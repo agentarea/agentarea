@@ -210,6 +210,11 @@
     --violet: #5e6ad2;
     /* amber accent — kept warm in both themes (unlike --chart-4) */
     --amber: #d99a00;
+    /* semantic status accents — blocker groups, activity tones, dots */
+    --status-success: #10b981;
+    --status-warning: #f59e0b;
+    --status-danger: #ef4444;
+    --status-info: #3b82f6;
   }
   .dark {
     --layout-background: 240 5.9% 10%;
@@ -312,12 +317,18 @@
     );
 
     /* board: dashed line-grid + technical registration markers (dark) */
-    --board-line: #26282c;
+    /* matches the row-divider tone (zinc-700) so the 4-up grid stays visible */
+    --board-line: #3f3f46;
     --board-crop: #4c4f56;
     /* violet accent — spend hero chart + budget bar (dark) */
     --violet: #8b93ff;
     /* amber accent — kept warm in both themes (dark) */
     --amber: #e8b23e;
+    /* semantic status accents — brighter for dark surfaces (dark) */
+    --status-success: #34d399;
+    --status-warning: #fbbf24;
+    --status-danger: #f87171;
+    --status-info: #60a5fa;
   }
 }
 

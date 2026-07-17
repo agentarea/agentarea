@@ -15,8 +15,8 @@ const fmt = (v: number) =>
   }).format(v);
 
 function barTone(pct: number) {
-  if (pct >= 100) return "bg-red-500";
-  if (pct >= 80) return "bg-amber-500";
+  if (pct >= 100) return "bg-[color:var(--status-danger)]";
+  if (pct >= 80) return "bg-[color:var(--status-warning)]";
   return "bg-[color:var(--violet)]";
 }
 

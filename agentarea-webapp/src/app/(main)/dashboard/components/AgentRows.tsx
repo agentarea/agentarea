@@ -62,7 +62,7 @@ export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-border/60 px-6 pb-3 pt-4">
+      <div className="border-b border-zinc-200 px-6 pb-3 pt-4 dark:border-zinc-700">
         <BoardSectionHeader
           icon={<Bot />}
           color="hsl(var(--primary))"
@@ -99,7 +99,6 @@ export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
               <InteractiveListRow
                 showIndicator={false}
                 className="px-6 py-2.5"
-                dividerClassName="border-b border-border/60"
                 start={
                   <AgentAvatar
                     agent={{ id: a.agent_id, name: a.name }}

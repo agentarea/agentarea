@@ -2,6 +2,7 @@ import { useTranslations } from "next-intl";
 import { Activity } from "lucide-react";
 import { BoardSectionHeader } from "@/components/board";
 import { computeDelta, DeltaBadge, Sparkline } from "@/components/charts/Sparkline";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { cn } from "@/lib/utils";
 import type { DailyTaskCounts } from "@/lib/api-dashboard";
 
@@ -10,9 +11,9 @@ type Props = {
 };
 
 const TONES = {
-  completed: { dot: "bg-emerald-500", color: "#10b981" },
-  failed: { dot: "bg-red-500", color: "#ef4444" },
-  awaiting: { dot: "bg-amber-500", color: "#f59e0b" },
+  completed: { tone: "success", color: "var(--status-success)" },
+  failed: { tone: "danger", color: "var(--status-danger)" },
+  awaiting: { tone: "warning", color: "var(--status-warning)" },
 } as const;
 
 export function ActivityStrip({ data }: Props) {
@@ -66,10 +67,13 @@ function StatCard({
       )}
     >
       <div className="flex min-w-0 flex-1 flex-row items-baseline gap-3 sm:flex-none sm:flex-col sm:items-start sm:gap-0 lg:min-w-[120px] lg:flex-none lg:justify-center">
-        <div className="flex items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground">
-          <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full", t.dot)} />
+        <StatusIndicator
+          tone={t.tone}
+          size="sm"
+          className="text-[11.5px] font-medium"
+        >
           {label}
-        </div>
+        </StatusIndicator>
         <div
           className={cn(
             "text-[22px] font-semibold leading-none tracking-[-0.025em] tabular-nums sm:mt-0.5",

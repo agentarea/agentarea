@@ -113,25 +113,23 @@ export function Sparkline({
       aria-hidden="true"
     >
       {areaD && (
-        <path d={areaD} fill={fill} fillOpacity={fillOpacity} stroke="none" />
+        <path
+          d={areaD}
+          style={{ fill }}
+          fillOpacity={fillOpacity}
+          stroke="none"
+        />
       )}
       <path
         d={d}
         fill="none"
-        stroke={stroke}
+        style={{ stroke }}
         strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
       />
-      {showDot && (
-        <circle
-          cx={last.x}
-          cy={last.y}
-          r={2}
-          fill={stroke}
-        />
-      )}
+      {showDot && <circle cx={last.x} cy={last.y} r={2} style={{ fill: stroke }} />}
     </svg>
   );
 }

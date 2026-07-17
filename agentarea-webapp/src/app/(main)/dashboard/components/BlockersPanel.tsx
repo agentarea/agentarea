@@ -32,7 +32,7 @@ export function BlockersPanel({
   const groups: Group[] = [
     {
       label: t("awaitingInput"),
-      color: "#f59e0b",
+      color: "var(--status-warning)",
       rows: blockers.hitl.map((b) => ({
         key: b.task_id,
         question: b.description,
@@ -44,7 +44,7 @@ export function BlockersPanel({
     },
     {
       label: t("walletExhausted"),
-      color: "#3b82f6",
+      color: "var(--status-info)",
       rows: blockers.wallet_exhausted.map((b) => ({
         key: b.agent_id,
         question: t("budgetExhausted", {
@@ -59,7 +59,7 @@ export function BlockersPanel({
     },
     {
       label: t("failed24h"),
-      color: "#ef4444",
+      color: "var(--status-danger)",
       rows: blockers.failed_24h.map((b) => ({
         key: b.task_id,
         question: b.error?.split("\n")[0] || t("taskFailed"),
@@ -75,7 +75,7 @@ export function BlockersPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-border/60 px-6 pb-3 pt-4">
+      <div className="border-b border-zinc-200 px-6 pb-3 pt-4 dark:border-zinc-700">
         <BoardSectionHeader
           icon={<Shield />}
           color="var(--amber)"
@@ -109,7 +109,6 @@ export function BlockersPanel({
                 <Link key={r.key} href={r.href} className="block">
                   <InteractiveListRow
                     className="px-6 py-2.5"
-                    dividerClassName="border-b border-border/60"
                     contentClassName="items-start"
                   >
                     <div className="flex min-w-0 flex-col gap-1.5">

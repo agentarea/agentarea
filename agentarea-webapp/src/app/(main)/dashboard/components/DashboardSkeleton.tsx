@@ -77,7 +77,7 @@ function ListSkeleton({
         {Array.from({ length: rows }).map((_, i) => (
           <div
             key={i}
-            className="flex items-center gap-3 border-b border-border/60 px-6 py-3"
+            className="flex items-center gap-3 border-b border-zinc-200 px-6 py-3 dark:border-zinc-700"
           >
             <Skeleton className="h-6 w-6 shrink-0 rounded-md" />
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
