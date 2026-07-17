@@ -758,7 +758,6 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     event_broker=dependencies.event_broker,
                 )
 
-            # Legacy error handling for backward compatibility
             error_type = type(e).__name__
             error_message = str(e)
 
@@ -1870,6 +1869,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
         from agentarea_agents.infrastructure.skill_storage_service import (
             SkillStorageService,
         )
+        from agentarea_agents_sdk.tools.shell_toolset import (
+            SandboxHTTPError,
+            wait_for_sandbox_execution,
+        )
         from agentarea_common.config.mcp import MCPSettings
 
         from .skill_materialization import (
@@ -1933,18 +1936,23 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 payload = {key: value for key, value in payload.items() if value}
 
                 url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/executions"
-                async with httpx.AsyncClient(timeout=60) as client:
-                    resp = await client.post(url, json=payload)
-                    if resp.status_code >= 400:
-                        logger.error(
-                            "Skill materialization failed: %s %s",
-                            resp.status_code,
-                            resp.text[:300],
+                timeout_seconds = 60
+                async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                    created = await client.post(url, json=payload)
+                    # The POST only schedules the work; the files are not on
+                    # disk until the runner reports completion. Reporting
+                    # success here would tell the agent its skill is ready
+                    # before it is — and hide an outright failure.
+                    try:
+                        await wait_for_sandbox_execution(
+                            client=client,
+                            created=created,
+                            mcp_manager_url=mcp_settings.MCP_MANAGER_URL,
+                            timeout_seconds=timeout_seconds,
                         )
-                        return MaterializeSkillFilesResult(
-                            success=False,
-                            error=f"sandbox returned {resp.status_code}",
-                        )
+                    except SandboxHTTPError as exc:
+                        logger.error("Skill materialization failed: %s", exc)
+                        return MaterializeSkillFilesResult(success=False, error=str(exc))
 
                 directory = skill_workspace_dir(request.skill_name)
                 return MaterializeSkillFilesResult(

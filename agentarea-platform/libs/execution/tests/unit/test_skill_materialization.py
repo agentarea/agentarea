@@ -47,6 +47,27 @@ def test_directory_name_is_slugified():
     assert skill_workspace_dir("My Skill v2") == "skills/my-skill-v2"
 
 
+def test_non_ascii_names_keep_their_identity():
+    # Stripping every non-[a-z0-9] char collapsed each of these to the same
+    # directory, so two skills would silently overwrite one another.
+    assert skill_workspace_dir("Отчёт") != skill_workspace_dir("План")
+    assert skill_workspace_dir("Отчёт") == skill_workspace_dir("Отчёт")
+
+
+def test_names_that_slugify_to_nothing_stay_distinct():
+    assert skill_workspace_dir("!!!") != skill_workspace_dir("???")
+
+
+def test_degenerate_names_are_stable_across_calls():
+    assert skill_workspace_dir("!!!") == skill_workspace_dir("!!!")
+
+
+def test_every_directory_stays_under_the_skills_root():
+    for name in ("Отчёт", "!!!", "../../etc", "", "ok"):
+        assert skill_workspace_dir(name).startswith("skills/")
+        assert ".." not in skill_workspace_dir(name)
+
+
 def test_directory_never_escapes_the_skills_root():
     # A hostile or sloppy skill name must not write outside skills/.
     assert skill_workspace_dir("../../etc") == "skills/etc"

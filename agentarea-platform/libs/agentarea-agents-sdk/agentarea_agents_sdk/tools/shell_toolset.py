@@ -137,48 +137,12 @@ class ShellToolset(Toolset):
         created: Any,
         timeout_seconds: int,
     ) -> dict[str, Any]:
-        if created.status_code >= 400:
-            raise SandboxHTTPError(f"sandbox returned HTTP {created.status_code}: {created.text}")
-        try:
-            record = created.json()
-        except ValueError as exc:
-            raise SandboxHTTPError(f"invalid sandbox response: {created.text}") from exc
-
-        if not isinstance(record, dict):
-            raise SandboxHTTPError(f"invalid sandbox response: {created.text}")
-
-        # Unit tests and older MCP Manager versions may return the execution
-        # result directly. Treat that as already completed.
-        if "id" not in record:
-            return record
-
-        deadline = time.monotonic() + timeout_seconds + 60
-        while True:
-            status = record.get("status")
-            if status == "completed":
-                result = record.get("result")
-                if isinstance(result, dict):
-                    return result
-                return record
-            if status in {"failed", "cancelled"}:
-                message = record.get("error") or status
-                raise SandboxHTTPError(f"sandbox execution {status}: {message}")
-
-            if time.monotonic() >= deadline:
-                raise SandboxHTTPError(
-                    f"sandbox execution timed out waiting for completion: {record.get('id')}"
-                )
-
-            await asyncio.sleep(2)
-            resp = await client.get(f"{self._mcp_manager_url}/sandbox/executions/{record['id']}")
-            if resp.status_code >= 400:
-                raise SandboxHTTPError(
-                    f"sandbox status returned HTTP {resp.status_code}: {resp.text}"
-                )
-            try:
-                record = resp.json()
-            except ValueError as exc:
-                raise SandboxHTTPError(f"invalid sandbox status response: {resp.text}") from exc
+        return await wait_for_sandbox_execution(
+            client=client,
+            created=created,
+            mcp_manager_url=self._mcp_manager_url,
+            timeout_seconds=timeout_seconds,
+        )
 
     async def _collect_project_input_files(self) -> list[dict[str, Any]]:
         project_id = (self._ctx.metadata or {}).get("project_id")
@@ -289,6 +253,62 @@ class ShellToolset(Toolset):
         if self._base_prefix:
             return f"{self._base_prefix}/sandbox/{clean}"
         return f"sandbox/{clean}"
+
+
+async def wait_for_sandbox_execution(
+    client: Any,
+    created: Any,
+    mcp_manager_url: str,
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    """Wait for a scheduled sandbox execution to finish; return its result.
+
+    ``POST /sandbox/executions`` only *creates* a pending record — the data-plane
+    runner owns the actual work. Any caller that treats the create response as
+    completion reports success before anything has run, and never learns that it
+    failed. Shared so there is one place that knows this, rather than one per
+    caller.
+    """
+    if created.status_code >= 400:
+        raise SandboxHTTPError(f"sandbox returned HTTP {created.status_code}: {created.text}")
+    try:
+        record = created.json()
+    except ValueError as exc:
+        raise SandboxHTTPError(f"invalid sandbox response: {created.text}") from exc
+
+    if not isinstance(record, dict):
+        raise SandboxHTTPError(f"invalid sandbox response: {created.text}")
+
+    # Unit tests and older MCP Manager versions may return the execution
+    # result directly. Treat that as already completed.
+    if "id" not in record:
+        return record
+
+    deadline = time.monotonic() + timeout_seconds + 60
+    while True:
+        status = record.get("status")
+        if status == "completed":
+            result = record.get("result")
+            if isinstance(result, dict):
+                return result
+            return record
+        if status in {"failed", "cancelled"}:
+            message = record.get("error") or status
+            raise SandboxHTTPError(f"sandbox execution {status}: {message}")
+
+        if time.monotonic() >= deadline:
+            raise SandboxHTTPError(
+                f"sandbox execution timed out waiting for completion: {record.get('id')}"
+            )
+
+        await asyncio.sleep(2)
+        resp = await client.get(f"{mcp_manager_url}/sandbox/executions/{record['id']}")
+        if resp.status_code >= 400:
+            raise SandboxHTTPError(f"sandbox status returned HTTP {resp.status_code}: {resp.text}")
+        try:
+            record = resp.json()
+        except ValueError as exc:
+            raise SandboxHTTPError(f"invalid sandbox status response: {resp.text}") from exc
 
 
 def _normalize_artifact_paths(paths: list[str] | None) -> list[str]:
