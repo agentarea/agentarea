@@ -287,6 +287,7 @@ class LLMCallRequest(BaseModel):
     task_id: str | None = None
     agent_id: str | None = None
     execution_id: str | None = None
+    iteration: int | None = None  # identifies the streamed chunks of this call
     resolved_model: dict | None = None  # Cached ResolvedModelInfo dict; None = DB lookup
     effective_policy: dict[str, Any] | None = None
     # Runtime governance counters — let budget gates compare against the running total

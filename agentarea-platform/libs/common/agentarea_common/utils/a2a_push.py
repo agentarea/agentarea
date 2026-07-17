@@ -26,8 +26,8 @@ from agentarea_common.events.contract import (
 PUSH_CONFIGS_PARAM_KEY = "a2a_push_configs"
 
 # Maps canonical workflow terminal event types to A2A v1.0.0 task states (proto
-# encoding). The incoming event_type is canonicalized before lookup, so legacy
-# and canonical names both resolve.
+# encoding). Canonical names only: the emit side speaks the canonical contract,
+# and pre-contract names like "WorkflowCompleted" are deliberately not accepted.
 _TERMINAL_EVENT_STATES = {
     TASK_COMPLETED: "COMPLETED",
     TASK_FAILED: "FAILED",

@@ -683,6 +683,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 event_publisher = create_event_publisher(
                     dependencies.event_broker,
                     request.task_id,
+                    execution_id=request.execution_id,
+                    iteration=request.iteration,
                     broker_client=dependencies.broker_client,
                 )
 

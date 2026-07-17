@@ -16,13 +16,22 @@ def resolve_event_broker(event_broker: Any) -> EventBroker:
     if isinstance(event_broker, EventBroker):
         return event_broker
 
-    raise TypeError(
-        f"event_broker must implement EventBroker, got {type(event_broker).__name__}"
-    )
+    raise TypeError(f"event_broker must implement EventBroker, got {type(event_broker).__name__}")
 
 
-def create_event_publisher(event_broker, task_id: str, broker_client=None):
+def create_event_publisher(
+    event_broker,
+    task_id: str,
+    execution_id: str | None = None,
+    iteration: int | None = None,
+    broker_client=None,
+):
     """Create an event publisher function for chunk events.
+
+    ``execution_id`` and ``iteration`` identify the LLM call this chunk belongs
+    to. The read side supersedes by part id, and an llm part's id is built from
+    exactly these two fields, so a chunk without them cannot be matched to the
+    call it is streaming and never renders as text.
 
     ``broker_client`` (a ``BrokerClient``) additionally XADDs each chunk to the
     per-task live stream so the A2A read side tails tokens the same way it tails
@@ -53,6 +62,8 @@ def create_event_publisher(event_broker, task_id: str, broker_client=None):
                 "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 "data": {
                     "task_id": task_id,
+                    "execution_id": execution_id,
+                    "iteration": iteration,
                     "chunk": chunk,
                     "chunk_index": chunk_index,
                     "is_final": is_final,

@@ -1465,6 +1465,7 @@ class AgentExecutionWorkflow:
                 task_id=self.state.task_id,
                 agent_id=self.state.agent_id,
                 execution_id=self.state.execution_id,
+                iteration=self.state.current_iteration,
                 resolved_model=self.state.resolved_model,
                 effective_policy=self.state.effective_policy,
                 cost_used=float(self.budget_tracker.cost) if self.budget_tracker else None,
