@@ -229,7 +229,13 @@ export function useTaskEvents(
   }, [agentId, taskId]);
 
   useEffect(() => {
-    if (!agentId || !taskId || !includeHistory || loadedHistory.current) return;
+    if (!agentId || !taskId || !includeHistory || loadedHistory.current) {
+      // A run cancelled mid-flight never reaches its finally, so clear the
+      // flag here — otherwise flipping includeHistory off during a fetch
+      // leaves the consumer loading forever.
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
     setLoading(true);
@@ -248,19 +254,24 @@ export function useTaskEvents(
 
         let next = initialState();
         const rows: DisplayEvent[] = [];
+        // Ids are held back until the fold is committed below. Marking one seen
+        // while its event is still only in a local `next` would strand it if
+        // this loop threw: applied nowhere, yet skipped forever after.
+        const foldedIds: string[] = [];
         for (const event of data.events) {
           const input = normalizeHistory(event);
           if (isControl(input.eventType)) continue;
           const id = eventIdOf(input.data as RawData);
           if (id) {
-            if (seenIds.current.has(id)) continue;
-            seenIds.current.add(id);
+            if (seenIds.current.has(id) || foldedIds.includes(id)) continue;
+            foldedIds.push(id);
           }
           next = applyEvent(next, input);
           rows.push(
             toDisplayRow(input.eventType, input.data as RawData, rows.length)
           );
         }
+        for (const id of foldedIds) seenIds.current.add(id);
         stateRef.current = next;
         rawRef.current = rows;
         rawCountRef.current = rows.length;
