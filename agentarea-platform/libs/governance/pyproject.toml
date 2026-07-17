@@ -10,14 +10,12 @@ license = {text = "Apache-2.0"}
 requires-python = ">=3.12"
 dependencies = [
     "agentarea-common",
-    "agentarea-agents-sdk",
     "pydantic>=2.4.2",
     "sqlalchemy>=2.0.0",
 ]
 
 [tool.uv.sources]
 agentarea-common = { workspace = true }
-agentarea-agents-sdk = { workspace = true }
 
 [project.optional-dependencies]
 temporal = [

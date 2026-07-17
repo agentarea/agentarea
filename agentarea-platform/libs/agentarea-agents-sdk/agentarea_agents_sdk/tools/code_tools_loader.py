@@ -9,7 +9,6 @@ registry, reading from the live registry. The class IS the source of truth.
 
 from __future__ import annotations
 
-import inspect
 import logging
 from typing import Any
 
@@ -74,28 +73,6 @@ def _meta_to_dict(meta: ToolsetMetadata, cls: type) -> dict[str, Any]:
         "requires_user_confirmation": meta.requires_user_confirmation,
         "class_path": f"{cls.__module__}.{cls.__name__}",
     }
-
-
-def tools_requiring_confirmation() -> list[str]:
-    """Tool names whose toolset declares ``requires_user_confirmation``.
-
-    Returned as the names the model calls and the PDP judges (``shell_bash``),
-    not as namespaces — policy decides per tool call, so a declaration keyed on
-    anything else matches nothing. Classes are inspected rather than
-    instantiated: this runs during policy resolution, and a toolset constructor
-    reaching for config there would fail the whole task.
-    """
-    _ensure_all_toolsets_imported()
-    names: list[str] = []
-    for cls in get_toolset_registry().values():
-        meta: ToolsetMetadata | None = getattr(cls, "__toolset_meta__", None)
-        if not meta or not meta.requires_user_confirmation:
-            continue
-        prefix = meta.namespace.rsplit("/", 1)[-1] if meta.namespace else ""
-        for method_name, method in inspect.getmembers(cls, predicate=inspect.isfunction):
-            if getattr(method, "_is_tool_method", False):
-                names.append(f"{prefix}_{method_name}" if prefix else method_name)
-    return sorted(names)
 
 
 def get_code_tools_metadata() -> dict[str, dict[str, Any]]:

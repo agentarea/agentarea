@@ -9,10 +9,8 @@ typed-document storage while the source of truth becomes relational rules.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from uuid import UUID
 
-from agentarea_agents_sdk.tools.code_tools_loader import tools_requiring_confirmation
 from agentarea_common.base.repository_factory import RepositoryFactory
 
 from ..domain.policies import (
@@ -30,22 +28,8 @@ class GovernancePolicyResolver:
     Satisfies ``agentarea_common.ports.policy_resolver.PolicyResolverPort``.
     """
 
-    def __init__(
-        self,
-        repository_factory: RepositoryFactory,
-        *,
-        tool_confirmation_defaults: Sequence[str] | None = None,
-    ):
+    def __init__(self, repository_factory: RepositoryFactory):
         self._rule_repository = repository_factory.create_repository(PolicyRuleRepository)
-        # Read from the tool registry by default rather than from each caller:
-        # the runtime and the policy-preview API build their own resolvers, and a
-        # declaration passed to one but not the other would show a verdict the
-        # gate does not apply.
-        self._tool_confirmation_defaults = list(
-            tools_requiring_confirmation()
-            if tool_confirmation_defaults is None
-            else tool_confirmation_defaults
-        )
 
     async def resolve(
         self,
@@ -83,11 +67,7 @@ class GovernancePolicyResolver:
         if task_policy is not None:
             layers.append(task_policy)
 
-        return PolicyResolver().resolve(
-            layers,
-            source_policy_ids=source_ids,
-            tool_confirmation_defaults=self._tool_confirmation_defaults,
-        )
+        return PolicyResolver().resolve(layers, source_policy_ids=source_ids)
 
 
 def _rule_ids(rules: list[PolicyRule]) -> list[str]:

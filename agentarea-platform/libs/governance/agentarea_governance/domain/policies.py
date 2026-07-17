@@ -112,10 +112,6 @@ class ApprovalPolicy(BaseModel):
 
     requires_human_approval: bool | None = None
     escalation_rules: list[str] = Field(default_factory=list)
-    # Tools whose own ``requires_user_confirmation`` declaration this scope
-    # waives. Only cancels a tool-declared default — an explicit escalation_rules
-    # entry always wins. ``None`` = unset (waive nothing).
-    auto_approved: list[str] | None = None
     # Who may approve, as Keto-style subject refs: "user:<id>", "group:<id>",
     # or a userset "<type>:<id>#<relation>". Empty = any workspace member (soft
     # default — see issue #198 / ADR-005 for the zero-trust posture decision).
@@ -225,16 +221,7 @@ class PolicyResolver:
         policies: list[PolicyDocument | None],
         *,
         source_policy_ids: list[str] | None = None,
-        tool_confirmation_defaults: list[str] | None = None,
     ) -> EffectivePolicy:
-        """Merge the scope chain, then fold in the tools' own declarations.
-
-        ``tool_confirmation_defaults`` are the tools that declare
-        ``requires_user_confirmation``. They are applied after the human-authored
-        chain rather than as a scope of their own: a declaration is a default the
-        policy may waive via ``auto_approved``, and folding it in as a scope
-        would make it an unwaivable floor (lower scopes may only tighten).
-        """
         current = PolicyDocument()
         for policy in policies:
             if policy is None:
@@ -242,30 +229,10 @@ class PolicyResolver:
             self._validate_tightens(current, policy)
             current = self._merge(current, policy)
 
-        current = current.model_copy(
-            update={
-                "approval": self._apply_tool_defaults(current.approval, tool_confirmation_defaults)
-            }
-        )
-
         return EffectivePolicy(
             **current.model_dump(),
             source_policy_ids=source_policy_ids or [],
             resolver_version=RESOLVER_VERSION,
-        )
-
-    def _apply_tool_defaults(
-        self, approval: ApprovalPolicy | None, defaults: list[str] | None
-    ) -> ApprovalPolicy | None:
-        if not defaults:
-            return approval
-        approval = approval or ApprovalPolicy()
-        waived = set(approval.auto_approved or [])
-        declared = [tool for tool in defaults if tool not in waived]
-        if not declared:
-            return approval
-        return approval.model_copy(
-            update={"escalation_rules": _dedupe([*approval.escalation_rules, *declared])}
         )
 
     def _validate_tightens(self, higher: PolicyDocument, lower: PolicyDocument) -> None:
@@ -319,14 +286,6 @@ class PolicyResolver:
             return
         if higher.requires_human_approval is True and lower.requires_human_approval is False:
             raise PolicyValidationError("requires_human_approval cannot be disabled")
-        # auto_approved is the one approval field that loosens, so it inverts the
-        # usual check: a lower scope may drop waivers it inherited, never add.
-        if higher.auto_approved is not None and lower.auto_approved is not None:
-            for tool in lower.auto_approved:
-                if tool not in higher.auto_approved:
-                    raise PolicyValidationError(
-                        "approval.auto_approved cannot widen higher-scope auto-approval"
-                    )
 
     def _validate_content_safety(
         self, higher: ContentSafetyPolicy | None, lower: ContentSafetyPolicy | None
@@ -386,9 +345,6 @@ class PolicyResolver:
             requires_human_approval=bool(higher.requires_human_approval)
             or bool(lower.requires_human_approval),
             escalation_rules=_dedupe([*higher.escalation_rules, *lower.escalation_rules]),
-            auto_approved=lower.auto_approved
-            if lower.auto_approved is not None
-            else higher.auto_approved,
             approvers=_dedupe([*higher.approvers, *lower.approvers]),
         )
 
