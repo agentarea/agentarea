@@ -116,6 +116,56 @@ async def test_status_change_event_also_precedes_the_write(monkeypatch):
     assert calls[-1] == "aggregate-write"
 
 
+class _RecordingBroker:
+    def __init__(self, calls: list[str]) -> None:
+        self._calls = calls
+        self.events: list[object] = []
+
+    async def publish(self, event) -> None:
+        self._calls.append("broker-publish")
+        self.events.append(event)
+
+
+@pytest.mark.asyncio
+async def test_without_an_outbox_the_broker_publish_waits_for_the_write(monkeypatch):
+    # A raw broker publish has no transaction to unwind, so it must not happen
+    # until the write has landed — otherwise a failed write still emits.
+    calls: list[str] = []
+    broker = _RecordingBroker(calls)
+    service = _Service(
+        task_repository=_RecordingRepository(calls),
+        event_broker=broker,
+        outbox_publisher=None,
+    )
+    task = _task()
+    monkeypatch.setattr(service, "_validate_task", _noop)
+    monkeypatch.setattr(service, "get_task", _existing(task, "pending"))
+
+    await service.update_task(task)
+
+    assert calls[0] == "aggregate-write"
+    assert "broker-publish" in calls[1:]
+
+
+@pytest.mark.asyncio
+async def test_without_an_outbox_a_failed_write_emits_nothing(monkeypatch):
+    calls: list[str] = []
+    broker = _RecordingBroker(calls)
+    service = _Service(
+        task_repository=_RecordingRepository(calls, fail=True),
+        event_broker=broker,
+        outbox_publisher=None,
+    )
+    task = _task()
+    monkeypatch.setattr(service, "_validate_task", _noop)
+    monkeypatch.setattr(service, "get_task", _existing(task, "pending"))
+
+    with pytest.raises(RuntimeError):
+        await service.update_task(task)
+
+    assert broker.events == []
+
+
 async def _noop(*args, **kwargs):
     return None
 

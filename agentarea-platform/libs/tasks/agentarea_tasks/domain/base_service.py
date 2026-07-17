@@ -9,6 +9,7 @@ hierarchy and eliminating code duplication.
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.events.broker import EventBroker
@@ -194,21 +195,15 @@ class BaseTaskService(ABC):
             metadata=task.metadata,
         )
 
-        # Enqueue the events BEFORE the aggregate write, on the same session:
-        # the repository commits, so a row added afterwards is not covered by
-        # that commit — which is the whole guarantee the outbox exists for. The
-        # payloads describe the state being written, and the values are already
-        # known here. If the write raises, the session rolls back and the rows
-        # go with it.
-        await self._publish_task_event(
+        events: list[Any] = [
             TaskUpdated(
                 task_id=str(task_domain.id),
                 status=task_domain.status,
                 metadata=task_domain.metadata,
             )
-        )
+        ]
         if old_status != new_status:
-            await self._publish_task_event(
+            events.append(
                 TaskStatusChanged(
                     task_id=str(task_domain.id),
                     old_status=old_status,
@@ -217,8 +212,22 @@ class BaseTaskService(ABC):
                 )
             )
 
-        # Persist the update — this commit covers the outbox rows above.
+        # The two paths need opposite orders, so neither can use the shared
+        # helper here. An outbox row must go in BEFORE the write, on the same
+        # session, or the repository's commit will not cover it — that coverage
+        # is the entire point of the outbox. A raw broker publish has no
+        # transaction to unwind, so it must wait until the write has landed;
+        # publishing first would emit an event for a change that never happened.
+        if self.outbox_publisher is not None:
+            for event in events:
+                await self.outbox_publisher.publish(event)
+
+        # Persist the update — this commit covers any outbox rows above.
         updated_task_domain = await self.task_repository.update_task(task_domain)
+
+        if self.outbox_publisher is None:
+            for event in events:
+                await self.event_broker.publish(event)
 
         # Convert back to AgentTask for return
         updated_task = AgentTask(

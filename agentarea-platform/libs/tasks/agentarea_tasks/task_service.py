@@ -116,7 +116,7 @@ class TaskService(BaseTaskService):
         """Reject task creation if the workspace has hit its policy monthly cap.
 
         No-op when:
-        - workspace_id is missing (legacy call sites)
+        - workspace_id is missing
         - no policy monthly cap is configured
         """
         if not workspace_id:
