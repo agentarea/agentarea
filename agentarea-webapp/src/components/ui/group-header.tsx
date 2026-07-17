@@ -32,7 +32,7 @@ export function GroupHeader({
 }) {
   const cls = cn(
     "skill-hatch flex h-9 w-full items-center gap-2 border-b border-zinc-100 px-4 dark:border-zinc-800/70",
-    sticky && "sticky top-0 z-[2]",
+    sticky && "sticky top-0 z-10",
     className
   );
   const inner = (

@@ -931,3 +931,15 @@ body div[data-sonner-toast][data-type="warning"] {
     max-width: none !important;
   }
 }
+
+/* recharts: suppress the browser focus-ring "box" drawn when the chart svg is
+   clicked/focused (its surface has tabindex=0 for a11y). Kept UNLAYERED so
+   Tailwind's @layer purge can't strip it — the class only exists at runtime. */
+.recharts-surface:focus,
+.recharts-surface:focus-visible,
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible,
+.recharts-wrapper :focus,
+.recharts-wrapper :focus-visible {
+  outline: none !important;
+}

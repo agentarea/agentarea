@@ -103,7 +103,7 @@ export function BlockersPanel({
               count={g.rows.length}
               color={g.color}
               sticky={false}
-              headerClassName="px-6 lg:sticky lg:top-0 lg:z-[2]"
+              headerClassName="px-6 lg:sticky lg:top-0 lg:z-10"
             >
               {g.rows.map((r) => (
                 <Link key={r.key} href={r.href} className="block">
