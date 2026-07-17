@@ -79,6 +79,20 @@ async def test_resolve_workspace_budget_cap(session_factory):
         assert len(effective.source_policy_ids) == 1
 
 
+async def test_the_tool_registry_declarations_reach_the_resolved_snapshot(session_factory):
+    # The default is read inside the adapter, not passed by callers: the runtime
+    # (task_service) and the policy-preview API each build their own resolver,
+    # and a declaration reaching only one of them would make the preview show a
+    # verdict the gate never applies.
+    async with session_factory() as session:
+        context = _context()
+
+        resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
+        effective = await resolver.resolve(workspace_id=context.workspace_id)
+
+        assert "shell_bash" in effective.approval.escalation_rules
+
+
 async def test_resolve_merges_workspace_and_agent_tighter_wins(session_factory):
     async with session_factory() as session:
         context = _context()
