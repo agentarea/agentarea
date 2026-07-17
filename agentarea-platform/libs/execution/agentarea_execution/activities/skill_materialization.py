@@ -28,28 +28,29 @@ def assemble_skill_bundle(
     return [(SKILL_MANIFEST, (content or "").encode("utf-8")), *files]
 
 
-def skill_workspace_dir(skill_name: str) -> str:
+def skill_workspace_dir(skill_name: str, skill_id: str) -> str:
     """Sandbox directory holding a skill's bundle, always under the skills root.
 
-    The slug keeps unicode letters and digits: reducing to ``[a-z0-9]`` collapsed
-    every non-ASCII name to one directory, so two skills would silently overwrite
-    each other's files. Names that carry no alphanumerics at all fall back to a
-    digest of the name rather than a shared constant, for the same reason.
+    The directory is keyed on ``skill_id``, because the display name does not
+    identify a skill: any slug of it collapses distinct names together —
+    "deploy_api" and "Deploy API" both reduce to "deploy-api" — and two skills
+    sharing a directory means the agent silently reads one skill's manifest and
+    runs the other's scripts. The slug is kept only so the path is readable to
+    whoever is looking at it.
     """
     name = skill_name or ""
     # str.isalnum is unicode-aware, so "Отчёт" keeps its letters instead of
     # vanishing; every other run of characters becomes a single separator.
     slug = re.sub(r"-+", "-", "".join(c if c.isalnum() else "-" for c in name.lower())).strip("-")
-    if not slug:
-        slug = f"skill-{sha256(name.encode('utf-8')).hexdigest()[:8]}" if name else "skill"
-    return f"{SKILLS_ROOT}/{slug}"
+    suffix = sha256(str(skill_id).encode("utf-8")).hexdigest()[:8]
+    return f"{SKILLS_ROOT}/{slug}-{suffix}" if slug else f"{SKILLS_ROOT}/skill-{suffix}"
 
 
 def build_skill_input_files(
-    skill_name: str, files: list[tuple[str, bytes]]
+    skill_name: str, skill_id: str, files: list[tuple[str, bytes]]
 ) -> list[dict[str, str]]:
     """Lay a skill's files out under its sandbox directory, dropping unsafe paths."""
-    directory = skill_workspace_dir(skill_name)
+    directory = skill_workspace_dir(skill_name, skill_id)
     input_files: list[dict[str, str]] = []
 
     for relative_path, content in files:

@@ -1911,7 +1911,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         )
 
                 files = assemble_skill_bundle(skill.content, bundled)
-                input_files = build_skill_input_files(request.skill_name, files)
+                input_files = build_skill_input_files(
+                    request.skill_name, str(request.skill_id), files
+                )
                 if not input_files:
                     return MaterializeSkillFilesResult(
                         success=False,
@@ -1954,7 +1956,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         logger.error("Skill materialization failed: %s", exc)
                         return MaterializeSkillFilesResult(success=False, error=str(exc))
 
-                directory = skill_workspace_dir(request.skill_name)
+                directory = skill_workspace_dir(request.skill_name, str(request.skill_id))
                 return MaterializeSkillFilesResult(
                     success=True,
                     directory=directory,

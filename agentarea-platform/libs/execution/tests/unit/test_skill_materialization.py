@@ -40,71 +40,80 @@ def test_a_skill_with_neither_prose_nor_files_still_has_a_manifest():
 
 
 def test_directory_is_derived_from_the_skill_name():
-    assert skill_workspace_dir("docx") == "skills/docx"
+    assert skill_workspace_dir("docx", "id-1").startswith("skills/docx-")
 
 
 def test_directory_name_is_slugified():
-    assert skill_workspace_dir("My Skill v2") == "skills/my-skill-v2"
+    assert skill_workspace_dir("My Skill v2", "id-1").startswith("skills/my-skill-v2-")
 
 
 def test_non_ascii_names_keep_their_identity():
     # Stripping every non-[a-z0-9] char collapsed each of these to the same
     # directory, so two skills would silently overwrite one another.
-    assert skill_workspace_dir("Отчёт") != skill_workspace_dir("План")
-    assert skill_workspace_dir("Отчёт") == skill_workspace_dir("Отчёт")
+    assert skill_workspace_dir("Отчёт", "id-1") != skill_workspace_dir("План", "id-2")
+    assert skill_workspace_dir("Отчёт", "id-1") == skill_workspace_dir("Отчёт", "id-1")
 
 
 def test_names_that_slugify_to_nothing_stay_distinct():
-    assert skill_workspace_dir("!!!") != skill_workspace_dir("???")
+    assert skill_workspace_dir("!!!", "id-1") != skill_workspace_dir("???", "id-2")
 
 
 def test_degenerate_names_are_stable_across_calls():
-    assert skill_workspace_dir("!!!") == skill_workspace_dir("!!!")
+    assert skill_workspace_dir("!!!", "id-1") == skill_workspace_dir("!!!", "id-1")
 
 
 def test_every_directory_stays_under_the_skills_root():
     for name in ("Отчёт", "!!!", "../../etc", "", "ok"):
-        assert skill_workspace_dir(name).startswith("skills/")
-        assert ".." not in skill_workspace_dir(name)
+        assert skill_workspace_dir(name, "id-1").startswith("skills/")
+        assert ".." not in skill_workspace_dir(name, "id-1")
 
 
 def test_directory_never_escapes_the_skills_root():
     # A hostile or sloppy skill name must not write outside skills/.
-    assert skill_workspace_dir("../../etc") == "skills/etc"
-    assert skill_workspace_dir("/abs/path") == "skills/abs-path"
+    assert skill_workspace_dir("../../etc", "id-1").startswith("skills/etc-")
+    assert skill_workspace_dir("/abs/path", "id-1").startswith("skills/abs-path-")
 
 
 def test_unnamed_skill_still_gets_a_stable_directory():
-    assert skill_workspace_dir("") == "skills/skill"
+    assert skill_workspace_dir("", "id-1").startswith("skills/skill-")
 
 
 def test_files_are_placed_under_the_skill_directory():
-    files = build_skill_input_files("docx", [("generate.py", b"print(1)")])
+    files = build_skill_input_files("docx", "id-1", [("generate.py", b"print(1)")])
 
     assert len(files) == 1
-    assert files[0]["path"] == "skills/docx/generate.py"
+    assert files[0]["path"].startswith("skills/docx-")
+    assert files[0]["path"].endswith("/generate.py")
+
+
+def test_two_skills_whose_names_slugify_alike_never_share_a_directory():
+    # "deploy_api" and "Deploy API" are both legal names that slugify to the
+    # same string; sharing a directory would make the agent read one skill's
+    # manifest and run the other's scripts, silently.
+    assert skill_workspace_dir("deploy_api", "id-1") != skill_workspace_dir("Deploy API", "id-2")
 
 
 def test_content_is_base64_encoded_for_transport():
     import base64
 
-    files = build_skill_input_files("docx", [("generate.py", b"print(1)")])
+    files = build_skill_input_files("docx", "id-1", [("generate.py", b"print(1)")])
     assert base64.b64decode(files[0]["content_base64"]) == b"print(1)"
 
 
 def test_nested_bundle_paths_are_preserved():
-    files = build_skill_input_files("docx", [("lib/util.py", b"x")])
-    assert files[0]["path"] == "skills/docx/lib/util.py"
+    files = build_skill_input_files("docx", "id-1", [("lib/util.py", b"x")])
+    assert files[0]["path"].endswith("/lib/util.py")
 
 
 def test_traversal_in_a_bundle_path_is_rejected():
-    files = build_skill_input_files("docx", [("../../evil.py", b"x"), ("ok.py", b"y")])
-    assert [f["path"] for f in files] == ["skills/docx/ok.py"]
+    files = build_skill_input_files("docx", "id-1", [("../../evil.py", b"x"), ("ok.py", b"y")])
+    assert len(files) == 1
+    assert files[0]["path"].endswith("/ok.py")
 
 
 def test_binary_content_survives():
     payload = bytes(range(256))
-    files = build_skill_input_files("docx", [("logo.png", payload)])
+    files = build_skill_input_files("docx", "id-1", [("logo.png", payload)])
 
     import base64
 
@@ -112,4 +121,4 @@ def test_binary_content_survives():
 
 
 def test_empty_bundle_yields_nothing():
-    assert build_skill_input_files("docx", []) == []
+    assert build_skill_input_files("docx", "id-1", []) == []
