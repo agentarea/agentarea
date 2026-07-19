@@ -343,7 +343,7 @@ async def get_network_topology(
                         )
                     continue
 
-                # Fallback: legacy MCP entries identified by id fields.
+                # Fallback: MCP entries identified only by id fields.
                 server_id = (
                     tool.get("tool_server_id")
                     or tool.get("server_id")

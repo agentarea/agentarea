@@ -1,4 +1,4 @@
-"""Per-instance MCP reverse proxy (Streamable HTTP only — no SSE legacy).
+"""Per-instance MCP reverse proxy (Streamable HTTP only — no SSE transport).
 
 Each MCP instance gets a stable governed endpoint:
 

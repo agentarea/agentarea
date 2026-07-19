@@ -98,10 +98,9 @@ def _callback_uri(request: Request) -> str:
 def _resolve_instance_remote_url(instance, server_spec) -> str | None:
     """Resolve the remote MCP URL for an instance.
 
-    Transport fields moved from instance.json_spec onto MCPServer columns in
-    PR #151. Newly-created URL instances carry no endpoint_url in their own
-    json_spec — the URL lives on the parent MCPServer's remote_url (or, for
-    legacy specs, in MCPServer.json_spec).
+    Transport fields live on the parent MCPServer: URL instances carry no
+    endpoint_url in their own json_spec, so the URL comes from the server's
+    remote_url column (or its json_spec).
     """
     legacy = (instance.json_spec or {}).get("endpoint_url") or (instance.json_spec or {}).get("url")
     if legacy:
