@@ -704,7 +704,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve the workspace.
 	// - WorkflowID set → /workspace/wf-<id>/ (persistent across calls, no cleanup here).
-	// - empty          → fresh tempdir, removed after the call (legacy stateless path).
+	// - empty          → fresh tempdir, removed after the call (stateless path).
 	workspace, cleanupWorkspace, err := resolveWorkspace(req.WorkflowID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
@@ -1185,7 +1185,7 @@ func startIdleWatchdog() {
 // When workflowID is set the directory is /workspace/wf-<id>/ and persists
 // across calls in that workflow — cleanup happens at pod tear-down. When
 // workflowID is empty the directory is a fresh tempdir and the returned
-// cleanup function removes it after the call (legacy stateless path).
+// cleanup function removes it after the call (stateless path).
 func resolveWorkspace(workflowID string) (string, func(), error) {
 	if workflowID == "" {
 		dir, err := os.MkdirTemp("", "sandbox-*")

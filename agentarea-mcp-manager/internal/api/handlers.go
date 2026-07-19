@@ -72,7 +72,7 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	// Warm pool path: retires the pod assigned to this workflow.
 	router.DELETE("/sandbox/workflow/:id", h.deleteSandboxWorkflow)
 
-	// Legacy container endpoints for backward compatibility (only when container manager is available)
+	// Container endpoints — only the Docker backend supplies a container manager.
 	if h.containerManager != nil {
 		router.GET("/containers", h.listContainers)
 		router.POST("/containers", h.createContainer)
@@ -571,8 +571,6 @@ func (h *Handler) healthCheckInstances(c *gin.Context) {
 		})
 	}
 }
-
-// Legacy container management methods (for backward compatibility)
 
 // listContainers returns a list of all managed containers
 func (h *Handler) listContainers(c *gin.Context) {
