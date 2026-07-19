@@ -240,9 +240,6 @@ import type {
   GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetData,
   GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetErrors,
   GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses,
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetData,
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors,
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses,
   GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetData,
   GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetErrors,
   GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponses,
@@ -1657,14 +1654,12 @@ export const getAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGet = <
  *
  * Agent-specific well-known discovery endpoint.
  *
- * Returns the agent card for this specific agent.
- * This endpoint can be accessed at:
- * - /v1/agents/{agent_id}/.well-known/agent-card.json
- * - /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)
+ * Returns the agent card for this specific agent, at
+ * /v1/agents/{agent_id}/.well-known/agent-card.json
  *
  * This allows each agent to have its own well-known endpoint, which is A2A compliant.
  * Later, this can be proxied to subdomains:
- * - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
+ * - agent1.domain.com/.well-known/agent-card.json -> /v1/agents/{id}/.well-known/agent-card.json
  */
 export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGet = <
   ThrowOnError extends boolean = false,
@@ -1691,48 +1686,6 @@ export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGet = <
       },
     ],
     url: "/v1/agents/{agent_id}/.well-known/agent-card.json",
-    ...options,
-  });
-
-/**
- * Get Agent Well Known Card
- *
- * Agent-specific well-known discovery endpoint.
- *
- * Returns the agent card for this specific agent.
- * This endpoint can be accessed at:
- * - /v1/agents/{agent_id}/.well-known/agent-card.json
- * - /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)
- *
- * This allows each agent to have its own well-known endpoint, which is A2A compliant.
- * Later, this can be proxied to subdomains:
- * - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
- */
-export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses,
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses,
-    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/.well-known/agent.json",
     ...options,
   });
 

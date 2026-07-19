@@ -3197,15 +3197,18 @@ export type McpToolConfigOutput = {
 /**
  * McpToolPermission
  *
- * A single MCP tool the agent may call, with its per-call approval gate.
+ * A single MCP tool the agent may call.
  *
  * Replaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).
+ * ``requires_user_confirmation`` is transport only: the API translates it into
+ * an agent-scoped approval policy rule and does not persist it here, so it is
+ * ``None`` at rest and reconstituted from rules on read.
  */
 export type McpToolPermission = {
   /**
    * Requires User Confirmation
    */
-  requires_user_confirmation?: boolean;
+  requires_user_confirmation?: boolean | null;
   /**
    * Tool Name
    */
@@ -6322,7 +6325,7 @@ export type TriggerUpdate = {
   /**
    * Enabled
    *
-   * Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (legacy).
+   * Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (alias).
    */
   enabled?: boolean | null;
   /**
@@ -7610,39 +7613,6 @@ export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetRespons
 export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponse =
   GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses];
 
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetData = {
-  body?: never;
-  path: {
-    /**
-     * Agent Id
-     */
-    agent_id: string;
-  };
-  query?: never;
-  url: "/v1/agents/{agent_id}/.well-known/agent.json";
-};
-
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetError =
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors];
-
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses =
-  {
-    /**
-     * Successful Response
-     */
-    200: AgentCard;
-  };
-
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponse =
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses];
-
 export type HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostData = {
   body?: never;
   path: {
@@ -8167,7 +8137,14 @@ export type StreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetData = {
      */
     task_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * Include Chunks
+     *
+     * Include incremental llm.call.chunk token events in the stream
+     */
+    include_chunks?: boolean;
+  };
   url: "/v1/agents/{agent_id}/tasks/{task_id}/events/stream";
 };
 

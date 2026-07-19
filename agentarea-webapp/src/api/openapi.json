@@ -5371,12 +5371,18 @@
         "type": "object"
       },
       "McpToolPermission": {
-        "description": "A single MCP tool the agent may call, with its per-call approval gate.\n\nReplaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).",
+        "description": "A single MCP tool the agent may call.\n\nReplaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).\n``requires_user_confirmation`` is transport only: the API translates it into\nan agent-scoped approval policy rule and does not persist it here, so it is\n``None`` at rest and reconstituted from rules on read.",
         "properties": {
           "requires_user_confirmation": {
-            "default": false,
-            "title": "Requires User Confirmation",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires User Confirmation"
           },
           "tool_name": {
             "title": "Tool Name",
@@ -10558,7 +10564,7 @@
                 "type": "null"
               }
             ],
-            "description": "Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (legacy).",
+            "description": "Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (alias).",
             "title": "Enabled"
           },
           "failure_threshold": {
@@ -12728,60 +12734,8 @@
     },
     "/v1/agents/{agent_id}/.well-known/agent-card.json": {
       "get": {
-        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent.\nThis endpoint can be accessed at:\n- /v1/agents/{agent_id}/.well-known/agent-card.json\n- /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json",
+        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent, at\n/v1/agents/{agent_id}/.well-known/agent-card.json\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent-card.json -> /v1/agents/{id}/.well-known/agent-card.json",
         "operationId": "get_agent_well_known_card_v1_agents__agent_id___well_known_agent_card_json_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Agent Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentCard"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Agent Well Known Card",
-        "tags": [
-          "v1",
-          "protected",
-          "agents",
-          "agents-well-known"
-        ]
-      }
-    },
-    "/v1/agents/{agent_id}/.well-known/agent.json": {
-      "get": {
-        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent.\nThis endpoint can be accessed at:\n- /v1/agents/{agent_id}/.well-known/agent-card.json\n- /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json",
-        "operationId": "get_agent_well_known_card_v1_agents__agent_id___well_known_agent_json_get",
         "parameters": [
           {
             "in": "path",
@@ -13777,6 +13731,18 @@
               "format": "uuid",
               "title": "Task Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Include incremental llm.call.chunk token events in the stream",
+            "in": "query",
+            "name": "include_chunks",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Include incremental llm.call.chunk token events in the stream",
+              "title": "Include Chunks",
+              "type": "boolean"
             }
           }
         ],

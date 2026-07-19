@@ -1158,12 +1158,15 @@ export const zMcpInstanceAssociationBody = z.object({
 /**
  * McpToolPermission
  *
- * A single MCP tool the agent may call, with its per-call approval gate.
+ * A single MCP tool the agent may call.
  *
  * Replaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).
+ * ``requires_user_confirmation`` is transport only: the API translates it into
+ * an agent-scoped approval policy rule and does not persist it here, so it is
+ * ``None`` at rest and reconstituted from rules on read.
  */
 export const zMcpToolPermission = z.object({
-  requires_user_confirmation: z.boolean().optional().default(false),
+  requires_user_confirmation: z.boolean().nullish(),
   tool_name: z.string(),
 });
 
@@ -3132,17 +3135,6 @@ export const zGetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetPath 
 export const zGetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponse =
   zAgentCard;
 
-export const zGetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetPath =
-  z.object({
-    agent_id: z.string().uuid(),
-  });
-
-/**
- * Successful Response
- */
-export const zGetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponse =
-  zAgentCard;
-
 export const zHandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostPath = z.object({
   agent_id: z.string().uuid(),
 });
@@ -3297,6 +3289,11 @@ export const zStreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetPath =
   z.object({
     agent_id: z.string().uuid(),
     task_id: z.string().uuid(),
+  });
+
+export const zStreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetQuery =
+  z.object({
+    include_chunks: z.boolean().optional().default(true),
   });
 
 export const zSubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostBody =
