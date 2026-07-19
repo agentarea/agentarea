@@ -18,7 +18,8 @@
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "generate:openapi": "curl -sf http://localhost:8000/openapi.json -o src/api/openapi.json",
     "generate:client": "openapi-ts",
-    "generate:api": "pnpm generate:openapi && pnpm generate:client"
+    "generate:shared-client": "pnpm --filter @agentarea/api-client run generate && pnpm --filter @agentarea/api-client run build:types",
+    "generate:api": "pnpm generate:openapi && pnpm generate:client && pnpm generate:shared-client"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
