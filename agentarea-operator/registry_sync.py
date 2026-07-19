@@ -82,31 +82,12 @@ def _parse_mcp_servers(data: dict[str, Any]) -> list[dict[str, Any]]:
     if not servers:
         return []
     first = servers[0]
-    if "server" in first:
-        return _parse_standard_mcp(servers)
-    return _parse_legacy_mcp(servers)
-
-
-def _parse_legacy_mcp(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = []
-    for entry in servers:
-        external_id = entry.get("registry_id") or entry.get("name")
-        if not external_id:
-            continue
-        conn_type = entry.get("connection_type", "url")
-        json_spec = entry.get("json_spec", {})
-        ext_id = f"{external_id}/{conn_type}" if conn_type != "url" else external_id
-        items.append(
-            {
-                "external_id": ext_id,
-                "name": external_id,
-                "description": (entry.get("description") or "")[:500],
-                "version": entry.get("version") or "latest",
-                "spec": {**json_spec, "connection_type": conn_type},
-                "tags": [],
-            }
+    if "server" not in first:
+        raise ValueError(
+            "Unrecognized MCP registry format: each entry of 'servers' must contain a "
+            f"'server' key (got keys: {sorted(first)})"
         )
-    return items
+    return _parse_standard_mcp(servers)
 
 
 def _parse_standard_mcp(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
