@@ -36,7 +36,9 @@ class TestMcpToolSettings:
         settings = McpToolSettings(allowed_tools=["read_file"])
         assert settings.allowed_tools is not None
         assert settings.allowed_tools[0].tool_name == "read_file"
-        assert settings.allowed_tools[0].requires_user_confirmation is False
+        # A bare string specifies no approval; the flag is unset (None), not False.
+        # Approval is carried into policy rules, not persisted on the permission.
+        assert settings.allowed_tools[0].requires_user_confirmation is None
 
     def test_allowed_tools_accepts_permission_objects(self):
         settings = McpToolSettings(

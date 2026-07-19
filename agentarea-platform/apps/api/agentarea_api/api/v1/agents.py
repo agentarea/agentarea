@@ -3,7 +3,7 @@
 import logging
 import re
 from contextlib import suppress
-from typing import Any, Literal, cast
+from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
@@ -26,13 +26,24 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.config import get_database
+from agentarea_common.config.database import get_db_session
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_mcp.application.service import MCPServerInstanceService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import agents_a2a, agents_well_known
 from ._access_control_grants import grant_user_relation
+from ._approval_policy_sync import (
+    apply_approval_targets,
+    approval_targets_for_agents,
+    approval_targets_from_tools,
+    strip_confirmation_flags,
+    sync_agent_approval_rules,
+)
+
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 
 logger = logging.getLogger(__name__)
 
@@ -199,10 +210,43 @@ async def _grant_agent_owner(agent_id: UUID | str, user_id: str) -> None:
     )
 
 
+def _split_approval_targets(
+    tools: list[ToolConfig] | None,
+) -> tuple[set[str], list[ToolConfig] | None]:
+    """Lift the approval toggles out of the tool config into rule targets.
+
+    Returns the targets to sync and the tools with the flag removed, so the
+    persisted config never carries the flag — rules are its only home.
+    """
+    if not tools:
+        return set(), tools
+    dicts = [tool.model_dump() for tool in tools]
+    targets = approval_targets_from_tools(dicts)
+    stripped = [TOOL_CONFIG_ADAPTER.validate_python(t) for t in strip_confirmation_flags(dicts)]
+    return targets, stripped
+
+
+async def _overlay_approval_flags(
+    session: AsyncSession,
+    user_context: UserContext,
+    responses: list[AgentResponse],
+) -> None:
+    """Reconstitute each response's approval flags from rules for the UI."""
+    agent_ids = [response.id for response in responses]
+    by_agent = await approval_targets_for_agents(session, user_context, agent_ids)
+    for response in responses:
+        targets = by_agent.get(response.id)
+        if not targets or not response.tools:
+            continue
+        applied = apply_approval_targets([t.model_dump() for t in response.tools], targets)
+        response.tools = [TOOL_CONFIG_ADAPTER.validate_python(t) for t in applied]
+
+
 @router.post("/", response_model=AgentResponse)
 async def create_agent(
     data: AgentCreate,
     user_context: UserContextDep,
+    session: DatabaseSessionDep,
     agent_service: AgentService = Depends(get_agent_service),
 ):
     """Create a new agent."""
@@ -226,9 +270,16 @@ async def create_agent(
                 ),
             )
 
+    approval_targets, stripped_tools = _split_approval_targets(data.tools)
+    if data.tools is not None:
+        data = data.model_copy(update={"tools": stripped_tools})
+
     agent = await agent_service.create_agent(data)
     await _grant_agent_owner(agent.id, user_context.user_id)
-    return AgentResponse.from_domain(agent)
+    await sync_agent_approval_rules(session, user_context, agent.id, approval_targets)
+    response = AgentResponse.from_domain(agent)
+    await _overlay_approval_flags(session, user_context, [response])
+    return response
 
 
 class ToolResponse(BaseModel):
@@ -325,6 +376,7 @@ async def get_all_tools(
 async def get_agent(
     agent_id: str,
     user_context: UserContextDep,
+    session: DatabaseSessionDep,
     agent_service: AgentService = Depends(get_read_agent_service),
 ):
     """Get an agent by UUID or workspace-scoped slug (tenant or catalog)."""
@@ -337,7 +389,9 @@ async def get_agent(
         agent = await agent_service.get_with_catalog(resolved_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return AgentResponse.from_domain(agent, include_skills=True)
+    response = AgentResponse.from_domain(agent, include_skills=True)
+    await _overlay_approval_flags(session, user_context, [response])
+    return response
 
 
 @router.post("/{agent_id}/install", response_model=AgentResponse)
@@ -368,6 +422,7 @@ async def install_agent(
 @router.get("/", response_model=list[AgentResponse])
 async def list_agents(
     user_context: UserContextDep,
+    session: DatabaseSessionDep,
     agent_service: AgentService = Depends(get_read_agent_service),
 ):
     """List all workspace agents.
@@ -380,7 +435,9 @@ async def list_agents(
         layer (future access-control) rather than query parameters.
     """
     agents = await agent_service.list()
-    return [AgentResponse.from_domain(agent) for agent in agents]
+    responses = [AgentResponse.from_domain(agent) for agent in agents]
+    await _overlay_approval_flags(session, user_context, responses)
+    return responses
 
 
 @router.patch("/{agent_id}", response_model=AgentResponse)
@@ -388,6 +445,7 @@ async def update_agent(
     agent_id: str,
     data: AgentUpdate,
     user_context: UserContextDep,
+    session: DatabaseSessionDep,
     agent_service: AgentService = Depends(get_agent_service),
 ):
     """Update an agent (by UUID or workspace-scoped slug)."""
@@ -399,16 +457,27 @@ async def update_agent(
     if data.model_id is not None:
         await validate_model_id(data.model_id, user_context)
 
+    # Only reconcile approval rules when tools are part of this update; a partial
+    # update that omits tools must not wipe the agent's existing approvals.
+    tools_edited = data.tools is not None
+    approval_targets, stripped_tools = _split_approval_targets(data.tools)
+    if tools_edited:
+        data = data.model_copy(update={"tools": stripped_tools})
+
     agent = await agent_service.update_agent(id=resolved_id, payload=data)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     # Editing an un-installed catalog agent forks a tenant copy (copy-on-write);
     # assert ownership of the resulting row. Idempotent for plain edits.
     await _grant_agent_owner(agent.id, user_context.user_id)
+    if tools_edited:
+        await sync_agent_approval_rules(session, user_context, agent.id, approval_targets)
     agent = await agent_service.get_with_skills(agent.id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return AgentResponse.from_domain(agent, include_skills=True)
+    response = AgentResponse.from_domain(agent, include_skills=True)
+    await _overlay_approval_flags(session, user_context, [response])
+    return response
 
 
 @router.delete("/{agent_id}")
