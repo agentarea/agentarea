@@ -124,7 +124,7 @@ class SecretManagerFactory:
             )
 
 
-# Backward compatibility functions - keep old API but use factory internally
+# Convenience wrappers over SecretManagerFactory
 
 
 def get_secret_manager(
@@ -134,7 +134,7 @@ def get_secret_manager(
 ) -> BaseSecretManager:
     """Create a secret manager instance based on configuration.
 
-    Legacy function - use SecretManagerFactory directly for better control.
+    Convenience wrapper — use SecretManagerFactory directly for more control.
 
     Args:
         secret_manager_type: Type of secret manager ("database" or "infisical")

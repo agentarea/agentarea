@@ -317,6 +317,6 @@ class TestParseOpenAPIOperations:
             assert "name" in t
             assert "description" in t
             assert "inputSchema" in t
-            # Must NOT have enriched fields in the legacy output
+            # Must NOT have enriched fields in the UI-contract output
             assert "method" not in t
             assert "path" not in t

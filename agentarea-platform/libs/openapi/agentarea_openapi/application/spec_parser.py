@@ -97,7 +97,7 @@ def parse_openapi_operations(spec: dict[str, Any]) -> list[dict[str, Any]]:
 def parse_openapi_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract operations from an OpenAPI 3.x spec as tool definitions.
 
-    Thin projector over parse_openapi_operations — returns the legacy
+    Thin projector over parse_openapi_operations — returns the
     {name, description, inputSchema} shape for the UI contract (available_tools column).
 
     Raises ValueError for non-OpenAPI 3.x specs.

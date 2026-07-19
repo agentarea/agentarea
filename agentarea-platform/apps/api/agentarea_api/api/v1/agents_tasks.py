@@ -650,7 +650,7 @@ async def get_agent_task(
                 execution_id=task.execution_id,
             )
 
-        # Fall back to workflow status for legacy workflow-only tasks.
+        # Fall back to workflow status for workflow-only tasks.
         execution_id = f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
 
