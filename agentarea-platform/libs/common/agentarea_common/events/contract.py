@@ -4,7 +4,7 @@ Pure, side-effect-free. No broker, redis, or db imports. Both the backend
 read-path decoder and the frontend reducer mirror this contract.
 
 The source emits the canonical dotted names directly (see EventTypes in
-agentarea_execution.workflows.constants); there is no legacy vocabulary and no
+agentarea_execution.workflows.constants); there is no second vocabulary and no
 alias-on-read bridge.
 
 Core idea — supersede-by-id: every non-lifecycle event maps to a Part with a
@@ -49,9 +49,10 @@ _TERMINAL_TYPES: frozenset[str] = frozenset({TASK_COMPLETED, TASK_FAILED, TASK_C
 def canonical_type(event_type: str) -> str:
     """Return the canonical dotted event type (identity for canonical inputs).
 
-    The source already emits canonical names, so this only strips a leading
-    ``workflow.`` prefix defensively. Kept as the call-site seam so read-path
-    comparison sites stay uniform.
+    The vocabulary is already canonical at the source; the only transform is
+    stripping the ``workflow.`` namespace prefix that the activity publisher
+    adds when it puts an event on the wire (see event_publisher). Kept as the
+    call-site seam so read-path comparison sites stay uniform.
     """
     return event_type[len("workflow.") :] if event_type.startswith("workflow.") else event_type
 

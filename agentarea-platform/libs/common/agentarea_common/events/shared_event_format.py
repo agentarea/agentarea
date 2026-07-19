@@ -157,10 +157,10 @@ def get_channel_for_event_type(event_type: str) -> str:
     Pattern: agentarea.events.{domain}.{action}
     Example: agentarea.events.mcp.instance.created
 
-    For backward compatibility with Go MCP Manager, also supports
-    legacy channel names (MCPServerInstanceCreated, MCPServerInstanceDeleted).
+    The MCP instance lifecycle events are still emitted under their PascalCase
+    names, which the Go MCP Manager subscribes to verbatim; they pass through
+    unmapped.
     """
-    # Legacy event types (PascalCase) - keep as-is for backward compatibility
     if event_type in ("MCPServerInstanceCreated", "MCPServerInstanceDeleted"):
         return event_type
 

@@ -25,9 +25,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Envelope ``data`` keys that carry the aggregate id, in priority order. The
-# legacy DomainEvent flattens payload kwargs into ``data`` (so ``task_id`` etc.
-# live there); typed BaseEvent also exposes ``aggregate_id`` directly.
+# Envelope ``data`` keys that carry the aggregate id, in priority order.
+# DomainEvent flattens payload kwargs into ``data`` (so ``task_id`` etc. live
+# there); typed BaseEvent also exposes ``aggregate_id`` directly.
 _AGGREGATE_ID_KEYS = (
     "aggregate_id",
     "task_id",

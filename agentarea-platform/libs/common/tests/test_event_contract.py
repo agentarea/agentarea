@@ -3,8 +3,8 @@
 Pure tests: no Redis, no DB. They lock the public API of
 ``agentarea_common.events.contract``:
 
-- ``canonical_type`` — identity for canonical inputs, strips a defensive
-  ``workflow.`` prefix. There is no legacy alias bridge.
+- ``canonical_type`` — identity for canonical inputs, strips the ``workflow.``
+  namespace prefix. There is no alias bridge.
 - ``derive_part`` — map a canonical (event_type, data) to a superseding Part.
 - ``reduce_parts`` — supersede-by-id fold over an event stream.
 """
