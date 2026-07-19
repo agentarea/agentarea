@@ -3,7 +3,7 @@
  *
  * Pure, side-effect-free mirror of the backend contract
  * (agentarea_common/events/contract.py). The source emits the canonical dotted
- * names directly — there is no legacy vocabulary and no alias-on-read bridge.
+ * names directly — there is no second vocabulary and no alias-on-read bridge.
  *
  * The whole point is supersede-by-id: every non-lifecycle event maps to a Part
  * with a stable partId; a later event with the same partId replaces that part

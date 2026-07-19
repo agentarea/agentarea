@@ -1008,7 +1008,7 @@ const ToolConfig = ({
                                 : "text-muted-foreground hover:text-foreground")
                             }
                             aria-pressed={currentLoadMode === "explicit"}
-                            title="Send every operation schema in every LLM call (legacy behavior, larger context)."
+                            title="Send every operation schema in every LLM call (default behavior, larger context)."
                           >
                             Explicit
                           </button>

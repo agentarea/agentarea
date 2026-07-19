@@ -4,9 +4,8 @@
  * A2UI surfaces (agent-to-user interactive UI, protocol v0.9) are not a single
  * superseding payload like other parts: a create event seeds a surface, then
  * update-components upserts nodes (flat adjacency-list) and update-data patches
- * the data model at a JSON Pointer path, and delete removes the surface. This
- * mirrors the semantics the legacy messageAccumulator implemented, folded into
- * a stable accumulated shape keyed by surface_id.
+ * the data model at a JSON Pointer path, and delete removes the surface. The
+ * result is folded into a stable accumulated shape keyed by surface_id.
  */
 
 import { A2UI_CREATE, A2UI_UPDATE_COMPONENTS, EventData } from "./contract";

@@ -126,7 +126,7 @@ export function TaskProvider({ taskId, initialTask, initialError, children }: Ta
   const policyTaskId = task?.id;
 
   // Load the immutable governance policy snapshot for the task (best-effort:
-  // legacy tasks return 404, which we treat as "no policy").
+  // tasks without a snapshot return 404, which we treat as "no policy").
   useEffect(() => {
     if (!policyTaskId) return;
     const loadPolicy = async () => {
