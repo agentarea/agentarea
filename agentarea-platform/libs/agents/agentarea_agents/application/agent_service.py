@@ -9,6 +9,11 @@ from agentarea_common.base.service import BaseCrudService
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.utils.slug import generate_slug
 
+from agentarea_agents.application.approval_sync import (
+    approval_targets_from_tools,
+    strip_confirmation_flags,
+    sync_agent_approval_rules,
+)
 from agentarea_agents.domain.events import AgentCreated, AgentDeleted, AgentUpdated
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.catalog_agent_repository import (
@@ -93,6 +98,29 @@ class AgentService(BaseCrudService[Agent]):
             user_context=self._user_context,
         )
 
+    def _lift_approval_toggles(
+        self, tools: list[dict] | None
+    ) -> tuple[set[str], list[dict] | None]:
+        """Split the per-tool approval toggles out of the tool config.
+
+        Returns the rule targets to sync and the tools with the flag removed, so
+        the persisted config never carries the flag — the agent-scoped policy
+        rule is its only home. Every agent-creation path funnels through here so
+        a ticked tool always yields an enforcing rule, not just a dead flag.
+        """
+        if not tools:
+            return set(), tools
+        return approval_targets_from_tools(tools), strip_confirmation_flags(tools)
+
+    async def _sync_approval_rules(self, agent_id: UUID, targets: set[str]) -> None:
+        """Reconcile the agent's APPROVAL rules to exactly ``targets``."""
+        await sync_agent_approval_rules(
+            self.repository_factory.session,
+            self.repository_factory.user_context,
+            agent_id,
+            targets,
+        )
+
     async def list(self, include_catalog: bool = False) -> list[Agent]:  # type: ignore[override]
         """List the workspace's own agents.
 
@@ -162,6 +190,7 @@ class AgentService(BaseCrudService[Agent]):
     @audited("agent.create", resource_type="agent")
     async def create_agent(self, payload: AgentCreate) -> Agent:
         tools = [t.model_dump(exclude_none=True) for t in payload.tools] if payload.tools else None
+        approval_targets, tools = self._lift_approval_toggles(tools)
         events_config = payload.events_config.model_dump() if payload.events_config else None
 
         slug = await self._resolve_unique_slug(payload.name)
@@ -179,6 +208,10 @@ class AgentService(BaseCrudService[Agent]):
             agent_type=payload.agent_type,
         )
         agent = await self.create(agent)
+        # A brand-new agent has no prior rules, so an empty target set is a no-op
+        # reconcile — unlike update, which must run to remove unticked rules.
+        if approval_targets:
+            await self._sync_approval_rules(agent.id, approval_targets)
 
         if payload.skill_ids:
             repo = self._get_agent_repository()
@@ -211,6 +244,7 @@ class AgentService(BaseCrudService[Agent]):
         tools = spec.get("tools")
         if not isinstance(tools, list):
             tools = None
+        approval_targets, tools = self._lift_approval_toggles(tools)
 
         # The catalog never binds a concrete model — that is a per-workspace
         # instance. The forked agent starts with no model; the UI uses
@@ -232,6 +266,8 @@ class AgentService(BaseCrudService[Agent]):
             registry_item_id=item.id,
         )
         await self._get_catalog_repository().mark_installed(item.id, str(agent.id), item.version)
+        if approval_targets:
+            await self._sync_approval_rules(agent.id, approval_targets)
         return agent
 
     async def install_catalog_agent(self, id: UUID) -> Agent | None:
@@ -280,8 +316,11 @@ class AgentService(BaseCrudService[Agent]):
             agent.instruction = patch["instruction"]
         if "model_id" in patch:
             agent.model_id = patch["model_id"]
-        if "tools" in patch and payload.tools is not None:
-            agent.tools = [t.model_dump(exclude_none=True) for t in payload.tools]
+        tools_edited = "tools" in patch and payload.tools is not None
+        approval_targets: set[str] = set()
+        if tools_edited:
+            dumped = [t.model_dump(exclude_none=True) for t in payload.tools]
+            approval_targets, agent.tools = self._lift_approval_toggles(dumped)
         if "events_config" in patch and payload.events_config is not None:
             agent.events_config = payload.events_config.model_dump()
         if "planning" in patch:
@@ -292,6 +331,9 @@ class AgentService(BaseCrudService[Agent]):
             agent.agent_type = patch["agent_type"]
 
         agent = await self.update(agent)
+
+        if tools_edited:
+            await self._sync_approval_rules(agent.id, approval_targets)
 
         if "skill_ids" in patch and payload.skill_ids is not None:
             repo = self._get_agent_repository()

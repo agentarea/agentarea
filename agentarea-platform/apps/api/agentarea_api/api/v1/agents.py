@@ -38,9 +38,6 @@ from ._access_control_grants import grant_user_relation
 from ._approval_policy_sync import (
     apply_approval_targets,
     approval_targets_for_agents,
-    approval_targets_from_tools,
-    strip_confirmation_flags,
-    sync_agent_approval_rules,
 )
 
 DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
@@ -210,22 +207,6 @@ async def _grant_agent_owner(agent_id: UUID | str, user_id: str) -> None:
     )
 
 
-def _split_approval_targets(
-    tools: list[ToolConfig] | None,
-) -> tuple[set[str], list[ToolConfig] | None]:
-    """Lift the approval toggles out of the tool config into rule targets.
-
-    Returns the targets to sync and the tools with the flag removed, so the
-    persisted config never carries the flag — rules are its only home.
-    """
-    if not tools:
-        return set(), tools
-    dicts = [tool.model_dump() for tool in tools]
-    targets = approval_targets_from_tools(dicts)
-    stripped = [TOOL_CONFIG_ADAPTER.validate_python(t) for t in strip_confirmation_flags(dicts)]
-    return targets, stripped
-
-
 async def _overlay_approval_flags(
     session: AsyncSession,
     user_context: UserContext,
@@ -270,13 +251,8 @@ async def create_agent(
                 ),
             )
 
-    approval_targets, stripped_tools = _split_approval_targets(data.tools)
-    if data.tools is not None:
-        data = data.model_copy(update={"tools": stripped_tools})
-
     agent = await agent_service.create_agent(data)
     await _grant_agent_owner(agent.id, user_context.user_id)
-    await sync_agent_approval_rules(session, user_context, agent.id, approval_targets)
     response = AgentResponse.from_domain(agent)
     await _overlay_approval_flags(session, user_context, [response])
     return response
@@ -457,21 +433,12 @@ async def update_agent(
     if data.model_id is not None:
         await validate_model_id(data.model_id, user_context)
 
-    # Only reconcile approval rules when tools are part of this update; a partial
-    # update that omits tools must not wipe the agent's existing approvals.
-    tools_edited = data.tools is not None
-    approval_targets, stripped_tools = _split_approval_targets(data.tools)
-    if tools_edited:
-        data = data.model_copy(update={"tools": stripped_tools})
-
     agent = await agent_service.update_agent(id=resolved_id, payload=data)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     # Editing an un-installed catalog agent forks a tenant copy (copy-on-write);
     # assert ownership of the resulting row. Idempotent for plain edits.
     await _grant_agent_owner(agent.id, user_context.user_id)
-    if tools_edited:
-        await sync_agent_approval_rules(session, user_context, agent.id, approval_targets)
     agent = await agent_service.get_with_skills(agent.id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
