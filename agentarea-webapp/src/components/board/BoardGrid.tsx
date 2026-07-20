@@ -30,7 +30,7 @@ function PlusMark({ pos }: { pos: PlusPos }) {
       className={cn("pointer-events-none absolute z-[6] hidden h-[11px] w-[11px] lg:block", place[pos])}
       style={{
         background:
-          "linear-gradient(var(--board-crop),var(--board-crop)) center / 1.4px 11px no-repeat," +
+          "linear-gradient(var(--board-crop),var(--board-crop)) center / 1.4px 11px no-repeat, " +
           "linear-gradient(var(--board-crop),var(--board-crop)) center / 11px 1.4px no-repeat",
       }}
     />
@@ -148,7 +148,7 @@ export function BoardGrid({
         style={{
           left: `${leftFraction * 100}%`,
           background:
-            "linear-gradient(var(--board-crop),var(--board-crop)) center / 1.4px 11px no-repeat," +
+            "linear-gradient(var(--board-crop),var(--board-crop)) center / 1.4px 11px no-repeat, " +
             "linear-gradient(var(--board-crop),var(--board-crop)) center / 11px 1.4px no-repeat",
         }}
       />
@@ -158,7 +158,7 @@ export function BoardGrid({
         style={{
           left: `${leftFraction * 100}%`,
           background:
-            "linear-gradient(var(--board-crop),var(--board-crop)) center / 1.4px 11px no-repeat," +
+            "linear-gradient(var(--board-crop),var(--board-crop)) center / 1.4px 11px no-repeat, " +
             "linear-gradient(var(--board-crop),var(--board-crop)) center / 11px 1.4px no-repeat",
         }}
       />
