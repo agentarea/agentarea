@@ -75,7 +75,7 @@ export function SpendCard({
               <div className={cn("mt-2 text-[11.5px] tabular-nums", pctTone(pct))}>
                 {t("budgetUsage", {
                   pct: pct.toFixed(0),
-                  cap: fmt(spend.cap_usd!),
+                  cap: fmt(spend.cap_usd ?? 0),
                 })}
               </div>
               <div className="ml-auto mt-1.5 h-[5px] w-[150px] overflow-hidden rounded-full bg-muted">

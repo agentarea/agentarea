@@ -22,7 +22,6 @@ import {
   ScrollText,
   Server,
   Shield,
-  ShieldCheck,
   Sparkles,
   Timer,
   Unplug,
