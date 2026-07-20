@@ -58,7 +58,6 @@ class TestE2EFullPipeline:
         )
         result = await pipeline.run(Phase.PRE_TOOL_CALL, ctx)
         assert result.action == InterceptorAction.ALLOW
-        assert result.interceptor_name != "capability_guard"
 
     @pytest.mark.asyncio
     async def test_budget_exhausted_denies_before_capability(self):

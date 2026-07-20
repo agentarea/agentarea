@@ -26,11 +26,10 @@ from uuid import UUID
 import httpx
 from agentarea_api.api.deps.services import BaseSecretManagerDep, DatabaseSessionDep
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.tool_authorization import (
-    ToolAuthorizationRequest,
-    authorize_tool_invocation,
-)
+from agentarea_common.auth.tool_authorization import decide_tool_policy
+from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
+from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
@@ -106,8 +105,14 @@ def _iter_jsonrpc_tool_calls(payload: Any) -> list[tuple[str, dict[str, Any]]]:
     return calls
 
 
-async def _authorize_mcp_tool_calls(body: bytes, user_context) -> None:
-    """Deny JSON-RPC tool calls unless the tool authorization PDP allows them."""
+async def _authorize_mcp_tool_calls(body: bytes, user_context, session) -> None:
+    """Deny JSON-RPC tool calls the governance policy does not permit.
+
+    The proxy has no task snapshot, so it resolves the workspace+user policy at
+    request time and runs the same PDP (``decide_tool_policy``) the disclosure,
+    workflow gate, and tool activity use — one authorization vocabulary across
+    every tool path. Resolving here (outside the Temporal sandbox) is fine.
+    """
     if not body:
         return
     try:
@@ -118,16 +123,15 @@ async def _authorize_mcp_tool_calls(body: bytes, user_context) -> None:
     if not tool_calls:
         return
 
-    for tool_name, tool_args in tool_calls:
-        decision = await authorize_tool_invocation(
-            ToolAuthorizationRequest(
-                tool_name=tool_name,
-                tool_args=tool_args,
-                user_id=user_context.user_id,
-                workspace_id=user_context.workspace_id,
-                policy_required=False,
-            )
-        )
+    resolver = GovernancePolicyResolver(RepositoryFactory(session, user_context))
+    snapshot = await resolver.resolve(
+        workspace_id=user_context.workspace_id,
+        user_id=user_context.user_id,
+    )
+    policy = snapshot.to_json_dict()
+
+    for tool_name, _tool_args in tool_calls:
+        decision = decide_tool_policy(policy, tool_name)
         if not decision.allowed:
             raise HTTPException(
                 status_code=403,
@@ -271,7 +275,7 @@ async def proxy_instance(
 
     body = await request.body() if request.method in ("POST", "DELETE") else None
     if request.method == "POST" and body is not None:
-        await _authorize_mcp_tool_calls(body, user_context)
+        await _authorize_mcp_tool_calls(body, user_context, db_session)
     params = dict(request.query_params)
 
     client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=None, write=30, pool=10))

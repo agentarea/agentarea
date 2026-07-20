@@ -1,13 +1,10 @@
 """Tests for the single tool invocation authorization PDP.
 
-Task paths are policy-only: the resolved snapshot (composition + policy) is
-authoritative, and the OpenFGA graph is not consulted — so disclosure, the
-workflow gate, and the activity read one answer. The graph remains the control
-surface only for the policy-less MCP proxy path (``policy_required=False``),
-which has no snapshot.
+The resolved policy snapshot (composition + policy) is authoritative: disclosure,
+the workflow gate, and the tool activity read one answer. ``decide_tool_policy``
+is that judgment; ``authorize_tool_invocation`` is the request-shaped wrapper the
+tool activity calls.
 """
-
-from unittest.mock import AsyncMock
 
 import pytest
 from agentarea_common.auth.tool_authorization import (
@@ -16,20 +13,6 @@ from agentarea_common.auth.tool_authorization import (
     authorize_tool_invocation,
     decide_tool_policy,
 )
-from agentarea_common.config import get_settings
-from agentarea_common.rebac.models import CheckResult
-
-
-@pytest.fixture(autouse=True)
-def _clear_settings_cache(monkeypatch):
-    monkeypatch.delenv("ACCESS_CONTROL_BACKEND", raising=False)
-    monkeypatch.setenv("WORKFLOW__TEMPORAL_SERVER_URL", "localhost:7233")
-    monkeypatch.setenv("WORKFLOW__TEMPORAL_NAMESPACE", "default")
-    monkeypatch.setenv("WORKFLOW__TEMPORAL_TASK_QUEUE", "test-task-queue")
-    get_settings.cache_clear()
-    yield
-    get_settings.cache_clear()
-
 
 # --- decide_tool_policy: default-allow -----------------------------------------
 
@@ -64,15 +47,11 @@ def test_a_non_empty_allowlist_still_restricts():
     assert decide_tool_policy(policy, "shell_exec").action is ToolAuthorizationAction.DENY
 
 
-# --- authorize_tool_invocation: task path is policy-only ------------------------
+# --- authorize_tool_invocation: the request-shaped policy verdict ---------------
 
 
 @pytest.mark.asyncio
-async def test_task_path_never_consults_the_graph(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-
+async def test_authorize_returns_the_policy_decision():
     decision = await authorize_tool_invocation(
         ToolAuthorizationRequest(
             tool_name="web_search",
@@ -80,44 +59,14 @@ async def test_task_path_never_consults_the_graph(monkeypatch):
             user_id="u1",
             workspace_id="ws-1",
             effective_policy={"tools": {"allowed": ["web_*"]}},
-        ),
-        openfga_client=openfga,
+        )
     )
 
     assert decision.action is ToolAuthorizationAction.ALLOW
-    openfga.check.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_task_path_ignores_a_graph_that_would_deny(monkeypatch):
-    # The graph's opinion no longer overrides the snapshot on task paths. A
-    # policy-allowed tool runs even if a stale graph grant is absent.
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-    openfga.check.return_value = CheckResult(allowed=False)
-
-    decision = await authorize_tool_invocation(
-        ToolAuthorizationRequest(
-            tool_name="shell",
-            tool_args={},
-            user_id="u1",
-            workspace_id="ws-1",
-            effective_policy=None,
-        ),
-        openfga_client=openfga,
-    )
-
-    assert decision.action is ToolAuthorizationAction.ALLOW
-    openfga.check.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_task_path_denies_a_policy_denied_tool(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-
+async def test_authorize_denies_a_policy_denied_tool():
     decision = await authorize_tool_invocation(
         ToolAuthorizationRequest(
             tool_name="shell",
@@ -125,117 +74,16 @@ async def test_task_path_denies_a_policy_denied_tool(monkeypatch):
             user_id="u1",
             workspace_id="ws-1",
             effective_policy={"tools": {"denied": ["shell"]}},
-        ),
-        openfga_client=openfga,
-    )
-
-    assert decision.action is ToolAuthorizationAction.DENY
-    openfga.check.assert_not_awaited()
-
-
-# --- MCP proxy path (policy_required=False): the graph is the only control -------
-
-
-@pytest.mark.asyncio
-async def test_proxy_allows_when_graph_allows(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-    openfga.check.return_value = CheckResult(allowed=True)
-
-    decision = await authorize_tool_invocation(
-        ToolAuthorizationRequest(
-            tool_name="github.create_issue",
-            tool_args={"repo": "acme/app"},
-            user_id="u1",
-            workspace_id="ws-1",
-            policy_required=False,
-        ),
-        openfga_client=openfga,
-    )
-
-    assert decision.action is ToolAuthorizationAction.ALLOW
-    openfga.check.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_proxy_denies_when_graph_denies(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-    openfga.check.return_value = CheckResult(allowed=False)
-
-    decision = await authorize_tool_invocation(
-        ToolAuthorizationRequest(
-            tool_name="github.create_issue",
-            tool_args={"repo": "acme/app"},
-            user_id="u1",
-            workspace_id="ws-1",
-            policy_required=False,
-        ),
-        openfga_client=openfga,
-    )
-
-    assert decision.action is ToolAuthorizationAction.DENY
-    assert decision.reason == "OpenFGA denied this tool invocation"
-
-
-@pytest.mark.asyncio
-async def test_proxy_denies_when_graph_disabled(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "disabled")
-    get_settings.cache_clear()
-
-    decision = await authorize_tool_invocation(
-        ToolAuthorizationRequest(
-            tool_name="github.create_issue",
-            tool_args={"repo": "acme/app"},
-            user_id="u1",
-            workspace_id="ws-1",
-            policy_required=False,
         )
     )
 
     assert decision.action is ToolAuthorizationAction.DENY
-    assert decision.reason == "OpenFGA tool authorization is disabled"
 
 
 @pytest.mark.asyncio
-async def test_proxy_requires_user_id(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-
+async def test_authorize_allows_when_no_policy_restricts():
     decision = await authorize_tool_invocation(
-        ToolAuthorizationRequest(
-            tool_name="github.create_issue",
-            tool_args={"repo": "acme/app"},
-            workspace_id="ws-1",
-            policy_required=False,
-        ),
-        openfga_client=openfga,
+        ToolAuthorizationRequest(tool_name="shell", tool_args={}, effective_policy=None)
     )
 
-    assert decision.action is ToolAuthorizationAction.DENY
-    assert decision.reason == "missing user_id for tool authorization"
-    openfga.check.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_proxy_requires_workspace_id(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-
-    decision = await authorize_tool_invocation(
-        ToolAuthorizationRequest(
-            tool_name="github.create_issue",
-            tool_args={"repo": "acme/app"},
-            user_id="u1",
-            policy_required=False,
-        ),
-        openfga_client=openfga,
-    )
-
-    assert decision.action is ToolAuthorizationAction.DENY
-    assert decision.reason == "missing workspace_id for tool authorization"
-    openfga.check.assert_not_awaited()
+    assert decision.action is ToolAuthorizationAction.ALLOW

@@ -54,9 +54,6 @@ class NetworkTopologyResponse(BaseModel):
 
 _GOVERNANCE_INTERCEPTORS = [
     GovernanceOverlay(
-        interceptor_name="capability_guard", category="gate", phases=["pre_tool_call"]
-    ),
-    GovernanceOverlay(
         interceptor_name="cost_budget_guard", category="gate", phases=["pre_llm_call"]
     ),
     GovernanceOverlay(

@@ -5,13 +5,14 @@ from uuid import uuid4
 import pytest
 from agentarea_governance.domain.enums import InterceptorAction, Phase
 from agentarea_governance.domain.models import InterceptorContext
-from agentarea_governance.interceptors.gates.capability_guard import CapabilityGuard
 from agentarea_governance.interceptors.gates.cost_budget_guard import CostBudgetGuard
 from agentarea_governance.interceptors.gates.service_budget_guard import ServiceBudgetGuard
 from agentarea_governance.interceptors.gates.token_budget_guard import TokenBudgetGuard
 
 
-def _ctx(action_name: str = "web_search", execution_state: dict | None = None) -> InterceptorContext:
+def _ctx(
+    action_name: str = "web_search", execution_state: dict | None = None
+) -> InterceptorContext:
     return InterceptorContext(
         agent_id=uuid4(),
         workspace_id="ws-1",
@@ -21,66 +22,6 @@ def _ctx(action_name: str = "web_search", execution_state: dict | None = None) -
         action_name=action_name,
         execution_state=execution_state or {},
     )
-
-
-class TestCapabilityGuard:
-    @pytest.mark.asyncio
-    async def test_no_config_denies(self):
-        guard = CapabilityGuard()
-        result = await guard.execute(_ctx())
-        assert result.action == InterceptorAction.DENY
-        assert "allowlist" in result.reason
-
-    @pytest.mark.asyncio
-    async def test_allowed_tool(self):
-        guard = CapabilityGuard()
-        ctx = _ctx("web_search", {"tools_config": {"allowed": ["web_search", "file_read"]}})
-        result = await guard.execute(ctx)
-        assert result.action == InterceptorAction.ALLOW
-
-    @pytest.mark.asyncio
-    async def test_denied_tool_not_in_allowed(self):
-        guard = CapabilityGuard()
-        ctx = _ctx("shell_exec", {"tools_config": {"allowed": ["web_search"]}})
-        result = await guard.execute(ctx)
-        assert result.action == InterceptorAction.DENY
-        assert "shell_exec" in result.reason
-
-    @pytest.mark.asyncio
-    async def test_denied_tool_in_deny_list(self):
-        guard = CapabilityGuard()
-        ctx = _ctx("shell_exec", {"tools_config": {"denied": ["shell_exec", "rm_rf"]}})
-        result = await guard.execute(ctx)
-        assert result.action == InterceptorAction.DENY
-
-    @pytest.mark.asyncio
-    async def test_glob_pattern_match(self):
-        guard = CapabilityGuard()
-        ctx = _ctx("web_search", {"tools_config": {"allowed": ["web_*"]}})
-        result = await guard.execute(ctx)
-        assert result.action == InterceptorAction.ALLOW
-
-    @pytest.mark.asyncio
-    async def test_glob_pattern_no_match(self):
-        guard = CapabilityGuard()
-        ctx = _ctx("shell_exec", {"tools_config": {"allowed": ["web_*"]}})
-        result = await guard.execute(ctx)
-        assert result.action == InterceptorAction.DENY
-
-    @pytest.mark.asyncio
-    async def test_deny_list_glob(self):
-        guard = CapabilityGuard()
-        ctx = _ctx("payment_process", {"tools_config": {"denied": ["payment_*"]}})
-        result = await guard.execute(ctx)
-        assert result.action == InterceptorAction.DENY
-
-    @pytest.mark.asyncio
-    async def test_deny_list_without_allowlist_does_not_open_other_tools(self):
-        guard = CapabilityGuard()
-        ctx = _ctx("web_search", {"tools_config": {"denied": ["payment_*"]}})
-        result = await guard.execute(ctx)
-        assert result.action == InterceptorAction.DENY
-        assert "allowed tools" in result.reason
 
 
 class TestCostBudgetGuard:

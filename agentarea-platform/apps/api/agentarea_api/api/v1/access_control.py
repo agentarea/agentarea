@@ -13,7 +13,6 @@ preferred when enabled; Keto remains supported as a migration fallback.
 
 import logging
 from typing import Annotated, Literal
-from urllib.parse import unquote
 from uuid import UUID
 
 from agentarea_agents.domain.collection_models import collection_skills_table
@@ -269,19 +268,7 @@ _NAMESPACE_REPOS: dict[str, type] = {
     "Skill": SkillRepository,
     "SkillCollection": SkillCollectionRepository,
 }
-_VIRTUAL_NAMESPACES = {"Tool", "ToolResource"}
-_READABLE_NAMESPACES = set(_NAMESPACE_REPOS) | _VIRTUAL_NAMESPACES
-
-
-def _virtual_object_workspace_id(namespace: str, object_id: str) -> str | None:
-    if namespace == "ToolResource":
-        object_id = object_id.split("~args~", 1)[0]
-    if namespace not in _VIRTUAL_NAMESPACES:
-        return None
-    workspace_id, separator, _tool_name = object_id.partition("/")
-    if not separator or not workspace_id:
-        return None
-    return unquote(workspace_id)
+_READABLE_NAMESPACES = set(_NAMESPACE_REPOS)
 
 
 async def _workspace_member_ids(
@@ -323,19 +310,6 @@ async def _assert_object_in_workspace(
     """Raise 403/422 if namespace:object_id does not belong to the caller's workspace."""
     repo_cls = _NAMESPACE_REPOS.get(namespace)
     if repo_cls is None:
-        if namespace in _VIRTUAL_NAMESPACES:
-            if user_context is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"{namespace} objects require a workspace-scoped id",
-                )
-            object_workspace_id = _virtual_object_workspace_id(namespace, object_id)
-            if object_workspace_id != user_context.workspace_id:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"{namespace}:{object_id} not found in your workspace",
-                )
-            return
         raise HTTPException(status_code=422, detail=f"Unsupported namespace: {namespace!r}")
     try:
         obj_uuid = UUID(object_id)
@@ -382,16 +356,9 @@ def _relationship_is_in_workspace(
     workspace_objects: dict[str, set[str]],
     workspace_member_ids: set[str],
 ) -> bool:
-    if relationship.namespace in _VIRTUAL_NAMESPACES:
-        if (
-            _virtual_object_workspace_id(relationship.namespace, relationship.object)
-            != workspace_id
-        ):
-            return False
-    else:
-        allowed_objects = workspace_objects.get(relationship.namespace)
-        if allowed_objects is None or str(relationship.object) not in allowed_objects:
-            return False
+    allowed_objects = workspace_objects.get(relationship.namespace)
+    if allowed_objects is None or str(relationship.object) not in allowed_objects:
+        return False
 
     if relationship.subject_set is not None:
         subject_set = relationship.subject_set
@@ -410,14 +377,6 @@ def _relationship_is_in_workspace(
     if subject_id.startswith("Workspace:"):
         return subject_id.split(":", 1)[1] == workspace_id
     return False
-
-
-def _assert_relationship_mutable_namespace(namespace: str) -> None:
-    if namespace in _VIRTUAL_NAMESPACES:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Use the tool-access API to mutate {namespace} grants",
-        )
 
 
 async def _assert_workspace_admin(user_context: UserContext) -> None:
@@ -607,11 +566,7 @@ async def list_relationships(
     )
     workspace_member_ids = await _workspace_member_ids(user_context, db_session)
 
-    namespaces = (
-        [namespace]
-        if namespace
-        else ["SkillCollection", "Skill", "MCPServer", "Agent", "Tool", "ToolResource"]
-    )
+    namespaces = [namespace] if namespace else ["SkillCollection", "Skill", "MCPServer", "Agent"]
     items: list[RelationshipItem] = []
     for ns in namespaces:
         for t in await _workspace_relationships(graph_client, ns):
@@ -683,7 +638,6 @@ async def create_relationship(
     if graph_client is None:
         raise HTTPException(status_code=503, detail="Graph authorization is disabled")
     await _assert_workspace_admin(user_context)
-    _assert_relationship_mutable_namespace(payload.namespace)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     # Validate the subject too: a subject_set pointing at one of our entity
     # namespaces must also belong to the caller's workspace, so admins cannot
@@ -720,7 +674,6 @@ async def delete_relationship(
     if graph_client is None:
         raise HTTPException(status_code=503, detail="Graph authorization is disabled")
     await _assert_workspace_admin(user_context)
-    _assert_relationship_mutable_namespace(payload.namespace)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     relationship = _to_graph_relationship(payload)
     try:

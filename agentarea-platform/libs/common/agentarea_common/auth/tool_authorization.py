@@ -3,15 +3,9 @@
 from __future__ import annotations
 
 import fnmatch
-import logging
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from agentarea_common.rebac.openfga_client import OpenFGAClient
-
-logger = logging.getLogger(__name__)
+from typing import Any
 
 
 class ToolAuthorizationAction(StrEnum):
@@ -26,9 +20,8 @@ class ToolAuthorizationAction(StrEnum):
 class ToolAuthorizationRequest:
     """Inputs to the tool invocation PDP.
 
-    ``policy_required`` means the caller is executing inside a resolved task
-    policy snapshot. Direct MCP proxy calls do not have that snapshot, so they
-    still use this PDP but go straight to the graph-backed concrete grant.
+    The decision is the resolved policy snapshot's verdict for ``tool_name``;
+    ``user_id``/``workspace_id`` are carried as request context.
     """
 
     tool_name: str
@@ -36,7 +29,6 @@ class ToolAuthorizationRequest:
     user_id: str | None = None
     workspace_id: str | None = None
     effective_policy: dict[str, Any] | None = None
-    policy_required: bool = True
 
 
 @dataclass(frozen=True)
@@ -53,66 +45,14 @@ class ToolAuthorizationDecision:
 
 async def authorize_tool_invocation(
     request: ToolAuthorizationRequest,
-    *,
-    openfga_client: OpenFGAClient | None = None,
 ) -> ToolAuthorizationDecision:
     """Decide whether a concrete tool invocation may run.
 
-    This is the single runtime PDP. It evaluates the task policy snapshot and,
-    when the policy does not explicitly grant all invocations, delegates the
-    concrete user/tool/args resource decision to the configured graph backend.
+    This is the single runtime PDP: the resolved policy snapshot (composition +
+    policy) is authoritative, and disclosure, the workflow gate, and the tool
+    activity all read the one answer.
     """
-    if request.policy_required:
-        # Task paths carry a resolved policy snapshot that is authoritative:
-        # composition + policy already decided allow / deny / approval. The graph
-        # is not consulted here — disclosure, the workflow gate, and this activity
-        # all read the one snapshot, so there is no path where disclosure says yes
-        # and enforcement says no. The graph remains only for the policy-less MCP
-        # proxy path below, which has no snapshot to consult.
-        return decide_tool_policy(request.effective_policy, request.tool_name)
-
-    if not request.user_id:
-        return ToolAuthorizationDecision(
-            ToolAuthorizationAction.DENY,
-            "missing user_id for tool authorization",
-        )
-    if not request.workspace_id:
-        return ToolAuthorizationDecision(
-            ToolAuthorizationAction.DENY,
-            "missing workspace_id for tool authorization",
-        )
-
-    from agentarea_common.config import get_settings
-
-    settings = get_settings()
-    if settings.access_control.ACCESS_CONTROL_BACKEND != "openfga":
-        return ToolAuthorizationDecision(
-            ToolAuthorizationAction.DENY,
-            "OpenFGA tool authorization is disabled",
-        )
-
-    openfga = openfga_client or _resolve_openfga_client()
-    if openfga is None:
-        return ToolAuthorizationDecision(
-            ToolAuthorizationAction.DENY,
-            "OpenFGA tool authorization unavailable",
-        )
-
-    from .tool_invocation import is_tool_invocation_allowed
-
-    allowed = await is_tool_invocation_allowed(
-        openfga,
-        user_id=request.user_id,
-        workspace_id=request.workspace_id,
-        tool_name=request.tool_name,
-        tool_args=request.tool_args,
-    )
-    if not allowed:
-        return ToolAuthorizationDecision(
-            ToolAuthorizationAction.DENY,
-            "OpenFGA denied this tool invocation",
-        )
-    return ToolAuthorizationDecision(ToolAuthorizationAction.ALLOW, "allowed by graph policy")
+    return decide_tool_policy(request.effective_policy, request.tool_name)
 
 
 def decide_tool_policy(
@@ -157,24 +97,3 @@ def decide_tool_policy(
 
 def _matches_any(name: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatch(name, pattern) for pattern in patterns)
-
-
-def _resolve_openfga_client() -> OpenFGAClient | None:
-    from agentarea_common.config import get_settings
-    from agentarea_common.di.container import get_container
-    from agentarea_common.rebac.openfga_client import OpenFGAClient
-
-    settings = get_settings()
-    try:
-        try:
-            return get_container().get(OpenFGAClient)
-        except ValueError:
-            return OpenFGAClient(
-                api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-                store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-                authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-                timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
-            )
-    except Exception:
-        logger.exception("OpenFGA tool authorization client unavailable")
-        return None
