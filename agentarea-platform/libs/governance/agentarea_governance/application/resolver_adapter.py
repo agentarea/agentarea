@@ -38,6 +38,7 @@ class GovernancePolicyResolver:
         agent_id: UUID | None = None,
         task_id: UUID | None = None,
         task_policy: PolicyDocument | None = None,
+        user_id: str | None = None,
     ) -> EffectivePolicy:
         if not workspace_id:
             return EffectivePolicy()
@@ -63,6 +64,20 @@ class GovernancePolicyResolver:
             if agent_rules:
                 layers.append(rules_to_document(agent_rules))
                 source_ids.extend(_rule_ids(agent_rules))
+
+        # Per-user layer, resolved from the task creator. Tighter than the agent
+        # scope (monotonic merge lets it only restrict): this is where "disable
+        # tool X for user Y" lives, so the same agent yields different verdicts
+        # for different callers, all captured in the one snapshot.
+        if user_id:
+            user_rules = await self._rule_repository.list_rules(
+                subject_type=PolicySubjectType.USER,
+                subject_id=user_id,
+                enabled=True,
+            )
+            if user_rules:
+                layers.append(rules_to_document(user_rules))
+                source_ids.extend(_rule_ids(user_rules))
 
         if task_policy is not None:
             layers.append(task_policy)

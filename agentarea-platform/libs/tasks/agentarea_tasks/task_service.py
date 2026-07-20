@@ -97,7 +97,12 @@ class TaskService(BaseTaskService):
         task_id: UUID | None = None,
         task_policy: PolicyDocument | None = None,
     ) -> EffectivePolicy:
-        """Resolve workspace/agent/task policy via the injected port."""
+        """Resolve workspace/agent/user/task policy via the injected port.
+
+        The per-user layer is resolved from the task creator (this service's
+        UserContext), so the snapshot a task carries reflects that specific
+        caller's permissions — the same agent can resolve differently per user.
+        """
         if not workspace_id:
             return EffectivePolicy()
 
@@ -106,6 +111,7 @@ class TaskService(BaseTaskService):
             agent_id=agent_id,
             task_id=task_id,
             task_policy=task_policy,
+            user_id=self.repository_factory.user_context.user_id,
         )
 
     async def _enforce_budget_cap(
