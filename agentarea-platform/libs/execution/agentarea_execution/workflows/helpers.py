@@ -57,8 +57,23 @@ def policy_requires_approval(effective_policy: dict[str, Any] | None, tool_name:
 
 
 def policy_approvers(effective_policy: dict[str, Any] | None) -> list[str]:
-    """Subject refs allowed to approve, from ApprovalPolicy.approvers."""
+    """Global subject refs allowed to approve, from ApprovalPolicy.approvers."""
     return list(((effective_policy or {}).get("approval") or {}).get("approvers") or [])
+
+
+def approvers_for_tool(effective_policy: dict[str, Any] | None, tool_name: str) -> list[str]:
+    """Subject refs allowed to approve a specific tool.
+
+    Per-tool approvers (ApprovalPolicy.approvers_by_tool) win when present, so a
+    tool signed off by one team does not inherit another tool's approvers. Falls
+    back to the global approvers list, and finally to empty (any member — the
+    existing soft default, see issue #198).
+    """
+    approval = (effective_policy or {}).get("approval") or {}
+    per_tool = (approval.get("approvers_by_tool") or {}).get(tool_name)
+    if per_tool:
+        return list(per_tool)
+    return list(approval.get("approvers") or [])
 
 
 class ToolAction(StrEnum):

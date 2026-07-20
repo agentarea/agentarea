@@ -45,11 +45,11 @@ with workflow.unsafe.imports_passed_through():
         StateValidator,
         ToolAction,
         ToolCallExtractor,
+        approvers_for_tool,
         build_output_summary,
         caller_can_approve,
         decide_tool_action,
         filter_disclosed_tools,
-        policy_approvers,
         resolve_effective_budget,
     )
     from .models import (
@@ -2029,7 +2029,7 @@ class AgentExecutionWorkflow:
             tool_call_id=tool_call.id,
             tool_name=tool_name,
             tool_args=tool_args,
-            approvers=policy_approvers(self.state.effective_policy),
+            approvers=approvers_for_tool(self.state.effective_policy, tool_name),
         )
         self._pending_escalations[escalation_id] = escalation
         self.state.status = ExecutionStatus.WAITING_FOR_APPROVAL
