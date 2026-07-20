@@ -10,10 +10,16 @@ type Props = {
   data: DailyTaskCounts[];
 };
 
+// Chart colors are pastel — the hue lightened toward the theme background so the
+// sparklines stay soft and clean (not muddy) and read quieter than the vivid
+// status dots on the labels. Mixing with --background adapts to light/dark.
+const muted = (v: string) =>
+  `color-mix(in srgb, ${v} 45%, hsl(var(--background)))`;
+
 const TONES = {
-  completed: { tone: "success", color: "var(--status-success)" },
-  failed: { tone: "danger", color: "var(--status-danger)" },
-  awaiting: { tone: "warning", color: "var(--status-warning)" },
+  completed: { tone: "success", color: muted("var(--status-success)") },
+  failed: { tone: "danger", color: muted("var(--status-danger)") },
+  awaiting: { tone: "warning", color: muted("var(--status-warning)") },
 } as const;
 
 export function ActivityStrip({ data }: Props) {
@@ -86,6 +92,7 @@ function StatCard({
           pct={delta.pct}
           direction={delta.direction}
           goodDirection={goodDirection}
+          className="text-[10.5px] gap-0"
         />
       </div>
 

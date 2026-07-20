@@ -113,12 +113,7 @@ export function Sparkline({
       aria-hidden="true"
     >
       {areaD && (
-        <path
-          d={areaD}
-          style={{ fill }}
-          fillOpacity={fillOpacity}
-          stroke="none"
-        />
+        <path d={areaD} style={{ fill }} fillOpacity={fillOpacity} stroke="none" />
       )}
       <path
         d={d}
@@ -156,13 +151,19 @@ export function DeltaBadge({
   pct,
   direction,
   goodDirection = "up",
+  className,
 }: {
   pct: number | null;
   direction: DeltaDirection;
   goodDirection?: "up" | "down";
+  className?: string;
 }) {
   if (pct === null || direction === "flat") {
-    return <span className="text-xs text-muted-foreground tabular-nums">—</span>;
+    return (
+      <span className={cn("text-xs text-muted-foreground tabular-nums", className)}>
+        —
+      </span>
+    );
   }
   const isGood =
     (goodDirection === "up" && direction === "up") ||
@@ -174,7 +175,8 @@ export function DeltaBadge({
         "inline-flex items-center gap-0.5 tabular-nums text-xs font-medium",
         isGood
           ? "text-emerald-600 dark:text-emerald-400"
-          : "text-red-600 dark:text-red-400"
+          : "text-red-600 dark:text-red-400",
+        className
       )}
     >
       <span>{arrow}</span>
