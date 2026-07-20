@@ -42,7 +42,11 @@ class TestE2EFullPipeline:
         assert result.action == InterceptorAction.ALLOW
 
     @pytest.mark.asyncio
-    async def test_denied_tool_by_capability(self):
+    async def test_tool_capability_is_not_a_pipeline_gate(self):
+        # Tool capability is decided by the single PDP (decide_tool_policy),
+        # consulted at disclosure / the workflow gate / the tool activity — not by
+        # a pipeline gate. The pipeline no longer denies a tool for capability
+        # reasons; with budget healthy, PRE_TOOL_CALL passes.
         pipeline = create_governance_pipeline()
         ctx = _ctx(
             action_name="shell_exec",
@@ -53,8 +57,8 @@ class TestE2EFullPipeline:
             },
         )
         result = await pipeline.run(Phase.PRE_TOOL_CALL, ctx)
-        assert result.action == InterceptorAction.DENY
-        assert result.interceptor_name == "capability_guard"
+        assert result.action == InterceptorAction.ALLOW
+        assert result.interceptor_name != "capability_guard"
 
     @pytest.mark.asyncio
     async def test_budget_exhausted_denies_before_capability(self):

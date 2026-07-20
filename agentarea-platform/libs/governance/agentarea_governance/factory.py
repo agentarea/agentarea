@@ -11,7 +11,6 @@ from .engines.regex_engine import RegexDetectionEngine
 from .interceptors.filters.mcp_tool_scanner import MCPToolSecurityScanner
 from .interceptors.filters.output_sanitizer import OutputSanitizer
 from .interceptors.filters.prompt_injection_detector import PromptInjectionDetector
-from .interceptors.gates.capability_guard import CapabilityGuard
 from .interceptors.gates.cost_budget_guard import CostBudgetGuard
 from .interceptors.gates.semantic_guard import SemanticGuard
 from .interceptors.gates.service_budget_guard import ServiceBudgetGuard
@@ -51,9 +50,11 @@ def create_governance_pipeline() -> InterceptorPipeline:
             registry.register(entitlement_guard, Phase.PRE_LLM_CALL, priority=120)
             logger.info("Plan entitlement guard registered (enterprise mode)")
 
-    # Capability gate
-    registry.register(CapabilityGuard(), Phase.PRE_TOOL_CALL, priority=200)
-    registry.register(CapabilityGuard(), Phase.PRE_DELEGATION, priority=200)
+    # Tool capability authorization is NOT a pipeline gate. It is the single PDP
+    # (agentarea_common.auth.tool_authorization.decide_tool_policy), consulted at
+    # disclosure, the workflow gate, and the tool activity — default-allow, deny
+    # only what policy denies. A second deny-by-default gate here contradicted it
+    # (offered a tool, then rejected it), so it was removed.
 
     # Security filters — input
     registry.register(PromptInjectionDetector(engine), Phase.PRE_LLM_CALL, priority=300)
