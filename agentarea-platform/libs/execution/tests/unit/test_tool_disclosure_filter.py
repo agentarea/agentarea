@@ -35,13 +35,22 @@ def test_denied_capability_is_never_disclosed():
     assert names(filter_disclosed_tools(policy, tools)) == ["web_search"]
 
 
-def test_control_flow_tools_survive_a_deny_all_policy():
-    # Deny-by-default must not strand the workflow: without completion the
-    # agent can never finish, and without request_user_input it can never ask.
+def test_control_flow_tools_survive_even_an_explicit_deny():
+    # Control-flow tools bypass the gate entirely: even a policy that denies them
+    # by name must not strand the workflow — without completion the agent can
+    # never finish, and without request_user_input it can never ask. A denied
+    # capability tool (shell) is still excluded.
+    policy = {"tools": {"denied": ["shell", *CONTROL_FLOW_TOOLS]}}
     tools = [fn(name) for name in sorted(CONTROL_FLOW_TOOLS)] + [fn("shell")]
-    kept = names(filter_disclosed_tools({}, tools))
+    kept = names(filter_disclosed_tools(policy, tools))
     assert set(kept) == CONTROL_FLOW_TOOLS
     assert "shell" not in kept
+
+
+def test_an_unrestricted_capability_tool_is_disclosed():
+    # Default-allow: a composed tool with no restriction is offered to the model,
+    # no allow rule required.
+    assert names(filter_disclosed_tools({}, [fn("shell")])) == ["shell"]
 
 
 def test_approval_required_tools_stay_disclosed():

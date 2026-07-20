@@ -63,12 +63,13 @@ async def authorize_tool_invocation(
     concrete user/tool/args resource decision to the configured graph backend.
     """
     if request.policy_required:
-        policy_decision = decide_tool_policy(request.effective_policy, request.tool_name)
-        if policy_decision.action is not ToolAuthorizationAction.ALLOW:
-            return policy_decision
-
-    if request.policy_required and _policy_allows_all_invocations(request.effective_policy):
-        return ToolAuthorizationDecision(ToolAuthorizationAction.ALLOW, "allowed by task policy")
+        # Task paths carry a resolved policy snapshot that is authoritative:
+        # composition + policy already decided allow / deny / approval. The graph
+        # is not consulted here — disclosure, the workflow gate, and this activity
+        # all read the one snapshot, so there is no path where disclosure says yes
+        # and enforcement says no. The graph remains only for the policy-less MCP
+        # proxy path below, which has no snapshot to consult.
+        return decide_tool_policy(request.effective_policy, request.tool_name)
 
     if not request.user_id:
         return ToolAuthorizationDecision(
@@ -117,14 +118,16 @@ async def authorize_tool_invocation(
 def decide_tool_policy(
     effective_policy: dict[str, Any] | None, tool_name: str
 ) -> ToolAuthorizationDecision:
-    """Evaluate only the task policy portion of a tool invocation decision."""
+    """Evaluate only the task policy portion of a tool invocation decision.
+
+    Default-allow: this function only ever judges a tool the agent is already
+    composed with (that is why it is being asked about), so composition is the
+    allow. Policy subtracts from it — a ``denied`` match, or a non-empty
+    ``allowed`` allowlist the tool falls outside of, or an approval requirement.
+    An absent/empty allowlist is "no allowlist in use", not "deny everything";
+    restriction is expressed by composing fewer tools or by DENY rules.
+    """
     tools = (effective_policy or {}).get("tools") or {}
-    allowed = tools.get("allowed")
-    if not allowed:
-        return ToolAuthorizationDecision(
-            ToolAuthorizationAction.DENY,
-            f"tool '{tool_name}' is not explicitly allowed by policy",
-        )
 
     denied = tools.get("denied") or []
     if _matches_any(tool_name, denied):
@@ -133,10 +136,11 @@ def decide_tool_policy(
             f"tool '{tool_name}' is denied by policy",
         )
 
-    if not _matches_any(tool_name, allowed):
+    allowed = tools.get("allowed")
+    if allowed and not _matches_any(tool_name, allowed):
         return ToolAuthorizationDecision(
             ToolAuthorizationAction.DENY,
-            f"tool '{tool_name}' is not explicitly allowed by policy",
+            f"tool '{tool_name}' is not permitted by the policy allowlist",
         )
 
     approval = (effective_policy or {}).get("approval") or {}
@@ -149,11 +153,6 @@ def decide_tool_policy(
         )
 
     return ToolAuthorizationDecision(ToolAuthorizationAction.ALLOW, "allowed by task policy")
-
-
-def _policy_allows_all_invocations(effective_policy: dict[str, Any] | None) -> bool:
-    tools = (effective_policy or {}).get("tools") or {}
-    return "*" in (tools.get("allowed") or [])
 
 
 def _matches_any(name: str, patterns: list[str]) -> bool:
