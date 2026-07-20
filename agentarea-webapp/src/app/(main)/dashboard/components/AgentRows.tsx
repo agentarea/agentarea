@@ -1,3 +1,4 @@
+import { Fragment, type ReactElement } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ArrowUpRight, Bot } from "lucide-react";
@@ -36,36 +37,44 @@ function Dot() {
 export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
   const t = useTranslations("DashboardPage");
 
-  const stats = (a: DashboardAgentRow, className?: string) => (
-    <span
-      className={cn(
-        "flex items-center gap-2 text-[12px] text-muted-foreground",
-        className
-      )}
-    >
-      <span>{t("statDone", { count: a.tasks_done_today })}</span>
-      <Dot />
+  const stats = (a: DashboardAgentRow, className?: string) => {
+    const parts = [
+      a.tasks_done_today > 0 && (
+        <span key="done">{t("statDone", { count: a.tasks_done_today })}</span>
+      ),
+      a.tasks_failed_today > 0 && (
+        <span key="failed" className="font-semibold text-red-500 dark:text-red-400">
+          {t("statFailed", { count: a.tasks_failed_today })}
+        </span>
+      ),
+      <span key="mtd" className="font-mono font-medium text-foreground/80">
+        {t("statMtd", { amount: fmt(a.cost_mtd_usd) })}
+      </span>,
+    ].filter(Boolean) as ReactElement[];
+
+    return (
       <span
         className={cn(
-          a.tasks_failed_today > 0 &&
-            "font-semibold text-red-500 dark:text-red-400"
+          "flex items-center gap-2 text-[12px] text-muted-foreground",
+          className
         )}
       >
-        {t("statFailed", { count: a.tasks_failed_today })}
+        {parts.map((part, i) => (
+          <Fragment key={part.key}>
+            {i > 0 && <Dot />}
+            {part}
+          </Fragment>
+        ))}
       </span>
-      <Dot />
-      <span className="font-mono font-medium text-foreground/80">
-        {t("statMtd", { amount: fmt(a.cost_mtd_usd) })}
-      </span>
-    </span>
-  );
+    );
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-b border-zinc-200 px-6 pb-3 pt-4 dark:border-zinc-700">
         <BoardSectionHeader
           icon={<Bot />}
-          color="hsl(var(--primary))"
+          color="hsl(var(--foreground))"
           title={t("agents")}
           pill={t("agentsActive", { count: agents.length })}
           meta={

@@ -1,6 +1,7 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Shield } from "lucide-react";
+import { Clock, Shield, TriangleAlert, Wallet } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import EmptyState from "@/components/EmptyState";
 import { BoardSectionHeader } from "@/components/board";
@@ -18,7 +19,12 @@ type BlockerRow = {
   href: string;
 };
 
-type Group = { label: string; color: string; rows: BlockerRow[] };
+type Group = {
+  label: string;
+  color: string;
+  icon: ReactNode;
+  rows: BlockerRow[];
+};
 
 export function BlockersPanel({
   blockers,
@@ -33,6 +39,7 @@ export function BlockersPanel({
     {
       label: t("awaitingInput"),
       color: "var(--status-warning)",
+      icon: <Clock />,
       rows: blockers.hitl.map((b) => ({
         key: b.task_id,
         question: b.description,
@@ -45,6 +52,7 @@ export function BlockersPanel({
     {
       label: t("walletExhausted"),
       color: "var(--status-info)",
+      icon: <Wallet />,
       rows: blockers.wallet_exhausted.map((b) => ({
         key: b.agent_id,
         question: t("budgetExhausted", {
@@ -60,6 +68,7 @@ export function BlockersPanel({
     {
       label: t("failed24h"),
       color: "var(--status-danger)",
+      icon: <TriangleAlert />,
       rows: blockers.failed_24h.map((b) => ({
         key: b.task_id,
         question: b.error?.split("\n")[0] || t("taskFailed"),
@@ -78,7 +87,7 @@ export function BlockersPanel({
       <div className="border-b border-zinc-200 px-6 pb-3 pt-4 dark:border-zinc-700">
         <BoardSectionHeader
           icon={<Shield />}
-          color="var(--amber)"
+          color="hsl(var(--foreground))"
           title={t("blockers")}
           pill={total > 0 ? total : undefined}
         />
@@ -102,6 +111,7 @@ export function BlockersPanel({
               label={g.label}
               count={g.rows.length}
               color={g.color}
+              icon={g.icon}
               sticky={false}
               headerClassName="px-6 lg:sticky lg:top-0 lg:z-10"
             >

@@ -15,6 +15,7 @@ export function GroupHeader({
   label,
   count,
   color,
+  icon,
   collapsed = false,
   onToggle,
   sticky = true,
@@ -22,8 +23,10 @@ export function GroupHeader({
 }: {
   label: ReactNode;
   count?: number;
-  /** CSS color for the rounded-square marker. Omit to hide the marker. */
+  /** CSS color for the marker (rounded square, or the `icon` when provided). */
   color?: string;
+  /** Minimalist status icon drawn in `color`; replaces the square marker. */
+  icon?: ReactNode;
   collapsed?: boolean;
   onToggle?: () => void;
   /** Stick to the top of the scroll container (default true). */
@@ -45,12 +48,19 @@ export function GroupHeader({
           )}
         />
       )}
-      {color && (
+      {icon ? (
+        <span
+          className="flex shrink-0 items-center justify-center [&>svg]:h-[14px] [&>svg]:w-[14px]"
+          style={{ color }}
+        >
+          {icon}
+        </span>
+      ) : color ? (
         <span
           className="h-[9px] w-[9px] shrink-0 rounded-[3px]"
           style={{ backgroundColor: color }}
         />
-      )}
+      ) : null}
       <span className="text-[12.5px] font-semibold">{label}</span>
       {count != null && (
         <span className="rounded-full bg-muted px-[7px] text-[11.5px] leading-[17px] text-muted-foreground">
@@ -79,6 +89,7 @@ export function CollapsibleGroup({
   label,
   count,
   color,
+  icon,
   defaultOpen = true,
   sticky,
   headerClassName,
@@ -87,6 +98,7 @@ export function CollapsibleGroup({
   label: ReactNode;
   count?: number;
   color?: string;
+  icon?: ReactNode;
   defaultOpen?: boolean;
   sticky?: boolean;
   headerClassName?: string;
@@ -99,6 +111,7 @@ export function CollapsibleGroup({
         label={label}
         count={count}
         color={color}
+        icon={icon}
         collapsed={!open}
         onToggle={() => setOpen((o) => !o)}
         sticky={sticky}

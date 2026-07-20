@@ -65,7 +65,7 @@ export function EntityAvatar({
         borderRadius: radius,
         color: soft ? color : undefined,
         backgroundColor: soft
-          ? `color-mix(in srgb, ${color} 14%, transparent)`
+          ? `color-mix(in srgb, ${color} 8%, transparent)`
           : color,
         backgroundImage: lines && !soft ? LINE_TEXTURE : undefined,
       }}

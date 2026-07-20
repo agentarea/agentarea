@@ -9,7 +9,7 @@ function SpendSkeleton() {
     <div className="flex min-h-0 flex-1 flex-col">
       <BoardSectionHeader
         icon={<Wallet />}
-        color="hsl(var(--chart-2))"
+        color="hsl(var(--foreground))"
         title={t("spend")}
         meta={t("monthToDate")}
       />
@@ -35,7 +35,7 @@ function ActivitySkeleton() {
     <div className="flex min-h-0 flex-1 flex-col">
       <BoardSectionHeader
         icon={<Activity />}
-        color="var(--violet)"
+        color="hsl(var(--foreground))"
         title={t("activity")}
         meta={t("activityMeta")}
       />
@@ -101,7 +101,7 @@ export default function DashboardSkeleton() {
         bottomLeft={
           <ListSkeleton
             icon={<Bot />}
-            color="hsl(var(--primary))"
+            color="hsl(var(--foreground))"
             title={t("agents")}
             rows={5}
           />
@@ -109,7 +109,7 @@ export default function DashboardSkeleton() {
         bottomRight={
           <ListSkeleton
             icon={<Shield />}
-            color="var(--amber)"
+            color="hsl(var(--foreground))"
             title={t("blockers")}
             rows={4}
           />

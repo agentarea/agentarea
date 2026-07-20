@@ -45,7 +45,7 @@ export function SpendCard({
     <div className="flex min-h-0 flex-1 flex-col">
       <BoardSectionHeader
         icon={<Wallet />}
-        color="hsl(var(--chart-2))"
+        color="hsl(var(--foreground))"
         title={t("spend")}
         meta={t("monthToDate")}
       />
