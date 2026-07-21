@@ -67,15 +67,15 @@
   .dark .conn-bp::after {
     background: repeating-linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.06) 0 1px,
+      rgba(255, 255, 255, 0.09) 0 1px,
       transparent 1px 8px
     );
   }
   .dark .conn-bp::before {
-    border-right-color: #26282c;
+    border-right-color: rgba(255, 255, 255, 0.16);
   }
   .dark .conn-bp::after {
-    border-left-color: #26282c;
+    border-left-color: rgba(255, 255, 255, 0.16);
   }
   /* full-width dashed divider between options, with crop-mark crosses */
   .conn-bp-div {
@@ -86,7 +86,7 @@
     z-index: 4;
   }
   .dark .conn-bp-div {
-    border-top-color: #26282c;
+    border-top-color: rgba(255, 255, 255, 0.16);
   }
   .conn-bp-mkp {
     position: absolute;
@@ -101,8 +101,8 @@
   }
   .dark .conn-bp-mkp {
     background:
-      linear-gradient(#4c4f56, #4c4f56) center / 1.3px 9px no-repeat,
-      linear-gradient(#4c4f56, #4c4f56) center / 9px 1.3px no-repeat;
+      linear-gradient(#6b6e76, #6b6e76) center / 1.3px 9px no-repeat,
+      linear-gradient(#6b6e76, #6b6e76) center / 9px 1.3px no-repeat;
   }
   .conn-bp-mkp.l {
     left: 28px;

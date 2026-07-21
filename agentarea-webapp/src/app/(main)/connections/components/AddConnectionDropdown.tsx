@@ -104,7 +104,7 @@ export function AddConnectionDropdown() {
                 {/* solid fill fades in on hover */}
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute inset-0 z-0 rounded-[7px] bg-muted/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                  className="pointer-events-none absolute inset-0 z-0 rounded-[7px] bg-muted/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 dark:bg-white/[0.07]"
                 />
                 <span
                   className={cn(
@@ -115,7 +115,7 @@ export function AddConnectionDropdown() {
                   {option.icon}
                 </span>
                 <span className="relative z-[1] min-w-0 flex-1">
-                  <span className="mb-1 block text-[12.5px] font-bold uppercase leading-none tracking-[0.03em]">
+                  <span className="mb-1 block text-[12.5px] font-semibold uppercase leading-none tracking-[0.03em]">
                     {t(`${option.id}.title`)}
                   </span>
                   <span className="block text-xs leading-normal text-muted-foreground">
