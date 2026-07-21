@@ -7,25 +7,25 @@ function TriggerCardSkeleton() {
   return <LinkedCardSkeleton icon subtitle lines={1} />;
 }
 
-// Mirrors a TriggersTable row: icon · name · schedule · type · agent · next · status.
+// Mirrors a TriggersTable row: tile · name · schedule · type · agent · next · status.
 function TriggersTableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="-mx-4 -mt-5 border-t border-zinc-100 dark:border-zinc-800" aria-hidden="true">
+    <div className="-mx-4 -mt-5" aria-hidden="true">
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
-          className="flex items-center gap-3 border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800"
+          className="flex items-center gap-3 border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-700"
         >
-          <Skeleton className="h-7 w-7 shrink-0 rounded-md" />
-          <Skeleton className="h-4 flex-[1.7]" />
-          <Skeleton className="hidden h-3 flex-[1.4] md:block" />
-          <Skeleton className="hidden h-5 w-20 shrink-0 rounded-full sm:block" />
-          <div className="hidden flex-[1.2] items-center gap-2 md:flex">
+          <Skeleton className="h-[22px] w-[22px] shrink-0 rounded-md" />
+          <Skeleton className="h-4 w-40 shrink-0" />
+          <Skeleton className="hidden h-3 flex-1 md:block" />
+          <Skeleton className="h-[22px] w-20 shrink-0 rounded-full" />
+          <div className="hidden items-center gap-1.5 md:flex">
             <Skeleton className="h-5 w-5 shrink-0 rounded-md" />
             <Skeleton className="h-3 w-20" />
           </div>
-          <Skeleton className="hidden h-3 w-[72px] shrink-0 lg:block" />
-          <Skeleton className="h-5 w-[92px] shrink-0 rounded-full" />
+          <Skeleton className="hidden h-3 w-14 shrink-0 lg:block" />
+          <Skeleton className="h-4 w-16 shrink-0 rounded-full" />
         </div>
       ))}
     </div>

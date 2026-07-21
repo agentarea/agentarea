@@ -50,14 +50,12 @@ export default async function TriggersPage({
           <Suspense fallback={<div className="h-7" />}>
             <TriggersTypeFilterSection currentType={typeFilter} />
           </Suspense>
-          <div className="flex flex-1 items-center justify-end gap-3">
-            <SearchInput
-              urlParamName="search"
-              urlPath="/triggers"
-              placeholder={t("searchPlaceholder")}
-            />
-            <TriggersHeaderTabs currentTab={viewMode} />
-          </div>
+          <SearchInput
+            urlParamName="search"
+            urlPath="/triggers"
+            placeholder={t("searchPlaceholder")}
+          />
+          <TriggersHeaderTabs currentTab={viewMode} />
         </>
       }
     >

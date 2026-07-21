@@ -1,119 +1,140 @@
 "use client";
 
+import type { MouseEvent } from "react";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { Clock, Webhook } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Activity, Clock, Pencil } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import { Badge } from "@/components/ui/badge";
+import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getTriggerStatusPresentation } from "@/lib/status";
-import { cn } from "@/lib/utils";
 import {
   describeTriggerSchedule,
+  findTriggerCatalogEntry,
   formatCompactDistance,
+  getTriggerColor,
+  getTriggerDisplayName,
   getTriggerHealth,
+  getTriggerIconComponent,
+  TriggerTile,
   type EnrichedTrigger,
   type TriggerCatalogEntry,
 } from "./triggerDisplay";
 
 interface TriggersTableProps {
   triggers: EnrichedTrigger[];
-  /** Accepted for call-site compatibility; the row now derives everything it
-   *  needs from the trigger itself. */
   catalog?: TriggerCatalogEntry[];
 }
 
-export default function TriggersTable({ triggers }: TriggersTableProps) {
+export default function TriggersTable({
+  triggers,
+  catalog = [],
+}: TriggersTableProps) {
+  const router = useRouter();
   const tStatus = useTranslations("TriggersPage.status");
-  const tType = useTranslations("TriggersPage.type");
+
+  const stop = (e: MouseEvent) => e.stopPropagation();
 
   return (
-    <div className="-mx-4 -mt-5 border-t border-zinc-100 dark:border-zinc-800">
+    <div className="-mx-4 -mt-5">
       {triggers.map((trigger) => {
-        const isCron = trigger.trigger_type === "cron";
-        const TypeIcon = isCron ? Clock : Webhook;
+        const entry = findTriggerCatalogEntry(trigger, catalog);
+        const Icon = getTriggerIconComponent(entry, trigger);
+        const color = getTriggerColor(entry, trigger);
+        const typeLabel = getTriggerDisplayName(trigger, entry);
         const schedule = describeTriggerSchedule(trigger);
         const health = getTriggerHealth(trigger);
         const status = getTriggerStatusPresentation(health);
         const nextRun = trigger.next_run_time ?? trigger.next_run_at;
-        const agentName = trigger.agent_name || "—";
 
         return (
-          <Link
+          <InteractiveListRow
             key={trigger.id}
-            href={`/triggers/${trigger.id}`}
-            className="group flex items-center gap-3 border-b border-zinc-100 px-4 py-2.5 transition-colors hover:bg-primary/5 dark:border-zinc-800 dark:hover:bg-primary/10"
-          >
-            {/* Trigger icon */}
-            <span
-              className={cn(
-                "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
-                isCron
-                  ? "bg-primary/10 text-primary"
-                  : "bg-violet-100 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
-              )}
-            >
-              <TypeIcon className="h-3.5 w-3.5" />
-            </span>
+            onClick={() => router.push(`/triggers/${trigger.id}`)}
+            start={<TriggerTile color={color} icon={Icon} variant="row" />}
+            contentClassName="gap-3"
+            end={
+              <>
+                {/* Type pill */}
+                <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
+                  <span
+                    className="h-[7px] w-[7px] rounded-full"
+                    style={{ backgroundColor: color }}
+                  />
+                  {typeLabel}
+                </span>
 
-            {/* Name */}
-            <span className="min-w-0 flex-[1.7] truncate text-[13px] font-medium text-foreground group-hover:text-primary">
-              {trigger.name}
-            </span>
-
-            {/* Schedule description */}
-            <span className="hidden min-w-0 flex-[1.4] truncate text-[13px] text-muted-foreground md:block">
-              {schedule}
-            </span>
-
-            {/* Trigger type badge */}
-            <span className="hidden shrink-0 sm:flex">
-              <Badge
-                variant="outline"
-                className="h-5 gap-1 px-1.5 font-normal text-foreground"
-              >
-                <TypeIcon
-                  className={cn(
-                    "h-3 w-3",
-                    isCron ? "text-primary" : "text-violet-500"
+                {/* Agent */}
+                <span className="hidden min-w-0 items-center gap-1.5 md:flex">
+                  {trigger.agent_name && (
+                    <AgentAvatar
+                      agent={{
+                        id: trigger.agent_id || trigger.agent_name,
+                        name: trigger.agent_name,
+                      }}
+                      size="xs"
+                    />
                   )}
-                />
-                {isCron ? tType("cron") : tType("webhook")}
-              </Badge>
-            </span>
+                  <span className="max-w-[120px] truncate text-[11.5px] text-muted-foreground">
+                    {trigger.agent_name || "—"}
+                  </span>
+                </span>
 
-            {/* Agent */}
-            <span className="hidden min-w-0 flex-[1.2] items-center gap-2 md:flex">
-              {trigger.agent_name && (
-                <AgentAvatar
-                  agent={{ id: trigger.agent_id || trigger.agent_name, name: trigger.agent_name }}
-                  size="xs"
-                />
-              )}
-              <span className="truncate text-[13px] text-muted-foreground">
-                {agentName}
+                {/* Next run */}
+                <span className="hidden w-14 items-center justify-end gap-1 text-[11.5px] text-muted-foreground/80 lg:flex">
+                  {nextRun ? (
+                    <>
+                      <Clock className="h-3 w-3" strokeWidth={1.7} />
+                      {formatCompactDistance(nextRun)}
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground/60">—</span>
+                  )}
+                </span>
+
+                {/* Status */}
+                <StatusIndicator size="sm" tone={status.tone} pulse={status.pulse}>
+                  {tStatus(health)}
+                </StatusIndicator>
+              </>
+            }
+            hoverActionsClassName="bg-gradient-to-l from-muted/60 via-muted/60 to-transparent dark:from-zinc-800/50 dark:via-zinc-800/50"
+            hoverActions={
+              <>
+                <button
+                  type="button"
+                  title="Executions"
+                  onClick={(e) => {
+                    stop(e);
+                    router.push(`/triggers/${trigger.id}/executions`);
+                  }}
+                  className="grid h-[26px] w-[26px] place-items-center rounded-md text-muted-foreground hover:bg-zinc-200/70 hover:text-foreground dark:hover:bg-zinc-700"
+                >
+                  <Activity className="h-[15px] w-[15px]" />
+                </button>
+                <button
+                  type="button"
+                  title="Edit"
+                  onClick={(e) => {
+                    stop(e);
+                    router.push(`/triggers/${trigger.id}/edit`);
+                  }}
+                  className="grid h-[26px] w-[26px] place-items-center rounded-md text-muted-foreground hover:bg-zinc-200/70 hover:text-foreground dark:hover:bg-zinc-700"
+                >
+                  <Pencil className="h-[15px] w-[15px]" />
+                </button>
+              </>
+            }
+          >
+            <>
+              <span className="max-w-[230px] shrink-0 truncate text-[13px] font-medium text-foreground">
+                {trigger.name}
               </span>
-            </span>
-
-            {/* Next run */}
-            <span className="hidden w-[72px] shrink-0 items-center justify-end gap-1 text-[13px] text-muted-foreground lg:flex">
-              {nextRun ? (
-                <>
-                  <Clock className="h-3 w-3" />
-                  {formatCompactDistance(nextRun)}
-                </>
-              ) : (
-                <span className="text-muted-foreground/60">—</span>
-              )}
-            </span>
-
-            {/* Status */}
-            <span className="flex w-[92px] shrink-0 items-center justify-end">
-              <StatusIndicator size="sm" tone={status.tone} pulse={status.pulse}>
-                {tStatus(health)}
-              </StatusIndicator>
-            </span>
-          </Link>
+              <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground">
+                {schedule}
+              </span>
+            </>
+          </InteractiveListRow>
         );
       })}
     </div>
