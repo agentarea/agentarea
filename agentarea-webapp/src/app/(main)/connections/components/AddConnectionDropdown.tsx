@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ArrowUpRight, LayoutGrid, Plus } from "lucide-react";
@@ -47,9 +47,19 @@ const OPTIONS: ConnectionOption[] = [
     id: "openapi",
     href: "/connections/add-openapi",
     iconClass: "",
-    icon: <OpenAPIConnectionMark className="h-[38px] w-[38px] rounded-lg text-[11px]" />,
+    icon: <OpenAPIConnectionMark className="h-[42px] w-[42px] rounded-md text-[12px]" />,
   },
 ];
+
+/* blueprint divider with crop-mark crosses at the side rails */
+function BlueprintDivider() {
+  return (
+    <div className="conn-bp-div" aria-hidden>
+      <span className="conn-bp-mkp l" />
+      <span className="conn-bp-mkp r" />
+    </div>
+  );
+}
 
 export function AddConnectionDropdown() {
   const t = useTranslations("MCPServersPage.addConnectionDialog");
@@ -73,45 +83,51 @@ export function AddConnectionDropdown() {
           {t("trigger")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md gap-0 p-0">
-        <DialogHeader className="space-y-1.5 p-6 pb-2">
+      <DialogContent className="gap-0 p-0 sm:max-w-[496px] sm:rounded-[10px]">
+        <DialogHeader className="space-y-1.5 px-6 pb-4 pt-5">
           <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>{t("description")}</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-0.5 p-3">
+        <div className="conn-bp">
+          <BlueprintDivider />
           {OPTIONS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => handleSelect(option.href)}
-              className={cn(
-                "group relative flex w-full items-center gap-3.5 overflow-hidden rounded-sm border border-transparent p-3.5 text-left transition-colors",
-                "hover:border-primary/20 dark:hover:border-primary/50 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              )}
-              data-test={`new-connection-${option.id}`}
-            >
-              {/* brand: 135° diagonal hatch that fades in from the left on hover */}
-              <span aria-hidden className="conn-opt-hatch" />
-              <span
+            <Fragment key={option.id}>
+              <button
+                type="button"
+                onClick={() => handleSelect(option.href)}
                 className={cn(
-                  "relative z-10 flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg transition-transform group-hover:scale-105",
-                  option.iconClass
+                  "group relative z-[1] flex w-full items-center gap-4 rounded-[7px] px-4 py-4 text-left",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 )}
+                data-test={`new-connection-${option.id}`}
               >
-                {option.icon}
-              </span>
-              <span className="relative z-10 min-w-0 flex-1 space-y-0.5">
-                <span className="block text-sm font-semibold leading-tight">
-                  {t(`${option.id}.title`)}
+                {/* solid fill fades in on hover */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 z-0 rounded-[7px] bg-muted/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                />
+                <span
+                  className={cn(
+                    "relative z-[1] flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-md",
+                    option.iconClass
+                  )}
+                >
+                  {option.icon}
                 </span>
-                <span className="block text-xs text-muted-foreground">
-                  {t(`${option.id}.description`)}
+                <span className="relative z-[1] min-w-0 flex-1">
+                  <span className="mb-1 block text-[12.5px] font-bold uppercase leading-none tracking-[0.03em]">
+                    {t(`${option.id}.title`)}
+                  </span>
+                  <span className="block text-xs leading-normal text-muted-foreground">
+                    {t(`${option.id}.description`)}
+                  </span>
                 </span>
-              </span>
-              <ArrowUpRight
-                className="relative z-10 h-[18px] w-[18px] shrink-0 -translate-x-1.5 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0 group-hover:text-primary group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:text-primary group-focus-visible:opacity-100"
-              />
-            </button>
+                <ArrowUpRight
+                  className="relative z-[1] h-[18px] w-[18px] shrink-0 -translate-x-1.5 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0 group-hover:text-primary group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:text-primary group-focus-visible:opacity-100"
+                />
+              </button>
+              <BlueprintDivider />
+            </Fragment>
           ))}
         </div>
       </DialogContent>

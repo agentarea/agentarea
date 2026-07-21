@@ -34,36 +34,83 @@
     background-image: var(--hatch-accent), var(--hatch-soft);
   }
 
-  /* add-connection option: accent hatch that fades in from the left on hover */
-  .conn-opt-hatch {
+  /* ---- Add-a-connection modal · v2 "blueprint" sheet ---- */
+  /* dashed side rails filled with a fine 135° hatch band */
+  .conn-bp {
+    position: relative;
+    padding: 0 28px 14px;
+  }
+  .conn-bp::before,
+  .conn-bp::after {
+    content: "";
     position: absolute;
-    inset: 0;
-    z-index: 0;
-    background-image: var(--hatch-accent);
-    opacity: 0;
-    pointer-events: none;
-    transform: translateX(-10px);
-    -webkit-mask-image: linear-gradient(90deg, #000, transparent 62%);
-    mask-image: linear-gradient(90deg, #000, transparent 62%);
-    transition:
-      opacity 0.22s,
-      transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .group:hover .conn-opt-hatch,
-  .group:focus-visible .conn-opt-hatch {
-    opacity: 1;
-    transform: none;
-  }
-  /* dark: the shared --hatch-accent is too faint here — use a brighter,
-     denser accent hatch so the hover reads clearly */
-  .dark .conn-opt-hatch {
-    background-image: repeating-linear-gradient(
+    top: 0;
+    bottom: 0;
+    width: 28px;
+    background: repeating-linear-gradient(
       135deg,
-      transparent,
-      transparent 8px,
-      rgba(91, 134, 221, 0.32) 8px,
-      rgba(91, 134, 221, 0.32) 10px
+      #e9e9ec 0 1px,
+      transparent 1px 8px
     );
+    pointer-events: none;
+    z-index: 0;
+  }
+  .conn-bp::before {
+    left: 0;
+    border-right: 1px dashed #e4e4e7;
+  }
+  .conn-bp::after {
+    right: 0;
+    border-left: 1px dashed #e4e4e7;
+  }
+  .dark .conn-bp::before,
+  .dark .conn-bp::after {
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.06) 0 1px,
+      transparent 1px 8px
+    );
+  }
+  .dark .conn-bp::before {
+    border-right-color: #26282c;
+  }
+  .dark .conn-bp::after {
+    border-left-color: #26282c;
+  }
+  /* full-width dashed divider between options, with crop-mark crosses */
+  .conn-bp-div {
+    position: relative;
+    height: 0;
+    margin: 0 -28px;
+    border-top: 1px dashed #e4e4e7;
+    z-index: 4;
+  }
+  .dark .conn-bp-div {
+    border-top-color: #26282c;
+  }
+  .conn-bp-mkp {
+    position: absolute;
+    top: 0;
+    width: 9px;
+    height: 9px;
+    pointer-events: none;
+    z-index: 5;
+    background:
+      linear-gradient(#bcbfc5, #bcbfc5) center / 1.3px 9px no-repeat,
+      linear-gradient(#bcbfc5, #bcbfc5) center / 9px 1.3px no-repeat;
+  }
+  .dark .conn-bp-mkp {
+    background:
+      linear-gradient(#4c4f56, #4c4f56) center / 1.3px 9px no-repeat,
+      linear-gradient(#4c4f56, #4c4f56) center / 9px 1.3px no-repeat;
+  }
+  .conn-bp-mkp.l {
+    left: 28px;
+    transform: translate(-50%, -50%);
+  }
+  .conn-bp-mkp.r {
+    right: 28px;
+    transform: translate(50%, -50%);
   }
 
   /* card: soft footer band (idle) that grows upward into a full wash on hover */
