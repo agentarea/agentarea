@@ -34,6 +34,38 @@
     background-image: var(--hatch-accent), var(--hatch-soft);
   }
 
+  /* add-connection option: accent hatch that fades in from the left on hover */
+  .conn-opt-hatch {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-image: var(--hatch-accent);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-10px);
+    -webkit-mask-image: linear-gradient(90deg, #000, transparent 62%);
+    mask-image: linear-gradient(90deg, #000, transparent 62%);
+    transition:
+      opacity 0.22s,
+      transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .group:hover .conn-opt-hatch,
+  .group:focus-visible .conn-opt-hatch {
+    opacity: 1;
+    transform: none;
+  }
+  /* dark: the shared --hatch-accent is too faint here — use a brighter,
+     denser accent hatch so the hover reads clearly */
+  .dark .conn-opt-hatch {
+    background-image: repeating-linear-gradient(
+      135deg,
+      transparent,
+      transparent 8px,
+      rgba(91, 134, 221, 0.32) 8px,
+      rgba(91, 134, 221, 0.32) 10px
+    );
+  }
+
   /* card: soft footer band (idle) that grows upward into a full wash on hover */
   .skill-card-hatch {
     position: absolute;
