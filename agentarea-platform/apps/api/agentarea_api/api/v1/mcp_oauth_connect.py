@@ -95,16 +95,12 @@ def _callback_uri(request: Request) -> str:
     return f"{api_base}/v1/mcp-oauth/callback"
 
 
-def _resolve_instance_remote_url(instance, server_spec) -> str | None:
-    """Resolve the remote MCP URL for an instance.
+def _resolve_instance_remote_url(server_spec) -> str | None:
+    """Resolve the remote MCP URL from the parent MCPServer.
 
-    Transport fields live on the parent MCPServer: URL instances carry no
-    endpoint_url in their own json_spec, so the URL comes from the server's
-    remote_url column (or its json_spec).
+    Transport fields live on the server: the URL comes from its remote_url
+    column, falling back to the URL in its json_spec.
     """
-    legacy = (instance.json_spec or {}).get("endpoint_url") or (instance.json_spec or {}).get("url")
-    if legacy:
-        return legacy
     if server_spec is None:
         return None
     if getattr(server_spec, "remote_url", None):
@@ -180,7 +176,7 @@ async def oauth_authorize(
         server_repo = MCPServerRepository(db_session, user_context)
         server_spec = await server_repo.get_server_by_id(instance.server_spec_id)
 
-    mcp_url = _resolve_instance_remote_url(instance, server_spec)
+    mcp_url = _resolve_instance_remote_url(server_spec)
     if not mcp_url:
         raise HTTPException(
             status_code=400,

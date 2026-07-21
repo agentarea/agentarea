@@ -158,9 +158,6 @@ async def _resolve_upstream_url(instance, server_spec) -> tuple[str, str | None]
             instance_type = "docker"
 
     if instance_type == "url":
-        legacy = json_spec.get("endpoint_url") or json_spec.get("url")
-        if legacy:
-            return legacy, instance_type
         if server_spec is not None and getattr(server_spec, "remote_url", None):
             return server_spec.remote_url, instance_type
         spec_json = getattr(server_spec, "json_spec", None) or {}

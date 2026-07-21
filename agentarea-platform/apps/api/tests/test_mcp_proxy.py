@@ -33,20 +33,6 @@ async def test_resolve_upstream_url_url_type_from_server_remote_url():
 
 
 @pytest.mark.asyncio
-async def test_resolve_upstream_url_legacy_endpoint_url_on_instance():
-    instance = SimpleNamespace(
-        json_spec={"type": "url", "endpoint_url": "https://legacy.example/mcp"},
-        id="i",
-    )
-    server_spec = SimpleNamespace(remote_url=None, cmd=None, json_spec={})
-
-    assert await _resolve_upstream_url(instance, server_spec) == (
-        "https://legacy.example/mcp",
-        "url",
-    )
-
-
-@pytest.mark.asyncio
 async def test_resolve_upstream_url_docker_appends_mcp_path():
     instance = SimpleNamespace(
         json_spec={"type": "docker"},
