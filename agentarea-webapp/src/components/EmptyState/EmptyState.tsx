@@ -8,6 +8,7 @@ import {
   Bot,
   BotOff,
   Brain,
+  CheckCircle2,
   ChevronsLeftRightEllipsis,
   Clock,
   Cpu,
@@ -28,6 +29,7 @@ import {
   Zap,
 } from "lucide-react";
 import { EmptyState as EmptyStateComponent } from "@/components/ui/empty-state";
+import { cn } from "@/lib/utils";
 
 type EmptyStateProps = {
   title: string;
@@ -38,6 +40,7 @@ type EmptyStateProps = {
     | "agent"
     | "apiKey"
     | "audit"
+    | "healthy"
     | "llm"
     | "mcp"
     | "payments"
@@ -54,6 +57,10 @@ type EmptyStateProps = {
     href?: string;
     onClick?: () => void;
   };
+  /** Extra classes merged onto the card — e.g. to make it borderless/compact. */
+  className?: string;
+  /** Tint applied to the emphasized (center / single) icon. */
+  accentClassName?: string;
 };
 
 export default function EmptyState({
@@ -63,6 +70,8 @@ export default function EmptyState({
   additionAction,
   icons,
   iconsType,
+  className,
+  accentClassName,
 }: EmptyStateProps) {
   const router = useRouter();
   const resolvedIcons =
@@ -71,7 +80,7 @@ export default function EmptyState({
       ? iconsType === "404"
         ? [Ban, Unplug, BotOff]
         : iconsType === "agent"
-          ? [Bot, Zap, Shield]
+          ? [Zap, Bot, Shield]
           : iconsType === "apiKey"
             ? [Key, Shield, Zap]
             : iconsType === "llm"
@@ -86,6 +95,8 @@ export default function EmptyState({
                       ? [Zap, Clock, Timer]
                       : iconsType === "audit"
                         ? [ScrollText, Shield, Clock]
+                        : iconsType === "healthy"
+                        ? [Shield, CheckCircle2, Sparkles]
                         : iconsType === "skills"
                           ? [Sparkles, Zap, Blocks]
                           : [Bot, Blocks, ChevronsLeftRightEllipsis]
@@ -99,10 +110,14 @@ export default function EmptyState({
       transition={{ duration: 0.5 }}
     >
       <EmptyStateComponent
-        className="max-w-auto w-full hover:border-accent/20 hover:bg-white dark:bg-zinc-800 dark:hover:border-white/30 dark:hover:bg-zinc-800"
+        className={cn(
+          "max-w-auto w-full hover:border-accent/20 hover:bg-white dark:bg-zinc-800 dark:hover:border-white/30 dark:hover:bg-zinc-800",
+          className
+        )}
         title={title}
         description={description || ""}
         icons={resolvedIcons}
+        accentClassName={accentClassName}
         action={
           action
             ? {

@@ -202,6 +202,19 @@
       #f1f1f4 9px,
       #f1f1f4 10px
     );
+
+    /* board: dashed line-grid + technical registration markers */
+    --board-line: #e4e4e7;
+    --board-crop: #bcbfc5;
+    /* violet accent — spend hero chart + budget bar */
+    --violet: #5e6ad2;
+    /* amber accent — kept warm in both themes (unlike --chart-4) */
+    --amber: #d99a00;
+    /* semantic status accents — blocker groups, activity tones, dots */
+    --status-success: #10b981;
+    --status-warning: #f59e0b;
+    --status-danger: #ef4444;
+    --status-info: #3b82f6;
   }
   .dark {
     --layout-background: 240 5.9% 10%;
@@ -302,6 +315,20 @@
       #212126 9px,
       #212126 10px
     );
+
+    /* board: dashed line-grid + technical registration markers (dark) */
+    /* matches the row-divider tone (zinc-700) so the 4-up grid stays visible */
+    --board-line: #3f3f46;
+    --board-crop: #4c4f56;
+    /* violet accent — spend hero chart + budget bar (dark) */
+    --violet: #8b93ff;
+    /* amber accent — kept warm in both themes (dark) */
+    --amber: #e8b23e;
+    /* semantic status accents — brighter for dark surfaces (dark) */
+    --status-success: #34d399;
+    --status-warning: #fbbf24;
+    --status-danger: #f87171;
+    --status-info: #60a5fa;
   }
 }
 
@@ -903,4 +930,16 @@ body div[data-sonner-toast][data-type="warning"] {
     height: auto !important;
     max-width: none !important;
   }
+}
+
+/* recharts: suppress the browser focus-ring "box" drawn when the chart svg is
+   clicked/focused (its surface has tabindex=0 for a11y). Kept UNLAYERED so
+   Tailwind's @layer purge can't strip it — the class only exists at runtime. */
+.recharts-surface:focus,
+.recharts-surface:focus-visible,
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible,
+.recharts-wrapper :focus,
+.recharts-wrapper :focus-visible {
+  outline: none !important;
 }
