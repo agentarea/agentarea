@@ -893,18 +893,10 @@ class RegistryService:
 
 
 def _agent_preferred_models(entry: dict[str, Any]) -> list[str]:
-    """Extract a catalog agent's preferred model slugs in priority order.
-
-    Prefers the ``preferred_models`` list. Older catalog entries stored a single
-    model slug under ``model_id`` (e.g. ``"gpt-4o"``) — never an instance UUID —
-    so that is accepted as a one-element fallback for backward compatibility.
-    """
+    """Extract a catalog agent's preferred model slugs in priority order."""
     preferred = entry.get("preferred_models")
     if isinstance(preferred, list):
         return [m for m in preferred if isinstance(m, str) and m]
-    model_id_slug = entry.get("model_id")
-    if isinstance(model_id_slug, str) and model_id_slug:
-        return [model_id_slug]
     return []
 
 

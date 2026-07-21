@@ -328,11 +328,6 @@ class TestParseDefaultAgents:
         # The catalog never carries a runnable instance UUID under model_id.
         assert "model_id" not in spec
 
-    def test_model_id_slug_becomes_preferred_model(self):
-        data = {"agents": [{"name": "A", "model_id": "gpt-4o"}]}
-        items = RegistryService._parse_agents(data)
-        assert items[0]["spec"]["preferred_models"] == ["gpt-4o"]
-
 
 class TestParseBundles:
     def _bundle(self, **over):
