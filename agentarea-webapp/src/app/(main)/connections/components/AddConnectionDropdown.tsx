@@ -104,7 +104,7 @@ export function AddConnectionDropdown() {
                 {/* solid fill fades in on hover */}
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute inset-0 z-0 rounded-[7px] bg-muted/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 dark:bg-white/[0.07]"
+                  className="pointer-events-none absolute inset-0 z-0 rounded-[7px] bg-muted/60 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 group-focus-visible:opacity-100 dark:bg-white/[0.07]"
                 />
                 <span
                   className={cn(
