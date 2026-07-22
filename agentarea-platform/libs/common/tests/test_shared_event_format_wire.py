@@ -89,10 +89,7 @@ def test_serialize_produces_expected_json_shape():
     }
 
 
-def test_channel_routing_for_mcp_and_pascal_case_types():
-    # PascalCase MCP names pass through unchanged (Go MCP Manager subscribes to them).
-    assert get_channel_for_event_type("MCPServerInstanceCreated") == "MCPServerInstanceCreated"
-    assert get_channel_for_event_type("MCPServerInstanceDeleted") == "MCPServerInstanceDeleted"
+def test_channel_routing_for_reverse_dns_types():
     # Reverse-DNS com.agentarea.* maps to agentarea.events.*
     assert (
         get_channel_for_event_type("com.agentarea.mcp.instance.created")

@@ -155,17 +155,9 @@ def get_channel_for_event_type(event_type: str) -> str:
     """Get Redis channel name for event type.
 
     Pattern: agentarea.events.{domain}.{action}
-    Example: agentarea.events.mcp.instance.created
-
-    The MCP instance lifecycle events are still emitted under their PascalCase
-    names, which the Go MCP Manager subscribes to verbatim; they pass through
-    unmapped.
+    Example: com.agentarea.mcp.instance.created -> agentarea.events.mcp.instance.created
     """
-    if event_type in ("MCPServerInstanceCreated", "MCPServerInstanceDeleted"):
-        return event_type
-
     # Convert reverse DNS to channel path
-    # com.agentarea.mcp.instance.created -> agentarea.events.mcp.instance.created
     parts = event_type.split(".")
     if len(parts) >= 2 and parts[0] == "com":
         return f"agentarea.events.{'.'.join(parts[2:])}"

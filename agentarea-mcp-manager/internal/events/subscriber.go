@@ -48,8 +48,6 @@ func (s *EventSubscriber) Start(ctx context.Context) error {
 	pubsub := s.redisClient.Subscribe(ctx,
 		"agentarea.events.mcp.instance.created",
 		"agentarea.events.mcp.instance.deleted",
-		"MCPServerInstanceCreated",
-		"MCPServerInstanceDeleted",
 	)
 	defer pubsub.Close()
 
@@ -85,9 +83,9 @@ func (s *EventSubscriber) handleMessage(ctx context.Context, msg *redis.Message)
 		slog.String("payload", msg.Payload))
 
 	switch msg.Channel {
-	case "MCPServerInstanceCreated", "agentarea.events.mcp.instance.created":
+	case "agentarea.events.mcp.instance.created":
 		s.handleInstanceCreated(msg.Payload)
-	case "MCPServerInstanceDeleted", "agentarea.events.mcp.instance.deleted":
+	case "agentarea.events.mcp.instance.deleted":
 		s.handleInstanceDeleted(ctx, msg.Payload)
 	default:
 		s.logger.Warn("Unknown event channel", slog.String("channel", msg.Channel))
