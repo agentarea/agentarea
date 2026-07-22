@@ -82,18 +82,24 @@ def test_model():
 
 
 @pytest.fixture
-def skip_if_no_llm():
-    """Skip test if LLM is not available."""
+def skip_if_no_llm(test_model):
+    """Skip test unless the Ollama model it needs is pulled locally."""
 
     def _skip_if_no_llm():
-        try:
-            from agentarea_agents_sdk.models.llm_model import LLMModel
+        import os
 
-            LLMModel(provider_type="ollama_chat", model_name="qwen2.5", endpoint_url=None)
-            # Try a simple request to check if model is available
-            return False  # Don't skip
+        import httpx
+
+        base = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        model = test_model.split("/", 1)[-1].split(":")[0]
+        try:
+            resp = httpx.get(f"{base}/api/tags", timeout=1.0)
+            resp.raise_for_status()
+            names = {m["name"].split(":")[0] for m in resp.json().get("models", [])}
         except Exception:
-            pytest.skip("LLM model not available")
+            pytest.skip(f"Ollama not reachable at {base}")
+        if model not in names:
+            pytest.skip(f"Ollama model {model!r} not pulled (have: {sorted(names)})")
 
     return _skip_if_no_llm
 
