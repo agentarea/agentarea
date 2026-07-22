@@ -1,4 +1,10 @@
 {
+  "404": {
+    "404": "404",
+    "title": "Error 404",
+    "description": "The page you are looking for does not exist.",
+    "goHome": "Go to home"
+  },
   "Metadata": {
     "agents": "Agents",
     "createAgent": "Create Agent",
@@ -44,12 +50,6 @@
       "title": "Empty data",
       "description": "Sorry, we couldn't find any data"
     }
-  },
-  "404": {
-    "title": "Error 404",
-    "404": "404",
-    "description": "The page you are looking for does not exist.",
-    "goHome": "Go to home"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -1278,7 +1278,8 @@
     "filter": {
       "all": "All",
       "cron": "Cron",
-      "webhook": "Webhook"
+      "webhook": "Webhook",
+      "button": "Filter"
     },
     "noTriggers": "No triggers yet",
     "noTriggersDescription": "Create a trigger to automate your agent workflows.",

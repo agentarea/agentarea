@@ -2,10 +2,10 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
-import SearchInput from "@/components/SearchInput";
 import TriggersContent from "./components/TriggersContent";
 import TriggersHeaderTabs from "./components/TriggersHeaderTabs";
 import TriggersSkeleton from "./components/TriggersSkeleton";
+import TriggersToolbar from "./components/TriggersToolbar";
 import TriggersTypeFilterSection from "./components/TriggersTypeFilterSection";
 import CreateTriggerButton from "./components/CreateTriggerButton";
 
@@ -45,30 +45,32 @@ export default async function TriggersPage({
         breadcrumb: [{ label: t("title") }],
         controls: <CreateTriggerButton />,
       }}
-      subheader={
-        <>
-          <Suspense fallback={<div className="h-7" />}>
-            <TriggersTypeFilterSection currentType={typeFilter} />
-          </Suspense>
-          <SearchInput
-            urlParamName="search"
-            urlPath="/triggers"
-            placeholder={t("searchPlaceholder")}
-          />
-          <TriggersHeaderTabs currentTab={viewMode} />
-        </>
-      }
+      className="p-0 overflow-hidden"
     >
-      <Suspense
-        key={`${viewMode}-${searchQuery}-${typeFilter}`}
-        fallback={<TriggersSkeleton viewMode={viewMode} />}
-      >
-        <TriggersContent
-          viewMode={viewMode}
-          searchQuery={searchQuery}
-          typeFilter={typeFilter}
+      <div className="flex h-full w-full flex-col">
+        <TriggersToolbar
+          searchPlaceholder={t("searchPlaceholder")}
+          filterSlot={
+            <Suspense fallback={<div className="h-7 w-48" />}>
+              <TriggersTypeFilterSection currentType={typeFilter} />
+            </Suspense>
+          }
+          tabsSlot={<TriggersHeaderTabs currentTab={viewMode} />}
         />
-      </Suspense>
+
+        <div className="min-h-0 flex-1 overflow-auto px-4 py-5">
+          <Suspense
+            key={`${viewMode}-${searchQuery}-${typeFilter}`}
+            fallback={<TriggersSkeleton viewMode={viewMode} />}
+          >
+            <TriggersContent
+              viewMode={viewMode}
+              searchQuery={searchQuery}
+              typeFilter={typeFilter}
+            />
+          </Suspense>
+        </div>
+      </div>
     </ContentBlock>
   );
 }

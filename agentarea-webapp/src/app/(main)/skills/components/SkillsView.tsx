@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/popover";
 import { GroupHeader } from "@/components/ui/group-header";
 import { MenuRow, MenuSectionLabel, MenuSeparator } from "@/components/ui/menu-row";
+import { ToolbarButton } from "@/components/ui/toolbar-button";
 import {
   Select,
   SelectContent,
@@ -321,30 +322,21 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
         )}
 
         {/* Filter toggle */}
-        <button
-          type="button"
+        <ToolbarButton
+          icon={Filter}
+          active={filtersOpen}
           onClick={() => setFiltersOpen((v) => !v)}
-          className={cn(
-            "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal transition-colors",
-            filtersOpen
-              ? "bg-muted text-foreground"
-              : "text-foreground/80 hover:bg-muted/60"
-          )}
+          labelClassName="skills-btn-label"
         >
-          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="skills-btn-label">{t("filters.filter")}</span>
-        </button>
+          {t("filters.filter")}
+        </ToolbarButton>
 
         {/* Display menu */}
         <Popover>
           <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal text-foreground/80 transition-colors hover:bg-muted/60"
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="skills-btn-label">{t("display.display")}</span>
-            </button>
+            <ToolbarButton icon={SlidersHorizontal} labelClassName="skills-btn-label">
+              {t("display.display")}
+            </ToolbarButton>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-52 p-1.5">
             <MenuSectionLabel>{t("display.grouping")}</MenuSectionLabel>

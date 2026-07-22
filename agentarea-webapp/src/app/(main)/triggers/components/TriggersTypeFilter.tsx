@@ -54,6 +54,8 @@ export default function TriggersTypeFilter({
       value={active}
       onChange={select}
       layoutId="triggers-type-filter"
+      className="w-full sm:w-auto"
+      itemClassName="px-2 sm:px-3"
     />
   );
 }

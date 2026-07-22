@@ -53,19 +53,22 @@ export default function TriggersTable({
             onClick={() => router.push(`/triggers/${trigger.id}`)}
             start={<TriggerTile color={color} icon={Icon} variant="row" />}
             contentClassName="gap-3"
+            endClassName="gap-4"
             end={
               <>
                 {/* Type pill */}
-                <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
-                  <span
-                    className="h-[7px] w-[7px] rounded-full"
-                    style={{ backgroundColor: color }}
-                  />
-                  {typeLabel}
+                <span className="flex w-auto shrink-0 justify-start sm:w-[104px]">
+                  <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
+                    <span
+                      className="h-[7px] w-[7px] rounded-full"
+                      style={{ backgroundColor: color }}
+                    />
+                    {typeLabel}
+                  </span>
                 </span>
 
                 {/* Agent */}
-                <span className="hidden min-w-0 items-center gap-1.5 md:flex">
+                <span className="hidden w-[160px] shrink-0 items-center gap-1.5 md:flex">
                   {trigger.agent_name && (
                     <AgentAvatar
                       agent={{
@@ -75,13 +78,13 @@ export default function TriggersTable({
                       size="xs"
                     />
                   )}
-                  <span className="max-w-[120px] truncate text-[11.5px] text-muted-foreground">
+                  <span className="truncate text-[11.5px] text-muted-foreground">
                     {trigger.agent_name || "—"}
                   </span>
                 </span>
 
                 {/* Next run */}
-                <span className="hidden w-14 items-center justify-end gap-1 text-[11.5px] text-muted-foreground/80 lg:flex">
+                <span className="hidden w-12 shrink-0 items-center justify-end gap-1 text-[11.5px] text-muted-foreground/80 lg:flex">
                   {nextRun ? (
                     <>
                       <Clock className="h-3 w-3" strokeWidth={1.7} />
@@ -93,9 +96,15 @@ export default function TriggersTable({
                 </span>
 
                 {/* Status */}
-                <StatusIndicator size="sm" tone={status.tone} pulse={status.pulse}>
-                  {tStatus(health)}
-                </StatusIndicator>
+                <span className="hidden w-[116px] shrink-0 items-center justify-start sm:flex">
+                  <StatusIndicator
+                    size="sm"
+                    tone={status.tone}
+                    pulse={status.pulse}
+                  >
+                    {tStatus(health)}
+                  </StatusIndicator>
+                </span>
               </>
             }
             hoverActionsClassName="bg-gradient-to-l from-muted/60 via-muted/60 to-transparent dark:from-zinc-800/50 dark:via-zinc-800/50"
@@ -127,10 +136,10 @@ export default function TriggersTable({
             }
           >
             <>
-              <span className="max-w-[230px] shrink-0 truncate text-[13px] font-medium text-foreground">
+              <span className="min-w-0 max-w-[240px] shrink truncate text-[13px] font-medium text-foreground">
                 {trigger.name}
               </span>
-              <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground">
+              <span className="hidden min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground sm:block">
                 {schedule}
               </span>
             </>

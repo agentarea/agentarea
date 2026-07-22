@@ -18,14 +18,18 @@ function TriggersTableSkeleton({ rows = 8 }: { rows?: number }) {
         >
           <Skeleton className="h-[22px] w-[22px] shrink-0 rounded-md" />
           <Skeleton className="h-4 w-40 shrink-0" />
-          <Skeleton className="hidden h-3 flex-1 md:block" />
-          <Skeleton className="h-[22px] w-20 shrink-0 rounded-full" />
-          <div className="hidden items-center gap-1.5 md:flex">
+          <div className="min-w-0 flex-1" />
+          {/* type */}
+          <Skeleton className="h-[22px] w-16 shrink-0 rounded-full" />
+          {/* agent */}
+          <div className="hidden w-[160px] shrink-0 items-center gap-1.5 md:flex">
             <Skeleton className="h-5 w-5 shrink-0 rounded-md" />
-            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-3 w-24" />
           </div>
-          <Skeleton className="hidden h-3 w-14 shrink-0 lg:block" />
-          <Skeleton className="h-4 w-16 shrink-0 rounded-full" />
+          {/* next run */}
+          <Skeleton className="hidden h-3 w-12 shrink-0 lg:block" />
+          {/* status */}
+          <Skeleton className="hidden h-4 w-[116px] shrink-0 rounded-full sm:block" />
         </div>
       ))}
     </div>
