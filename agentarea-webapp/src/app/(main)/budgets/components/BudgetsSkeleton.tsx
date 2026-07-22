@@ -25,7 +25,7 @@ function SpendSkeleton() {
           <Skeleton className="mt-1 h-[5px] w-[168px] rounded-full" />
         </div>
       </div>
-      <Skeleton className="-mx-6 mt-1 min-h-[132px] flex-1 rounded-none" />
+      <Skeleton className="-mx-6 mt-1 h-[188px] rounded-none" />
     </div>
   );
 }

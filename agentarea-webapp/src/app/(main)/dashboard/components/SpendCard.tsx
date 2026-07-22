@@ -114,13 +114,15 @@ export function SpendCard({
 
       <div
         className={cn(
-          "-mx-6 flex-1",
-          compact ? "mt-1 min-h-[132px]" : "mt-2.5 min-h-[96px]"
+          "-mx-6",
+          compact
+            ? "mt-1 h-[188px]"
+            : "mt-2.5 min-h-[96px] flex-1"
         )}
       >
         <SpendTrendChart
           data={trend}
-          height={compact ? "100%" : 190}
+          height={compact ? 188 : 190}
           locale={locale}
           seriesLabel={t("spend")}
           cumulativeLabel={t("cumulative")}

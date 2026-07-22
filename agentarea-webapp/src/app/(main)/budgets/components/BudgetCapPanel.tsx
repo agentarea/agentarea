@@ -100,9 +100,9 @@ export function BudgetCapPanel({
   };
 
   return (
-    <section className="grid items-start gap-x-8 gap-y-6 p-5 md:grid-cols-[minmax(0,1fr)_300px]">
+    <section className="grid items-start gap-x-8 gap-y-6 px-0 py-1 lg:p-5 lg:grid-cols-[minmax(0,1fr)_300px]">
       {/* lead — icon + title + description */}
-      <div className="flex gap-3.5 md:col-start-1">
+      <div className="flex gap-3.5 lg:col-start-1">
         <EntityAvatar
           variant="soft"
           size={38}
@@ -121,7 +121,7 @@ export function BudgetCapPanel({
       </div>
 
       {/* form — right column, spans both rows on desktop */}
-      <div className="flex flex-col gap-2.5 md:col-start-2 md:row-span-2 md:row-start-1">
+      <div className="flex flex-col gap-2.5 lg:col-start-2 lg:row-span-2 lg:row-start-1">
         <FormLabel
           htmlFor="monthly-cap"
           icon={DollarSign}
@@ -129,7 +129,7 @@ export function BudgetCapPanel({
         >
           {t("capField")}
         </FormLabel>
-        <div className="flex gap-2.5">
+        <div className="flex flex-col gap-2.5 sm:flex-row">
           <Input
             id="monthly-cap"
             type="number"
@@ -147,7 +147,7 @@ export function BudgetCapPanel({
           />
           <Button
             type="button"
-            className="h-[38px]"
+            className="h-[38px] sm:self-start"
             isLoading={isPending}
             disabled={!canSave}
             onClick={saveCap}
@@ -175,13 +175,13 @@ export function BudgetCapPanel({
       </div>
 
       {/* usage — left column, second row */}
-      <div className="md:col-start-1 md:row-start-2">
+      <div className="lg:col-start-1 lg:row-start-2">
         {cap == null ? (
           <p className="text-[13px] text-muted-foreground">{t("capNoCap")}</p>
         ) : (
           <>
-            <div className="flex items-baseline justify-between text-[13px]">
-              <span className="font-semibold tabular-nums text-foreground">
+            <div className="flex items-baseline justify-between text-[12px]">
+              <span className="font-medium tabular-nums text-foreground">
                 {t("capUsed", { amount: fmt(mtdSpend) })}
               </span>
               <span
