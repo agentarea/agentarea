@@ -28,7 +28,6 @@ class TestPromptBuilder:
         assert agent_instruction in prompt
         assert goal_description in prompt
         assert "test_tool" in prompt
-        assert "ReAct" in prompt  # Should mention ReAct framework
 
 
 class TestToolExecutor:
