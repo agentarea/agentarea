@@ -66,6 +66,8 @@ export function BudgetCapPanel({
     () => parseCap(capInput, t("capInvalid")),
     [capInput, t]
   );
+  const hasChanges = parsed.error == null && parsed.value !== cap;
+  const canSave = hasChanges && !isPending;
   const capPct = cap && cap > 0 ? (mtdSpend / cap) * 100 : null;
   const displayPct = capPct == null ? 0 : Math.min(capPct, 100);
 
@@ -147,7 +149,7 @@ export function BudgetCapPanel({
             type="button"
             className="h-[38px]"
             isLoading={isPending}
-            disabled={isPending}
+            disabled={!canSave}
             onClick={saveCap}
           >
             {t("save")}

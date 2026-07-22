@@ -62,11 +62,6 @@ export function BudgetsBoard({
         className="pointer-events-none absolute top-0 z-[6] hidden h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 lg:block"
         style={{ left: `${LEFT_FRACTION * 100}%`, ...cropMark }}
       />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute bottom-0 z-[6] hidden h-[11px] w-[11px] -translate-x-1/2 translate-y-1/2 lg:block"
-        style={{ left: `${LEFT_FRACTION * 100}%`, ...cropMark }}
-      />
     </div>
   );
 }
