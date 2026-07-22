@@ -29,9 +29,11 @@ function pctTone(pct: number) {
 export function SpendCard({
   spend,
   trend,
+  compact = false,
 }: {
   spend: DashboardSpend;
   trend: DailySpendPoint[];
+  compact?: boolean;
 }) {
   const t = useTranslations("DashboardPage");
   const locale = useLocale();
@@ -50,12 +52,22 @@ export function SpendCard({
         meta={t("monthToDate")}
       />
 
-      <div className="mt-1.5 flex items-start gap-3.5">
+      <div className={cn("flex items-start gap-3.5", compact ? "mt-1" : "mt-1.5")}>
         <div>
-          <div className="text-[27px] font-semibold leading-[0.95] tracking-[-0.03em] tabular-nums">
+          <div
+            className={cn(
+              "font-semibold leading-[0.95] tracking-[-0.03em] tabular-nums",
+              compact ? "text-[24px]" : "text-[27px]"
+            )}
+          >
             {fmt(spend.mtd_usd)}
           </div>
-          <div className="mt-1.5 flex items-center gap-2 text-[12.5px] text-muted-foreground">
+          <div
+            className={cn(
+              "flex items-center gap-2 text-[12.5px] text-muted-foreground",
+              compact ? "mt-1" : "mt-1.5"
+            )}
+          >
             <DeltaBadge
               pct={delta.pct}
               direction={delta.direction}
@@ -65,20 +77,31 @@ export function SpendCard({
           </div>
         </div>
 
-        <div className="ml-auto pt-0.5 text-right">
+        <div className={cn("ml-auto text-right", compact ? "pt-0" : "pt-0.5")}>
           <div className="text-[11.5px] text-muted-foreground">{t("today")}</div>
           <div className="mt-0.5 text-[15px] font-semibold tabular-nums">
             {fmt(spend.today_usd)}
           </div>
           {hasCap && (
             <>
-              <div className={cn("mt-2 text-[11.5px] tabular-nums", pctTone(pct))}>
+              <div
+                className={cn(
+                  "text-[11.5px] tabular-nums",
+                  compact ? "mt-1.5" : "mt-2",
+                  pctTone(pct)
+                )}
+              >
                 {t("budgetUsage", {
                   pct: pct.toFixed(0),
                   cap: fmt(spend.cap_usd ?? 0),
                 })}
               </div>
-              <div className="ml-auto mt-1.5 h-[5px] w-[150px] overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn(
+                  "ml-auto h-[5px] overflow-hidden rounded-full bg-muted",
+                  compact ? "mt-1 w-[168px]" : "mt-1.5 w-[150px]"
+                )}
+              >
                 <div
                   className={cn("h-full rounded-full", barTone(pct))}
                   style={{ width: `${Math.min(100, pct)}%` }}
@@ -89,10 +112,15 @@ export function SpendCard({
         </div>
       </div>
 
-      <div className="-mx-6 mt-2.5 min-h-[96px] flex-1">
+      <div
+        className={cn(
+          "-mx-6 flex-1",
+          compact ? "mt-1 min-h-[132px]" : "mt-2.5 min-h-[96px]"
+        )}
+      >
         <SpendTrendChart
           data={trend}
-          height={190}
+          height={compact ? "100%" : 190}
           locale={locale}
           seriesLabel={t("spend")}
           cumulativeLabel={t("cumulative")}

@@ -45,7 +45,7 @@ export function SpendTrendChart({
   cumulativeLabel = "cumulative",
 }: {
   data: Point[];
-  height?: number;
+  height?: number | string;
   locale?: string;
   seriesLabel?: string;
   cumulativeLabel?: string;
