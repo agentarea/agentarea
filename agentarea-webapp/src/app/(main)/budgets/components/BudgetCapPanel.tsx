@@ -196,7 +196,7 @@ export function BudgetCapPanel({
                 })}
               </span>
             </div>
-            <div className="mt-2.5 h-[7px] overflow-hidden rounded-full bg-muted">
+            <div className="mt-2.5 h-[7px] overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-700/80">
               <div
                 className={cn("h-full rounded-full", barTone(capPct ?? 0))}
                 style={{ width: `${displayPct}%` }}

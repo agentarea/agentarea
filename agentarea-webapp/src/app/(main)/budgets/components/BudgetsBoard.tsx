@@ -41,7 +41,17 @@ export function BudgetsBoard({
     <div className="relative w-full">
       <div className="flex flex-col lg:grid" style={gridStyle}>
         {/* top-left — Spend */}
-        <BoardCell padded className={cn("border-b", dashed, "lg:border-r")}>
+        <BoardCell
+          padded
+          className={cn("border-b", dashed, "lg:border-r")}
+          markers={
+            <span
+              aria-hidden
+              className="pointer-events-none absolute right-0 bottom-0 z-[6] hidden h-[9px] w-[9px] translate-x-1/2 translate-y-1/2 rounded-full border-[1.5px] bg-background lg:block"
+              style={{ borderColor: "var(--board-crop)" }}
+            />
+          }
+        >
           {spend}
         </BoardCell>
 
