@@ -107,8 +107,6 @@ def parse_openapi_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
         {
             "name": op["name"],
             "description": op["description"],
-            "method": op["method"],
-            "path": op["path"],
             "inputSchema": op["input_schema"],
         }
         for op in operations
