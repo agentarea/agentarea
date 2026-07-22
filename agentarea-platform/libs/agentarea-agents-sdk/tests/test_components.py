@@ -155,8 +155,8 @@ class TestTools:
         assert tool.name == "completion"
         assert hasattr(tool, "description")
 
-        # Test execution (no parameters needed)
-        result = await tool.execute()
+        # Test execution: the final answer is passed as `result`
+        result = await tool.execute(result="done")
         assert result.get("success") is True
         assert isinstance(result.get("result"), str)
 
