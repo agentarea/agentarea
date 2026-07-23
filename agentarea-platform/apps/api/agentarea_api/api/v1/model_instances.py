@@ -8,6 +8,7 @@ from agentarea_api.api.deps.services import get_provider_service
 from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
+from agentarea_common.config.app import get_app_settings
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
@@ -281,7 +282,7 @@ async def validate_model_instance(
         # Prepare endpoint URL defaults
         resolved_endpoint_url = endpoint_url
         if not resolved_endpoint_url and provider_type == "ollama_chat":
-            resolved_endpoint_url = "http://host.docker.internal:11434"
+            resolved_endpoint_url = get_app_settings().ollama_api_base
 
         logger.info(f"Testing LLM configuration via SDK: {provider_type}/{model_name}")
 

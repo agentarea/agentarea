@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass, field
 
 import httpx
+from agentarea_common.config.app import get_app_settings
 from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,6 @@ _PROVIDER_BASE_URLS: dict[str, str] = {
     "perplexity": "https://api.perplexity.ai",
     "cerebras": "https://api.cerebras.ai",
     "xai": "https://api.x.ai",
-    "ollama": "http://localhost:11434",
     "zai": "https://api.z.ai/api/paas/v4",
 }
 
@@ -58,7 +58,10 @@ class ModelDiscoveryService:
         self._allow_private_endpoints = allow_private_endpoints
 
     def _build_url(self, provider_key: str, endpoint_url: str | None) -> str | None:
-        base = endpoint_url or _PROVIDER_BASE_URLS.get(provider_key, "")
+        if provider_key == "ollama":
+            base = endpoint_url or get_app_settings().ollama_api_base
+        else:
+            base = endpoint_url or _PROVIDER_BASE_URLS.get(provider_key, "")
         if not base:
             return None
         base = base.rstrip("/")
