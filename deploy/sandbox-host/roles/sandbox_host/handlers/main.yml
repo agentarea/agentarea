@@ -1,0 +1,24 @@
+---
+- name: Restart docker
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+
+- name: Reload sysctl
+  ansible.builtin.command: sysctl --system
+  changed_when: false
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart sandbox-egress
+  ansible.builtin.systemd:
+    name: sandbox-egress
+    state: restarted
+
+- name: Restart sandbox-executor
+  ansible.builtin.systemd:
+    name: "{{ sandbox_executor_name }}"
+    state: restarted
+  when: sandbox_executor_enabled | bool

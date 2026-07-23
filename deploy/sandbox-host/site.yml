@@ -1,0 +1,12 @@
+---
+# Provision dedicated AgentArea sandbox hosts: Docker + gVisor (runsc) + host
+# hardening, running the sandbox executor under a userspace kernel. Runs on any
+# plain Ubuntu VM (Timeweb / Aeza / DigitalOcean / Hetzner / YC) — no KVM needed.
+#
+#   ansible-playbook -i inventory.ini site.yml \
+#     -e sandbox_activation_auth_secret="$SANDBOX_ACTIVATION_AUTH_SECRET"
+- name: Provision AgentArea sandbox hosts
+  hosts: sandbox_hosts
+  become: true
+  roles:
+    - sandbox_host

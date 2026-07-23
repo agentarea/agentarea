@@ -1,0 +1,44 @@
+---
+- name: Harden kernel sysctls (defense-in-depth; gVisor is the primary wall)
+  ansible.builtin.template:
+    src: 99-sandbox-hardening.conf.j2
+    dest: /etc/sysctl.d/99-sandbox-hardening.conf
+    mode: "0644"
+  notify: Reload sysctl
+
+- name: Install unattended-upgrades (patch cadence IS the shared-kernel posture)
+  ansible.builtin.apt:
+    name:
+      - unattended-upgrades
+    state: present
+
+- name: Enable unattended-upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    mode: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+- name: Install container egress firewall script
+  ansible.builtin.template:
+    src: sandbox-egress.sh.j2
+    dest: /usr/local/sbin/sandbox-egress.sh
+    mode: "0755"
+  notify: Restart sandbox-egress
+
+- name: Install sandbox-egress systemd unit
+  ansible.builtin.template:
+    src: sandbox-egress.service.j2
+    dest: /etc/systemd/system/sandbox-egress.service
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart sandbox-egress
+
+- name: Enable and start sandbox-egress
+  ansible.builtin.systemd:
+    name: sandbox-egress
+    enabled: true
+    state: started
+    daemon_reload: true

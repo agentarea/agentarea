@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Managed by the sandbox_host Ansible role.
+#
+# Runs after docker starts (systemd ordering) and rebuilds the DOCKER-USER chain
+# so untrusted CONTAINER-INITIATED egress cannot reach the cloud metadata service
+# or private networks, while public egress (pip/npm) and inbound traffic to
+# published container ports (the executor's :8080) keep working.
+#
+# Critical: the DROP rules match on the incoming bridge interface (-i docker0 /
+# br+), i.e. traffic ENTERING the FORWARD chain from a container. Matching on
+# destination alone would also drop the REPLY packets (whose destination is the
+# container's own RFC1918 bridge IP) and break ALL egress.
+set -euo pipefail
+
+iptables -L DOCKER-USER -n >/dev/null 2>&1 || iptables -N DOCKER-USER || true
+
+# Rebuild idempotently and in deterministic order.
+iptables -F DOCKER-USER
+
+# Allow replies to connections the container itself opened.
+iptables -A DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+
+# Block container-initiated traffic (from any docker bridge) to metadata + RFC1918.
+# If you run a private package mirror, insert an ACCEPT/RETURN for its CIDR here,
+# before these DROP rules.
+for IFACE in docker0 'br+'; do
+{% for cidr in sandbox_egress_deny %}
+  iptables -A DOCKER-USER -i "$IFACE" -d {{ cidr }} -j DROP
+{% endfor %}
+done
+
+iptables -A DOCKER-USER -j RETURN

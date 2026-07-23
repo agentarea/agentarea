@@ -1,0 +1,3 @@
+# Environment-specific inventory (contains a concrete host). Commit only the example.
+inventory.ini
+*.retry
