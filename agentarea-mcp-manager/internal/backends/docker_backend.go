@@ -10,6 +10,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/container"
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
 
@@ -18,6 +19,17 @@ type DockerBackend struct {
 	manager *container.Manager
 	config  *config.Config
 	logger  *slog.Logger
+}
+
+func (d *DockerBackend) RuntimeManifest(ctx context.Context, packageInstall string) (*runtimeinfo.Manifest, error) {
+	if err := runtimeinfo.ValidatePackageInstall(packageInstall); err != nil {
+		return nil, err
+	}
+	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
+	if base == "" {
+		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	}
+	return warmpool.GetRuntimeManifest(ctx, base, 10*time.Second, packageInstall)
 }
 
 // NewDockerBackend creates a new Docker backend

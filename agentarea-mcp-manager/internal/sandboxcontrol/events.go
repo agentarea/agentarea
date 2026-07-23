@@ -51,6 +51,23 @@ func (b *RedisEventBus) publish(ctx context.Context, stream, eventType string, r
 	if b == nil || b.client == nil {
 		return fmt.Errorf("sandbox event bus is not configured")
 	}
+	data := map[string]any{
+		"execution_id": record.ID,
+		"status":       record.Status,
+	}
+	if record.TaskID != "" {
+		data["task_id"] = record.TaskID
+	}
+	if record.WorkspaceID != "" {
+		data["workspace_id"] = record.WorkspaceID
+	}
+	if record.WorkspaceManifestRef != nil {
+		data["workspace_manifest_ref"] = record.WorkspaceManifestRef
+	}
+	if len(record.OutputRefs) > 0 {
+		data["output_refs"] = record.OutputRefs
+		data["output_ref_count"] = len(record.OutputRefs)
+	}
 	event := CloudEvent{
 		SpecVersion:     "1.0",
 		Type:            eventType,
@@ -59,9 +76,7 @@ func (b *RedisEventBus) publish(ctx context.Context, stream, eventType string, r
 		Time:            time.Now().UTC(),
 		DataContentType: "application/json",
 		CorrelationID:   record.ID,
-		Data: map[string]any{
-			"execution": record,
-		},
+		Data:            data,
 	}
 	payload, err := json.Marshal(event)
 	if err != nil {

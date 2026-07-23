@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/container"
 	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
 )
 
@@ -44,6 +46,7 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 
 	// Health check
 	router.GET("/health", h.healthCheck)
+	router.GET("/runtime/manifest", h.runtimeManifest)
 
 	// Instance management (backend-agnostic)
 	router.GET("/instances", h.listInstances)
@@ -67,10 +70,8 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	router.POST("/sandbox/executions", h.createSandboxExecution)
 	router.GET("/sandbox/executions/:id", h.getSandboxExecution)
 	router.POST("/sandbox/executions/:id/events", h.applySandboxExecutionEvent)
-	router.POST("/sandbox/execute", h.executeSandbox)
-	// Per-workflow sandbox teardown — invoked by Temporal workflow finalizer.
-	// Warm pool path: retires the pod assigned to this workflow.
-	router.DELETE("/sandbox/workflow/:id", h.deleteSandboxWorkflow)
+	// Per-task sandbox teardown, invoked by the Temporal workflow finalizer.
+	router.DELETE("/sandbox/task/:id", h.deleteSandboxTask)
 
 	// Container endpoints — only the Docker backend supplies a container manager.
 	if h.containerManager != nil {
@@ -84,6 +85,39 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 		router.GET("/containers/:service/health/detailed", h.getDetailedContainerHealth)
 		router.GET("/containers/health", h.healthCheckContainers)
 	}
+}
+
+type runtimeManifestProvider interface {
+	RuntimeManifest(context.Context, string) (*runtimeinfo.Manifest, error)
+}
+
+func (h *Handler) runtimeManifest(c *gin.Context) {
+	packageInstall := c.DefaultQuery("package_install", runtimeinfo.PackageInstallAllowed)
+	if err := runtimeinfo.ValidatePackageInstall(packageInstall); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_package_install",
+			"message": err.Error(),
+		})
+		return
+	}
+	provider, ok := h.backend.(runtimeManifestProvider)
+	if !ok {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "runtime_manifest_unavailable",
+			"message": "sandbox backend does not expose a runtime manifest",
+		})
+		return
+	}
+	manifest, err := provider.RuntimeManifest(c.Request.Context(), packageInstall)
+	if err != nil {
+		h.logger.Warn("Runtime manifest discovery failed", slog.String("error", err.Error()))
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "runtime_manifest_unavailable",
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, manifest)
 }
 
 // healthCheck returns the health status of the service

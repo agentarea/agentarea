@@ -3,7 +3,12 @@ package sandboxcontrol
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"path"
+	"strings"
 	"time"
+
+	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 )
 
 type Service struct {
@@ -16,8 +21,28 @@ func NewService(store Store, events EventBus) *Service {
 }
 
 func (s *Service) CreateExecution(ctx context.Context, req ExecutionCreateRequest) (*ExecutionRecord, error) {
-	if req.Command.ScriptContent == "" || req.Command.ScriptName == "" {
-		return nil, fmt.Errorf("command.script_content and command.script_name are required")
+	if err := validateCreateRequest(&req); err != nil {
+		return nil, err
+	}
+	if err := runtimeinfo.ValidatePackageInstall(req.Runtime.PackageInstall); err != nil {
+		return nil, err
+	}
+	if req.Command.WorkspaceHydration != nil {
+		return nil, fmt.Errorf("workspace_hydration is activation-only and cannot be persisted")
+	}
+	if req.Command.WorkspaceManifestRef != nil {
+		return nil, fmt.Errorf("workspace_manifest_ref must be top-level in the execution request")
+	}
+	if req.WorkspaceManifestRef != nil {
+		if err := req.WorkspaceManifestRef.Validate(); err != nil {
+			return nil, fmt.Errorf("invalid workspace_manifest_ref: %w", err)
+		}
+		if req.TaskID == "" {
+			req.TaskID = req.WorkspaceManifestRef.TaskID
+		}
+		if req.WorkspaceID == "" {
+			req.WorkspaceID = req.WorkspaceManifestRef.WorkspaceID
+		}
 	}
 	now := time.Now().UTC()
 	id := newID("sexec")
@@ -25,18 +50,20 @@ func (s *Service) CreateExecution(ctx context.Context, req ExecutionCreateReques
 		req.WorkflowID = req.Command.WorkflowID
 	}
 	record := &ExecutionRecord{
-		ID:          id,
-		SessionID:   req.SessionID,
-		WorkflowID:  req.WorkflowID,
-		TaskID:      req.TaskID,
-		WorkspaceID: req.WorkspaceID,
-		Runtime:     req.Runtime,
-		Status:      ExecutionStatusQueued,
-		Command:     req.Command,
-		Metadata:    req.Metadata,
-		InputRefs:   req.InputRefs,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:                   id,
+		SessionID:            req.SessionID,
+		WorkflowID:           req.WorkflowID,
+		TaskID:               req.TaskID,
+		WorkspaceID:          req.WorkspaceID,
+		Runtime:              req.Runtime,
+		Status:               ExecutionStatusQueued,
+		Command:              req.Command,
+		WorkspaceManifestRef: req.WorkspaceManifestRef,
+		CreatedAt:            now,
+		UpdatedAt:            now,
+	}
+	if err := validateExecutionRecord(record); err != nil {
+		return nil, err
 	}
 	if err := s.store.CreateExecution(ctx, record); err != nil {
 		return nil, err
@@ -56,8 +83,17 @@ func (s *Service) GetExecution(ctx context.Context, id string) (*ExecutionRecord
 }
 
 func (s *Service) ApplyExecutionEvent(ctx context.Context, id string, event ExecutionEventRequest) (*ExecutionRecord, error) {
+	if err := validateExecutionID(id); err != nil {
+		return nil, err
+	}
+	if err := validateExecutionEvent(event); err != nil {
+		return nil, err
+	}
 	record, err := s.store.GetExecution(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateExecutionWorkspaceEvent(record, event); err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
@@ -80,6 +116,9 @@ func (s *Service) ApplyExecutionEvent(ctx context.Context, id string, event Exec
 	if len(event.OutputRefs) > 0 {
 		record.OutputRefs = append(record.OutputRefs, event.OutputRefs...)
 	}
+	if event.WorkspaceManifestRef != nil {
+		record.WorkspaceManifestRef = event.WorkspaceManifestRef
+	}
 	if event.Result != nil {
 		record.Result = event.Result
 	}
@@ -92,6 +131,9 @@ func (s *Service) ApplyExecutionEvent(ctx context.Context, id string, event Exec
 		}
 	}
 	record.UpdatedAt = now
+	if err := validateExecutionRecord(record); err != nil {
+		return nil, err
+	}
 	if err := s.store.UpdateExecution(ctx, record); err != nil {
 		return nil, err
 	}
@@ -105,6 +147,64 @@ func (s *Service) ApplyExecutionEvent(ctx context.Context, id string, event Exec
 		}
 	}
 	return record, nil
+}
+
+func validateExecutionWorkspaceEvent(record *ExecutionRecord, event ExecutionEventRequest) error {
+	if record == nil {
+		return fmt.Errorf("execution record is required")
+	}
+	baseRef := record.WorkspaceManifestRef
+	nextRef := event.WorkspaceManifestRef
+	if event.Result != nil {
+		if event.Result.Stdout != "" || event.Result.Stderr != "" {
+			return fmt.Errorf("execution result bodies must be stored as immutable output refs")
+		}
+		streamRefs := make([]SandboxObjectReference, 0, 2)
+		if event.Result.StdoutRef != nil {
+			streamRefs = append(streamRefs, *event.Result.StdoutRef)
+		}
+		if event.Result.StderrRef != nil {
+			streamRefs = append(streamRefs, *event.Result.StderrRef)
+		}
+		event.OutputRefs = append(event.OutputRefs, streamRefs...)
+	}
+	if nextRef != nil {
+		if err := nextRef.Validate(); err != nil {
+			return fmt.Errorf("invalid workspace manifest completion ref: %w", err)
+		}
+		if nextRef.WorkspaceID != record.WorkspaceID || nextRef.TaskID != record.TaskID {
+			return fmt.Errorf("workspace manifest completion identity mismatch")
+		}
+	}
+	if len(event.OutputRefs) == 0 {
+		return nil
+	}
+	var baseHost string
+	if baseRef != nil {
+		baseURI, _ := url.Parse(baseRef.ManifestURI)
+		baseHost = baseURI.Host
+	}
+	for _, output := range event.OutputRefs {
+		if err := output.Validate(); err != nil {
+			return fmt.Errorf("invalid workspace output ref: %w", err)
+		}
+		if output.Deleted || baseRef == nil {
+			continue
+		}
+		objectURI, _ := url.Parse(output.ObjectURI)
+		expectedSuffix := "/" + path.Join(
+			"workspaces",
+			record.WorkspaceID,
+			"tasks",
+			record.TaskID,
+			"objects",
+			output.SHA256,
+		)
+		if objectURI.Host != baseHost || !strings.HasSuffix(objectURI.Path, expectedSuffix) {
+			return fmt.Errorf("workspace output ref is outside the execution task prefix")
+		}
+	}
+	return nil
 }
 
 func statusForEventType(eventType, fallback string) string {
