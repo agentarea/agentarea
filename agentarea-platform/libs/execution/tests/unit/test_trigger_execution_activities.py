@@ -464,10 +464,11 @@ class TestTriggerExecutionActivities:
                 "test_param": "test_value",
             }
 
-            # Setup task service methods
+            # Setup task service methods. The activity submits through the
+            # normal routing path (route_or_submit_task), not create_task_from_params.
             mock_task = MagicMock()
             mock_task.id = uuid4()
-            mock_task_service.create_task_from_params.return_value = mock_task
+            mock_task_service.route_or_submit_task.return_value = mock_task
 
             # Get the activity function
             create_task_activity = trigger_activities[
@@ -489,7 +490,7 @@ class TestTriggerExecutionActivities:
             # Verify service calls
             mock_trigger_service.get_trigger.assert_called_once_with(sample_trigger.id)
             mock_trigger_service._build_task_parameters.assert_called_once()
-            mock_task_service.create_task_from_params.assert_called_once()
+            mock_task_service.route_or_submit_task.assert_called_once()
 
     @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
     async def test_create_task_from_trigger_activity_trigger_not_found(
