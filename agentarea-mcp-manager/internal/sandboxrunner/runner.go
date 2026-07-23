@@ -121,6 +121,8 @@ func NewWithPlacer(cfg Config, store *sandboxcontrol.RedisStore, placer sandboxp
 		} else {
 			runner.workspaceRepository = repository
 		}
+	} else {
+		logger.Warn("sandbox runner output offload disabled: no workspace bucket configured; command stdout/stderr will be dropped (only exit codes persist)")
 	}
 	return runner
 }

@@ -791,13 +791,21 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	cmd := exec.Command("sh", commandFile) // #nosec G204 -- interpreter is constant; commandFile is a fixed path inside the isolated per-task workspace
 	cmd.Dir = workspaceDir
-	if err := prepareTaskWorkspace(workspaceDir); err != nil {
+	// Resolve the non-root identity to run the untrusted command as. When the
+	// service runs as root this MUST succeed; running untrusted code as root
+	// would expose PID1's environment (incl. the activation secret) via /proc.
+	credential, err := sandboxCommandCredential()
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+	if err := prepareTaskWorkspace(workspaceDir, credential); err != nil {
 		http.Error(w, `{"error": "failed to prepare non-root task workspace"}`, http.StatusInternalServerError)
 		return
 	}
 
 	cmd.Env = sandboxExecutionEnvironment(req.WorkspaceID, req.TaskID, workspaceDir)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Credential: sandboxCommandCredential()}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Credential: credential}
 
 	// Capture output
 	stdout := newBoundedBuffer(stdoutLimit)
@@ -1491,25 +1499,31 @@ func runtimeManifestHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(manifest)
 }
 
-func sandboxCommandCredential() *syscall.Credential {
-	if os.Geteuid() != 0 {
-		return nil
-	}
-	uidText := os.Getenv("SANDBOX_COMMAND_UID")
-	gidText := os.Getenv("SANDBOX_COMMAND_GID")
-	if uidText == "" || gidText == "" {
-		return nil
+// sandboxCommandCredential resolves the identity the untrusted command runs as.
+// If the service is already unprivileged the command inherits that non-root
+// identity (nil credential). If the service runs as root it MUST drop to a
+// valid non-root uid/gid; it returns an error rather than falling back to root,
+// because a root command could read PID1's environment (incl. the activation
+// HMAC secret) and forge tokens for any workspace/task.
+func sandboxCommandCredential() (*syscall.Credential, error) {
+	return resolveCommandCredential(os.Geteuid(), os.Getenv("SANDBOX_COMMAND_UID"), os.Getenv("SANDBOX_COMMAND_GID"))
+}
+
+// resolveCommandCredential is the pure core of sandboxCommandCredential, split
+// out so the fail-hard-as-root invariant is unit-testable without real euid.
+func resolveCommandCredential(euid int, uidText, gidText string) (*syscall.Credential, error) {
+	if euid != 0 {
+		return nil, nil
 	}
 	uid, uidErr := strconv.ParseUint(uidText, 10, 32)
 	gid, gidErr := strconv.ParseUint(gidText, 10, 32)
-	if uidErr != nil || gidErr != nil || uid == 0 || gid == 0 {
-		return nil
+	if uidText == "" || gidText == "" || uidErr != nil || gidErr != nil || uid == 0 || gid == 0 {
+		return nil, fmt.Errorf("refusing to run untrusted command as root: SANDBOX_COMMAND_UID and SANDBOX_COMMAND_GID must be set to a non-root uid/gid")
 	}
-	return &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
+	return &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}, nil
 }
 
-func prepareTaskWorkspace(workspaceDir string) error {
-	credential := sandboxCommandCredential()
+func prepareTaskWorkspace(workspaceDir string, credential *syscall.Credential) error {
 	if credential == nil {
 		return nil
 	}

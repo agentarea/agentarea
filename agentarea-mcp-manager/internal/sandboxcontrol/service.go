@@ -93,6 +93,12 @@ func (s *Service) ApplyExecutionEvent(ctx context.Context, id string, event Exec
 	if err != nil {
 		return nil, err
 	}
+	// Terminal states are final: refuse to drive a completed/failed/cancelled
+	// execution back to running or overwrite its result. The service owns this
+	// invariant, not just the runner's dedupe.
+	if record.Status == ExecutionStatusCompleted || record.Status == ExecutionStatusFailed || record.Status == ExecutionStatusCancelled {
+		return nil, fmt.Errorf("execution %s is already terminal (%s); refusing to mutate", id, record.Status)
+	}
 	if err := validateExecutionWorkspaceEvent(record, event); err != nil {
 		return nil, err
 	}

@@ -1,7 +1,10 @@
 [Unit]
 Description=AgentArea sandbox executor ({{ sandbox_runtime }})
 After=docker.service sandbox-egress.service
-Requires=docker.service
+# Requires (not just After) sandbox-egress: if the egress firewall fails to
+# apply, the executor must NOT start — untrusted bash with no DOCKER-USER
+# filtering could reach cloud metadata / RFC1918. gVisor does not gate egress.
+Requires=docker.service sandbox-egress.service
 
 [Service]
 Restart=always

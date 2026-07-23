@@ -12,7 +12,18 @@
 # container's own RFC1918 bridge IP) and break ALL egress.
 set -euo pipefail
 
-iptables -L DOCKER-USER -n >/dev/null 2>&1 || iptables -N DOCKER-USER || true
+# DOCKER-USER must already exist AND be referenced from FORWARD. If not, Docker
+# is not managing iptables (nft-only path, iptables=false, ...) and this firewall
+# would be silently inert — fail hard rather than create an orphan chain that
+# enforces nothing.
+if ! iptables -S DOCKER-USER >/dev/null 2>&1; then
+  echo "FATAL: DOCKER-USER chain absent - Docker is not managing iptables; refusing to run with no egress enforcement" >&2
+  exit 1
+fi
+if ! iptables -S FORWARD 2>/dev/null | grep -q -- '-j DOCKER-USER'; then
+  echo "FATAL: FORWARD does not jump to DOCKER-USER - egress rules would be dead" >&2
+  exit 1
+fi
 
 # Rebuild idempotently and in deterministic order.
 iptables -F DOCKER-USER
@@ -30,3 +41,18 @@ for IFACE in docker0 'br+'; do
 done
 
 iptables -A DOCKER-USER -j RETURN
+
+# IPv6: symmetric drops, but ONLY if Docker actually manages a v6 DOCKER-USER
+# chain (container IPv6 is off by default, so otherwise there is no v6 path to
+# filter and creating an orphan chain would enforce nothing). fc00::/7 covers
+# ULA incl. fd00:ec2::254-style v6 metadata; fe80::/10 link-local.
+if command -v ip6tables >/dev/null 2>&1 && ip6tables -S DOCKER-USER >/dev/null 2>&1; then
+  ip6tables -F DOCKER-USER
+  ip6tables -A DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+  for IFACE in docker0 'br+'; do
+    for CIDR in fc00::/7 fe80::/10; do
+      ip6tables -A DOCKER-USER -i "$IFACE" -d "$CIDR" -j DROP
+    done
+  done
+  ip6tables -A DOCKER-USER -j RETURN
+fi

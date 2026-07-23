@@ -48,8 +48,11 @@ type ExecutionCreateRequest struct {
 	WorkspaceManifestRef *workspace.ManifestRef  `json:"workspace_manifest_ref,omitempty"`
 }
 
+// RuntimeSelector expresses where/how a task may run. Only Region is honored by
+// placement today (see internal/sandboxplacement). A provider/isolation-tier
+// selector is intentionally NOT present until it is actually wired for routing,
+// so the contract never advertises a selector that silently does nothing.
 type RuntimeSelector struct {
-	Provider       string `json:"provider,omitempty"`
 	Region         string `json:"region,omitempty"`
 	PackageInstall string `json:"package_install"`
 }

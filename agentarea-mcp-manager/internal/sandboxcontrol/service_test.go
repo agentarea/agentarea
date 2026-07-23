@@ -266,7 +266,7 @@ func TestServiceRejectsNonInternalEventMetadata(t *testing.T) {
 	store := newMemoryStore()
 	service := NewService(store, &recordingEventBus{})
 	record, err := service.CreateExecution(context.Background(), ExecutionCreateRequest{
-		Runtime:              RuntimeSelector{Provider: "agentarea-k8s", PackageInstall: runtimeinfo.PackageInstallAllowed},
+		Runtime:              RuntimeSelector{PackageInstall: runtimeinfo.PackageInstallAllowed},
 		WorkspaceManifestRef: validTestManifestRef("workspace-1", "task-1", "e", 1, 17),
 		Command:              warmpool.ExecuteRequest{CommandBody: "echo ok"},
 	})

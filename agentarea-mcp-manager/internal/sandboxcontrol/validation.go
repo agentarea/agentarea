@@ -162,11 +162,6 @@ func validateExecutionEvent(event ExecutionEventRequest) error {
 }
 
 func validateRuntimeSelector(selector RuntimeSelector) error {
-	if selector.Provider != "" {
-		if err := workspace.ValidateIdentifier("runtime provider", selector.Provider); err != nil {
-			return err
-		}
-	}
 	if selector.Region != "" {
 		if err := workspace.ValidateIdentifier("runtime region", selector.Region); err != nil {
 			return err

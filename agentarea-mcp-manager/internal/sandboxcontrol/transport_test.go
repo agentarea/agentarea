@@ -107,7 +107,7 @@ func validStoredExecutionRecord() *ExecutionRecord {
 		WorkflowID:           "workflow-1",
 		TaskID:               ref.TaskID,
 		WorkspaceID:          ref.WorkspaceID,
-		Runtime:              RuntimeSelector{Provider: "agentarea-k8s", PackageInstall: runtimeinfo.PackageInstallAllowed},
+		Runtime:              RuntimeSelector{PackageInstall: runtimeinfo.PackageInstallAllowed},
 		Status:               ExecutionStatusQueued,
 		Command:              warmpool.ExecuteRequest{CommandBody: "echo ok"},
 		WorkspaceManifestRef: ref,
@@ -201,7 +201,7 @@ func createRefsOnlyExecution(t *testing.T, ctx context.Context, service *Service
 		FencingToken:   generation,
 	}
 	record, err := service.CreateExecution(ctx, ExecutionCreateRequest{
-		Runtime:              RuntimeSelector{Provider: "agentarea-k8s", PackageInstall: runtimeinfo.PackageInstallAllowed},
+		Runtime:              RuntimeSelector{PackageInstall: runtimeinfo.PackageInstallAllowed},
 		TaskID:               ref.TaskID,
 		WorkspaceID:          ref.WorkspaceID,
 		WorkspaceManifestRef: ref,
