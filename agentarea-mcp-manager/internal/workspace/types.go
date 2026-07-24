@@ -31,10 +31,13 @@ type Entry struct {
 	ObjectURI           string `json:"object_uri,omitempty"`
 	ObjectVersionOrETag string `json:"object_version_or_etag,omitempty"`
 	SHA256              string `json:"sha256,omitempty"`
-	Size                int64  `json:"size,omitempty"`
-	ContentType         string `json:"content_type,omitempty"`
-	Mode                uint32 `json:"mode,omitempty"`
-	Deleted             bool   `json:"deleted,omitempty"`
+	// Size has no omitempty: a zero-length stream (empty stdout/stderr) is a
+	// valid ref with size 0, and dropping the key makes strict consumers reject
+	// the ref as malformed.
+	Size        int64  `json:"size"`
+	ContentType string `json:"content_type,omitempty"`
+	Mode        uint32 `json:"mode,omitempty"`
+	Deleted     bool   `json:"deleted,omitempty"`
 }
 
 type Manifest struct {
