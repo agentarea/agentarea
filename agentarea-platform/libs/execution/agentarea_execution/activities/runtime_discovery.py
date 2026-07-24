@@ -1,5 +1,6 @@
 """Sandbox runtime discovery and prompt rendering."""
 
+import logging
 from typing import Any, Literal
 
 import httpx
@@ -9,6 +10,8 @@ from ..models import (
     RuntimeDiscoveryResult,
     RuntimeManifest,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def fetch_runtime_manifest(
@@ -27,6 +30,7 @@ async def fetch_runtime_manifest(
             response.raise_for_status()
         return RuntimeDiscoveryResult(manifest=RuntimeManifest.model_validate(response.json()))
     except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("runtime manifest fetch failed from %s", url, exc_info=True)
         return RuntimeDiscoveryResult(error=f"runtime manifest unavailable: {exc}")
 
 
