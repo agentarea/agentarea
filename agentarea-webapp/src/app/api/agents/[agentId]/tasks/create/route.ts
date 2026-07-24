@@ -9,15 +9,17 @@ export async function POST(
   const { agentId } = await params;
 
   try {
-    // Use session-based token retrieval only; do not handle workspace
+    // Keep credentials server-side while forwarding the active workspace slug.
     const token = await getAuthToken();
 
-    // Get the task creation data from request body
-    const taskData = await request.json();
+    const incomingContentType = request.headers.get("content-type") || "";
+    const isMultipart = incomingContentType
+      .toLowerCase()
+      .startsWith("multipart/form-data");
 
     // Create headers for backend request
     const backendHeaders: Record<string, string> = {
-      "Content-Type": "application/json",
+      "Content-Type": incomingContentType || "application/json",
       Accept: "text/event-stream",
     };
 
@@ -25,19 +27,36 @@ export async function POST(
       backendHeaders["Authorization"] = `Bearer ${token}`;
     }
 
+    let workspaceSlug = request.headers.get("x-workspace-slug");
+    if (!workspaceSlug) {
+      const referer = request.headers.get("referer");
+      const match = referer?.match(/\/w\/([^/?#]+)/);
+      if (match) workspaceSlug = decodeURIComponent(match[1]);
+    }
+    if (workspaceSlug) {
+      backendHeaders["X-Workspace-Slug"] = workspaceSlug;
+    }
+
     // Connect to backend task creation endpoint with SSE (server-side only)
     const backendUrl = env.API_URL;
-    const createTaskUrl = `${backendUrl}/v1/agents/${agentId}/tasks/`;
+    const endpoint = isMultipart ? "with-attachments" : "";
+    const createTaskUrl = `${backendUrl}/v1/agents/${agentId}/tasks/${endpoint}`;
 
-    const response = await fetch(createTaskUrl, {
+    const requestInit: RequestInit & { duplex?: "half" } = {
       method: "POST",
       headers: backendHeaders,
-      body: JSON.stringify(taskData),
-    });
+      body: request.body,
+      duplex: "half",
+    };
+    const response = await fetch(createTaskUrl, requestInit);
 
     if (!response.ok) {
-      return new Response(`Backend task creation error: ${response.status}`, {
+      return new Response(await response.text(), {
         status: response.status,
+        headers: {
+          "Content-Type":
+            response.headers.get("content-type") || "text/plain; charset=utf-8",
+        },
       });
     }
 

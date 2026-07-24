@@ -1,11 +1,14 @@
 import { createElement } from "react";
 import {
   Clock,
+  CreditCard,
   Github,
   Hash,
+  ListTodo,
   Mail,
   MessageSquare,
   Send,
+  Users,
   Webhook,
   Zap,
   type LucideIcon,
@@ -63,15 +66,28 @@ export function findTriggerCatalogEntry(
   );
 }
 
-function triggerIconKey(
+// webhook_type only means anything for webhook triggers — the backend stores a
+// "generic" default on cron triggers too, which must not mask the schedule.
+function effectiveWebhookType(trigger?: TriggerLike) {
+  if (!trigger || trigger.trigger_type === "cron") return "";
+  return (
+    trigger.webhook_type ||
+    trigger.config?.webhook_type ||
+    ""
+  ).toLowerCase();
+}
+
+// For webhook triggers the trigger's own webhook_type wins over the catalog
+// entry: channels missing from the catalog (e.g. github) fall back to the
+// generic "webhook" entry, which must not mask the real event source.
+export function getTriggerSourceKey(
   entry?: TriggerCatalogEntry | null,
   trigger?: TriggerLike
 ) {
-  const webhookType = trigger?.webhook_type || trigger?.config?.webhook_type;
   return (
+    effectiveWebhookType(trigger) ||
     entry?.id ||
     entry?.webhook_type ||
-    webhookType ||
     trigger?.trigger_type ||
     "webhook"
   ).toLowerCase();
@@ -86,6 +102,9 @@ const TRIGGER_ICON_BY_KEY: Record<string, LucideIcon> = {
   email: Mail,
   gmail: Mail,
   github: Github,
+  stripe: CreditCard,
+  linear: ListTodo,
+  teams: Users,
   webhook: Webhook,
   generic: Webhook,
   event: Zap,
@@ -95,7 +114,7 @@ export function getTriggerIconComponent(
   entry?: TriggerCatalogEntry | null,
   trigger?: TriggerLike
 ): LucideIcon {
-  return TRIGGER_ICON_BY_KEY[triggerIconKey(entry, trigger)] ?? Webhook;
+  return TRIGGER_ICON_BY_KEY[getTriggerSourceKey(entry, trigger)] ?? Webhook;
 }
 
 export function renderTriggerIcon(
@@ -106,10 +125,28 @@ export function renderTriggerIcon(
   return createElement(getTriggerIconComponent(entry, trigger), { className });
 }
 
+const WEBHOOK_TYPE_LABELS: Record<string, string> = {
+  github: "GitHub",
+  gmail: "Gmail",
+  teams: "Microsoft Teams",
+};
+
 export function getTriggerDisplayName(
   trigger: TriggerLike,
   entry?: TriggerCatalogEntry | null
 ) {
+  const webhookType = effectiveWebhookType(trigger);
+  const entryMatchesType =
+    !webhookType ||
+    entry?.webhook_type === webhookType ||
+    entry?.id === webhookType;
+  if (entry?.name && entryMatchesType) return entry.name;
+  if (webhookType && webhookType !== "generic") {
+    return (
+      WEBHOOK_TYPE_LABELS[webhookType] ??
+      webhookType.charAt(0).toUpperCase() + webhookType.slice(1)
+    );
+  }
   return entry?.name ?? (trigger.trigger_type === "cron" ? "Cron" : "Webhook");
 }
 

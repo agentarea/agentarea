@@ -24,11 +24,17 @@ interface TableProps<T> {
   data: T[];
   columns: Column<T>[];
   onRowClick?: (item: T) => void;
+  className?: string;
 }
 
-export default function Table<T,>({ data, columns, onRowClick }: TableProps<T>) {
+export default function Table<T>({
+  data,
+  columns,
+  onRowClick,
+  className,
+}: TableProps<T>) {
   return (
-    <TableComponent>
+    <TableComponent className={className}>
       <TableHeader
         className="relative"
         style={{

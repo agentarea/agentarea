@@ -3,20 +3,22 @@
 import { useState } from "react";
 import { useLocale } from "next-intl";
 import { InfoPanelBody, InfoPanelShell } from "@/components/InfoPanel";
-import TaskInfoHeader from "./components/TaskInfoHeader";
-import TaskInfoTabs from "./components/TaskInfoTabs";
+import type { EffectivePolicy } from "@/types/policies";
+import ActivitySummary, {
+  TaskActivitySummary,
+} from "./components/ActivitySummary";
+import BudgetInfo from "./components/BudgetInfo";
+import Documents from "./components/Documents";
+import Files from "./components/Files";
 import KeyMetrics from "./components/KeyMetrics";
-import QuickActions from "./components/QuickActions";
 import Metadata from "./components/Metadata";
 import ModelInfo from "./components/ModelInfo";
-import ActivitySummary, { TaskActivitySummary } from "./components/ActivitySummary";
 import Participants from "./components/Participants";
-import Files from "./components/Files";
-import Documents from "./components/Documents";
-import BudgetInfo from "./components/BudgetInfo";
 import PolicyInfo from "./components/PolicyInfo";
+import QuickActions from "./components/QuickActions";
+import TaskInfoHeader from "./components/TaskInfoHeader";
+import TaskInfoTabs from "./components/TaskInfoTabs";
 import { Task } from "./types";
-import type { EffectivePolicy } from "@/types/policies";
 
 interface TaskInfoPanelProps {
   task?: Task | null;
@@ -96,6 +98,7 @@ export default function TaskInfoPanel({
 
             <ActivitySummary summary={activitySummary} />
             <Participants
+              agentId={task.agent_id}
               agentName={task.agent_name}
               delegatedAgents={activitySummary?.delegatedAgents}
             />

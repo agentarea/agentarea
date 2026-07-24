@@ -7,25 +7,32 @@
  * exposes a user-facing `message` and `status`.
  */
 
+import { A2UISurfaceState, applyA2UI } from "./a2ui";
 import {
+  A2UI_DELETE,
   canonicalType,
   derivePart,
-  Part,
   EventData,
   EventInput,
-  TERMINAL_TYPES,
+  Part,
+  TASK_AWAITING_CONTINUATION,
   TASK_COMPLETED,
+  TASK_CONTINUED,
   TASK_FAILED,
-  A2UI_DELETE,
+  TERMINAL_TYPES,
 } from "./contract";
-import { applyA2UI, A2UISurfaceState } from "./a2ui";
 
 export interface TimelineItem {
   eventType: string;
   data: EventData;
 }
 
-export type TaskStatus = "running" | "completed" | "failed" | "cancelled";
+export type TaskStatus =
+  | "running"
+  | "waiting_for_continuation"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export interface EventState {
   /** Ordered parts, superseded by partId. */
@@ -92,7 +99,7 @@ function a2uiPartData(
 ): EventData {
   const prevSurface =
     prev && prev.kind === "a2ui"
-      ? (prev.data.surface as A2UISurfaceState | undefined) ?? null
+      ? ((prev.data.surface as A2UISurfaceState | undefined) ?? null)
       : null;
   const surface = applyA2UI(prevSurface, canonical, surfaceId, data);
   return { ...data, surface };
@@ -136,7 +143,10 @@ export function applyEvent(state: EventState, event: EventInput): EventState {
     return { ...state, byId, order, parts };
   }
 
-  const timeline = [...state.timeline, { eventType: canonical, data: event.data }];
+  const timeline = [
+    ...state.timeline,
+    { eventType: canonical, data: event.data },
+  ];
   if (TERMINAL_TYPES.has(canonical)) {
     return {
       ...state,
@@ -144,6 +154,12 @@ export function applyEvent(state: EventState, event: EventInput): EventState {
       status: statusForTerminal(canonical),
       terminalMessage: terminalMessageFrom(canonical, event.data),
     };
+  }
+  if (canonical === TASK_AWAITING_CONTINUATION) {
+    return { ...state, timeline, status: "waiting_for_continuation" };
+  }
+  if (canonical === TASK_CONTINUED) {
+    return { ...state, timeline, status: "running", terminalMessage: null };
   }
   return { ...state, timeline };
 }

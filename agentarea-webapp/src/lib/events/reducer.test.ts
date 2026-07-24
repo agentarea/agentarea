@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { applyEvent, reduceState, initialState } from "./reducer";
-import { reduceParts, EventInput } from "./contract";
+import { describe, expect, it } from "vitest";
+import { EventInput, reduceParts } from "./contract";
+import { applyEvent, initialState, reduceState } from "./reducer";
 
 function feed(events: EventInput[]) {
   return reduceState(events);
@@ -9,9 +9,18 @@ function feed(events: EventInput[]) {
 describe("reducer parts (supersede-by-id)", () => {
   it("collapses chunk, chunk, final into one llm part with final content", () => {
     const state = feed([
-      { eventType: "llm.call.chunk", data: { execution_id: "e", iteration: 0, chunk: "a" } },
-      { eventType: "llm.call.chunk", data: { execution_id: "e", iteration: 0, chunk: "ab" } },
-      { eventType: "llm.call.completed", data: { execution_id: "e", iteration: 0, content: "final" } },
+      {
+        eventType: "llm.call.chunk",
+        data: { execution_id: "e", iteration: 0, chunk: "a" },
+      },
+      {
+        eventType: "llm.call.chunk",
+        data: { execution_id: "e", iteration: 0, chunk: "ab" },
+      },
+      {
+        eventType: "llm.call.completed",
+        data: { execution_id: "e", iteration: 0, content: "final" },
+      },
     ]);
     expect(state.parts).toHaveLength(1);
     expect(state.parts[0].eventType).toBe("llm.call.completed");
@@ -20,8 +29,14 @@ describe("reducer parts (supersede-by-id)", () => {
 
   it("collapses two input.request with the same id into one part", () => {
     const state = feed([
-      { eventType: "input.request", data: { input_request_id: "ir", question: "a?" } },
-      { eventType: "input.request", data: { input_request_id: "ir", question: "b?" } },
+      {
+        eventType: "input.request",
+        data: { input_request_id: "ir", question: "a?" },
+      },
+      {
+        eventType: "input.request",
+        data: { input_request_id: "ir", question: "b?" },
+      },
     ]);
     expect(state.parts).toHaveLength(1);
     expect(state.parts[0].data.question).toBe("b?");
@@ -29,8 +44,14 @@ describe("reducer parts (supersede-by-id)", () => {
 
   it("resolves a form when input.response supersedes the same-id request", () => {
     const state = feed([
-      { eventType: "input.request", data: { input_request_id: "ir", question: "a?" } },
-      { eventType: "input.response", data: { input_request_id: "ir", answer: "yes" } },
+      {
+        eventType: "input.request",
+        data: { input_request_id: "ir", question: "a?" },
+      },
+      {
+        eventType: "input.response",
+        data: { input_request_id: "ir", answer: "yes" },
+      },
     ]);
     expect(state.parts).toHaveLength(1);
     expect(state.parts[0].eventType).toBe("input.response");
@@ -62,13 +83,28 @@ describe("reducer parts (supersede-by-id)", () => {
 
 describe("reducer incremental == batch (the supersede invariant)", () => {
   const events: EventInput[] = [
-    { eventType: "llm.call.started", data: { execution_id: "e", iteration: 0 } },
-    { eventType: "llm.call.chunk", data: { execution_id: "e", iteration: 0, chunk: "hi" } },
+    {
+      eventType: "llm.call.started",
+      data: { execution_id: "e", iteration: 0 },
+    },
+    {
+      eventType: "llm.call.chunk",
+      data: { execution_id: "e", iteration: 0, chunk: "hi" },
+    },
     { eventType: "tool.call", data: { tool_call_id: "t1", name: "read" } },
-    { eventType: "llm.call.chunk", data: { execution_id: "e", iteration: 0, chunk: "hi there" } },
+    {
+      eventType: "llm.call.chunk",
+      data: { execution_id: "e", iteration: 0, chunk: "hi there" },
+    },
     { eventType: "tool.result", data: { tool_call_id: "t1", success: true } },
-    { eventType: "llm.call.completed", data: { execution_id: "e", iteration: 0, content: "done" } },
-    { eventType: "input.request", data: { input_request_id: "ir", question: "q?" } },
+    {
+      eventType: "llm.call.completed",
+      data: { execution_id: "e", iteration: 0, content: "done" },
+    },
+    {
+      eventType: "input.request",
+      data: { input_request_id: "ir", question: "q?" },
+    },
     { eventType: "task.completed", data: { message: "all good" } },
   ];
 
@@ -100,14 +136,35 @@ describe("reducer timeline and terminal message", () => {
   });
 
   it("derives a completed message from final_response when message is absent", () => {
-    const state = feed([{ eventType: "task.completed", data: { final_response: "shipped" } }]);
+    const state = feed([
+      { eventType: "task.completed", data: { final_response: "shipped" } },
+    ]);
     expect(state.status).toBe("completed");
     expect(state.terminalMessage).toBe("shipped");
   });
 
   it("stays running with a null terminal message before any terminal event", () => {
-    const state = feed([{ eventType: "tool.call", data: { tool_call_id: "t" } }]);
+    const state = feed([
+      { eventType: "tool.call", data: { tool_call_id: "t" } },
+    ]);
     expect(state.status).toBe("running");
     expect(state.terminalMessage).toBeNull();
+  });
+
+  it("tracks continuation wait and resume as nonterminal lifecycle states", () => {
+    const waiting = feed([
+      {
+        eventType: "task.awaiting_continuation",
+        data: { failure_reason: "iteration_limit" },
+      },
+    ]);
+    expect(waiting.status).toBe("waiting_for_continuation");
+    expect(waiting.terminalMessage).toBeNull();
+
+    const continued = applyEvent(waiting, {
+      eventType: "task.continued",
+      data: { continuation_count: 1 },
+    });
+    expect(continued.status).toBe("running");
   });
 });

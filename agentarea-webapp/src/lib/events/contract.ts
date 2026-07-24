@@ -29,6 +29,8 @@ export const A2UI_DELETE = "a2ui.delete";
 export const TASK_COMPLETED = "task.completed";
 export const TASK_FAILED = "task.failed";
 export const TASK_CANCELLED = "task.cancelled";
+export const TASK_AWAITING_CONTINUATION = "task.awaiting_continuation";
+export const TASK_CONTINUED = "task.continued";
 
 export const TERMINAL_TYPES: ReadonlySet<string> = new Set([
   TASK_COMPLETED,

@@ -3,7 +3,10 @@
 import { Suspense } from "react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import NetworkClient, { NetworkHeaderTabs } from "./NetworkClient";
+import NetworkClient, {
+  NetworkHeaderControls,
+  NetworkHeaderTabs,
+} from "./NetworkClient";
 import { NetworkProvider } from "./NetworkProvider";
 
 export default function NetworkPage() {
@@ -11,8 +14,8 @@ export default function NetworkPage() {
     <NetworkProvider>
       <ContentBlock
         header={{
-          breadcrumb: [{ label: "Network" }],
-          description: "Visual overview of your workspace topology",
+          breadcrumb: [{ label: "Network topology" }],
+          controls: <NetworkHeaderControls />,
         }}
         subheader={<NetworkHeaderTabs />}
         className="p-0"

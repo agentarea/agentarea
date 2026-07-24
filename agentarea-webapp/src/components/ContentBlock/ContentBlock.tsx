@@ -16,6 +16,7 @@ type ContentBlockProps = {
   children: React.ReactNode;
   subheader?: React.ReactNode;
   className?: string;
+  showSidebarTrigger?: boolean;
   header?:
     | {
         title: string;
@@ -38,6 +39,7 @@ export default function ContentBlock({
   header,
   className,
   subheader,
+  showSidebarTrigger = true,
 }: ContentBlockProps) {
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -66,8 +68,12 @@ export default function ContentBlock({
           ) : (
             <>
               <div className="flex min-w-0 items-start gap-1.5 md:gap-2">
-                <SidebarTrigger className="h-5 w-5" />
-                <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
+                {showSidebarTrigger && (
+                  <>
+                    <SidebarTrigger className="h-5 w-5" />
+                    <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
+                  </>
+                )}
                 <div className="flex min-w-0 flex-col gap-1">
                   <Breadcrumb>
                     <BreadcrumbList className="min-w-0 gap-1 sm:gap-2.5 max-sm:text-xs max-sm:leading-[22px]">

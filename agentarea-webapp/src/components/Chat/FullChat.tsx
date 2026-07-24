@@ -1,31 +1,31 @@
 "use client";
 
-import type { PolicyDocument } from "@/api/client/types.gen";
 import React from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import type { PolicyDocument } from "@/api/client/types.gen";
+import type { HumanInputSecretValue } from "@/components/Chat/types";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useMentions } from "@/hooks/useMentions";
+import { useTaskActions } from "@/hooks/useTaskActions";
+import { canonicalType } from "@/lib/events/contract";
+import { normalizeSSEEvent } from "@/lib/events/normalize";
+import { PartRenderer } from "@/lib/events/parts/PartRenderer";
+import {
+  applyEvent,
+  initialState,
+  type EventState,
+} from "@/lib/events/reducer";
 import {
   pauseAgentTaskAction as pauseAgentTask,
   resumeAgentTaskAction as resumeAgentTask,
 } from "@/lib/server-actions";
-import { useTaskActions } from "@/hooks/useTaskActions";
 import { cn } from "@/lib/utils";
 import {
   extractPlainText,
   formatTextForTextarea,
   restoreMentionIds,
 } from "@/utils/mentions";
-import {
-  applyEvent,
-  initialState,
-  type EventState,
-} from "@/lib/events/reducer";
-import { normalizeSSEEvent } from "@/lib/events/normalize";
-import { canonicalType } from "@/lib/events/contract";
-import { PartRenderer } from "@/lib/events/parts/PartRenderer";
-import type { HumanInputSecretValue } from "@/components/Chat/types";
-import { StatusIndicator } from "@/components/ui/status-indicator";
 import { BadgeSuggestions } from "./componets/BadgeSuggestions";
 import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
 import { ChatInputArea } from "./componets/ChatInputArea";
@@ -203,8 +203,7 @@ export default function FullChat({
   // Unified event core: SSE events fold through the reducer into ordered parts
   // (supersede-by-id). User messages the person typed aren't task events, so
   // they're tracked separately and interleaved by arrival order.
-  const [eventState, setEventState] =
-    React.useState<EventState>(initialState);
+  const [eventState, setEventState] = React.useState<EventState>(initialState);
   const [userEntries, setUserEntries] = React.useState<UserEntry[]>([]);
   const eventStateRef = React.useRef<EventState>(eventState);
   eventStateRef.current = eventState;
@@ -451,6 +450,12 @@ export default function FullChat({
       } else if (canonical === "task.cancelled") {
         setTaskLifecycleStatus("cancelled");
         setIsLoading(false);
+      } else if (canonical === "task.awaiting_continuation") {
+        setTaskLifecycleStatus("waiting_for_continuation");
+        setIsLoading(false);
+      } else if (canonical === "task.continued") {
+        setTaskLifecycleStatus("running");
+        setIsLoading(true);
       } else if (rawType === "execution_paused") {
         setTaskLifecycleStatus("paused");
       } else if (rawType === "execution_resumed") {
@@ -474,6 +479,7 @@ export default function FullChat({
       (policy) => policy.id === selectedTaskPolicyId
     );
     const taskPolicy = buildTaskPolicyDocument(selectedTaskPolicy?.policy);
+    const filesToUpload = [...selectedFiles];
 
     const userMessage: UserChatMessage = {
       id: Date.now().toString(),
@@ -494,31 +500,47 @@ export default function FullChat({
     }
 
     try {
+      const taskData = {
+        description:
+          plainContent || "Use the attached files to complete the task.",
+        project_id: selectedProjectId,
+        task_policy: taskPolicy,
+        parameters: {
+          context: {
+            project_id: selectedProjectId,
+            task_policy_rule_id: selectedTaskPolicy?.id,
+            task_policy_rule_name: selectedTaskPolicy?.name,
+          },
+          task_type: "chat",
+          session_id: `chat-${Date.now()}`,
+        },
+        enable_agent_communication: true,
+      };
+      const headers: Record<string, string> = { Accept: "text/event-stream" };
+      let body: BodyInit;
+      if (filesToUpload.length > 0) {
+        const formData = new FormData();
+        formData.append("task_data", JSON.stringify(taskData));
+        for (const file of filesToUpload) {
+          formData.append("files", file, file.name);
+        }
+        body = formData;
+      } else {
+        headers["Content-Type"] = "application/json";
+        body = JSON.stringify(taskData);
+      }
+
       const response = await fetch(`/api/agents/${agent.id}/tasks/create`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        },
-        body: JSON.stringify({
-          description: plainContent,
-          project_id: selectedProjectId,
-          task_policy: taskPolicy,
-          parameters: {
-            context: {
-              project_id: selectedProjectId,
-              task_policy_rule_id: selectedTaskPolicy?.id,
-              task_policy_rule_name: selectedTaskPolicy?.name,
-            },
-            task_type: "chat",
-            session_id: `chat-${Date.now()}`,
-          },
-          enable_agent_communication: true,
-        }),
+        headers,
+        body,
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorBody = await response.text();
+        throw new Error(
+          errorBody || `Task creation failed with status ${response.status}`
+        );
       }
 
       if (!response.body) {

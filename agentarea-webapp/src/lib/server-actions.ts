@@ -30,6 +30,7 @@ import {
   bulkCreateModelInstances,
   cancelAgentTask,
   checkMCPServerInstanceConfiguration,
+  continueAgentTask,
   createAgentWallet,
   createClient,
   createMCPAuthConfig,
@@ -182,6 +183,18 @@ export async function pauseAgentTaskAction(agentId: string, taskId: string) {
 
 export async function resumeAgentTaskAction(agentId: string, taskId: string) {
   return await resumeAgentTask(agentId, taskId);
+}
+
+export async function continueAgentTaskAction(
+  taskId: string,
+  additionalIterations: number,
+  additionalBudgetUsd?: string
+) {
+  return await continueAgentTask(
+    taskId,
+    additionalIterations,
+    additionalBudgetUsd
+  );
 }
 
 export async function sendTaskCommandAction(

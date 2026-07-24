@@ -1,9 +1,4 @@
-export type StatusTone =
-  | "success"
-  | "warning"
-  | "danger"
-  | "info"
-  | "neutral";
+export type StatusTone = "success" | "warning" | "danger" | "info" | "neutral";
 
 export type StatusIndicatorSize = "default" | "sm";
 
@@ -183,9 +178,7 @@ export function getMcpCatalogStatusPresentation(
   }
 }
 
-export function getTaskStatusPresentation(
-  status: string
-): StatusPresentation {
+export function getTaskStatusPresentation(status: string): StatusPresentation {
   switch (normalizeStatus(status)) {
     case "completed":
       return { label: "Completed", labelKey: "completed", tone: "success" };
@@ -200,9 +193,24 @@ export function getTaskStatusPresentation(
         pulse: true,
       };
     case "input_required":
+    case "waiting_for_input":
       return {
         label: "Input Required",
         labelKey: "inputRequired",
+        tone: "warning",
+        pulse: true,
+      };
+    case "waiting_for_approval":
+      return {
+        label: "Approval Required",
+        labelKey: "approvalRequired",
+        tone: "warning",
+        pulse: true,
+      };
+    case "waiting_for_continuation":
+      return {
+        label: "Continuation Required",
+        labelKey: "continuationRequired",
         tone: "warning",
         pulse: true,
       };
@@ -281,9 +289,7 @@ export function getTriggerExecutionStatusPresentation(
   }
 }
 
-export function getAgentStatusPresentation(
-  status: string
-): StatusPresentation {
+export function getAgentStatusPresentation(status: string): StatusPresentation {
   switch (normalizeStatus(status)) {
     case "active":
       return { label: "Active", tone: "success" };
@@ -326,9 +332,7 @@ export function getPaymentStatusPresentation(
   }
 }
 
-export function getInboxStatusPresentation(
-  status: string
-): StatusPresentation {
+export function getInboxStatusPresentation(status: string): StatusPresentation {
   const normalized = normalizeStatus(status);
 
   if (normalized === "waiting_for_approval" || normalized === "pending") {

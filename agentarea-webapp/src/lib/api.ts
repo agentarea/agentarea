@@ -19,6 +19,7 @@ import type {
   InvitationResponse,
   ListPolicyRulesV1PoliciesGetData,
   ListRelationshipsV1AccessControlRelationshipsGetData,
+  McpInstanceConsumer,
   McpServerCreate,
   McpServerInstanceCreate,
   McpServerInstanceResponse,
@@ -355,6 +356,28 @@ export const resumeAgentTask = async (agentId: string, taskId: string) => {
       client: serverClient,
       path: { agent_id: agentId, task_id: taskId },
     });
+  return { data, error };
+};
+
+export const continueAgentTask = async (
+  taskId: string,
+  additionalIterations: number,
+  additionalBudgetUsd?: string
+) => {
+  const body: Record<string, number | string> = {
+    additional_iterations: additionalIterations,
+  };
+  if (additionalBudgetUsd) {
+    body.additional_budget_usd = additionalBudgetUsd;
+  }
+  const { data, error } = await requestJson(
+    "POST",
+    "/v1/tasks/{task_id}/continue",
+    {
+      params: { path: { task_id: taskId } },
+      body,
+    }
+  );
   return { data, error };
 };
 
@@ -963,25 +986,19 @@ export const getMCPInstanceHealth = async (
   }
 };
 
-export interface MCPInstanceConsumer {
-  agent_id: string;
-  agent_name: string;
-  agent_slug: string | null;
-  // null → the agent allows every tool the server exposes.
-  enabled_tools: string[] | null;
-  confirm_tools: string[];
-}
+export type MCPInstanceConsumer = McpInstanceConsumer;
 
-// Hand-rolled until `pnpm generate:api` picks up the new
-// GET /v1/mcp-server-instances/{id}/consumers endpoint.
 export const getMCPInstanceConsumers = async (
   instanceId: string
 ): Promise<MCPInstanceConsumer[]> => {
   try {
-    const { data, error } = await serverClient.request<MCPInstanceConsumer[]>({
-      method: "GET",
-      url: `/v1/mcp-server-instances/${instanceId}/consumers`,
-    });
+    const { data, error } =
+      await sdk.listMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGet(
+        {
+          client: serverClient,
+          path: { instance_id: instanceId },
+        }
+      );
     if (error || !data) return [];
     return data;
   } catch (error) {
