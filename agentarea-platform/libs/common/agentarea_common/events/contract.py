@@ -41,6 +41,8 @@ TASK_STARTED = "task.started"
 TASK_COMPLETED = "task.completed"
 TASK_FAILED = "task.failed"
 TASK_CANCELLED = "task.cancelled"
+TASK_AWAITING_CONTINUATION = "task.awaiting_continuation"
+TASK_CONTINUED = "task.continued"
 
 # Canonical terminal types: append-only lifecycle events that end a task feed.
 _TERMINAL_TYPES: frozenset[str] = frozenset({TASK_COMPLETED, TASK_FAILED, TASK_CANCELLED})

@@ -137,6 +137,12 @@ class ExecutionService(ExecutionServiceInterface):
             logger.error(f"Failed to send workflow command '{command}': {e}")
             return False
 
+    async def continue_execution(
+        self, execution_id: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Request a validated continuation through a Temporal update."""
+        return await self._workflow_orchestrator.continue_workflow(execution_id, payload)
+
 
 # Interface for workflow orchestrators
 from abc import ABC, abstractmethod  # noqa: E402
@@ -197,4 +203,11 @@ class WorkflowOrchestratorInterface(ABC):
         self, execution_id: str, command: str, payload: dict[str, Any]
     ) -> bool:
         """Send a generic command signal to a running workflow."""
+        pass
+
+    @abstractmethod
+    async def continue_workflow(
+        self, execution_id: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Atomically continue a workflow waiting on resource limits."""
         pass

@@ -12,7 +12,7 @@ import json
 from urllib.parse import quote
 
 from .decorator_tool import Toolset, tool_method
-from .file_toolset import InMemoryStorage, StorageClient
+from .file_toolset import InMemoryStorage, StorageClient, WorkspaceRepositoryClient
 from .tool_definition import toolset
 
 
@@ -29,18 +29,28 @@ class WorkspaceFilesToolset(Toolset):
     def __init__(
         self,
         storage: StorageClient | None = None,
+        workspace_repository: WorkspaceRepositoryClient | None = None,
         workspace_id: str | None = None,
+        task_id: str | None = None,
+        lease_owner: str | None = None,
         base_prefix: str = "",
     ) -> None:
         super().__init__()
         self.storage: StorageClient = storage or InMemoryStorage()
+        self.workspace_repository = workspace_repository
         self.workspace_id = workspace_id or "_standalone"
+        self.task_id = task_id or ""
+        self.lease_owner = lease_owner or ""
         self.base_prefix = base_prefix.strip("/")
 
     def _resolve_prefix(self, prefix: str = "") -> str:
-        clean_prefix = prefix.lstrip("/")
-        if ".." in clean_prefix.split("/"):
+        if prefix.startswith("/"):
             raise ValueError(f"path escapes workspace scope: {prefix!r}")
+        clean_prefix = prefix
+        if ".." in clean_prefix.split("/") or "\\" in clean_prefix:
+            raise ValueError(f"path escapes workspace scope: {prefix!r}")
+        if self.workspace_repository is not None:
+            return clean_prefix
         if self.base_prefix and clean_prefix:
             return f"{self.base_prefix}/{clean_prefix}"
         return self.base_prefix or clean_prefix
@@ -55,7 +65,14 @@ class WorkspaceFilesToolset(Toolset):
         """List files in the current workspace's storage."""
         try:
             resolved_prefix = self._resolve_prefix(prefix)
-            objects = await self.storage.list(self.workspace_id, prefix=resolved_prefix)
+            if self.workspace_repository is not None:
+                if not self.task_id:
+                    raise ValueError("task_id is required for canonical workspace operations")
+                objects = await self.workspace_repository.list(
+                    self.workspace_id, self.task_id, prefix=resolved_prefix, max_items=max_items
+                )
+            else:
+                objects = await self.storage.list(self.workspace_id, prefix=resolved_prefix)
             rows = []
             for obj in objects[: max(0, max_items)]:
                 path = str(
@@ -79,9 +96,22 @@ class WorkspaceFilesToolset(Toolset):
         """Return an AgentArea API download path for a workspace file."""
         try:
             resolved_path = self._resolve_prefix(path)
-            if not await self.storage.exists(self.workspace_id, resolved_path):
+            if self.workspace_repository is not None:
+                if not self.task_id:
+                    raise ValueError("task_id is required for canonical workspace operations")
+                exists = await self.workspace_repository.exists(
+                    self.workspace_id, self.task_id, resolved_path
+                )
+            else:
+                exists = await self.storage.exists(self.workspace_id, resolved_path)
+            if not exists:
                 return json.dumps({"error": "File not found", "path": path})
-            encoded_path = quote(resolved_path.lstrip("/"), safe="/")
+            api_path = (
+                f"tasks/{self.task_id}/workspace/{resolved_path}"
+                if self.workspace_repository is not None
+                else resolved_path.lstrip("/")
+            )
+            encoded_path = quote(api_path, safe="/")
             return json.dumps(
                 {
                     "url": f"/v1/files/download/{encoded_path}",
@@ -97,9 +127,25 @@ class WorkspaceFilesToolset(Toolset):
         """Delete a workspace file."""
         try:
             resolved_path = self._resolve_prefix(path)
-            if not await self.storage.exists(self.workspace_id, resolved_path):
+            if self.workspace_repository is not None:
+                if not self.task_id:
+                    raise ValueError("task_id is required for canonical workspace operations")
+                exists = await self.workspace_repository.exists(
+                    self.workspace_id, self.task_id, resolved_path
+                )
+            else:
+                exists = await self.storage.exists(self.workspace_id, resolved_path)
+            if not exists:
                 return json.dumps({"deleted": False, "error": "File not found"})
-            await self.storage.delete(self.workspace_id, resolved_path)
+            if self.workspace_repository is not None:
+                await self.workspace_repository.delete(
+                    self.workspace_id,
+                    self.task_id,
+                    resolved_path,
+                    owner=self.lease_owner or None,
+                )
+            else:
+                await self.storage.delete(self.workspace_id, resolved_path)
             return json.dumps({"deleted": True, "path": path})
         except Exception as exc:
             return json.dumps({"deleted": False, "error": str(exc), "path": path})

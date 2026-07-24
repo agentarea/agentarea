@@ -8,6 +8,8 @@ from temporalio import activity
 
 from agentarea_execution.models import (
     AgentConfigRequest,
+    ArtifactValidationRequest,
+    ArtifactValidationResult,
     LLMCallRequest,
     MCPToolRequest,
     ResolveModelRequest,
@@ -176,3 +178,10 @@ async def mock_execute_mcp_tool(request: MCPToolRequest) -> dict[str, Any]:
 @activity.defn(name="update_task_status_activity")
 async def mock_update_task_status(request: UpdateTaskStatusRequest) -> bool:
     return True
+
+
+@activity.defn(name="validate_artifacts_activity")
+async def mock_validate_artifacts(
+    request: ArtifactValidationRequest,
+) -> ArtifactValidationResult:
+    return ArtifactValidationResult(state="no_artifacts", generation=0)

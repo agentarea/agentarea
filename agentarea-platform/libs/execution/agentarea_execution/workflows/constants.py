@@ -14,6 +14,7 @@ ACTIVITY_TIMEOUT: Final[timedelta] = timedelta(minutes=5)
 LLM_CALL_TIMEOUT: Final[timedelta] = timedelta(minutes=10)
 TOOL_EXECUTION_TIMEOUT: Final[timedelta] = timedelta(minutes=35)
 EVENT_PUBLISH_TIMEOUT: Final[timedelta] = timedelta(seconds=5)
+CONTINUATION_TIMEOUT: Final[timedelta] = timedelta(hours=24)
 
 # Heartbeat configuration
 HEARTBEAT_TIMEOUT: Final[timedelta] = timedelta(seconds=30)
@@ -24,7 +25,10 @@ DELEGATION_TIMEOUT: Final[timedelta] = timedelta(minutes=10)  # Max time for chi
 # Retry policies
 DEFAULT_RETRY_ATTEMPTS: Final[int] = 3
 EVENT_PUBLISH_RETRY_ATTEMPTS: Final[int] = 1
-LLM_RETRY_ATTEMPTS: Final[int] = 1
+# LLM calls retry transient failures (rate limit, network, 5xx) with backoff.
+# Genuinely permanent failures (auth, quota/billing, bad model) still fail fast
+# via the ApplicationError non_retryable flag (_is_non_retryable_error).
+LLM_RETRY_ATTEMPTS: Final[int] = 3
 
 
 # Context window management
@@ -57,6 +61,10 @@ class EventTypes:
     WORKFLOW_COMPLETED: Final[str] = "task.completed"
     WORKFLOW_FAILED: Final[str] = "task.failed"
     WORKFLOW_CANCELLED: Final[str] = "task.cancelled"
+    WORKFLOW_AWAITING_CONTINUATION: Final[str] = "task.awaiting_continuation"
+    WORKFLOW_CONTINUED: Final[str] = "task.continued"
+    VALIDATION_STARTED: Final[str] = "artifact.validation.started"
+    VALIDATION_COMPLETED: Final[str] = "artifact.validation.completed"
 
     # Timeline/system — not in the part taxonomy, kept bare.
     ITERATION_STARTED: Final[str] = "IterationStarted"
@@ -104,6 +112,7 @@ class EventTypes:
     MODEL_CHANGED: Final[str] = "ModelChanged"
     MODEL_RESOLUTION_FALLBACK: Final[str] = "ModelResolutionFallback"
     MODEL_UNAVAILABLE: Final[str] = "ModelUnavailable"
+    RUNTIME_DISCOVERED: Final[str] = "RuntimeDiscovered"
     WORKFLOW_COMMAND_RECEIVED: Final[str] = "WorkflowCommandReceived"
 
 
@@ -112,6 +121,8 @@ class Activities:
     """Activity function references to avoid hardcoded strings."""
 
     BUILD_AGENT_CONFIG: Final[str] = "build_agent_config_activity"
+    DISCOVER_RUNTIME_MANIFEST: Final[str] = "discover_runtime_manifest_activity"
+    VALIDATE_ARTIFACTS: Final[str] = "validate_artifacts_activity"
     DISCOVER_AVAILABLE_TOOLS: Final[str] = "discover_available_tools_activity"
     EXECUTE_ADK_AGENT_WITH_TEMPORAL_BACKBONE: Final[str] = (
         "execute_adk_agent_with_temporal_backbone"
@@ -126,7 +137,7 @@ class Activities:
     RECALL_HISTORY: Final[str] = "recall_history_activity"
     UPDATE_TASK_STATUS: Final[str] = "update_task_status_activity"
     MATERIALIZE_SKILL_FILES: Final[str] = "materialize_skill_files_activity"
-    CLEANUP_SANDBOX_WORKFLOW: Final[str] = "cleanup_sandbox_workflow_activity"
+    CLEANUP_SANDBOX_TASK: Final[str] = "cleanup_sandbox_task_activity"
     # Dynamic context discovery
     DISCOVER_TOOL_PROVIDERS: Final[str] = "discover_tool_providers_activity"
     STORE_CONTEXT_OUTPUT: Final[str] = "store_context_output"
@@ -148,6 +159,7 @@ class ExecutionStatus:
     EXECUTING: Final[str] = "executing"
     WAITING_FOR_APPROVAL: Final[str] = "waiting_for_approval"
     WAITING_FOR_INPUT: Final[str] = "waiting_for_input"
+    WAITING_FOR_CONTINUATION: Final[str] = "waiting_for_continuation"
     BLOCKED: Final[str] = "blocked"
     TOOL_EXECUTION: Final[str] = "tool_execution"
     EVALUATING: Final[str] = "evaluating"

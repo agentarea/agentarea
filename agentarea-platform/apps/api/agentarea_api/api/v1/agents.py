@@ -34,7 +34,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import agents_a2a, agents_well_known
-from ._access_control_grants import grant_user_relation
+from ._access_control_grants import grant_resource_owner
 from ._approval_policy_sync import (
     apply_approval_targets,
     approval_targets_for_agents,
@@ -190,19 +190,20 @@ async def _resolve_agent_id(agent_service: AgentService, identifier: str) -> UUI
     return catalog_agent.id if catalog_agent else None
 
 
-async def _grant_agent_owner(agent_id: UUID | str, user_id: str) -> None:
-    """Assert that ``user_id`` owns ``agent_id`` in Keto.
+async def _grant_agent_owner(agent_id: UUID | str, user_id: str, workspace_id: str) -> None:
+    """Assert that ``user_id`` owns ``agent_id`` in the resource graph.
 
     Called on every path that materializes an agent the caller now owns —
     create, catalog install (copy-on-write fork), and edit (which forks an
     un-owned catalog agent) — so a freshly-minted agent never ends up without
-    its ``owners`` relationship (which would 403 the creator on their own row). The
-    Keto write is an idempotent upsert, so re-asserting on update is harmless.
+    its ownership relationships (which would 403 the creator on their own row).
+    Attaches the agent artifact to the workspace root project and grants the
+    creator read/write/manage. Writes are idempotent, so re-asserting on update
+    is harmless.
     """
-    await grant_user_relation(
-        namespace="Agent",
-        object_id=agent_id,
-        relation="owners",
+    await grant_resource_owner(
+        resource_id=agent_id,
+        workspace_id=workspace_id,
         user_id=user_id,
     )
 
@@ -252,7 +253,7 @@ async def create_agent(
             )
 
     agent = await agent_service.create_agent(data)
-    await _grant_agent_owner(agent.id, user_context.user_id)
+    await _grant_agent_owner(agent.id, user_context.user_id, user_context.workspace_id)
     response = AgentResponse.from_domain(agent)
     await _overlay_approval_flags(session, user_context, [response])
     return response
@@ -389,7 +390,7 @@ async def install_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     # The fork created a real tenant row; assert ownership so it is not orphaned
     # in Keto (matching create). Idempotent if the workspace already installed it.
-    await _grant_agent_owner(agent.id, user_context.user_id)
+    await _grant_agent_owner(agent.id, user_context.user_id, user_context.workspace_id)
     agent = await agent_service.get_with_skills(agent.id) or agent
     return AgentResponse.from_domain(agent, include_skills=True)
 
@@ -438,7 +439,7 @@ async def update_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     # Editing an un-installed catalog agent forks a tenant copy (copy-on-write);
     # assert ownership of the resulting row. Idempotent for plain edits.
-    await _grant_agent_owner(agent.id, user_context.user_id)
+    await _grant_agent_owner(agent.id, user_context.user_id, user_context.workspace_id)
     agent = await agent_service.get_with_skills(agent.id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")

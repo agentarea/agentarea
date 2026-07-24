@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+__all__ = ["ToolAuthorizationAction", "ToolAuthorizationRequest", "ToolAuthorizationDecision"]
+
 
 class ToolAuthorizationAction(StrEnum):
     """Authorization verdict for a concrete tool invocation."""

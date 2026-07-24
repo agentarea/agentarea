@@ -3,11 +3,11 @@
 Integrates with existing AgentArea domain models and uses proper UUID types.
 """
 
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from agentarea_common.money import ZERO, Money
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ResolvedModelInfo(BaseModel):
@@ -58,6 +58,19 @@ class ChangeModelPayload(BaseModel):
     resolved_at: str | None = None
 
 
+class BudgetUpdatePayload(BaseModel):
+    """Validated absolute inference-budget update."""
+
+    budget_usd: Money = Field(gt=ZERO)
+
+
+class ContinueExecutionPayload(BaseModel):
+    """Additional resources granted to a workflow waiting on a limit."""
+
+    additional_iterations: int = Field(default=0, ge=0, le=1000)
+    additional_budget_usd: Money | None = Field(default=None, gt=ZERO)
+
+
 class AgentExecutionRequest(BaseModel):
     """Request to execute an agent task via Temporal workflow."""
 
@@ -94,6 +107,8 @@ class AgentExecutionResult(BaseModel):
 
     # Execution results
     success: bool
+    status: str | None = None
+    validation_state: str | None = None
     final_response: str | None = None
     conversation_history: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -104,6 +119,7 @@ class AgentExecutionResult(BaseModel):
     total_cost: Money = ZERO
 
     # Error handling
+    failure_reason: str | None = None
     error_message: str | None = None
 
     # Artifacts and outputs
@@ -205,6 +221,92 @@ class SkillInfo(BaseModel):
     files: list[str] = Field(default_factory=list)  # Available file paths
 
 
+class RuntimePython(BaseModel):
+    version: str
+    executable: str
+
+
+class RuntimeNode(BaseModel):
+    version: str
+    npm_version: str
+
+
+class RuntimeFeatures(BaseModel):
+    browser: Literal["none", "playwright"]
+    managed_environment_mutation: bool
+    arbitrary_workspace_code: bool
+
+
+class RuntimeManifest(BaseModel):
+    schema_version: Literal[1]
+    image_version: str
+    managed_environment: Literal["mutable", "immutable"]
+    python: RuntimePython
+    node: RuntimeNode
+    tools: dict[str, str] = Field(default_factory=dict)
+    packages: dict[str, str] = Field(default_factory=dict)
+    features: RuntimeFeatures
+
+    @model_validator(mode="after")
+    def validate_profile_features(self) -> "RuntimeManifest":
+        expected_mutation = self.managed_environment == "mutable"
+        if self.features.managed_environment_mutation != expected_mutation:
+            raise ValueError("managed environment feature disagrees with profile")
+        if not self.features.arbitrary_workspace_code:
+            raise ValueError("runtime must disclose arbitrary workspace code capability")
+        return self
+
+
+class RuntimeDiscoveryResult(BaseModel):
+    manifest: RuntimeManifest | None = None
+    error: str | None = None
+
+
+class CapabilityUnavailableResult(BaseModel):
+    status: Literal["blocked"] = "blocked"
+    reason: Literal["capability_unavailable"] = "capability_unavailable"
+    capability: str
+    runtime_version: str | None = None
+
+
+class ArtifactValidationIssue(BaseModel):
+    """One actionable failure produced by the runtime artifact validator."""
+
+    path: str
+    validator: str
+    code: str
+    message: str
+
+
+class ArtifactValidationEvidence(BaseModel):
+    """Identity-only evidence for an artifact checked in the task workspace."""
+
+    path: str
+    validator: str
+    sha256: str
+    size: int
+
+
+class ArtifactValidationRequest(BaseModel):
+    """Refs-only request for validating the current canonical task workspace."""
+
+    workspace_id: str
+    task_id: str
+    workflow_id: str
+    declared_paths: list[str] = Field(default_factory=list, max_length=1000)
+    package_install: Literal["allowed", "locked"] = "allowed"
+
+
+class ArtifactValidationResult(BaseModel):
+    """Fail-closed outcome returned by the validation activity."""
+
+    state: Literal["passed", "failed", "unavailable", "no_artifacts"]
+    generation: int
+    evidence: list[ArtifactValidationEvidence] = Field(default_factory=list)
+    issues: list[ArtifactValidationIssue] = Field(default_factory=list)
+    capability_unavailable: CapabilityUnavailableResult | None = None
+
+
 class AgentConfigResult(BaseModel):
     """Agent configuration result."""
 
@@ -223,6 +325,8 @@ class AgentConfigResult(BaseModel):
     execution_context: dict[str, Any] | None = None
     step_type: str | None = None
     skills: list[SkillInfo] = Field(default_factory=list)
+    runtime: RuntimeDiscoveryResult | None = None
+    runtime_event_data: dict[str, Any] = Field(default_factory=dict)
 
 
 class ToolDiscoveryRequest(BaseModel):

@@ -285,7 +285,14 @@ def _is_network_error(error: Exception) -> bool:
 
 
 def _is_non_retryable_error(error: Exception) -> bool:
-    """Determine if error should not be retried."""
+    """Determine if error should not be retried.
+
+    A rate limit (429) is transient and takes precedence: retry it with backoff.
+    Without this, the quota check's broad ``"exceeded"`` match swallows
+    "rate limit exceeded" and wrongly fails the whole task fast.
+    """
+    if _is_rate_limit_error(error):
+        return False
     return _is_auth_error(error) or _is_quota_error(error) or _is_model_error(error)
 
 

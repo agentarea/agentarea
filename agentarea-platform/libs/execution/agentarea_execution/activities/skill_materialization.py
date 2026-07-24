@@ -1,11 +1,10 @@
-"""Turn a skill bundle into sandbox input files.
+"""Turn a skill bundle into canonical task-workspace files.
 
 A skill is a directory of files. Activating one copies it into the task's
 sandbox workspace, which persists across bash calls, so the agent reaches its
 scripts with the ordinary shell instead of a bespoke execution tool.
 """
 
-import base64
 import re
 from hashlib import sha256
 from pathlib import PurePosixPath
@@ -46,24 +45,25 @@ def skill_workspace_dir(skill_name: str, skill_id: str) -> str:
     return f"{SKILLS_ROOT}/{slug}-{suffix}" if slug else f"{SKILLS_ROOT}/skill-{suffix}"
 
 
-def build_skill_input_files(
+def build_skill_workspace_files(
     skill_name: str, skill_id: str, files: list[tuple[str, bytes]]
-) -> list[dict[str, str]]:
-    """Lay a skill's files out under its sandbox directory, dropping unsafe paths."""
+) -> dict[str, bytes]:
+    """Lay out a skill bundle as relative workspace paths.
+
+    Unsafe paths reject the whole bundle.  Silently dropping one file can turn
+    a valid skill into a subtly broken one and violates the atomic workspace
+    commit contract.
+    """
     directory = skill_workspace_dir(skill_name, skill_id)
-    input_files: list[dict[str, str]] = []
+    workspace_files: dict[str, bytes] = {}
 
     for relative_path, content in files:
         clean = PurePosixPath((relative_path or "").replace("\\", "/"))
         parts = [p for p in clean.parts if p not in ("", ".")]
         if not parts or ".." in parts or clean.is_absolute():
-            continue
+            raise ValueError(f"skill bundle path escapes workspace: {relative_path!r}")
+        if not isinstance(content, bytes):
+            raise TypeError(f"skill bundle content must be bytes: {relative_path!r}")
+        workspace_files[f"{directory}/{'/'.join(parts)}"] = content
 
-        input_files.append(
-            {
-                "path": f"{directory}/{'/'.join(parts)}",
-                "content_base64": base64.b64encode(content).decode("ascii"),
-            }
-        )
-
-    return input_files
+    return workspace_files

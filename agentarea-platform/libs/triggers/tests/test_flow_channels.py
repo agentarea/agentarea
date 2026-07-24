@@ -157,7 +157,7 @@ async def test_workflow_event_emitted_and_delivered() -> None:
     )
 
     event = {
-        "event_type": "WorkflowCompleted",
+        "event_type": "task.completed",
         "task_id": task_id,
         "event_id": event_id,
         "data": {"result": "All done"},
@@ -183,7 +183,7 @@ async def test_workflow_event_emitted_and_delivered() -> None:
     mock_adapter.format.assert_called_once()
     format_args = mock_adapter.format.call_args
     routed_event = format_args[0][0]
-    assert routed_event["event_type"] == "WorkflowCompleted"
+    assert routed_event["event_type"] == "task.completed"
     assert routed_event["task_id"] == task_id
 
     mock_adapter.send.assert_awaited_once()

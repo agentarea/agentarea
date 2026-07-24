@@ -7,6 +7,7 @@ vocabulary. There is no alias bridge.
 
 from __future__ import annotations
 
+import json
 import logging
 
 import pytest
@@ -39,6 +40,30 @@ def test_tool_call_completed_emits_tool_result():
     assert _only_event(mgr)["event_type"] == "tool.result"
 
 
+def test_tool_result_event_never_contains_inline_command_or_result_body():
+    mgr = _mgr()
+    command_canary = "cat inputs/private.txt"
+    output_canary = "PRIVATE_STDOUT_CANARY"
+    mgr.add_event(
+        EventTypes.TOOL_CALL_COMPLETED,
+        {
+            "tool_call_id": "tc-1",
+            "tool_name": "shell",
+            "result": output_canary,
+            "arguments": {"command": command_canary},
+            "exit_code": 0,
+            "artifact_paths": ["reports/result.txt"],
+        },
+    )
+
+    event = _only_event(mgr)
+    wire = json.dumps(event)
+    assert command_canary not in wire
+    assert output_canary not in wire
+    assert event["data"]["exit_code"] == 0
+    assert event["data"]["artifact_paths"] == ["reports/result.txt"]
+
+
 def test_tool_call_started_emits_tool_call():
     mgr = _mgr()
     mgr.add_event(EventTypes.TOOL_CALL_STARTED, {"tool_call_id": "tc-1"})
@@ -49,6 +74,38 @@ def test_llm_chunk_emits_dotted():
     mgr = _mgr()
     mgr.add_event(EventTypes.LLM_CALL_CHUNK, {"execution_id": "e-1", "iteration": 0})
     assert _only_event(mgr)["event_type"] == "llm.call.chunk"
+
+
+def test_llm_completed_event_projection_bounds_content_and_sanitizes_nested_tool_calls():
+    mgr = _mgr()
+    heredoc_body = "PRIVATE_HEREDOC_BODY_8f4c"
+    oversized_content = "x" * 2500
+
+    mgr.add_event(
+        EventTypes.LLM_CALL_COMPLETED,
+        {
+            "content": oversized_content,
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "bash",
+                        "arguments": {
+                            "command": f"python - <<'PY'\nprint('{heredoc_body}')\nPY",
+                            "content": "PRIVATE_FILE_BODY",
+                        },
+                    }
+                }
+            ],
+        },
+    )
+
+    event = _only_event(mgr)
+    wire = json.dumps(event)
+    assert event["event_type"] == "llm.call.completed"
+    assert len(event["data"]["content"]) < len(oversized_content)
+    assert "truncated 500 characters" in event["data"]["content"]
+    assert heredoc_body not in wire
+    assert "PRIVATE_FILE_BODY" not in wire
 
 
 def test_human_input_requested_emits_input_request():

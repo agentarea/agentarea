@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -50,6 +51,64 @@ class StorageClient(Protocol):
     async def list(self, workspace_id: str, prefix: str = "") -> list[Any]: ...
 
     async def delete(self, workspace_id: str, path: str) -> None: ...
+
+
+class WorkspaceRepositoryClient(Protocol):
+    """Generation-aware task workspace contract used by SDK toolsets."""
+
+    async def put(
+        self,
+        workspace_id: str,
+        task_id: str,
+        path: str,
+        data: bytes,
+        content_type: str | None = None,
+        **kwargs: Any,
+    ) -> Any: ...
+
+    async def get(self, workspace_id: str, task_id: str, path: str) -> tuple[bytes, str | None]: ...
+
+    async def exists(self, workspace_id: str, task_id: str, path: str) -> bool: ...
+
+    async def list(
+        self, workspace_id: str, task_id: str, prefix: str = "", max_items: int = 10_000
+    ) -> list[Any]: ...
+
+    async def delete(self, workspace_id: str, task_id: str, path: str, **kwargs: Any) -> Any: ...
+
+    async def current_manifest_ref(self, workspace_id: str, task_id: str) -> Any: ...
+
+    async def checkout_for_execution(
+        self, workspace_id: str, task_id: str, *, owner: str
+    ) -> Any: ...
+
+    async def release_execution_lease(
+        self,
+        workspace_id: str,
+        task_id: str,
+        manifest_ref: Mapping[str, Any] | Any,
+        *,
+        owner: str,
+    ) -> None: ...
+
+    async def import_workspace_prefix(
+        self,
+        workspace_id: str,
+        task_id: str,
+        *,
+        source_prefix: str,
+        target_prefix: str,
+        provenance: Mapping[str, str] | None = None,
+        owner: str | None = None,
+    ) -> Any: ...
+
+    async def put_files(
+        self,
+        workspace_id: str,
+        task_id: str,
+        files: Mapping[str, bytes],
+        **kwargs: Any,
+    ) -> Any: ...
 
 
 class InMemoryStorage:
@@ -111,7 +170,10 @@ class FileToolset(Toolset):
     def __init__(
         self,
         storage: StorageClient | None = None,
+        workspace_repository: WorkspaceRepositoryClient | None = None,
         workspace_id: str | None = None,
+        task_id: str | None = None,
+        lease_owner: str | None = None,
         base_prefix: str = "",
         save_files: bool = True,
         read_files: bool = True,
@@ -120,7 +182,10 @@ class FileToolset(Toolset):
     ) -> None:
         super().__init__()
         self.storage: StorageClient = storage or InMemoryStorage()
+        self.workspace_repository = workspace_repository
         self.workspace_id: str = workspace_id or "_standalone"
+        self.task_id = task_id or ""
+        self.lease_owner = lease_owner or ""
         self.base_prefix: str = base_prefix.strip("/")
         self._save_files_enabled = save_files
         self._read_files_enabled = read_files
@@ -128,9 +193,13 @@ class FileToolset(Toolset):
         self._search_files_enabled = search_files
 
     def _resolve(self, file_name: str) -> str:
-        name = file_name.lstrip("/")
-        if ".." in name.split("/"):
+        if file_name.startswith("/"):
             raise ValueError(f"path escapes workspace sandbox: {file_name!r}")
+        name = file_name
+        if not name or ".." in name.split("/") or "\\" in name:
+            raise ValueError(f"path escapes workspace sandbox: {file_name!r}")
+        if self.workspace_repository is not None:
+            return name
         if self.base_prefix:
             return f"{self.base_prefix}/{name}"
         return name
@@ -151,14 +220,25 @@ class FileToolset(Toolset):
             return "Error: save_file is disabled for this toolset instance"
         try:
             path = self._resolve(file_name)
-            if not overwrite and await self.storage.exists(self.workspace_id, path):
+            if not overwrite and await self._exists(path):
                 return f"File {file_name} already exists"
-            await self.storage.put(
-                self.workspace_id,
-                path,
-                contents.encode("utf-8"),
-                "text/plain; charset=utf-8",
-            )
+            if self.workspace_repository is not None:
+                self._require_task()
+                await self.workspace_repository.put(
+                    self.workspace_id,
+                    self.task_id,
+                    path,
+                    contents.encode("utf-8"),
+                    "text/plain; charset=utf-8",
+                    owner=self.lease_owner or None,
+                )
+            else:
+                await self.storage.put(
+                    self.workspace_id,
+                    path,
+                    contents.encode("utf-8"),
+                    "text/plain; charset=utf-8",
+                )
             return file_name
         except Exception as e:
             return f"Error saving to file: {e}"
@@ -167,14 +247,18 @@ class FileToolset(Toolset):
     async def read_file(self, file_name: str) -> str:
         """Read a text file from the task's artifact scope.
 
-        Binary objects (images, PDFs) should be fetched by a dedicated tool
-        that returns a presigned URL; this method always decodes as UTF-8.
+        Binary objects (images, PDFs) should be fetched through the
+        authenticated AgentArea file API; this method always decodes as UTF-8.
         """
         if not self._read_files_enabled:
             return "Error: read_file is disabled for this toolset instance"
         try:
             path = self._resolve(file_name)
-            data, _ = await self.storage.get(self.workspace_id, path)
+            if self.workspace_repository is not None:
+                self._require_task()
+                data, _ = await self.workspace_repository.get(self.workspace_id, self.task_id, path)
+            else:
+                data, _ = await self.storage.get(self.workspace_id, path)
             return data.decode("utf-8")
         except FileNotFoundError:
             return f"Error: File {file_name} does not exist"
@@ -192,7 +276,7 @@ class FileToolset(Toolset):
         if not self._list_files_enabled:
             return "Error: list_files is disabled for this toolset instance"
         try:
-            objects = await self.storage.list(self.workspace_id, prefix=self.base_prefix)
+            objects = await self._list()
             names = [self._relative(o) for o in objects]
             matched = (
                 [n for n in names if fnmatch.fnmatch(n, pattern)]
@@ -223,7 +307,7 @@ class FileToolset(Toolset):
         try:
             if not pattern or not pattern.strip():
                 return "Error: Pattern cannot be empty"
-            objects = await self.storage.list(self.workspace_id, prefix=self.base_prefix)
+            objects = await self._list()
             names = [self._relative(o) for o in objects]
             matched = [n for n in names if fnmatch.fnmatch(n, pattern)]
             return json.dumps(
@@ -246,3 +330,19 @@ class FileToolset(Toolset):
         if self.base_prefix and path.startswith(self.base_prefix + "/"):
             return path[len(self.base_prefix) + 1 :]
         return path
+
+    def _require_task(self) -> None:
+        if not self.task_id:
+            raise ValueError("task_id is required for canonical workspace operations")
+
+    async def _exists(self, path: str) -> bool:
+        if self.workspace_repository is None:
+            return await self.storage.exists(self.workspace_id, path)
+        self._require_task()
+        return await self.workspace_repository.exists(self.workspace_id, self.task_id, path)
+
+    async def _list(self) -> list[Any]:
+        if self.workspace_repository is None:
+            return await self.storage.list(self.workspace_id, prefix=self.base_prefix)
+        self._require_task()
+        return await self.workspace_repository.list(self.workspace_id, self.task_id)

@@ -13,7 +13,7 @@ from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
-from ._access_control_grants import grant_user_relation
+from ._access_control_grants import grant_resource_owner
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +88,9 @@ async def create_client(
     service: ClientServiceDep,
 ):
     client = await service.create_client(data)
-    await grant_user_relation(
-        namespace="Client",
-        object_id=client.id,
-        relation="owners",
+    await grant_resource_owner(
+        resource_id=client.id,
+        workspace_id=user_context.workspace_id,
         user_id=user_context.user_id,
     )
     return _to_response(client)

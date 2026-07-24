@@ -9,8 +9,13 @@ without passing a different ``workspace_id``.
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import logging
 import mimetypes
+import re
+import tempfile
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,6 +37,11 @@ from agentarea_common.config.aws import (
 logger = logging.getLogger(__name__)
 
 _WORKSPACE_PREFIX = "workspaces"
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+class ArtifactIntegrityError(RuntimeError):
+    """The stored artifact cannot be verified against its immutable digest."""
 
 
 @dataclass(frozen=True)
@@ -124,6 +134,7 @@ class ArtifactService:
     ) -> ArtifactObject:
         key = self._key(workspace_id, path)
         ct = content_type or self._guess_content_type(path)
+        digest = hashlib.sha256(data).hexdigest()
 
         # Distinguish a first write (created) from an overwrite (modified) for
         # provenance; only pay the extra head_object when we'll record it.
@@ -139,6 +150,8 @@ class ArtifactService:
                 Key=key,
                 Body=data,
                 ContentType=ct,
+                Metadata={"sha256": digest},
+                ChecksumSHA256=base64.b64encode(bytes.fromhex(digest)).decode("ascii"),
             )
 
         await asyncio.to_thread(_call)
@@ -159,6 +172,72 @@ class ArtifactService:
             return resp["Body"].read(), resp.get("ContentType")
 
         return await asyncio.to_thread(_call)
+
+    async def stream(
+        self,
+        workspace_id: str,
+        path: str,
+        *,
+        chunk_size: int = 1024 * 1024,
+    ) -> tuple[AsyncIterator[bytes], str | None, int]:
+        """Verify into a bounded spool before yielding any artifact bytes."""
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be positive")
+        key = self._key(workspace_id, path)
+
+        def open_object() -> Any:
+            try:
+                return self._client.get_object(Bucket=self._bucket, Key=key)
+            except ClientError as exc:
+                code = exc.response.get("Error", {}).get("Code")
+                if code in {"NoSuchKey", "404", "NotFound"}:
+                    raise FileNotFoundError(path) from exc
+                raise
+
+        response = await asyncio.to_thread(open_object)
+        body = response["Body"]
+        size = int(response.get("ContentLength") or 0)
+        digest = str((response.get("Metadata") or {}).get("sha256") or "")
+        if not _SHA256_RE.fullmatch(digest):
+            close = getattr(body, "close", None)
+            if callable(close):
+                await asyncio.to_thread(close)
+            raise ArtifactIntegrityError(f"artifact integrity digest is missing for {path!r}")
+
+        spool = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")
+        hasher = hashlib.sha256()
+        copied = 0
+        try:
+            while True:
+                remaining_with_sentinel = max(1, size - copied + 1)
+                read_size = min(chunk_size, remaining_with_sentinel)
+                chunk = await asyncio.to_thread(body.read, read_size)
+                if not chunk:
+                    break
+                copied += len(chunk)
+                if copied > size:
+                    raise ArtifactIntegrityError(f"artifact verification failed for {path!r}")
+                hasher.update(chunk)
+                await asyncio.to_thread(spool.write, chunk)
+            if copied != size or hasher.hexdigest() != digest:
+                raise ArtifactIntegrityError(f"artifact verification failed for {path!r}")
+            await asyncio.to_thread(spool.seek, 0)
+        except Exception:
+            spool.close()
+            raise
+        finally:
+            close = getattr(body, "close", None)
+            if callable(close):
+                await asyncio.to_thread(close)
+
+        async def verified_chunks() -> AsyncIterator[bytes]:
+            try:
+                while chunk := await asyncio.to_thread(spool.read, chunk_size):
+                    yield chunk
+            finally:
+                spool.close()
+
+        return verified_chunks(), response.get("ContentType"), size
 
     async def exists(self, workspace_id: str, path: str) -> bool:
         key = self._key(workspace_id, path)

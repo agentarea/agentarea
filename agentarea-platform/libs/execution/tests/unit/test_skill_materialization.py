@@ -8,7 +8,7 @@ path to run, only files and one shell.
 
 from agentarea_execution.activities.skill_materialization import (
     assemble_skill_bundle,
-    build_skill_input_files,
+    build_skill_workspace_files,
     skill_workspace_dir,
 )
 
@@ -79,11 +79,11 @@ def test_unnamed_skill_still_gets_a_stable_directory():
 
 
 def test_files_are_placed_under_the_skill_directory():
-    files = build_skill_input_files("docx", "id-1", [("generate.py", b"print(1)")])
+    files = build_skill_workspace_files("docx", "id-1", [("generate.py", b"print(1)")])
 
     assert len(files) == 1
-    assert files[0]["path"].startswith("skills/docx-")
-    assert files[0]["path"].endswith("/generate.py")
+    assert next(iter(files)).startswith("skills/docx-")
+    assert next(iter(files)).endswith("/generate.py")
 
 
 def test_two_skills_whose_names_slugify_alike_never_share_a_directory():
@@ -93,32 +93,28 @@ def test_two_skills_whose_names_slugify_alike_never_share_a_directory():
     assert skill_workspace_dir("deploy_api", "id-1") != skill_workspace_dir("Deploy API", "id-2")
 
 
-def test_content_is_base64_encoded_for_transport():
-    import base64
-
-    files = build_skill_input_files("docx", "id-1", [("generate.py", b"print(1)")])
-    assert base64.b64decode(files[0]["content_base64"]) == b"print(1)"
+def test_content_is_staged_as_bytes_for_object_storage():
+    files = build_skill_workspace_files("docx", "id-1", [("generate.py", b"print(1)")])
+    assert next(iter(files.values())) == b"print(1)"
 
 
 def test_nested_bundle_paths_are_preserved():
-    files = build_skill_input_files("docx", "id-1", [("lib/util.py", b"x")])
-    assert files[0]["path"].endswith("/lib/util.py")
+    files = build_skill_workspace_files("docx", "id-1", [("lib/util.py", b"x")])
+    assert next(iter(files)).endswith("/lib/util.py")
 
 
-def test_traversal_in_a_bundle_path_is_rejected():
-    files = build_skill_input_files("docx", "id-1", [("../../evil.py", b"x"), ("ok.py", b"y")])
-    assert len(files) == 1
-    assert files[0]["path"].endswith("/ok.py")
+def test_traversal_in_a_bundle_path_rejects_the_atomic_bundle():
+    import pytest
+
+    with pytest.raises(ValueError, match="escapes workspace"):
+        build_skill_workspace_files("docx", "id-1", [("../../evil.py", b"x"), ("ok.py", b"y")])
 
 
 def test_binary_content_survives():
     payload = bytes(range(256))
-    files = build_skill_input_files("docx", "id-1", [("logo.png", payload)])
-
-    import base64
-
-    assert base64.b64decode(files[0]["content_base64"]) == payload
+    files = build_skill_workspace_files("docx", "id-1", [("logo.png", payload)])
+    assert next(iter(files.values())) == payload
 
 
 def test_empty_bundle_yields_nothing():
-    assert build_skill_input_files("docx", "id-1", []) == []
+    assert build_skill_workspace_files("docx", "id-1", []) == {}

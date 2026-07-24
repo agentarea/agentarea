@@ -124,3 +124,13 @@ class TemporalWorkflowService:
         except Exception as e:
             logger.error(f"Failed to send workflow command '{command}': {e}")
             return False
+
+    async def continue_execution(
+        self, execution_id: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Execute the workflow's atomic continuation update."""
+        try:
+            return await self._execution_service.continue_execution(execution_id, payload)
+        except Exception as e:
+            logger.error("Failed to continue workflow %s: %s", execution_id, e)
+            return {"accepted": False, "reason": "workflow_unavailable"}

@@ -24,6 +24,7 @@ from agentarea_execution.testing import (
     mock_execute_mcp_tool,
     mock_resolve_model,
     mock_update_task_status,
+    mock_validate_artifacts,
 )
 
 
@@ -56,6 +57,7 @@ async def _run_workflow(
                     mock_execute_mcp_tool,
                     publish_activity,
                     mock_update_task_status,
+                    mock_validate_artifacts,
                 ],
                 activity_executor=executor,
             )
@@ -103,6 +105,9 @@ class TestEventOrdering:
 
         iter_idx = types.index("IterationCompleted")
         wf_idx = types.index("task.completed")
+        validation_started_idx = types.index("artifact.validation.started")
+        validation_completed_idx = types.index("artifact.validation.completed")
+        assert validation_started_idx < validation_completed_idx < wf_idx
         assert iter_idx < wf_idx, (
             f"IterationCompleted (idx={iter_idx}) must come before "
             f"task.completed (idx={wf_idx}). Sequence: {types}"

@@ -25,6 +25,8 @@ from agentarea_common.testing.flows import MainFlow
 from agentarea_execution.models import (
     AgentConfigRequest,
     AgentExecutionRequest,
+    ArtifactValidationRequest,
+    ArtifactValidationResult,
     LLMCallRequest,
     MCPToolRequest,
     ResolveModelRequest,
@@ -211,6 +213,13 @@ async def _mock_update_status(request: UpdateTaskStatusRequest) -> bool:
     return True
 
 
+@activity.defn(name="validate_artifacts_activity")
+async def _mock_validate_artifacts(
+    request: ArtifactValidationRequest,
+) -> ArtifactValidationResult:
+    return ArtifactValidationResult(state="no_artifacts", generation=0)
+
+
 _ALL_ACTIVITIES = [
     _mock_build_config,
     _mock_discover_tools,
@@ -219,6 +228,7 @@ _ALL_ACTIVITIES = [
     _mock_execute_mcp,
     _mock_publish_events,
     _mock_update_status,
+    _mock_validate_artifacts,
 ]
 
 
@@ -310,6 +320,7 @@ async def test_request_user_input_waits_for_queued_reply_then_continues():
             _mock_execute_mcp,
             _mock_publish_events,
             _mock_update_status,
+            _mock_validate_artifacts,
         ]
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             worker = Worker(

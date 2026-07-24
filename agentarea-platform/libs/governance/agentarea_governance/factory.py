@@ -50,11 +50,13 @@ def create_governance_pipeline() -> InterceptorPipeline:
             registry.register(entitlement_guard, Phase.PRE_LLM_CALL, priority=120)
             logger.info("Plan entitlement guard registered (enterprise mode)")
 
-    # Tool capability authorization is NOT a pipeline gate. It is the single PDP
-    # (agentarea_common.auth.tool_authorization.decide_tool_policy), consulted at
-    # disclosure, the workflow gate, and the tool activity — default-allow, deny
-    # only what policy denies. A second deny-by-default gate here contradicted it
-    # (offered a tool, then rejected it), so it was removed.
+    # Tool capability authorization is NOT a pipeline gate and NOT a separate
+    # authority. It is the governance policy engine's own decision: the resolved
+    # effective_policy applied as a post-filter at tool disclosure and re-checked
+    # at the tool activity via decide_tool_policy (one predicate, two enforcement
+    # points — Disclosed subset of Authorized). Do NOT re-add a deny-by-default
+    # gate here — a second gate would contradict the single engine (offer a tool,
+    # then reject it), which is why it was removed.
 
     # Security filters — input
     registry.register(PromptInjectionDetector(engine), Phase.PRE_LLM_CALL, priority=300)
