@@ -11,7 +11,6 @@ from typing import Any, cast
 from uuid import UUID
 
 import litellm
-from agentarea_common.config.app import get_app_settings
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 
@@ -604,7 +603,9 @@ class LLMConditionEvaluator:
                     url = f"http://{url}"
                 litellm_params["base_url"] = url
             elif "ollama" in provider_type:
-                litellm_params["base_url"] = get_app_settings().ollama_api_base
+                raise ValueError(
+                    f"Ollama model instance {effective_model_id} has no endpoint_url configured"
+                )
 
             logger.debug(f"Calling LLM for condition evaluation with model {litellm_model}")
 

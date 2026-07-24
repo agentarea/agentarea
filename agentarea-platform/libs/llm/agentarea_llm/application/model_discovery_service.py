@@ -2,7 +2,6 @@ import logging
 from dataclasses import dataclass, field
 
 import httpx
-from agentarea_common.config.app import get_app_settings
 from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
 
 logger = logging.getLogger(__name__)
@@ -59,7 +58,7 @@ class ModelDiscoveryService:
 
     def _build_url(self, provider_key: str, endpoint_url: str | None) -> str | None:
         if provider_key == "ollama":
-            base = endpoint_url or get_app_settings().ollama_api_base
+            base = endpoint_url
         else:
             base = endpoint_url or _PROVIDER_BASE_URLS.get(provider_key, "")
         if not base:

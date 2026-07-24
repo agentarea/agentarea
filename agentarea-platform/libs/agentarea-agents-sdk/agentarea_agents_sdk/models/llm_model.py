@@ -2,7 +2,6 @@
 
 import json
 import logging
-import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, cast
@@ -229,8 +228,6 @@ class LLMModel:
             if not url.startswith("http"):
                 url = f"http://{url}"
             params["base_url"] = url
-        # No explicit endpoint: litellm resolves Ollama via its native
-        # OLLAMA_API_BASE env var (localhost default).
 
         # Add tools if provided
         if request.tools:
@@ -252,9 +249,6 @@ class LLMModel:
             if not url.startswith("http"):
                 url = f"http://{url}"
             return url.rstrip("/")
-        # Default Ollama URL: litellm's native env var, localhost fallback
-        if self.provider_type and "ollama" in self.provider_type:
-            return os.environ.get("OLLAMA_API_BASE", "http://localhost:11434").rstrip("/")
         return None
 
     def _supports_direct_streaming(self) -> bool:

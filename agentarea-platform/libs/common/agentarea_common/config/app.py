@@ -109,19 +109,6 @@ class AppSettings(BaseAppSettings):
             return "host.docker.internal"
         return "localhost"
 
-    # Ollama endpoint override. Named after litellm's native env var so one
-    # setting covers both our code and litellm's own resolution.
-    OLLAMA_API_BASE: str | None = None
-
-    @property
-    def ollama_api_base(self) -> str:
-        """Base URL for a local Ollama instance.
-
-        OLLAMA_API_BASE env wins; otherwise built from local_host so it
-        resolves correctly both inside Docker and on the host.
-        """
-        return self.OLLAMA_API_BASE or f"http://{self.local_host}:11434"
-
 
 @lru_cache
 def get_app_settings() -> AppSettings:
