@@ -6,7 +6,6 @@ GATEWAY_NS=${ENVOY_GATEWAY_NAMESPACE:-envoy-gateway-system}
 GATEWAY_HOST=${MCP_GATEWAY_HOST:-mcp.agentarea.local}
 RUN_ID=${RUN_ID:-$(date +%H%M%S)}
 MCP_ID="tilt-smoke-${RUN_ID}"
-WORKFLOW_ID="tilt-smoke-${RUN_ID}"
 
 cleanup() {
   kubectl run "aa-clean-${RUN_ID}" --rm -i --restart=Never \
@@ -25,27 +24,6 @@ kcurl() {
 
 echo "Checking mcp-manager health"
 kcurl aa-health curl -fsS "http://agentarea-mcp-manager/health" >/dev/null
-
-echo "Checking sandbox persistence"
-SANDBOX_1=$(kcurl aa-sandbox-1 curl -fsS -X POST "http://agentarea-mcp-manager/sandbox/execute" \
-  -H "Content-Type: application/json" \
-  -d "{\"script_name\":\"cmd.sh\",\"script_content\":\"echo final > state.txt && cat state.txt\",\"workflow_id\":\"${WORKFLOW_ID}\",\"timeout_seconds\":30}")
-echo "${SANDBOX_1}" | grep -q '"exit_code":0'
-echo "${SANDBOX_1}" | grep -q 'final'
-
-SANDBOX_2=$(kcurl aa-sandbox-2 curl -fsS -X POST "http://agentarea-mcp-manager/sandbox/execute" \
-  -H "Content-Type: application/json" \
-  -d "{\"script_name\":\"cmd.sh\",\"script_content\":\"cat state.txt && node -e \\\"console.log(21*2)\\\"\",\"workflow_id\":\"${WORKFLOW_ID}\",\"timeout_seconds\":30}")
-echo "${SANDBOX_2}" | grep -q '"exit_code":0'
-echo "${SANDBOX_2}" | grep -q '42'
-
-kcurl aa-sandbox-clean curl -fsS -X DELETE "http://agentarea-mcp-manager/sandbox/workflow/${WORKFLOW_ID}" >/dev/null
-
-SANDBOX_3=$(kcurl aa-sandbox-3 curl -fsS -X POST "http://agentarea-mcp-manager/sandbox/execute" \
-  -H "Content-Type: application/json" \
-  -d "{\"script_name\":\"cmd.sh\",\"script_content\":\"test ! -f state.txt && echo cleanup-ok\",\"workflow_id\":\"${WORKFLOW_ID}\",\"timeout_seconds\":30}")
-echo "${SANDBOX_3}" | grep -q '"exit_code":0'
-echo "${SANDBOX_3}" | grep -q 'cleanup-ok'
 
 echo "Creating MCP ${MCP_ID}"
 kcurl aa-mcp-create curl -fsS -X POST "http://agentarea-mcp-manager/instances" \

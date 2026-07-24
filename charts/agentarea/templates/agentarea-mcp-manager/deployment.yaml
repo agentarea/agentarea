@@ -39,6 +39,16 @@ spec:
             {{- include "agentarea.redis.envs" . | nindent 12 }}
             {{- include "agentarea.redis.urlEnv" . | nindent 12 }}
             {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
+            - name: SANDBOX_ACTIVATION_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.application }}
+                  key: sandbox-activation-secret
+            - name: SANDBOX_CLEANUP_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentarea.sandboxCleanupSecretName" . }}
+                  key: token
             {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
             {{- $ip := .Values.mcpManager.instancePod }}
             {{- if and $ip (or $ip.labels $ip.annotations $ip.nodeSelector $ip.tolerations $ip.affinity $ip.imagePullSecrets $ip.priorityClassName) }}

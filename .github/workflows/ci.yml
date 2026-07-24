@@ -449,7 +449,7 @@ jobs:
       DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
 
   docker-agentarea-mcp-runner:
-    # Build activation service for warm pool
+    # Build the mutable runner used by package-install=allowed pools.
     if: |
       (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
@@ -461,8 +461,39 @@ jobs:
     uses: ./.github/workflows/docker-build-push.yml
     with:
       component: mcp-runner
+      image-name: agentarea/agentarea-mcp-runner
       context: agentarea-mcp-manager
       dockerfile: agentarea-mcp-manager/Dockerfile.runner
+      build-args: |
+        MANAGED_ENVIRONMENT=mutable
+      use-private-registry: false
+      push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+      DOCKER_REGISTRY_MIRROR: ${{ secrets.DOCKER_REGISTRY_MIRROR }}
+      DOCKER_REGISTRY_MIRROR_PATH: ${{ secrets.DOCKER_REGISTRY_MIRROR_PATH }}
+      DOCKER_REGISTRY_MIRROR_USERNAME: ${{ secrets.DOCKER_REGISTRY_MIRROR_USERNAME }}
+      DOCKER_REGISTRY_MIRROR_PASSWORD: ${{ secrets.DOCKER_REGISTRY_MIRROR_PASSWORD }}
+
+  docker-agentarea-mcp-runner-locked:
+    # Build the immutable runner used by package-install=locked pools.
+    if: |
+      (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
+      (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      inputs.skip-docker
+    needs: [changes, version-check, mcp-manager-lint-test]
+    permissions:
+      packages: write
+      contents: read
+    uses: ./.github/workflows/docker-build-push.yml
+    with:
+      component: mcp-runner-locked
+      image-name: agentarea/agentarea-mcp-runner-locked
+      context: agentarea-mcp-manager
+      dockerfile: agentarea-mcp-manager/Dockerfile.runner
+      build-args: |
+        MANAGED_ENVIRONMENT=immutable
       use-private-registry: false
       push: ${{ !inputs.skip-docker && github.ref == 'refs/heads/main' }}
     secrets:
@@ -767,6 +798,7 @@ jobs:
       - docker-operator
       - docker-agentarea-mcp-manager
       - docker-agentarea-mcp-runner
+      - docker-agentarea-mcp-runner-locked
       - docker-events
     steps:
       - name: Verify no required job failed

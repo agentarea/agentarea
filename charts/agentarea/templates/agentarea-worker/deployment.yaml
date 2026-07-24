@@ -71,6 +71,11 @@ spec:
             {{- include "agentarea.storage.envs" . | nindent 12 }}
             {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
+            - name: SANDBOX_CLEANUP_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentarea.sandboxCleanupSecretName" . }}
+                  key: token
             {{- include "agentarea.temporal.envs" . | nindent 12 }}
             {{- include "agentarea.worker.envs" . | nindent 12 }}
             {{- if .Values.keto.enabled }}
