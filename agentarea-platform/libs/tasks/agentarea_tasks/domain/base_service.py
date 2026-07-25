@@ -379,12 +379,15 @@ class BaseTaskService(ABC):
         valid_statuses = {
             "submitted",
             "pending",
+            "preparing",
             "running",
             "working",
             "completed",
             "failed",
             "blocked",
             "cancelled",
+            "waiting_for_continuation",
+            "waiting_for_input",
         }
         if task.status not in valid_statuses:
             raise TaskValidationError(f"Invalid task status: {task.status}")
