@@ -118,8 +118,9 @@ class ConnectionManager:
         # Clean up event broker
         if self._event_broker_singleton:
             try:
-                if hasattr(self._event_broker_singleton, "close"):
-                    await self._event_broker_singleton.close()
+                close = getattr(self._event_broker_singleton, "close", None)
+                if close is not None:
+                    await close()
                 logger.info("Cleaned up event broker singleton")
             except Exception as e:
                 logger.warning(f"Error cleaning up event broker: {e}", exc_info=True)

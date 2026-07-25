@@ -1896,6 +1896,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
         )
 
         try:
+            if not request.workspace_id:
+                raise ValueError("skill materialization requires a workspace_id")
             user_context = create_system_context(request.workspace_id)
             async with ActivityContext(container, user_context) as ctx:
                 skill_service = await ctx.get_skill_service()

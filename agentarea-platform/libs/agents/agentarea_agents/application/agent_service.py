@@ -319,7 +319,7 @@ class AgentService(BaseCrudService[Agent]):
         tools_edited = "tools" in patch and payload.tools is not None
         approval_targets: set[str] = set()
         if tools_edited:
-            dumped = [t.model_dump(exclude_none=True) for t in payload.tools]
+            dumped = [t.model_dump(exclude_none=True) for t in (payload.tools or [])]
             approval_targets, agent.tools = self._lift_approval_toggles(dumped)
         if "events_config" in patch and payload.events_config is not None:
             agent.events_config = payload.events_config.model_dump()

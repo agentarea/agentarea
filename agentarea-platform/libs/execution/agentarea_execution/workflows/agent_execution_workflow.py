@@ -2202,8 +2202,10 @@ class AgentExecutionWorkflow:
                         task_id=self.state.task_id,
                         workflow_id=self.state.execution_id,
                         declared_paths=declared_paths,
-                        package_install=str(
-                            (self._workflow_metadata or {}).get("package_install", "allowed")
+                        package_install=(
+                            "locked"
+                            if (self._workflow_metadata or {}).get("package_install") == "locked"
+                            else "allowed"
                         ),
                     )
                 ],
