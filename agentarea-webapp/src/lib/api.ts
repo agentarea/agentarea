@@ -53,8 +53,6 @@ import type {
   SkillResponse,
   SkillUpdateRequest,
   TaskCreate,
-  ToolAccessCheckRequest,
-  ToolAccessGrantRequest,
   TriggerCreate,
   UpdateWalletRequest,
   ValidateRequest,
@@ -2223,22 +2221,6 @@ export const deleteAccessControlRelationship = async (
       client: serverClient,
       body,
     });
-  return { data, error };
-};
-
-export const grantToolAccess = async (body: ToolAccessGrantRequest) => {
-  const { data, error } = await sdk.grantToolAccessV1ToolAccessGrantsPost({
-    client: serverClient,
-    body,
-  });
-  return { data, error };
-};
-
-export const checkToolAccess = async (body: ToolAccessCheckRequest) => {
-  const { data, error } = await sdk.checkToolAccessV1ToolAccessChecksPost({
-    client: serverClient,
-    body,
-  });
   return { data, error };
 };
 
