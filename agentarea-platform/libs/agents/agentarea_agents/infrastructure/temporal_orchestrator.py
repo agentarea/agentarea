@@ -415,9 +415,7 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             )
             raise
 
-    async def continue_workflow(
-        self, execution_id: str, payload: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def continue_workflow(self, execution_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Execute the workflow update that validates and applies a continuation."""
         client = await self._get_client()
         handle = client.get_workflow_handle(execution_id)
@@ -425,7 +423,11 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             result = await handle.execute_update("continue_execution", payload)
         except Exception as exc:
             message = str(exc).lower()
-            if "not found" in message or "already completed" in message or "no execution" in message:
+            if (
+                "not found" in message
+                or "already completed" in message
+                or "no execution" in message
+            ):
                 return {"accepted": False, "reason": "workflow_not_running"}
             raise
         if not isinstance(result, dict):

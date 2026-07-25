@@ -40,9 +40,7 @@ def upgrade() -> None:
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_event_outbox_event_id"), "event_outbox", ["event_id"], unique=True
-    )
+    op.create_index(op.f("ix_event_outbox_event_id"), "event_outbox", ["event_id"], unique=True)
     op.create_index(
         op.f("ix_event_outbox_aggregate_id"), "event_outbox", ["aggregate_id"], unique=False
     )

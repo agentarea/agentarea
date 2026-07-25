@@ -275,9 +275,7 @@ class S3WorkspaceRepository:
             )
         return key
 
-    async def _get_json_document(
-        self, key: str
-    ) -> tuple[dict[str, Any], str, bytes] | None:
+    async def _get_json_document(self, key: str) -> tuple[dict[str, Any], str, bytes] | None:
         def call() -> tuple[dict[str, Any], str, bytes] | None:
             try:
                 response = self._client.get_object(Bucket=self._bucket, Key=key)
@@ -663,9 +661,7 @@ class S3WorkspaceRepository:
             entry = WorkspaceEntry.from_dict(raw_entry)
             self._validate_entry(workspace_id, task_id, entry)
             if entry.relative_path in entries:
-                raise WorkspaceValidationError(
-                    f"duplicate workspace path: {entry.relative_path!r}"
-                )
+                raise WorkspaceValidationError(f"duplicate workspace path: {entry.relative_path!r}")
             entries[entry.relative_path] = entry
         return entries
 
@@ -856,9 +852,7 @@ class S3WorkspaceRepository:
                     source_size: int,
                     source_relative: str,
                 ) -> tuple[Any, str, str, int]:
-                    response = self._client.get_object(
-                        Bucket=self._bucket, Key=source_object_key
-                    )
+                    response = self._client.get_object(Bucket=self._bucket, Key=source_object_key)
                     source_body = response["Body"]
                     spool = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")
                     hasher = hashlib.sha256()
@@ -921,9 +915,7 @@ class S3WorkspaceRepository:
                 )
 
             self._check_quotas(entries)
-            next_ref = await self._commit(
-                workspace_id, task_id, ref, entries, pointer_etag, lease
-            )
+            next_ref = await self._commit(workspace_id, task_id, ref, entries, pointer_etag, lease)
             for path, action in changed_actions:
                 await self._record(workspace_id, task_id, path, action)
             return next_ref

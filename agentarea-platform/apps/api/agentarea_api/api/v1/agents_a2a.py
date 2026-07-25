@@ -397,7 +397,9 @@ def convert_a2a_message_to_task(
     return AgentTask(
         id=UUID(task_id) if task_id else uuid4(),
         title=(_first_line[:80] or "A2A Message Task"),
-        description=(message_content.strip() if message_content else "Task created from A2A message"),
+        description=(
+            message_content.strip() if message_content else "Task created from A2A message"
+        ),
         query=message_content,
         user_id=user_id,
         workspace_id=workspace_id,

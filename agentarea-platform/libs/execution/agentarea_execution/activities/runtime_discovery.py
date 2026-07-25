@@ -48,9 +48,9 @@ def render_runtime_prompt(
         )
 
     package_names = ", ".join(sorted(manifest.packages, key=str.casefold))
-    compatible = (
-        package_install == "allowed" and manifest.managed_environment == "mutable"
-    ) or (package_install == "locked" and manifest.managed_environment == "immutable")
+    compatible = (package_install == "allowed" and manifest.managed_environment == "mutable") or (
+        package_install == "locked" and manifest.managed_environment == "immutable"
+    )
     if package_install == "allowed":
         environment_policy = (
             "Package installation profile: allowed. The selected runtime must expose a mutable "
@@ -132,12 +132,8 @@ def runtime_event_data(
             "runtime_profile_compatible": False,
         }
     compatible = (
-        package_install == "allowed"
-        and result.manifest.managed_environment == "mutable"
-    ) or (
-        package_install == "locked"
-        and result.manifest.managed_environment == "immutable"
-    )
+        package_install == "allowed" and result.manifest.managed_environment == "mutable"
+    ) or (package_install == "locked" and result.manifest.managed_environment == "immutable")
     return {
         "runtime_version": result.manifest.image_version,
         "managed_environment": result.manifest.managed_environment,

@@ -206,8 +206,6 @@ class WorkflowOrchestratorInterface(ABC):
         pass
 
     @abstractmethod
-    async def continue_workflow(
-        self, execution_id: str, payload: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def continue_workflow(self, execution_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Atomically continue a workflow waiting on resource limits."""
         pass

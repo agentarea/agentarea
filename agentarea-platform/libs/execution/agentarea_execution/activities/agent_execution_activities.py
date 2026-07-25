@@ -387,9 +387,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 step_type=request.step_type,
                 skills=skills_info,
                 runtime=runtime,
-                runtime_event_data=runtime_event_data(
-                    runtime, package_install=package_install
-                ),
+                runtime_event_data=runtime_event_data(runtime, package_install=package_install),
             )
 
     @activity.defn

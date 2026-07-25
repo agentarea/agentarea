@@ -107,9 +107,7 @@ class SandboxFileStore:
             },
         )
         if response.status_code == 503 and self._durable is not None:
-            return await self._durable.get(
-                workspace_id or self._workspace_id, self._task_id, path
-            )
+            return await self._durable.get(workspace_id or self._workspace_id, self._task_id, path)
         if response.status_code == 404:
             raise FileNotFoundError(path)
         if response.status_code >= 400:
@@ -140,7 +138,9 @@ class SandboxFileStore:
                 workspace_id or self._workspace_id, self._task_id, prefix
             )
             return [
-                StoredObject(path=str(getattr(o, "path", "") or ""), size=int(getattr(o, "size", 0) or 0))
+                StoredObject(
+                    path=str(getattr(o, "path", "") or ""), size=int(getattr(o, "size", 0) or 0)
+                )
                 for o in objects
                 if getattr(o, "path", None)
             ]

@@ -26,9 +26,33 @@ from .tool_definition import toolset
 # generate them via the shell (enforcement, not a prompt hint).
 _BINARY_EXTENSIONS = frozenset(
     {
-        "xlsx", "xls", "pptx", "ppt", "docx", "doc", "pdf", "zip", "gz", "tar",
-        "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "tiff",
-        "mp3", "mp4", "wav", "ogg", "webm", "mov", "parquet", "sqlite", "db",
+        "xlsx",
+        "xls",
+        "pptx",
+        "ppt",
+        "docx",
+        "doc",
+        "pdf",
+        "zip",
+        "gz",
+        "tar",
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "webp",
+        "bmp",
+        "ico",
+        "tiff",
+        "mp3",
+        "mp4",
+        "wav",
+        "ogg",
+        "webm",
+        "mov",
+        "parquet",
+        "sqlite",
+        "db",
     }
 )
 

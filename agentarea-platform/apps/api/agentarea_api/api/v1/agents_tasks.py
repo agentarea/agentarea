@@ -109,8 +109,10 @@ def _sanitize_attachment_filename(filename: str | None) -> str:
 
 def _attachment_content_type(value: str | None) -> str:
     content_type = (value or "application/octet-stream").strip()
-    if not content_type or len(content_type) > 255 or any(
-        character in content_type for character in "\r\n\x00"
+    if (
+        not content_type
+        or len(content_type) > 255
+        or any(character in content_type for character in "\r\n\x00")
     ):
         return "application/octet-stream"
     return content_type
@@ -135,10 +137,7 @@ async def _read_task_attachments(
             await upload.close()
         raise HTTPException(
             status_code=413,
-            detail=(
-                f"Too many attachments: {len(files)}; "
-                f"limit is {TASK_ATTACHMENT_MAX_FILES}"
-            ),
+            detail=(f"Too many attachments: {len(files)}; limit is {TASK_ATTACHMENT_MAX_FILES}"),
         )
 
     staged: dict[str, bytes] = {}

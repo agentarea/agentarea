@@ -215,9 +215,7 @@ def sanitize_tool_event_value(value: Any, *, field_name: str = "", _depth: int =
         return _event_omission(value)
     if isinstance(value, dict):
         return {
-            str(key): sanitize_tool_event_value(
-                item, field_name=str(key), _depth=_depth + 1
-            )
+            str(key): sanitize_tool_event_value(item, field_name=str(key), _depth=_depth + 1)
             for key, item in list(value.items())[:100]
         }
     if isinstance(value, list | tuple):

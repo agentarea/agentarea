@@ -58,7 +58,9 @@ class ContextToolset(Toolset):
             objects = await self.storage.list(self.workspace_id, prefix=prefix)
         except Exception as e:
             return f"Error listing context: {e}"
-        paths = sorted(str(getattr(obj, "path", "")) for obj in objects if getattr(obj, "path", None))
+        paths = sorted(
+            str(getattr(obj, "path", "")) for obj in objects if getattr(obj, "path", None)
+        )
         if not paths:
             return "No context files found."
         return "\n".join(paths)

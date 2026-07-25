@@ -1524,9 +1524,7 @@ class AgentExecutionWorkflow:
         # If we get here, execution should continue
         return True, None, "Continue execution"
 
-    def _record_unsuccessful_termination(
-        self, failure_reason: str | None, message: str
-    ) -> None:
+    def _record_unsuccessful_termination(self, failure_reason: str | None, message: str) -> None:
         """Persist a stable failure code and a user-facing explanation."""
         if self.state.success or failure_reason is None:
             return
@@ -2220,9 +2218,7 @@ class AgentExecutionWorkflow:
             result = ArtifactValidationResult(
                 state="unavailable",
                 generation=0,
-                capability_unavailable=CapabilityUnavailableResult(
-                    capability="artifact_validator"
-                ),
+                capability_unavailable=CapabilityUnavailableResult(capability="artifact_validator"),
                 issues=[
                     ArtifactValidationIssue(
                         path="",

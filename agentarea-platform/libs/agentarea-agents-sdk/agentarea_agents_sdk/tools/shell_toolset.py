@@ -264,9 +264,7 @@ class ShellToolset(Toolset):
                 artifact = {
                     **artifact,
                     "object_uri": persisted.object_uri,
-                    "object_version_or_etag": getattr(
-                        persisted, "object_version_or_etag", None
-                    ),
+                    "object_version_or_etag": getattr(persisted, "object_version_or_etag", None),
                     "sha256": persisted.sha256,
                     "generation": getattr(persisted, "generation", None),
                 }

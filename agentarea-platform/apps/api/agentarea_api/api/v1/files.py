@@ -46,6 +46,7 @@ def _attachment_content_disposition(filename: str) -> str:
     encoded = quote(filename, safe="")
     return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
 
+
 router = APIRouter(prefix="/files", tags=["files"])
 
 
