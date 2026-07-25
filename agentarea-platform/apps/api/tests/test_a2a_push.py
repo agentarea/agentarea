@@ -55,7 +55,7 @@ def test_push_token_secret_name():
 
 def test_build_notification_body_terminal_completed():
     event = {
-        "event_type": "WorkflowCompleted",
+        "event_type": "task.completed",
         "event_id": "e1",
         "task_id": "task-1",
         "data": {"task_id": "task-1", "result": "Final answer"},
@@ -91,7 +91,7 @@ def test_webhook_adapter_formats_terminal_only():
     from agentarea_triggers.channels.adapters import _a2a_webhook_format
 
     terminal = {
-        "event_type": "WorkflowCompleted",
+        "event_type": "task.completed",
         "data": {"task_id": "t", "result": "done"},
     }
     assert (
