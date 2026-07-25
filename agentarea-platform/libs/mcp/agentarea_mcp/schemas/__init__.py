@@ -1,12 +1,18 @@
 """Pydantic schemas for the agentarea_mcp module.
 
 DTOs that drive REST endpoints, the MCP toolset, and the service layer
-live in :mod:`agentarea_mcp.schemas.dto`. Legacy MCP server config /
-deployment schemas remain accessible via re-export from
-:mod:`agentarea_mcp.schemas` for backwards compatibility.
+live in :mod:`agentarea_mcp.schemas.dto`. The MCP server config and
+deployment schemas live in :mod:`agentarea_mcp.schemas.server_config`
+and are re-exported here alongside them.
 """
 
-from agentarea_mcp._schemas_legacy import (
+from agentarea_mcp.schemas.dto import (
+    MCPServerCreate,
+    MCPServerInstanceCreate,
+    MCPServerInstanceUpdate,
+    MCPServerUpdate,
+)
+from agentarea_mcp.schemas.server_config import (
     MCPInstanceStatus,
     MCPServerConfig,
     MCPServerCreateRequest,
@@ -15,12 +21,6 @@ from agentarea_mcp._schemas_legacy import (
     MCPServerResponse,
     MCPServerStatus,
     MCPServerTemplate,
-)
-from agentarea_mcp.schemas.dto import (
-    MCPServerCreate,
-    MCPServerInstanceCreate,
-    MCPServerInstanceUpdate,
-    MCPServerUpdate,
 )
 
 __all__ = [

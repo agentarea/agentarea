@@ -15,8 +15,8 @@ from uuid import UUID, uuid4
 
 from agentarea_common.config.broker import RedisSettings
 from agentarea_common.events.base_events import DomainEvent
+from agentarea_common.events.factory import create_event_broker
 from agentarea_common.events.redis_event_broker import RedisEventBroker
-from agentarea_common.events.router import create_event_broker_from_router, get_event_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -32,19 +32,9 @@ async def test_event_broker_setup():
         settings = RedisSettings()
         logger.info(f"Redis URL: {settings.REDIS_URL}")
 
-        # Step 2: Create router (like in worker/API)
-        router = get_event_router(settings)
-        logger.info(f"Created router: {type(router).__name__}")
-        logger.info(f"Router broker: {type(router.broker).__name__}")
-
-        # Step 3: Create EventBroker from router (like in worker/API)
-        event_broker = create_event_broker_from_router(router)
+        # Step 2: Create EventBroker from settings (like in worker/API)
+        event_broker = create_event_broker(settings)
         logger.info(f"Created event broker: {type(event_broker).__name__}")
-        logger.info(f"Event broker redis_broker: {type(event_broker.redis_broker).__name__}")
-
-        # Step 4: Check if EventBroker has the right attributes
-        logger.info(f"EventBroker attributes: {dir(event_broker)}")
-        logger.info(f"RedisEventBroker.redis_broker attributes: {dir(event_broker.redis_broker)}")
 
         return event_broker
 
@@ -94,10 +84,7 @@ async def _event_publishing(event_broker: RedisEventBroker, task_id: UUID):
 
         # Log detailed information about the event broker
         logger.error(f"EventBroker type: {type(event_broker)}")
-        logger.error(f"EventBroker.redis_broker type: {type(event_broker.redis_broker)}")
-        logger.error(
-            f"Available methods on redis_broker: {[m for m in dir(event_broker.redis_broker) if not m.startswith('_')]}"
-        )
+        logger.error(f"EventBroker.raw_redis type: {type(event_broker.raw_redis)}")
 
         return False
 
@@ -116,27 +103,12 @@ async def _event_subscription(event_broker: RedisEventBroker, task_id: UUID):
             try:
                 logger.info("Starting event listener...")
 
-                # Access the underlying RedisBroker for subscription
-                if hasattr(event_broker, "redis_broker"):
-                    redis_broker = event_broker.redis_broker
+                # Access the raw Redis client for pubsub subscription
+                await event_broker._ensure_connected()
+                redis_connection = event_broker.raw_redis
+                logger.info("Redis client connected")
 
-                    # Check if it's connected
-                    if not event_broker._connected:
-                        await event_broker._ensure_connected()
-                        logger.info("Redis broker connected")
-
-                    # Try to access Redis connection for pubsub
-                    connection_attrs = ["_connection", "connection", "client", "_client", "redis"]
-                    redis_connection = None
-
-                    for attr in connection_attrs:
-                        if hasattr(redis_broker, attr):
-                            redis_connection = getattr(redis_broker, attr)
-                            logger.info(
-                                f"Found Redis connection via '{attr}': {type(redis_connection)}"
-                            )
-                            break
-
+                if True:
                     if redis_connection:
                         # Create pubsub
                         pubsub = redis_connection.pubsub()
@@ -283,9 +255,8 @@ async def test_full_integration():
         subscribe_success = await _event_subscription(event_broker, task_id)
 
         # Step 4: Cleanup
-        if hasattr(event_broker, "_connected") and event_broker._connected:
-            await event_broker.redis_broker.close()
-            logger.info("Closed Redis connection")
+        await event_broker.close()
+        logger.info("Closed Redis connection")
 
         # Summary
         logger.info("=" * 60)

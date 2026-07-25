@@ -73,9 +73,8 @@ def _is_lazy_instance(instance: MCPServerInstance) -> bool:
 def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
     """Canonical key for URL-type instances is `endpoint_url`.
 
-    Historically some callers (and the validation layer) accepted `url` or the
-    legacy `external_url`. Normalize on the way in so downstream code only has
-    to read one key.
+    Callers (and the validation layer) also accept `url` and `external_url`.
+    Normalize on the way in so downstream code only has to read one key.
     """
     if spec.get("type") != "url":
         return spec

@@ -38,12 +38,31 @@ export interface ToolCallDescription {
   code?: string;
 }
 
+/** Skill-script metadata carried alongside a tool call for richer rendering. */
+export interface ToolMeta {
+  skill_name?: string;
+  script_name?: string;
+  exit_code?: number | null;
+  artifact_paths?: string[];
+}
+
 export function describeToolCall(
   toolName: string,
-  args?: Record<string, unknown> | null
+  args?: Record<string, unknown> | null,
+  meta?: ToolMeta | null
 ): ToolCallDescription {
   const a = args || {};
   const n = (toolName || "").toLowerCase();
+
+  // Running a script inside a skill reads as "Ran <script>", not "Activated a
+  // skill" — check this before the generic skill branch below.
+  if (n === "run_skill_script") {
+    const script =
+      meta?.script_name ||
+      pick(a, ["script_name", "script", "file", "path"]) ||
+      undefined;
+    return script ? { text: `Ran ${basename(script)}` } : { text: "Ran a script" };
+  }
 
   // Skills
   if (n === "activate_skill" || n.includes("skill")) {
@@ -150,6 +169,7 @@ type ToolCategory =
 
 function toolCategory(toolName: string): ToolCategory {
   const n = (toolName || "").toLowerCase();
+  if (n === "run_skill_script") return "ran";
   if (n === "activate_skill" || n.includes("skill")) return "skill";
   if (/(shell|bash|terminal|command|cmd|execute|exec|run_)/.test(n)) return "ran";
   if (n.startsWith("delegate") || n.includes("call_agent") || n.includes("sub_agent")) return "delegated";

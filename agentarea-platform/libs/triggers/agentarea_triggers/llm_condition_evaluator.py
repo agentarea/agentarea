@@ -602,9 +602,10 @@ class LLMConditionEvaluator:
                 if not url.startswith("http"):
                     url = f"http://{url}"
                 litellm_params["base_url"] = url
-
-            # TODO: Remove this hardcoded override when proper configuration is available
-            litellm_params["base_url"] = "http://host.docker.internal:11434"
+            elif "ollama" in provider_type:
+                raise ValueError(
+                    f"Ollama model instance {effective_model_id} has no endpoint_url configured"
+                )
 
             logger.debug(f"Calling LLM for condition evaluation with model {litellm_model}")
 

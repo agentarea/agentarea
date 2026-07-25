@@ -9,6 +9,7 @@ class BrokerSettings(BaseAppSettings):
     """Base broker configuration."""
 
     BROKER_TYPE: Literal["redis", "kafka"] = "redis"
+    EVENT_BUS_BACKEND: Literal["redis", "kafka", "nats"] = "redis"
 
 
 class RedisSettings(BrokerSettings):

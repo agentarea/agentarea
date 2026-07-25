@@ -124,6 +124,12 @@ class TestParseMCPServers:
             ]
         }
 
+    def test_unrecognized_format_raises(self):
+        with pytest.raises(ValueError, match="'server' key"):
+            RegistryService._parse_mcp_servers(
+                {"servers": [{"registry_id": "io.example/echo", "connection_type": "url"}]}
+            )
+
     def test_pypi_package_parses_to_uvx_command(self):
         items = RegistryService._parse_mcp_servers(self._telegram_entry())
 
@@ -321,11 +327,6 @@ class TestParseDefaultAgents:
         assert spec["preferred_models"] == ["gpt-4o", "o3"]
         # The catalog never carries a runnable instance UUID under model_id.
         assert "model_id" not in spec
-
-    def test_legacy_model_id_slug_becomes_preferred_model(self):
-        data = {"agents": [{"name": "A", "model_id": "gpt-4o"}]}
-        items = RegistryService._parse_agents(data)
-        assert items[0]["spec"]["preferred_models"] == ["gpt-4o"]
 
 
 class TestParseBundles:

@@ -11,6 +11,7 @@ import {
   discoverModelsPreviewAction,
 } from "@/lib/server-actions";
 import { ModelSpec, ProviderSpec } from "@/types/provider";
+import { filterModelsByDiscovery } from "./modelDiscovery";
 
 interface SelectedModel {
   modelSpecId: string;
@@ -44,6 +45,8 @@ export default function ModelInstances({
 }: ModelInstancesProps) {
   const t = useTranslations("ProviderConfigForm");
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const [discoveredModelNames, setDiscoveredModelNames] =
+    useState<ReadonlySet<string> | null>(null);
   // In edit mode, the existing model instances are the source of truth and
   // should be visible immediately. In create mode, hide the registry-wide
   // model list until the user runs Discover so they only see models they
@@ -51,14 +54,20 @@ export default function ModelInstances({
   const [hasDiscovered, setHasDiscovered] = useState<boolean>(isEdit);
   const [filter] = useState<string>("");
 
+  const visibleModels = useMemo(
+    () => filterModelsByDiscovery(availableModels, discoveredModelNames),
+    [availableModels, discoveredModelNames]
+  );
+
   const filteredModels = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return availableModels;
-    return availableModels.filter((m) => {
-      const haystack = `${m.display_name ?? ""} ${m.model_name ?? ""} ${m.description ?? ""}`.toLowerCase();
+    if (!q) return visibleModels;
+    return visibleModels.filter((m) => {
+      const haystack =
+        `${m.display_name ?? ""} ${m.model_name ?? ""} ${m.description ?? ""}`.toLowerCase();
       return haystack.includes(q);
     });
-  }, [availableModels, filter]);
+  }, [visibleModels, filter]);
 
   const formatTokens = (tokens?: number | null) => {
     if (tokens == null) return "-";
@@ -88,6 +97,7 @@ export default function ModelInstances({
     try {
       let totalCount = 0;
       let newCount = 0;
+      let discoveredNames: string[] = [];
 
       if (providerConfigId) {
         const { data, error } = await discoverModelsAction(providerConfigId);
@@ -96,9 +106,9 @@ export default function ModelInstances({
           toast.error(typeof detail === "string" ? detail : t("failedToDiscover"));
           return;
         }
-        const result = data as { total_discovered?: number; new_model_instances?: number };
-        totalCount = result?.total_discovered ?? 0;
-        newCount = result?.new_model_instances ?? 0;
+        totalCount = data?.discovered ?? 0;
+        newCount = data?.new_models ?? 0;
+        discoveredNames = data?.models.map((model) => model.model_name) ?? [];
       } else {
         const { data, error } = await discoverModelsPreviewAction({
           provider_key: providerKey ?? "",
@@ -122,9 +132,9 @@ export default function ModelInstances({
           toast.error(msg);
           return;
         }
-        const result = data as { discovered?: number; new_models?: number };
-        totalCount = result?.discovered ?? 0;
-        newCount = result?.new_models ?? 0;
+        totalCount = data?.discovered ?? 0;
+        newCount = data?.new_models ?? 0;
+        discoveredNames = data?.models.map((model) => model.model_name) ?? [];
       }
 
       if (newCount > 0) {
@@ -132,6 +142,7 @@ export default function ModelInstances({
       } else {
         toast.success(t("discoveredCountNoNew", { totalCount }));
       }
+      setDiscoveredModelNames(new Set(discoveredNames));
       setHasDiscovered(true);
       await onModelsDiscovered?.();
     } catch (err) {
@@ -147,6 +158,7 @@ export default function ModelInstances({
   useEffect(() => {
     if (!isEdit) {
       setHasDiscovered(false);
+      setDiscoveredModelNames(null);
       setSelectedModels([]);
     }
   }, [selectedProvider?.id, isEdit, setSelectedModels]);
@@ -235,7 +247,7 @@ export default function ModelInstances({
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          {hasDiscovered && availableModels.length > 0 && (
+          {hasDiscovered && visibleModels.length > 0 && (
             <div className="mx-3 flex items-center space-x-2">
               <button
                 type="button"
@@ -248,7 +260,7 @@ export default function ModelInstances({
               <span className="note cursor-pointer text-xs font-normal">
                 {t("selectedModelsCount", {
                   selectedCount: selectedModels.length,
-                  totalCount: availableModels.length,
+                  totalCount: visibleModels.length,
                 })}
               </span>
             </div>
@@ -263,7 +275,7 @@ export default function ModelInstances({
               {t("noModelsLoadedHint", { action: t("testAndDiscover") })}
             </p>
           </div>
-        ) : availableModels.length === 0 ? (
+        ) : visibleModels.length === 0 ? (
           <div className="rounded-lg bg-gray-50 p-4 text-center text-sm text-muted-foreground">
             {t("noModelsAvailableForThisProvider")}
           </div>
@@ -279,7 +291,7 @@ export default function ModelInstances({
               <div>Capabilities</div>
             </div>
 
-            {availableModels.map((model: ModelSpec) => {
+            {visibleModels.map((model: ModelSpec) => {
               const isSelected = selectedModels.some((m) => m.modelSpecId === model.id);
               return (
                 <div

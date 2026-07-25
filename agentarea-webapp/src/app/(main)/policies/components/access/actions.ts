@@ -4,24 +4,14 @@ import type {
   RelationshipWriteRequest,
   ResolveRequest,
   ResolveResponse,
-  ToolAccessCheckRequest,
-  ToolAccessCheckResponse,
-  ToolAccessGrantRequest,
-  ToolAccessGrantResponse,
 } from "@/api/client/types.gen";
 import {
-  zCheckToolAccessV1ToolAccessChecksPostBody,
-  zCheckToolAccessV1ToolAccessChecksPostResponse,
   zCreateRelationshipV1AccessControlRelationshipsPostBody,
-  zGrantToolAccessV1ToolAccessGrantsPostBody,
-  zGrantToolAccessV1ToolAccessGrantsPostResponse,
   zResolveAccessV1AccessControlResolvePostBody,
   zResolveAccessV1AccessControlResolvePostResponse,
 } from "@/api/client/zod.gen";
 import {
-  checkToolAccess,
   createAccessControlRelationship,
-  grantToolAccess,
   resolveAccessControl,
 } from "@/lib/api";
 
@@ -63,28 +53,3 @@ export async function createAccessRelationshipAction(
   }
 }
 
-export async function grantToolAccessAction(
-  input: ToolAccessGrantRequest
-): Promise<ToolAccessGrantResponse> {
-  const body = zGrantToolAccessV1ToolAccessGrantsPostBody.parse(input);
-  const { data, error } = await grantToolAccess(body);
-
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Grant failed"));
-  }
-
-  return zGrantToolAccessV1ToolAccessGrantsPostResponse.parse(data);
-}
-
-export async function checkToolAccessAction(
-  input: ToolAccessCheckRequest
-): Promise<ToolAccessCheckResponse> {
-  const body = zCheckToolAccessV1ToolAccessChecksPostBody.parse(input);
-  const { data, error } = await checkToolAccess(body);
-
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Check failed"));
-  }
-
-  return zCheckToolAccessV1ToolAccessChecksPostResponse.parse(data);
-}

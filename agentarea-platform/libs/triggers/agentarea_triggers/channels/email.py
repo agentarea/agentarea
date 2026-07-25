@@ -41,7 +41,7 @@ class EmailAdapter:
         event_type = event.get("event_type", "")
         data = event.get("data", {})
 
-        if event_type == "WorkflowCompleted":
+        if event_type == "task.completed":
             result = data.get("result", "Task completed successfully.")
             return _html_wrap(
                 subject="Task Complete",
@@ -49,7 +49,7 @@ class EmailAdapter:
                 status="success",
             )
 
-        if event_type == "WorkflowFailed":
+        if event_type == "task.failed":
             error = data.get("error", "Unknown error")
             return _html_wrap(
                 subject="Task Failed",
@@ -57,14 +57,14 @@ class EmailAdapter:
                 status="error",
             )
 
-        if event_type == "WorkflowCancelled":
+        if event_type == "task.cancelled":
             return _html_wrap(
                 subject="Task Cancelled",
                 body="<p>The task was cancelled.</p>",
                 status="warning",
             )
 
-        if event_type == "HumanApprovalRequested":
+        if event_type == "approval.request":
             question = data.get("question", "Approval needed")
             return _html_wrap(
                 subject="Action Required",
@@ -74,7 +74,7 @@ class EmailAdapter:
                 status="warning",
             )
 
-        if event_type == "HumanApprovalReceived":
+        if event_type == "approval.response":
             return _html_wrap(
                 subject="Approval Received",
                 body="<p>Your approval was received. The agent is continuing.</p>",

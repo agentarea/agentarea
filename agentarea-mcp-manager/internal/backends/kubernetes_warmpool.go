@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,28 +16,38 @@ import (
 
 const warmPoolMCPPort = 3000
 
+func (k *KubernetesBackend) RuntimeManifest(ctx context.Context, packageInstall string) (*runtimeinfo.Manifest, error) {
+	if err := runtimeinfo.ValidatePackageInstall(packageInstall); err != nil {
+		return nil, err
+	}
+	client := k.GetWarmPoolClient()
+	if client == nil {
+		return nil, fmt.Errorf("sandbox warm pool client is not available")
+	}
+	pod, err := client.FindRuntimeManifestPod(ctx, packageInstall)
+	if err != nil {
+		return nil, err
+	}
+	return client.RuntimeManifestInPod(ctx, pod, packageInstall)
+}
+
 // GetWarmPoolClient returns a warm pool client for the current namespace.
 func (k *KubernetesBackend) GetWarmPoolClient() *warmpool.Client {
 	return warmpool.NewClient(k.clientset, k.k8sConfig.Namespace)
 }
 
-// ExecuteSandbox runs a sandbox script on the warm-pool data plane. A
-// WorkflowID pins execution to a sticky pod (so /workspace/wf-<id>/ persists
-// across calls); otherwise any available warm pod is used. Implements
-// sandboxrunner.SandboxExecutor.
+// ExecuteSandbox runs a sandbox script on the warm-pool data plane. TaskID
+// selects a sticky session pod so state persists across calls; execution runs
+// in place on that pod. Implements sandboxrunner.SandboxExecutor.
 func (k *KubernetesBackend) ExecuteSandbox(ctx context.Context, req warmpool.ExecuteRequest) (*warmpool.ExecuteResponse, error) {
+	if req.TaskID == "" {
+		return nil, fmt.Errorf("task_id is required for sandbox execution")
+	}
 	wp := k.GetWarmPoolClient()
 	if wp == nil {
 		return nil, fmt.Errorf("warm pool client unavailable")
 	}
-
-	var pod *corev1.Pod
-	var err error
-	if req.WorkflowID != "" {
-		pod, err = wp.FindOrAssignPodForWorkflow(ctx, req.WorkflowID)
-	} else {
-		pod, err = wp.FindAvailablePod(ctx)
-	}
+	pod, err := wp.FindOrAssignPodForTask(ctx, req.TaskID, req.PackageInstall)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +65,7 @@ func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec
 	// Try warm pool activation before creating per-instance resources. If the
 	// pool is empty, standard deployment can create those resources cleanly.
 	warmPoolClient := warmpool.NewClient(k.clientset, k.k8sConfig.Namespace)
-	pod, err := warmPoolClient.FindAvailablePod(ctx)
+	pod, err := warmPoolClient.FindAvailablePod(ctx, runtimeinfo.PackageInstallAllowed)
 	if err != nil {
 		k.logger.Warn("No warm pods available, falling back to standard deployment",
 			slog.String("error", err.Error()))

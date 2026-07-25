@@ -212,6 +212,7 @@ export const zAnalyzeRequest = z.object({
  */
 export const zApprovalPolicy = z.object({
   approvers: z.array(z.string()).optional(),
+  approvers_by_tool: z.record(z.array(z.string())).optional(),
   escalation_rules: z.array(z.string()).optional(),
   requires_human_approval: z.boolean().nullish(),
 });
@@ -273,6 +274,15 @@ export const zAuditLogListResponse = z.object({
   events: z.array(zAuditEventResponse),
   next_cursor: z.string().nullable(),
 });
+
+/**
+ * Body_create_task_for_agent_with_attachments_v1_agents__agent_id__tasks_with_attachments_post
+ */
+export const zBodyCreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPost =
+  z.object({
+    files: z.array(z.string()),
+    task_data: z.string(),
+  });
 
 /**
  * Body_import_workspace_config_file_v1_workspace_import_file_post
@@ -523,6 +533,7 @@ export const zClientUpdate = z.object({
  */
 export const zCodeToolSettings = z.object({
   disabled_methods: z.array(z.string()).nullish(),
+  package_install: z.enum(["allowed", "locked"]).nullish(),
   requires_user_confirmation: z.boolean().nullish(),
 });
 
@@ -569,6 +580,22 @@ export const zCollectionUpdateRequest = z.object({
 export const zContentSafetyPolicy = z.object({
   output_sanitizer_enabled: z.boolean().nullish(),
   prompt_injection_detection_enabled: z.boolean().nullish(),
+});
+
+/**
+ * ContinueTaskPayload
+ */
+export const zContinueTaskPayload = z.object({
+  additional_budget_usd: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
+  additional_iterations: z
+    .number()
+    .int()
+    .gte(0)
+    .lte(1000)
+    .optional()
+    .default(0),
 });
 
 /**
@@ -1158,12 +1185,15 @@ export const zMcpInstanceAssociationBody = z.object({
 /**
  * McpToolPermission
  *
- * A single MCP tool the agent may call, with its per-call approval gate.
+ * A single MCP tool the agent may call.
  *
  * Replaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).
+ * ``requires_user_confirmation`` is transport only: the API translates it into
+ * an agent-scoped approval policy rule and does not persist it here, so it is
+ * ``None`` at rest and reconstituted from rules on read.
  */
 export const zMcpToolPermission = z.object({
-  requires_user_confirmation: z.boolean().optional().default(false),
+  requires_user_confirmation: z.boolean().nullish(),
   tool_name: z.string(),
 });
 
@@ -2259,7 +2289,9 @@ export const zTaskArtifactItem = z.object({
  * TaskCommandPayload
  */
 export const zTaskCommandPayload = z.object({
-  budget_usd: z.number().nullish(),
+  budget_usd: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
   command: z.string(),
   message: z.string().nullish(),
   message_id: z.string().nullish(),
@@ -2313,7 +2345,9 @@ export const zTaskResponse = z.object({
   agent_id: z.string().uuid(),
   created_at: z.string(),
   description: z.string(),
+  error: z.string().nullish(),
   execution_id: z.string().nullish(),
+  failure_reason: z.string().nullish(),
   id: z.string().uuid(),
   parameters: z.record(z.unknown()),
   result: z.union([z.record(z.unknown()), z.string()]).nullish(),
@@ -2363,9 +2397,11 @@ export const zTaskWithAgent = z.object({
   agent_name: z.string(),
   created_at: z.string(),
   description: z.string(),
+  error: z.string().nullish(),
   escalation_id: z.string().nullish(),
   escalation_tool_name: z.string().nullish(),
   execution_id: z.string().nullish(),
+  failure_reason: z.string().nullish(),
   id: z.string().uuid(),
   parameters: z.record(z.unknown()),
   result: z.union([z.record(z.unknown()), z.string()]).nullish(),
@@ -2391,60 +2427,6 @@ export const zInboxResponse = z.object({
 export const zTokenPolicy = z.object({
   max_tokens: z.number().int().nullish(),
   max_tokens_per_call: z.number().int().nullish(),
-});
-
-/**
- * ToolAccessCheckRequest
- */
-export const zToolAccessCheckRequest = z.object({
-  arguments: z.record(z.unknown()).nullish(),
-  tool_name: z.string().min(1),
-  user_id: z.string(),
-});
-
-/**
- * ToolAccessGrant
- */
-export const zToolAccessGrant = z.object({
-  arguments_hash: z.string().nullish(),
-  object_id: z.string(),
-  scope: z.enum(["tool", "arguments"]),
-  tool_name: z.string(),
-  user_id: z.string(),
-  workspace_id: z.string(),
-});
-
-/**
- * ToolAccessCheckResponse
- */
-export const zToolAccessCheckResponse = z.object({
-  allowed: z.boolean(),
-  grant: zToolAccessGrant,
-});
-
-/**
- * ToolAccessGrantListResponse
- */
-export const zToolAccessGrantListResponse = z.object({
-  count: z.number().int(),
-  grants: z.array(zToolAccessGrant),
-});
-
-/**
- * ToolAccessGrantRequest
- */
-export const zToolAccessGrantRequest = z.object({
-  arguments: z.record(z.unknown()).nullish(),
-  tool_name: z.string().min(1),
-  user_id: z.string(),
-});
-
-/**
- * ToolAccessGrantResponse
- */
-export const zToolAccessGrantResponse = z.object({
-  grant: zToolAccessGrant,
-  ok: z.boolean(),
 });
 
 /**
@@ -3132,17 +3114,6 @@ export const zGetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetPath 
 export const zGetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponse =
   zAgentCard;
 
-export const zGetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetPath =
-  z.object({
-    agent_id: z.string().uuid(),
-  });
-
-/**
- * Successful Response
- */
-export const zGetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponse =
-  zAgentCard;
-
 export const zHandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostPath = z.object({
   agent_id: z.string().uuid(),
 });
@@ -3216,6 +3187,14 @@ export const zCreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostPath = z.object(
  */
 export const zCreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostResponse =
   zTaskResponse;
+
+export const zCreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostBody =
+  zBodyCreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPost;
+
+export const zCreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostPath =
+  z.object({
+    agent_id: z.string().uuid(),
+  });
 
 export const zCancelAgentTaskV1AgentsAgentIdTasksTaskIdDeletePath = z.object({
   agent_id: z.string().uuid(),
@@ -3297,6 +3276,11 @@ export const zStreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetPath =
   z.object({
     agent_id: z.string().uuid(),
     task_id: z.string().uuid(),
+  });
+
+export const zStreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetQuery =
+  z.object({
+    include_chunks: z.boolean().optional().default(true),
   });
 
 export const zSubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostBody =
@@ -4933,37 +4917,12 @@ export const zGetTaskByIdV1TasksTaskIdGetPath = z.object({
  */
 export const zGetTaskByIdV1TasksTaskIdGetResponse = zTaskWithAgent;
 
-export const zCheckToolAccessV1ToolAccessChecksPostBody =
-  zToolAccessCheckRequest;
+export const zContinueTaskExecutionV1TasksTaskIdContinuePostBody =
+  zContinueTaskPayload;
 
-/**
- * Successful Response
- */
-export const zCheckToolAccessV1ToolAccessChecksPostResponse =
-  zToolAccessCheckResponse;
-
-export const zRevokeToolAccessV1ToolAccessGrantsDeleteBody =
-  zToolAccessGrantRequest;
-
-/**
- * Successful Response
- */
-export const zRevokeToolAccessV1ToolAccessGrantsDeleteResponse = z.void();
-
-/**
- * Successful Response
- */
-export const zListToolAccessGrantsV1ToolAccessGrantsGetResponse =
-  zToolAccessGrantListResponse;
-
-export const zGrantToolAccessV1ToolAccessGrantsPostBody =
-  zToolAccessGrantRequest;
-
-/**
- * Successful Response
- */
-export const zGrantToolAccessV1ToolAccessGrantsPostResponse =
-  zToolAccessGrantResponse;
+export const zContinueTaskExecutionV1TasksTaskIdContinuePostPath = z.object({
+  task_id: z.string().uuid(),
+});
 
 export const zListTriggersV1TriggersGetQuery = z.object({
   agent_id: z.string().uuid().nullish(),

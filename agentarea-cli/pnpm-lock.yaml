@@ -20,8 +20,8 @@ importers:
   .:
     dependencies:
       '@agentarea/api-client':
-        specifier: file:../agentarea-webapp/packages/api-client
-        version: file:../agentarea-webapp/packages/api-client
+        specifier: link:../agentarea-webapp/packages/api-client
+        version: link:../agentarea-webapp/packages/api-client
       '@zowe/secrets-for-zowe-sdk':
         specifier: ^8.8.3
         version: 8.27.4
@@ -34,9 +34,6 @@ importers:
       conf:
         specifier: ^12.0.0
         version: 12.0.0
-      eventsource:
-        specifier: ^2.0.2
-        version: 2.0.2
       ink:
         specifier: ^4.1.0
         version: 4.4.1(@types/react@18.3.26)(react@18.3.1)
@@ -50,9 +47,6 @@ importers:
       '@sindresorhus/tsconfig':
         specifier: ^8.1.0
         version: 8.1.0
-      '@types/eventsource':
-        specifier: ^1.1.11
-        version: 1.1.15
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.23
@@ -100,9 +94,6 @@ importers:
         version: 0.61.1(@types/eslint@9.6.1)(@typescript-eslint/utils@8.58.2(eslint@9.39.4)(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(typescript@5.9.3)(webpack@5.106.2)
 
 packages:
-
-  '@agentarea/api-client@file:../agentarea-webapp/packages/api-client':
-    resolution: {directory: ../agentarea-webapp/packages/api-client, type: directory}
 
   '@alcalzone/ansi-tokenize@0.1.3':
     resolution: {integrity: sha512-3yWxPTq3UQ/FY9p1ErPxIyfT64elWaMvM9lIHnaqpyft63tkxodF5aUElYHrdisWve5cETkh1+KBw1yJuW0aRw==}
@@ -361,9 +352,6 @@ packages:
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
-
-  '@types/eventsource@1.1.15':
-    resolution: {integrity: sha512-XQmGcbnxUNa06HR3VBVkc9+A2Vpi9ZyLJcdS5dwaQQ/4ZMWFO+5c90FnMUpbtMZwB/FChoYHwuVg8TvkECacTA==}
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
@@ -1381,10 +1369,6 @@ packages:
   events@3.3.0:
     resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
     engines: {node: '>=0.8.x'}
-
-  eventsource@2.0.2:
-    resolution: {integrity: sha512-IzUmBGPR3+oUG9dUeXynyNmf91/3zUSJg1lCktzKw47OXuhco54U3r9B7O4XX+Rb1Itm9OZ2b0RkTs10bICOxA==}
-    engines: {node: '>=12.0.0'}
 
   execa@9.6.1:
     resolution: {integrity: sha512-9Be3ZoN4LmYR90tUoVu2te2BsbzHfhJyfEiAVfz7N5/zv+jduIfLrV2xdQXOHbaD6KgpGdO9PRPM1Y4Q9QkPkA==}
@@ -2942,8 +2926,6 @@ packages:
 
 snapshots:
 
-  '@agentarea/api-client@file:../agentarea-webapp/packages/api-client': {}
-
   '@alcalzone/ansi-tokenize@0.1.3':
     dependencies:
       ansi-styles: 6.2.3
@@ -3261,8 +3243,6 @@ snapshots:
       '@types/json-schema': 7.0.15
 
   '@types/estree@1.0.8': {}
-
-  '@types/eventsource@1.1.15': {}
 
   '@types/json-schema@7.0.15': {}
 
@@ -4477,8 +4457,6 @@ snapshots:
   esutils@2.0.3: {}
 
   events@3.3.0: {}
-
-  eventsource@2.0.2: {}
 
   execa@9.6.1:
     dependencies:

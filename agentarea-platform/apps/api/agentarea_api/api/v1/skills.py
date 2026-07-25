@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from ._access_control_grants import grant_user_relation
+from ._access_control_grants import grant_resource_owner
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 
@@ -196,10 +196,9 @@ async def create_skill(
                 ),
             )
 
-        await grant_user_relation(
-            namespace="Skill",
-            object_id=skill.id,
-            relation="owners",
+        await grant_resource_owner(
+            resource_id=skill.id,
+            workspace_id=skill_service.user_context.workspace_id,
             user_id=skill_service.user_context.user_id,
         )
         return SkillResponse.from_skill(skill)
@@ -232,10 +231,9 @@ async def upload_skill(
             name=name,
             description=description,
         )
-        await grant_user_relation(
-            namespace="Skill",
-            object_id=skill.id,
-            relation="owners",
+        await grant_resource_owner(
+            resource_id=skill.id,
+            workspace_id=skill_service.user_context.workspace_id,
             user_id=skill_service.user_context.user_id,
         )
         return SkillResponse.from_skill(skill)
@@ -292,10 +290,9 @@ async def install_skill(
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
 
-    await grant_user_relation(
-        namespace="Skill",
-        object_id=skill.id,
-        relation="owners",
+    await grant_resource_owner(
+        resource_id=skill.id,
+        workspace_id=skill_service.user_context.workspace_id,
         user_id=skill_service.user_context.user_id,
     )
     return SkillResponse.from_skill(skill)

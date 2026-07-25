@@ -113,8 +113,12 @@ class OpenFGAClient:
         subject_id: str,
         max_depth: int = 10,
         contextual_tuples: list[RelationTuple] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> CheckResult:
-        """Check whether ``subject_id`` has ``relation`` on ``namespace:object``."""
+        """Check whether ``subject_id`` has ``relation`` on ``namespace:object``.
+
+        ``context`` is passed through to OpenFGA for condition (ABAC) evaluation.
+        """
         client = await self._http()
         url = f"{self._api_url}/stores/{self._store_id}/check"
         body: dict[str, Any] = {
@@ -128,6 +132,8 @@ class OpenFGAClient:
             body["contextual_tuples"] = {
                 "tuple_keys": [_tuple_key(tuple_) for tuple_ in contextual_tuples]
             }
+        if context:
+            body["context"] = context
         if self._authorization_model_id:
             body["authorization_model_id"] = self._authorization_model_id
         try:
@@ -137,6 +143,46 @@ class OpenFGAClient:
         if resp.status_code != 200:
             raise OpenFGAError(f"check failed ({resp.status_code}): {resp.text}")
         return CheckResult(allowed=bool(resp.json().get("allowed", False)))
+
+    async def list_objects(
+        self,
+        namespace: str,
+        relation: str,
+        subject_id: str,
+        contextual_tuples: list[RelationTuple] | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> list[str]:
+        """List object ids of ``namespace`` on which ``subject_id`` has ``relation``.
+
+        Returns bare object ids (the ``namespace:`` prefix stripped), mirroring the
+        ``object`` argument shape used by :meth:`check`.
+        """
+        client = await self._http()
+        url = f"{self._api_url}/stores/{self._store_id}/list-objects"
+        body: dict[str, Any] = {
+            "type": namespace,
+            "relation": relation,
+            "user": subject_id,
+        }
+        if contextual_tuples:
+            body["contextual_tuples"] = {
+                "tuple_keys": [_tuple_key(tuple_) for tuple_ in contextual_tuples]
+            }
+        if context:
+            body["context"] = context
+        if self._authorization_model_id:
+            body["authorization_model_id"] = self._authorization_model_id
+        try:
+            resp = await client.post(url, json=body)
+        except httpx.HTTPError as exc:
+            raise OpenFGAUnavailableError(f"OpenFGA list-objects unreachable: {exc}") from exc
+        if resp.status_code != 200:
+            raise OpenFGAError(f"list_objects failed ({resp.status_code}): {resp.text}")
+        prefix = f"{namespace}:"
+        return [
+            obj[len(prefix) :] if obj.startswith(prefix) else obj
+            for obj in resp.json().get("objects") or []
+        ]
 
     async def _write(self, body: dict[str, Any], *, tolerate_404: bool = False) -> None:
         client = await self._http()

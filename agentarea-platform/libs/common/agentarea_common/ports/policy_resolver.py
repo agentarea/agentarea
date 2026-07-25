@@ -26,9 +26,12 @@ class PolicyResolverPort(Protocol):
         agent_id: UUID | None = None,
         task_id: UUID | None = None,
         task_policy: PolicyDocument | None = None,
+        user_id: str | None = None,
     ) -> EffectivePolicy:
         """Resolve the effective policy for a task.
 
+        ``user_id`` is the task creator; implementations resolve a per-user rule
+        layer from it so the snapshot captures "disable tool X for user Y".
         Implementations must apply lower-scope-only-tightens validation and
         return an immutable EffectivePolicy snapshot.
         """

@@ -901,6 +901,7 @@
     "title": "Tasks",
     "description": "Description",
     "agent": "Agent",
+    "source": "Source",
     "statusLabel": "Status",
     "created": "Created",
     "cost": "Cost",
@@ -920,6 +921,8 @@
       "completed": "Completed",
       "success": "Success",
       "inputRequired": "Input Required",
+      "approvalRequired": "Approval Required",
+      "continuationRequired": "Continuation Required",
       "failed": "Failed",
       "error": "Error",
       "blocked": "Blocked",
@@ -1280,6 +1283,10 @@
       "cron": "Cron",
       "webhook": "Webhook"
     },
+    "group": {
+      "byChannel": "Channels",
+      "none": "No grouping"
+    },
     "noTriggers": "No triggers yet",
     "noTriggersDescription": "Create a trigger to automate your agent workflows.",
     "noMatchingTriggers": "No triggers match your search",
@@ -1291,7 +1298,9 @@
       "status": "Status",
       "nextRun": "Next Run",
       "lastRun": "Last Run",
-      "created": "Created"
+      "created": "Created",
+      "channel": "Channel",
+      "when": "When"
     },
     "type": {
       "cron": "Cron",
@@ -1376,6 +1385,7 @@
   "NetworkPage": {
     "title": "Network",
     "description": "Visual overview of your workspace topology",
+    "topology": "Topology",
     "accessGraph": "Access Graph",
     "dataFlow": "Data Flow",
     "organization": "Organization"

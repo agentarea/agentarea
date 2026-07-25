@@ -1,0 +1,39 @@
+[Unit]
+Description=AgentArea sandbox executor ({{ sandbox_runtime }})
+After=docker.service sandbox-egress.service
+# Requires (not just After) sandbox-egress: if the egress firewall fails to
+# apply, the executor must NOT start — untrusted bash with no DOCKER-USER
+# filtering could reach cloud metadata / RFC1918. gVisor does not gate egress.
+Requires=docker.service sandbox-egress.service
+
+[Service]
+Restart=always
+RestartSec=5
+EnvironmentFile=/etc/agentarea/sandbox-executor.env
+# Values come from the EnvironmentFile above; `-e NAME` (no value) passes them
+# through without exposing the secret in the unit file or `docker inspect` args.
+ExecStartPre=-/usr/bin/docker rm -f {{ sandbox_executor_name }}
+# Best-effort: refresh from the registry when reachable, but still start from a
+# locally-loaded image (e.g. built from Dockerfile.runner and `docker load`ed).
+ExecStartPre=-/usr/bin/docker pull {{ sandbox_executor_image }}
+ExecStart=/usr/bin/docker run --rm --name {{ sandbox_executor_name }} \
+  --runtime={{ sandbox_runtime }} \
+  --cap-drop ALL \
+{% for cap in sandbox_executor_cap_add %}
+  --cap-add {{ cap }} \
+{% endfor %}
+  --security-opt no-new-privileges \
+  --pids-limit {{ sandbox_pids_limit }} \
+  --memory {{ sandbox_memory_limit }} \
+  --cpus {{ sandbox_cpus }} \
+  --tmpfs /tmp:rw,nosuid,nodev,size={{ sandbox_tmp_size }} \
+  -e SANDBOX_ACTIVATION_AUTH_SECRET \
+  -e SANDBOX_COMMAND_UID \
+  -e SANDBOX_COMMAND_GID \
+  -p {{ sandbox_executor_bind_addr }}:{{ sandbox_executor_host_port }}:8080 \
+  -v {{ sandbox_executor_name }}-workspace:/workspace \
+  {{ sandbox_executor_image }}
+ExecStop=/usr/bin/docker stop {{ sandbox_executor_name }}
+
+[Install]
+WantedBy=multi-user.target

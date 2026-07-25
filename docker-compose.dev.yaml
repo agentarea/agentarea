@@ -288,6 +288,13 @@ services:
       # compose) and route code-execution to the sandbox-executor container.
       SANDBOX_EMBEDDED_RUNNER: "true"
       SANDBOX_EXECUTOR_URL: http://sandbox-executor:8080
+      SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:-agentarea-dev-sandbox-activation-secret-change-me}
+      SANDBOX_CLEANUP_AUTH_SECRET: ${SANDBOX_CLEANUP_AUTH_SECRET:-agentarea-dev-sandbox-cleanup-secret-change-me}
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
+      AWS_REGION: ${RUSTFS_REGION:-us-east-1}
+      ARTIFACTS_BUCKET_NAME: ${ARTIFACTS_BUCKET:-artifacts}
+      AWS_ENDPOINT_URL: http://rustfs:9000
       # Secret manager configuration
       SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
       # Database secret manager settings
@@ -298,25 +305,28 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       SECRET_MANAGER_ENCRYPTION_KEY: ${SECRET_MANAGER_ENCRYPTION_KEY}
 
-  # Sandbox executor — isolated script runner (simulates warm pool pod in dev)
+  # Sandbox executor — isolated script runner (simulates warm pool pod in dev).
+  # Same unified runtime image as the prod warm-pool runner (Dockerfile.runner).
   sandbox-executor:
     image: agentarea/sandbox-executor:${VERSION:-latest}
     build:
       context: agentarea-mcp-manager
-      dockerfile: Dockerfile.sandbox
+      dockerfile: Dockerfile.runner
       platforms:
         - linux/amd64
         - linux/arm64
     container_name: sandbox-executor
     restart: unless-stopped
     tmpfs:
-      - /tmp
-      - /workspace
+      - /tmp:mode=1777
+      - /workspace:mode=1777
     networks:
       - mcp-network
       - default
     environment:
       ACTIVATION_PORT: "8080"
+      HOME: /home/sandbox
+      SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:-agentarea-dev-sandbox-activation-secret-change-me}
 
   # Temporal Infrastructure Services
   temporal:
@@ -427,6 +437,7 @@ services:
       # MCP settings
       - MCP_MANAGER_URL=http://mcp-manager:80
       - MCP_GATEWAY_URL=http://agentarea-traefik:8080
+      - SANDBOX_CLEANUP_AUTH_SECRET=${SANDBOX_CLEANUP_AUTH_SECRET:-agentarea-dev-sandbox-cleanup-secret-change-me}
 
       # Task execution
       - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
@@ -466,13 +477,13 @@ services:
         condition: service_healthy
     environment:
       - RCLONE_CONFIG_RUSTFS_TYPE=s3
-      - RCLONE_CONFIG_RUSTFS_PROVIDER=Rustfs
+      - RCLONE_CONFIG_RUSTFS_PROVIDER=Other
       - RCLONE_CONFIG_RUSTFS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
       - RCLONE_CONFIG_RUSTFS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
       - RCLONE_CONFIG_RUSTFS_ENDPOINT=http://rustfs:9000
       - RCLONE_CONFIG_RUSTFS_ACL=private
     entrypoint: ["/bin/sh", "-c"]
-    command: ["rclone mkdir rustfs:${DOCUMENTS_BUCKET:-documents} || true && rclone mkdir rustfs:${ARTIFACTS_BUCKET:-artifacts} || true && echo 'Buckets created successfully'"]
+    command: ["rclone mkdir rustfs:${DOCUMENTS_BUCKET:-documents} && rclone mkdir rustfs:${ARTIFACTS_BUCKET:-artifacts} && echo 'Buckets created successfully'"]
     networks:
       - default
 

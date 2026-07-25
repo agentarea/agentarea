@@ -7,7 +7,6 @@ from uuid import uuid4
 
 from agentarea_common.events.base_events import DomainEvent
 from agentarea_common.events.broker import EventBroker
-from agentarea_common.events.router import create_event_broker_from_router
 
 logger = logging.getLogger(__name__)
 
@@ -17,17 +16,22 @@ def resolve_event_broker(event_broker: Any) -> EventBroker:
     if isinstance(event_broker, EventBroker):
         return event_broker
 
-    if hasattr(event_broker, "broker"):
-        return create_event_broker_from_router(event_broker)
-
-    raise TypeError(
-        "event_broker must implement EventBroker or expose a RedisRouter-style "
-        f"'broker' attribute, got {type(event_broker).__name__}"
-    )
+    raise TypeError(f"event_broker must implement EventBroker, got {type(event_broker).__name__}")
 
 
-def create_event_publisher(event_broker, task_id: str, broker_client=None):
+def create_event_publisher(
+    event_broker,
+    task_id: str,
+    execution_id: str | None = None,
+    iteration: int | None = None,
+    broker_client=None,
+):
     """Create an event publisher function for chunk events.
+
+    ``execution_id`` and ``iteration`` identify the LLM call this chunk belongs
+    to. The read side supersedes by part id, and an llm part's id is built from
+    exactly these two fields, so a chunk without them cannot be matched to the
+    call it is streaming and never renders as text.
 
     ``broker_client`` (a ``BrokerClient``) additionally XADDs each chunk to the
     per-task live stream so the A2A read side tails tokens the same way it tails
@@ -53,11 +57,13 @@ def create_event_publisher(event_broker, task_id: str, broker_client=None):
             publisher = resolve_event_broker(event_broker)
 
             chunk_event = {
-                "event_type": "LLMCallChunk",
+                "event_type": "llm.call.chunk",
                 "event_id": str(uuid4()),
                 "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 "data": {
                     "task_id": task_id,
+                    "execution_id": execution_id,
+                    "iteration": iteration,
                     "chunk": chunk,
                     "chunk_index": chunk_index,
                     "is_final": is_final,
@@ -279,7 +285,14 @@ def _is_network_error(error: Exception) -> bool:
 
 
 def _is_non_retryable_error(error: Exception) -> bool:
-    """Determine if error should not be retried."""
+    """Determine if error should not be retried.
+
+    A rate limit (429) is transient and takes precedence: retry it with backoff.
+    Without this, the quota check's broad ``"exceeded"`` match swallows
+    "rate limit exceeded" and wrongly fails the whole task fast.
+    """
+    if _is_rate_limit_error(error):
+        return False
     return _is_auth_error(error) or _is_quota_error(error) or _is_model_error(error)
 
 

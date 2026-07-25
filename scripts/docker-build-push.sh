@@ -13,20 +13,22 @@ echo "Version:   $VERSION"
 echo "Short SHA: $SHORT_SHA"
 echo ""
 
-# name | context | dockerfile
+# name | context | dockerfile | managed_environment
 COMPONENTS=(
-  "api|agentarea-platform|agentarea-platform/apps/api/Dockerfile"
-  "worker|agentarea-platform|agentarea-platform/apps/worker/Dockerfile"
-  "frontend|agentarea-webapp|agentarea-webapp/Dockerfile"
-  "operator|agentarea-operator|agentarea-operator/Dockerfile"
-  "mcp-manager|agentarea-mcp-manager|agentarea-mcp-manager/Dockerfile"
-  "mcp-runner|agentarea-mcp-manager|agentarea-mcp-manager/Dockerfile.runner"
+  "api|agentarea-platform|agentarea-platform/apps/api/Dockerfile|"
+  "worker|agentarea-platform|agentarea-platform/apps/worker/Dockerfile|"
+  "frontend|agentarea-webapp|agentarea-webapp/Dockerfile|"
+  "operator|agentarea-operator|agentarea-operator/Dockerfile|"
+  "mcp-manager|agentarea-mcp-manager|agentarea-mcp-manager/Dockerfile|"
+  "mcp-runner|agentarea-mcp-manager|agentarea-mcp-manager/Dockerfile.runner|mutable"
+  "mcp-runner-locked|agentarea-mcp-manager|agentarea-mcp-manager/Dockerfile.runner|immutable"
 )
 
 build_and_push() {
   local name="$1"
   local context="$2"
   local dockerfile="$3"
+  local managed_environment="$4"
   local image="agentarea/agentarea-${name}"
 
   local tags=(
@@ -50,6 +52,9 @@ build_and_push() {
   if [[ "$name" == "frontend" ]]; then
     build_args+=(--build-arg "APP_VERSION=${VERSION}")
   fi
+  if [[ -n "$managed_environment" ]]; then
+    build_args+=(--build-arg "MANAGED_ENVIRONMENT=${managed_environment}")
+  fi
 
   docker buildx build \
     --platform linux/amd64,linux/arm64 \
@@ -64,11 +69,11 @@ build_and_push() {
 }
 
 # Optional: filter by component name(s) passed as args
-# Usage: ./scripts/docker-build-push.sh mcp-manager mcp-runner
+# Usage: ./scripts/docker-build-push.sh mcp-manager mcp-runner mcp-runner-locked
 FILTER=("$@")
 
 for entry in "${COMPONENTS[@]}"; do
-  IFS='|' read -r name context dockerfile <<< "$entry"
+  IFS='|' read -r name context dockerfile managed_environment <<< "$entry"
 
   if [ ${#FILTER[@]} -gt 0 ]; then
     match=false
@@ -78,7 +83,7 @@ for entry in "${COMPONENTS[@]}"; do
     $match || continue
   fi
 
-  build_and_push "$name" "$context" "$dockerfile"
+  build_and_push "$name" "$context" "$dockerfile" "$managed_environment"
 done
 
 echo "All done."

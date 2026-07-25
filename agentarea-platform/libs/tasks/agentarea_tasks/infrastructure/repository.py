@@ -11,6 +11,7 @@ from sqlalchemy import Numeric, cast, func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..domain.base_service import TaskNotFoundError
 from ..domain.models import Task, TaskCreate, TaskEvent, TaskUpdate
 from .orm import TaskEventORM, TaskORM
 
@@ -93,7 +94,12 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
         task_orm = await self.update(entity.id, **task_data)
         if not task_orm:
-            return entity  # Return original if update failed
+            # The row is gone (deleted, or outside this workspace). Returning the
+            # entity here reported success for a write that never happened, and
+            # left anything else flushed on this session — outbox rows included —
+            # uncommitted and unrolled-back. Fail so the caller's transaction
+            # unwinds with it.
+            raise TaskNotFoundError(f"Task {entity.id} not found for update")
         return self._orm_to_domain(task_orm)
 
     async def delete_task(self, id: UUID) -> bool:

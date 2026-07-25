@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 
 from agentarea_common.audit import audited
 from agentarea_common.events.broker import EventBroker
-from agentarea_common.money import to_money
+from agentarea_common.money import Money, serialize_money, to_money
 from agentarea_common.ports.policy_resolver import PolicyResolverPort
 from agentarea_governance.domain.policies import (
     EffectivePolicy,
@@ -38,6 +38,27 @@ logger = logging.getLogger(__name__)
 # because the workflow may legitimately stay alive in await_follow_up
 # after the activity has already persisted "completed" to the DB.
 _TERMINAL_WORKFLOW_STATUSES = frozenset({"completed", "failed", "cancelled", "canceled"})
+_PACKAGE_INSTALL_PROFILES = frozenset({"allowed", "locked"})
+
+
+def _agent_package_install_profile(agent: Any) -> str:
+    """Resolve the agent's sandbox profile from its shell-tool configuration."""
+    tools = getattr(agent, "tools", None)
+    if not isinstance(tools, list):
+        return "allowed"
+    for tool in tools:
+        if not isinstance(tool, dict) or tool.get("name") != "agentarea/shell":
+            continue
+        settings = tool.get("settings")
+        if not isinstance(settings, dict):
+            return "allowed"
+        profile = settings.get("package_install")
+        if profile is None:
+            return "allowed"
+        if profile not in _PACKAGE_INSTALL_PROFILES:
+            raise ValueError(f"invalid agent package_install profile: {profile}")
+        return str(profile)
+    return "allowed"
 
 
 class TaskService(BaseTaskService):
@@ -61,7 +82,16 @@ class TaskService(BaseTaskService):
         """
         # Create repositories using factory
         task_repository = repository_factory.create_repository(TaskRepository)
-        super().__init__(task_repository, event_broker)
+        # Route domain events through the transactional outbox on this service's
+        # session so they commit atomically with the task change (the worker
+        # relay publishes them to the broker later). event_broker is kept as the
+        # fallback for the base class when no outbox is available.
+        from agentarea_common.events.outbox_publisher import OutboxPublisher
+
+        outbox_publisher = OutboxPublisher(
+            repository_factory.session, repository_factory.user_context
+        )
+        super().__init__(task_repository, event_broker, outbox_publisher=outbox_publisher)
 
         self.repository_factory = repository_factory
         self.task_manager = task_manager
@@ -88,7 +118,12 @@ class TaskService(BaseTaskService):
         task_id: UUID | None = None,
         task_policy: PolicyDocument | None = None,
     ) -> EffectivePolicy:
-        """Resolve workspace/agent/task policy via the injected port."""
+        """Resolve workspace/agent/user/task policy via the injected port.
+
+        The per-user layer is resolved from the task creator (this service's
+        UserContext), so the snapshot a task carries reflects that specific
+        caller's permissions — the same agent can resolve differently per user.
+        """
         if not workspace_id:
             return EffectivePolicy()
 
@@ -97,6 +132,7 @@ class TaskService(BaseTaskService):
             agent_id=agent_id,
             task_id=task_id,
             task_policy=task_policy,
+            user_id=self.repository_factory.user_context.user_id,
         )
 
     async def _enforce_budget_cap(
@@ -107,7 +143,7 @@ class TaskService(BaseTaskService):
         """Reject task creation if the workspace has hit its policy monthly cap.
 
         No-op when:
-        - workspace_id is missing (legacy call sites)
+        - workspace_id is missing
         - no policy monthly cap is configured
         """
         if not workspace_id:
@@ -213,6 +249,12 @@ class TaskService(BaseTaskService):
         metadata.setdefault("created_via", "api")
         metadata["agent_name"] = agent_name
         metadata["requires_human_approval"] = requires_human_approval
+        package_install = metadata.get("package_install")
+        if package_install is None:
+            package_install = _agent_package_install_profile(agent)
+        if package_install not in _PACKAGE_INSTALL_PROFILES:
+            raise ValueError(f"invalid task package_install profile: {package_install}")
+        metadata["package_install"] = package_install
 
         task = AgentTask(
             id=new_task_id,
@@ -264,6 +306,8 @@ class TaskService(BaseTaskService):
         workspace_id: str,
         user_id: str | None = None,
         created_via: str = "api",
+        task_id: UUID | None = None,
+        trusted_metadata: dict[str, Any] | None = None,
     ) -> AgentTask:
         """Start a new agent run from a validated DTO.
 
@@ -279,13 +323,21 @@ class TaskService(BaseTaskService):
             user_id: User initiating the run, when authenticated.
             created_via: Source tag stored on ``metadata.created_via``
                 (defaults to ``"api"``; toolset overrides to ``"mcp"``).
+            task_id: Server-reserved task identity, when the caller must commit
+                task-scoped inputs before workflow dispatch.
+            trusted_metadata: Trusted server-side metadata merged into the
+                workflow request. REST request bodies do not populate it.
 
         Returns:
             The created (or routed-into) ``AgentTask`` with execution info.
         """
         metadata_overrides: dict[str, Any] = {"created_via": created_via}
+        if trusted_metadata:
+            metadata_overrides.update(trusted_metadata)
         if payload.project_id is not None:
             metadata_overrides["project_id"] = payload.project_id
+        if payload.package_install is not None:
+            metadata_overrides["package_install"] = payload.package_install
 
         return await self.create_and_execute_task_with_workflow(
             agent_id=payload.agent_id,
@@ -296,7 +348,50 @@ class TaskService(BaseTaskService):
             requires_human_approval=payload.requires_human_approval,
             task_policy=payload.task_policy,
             metadata_overrides=metadata_overrides,
+            task_id=task_id,
         )
+
+    async def reserve_run(
+        self,
+        payload: RunCreate,
+        *,
+        workspace_id: str,
+        user_id: str | None = None,
+        created_via: str = "api",
+        task_id: UUID,
+        trusted_metadata: dict[str, Any] | None = None,
+    ) -> AgentTask:
+        """Persist a validated task before committing task-scoped inputs.
+
+        Multipart uploads need an authoritative owner before object storage is
+        mutated. The returned task is intentionally not dispatched; callers
+        commit inputs and then pass it to :meth:`dispatch_reserved_run`.
+        """
+        metadata_overrides: dict[str, Any] = {"created_via": created_via}
+        if trusted_metadata:
+            metadata_overrides.update(trusted_metadata)
+        if payload.project_id is not None:
+            metadata_overrides["project_id"] = payload.project_id
+        if payload.package_install is not None:
+            metadata_overrides["package_install"] = payload.package_install
+        return await self.create_task_with_policy(
+            agent_id=payload.agent_id,
+            description=payload.description,
+            workspace_id=workspace_id,
+            parameters=payload.parameters,
+            user_id=user_id,
+            requires_human_approval=payload.requires_human_approval,
+            task_id=task_id,
+            metadata_overrides=metadata_overrides,
+            status="preparing",
+            task_policy=payload.task_policy,
+            require_model=True,
+        )
+
+    async def dispatch_reserved_run(self, task: AgentTask) -> AgentTask:
+        """Dispatch a previously persisted task without creating it twice."""
+        task.status = "pending"
+        return await self.task_manager.submit_task(task)
 
     async def route_or_submit_task(self, task: AgentTask) -> AgentTask:
         """Submit a channel-originated task, routing follow-ups to an active workflow.
@@ -575,6 +670,27 @@ class TaskService(BaseTaskService):
 
         return await self._enrich_task_with_workflow_status(task)
 
+    async def continue_execution(
+        self,
+        task_id: UUID,
+        *,
+        additional_iterations: int = 0,
+        additional_budget_usd: Money | None = None,
+    ) -> dict[str, Any]:
+        """Atomically grant resources to a task waiting for continuation."""
+        task = await self.get_task(task_id)
+        if task is None:
+            return {"accepted": False, "reason": "task_not_found"}
+        if task.status != "waiting_for_continuation":
+            return {"accepted": False, "reason": "not_waiting_for_continuation"}
+        if not task.execution_id or self.workflow_service is None:
+            return {"accepted": False, "reason": "workflow_unavailable"}
+
+        payload: dict[str, Any] = {"additional_iterations": additional_iterations}
+        if additional_budget_usd is not None:
+            payload["additional_budget_usd"] = serialize_money(additional_budget_usd)
+        return await self.workflow_service.continue_execution(task.execution_id, payload)
+
     async def _enrich_task_with_workflow_status(self, task: AgentTask) -> AgentTask:
         """Enrich a task with current workflow status.
 
@@ -599,6 +715,8 @@ class TaskService(BaseTaskService):
                 task.status = wf_state
                 if workflow_status.get("result"):
                     task.result = workflow_status.get("result")
+                if workflow_status.get("error"):
+                    task.error_message = str(workflow_status["error"])
         except Exception as e:
             logger.debug(f"Could not get workflow status for task {task.id}: {e}")
 

@@ -8,10 +8,12 @@
 # by the Service/gateway, and cross-pod reachability is already cut by every
 # instance's egress deny.
 #
-# Pods are selected by the managed-by label that mcp-manager stamps on every
-# instance pod, so the policy auto-applies with no per-pod wiring. CIDRs and the
-# DNS namespace are values-driven -- not pinned to any cloud provider; override
-# blockedEgressCIDRs for clusters whose internal ranges differ.
+# Pods are selected by both the manager identity and the MCP-server component.
+# The component constraint is security-critical: workflow sandboxes are also
+# manager-created, but locked sandboxes must not inherit this public-egress
+# allowance. CIDRs and the DNS namespace are values-driven -- not pinned to any
+# cloud provider; override blockedEgressCIDRs for clusters whose internal ranges
+# differ.
 #
 # Requires a CNI that enforces NetworkPolicy (e.g. Cilium on DOKS); a no-op on
 # clusters without enforcement.
@@ -26,6 +28,7 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/managed-by: mcp-manager
+      app.kubernetes.io/component: mcp-server
   policyTypes:
     - Egress
   egress:

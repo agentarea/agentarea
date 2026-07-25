@@ -902,6 +902,7 @@
     "title": "Задачи",
     "description": "Описание",
     "agent": "Агент",
+    "source": "Источник",
     "statusLabel": "Статус",
     "created": "Создано",
     "cost": "Стоимость",
@@ -921,6 +922,8 @@
       "completed": "Завершено",
       "success": "Успешно",
       "inputRequired": "Требуется ввод",
+      "approvalRequired": "Требуется согласование",
+      "continuationRequired": "Требуется продолжение",
       "failed": "Ошибка",
       "error": "Ошибка",
       "blocked": "Заблокировано",
@@ -1281,6 +1284,10 @@
       "cron": "Cron",
       "webhook": "Webhook"
     },
+    "group": {
+      "byChannel": "Каналы",
+      "none": "Без группировки"
+    },
     "noTriggers": "Триггеров пока нет",
     "noTriggersDescription": "Создайте триггер для автоматизации рабочих процессов агентов.",
     "noMatchingTriggers": "Нет триггеров, соответствующих поиску",
@@ -1292,7 +1299,9 @@
       "status": "Статус",
       "nextRun": "Следующий запуск",
       "lastRun": "Последний запуск",
-      "created": "Создан"
+      "created": "Создан",
+      "channel": "Канал",
+      "when": "Когда"
     },
     "type": {
       "cron": "Cron",
@@ -1377,6 +1386,7 @@
   "NetworkPage": {
     "title": "Сеть",
     "description": "Визуальный обзор топологии рабочего пространства",
+    "topology": "Топология",
     "accessGraph": "Граф доступа",
     "dataFlow": "Поток данных",
     "organization": "Организация"

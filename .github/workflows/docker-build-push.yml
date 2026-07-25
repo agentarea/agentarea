@@ -29,6 +29,11 @@ on:
         required: false
         type: boolean
         default: true
+      build-args:
+        description: 'Additional newline-delimited Docker build arguments'
+        required: false
+        type: string
+        default: ''
     secrets:
       DOCKERHUB_USERNAME:
         required: true
@@ -172,6 +177,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ steps.version.outputs.version }}
+            ${{ inputs.build-args }}
           cache-from: type=gha,scope=${{ inputs.component }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ inputs.component }}-${{ matrix.arch }}
           outputs: type=image,name=${{ steps.image.outputs.primary }},push-by-digest=true,name-canonical=true,push=true
@@ -190,6 +196,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ steps.version.outputs.version }}
+            ${{ inputs.build-args }}
           cache-from: type=gha,scope=${{ inputs.component }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ inputs.component }}-${{ matrix.arch }}
           provenance: false

@@ -61,23 +61,26 @@ export function ConsumersSection({ instanceId }: { instanceId: string }) {
                 </Link>
               </div>
               <div className="flex flex-wrap items-center gap-1">
-                {c.enabled_tools === null ? (
+                {c.enabled_tools == null ? (
                   <Badge variant="slate" size="sm">
                     all tools
                   </Badge>
                 ) : c.enabled_tools.length === 0 ? (
                   <span className="text-xs italic text-muted-foreground">none</span>
                 ) : (
-                  c.enabled_tools.map((tool) => (
-                    <Badge
-                      key={tool}
-                      variant={c.confirm_tools.includes(tool) ? "amber" : "success"}
-                      size="sm"
-                    >
-                      {tool}
-                      {c.confirm_tools.includes(tool) ? " (confirm)" : ""}
-                    </Badge>
-                  ))
+                  c.enabled_tools.map((tool) => {
+                    const needsConfirm = c.confirm_tools?.includes(tool) ?? false;
+                    return (
+                      <Badge
+                        key={tool}
+                        variant={needsConfirm ? "amber" : "success"}
+                        size="sm"
+                      >
+                        {tool}
+                        {needsConfirm ? " (confirm)" : ""}
+                      </Badge>
+                    );
+                  })
                 )}
               </div>
             </div>

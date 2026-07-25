@@ -1316,6 +1316,16 @@
             "title": "Approvers",
             "type": "array"
           },
+          "approvers_by_tool": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Approvers By Tool",
+            "type": "object"
+          },
           "escalation_rules": {
             "items": {
               "type": "string"
@@ -1596,6 +1606,28 @@
           "failed_24h"
         ],
         "title": "Blockers",
+        "type": "object"
+      },
+      "Body_create_task_for_agent_with_attachments_v1_agents__agent_id__tasks_with_attachments_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "task_data": {
+            "title": "Task Data",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_data",
+          "files"
+        ],
+        "title": "Body_create_task_for_agent_with_attachments_v1_agents__agent_id__tasks_with_attachments_post",
         "type": "object"
       },
       "Body_import_workspace_config_file_v1_workspace_import_file_post": {
@@ -2647,6 +2679,21 @@
             ],
             "title": "Disabled Methods"
           },
+          "package_install": {
+            "anyOf": [
+              {
+                "enum": [
+                  "allowed",
+                  "locked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Install"
+          },
           "requires_user_confirmation": {
             "anyOf": [
               {
@@ -2815,6 +2862,40 @@
           }
         },
         "title": "ContentSafetyPolicy",
+        "type": "object"
+      },
+      "ContinueTaskPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "additional_budget_usd": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "gt": "0"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Additional Budget Usd"
+          },
+          "additional_iterations": {
+            "default": 0,
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Additional Iterations",
+            "type": "integer"
+          }
+        },
+        "title": "ContinueTaskPayload",
         "type": "object"
       },
       "CreateInvitationBody": {
@@ -5371,12 +5452,18 @@
         "type": "object"
       },
       "McpToolPermission": {
-        "description": "A single MCP tool the agent may call, with its per-call approval gate.\n\nReplaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).",
+        "description": "A single MCP tool the agent may call.\n\nReplaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).\n``requires_user_confirmation`` is transport only: the API translates it into\nan agent-scoped approval policy rule and does not persist it here, so it is\n``None`` at rest and reconstituted from rules on read.",
         "properties": {
           "requires_user_confirmation": {
-            "default": false,
-            "title": "Requires User Confirmation",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires User Confirmation"
           },
           "tool_name": {
             "title": "Tool Name",
@@ -9116,6 +9203,10 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -9355,6 +9446,17 @@
             "title": "Description",
             "type": "string"
           },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
           "execution_id": {
             "anyOf": [
               {
@@ -9365,6 +9467,17 @@
               }
             ],
             "title": "Execution Id"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
           },
           "id": {
             "format": "uuid",
@@ -9569,6 +9682,17 @@
             "title": "Description",
             "type": "string"
           },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
           "escalation_id": {
             "anyOf": [
               {
@@ -9601,6 +9725,17 @@
               }
             ],
             "title": "Execution Id"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
           },
           "id": {
             "format": "uuid",
@@ -9683,175 +9818,6 @@
           }
         },
         "title": "TokenPolicy",
-        "type": "object"
-      },
-      "ToolAccessCheckRequest": {
-        "properties": {
-          "arguments": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional exact argument set. Omit to check the whole-tool grant.",
-            "title": "Arguments"
-          },
-          "tool_name": {
-            "minLength": 1,
-            "title": "Tool Name",
-            "type": "string"
-          },
-          "user_id": {
-            "description": "User UUID or User:<uuid> subject.",
-            "title": "User Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "user_id",
-          "tool_name"
-        ],
-        "title": "ToolAccessCheckRequest",
-        "type": "object"
-      },
-      "ToolAccessCheckResponse": {
-        "properties": {
-          "allowed": {
-            "title": "Allowed",
-            "type": "boolean"
-          },
-          "grant": {
-            "$ref": "#/components/schemas/ToolAccessGrant"
-          }
-        },
-        "required": [
-          "allowed",
-          "grant"
-        ],
-        "title": "ToolAccessCheckResponse",
-        "type": "object"
-      },
-      "ToolAccessGrant": {
-        "properties": {
-          "arguments_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Arguments Hash"
-          },
-          "object_id": {
-            "title": "Object Id",
-            "type": "string"
-          },
-          "scope": {
-            "enum": [
-              "tool",
-              "arguments"
-            ],
-            "title": "Scope",
-            "type": "string"
-          },
-          "tool_name": {
-            "title": "Tool Name",
-            "type": "string"
-          },
-          "user_id": {
-            "title": "User Id",
-            "type": "string"
-          },
-          "workspace_id": {
-            "title": "Workspace Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "scope",
-          "workspace_id",
-          "user_id",
-          "tool_name",
-          "object_id"
-        ],
-        "title": "ToolAccessGrant",
-        "type": "object"
-      },
-      "ToolAccessGrantListResponse": {
-        "properties": {
-          "count": {
-            "title": "Count",
-            "type": "integer"
-          },
-          "grants": {
-            "items": {
-              "$ref": "#/components/schemas/ToolAccessGrant"
-            },
-            "title": "Grants",
-            "type": "array"
-          }
-        },
-        "required": [
-          "grants",
-          "count"
-        ],
-        "title": "ToolAccessGrantListResponse",
-        "type": "object"
-      },
-      "ToolAccessGrantRequest": {
-        "properties": {
-          "arguments": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional exact argument set. Omit for a whole-tool grant.",
-            "title": "Arguments"
-          },
-          "tool_name": {
-            "minLength": 1,
-            "title": "Tool Name",
-            "type": "string"
-          },
-          "user_id": {
-            "description": "User UUID or User:<uuid> subject.",
-            "title": "User Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "user_id",
-          "tool_name"
-        ],
-        "title": "ToolAccessGrantRequest",
-        "type": "object"
-      },
-      "ToolAccessGrantResponse": {
-        "properties": {
-          "grant": {
-            "$ref": "#/components/schemas/ToolAccessGrant"
-          },
-          "ok": {
-            "title": "Ok",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "ok",
-          "grant"
-        ],
-        "title": "ToolAccessGrantResponse",
         "type": "object"
       },
       "ToolResponse": {
@@ -10558,7 +10524,7 @@
                 "type": "null"
               }
             ],
-            "description": "Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (legacy).",
+            "description": "Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (alias).",
             "title": "Enabled"
           },
           "failure_threshold": {
@@ -11975,7 +11941,7 @@
     },
     "/v1/access-control/check": {
       "post": {
-        "description": "Check whether a subject has a relation on an object.",
+        "description": "Check whether a subject has a permission on a resource.",
         "operationId": "check_permission_v1_access_control_check_post",
         "requestBody": {
           "content": {
@@ -12053,7 +12019,7 @@
     },
     "/v1/access-control/relationships": {
       "delete": {
-        "description": "Delete an authorization relationship from the configured graph backend.",
+        "description": "Revoke a resource-ownership relation from the configured graph backend.",
         "operationId": "delete_relationship_v1_access_control_relationships_delete",
         "requestBody": {
           "content": {
@@ -12093,7 +12059,7 @@
         ]
       },
       "get": {
-        "description": "List authorization relationships enriched with display names.",
+        "description": "List resource-ownership grants enriched with display names.\n\nGrants live on ``resource:<uuid>`` objects; each is mapped back onto the DB\nentity (agent / skill collection / MCP server / skill) it represents. The\noptional ``namespace`` filter restricts results to one entity kind.",
         "operationId": "list_relationships_v1_access_control_relationships_get",
         "parameters": [
           {
@@ -12148,7 +12114,7 @@
         ]
       },
       "post": {
-        "description": "Write an authorization relationship to the configured graph backend.",
+        "description": "Grant a resource-ownership relation via the configured graph backend.",
         "operationId": "create_relationship_v1_access_control_relationships_post",
         "requestBody": {
           "content": {
@@ -12199,7 +12165,7 @@
     },
     "/v1/access-control/resolve": {
       "post": {
-        "description": "Resolve why (and how) a subject can access a resource.\n\n``allowed`` is computed via the graph backend; ``paths`` are derived by\ntraversing workspace relationships directly so the UI can render the derivation.",
+        "description": "Resolve why (and how) a subject can access a resource.\n\n``allowed`` is computed via the graph backend; ``paths`` are derived from the\ndirect ``resource`` grants matching the subject so the UI can render the\nderivation. Grants inherited through ``project``/``role`` still affect\n``allowed`` but are not expanded into hops here.",
         "operationId": "resolve_access_v1_access_control_resolve_post",
         "requestBody": {
           "content": {
@@ -12248,7 +12214,7 @@
     },
     "/v1/access-control/sync": {
       "post": {
-        "description": "Mirror existing grants into the graph backend and seed a starter collection.\n\nIdempotent: safe to call repeatedly. Steps:\n  1. Mirror workspace members into the graph.\n  2. If no collections exist, create \"All skills\" containing every workspace\n     skill and grant workspace-member access to the collection.\n  3. Mirror each collection membership relationship.\n  4. Mirror each direct agent-to-skill grant.",
+        "description": "Mirror workspace membership into the graph backend (idempotent).\n\nResource ownership is granted at create time by ``grant_resource_owner`` and\nwas backfilled onto the ``resource`` model, so this endpoint only ensures the\nworkspace-member tuples that gate group defaults are present.",
         "operationId": "sync_grants_v1_access_control_sync_post",
         "responses": {
           "200": {
@@ -12728,60 +12694,8 @@
     },
     "/v1/agents/{agent_id}/.well-known/agent-card.json": {
       "get": {
-        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent.\nThis endpoint can be accessed at:\n- /v1/agents/{agent_id}/.well-known/agent-card.json\n- /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json",
+        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent, at\n/v1/agents/{agent_id}/.well-known/agent-card.json\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent-card.json -> /v1/agents/{id}/.well-known/agent-card.json",
         "operationId": "get_agent_well_known_card_v1_agents__agent_id___well_known_agent_card_json_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Agent Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentCard"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Agent Well Known Card",
-        "tags": [
-          "v1",
-          "protected",
-          "agents",
-          "agents-well-known"
-        ]
-      }
-    },
-    "/v1/agents/{agent_id}/.well-known/agent.json": {
-      "get": {
-        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent.\nThis endpoint can be accessed at:\n- /v1/agents/{agent_id}/.well-known/agent-card.json\n- /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json",
-        "operationId": "get_agent_well_known_card_v1_agents__agent_id___well_known_agent_json_get",
         "parameters": [
           {
             "in": "path",
@@ -13240,6 +13154,65 @@
           }
         ],
         "summary": "Create Task For Agent Sync",
+        "tags": [
+          "v1",
+          "protected",
+          "agent-tasks"
+        ]
+      }
+    },
+    "/v1/agents/{agent_id}/tasks/with-attachments": {
+      "post": {
+        "description": "Commit multipart attachments before dispatching the task workflow.",
+        "operationId": "create_task_for_agent_with_attachments_v1_agents__agent_id__tasks_with_attachments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_task_for_agent_with_attachments_v1_agents__agent_id__tasks_with_attachments_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Task For Agent With Attachments",
         "tags": [
           "v1",
           "protected",
@@ -13777,6 +13750,18 @@
               "format": "uuid",
               "title": "Task Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Include incremental llm.call.chunk token events in the stream",
+            "in": "query",
+            "name": "include_chunks",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Include incremental llm.call.chunk token events in the stream",
+              "title": "Include Chunks",
+              "type": "boolean"
             }
           }
         ],
@@ -17131,7 +17116,7 @@
     },
     "/v1/mcp-server-instances/{instance_id}/consumers": {
       "get": {
-        "description": "List agents in the workspace that attach this MCP instance, with their enabled tools.\n\nA read-only reverse lookup over the agents' ``tools`` JSON \u2014 no separate store.",
+        "description": "List agents in the workspace that attach this MCP instance, with their enabled tools.\n\nA read-only reverse lookup over the agents' ``tools`` JSON. Which tools need\nconfirmation is not read from that JSON \u2014 it lives in approval policy rules,\nthe single source of truth \u2014 so it is resolved from there per agent.",
         "operationId": "list_mcp_server_instance_consumers_v1_mcp_server_instances__instance_id__consumers_get",
         "parameters": [
           {
@@ -22144,7 +22129,7 @@
     },
     "/v1/skill-collections/{collection_id}/skills": {
       "post": {
-        "description": "Add a skill to a collection and mirror the membership into the graph.",
+        "description": "Add a skill to a collection.\n\nMembership is organizational metadata stored in ``collection_skills``; it is\nnot an authorization edge, so nothing is written to the relationship graph.",
         "operationId": "add_skill_to_collection_v1_skill_collections__collection_id__skills_post",
         "parameters": [
           {
@@ -22198,7 +22183,7 @@
     },
     "/v1/skill-collections/{collection_id}/skills/{skill_id}": {
       "delete": {
-        "description": "Remove a skill from a collection and delete the graph membership.",
+        "description": "Remove a skill from a collection.\n\nMembership is organizational metadata stored in ``collection_skills``; it is\nnot an authorization edge, so nothing is removed from the relationship graph.",
         "operationId": "remove_skill_from_collection_v1_skill_collections__collection_id__skills__skill_id__delete",
         "parameters": [
           {
@@ -23271,15 +23256,27 @@
         ]
       }
     },
-    "/v1/tool-access/checks": {
+    "/v1/tasks/{task_id}/continue": {
       "post": {
-        "description": "Check whether a user can call a tool.\n\nOmitting ``arguments`` checks a whole-tool grant. Passing ``arguments``\nchecks the concrete invocation path used by runtime tool execution.",
-        "operationId": "check_tool_access_v1_tool_access_checks_post",
+        "description": "Grant more iterations or budget to a task waiting on a hard limit.",
+        "operationId": "continue_task_execution_v1_tasks__task_id__continue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ToolAccessCheckRequest"
+                "$ref": "#/components/schemas/ContinueTaskPayload"
               }
             }
           },
@@ -23289,9 +23286,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ToolAccessCheckResponse"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -23312,127 +23307,11 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Check Tool Access",
+        "summary": "Continue Task Execution",
         "tags": [
           "v1",
           "protected",
-          "tool-access"
-        ]
-      }
-    },
-    "/v1/tool-access/grants": {
-      "delete": {
-        "description": "Revoke a whole-tool or exact-arguments grant.",
-        "operationId": "revoke_tool_access_v1_tool_access_grants_delete",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ToolAccessGrantRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Revoke Tool Access",
-        "tags": [
-          "v1",
-          "protected",
-          "tool-access"
-        ]
-      },
-      "get": {
-        "description": "List tool access grants in the configured graph backend.",
-        "operationId": "list_tool_access_grants_v1_tool_access_grants_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ToolAccessGrantListResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Tool Access Grants",
-        "tags": [
-          "v1",
-          "protected",
-          "tool-access"
-        ]
-      },
-      "post": {
-        "description": "Grant a user access to a whole tool, or to an exact argument set.",
-        "operationId": "grant_tool_access_v1_tool_access_grants_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ToolAccessGrantRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ToolAccessGrantResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Grant Tool Access",
-        "tags": [
-          "v1",
-          "protected",
-          "tool-access"
+          "tasks"
         ]
       }
     },

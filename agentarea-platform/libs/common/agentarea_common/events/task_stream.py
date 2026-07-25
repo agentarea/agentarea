@@ -27,6 +27,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from .adapters.redis_streams import encode, topic_for
+from .contract import canonical_type
 from .ports import EventStream, IntegrationEvent
 
 logger = logging.getLogger(__name__)
@@ -119,17 +120,24 @@ async def iter_task_event_feed(
     Stops after a terminal event or ``max_wall_time_seconds`` (so a stuck task
     does not tail forever). ``snapshot`` returns the DB history in order.
     ``exclude_types`` are silently dropped (e.g. a consumer that does not want
-    high-volume incremental ``LLMCallChunk`` events) — this never contains a
+    high-volume incremental ``llm.call.chunk`` events) — this never contains a
     terminal type, so it cannot suppress feed termination.
+
+    Membership tests are keyed on the canonical (dotted) event type. Rows and
+    stream events already carry canonical names; ``canonical_type`` only strips a
+    defensive ``workflow.`` prefix.
     """
     seen: set[str] = set()
+    terminal = frozenset(canonical_type(t) for t in terminal_types)
+    excluded = frozenset(canonical_type(t) for t in exclude_types)
 
     for env in await snapshot():
-        if env.event_type in exclude_types or env.event_id in seen:
+        canonical = canonical_type(env.event_type)
+        if canonical in excluded or env.event_id in seen:
             continue
         seen.add(env.event_id)
         yield env
-        if env.event_type in terminal_types:
+        if canonical in terminal:
             return
 
     # Live tail from the start of the retained stream; dedup against the
@@ -140,11 +148,12 @@ async def iter_task_event_feed(
         async with asyncio.timeout(max_wall_time_seconds):
             async for event in stream.read(stream=task_stream_name(task_id), from_offset="0"):
                 env = envelope_from_event(event)
-                if env.event_type in exclude_types or env.event_id in seen:
+                canonical = canonical_type(env.event_type)
+                if canonical in excluded or env.event_id in seen:
                     continue
                 seen.add(env.event_id)
                 yield env
-                if env.event_type in terminal_types:
+                if canonical in terminal:
                     return
                 if loop.time() >= deadline:
                     return

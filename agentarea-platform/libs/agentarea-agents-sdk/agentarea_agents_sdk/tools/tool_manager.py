@@ -68,11 +68,10 @@ class ToolManager:
         workspace_id: str | None = None,
         user_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Discover available tools for an agent (legacy flat-list API).
+        """Discover available tools for an agent (flat-list API).
 
-        Ignores `load_mode` and always returns full schemas for every tool —
-        existing callers keep their current behavior. New code should use
-        `discover_available_tools_split` to honor `load_mode`.
+        Ignores `load_mode` and always returns full schemas for every tool.
+        Use `discover_available_tools_split` to honor `load_mode`.
         """
         result = await self._discover(
             agent_id=agent_id,
@@ -104,8 +103,8 @@ class ToolManager:
 
         For OpenAPI tools with `load_mode == "searchable"`, schemas go into
         `searchable_entries` (deferred pool) instead of `explicit_tools`.
-        Other tool types and `load_mode == "explicit"` (or absent) preserve
-        legacy behavior — full schemas in `explicit_tools`.
+        Other tool types and `load_mode == "explicit"` (or absent) get full
+        schemas in `explicit_tools`.
         """
         return await self._discover(
             agent_id=agent_id,
@@ -236,7 +235,7 @@ class ToolManager:
         """Resolve a UUID-or-name reference to an OpenAPIConnection record.
 
         Mirrors the resolution path used by `OpenAPIToolFactory.create_tools_from_connection`
-        so legacy and searchable paths agree on which connection they pick.
+        so the explicit and searchable paths agree on which connection they pick.
         """
         try:
             try:
@@ -267,7 +266,7 @@ class ToolManager:
         mcp_server_ids: list[str],
         mcp_server_instance_service,
     ) -> list:
-        """Discover tools from MCP servers by UUID (legacy format)."""
+        """Discover tools from MCP servers by UUID."""
         all_mcp_tools = []
 
         for server_id in mcp_server_ids:

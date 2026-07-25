@@ -49,22 +49,26 @@ class SkillYAML(BaseModel):
 
 
 class McpToolPermission(BaseModel):
-    """A single MCP tool the agent may call, with its per-call approval gate.
+    """A single MCP tool the agent may call.
 
     Replaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).
+    ``requires_user_confirmation`` is transport only: the API translates it into
+    an agent-scoped approval policy rule and does not persist it here, so it is
+    ``None`` at rest and reconstituted from rules on read.
     """
 
     tool_name: str
-    requires_user_confirmation: bool = False
+    requires_user_confirmation: bool | None = None
 
 
 class BaseToolSettings(BaseModel):
     """Settings common to every tool type.
 
-    ``requires_user_confirmation`` is the one genuinely cross-cutting gate
-    (human approval before a tool call). Everything type-specific lives on the
-    concrete settings classes below, so a tool only ever carries fields it can
-    actually use — e.g. ``a2a_url`` is unrepresentable on a code tool.
+    ``requires_user_confirmation`` is transport only: the API lifts it into an
+    agent-scoped approval policy rule (the sole enforcement point) and does not
+    persist it here. Everything type-specific lives on the concrete settings
+    classes below, so a tool only ever carries fields it can actually use —
+    e.g. ``a2a_url`` is unrepresentable on a code tool.
     """
 
     requires_user_confirmation: bool | None = None
@@ -74,6 +78,7 @@ class CodeToolSettings(BaseToolSettings):
     """Settings for a built-in code toolset."""
 
     disabled_methods: list[str] | None = None
+    package_install: Literal["allowed", "locked"] | None = None
 
 
 class McpToolSettings(BaseToolSettings):

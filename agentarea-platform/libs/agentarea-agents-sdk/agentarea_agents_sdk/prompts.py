@@ -1,7 +1,7 @@
 """Prompt templates for agent LLM interactions.
 
 This module contains all prompt templates used by agents to interact with LLMs.
-Prompt structure follows patterns from OpenCode, Claude Code, and ADK:
+Prompt structure follows patterns from OpenCode and Claude Code:
 - Identity and role first (who are you?)
 - Environment context in XML blocks (what's around you?)
 - Task and success criteria (what are you doing?)

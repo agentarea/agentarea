@@ -16,13 +16,22 @@ from __future__ import annotations
 from typing import Any
 from uuid import uuid4
 
+from agentarea_common.events.contract import (
+    TASK_CANCELLED,
+    TASK_COMPLETED,
+    TASK_FAILED,
+    canonical_type,
+)
+
 PUSH_CONFIGS_PARAM_KEY = "a2a_push_configs"
 
-# Maps raw workflow terminal event types to A2A v1.0.0 task states (proto encoding).
+# Maps canonical workflow terminal event types to A2A v1.0.0 task states (proto
+# encoding). Canonical names only: the emit side speaks the canonical contract,
+# and pre-contract names like "WorkflowCompleted" are deliberately not accepted.
 _TERMINAL_EVENT_STATES = {
-    "WorkflowCompleted": "COMPLETED",
-    "WorkflowFailed": "FAILED",
-    "WorkflowCancelled": "CANCELED",
+    TASK_COMPLETED: "COMPLETED",
+    TASK_FAILED: "FAILED",
+    TASK_CANCELLED: "CANCELED",
 }
 
 
@@ -96,7 +105,7 @@ def build_push_notification_body(event: dict[str, Any]) -> str | None:
     """
     import json
 
-    event_type = event.get("event_type", "")
+    event_type = canonical_type(event.get("event_type", ""))
     state = _TERMINAL_EVENT_STATES.get(event_type)
     if not state:
         return None

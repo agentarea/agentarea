@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
  * Subheader actions for the create-connection screen. Both the URL and Docker
  * forms create from here (consistent with the rest of the app). The active form
  * reports its readiness via a `mcp-create-state` event so these buttons can gate
- * on it; if no form reports (e.g. legacy paths) the buttons stay enabled.
+ * on it; if no form reports, the buttons stay enabled.
  */
 export default function MCPCreateHeaderControls() {
   const t = useTranslations("MCPServersPage.createInstance");

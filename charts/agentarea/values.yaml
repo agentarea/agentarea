@@ -562,8 +562,8 @@ mcpManager:
   # Leave empty "" for standard container runtime
   runtimeClass: ""
 
-  # Runtime MCP server pods use a separate ServiceAccount so their registry
-  # access can point at the managed MCP runtime registry, not platform images.
+  # Untrusted MCP runtime and sandbox task pods use this zero-RBAC
+  # ServiceAccount instead of the control-plane ServiceAccount.
   runtime:
     serviceAccount:
       create: true
@@ -597,13 +597,31 @@ mcpManager:
   # Warm pool configuration for fast cold starts
   warmPool:
     enabled: false  # Enable for fast activation (200-500ms vs 5-15s)
-    image:
-      repository: agentarea/mcp-runner
-      tag: "latest"
-      pullPolicy: IfNotPresent
+    # Pools are profile-specific. `allowed` must point at a mutable image build;
+    # `locked` must point at an immutable image build. The manager routes by the
+    # exact package-install label and never falls back across profiles.
+    profiles:
+      - packageInstall: allowed
+        managedEnvironment: mutable
+        image:
+          repository: agentarea/agentarea-mcp-runner
+          tag: "latest"
+          pullPolicy: IfNotPresent
+      - packageInstall: locked
+        managedEnvironment: immutable
+        image:
+          repository: agentarea/agentarea-mcp-runner-locked
+          tag: "latest"
+          pullPolicy: IfNotPresent
 
-    # Maximum duration of a single sandbox command. Workflow pod lifetime is
-    # controlled separately by MCP Manager workflow lease/idle TTL settings.
+    # Locked pods get no public egress. Add only stable S3 endpoint CIDRs here
+    # when object storage is external to the cluster. Broad public routes are
+    # rejected by the template; DNS and in-cluster RustFS are already allowed.
+    lockedNetworkPolicy:
+      s3EgressCIDRs: []
+
+    # Maximum duration of a single sandbox command. Task pod lifetime is
+    # controlled separately by MCP Manager task lease/idle TTL settings.
     maxExecutionTimeoutSeconds: 1800
     
     # Number of warm pods per node

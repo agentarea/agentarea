@@ -45,11 +45,13 @@ with workflow.unsafe.imports_passed_through():
         StateValidator,
         ToolAction,
         ToolCallExtractor,
+        approvers_for_tool,
         build_output_summary,
         caller_can_approve,
         decide_tool_action,
-        policy_approvers,
+        filter_disclosed_tools,
         resolve_effective_budget,
+        sanitize_tool_event_value,
     )
     from .models import (
         AgentExecutionState,
@@ -65,16 +67,22 @@ from ..models import (
     AgentConfigResult,
     AgentExecutionRequest,
     AgentExecutionResult,
+    ArtifactValidationIssue,
+    ArtifactValidationRequest,
+    ArtifactValidationResult,
+    BudgetUpdatePayload,
+    CapabilityUnavailableResult,
     ChangeModelPayload,
     CompactMessagesRequest,
     CompactMessagesResult,
+    ContinueExecutionPayload,
     CreateDelegationTaskRequest,
     CreateDelegationTaskResult,
     DiscoverToolProvidersResult,
-    ExecuteSkillScriptRequest,
-    ExecuteSkillScriptResult,
     LLMCallRequest,
     LLMCallResult,
+    MaterializeSkillFilesRequest,
+    MaterializeSkillFilesResult,
     MCPToolRequest,
     ReadOutputRequest,
     ReadOutputResult,
@@ -85,8 +93,6 @@ from ..models import (
     ResolveModelRequest,
     SearchHistoryRequest,
     SearchHistoryResult,
-    SkillFileRequest,
-    SkillFileResult,
     StoreHistoryRequest,
     StoreHistoryResult,
     StoreOutputRequest,
@@ -98,6 +104,7 @@ from ..models import (
 )
 from .constants import (
     ACTIVITY_TIMEOUT,
+    CONTINUATION_TIMEOUT,
     DEFAULT_RETRY_ATTEMPTS,
     DELEGATION_TIMEOUT,
     EVENT_PUBLISH_RETRY_ATTEMPTS,
@@ -116,6 +123,58 @@ from .retry import make_retry_policy
 
 JsonDict = dict[str, Any]
 AgentToolRegistry = dict[str, JsonDict]
+
+
+def _render_workspace_attachment_prompt(value: Any) -> str:
+    """Render only validated server-generated attachment descriptor fields."""
+    if not isinstance(value, list):
+        return ""
+
+    lines: list[str] = []
+    for descriptor in value[:100]:
+        if not isinstance(descriptor, dict):
+            continue
+        relative_path = descriptor.get("relative_path")
+        filename = descriptor.get("filename")
+        size = descriptor.get("size")
+        content_type = descriptor.get("content_type")
+        if not isinstance(relative_path, str) or not relative_path.startswith(
+            "inputs/attachments/"
+        ):
+            continue
+        path_parts = relative_path.split("/")
+        if (
+            len(path_parts) != 3
+            or any(part in {"", ".", ".."} for part in path_parts)
+            or "\\" in relative_path
+            or any(character in relative_path for character in "\r\n\x00")
+        ):
+            continue
+        if not isinstance(filename, str) or filename != path_parts[-1]:
+            continue
+        if any(character in filename for character in "\r\n\x00"):
+            continue
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+            continue
+        if not isinstance(content_type, str) or any(
+            character in content_type for character in "\r\n\x00"
+        ):
+            content_type = "application/octet-stream"
+
+        lines.append(
+            "- path="
+            f"{json.dumps(relative_path, ensure_ascii=True)}; "
+            f"filename={json.dumps(filename, ensure_ascii=True)}; "
+            f"size={size}; content_type={json.dumps(content_type, ensure_ascii=True)}"
+        )
+
+    if not lines:
+        return ""
+    return (
+        "\n\nTask attachments are already available in the task workspace. "
+        "Use the exact relative paths below and do not ask the user to upload them again:\n"
+        + "\n".join(lines)
+    )
 
 
 @workflow.defn
@@ -149,6 +208,10 @@ class AgentExecutionWorkflow:
         self._message_queue: list[dict[str, Any]] = []
         # Track if completion event has been published (to avoid double-publish at termination)
         self._completion_event_published = False
+        self._waiting_for_continuation = False
+        self._continuation_failure_reason: str | None = None
+        self._continuation_message: str | None = None
+        self._continuation_count = 0
 
     @property
     def _events(self) -> EventManager:
@@ -271,6 +334,7 @@ class AgentExecutionWorkflow:
         handlers: dict[str, Callable[[dict[str, Any]], None]] = {
             "change_model": self._handle_change_model,
             "update_budget": self._handle_update_budget,
+            "continue_execution": self._handle_continue_execution,
             "queue_message": self._handle_queue_message,
             "submit_user_input": self._handle_submit_user_input,
             "remove_message": self._handle_remove_message,
@@ -313,8 +377,70 @@ class AgentExecutionWorkflow:
         )
 
     def _handle_update_budget(self, payload: dict[str, Any]) -> None:
-        """Handle an update_budget command (stub for future use)."""
-        pass
+        """Set a new absolute inference budget using Money semantics."""
+        info = BudgetUpdatePayload(**payload)
+        if info.budget_usd < self._budget.cost:
+            raise ValueError("budget_usd cannot be lower than accumulated cost")
+        old_limit = self._budget.budget_limit
+        self._budget.set_limit(info.budget_usd)
+        self.state.budget_usd = self._budget.budget_limit
+        if self.event_manager:
+            self.event_manager.add_event(
+                "BudgetUpdated",
+                {
+                    "old_limit": serialize_money(old_limit),
+                    "new_limit": serialize_money(self._budget.budget_limit),
+                },
+            )
+
+    def _apply_continuation(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Atomically grant resources to a workflow in continuation wait."""
+        info = ContinueExecutionPayload(**payload)
+        if not self._waiting_for_continuation:
+            return {"accepted": False, "reason": "not_waiting_for_continuation"}
+        if info.additional_iterations == 0 and info.additional_budget_usd is None:
+            return {"accepted": False, "reason": "no_resources_granted"}
+        if (
+            self._continuation_failure_reason == "iteration_limit"
+            and info.additional_iterations == 0
+        ):
+            return {"accepted": False, "reason": "additional_iterations_required"}
+        if (
+            self._continuation_failure_reason == "budget_exceeded"
+            and info.additional_budget_usd is None
+        ):
+            return {"accepted": False, "reason": "additional_budget_required"}
+
+        if info.additional_iterations:
+            if self.state.goal is None:
+                return {"accepted": False, "reason": "goal_not_initialized"}
+            self.state.goal.max_iterations += info.additional_iterations
+        if info.additional_budget_usd is not None:
+            self._budget.add_budget(info.additional_budget_usd)
+            self.state.budget_usd = self._budget.budget_limit
+
+        self._continuation_count += 1
+        self._waiting_for_continuation = False
+        self.state.status = ExecutionStatus.EXECUTING
+        self.state.failure_reason = None
+        self.state.error_message = None
+        return {
+            "accepted": True,
+            "continuation_count": self._continuation_count,
+            "max_iterations": self.state.goal.max_iterations if self.state.goal else None,
+            "budget_usd": serialize_money(self._budget.budget_limit),
+        }
+
+    def _handle_continue_execution(self, payload: dict[str, Any]) -> None:
+        """Signal-compatible continuation handler used by internal callers."""
+        result = self._apply_continuation(payload)
+        if not result["accepted"]:
+            workflow.logger.warning("Continuation ignored: %s", result["reason"])
+
+    @workflow.update
+    async def continue_execution(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Validated request/response continuation entry point for the API."""
+        return self._apply_continuation(payload)
 
     def _handle_queue_message(self, payload: dict[str, Any]) -> None:
         """Queue a user message for the agent's next iteration."""
@@ -451,7 +577,9 @@ class AgentExecutionWorkflow:
 
         # Build agent config using Pydantic request model
         agent_config_request = AgentConfigRequest(
-            agent_id=UUID(self.state.agent_id), user_context_data=self.state.user_context_data
+            agent_id=UUID(self.state.agent_id),
+            user_context_data=self.state.user_context_data,
+            execution_context=self._workflow_metadata,
         )
         agent_config_result: AgentConfigResult = await workflow.execute_activity(
             Activities.BUILD_AGENT_CONFIG,
@@ -465,6 +593,12 @@ class AgentExecutionWorkflow:
             self.state.agent_config = agent_config_result.model_dump()
         except AttributeError:
             self.state.agent_config = dict(agent_config_result)
+
+        self._events.add_event(
+            EventTypes.RUNTIME_DISCOVERED,
+            dict(self.state.agent_config.get("runtime_event_data") or {}),
+        )
+        await self._publish_events_immediately()
 
         # Store context window in state and initialize context manager
         self.state.context_window = self.state.agent_config.get("context_window", 128000)
@@ -624,6 +758,15 @@ class AgentExecutionWorkflow:
                         "result": {
                             "type": "string",
                             "description": "Your complete response to the user. This is what they will read.",
+                        },
+                        "artifact_paths": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "maxItems": 1000,
+                            "description": (
+                                "Workspace-relative paths of artifacts promised in the response. "
+                                "They must exist and pass validation before completion."
+                            ),
                         },
                     },
                     "required": ["result"],
@@ -827,46 +970,13 @@ class AgentExecutionWorkflow:
             self._skill_tool = SkillActivationTool(registry)
             available_tools.append(self._skill_tool.get_openai_function_definition())
 
-            # Inject run_skill_script tool for executing skill-bundled scripts
-            available_tools.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "run_skill_script",
-                        "description": (
-                            "Execute a script bundled with an activated skill in an isolated sandbox. "
-                            "The skill must be activated first via activate_skill."
-                        ),
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "skill_name": {
-                                    "type": "string",
-                                    "description": "Name of the activated skill that owns the script",
-                                },
-                                "script_name": {
-                                    "type": "string",
-                                    "description": "Filename of the script to run (e.g. calculator.py)",
-                                },
-                                "args": {
-                                    "type": "string",
-                                    "description": "Arguments to pass to the script",
-                                },
-                                "artifact_paths": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": (
-                                        "Relative output files to upload as task artifacts after the script runs"
-                                    ),
-                                },
-                            },
-                            "required": ["skill_name", "script_name"],
-                        },
-                    },
-                }
-            )
-
-        self.state.available_tools = available_tools
+        # Disclosure is a PDP decision: never offer the model a tool the gate
+        # would reject (same policy, one decision, both ends).
+        disclosed = filter_disclosed_tools(self.state.effective_policy, available_tools)
+        withheld = len(available_tools) - len(disclosed)
+        if withheld:
+            workflow.logger.info(f"Policy withheld {withheld} tool(s) from the model")
+        self.state.available_tools = disclosed
 
         if not StateValidator.validate_tools(self.state.available_tools):
             raise ApplicationError("Invalid tools configuration")
@@ -983,7 +1093,28 @@ class AgentExecutionWorkflow:
         self.state.wallet_id = state.wallet_id
         self.state.resolved_model = state.resolved_model
         self.state.effective_policy = state.effective_policy
-        self.state.status = ExecutionStatus.EXECUTING
+        self._message_queue = list(state.message_queue)
+        self._pending_escalations = dict(state.pending_escalations)
+        self._pending_input_requests = dict(state.pending_input_requests)
+        self._a2ui_action_queue = list(state.a2ui_action_queue)
+        self._awaiting_input = state.awaiting_input
+        self._paused = state.paused
+        self._pause_reason = state.pause_reason
+        self._workflow_metadata = dict(state.workflow_metadata)
+        self._completion_event_published = state.completion_event_published
+        self._waiting_for_continuation = state.waiting_for_continuation
+        self._continuation_failure_reason = state.continuation_failure_reason
+        self._continuation_message = state.continuation_message
+        self._continuation_count = state.continuation_count
+        self.state.status = state.status
+        self.state.success = state.success
+        self.state.final_response = state.final_response
+        self.state.failure_reason = state.failure_reason
+        self.state.error_message = state.error_message
+        self.state.blocked_reason = state.blocked_reason
+        self.state.validation_state = state.validation_state
+        self.state.validation_repair_attempts = state.validation_repair_attempts
+        self.state.validation_terminal = state.validation_terminal
 
         # Restore messages from compacted dicts
         self.state.messages = [Message(**msg) for msg in state.messages]
@@ -1089,6 +1220,28 @@ class AgentExecutionWorkflow:
             wallet_id=self.state.wallet_id,
             resolved_model=self.state.resolved_model,
             effective_policy=self.state.effective_policy,
+            message_queue=self._message_queue,
+            pending_escalations=self._pending_escalations,
+            pending_input_requests=self._pending_input_requests,
+            a2ui_action_queue=self._a2ui_action_queue,
+            awaiting_input=self._awaiting_input,
+            paused=self._paused,
+            pause_reason=self._pause_reason,
+            workflow_metadata=self._workflow_metadata,
+            completion_event_published=self._completion_event_published,
+            waiting_for_continuation=self._waiting_for_continuation,
+            continuation_failure_reason=self._continuation_failure_reason,
+            continuation_message=self._continuation_message,
+            continuation_count=self._continuation_count,
+            status=self.state.status,
+            success=self.state.success,
+            final_response=self.state.final_response,
+            failure_reason=self.state.failure_reason,
+            error_message=self.state.error_message,
+            blocked_reason=self.state.blocked_reason,
+            validation_state=self.state.validation_state,
+            validation_repair_attempts=self.state.validation_repair_attempts,
+            validation_terminal=self.state.validation_terminal,
         )
 
         # Publish event before continuing (persisted in DB via tier 2)
@@ -1137,19 +1290,25 @@ class AgentExecutionWorkflow:
             self.state.current_iteration += 1
 
             # Check if we should continue before starting the iteration
-            should_continue, reason = self._should_continue_execution()
+            should_continue, failure_reason, reason = self._should_continue_execution()
             if not should_continue:
                 workflow.logger.info(
                     f"Stopping execution before iteration {self.state.current_iteration}: {reason}"
                 )
                 # Decrement since we didn't actually execute this iteration
                 self.state.current_iteration -= 1
+                if failure_reason and await self._await_continuation(failure_reason, reason):
+                    continue
+                self._record_unsuccessful_termination(failure_reason, reason)
                 break
 
             workflow.logger.info(f"Starting iteration {self.state.current_iteration}")
 
             # Execute iteration
             await self._execute_iteration()
+
+            if self.state.validation_terminal:
+                break
 
             # If agent completed the task, wait for follow-up messages.
             # Exception: a workflow spawned via agent delegation has no
@@ -1164,19 +1323,20 @@ class AgentExecutionWorkflow:
                 await self._await_follow_up()
                 # If we got a new message, continue the loop
                 if not self._awaiting_input:
-                    # Reset success so the loop continues with new message
-                    self.state.success = False
-                    self.state.status = ExecutionStatus.EXECUTING
+                    self._reset_for_follow_up()
                     continue
                 # Timed out — exit the loop
                 break
 
             # Check if we should finish after completing the iteration
-            should_continue, reason = self._should_continue_execution()
+            should_continue, failure_reason, reason = self._should_continue_execution()
             if not should_continue:
                 workflow.logger.info(
                     f"Stopping execution after iteration {self.state.current_iteration}: {reason}"
                 )
+                if failure_reason and await self._await_continuation(failure_reason, reason):
+                    continue
+                self._record_unsuccessful_termination(failure_reason, reason)
                 break
 
             # Check if Temporal suggests resetting event history
@@ -1198,6 +1358,81 @@ class AgentExecutionWorkflow:
         owning their conversation, so they must not enter await_input.
         """
         return (self._workflow_metadata or {}).get("source") == "agent_delegation"
+
+    async def _await_continuation(self, failure_reason: str, message: str) -> bool:
+        """Idle durably until the user grants resources or the window expires."""
+        if self._is_delegation_child():
+            return False
+
+        self._record_unsuccessful_termination(failure_reason, message)
+        self._waiting_for_continuation = True
+        self._continuation_failure_reason = failure_reason
+        self._continuation_message = message
+        self.state.status = ExecutionStatus.WAITING_FOR_CONTINUATION
+
+        await workflow.execute_activity(
+            Activities.UPDATE_TASK_STATUS,
+            args=[
+                UpdateTaskStatusRequest(
+                    task_id=self.state.task_id,
+                    status=ExecutionStatus.WAITING_FOR_CONTINUATION,
+                    workspace_id=self.state.workspace_id,
+                )
+            ],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+        )
+        self._events.add_event(
+            EventTypes.WORKFLOW_AWAITING_CONTINUATION,
+            {
+                "failure_reason": failure_reason,
+                "message": message,
+                "iterations_used": self.state.current_iteration,
+                "max_iterations": self.state.goal.max_iterations if self.state.goal else None,
+                "cost": serialize_money(self._budget.cost),
+                "budget_usd": serialize_money(self._budget.budget_limit),
+                "continuation_timeout_seconds": int(CONTINUATION_TIMEOUT.total_seconds()),
+            },
+        )
+        await self._publish_events_immediately()
+
+        try:
+            await workflow.wait_condition(
+                lambda: not self._waiting_for_continuation,
+                timeout=CONTINUATION_TIMEOUT,
+            )
+        except TimeoutError:
+            self._waiting_for_continuation = False
+            self.state.status = ExecutionStatus.FAILED
+            workflow.logger.info("Continuation window expired: %s", failure_reason)
+            return False
+
+        original_reason = self._continuation_failure_reason
+        self._events.add_event(
+            EventTypes.WORKFLOW_CONTINUED,
+            {
+                "previous_failure_reason": original_reason,
+                "continuation_count": self._continuation_count,
+                "max_iterations": self.state.goal.max_iterations if self.state.goal else None,
+                "budget_usd": serialize_money(self._budget.budget_limit),
+            },
+        )
+        await self._publish_events_immediately()
+        await workflow.execute_activity(
+            Activities.UPDATE_TASK_STATUS,
+            args=[
+                UpdateTaskStatusRequest(
+                    task_id=self.state.task_id,
+                    status="running",
+                    workspace_id=self.state.workspace_id,
+                )
+            ],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+        )
+        self._continuation_failure_reason = None
+        self._continuation_message = None
+        return True
 
     async def _await_follow_up(self) -> None:
         """Wait for a follow-up user message or timeout.
@@ -1236,7 +1471,7 @@ class AgentExecutionWorkflow:
             retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
 
-    def _should_continue_execution(self) -> tuple[bool, str]:
+    def _should_continue_execution(self) -> tuple[bool, str | None, str]:
         """Comprehensive check for whether execution should continue.
 
         Checks all termination conditions:
@@ -1246,7 +1481,8 @@ class AgentExecutionWorkflow:
         - Workflow cancelled/paused state
 
         Returns:
-            tuple[bool, str]: (should_continue, reason_for_stopping)
+            tuple[bool, str | None, str]:
+                (should_continue, failure_reason, human_message)
         """
         # Debug logging
         workflow.logger.info(
@@ -1259,7 +1495,7 @@ class AgentExecutionWorkflow:
         # Check if goal is achieved (highest priority)
         if self.state.success:
             workflow.logger.info("Goal achieved - terminating workflow")
-            return False, "Goal achieved successfully"
+            return False, None, "Goal achieved successfully"
 
         # Check maximum iterations
         max_iterations = self.state.goal.max_iterations if self.state.goal else MAX_ITERATIONS
@@ -1267,13 +1503,18 @@ class AgentExecutionWorkflow:
             workflow.logger.info(
                 f"Max iterations reached ({max_iterations}) - terminating workflow"
             )
-            return False, f"Maximum iterations reached ({max_iterations})"
+            return (
+                False,
+                "iteration_limit",
+                f"Maximum iterations reached ({max_iterations})",
+            )
 
         # Check budget constraints
         if self.budget_tracker and self.budget_tracker.is_exceeded():
             workflow.logger.info("Budget exceeded - terminating workflow")
             return (
                 False,
+                "budget_exceeded",
                 f"Budget exceeded (${self.budget_tracker.cost:.2f}/${self.budget_tracker.budget_limit:.2f})",
             )
 
@@ -1281,7 +1522,28 @@ class AgentExecutionWorkflow:
         # For now, we don't have explicit cancellation, but this is where it would go
 
         # If we get here, execution should continue
-        return True, "Continue execution"
+        return True, None, "Continue execution"
+
+    def _record_unsuccessful_termination(self, failure_reason: str | None, message: str) -> None:
+        """Persist a stable failure code and a user-facing explanation."""
+        if self.state.success or failure_reason is None:
+            return
+
+        self.state.failure_reason = failure_reason
+        self.state.error_message = message
+
+    def _reset_for_follow_up(self) -> None:
+        """Start a new turn without carrying terminal success from the prior turn."""
+        self._completion_event_published = False
+        self.state.success = False
+        self.state.status = ExecutionStatus.EXECUTING
+        self.state.final_response = ""
+        self.state.failure_reason = None
+        self.state.error_message = None
+        self.state.blocked_reason = None
+        self.state.validation_state = "pending"
+        self.state.validation_repair_attempts = 0
+        self.state.validation_terminal = False
 
     async def _execute_iteration(self) -> None:
         """Execute a single iteration."""
@@ -1317,6 +1579,7 @@ class AgentExecutionWorkflow:
                         "iterations_completed": self.state.current_iteration,
                         "total_cost": serialize_money(self._budget.cost),
                         "result": self.state.final_response,
+                        "validation_state": self.state.validation_state,
                     },
                 )
                 self._completion_event_published = True
@@ -1369,6 +1632,10 @@ class AgentExecutionWorkflow:
                     "the user, pass that relative file path in the shell tool's "
                     "`artifact_paths` argument so it is stored as a task artifact."
                 )
+
+            agent_instruction += _render_workspace_attachment_prompt(
+                (self._workflow_metadata or {}).get("workspace_attachments")
+            )
 
             # Append OpenAPI operation catalog (load_mode=searchable, issue #115).
             # Pool lives in workflow state; only this name+description block is
@@ -1499,6 +1766,7 @@ class AgentExecutionWorkflow:
                 task_id=self.state.task_id,
                 agent_id=self.state.agent_id,
                 execution_id=self.state.execution_id,
+                iteration=self.state.current_iteration,
                 resolved_model=self.state.resolved_model,
                 effective_policy=self.state.effective_policy,
                 cost_used=float(self.budget_tracker.cost) if self.budget_tracker else None,
@@ -1646,7 +1914,7 @@ class AgentExecutionWorkflow:
 
         # Parse and publish A2UI events if agent has A2UI enabled
         if self.state.agent_config.get("a2ui_enabled", False) and content:
-            from .a2ui_parser import A2UI_DELIMITER, parse_a2ui_response
+            from .a2ui_parser import A2UI_DELIMITER, A2UI_TYPE_TO_CANONICAL, parse_a2ui_response
 
             if A2UI_DELIMITER in content:
                 a2ui_result = parse_a2ui_response(content)
@@ -1655,11 +1923,14 @@ class AgentExecutionWorkflow:
                     content = a2ui_result.text_content
                     response["content"] = content
 
-                    # Publish each A2UI event through the existing pipeline
+                    # Publish each A2UI event through the existing pipeline. The
+                    # LLM speaks the A2UI protocol type names; translate to the
+                    # canonical dotted vocabulary before emitting.
                     for a2ui_event in a2ui_result.a2ui_events:
                         event_data = {k: v for k, v in a2ui_event.items() if k != "type"}
                         event_data["task_id"] = str(self.state.task_id)
-                        self._events.add_event(a2ui_event["type"], event_data)
+                        canonical_a2ui = A2UI_TYPE_TO_CANONICAL[a2ui_event["type"]]
+                        self._events.add_event(canonical_a2ui, event_data)
 
                     await self._publish_events_immediately()
 
@@ -1729,7 +2000,6 @@ class AgentExecutionWorkflow:
         regular_calls: list[ToolCall] = []
         recall_calls: list[ToolCall] = []
         skill_calls: list[ToolCall] = []
-        script_calls: list[ToolCall] = []
         read_output_calls: list[ToolCall] = []
         activate_source_calls: list[ToolCall] = []
         load_tools_calls: list[ToolCall] = []
@@ -1751,8 +2021,6 @@ class AgentExecutionWorkflow:
                 load_tools_calls.append(tool_call)
             elif tool_name == "activate_skill":
                 skill_calls.append(tool_call)
-            elif tool_name == "run_skill_script":
-                script_calls.append(tool_call)
             elif tool_name in self._agent_tool_registry:
                 agent_calls.append(tool_call)
             else:
@@ -1769,7 +2037,6 @@ class AgentExecutionWorkflow:
                 *activate_source_calls,
                 *load_tools_calls,
                 *skill_calls,
-                *script_calls,
                 *agent_calls,
                 *regular_calls,
             ]
@@ -1807,10 +2074,6 @@ class AgentExecutionWorkflow:
         for tool_call in skill_calls:
             await self._execute_skill_activation(tool_call)
 
-        # Execute skill scripts (via MCP Manager sandbox)
-        for tool_call in script_calls:
-            await self._execute_skill_script(tool_call)
-
         # Run agent delegations in parallel (fan-out)
         if agent_calls:
             if len(agent_calls) == 1:
@@ -1831,15 +2094,60 @@ class AgentExecutionWorkflow:
             await self._handle_task_completion(completion_call)
 
     async def _handle_task_completion(self, completion_call: ToolCall) -> None:
-        """Handle task completion and optionally wait for follow-ups."""
+        """Gate completion on code-enforced validation of committed artifacts."""
         try:
             tool_args = json.loads(completion_call.function["arguments"])
-            result_text = tool_args.get("result", "Task completed")
-        except (json.JSONDecodeError, KeyError):
+            if not isinstance(tool_args, dict):
+                tool_args = {}
+            result_text = str(tool_args.get("result") or "Task completed")
+            raw_paths = tool_args.get("artifact_paths")
+            declared_paths = (
+                [path for path in raw_paths[:1000] if isinstance(path, str)]
+                if isinstance(raw_paths, list)
+                else []
+            )
+        except (json.JSONDecodeError, KeyError, TypeError):
             result_text = "Task completed"
+            declared_paths = []
+
+        validation = await self._validate_completion_artifacts(declared_paths)
+        if validation.state not in {"passed", "no_artifacts"}:
+            self.state.success = False
+            self.state.final_response = None
+            self._awaiting_input = False
+            if validation.state == "unavailable":
+                capability = (
+                    validation.capability_unavailable.capability
+                    if validation.capability_unavailable
+                    else "artifact_validator"
+                )
+                self.state.status = ExecutionStatus.BLOCKED
+                self.state.failure_reason = "capability_unavailable"
+                self.state.blocked_reason = (
+                    f"Artifact validation capability is unavailable: {capability}"
+                )
+                self.state.error_message = self.state.blocked_reason
+                self.state.validation_terminal = True
+                return
+
+            if self.state.validation_repair_attempts >= 2:
+                self.state.status = ExecutionStatus.FAILED
+                self.state.failure_reason = "validation_failed"
+                self.state.error_message = "Artifact validation failed after two repair attempts"
+                self.state.validation_terminal = True
+                return
+
+            self.state.validation_repair_attempts += 1
+            self._append_validation_feedback(completion_call, validation)
+            return
 
         self.state.success = True
         self.state.final_response = result_text
+        self.state.status = ExecutionStatus.COMPLETED
+        self.state.failure_reason = None
+        self.state.error_message = None
+        self.state.blocked_reason = None
+        self.state.validation_terminal = False
         # Every agent stays alive after completing a turn to accept follow-up
         # messages (the chat is conversational). Delegation children are the
         # only exception — that is handled in the main loop via
@@ -1856,13 +2164,136 @@ class AgentExecutionWorkflow:
                 UpdateTaskStatusRequest(
                     task_id=self.state.task_id,
                     status="completed",
-                    result=json.dumps({"response": result_text}),
+                    result=json.dumps(
+                        {
+                            "response": result_text,
+                            "validation_state": self.state.validation_state,
+                        }
+                    ),
                     workspace_id=self.state.workspace_id,
                     total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+        )
+
+    async def _validate_completion_artifacts(
+        self, declared_paths: list[str]
+    ) -> ArtifactValidationResult:
+        """Run the refs-only Temporal validation gate and persist its audit events."""
+        self.state.validation_state = "running"
+        self._events.add_event(
+            EventTypes.VALIDATION_STARTED,
+            {
+                "validation_state": "running",
+                "repair_attempt": self.state.validation_repair_attempts,
+                "declared_artifact_count": len(declared_paths),
+            },
+        )
+        await self._publish_events_immediately()
+
+        try:
+            result = await workflow.execute_activity(
+                Activities.VALIDATE_ARTIFACTS,
+                args=[
+                    ArtifactValidationRequest(
+                        workspace_id=self.state.workspace_id,
+                        task_id=self.state.task_id,
+                        workflow_id=self.state.execution_id,
+                        declared_paths=declared_paths,
+                        package_install=(
+                            "locked"
+                            if (self._workflow_metadata or {}).get("package_install") == "locked"
+                            else "allowed"
+                        ),
+                    )
+                ],
+                result_type=ArtifactValidationResult,
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+            )
+            if isinstance(result, dict):
+                result = ArtifactValidationResult.model_validate(result)
+        except ActivityError as exc:
+            workflow.logger.error("Artifact validation activity failed: %s", exc)
+            result = ArtifactValidationResult(
+                state="unavailable",
+                generation=0,
+                capability_unavailable=CapabilityUnavailableResult(capability="artifact_validator"),
+                issues=[
+                    ArtifactValidationIssue(
+                        path="",
+                        validator="artifact_validator",
+                        code="capability_unavailable",
+                        message="Artifact validation activity could not run",
+                    )
+                ],
+            )
+
+        self.state.validation_state = result.state
+        self._events.add_event(
+            EventTypes.VALIDATION_COMPLETED,
+            {
+                "validation_state": result.state,
+                "generation": result.generation,
+                "repair_attempt": self.state.validation_repair_attempts,
+                "evidence": [item.model_dump() for item in result.evidence],
+                "issues": [item.model_dump() for item in result.issues],
+                "capability_unavailable": result.capability_unavailable.model_dump()
+                if result.capability_unavailable
+                else None,
+            },
+        )
+        await self._publish_events_immediately()
+        return result
+
+    def _append_validation_feedback(
+        self,
+        completion_call: ToolCall,
+        result: ArtifactValidationResult,
+    ) -> None:
+        """Return structured, tool-paired repair evidence to the next model turn."""
+        call_is_in_history = any(
+            call.get("id") == completion_call.id
+            for message in self.state.messages
+            for call in (message.tool_calls or [])
+            if isinstance(call, dict)
+        )
+        if not call_is_in_history:
+            self.state.messages.append(
+                Message(
+                    role="assistant",
+                    content="",
+                    tool_calls=[
+                        {
+                            "id": completion_call.id,
+                            "type": "function",
+                            "function": completion_call.function,
+                        }
+                    ],
+                )
+            )
+
+        feedback = {
+            "status": "validation_failed",
+            "validation_state": result.state,
+            "repair_attempt": self.state.validation_repair_attempts,
+            "repair_attempts_remaining": 2 - self.state.validation_repair_attempts,
+            "generation": result.generation,
+            "issues": [item.model_dump() for item in result.issues],
+            "instruction": (
+                "Repair the listed workspace artifacts, then call completion again. "
+                "Do not claim success until validation passes."
+            ),
+        }
+        self.state.messages.append(
+            Message(
+                role="tool",
+                name="completion",
+                tool_call_id=completion_call.id,
+                content=json.dumps(feedback, ensure_ascii=False, separators=(",", ":")),
+            )
         )
 
     async def _execute_request_user_input(self, tool_call: ToolCall) -> None:
@@ -1978,7 +2409,7 @@ class AgentExecutionWorkflow:
         self._pending_input_requests.pop(input_request_id, None)
 
     def _normalize_user_input_questions(self, tool_args: dict[str, Any]) -> list[dict[str, Any]]:
-        """Normalize legacy question/options and rich questions[] into form fields."""
+        """Normalize the simple question/options form and rich questions[] into form fields."""
         raw_questions = tool_args.get("questions")
         if isinstance(raw_questions, list) and raw_questions:
             questions = []
@@ -2034,13 +2465,27 @@ class AgentExecutionWorkflow:
     async def _deny_tool_call(self, tool_call: ToolCall, tool_name: str, reason: str) -> None:
         """Reject a tool call by policy: surface the reason to the LLM, never run it."""
         workflow.logger.warning(f"Tool '{tool_name}' denied by policy: {reason}")
+        message = f"Tool call denied by policy: {reason}"
         self.state.messages.append(
             Message(
                 role="tool",
-                content=f"Tool call denied by policy: {reason}",
+                content=message,
                 tool_call_id=tool_call.id,
                 name=tool_name,
             )
+        )
+        # A denial is an outcome of the call, not just a log line: emit it so
+        # watchers see a denied tool instead of a call that never resolves.
+        self._events.add_event(
+            EventTypes.TOOL_CALL_COMPLETED,
+            {
+                "tool_name": tool_name,
+                "tool_call_id": tool_call.id,
+                "success": False,
+                "iteration": self.state.current_iteration,
+                "error": message,
+                "denied_by_policy": True,
+            },
         )
 
     async def _require_tool_approval(
@@ -2053,7 +2498,7 @@ class AgentExecutionWorkflow:
             tool_call_id=tool_call.id,
             tool_name=tool_name,
             tool_args=tool_args,
-            approvers=policy_approvers(self.state.effective_policy),
+            approvers=approvers_for_tool(self.state.effective_policy, tool_name),
         )
         self._pending_escalations[escalation_id] = escalation
         self.state.status = ExecutionStatus.WAITING_FOR_APPROVAL
@@ -2079,7 +2524,7 @@ class AgentExecutionWorkflow:
                 "tool_name": tool_name,
                 "tool_call_id": tool_call.id,
                 "iteration": self.state.current_iteration,
-                "arguments": tool_args,
+                "arguments": sanitize_tool_event_value(tool_args),
                 "approvers": escalation.approvers,
                 "message": f"Tool '{tool_name}' requires human approval",
             },
@@ -2189,7 +2634,7 @@ class AgentExecutionWorkflow:
                 "tool_name": tool_name,
                 "tool_call_id": tool_call.id,
                 "iteration": self.state.current_iteration,
-                "arguments": tool_args,
+                "arguments": sanitize_tool_event_value(tool_args),
             },
         )
         await self._publish_events_immediately()
@@ -2280,8 +2725,13 @@ class AgentExecutionWorkflow:
                     {
                         "tool_name": tool_name,
                         "tool_call_id": tool_call.id,
-                        "error": error_message,
-                        "arguments": tool_args,
+                        # Say it outright: a consumer should not have to infer
+                        # failure from the presence of an error field.
+                        "success": False,
+                        "error": sanitize_tool_event_value(error_message, field_name="result"),
+                        "exit_code": result_dict.get("exit_code"),
+                        "artifact_paths": result_dict.get("artifact_paths") or [],
+                        "arguments": sanitize_tool_event_value(tool_args),
                         "execution_time": execution_time,
                         "iteration": self.state.current_iteration,
                         "source": result_dict.get("source"),
@@ -2316,9 +2766,13 @@ class AgentExecutionWorkflow:
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
                     "success": success,
+                    # The command's own verdict, so the UI and the rollups stop
+                    # having to guess it out of the result text.
+                    "exit_code": result_dict.get("exit_code"),
+                    "artifact_paths": result_dict.get("artifact_paths") or [],
                     "iteration": self.state.current_iteration,
-                    "result": result_text,
-                    "arguments": tool_args,
+                    "result": sanitize_tool_event_value(result_text, field_name="result"),
+                    "arguments": sanitize_tool_event_value(tool_args),
                     "execution_time": execution_time,
                     "service_cost": service_cost,
                     "payment": result_dict.get("payment"),
@@ -2351,7 +2805,7 @@ class AgentExecutionWorkflow:
                 {
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
-                    "error": str(e),
+                    "error": sanitize_tool_event_value(str(e), field_name="result"),
                     "iteration": self.state.current_iteration,
                 },
             )
@@ -2708,153 +3162,78 @@ class AgentExecutionWorkflow:
         if skill_name and skill_name not in self.state.activated_skills:
             self.state.activated_skills.append(skill_name)
 
+        # A skill is a folder of files, so activating it puts that folder in the
+        # task's sandbox. The workspace persists across shell calls, so one
+        # upload is enough and the agent reaches the scripts with plain bash —
+        # no second execution tool.
+        materialized = await self._materialize_skill_files(skill_name)
+        if materialized:
+            result_text = f"{result_text}\n\n{materialized}"
+            self.state.messages[-1] = Message(
+                role="tool",
+                content=result_text,
+                tool_call_id=tool_call.id,
+                name="activate_skill",
+            )
+
         self._events.add_event(
             EventTypes.TOOL_CALL_COMPLETED,
             {
                 "tool_name": "activate_skill",
                 "tool_call_id": tool_call.id,
                 "skill_name": skill_name,
+                "success": True,
+                "result": result_text,
                 "iteration": self.state.current_iteration,
             },
         )
 
-    async def _execute_skill_script(self, tool_call: ToolCall) -> None:
-        """Execute a skill-bundled script via MCP Manager sandbox."""
-        if not await self._gate_tool_call(tool_call):
-            return
-        try:
-            args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
-            args = {}
+    async def _materialize_skill_files(self, skill_name: str) -> str:
+        """Copy an activated skill's folder into the sandbox; describe it to the agent.
 
-        skill_name = args.get("skill_name", "")
-        script_name = args.get("script_name", "")
-        script_args = args.get("args", "")
-        artifact_paths = args.get("artifact_paths") or []
-        if not isinstance(artifact_paths, list):
-            artifact_paths = []
-
-        # Validate skill is activated
-        if skill_name not in self.state.activated_skills:
-            self.state.messages.append(
-                Message(
-                    role="tool",
-                    content=f"Error: skill '{skill_name}' has not been activated. Call activate_skill first.",
-                    tool_call_id=tool_call.id,
-                    name="run_skill_script",
-                )
-            )
-            return
-
-        # Fetch script content from skill package via existing activity
+        Returns a note for the LLM, or an empty string when there is nothing to
+        say. Failure to materialize is not fatal: the skill's instructions still
+        stand on their own, so the agent keeps working with a degraded skill
+        rather than a dead task.
+        """
         skill_config = next(
             (s for s in self.state.agent_config.get("skills", []) if s.get("name") == skill_name),
             None,
         )
-        if not skill_config:
-            self.state.messages.append(
-                Message(
-                    role="tool",
-                    content=f"Error: skill '{skill_name}' not found in agent config.",
-                    tool_call_id=tool_call.id,
-                    name="run_skill_script",
-                )
+        skill_id = (skill_config or {}).get("id")
+        if not skill_id:
+            return ""
+
+        try:
+            result = await workflow.execute_activity(
+                Activities.MATERIALIZE_SKILL_FILES,
+                args=[
+                    MaterializeSkillFilesRequest(
+                        skill_id=UUID(skill_id),
+                        skill_name=skill_name,
+                        workflow_id=workflow.info().workflow_id,
+                        workspace_id=str(self.state.workspace_id)
+                        if self.state.workspace_id
+                        else None,
+                        task_id=str(self.state.task_id) if self.state.task_id else None,
+                    )
+                ],
+                result_type=MaterializeSkillFilesResult,
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=make_retry_policy(2),
             )
-            return
+        except Exception as e:
+            workflow.logger.warning(f"Could not materialize skill '{skill_name}': {e}")
+            return ""
 
-        # Try to fetch script from skill package (S3)
-        script_content = None
-        skill_id = skill_config.get("id")
-        if skill_id:
-            try:
-                file_result = await workflow.execute_activity(
-                    Activities.RESOLVE_SKILL_FILE,
-                    args=[
-                        SkillFileRequest(
-                            skill_id=UUID(skill_id),
-                            file_path=script_name,
-                            workspace_id=self.state.workspace_id,
-                            user_context_data=self.state.user_context_data,
-                        )
-                    ],
-                    result_type=SkillFileResult,
-                    start_to_close_timeout=ACTIVITY_TIMEOUT,
-                    retry_policy=make_retry_policy(2),
-                )
-                if file_result.success:
-                    script_content = file_result.content_text
-                    if not script_content and file_result.content:
-                        script_content = file_result.content.decode("utf-8")
-            except Exception as e:
-                workflow.logger.warning(f"Could not fetch script from S3: {e}")
+        if not result.success:
+            workflow.logger.warning(f"Could not materialize skill '{skill_name}': {result.error}")
+            return ""
 
-        if not script_content:
-            self.state.messages.append(
-                Message(
-                    role="tool",
-                    content=f"Error: script '{script_name}' not found in skill '{skill_name}'.",
-                    tool_call_id=tool_call.id,
-                    name="run_skill_script",
-                )
-            )
-            return
-
-        # Execute via MCP Manager sandbox. The activity layer owns scoping
-        # to the current task — workflow code stays oblivious to sandbox
-        # internals.
-        script_args_list = [script_args] if script_args else []
-        result = await workflow.execute_activity(
-            Activities.EXECUTE_SKILL_SCRIPT,
-            args=[
-                ExecuteSkillScriptRequest(
-                    script_content=script_content,
-                    script_name=script_name,
-                    args=script_args_list,
-                    artifact_paths=[str(path) for path in artifact_paths],
-                    timeout_seconds=1800,
-                    workspace_id=str(self.state.workspace_id) if self.state.workspace_id else None,
-                    task_id=str(self.state.task_id) if self.state.task_id else None,
-                )
-            ],
-            result_type=ExecuteSkillScriptResult,
-            start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
-            retry_policy=make_retry_policy(2),
-        )
-
-        # Build result message
-        output_parts = []
-        if result.stdout:
-            output_parts.append(result.stdout)
-        if result.stderr:
-            output_parts.append(f"STDERR: {result.stderr}")
-        if result.exit_code != 0:
-            output_parts.append(f"Exit code: {result.exit_code}")
-        if result.artifacts:
-            output_parts.append(f"Artifacts: {json.dumps(result.artifacts, ensure_ascii=False)}")
-        content = "\n".join(output_parts) or "(no output)"
-
-        # Offload large script outputs to MinIO (hybrid/dynamic strategy)
-        content = await self._maybe_offload_output(content, f"script_{tool_call.id}")
-
-        self.state.messages.append(
-            Message(
-                role="tool",
-                content=content,
-                tool_call_id=tool_call.id,
-                name="run_skill_script",
-            )
-        )
-
-        self._events.add_event(
-            EventTypes.TOOL_CALL_COMPLETED,
-            {
-                "tool_name": "run_skill_script",
-                "tool_call_id": tool_call.id,
-                "skill_name": skill_name,
-                "script_name": script_name,
-                "exit_code": result.exit_code,
-                "iteration": self.state.current_iteration,
-            },
+        listing = "\n".join(f"- {path}" for path in result.paths)
+        return (
+            f"This skill's files are in {result.directory}/ in your sandbox:\n{listing}\n"
+            f'Run them with the shell tool, e.g. bash("python {result.directory}/<script>").'
         )
 
     async def _execute_agent_delegation(self, tool_call: ToolCall) -> None:
@@ -3289,10 +3668,22 @@ class AgentExecutionWorkflow:
         # Determine final status.
         # If task_complete was already called, the task succeeded regardless of
         # follow-up message processing failures.
-        if self._completion_event_published or self.state.success:
+        if (self._completion_event_published or self.state.success) and (
+            self.state.final_response and self.state.final_response.strip()
+        ):
             self.state.status = ExecutionStatus.COMPLETED
             self.state.success = True
         else:
+            if self._completion_event_published or self.state.success:
+                self.state.failure_reason = "missing_final_response"
+                self.state.error_message = "Task ended without a final response"
+            elif self.state.status == ExecutionStatus.BLOCKED:
+                self.state.failure_reason = self.state.failure_reason or "blocked"
+                self.state.error_message = self.state.error_message or self.state.blocked_reason
+            elif not self.state.failure_reason:
+                self.state.failure_reason = "task_unsuccessful"
+                self.state.error_message = self.state.error_message or "Task did not complete"
+            self.state.success = False
             if self.state.status != ExecutionStatus.BLOCKED:
                 self.state.status = ExecutionStatus.FAILED
 
@@ -3309,16 +3700,17 @@ class AgentExecutionWorkflow:
                     "total_cost": serialize_money(self._budget.cost),
                     "final_response": self.state.final_response,
                     "status": self.state.status,
+                    "failure_reason": self.state.failure_reason,
+                    "error": self.state.error_message,
                     "blocked_reason": self.state.blocked_reason,
+                    "validation_state": self.state.validation_state,
                 },
             )
             await self._publish_events_immediately()
 
         # Update task status in the database.
         # If task_complete already set status to "completed", don't downgrade it.
-        if self._completion_event_published:
-            final_status = "completed"
-        elif self.state.success:
+        if self.state.success:
             final_status = "completed"
         elif self.state.status == ExecutionStatus.BLOCKED:
             final_status = "blocked"
@@ -3330,10 +3722,16 @@ class AgentExecutionWorkflow:
                 UpdateTaskStatusRequest(
                     task_id=self.state.task_id,
                     status=final_status,
-                    result=json.dumps({"response": self.state.final_response})
+                    result=json.dumps(
+                        {
+                            "response": self.state.final_response,
+                            "validation_state": self.state.validation_state,
+                        }
+                    )
                     if self.state.final_response
                     else None,
-                    error_message=self.state.blocked_reason if final_status == "blocked" else None,
+                    error_message=self.state.error_message
+                    or (self.state.blocked_reason if final_status == "blocked" else None),
                     workspace_id=self.state.workspace_id,
                     total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
                 )
@@ -3344,13 +3742,13 @@ class AgentExecutionWorkflow:
 
         try:
             await workflow.execute_activity(
-                Activities.CLEANUP_SANDBOX_WORKFLOW,
-                args=[workflow.info().workflow_id],
+                Activities.CLEANUP_SANDBOX_TASK,
+                args=[self.state.task_id],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=make_retry_policy(1),
             )
         except Exception as e:
-            workflow.logger.warning(f"Sandbox workflow cleanup failed: {e}")
+            workflow.logger.warning(f"Sandbox task cleanup failed: {e}")
 
         # Return result - convert messages to dict format for response
         conversation_history: list[dict[str, Any]] = []
@@ -3368,7 +3766,11 @@ class AgentExecutionWorkflow:
             task_id=UUID(self.state.task_id),
             agent_id=UUID(self.state.agent_id),
             success=self.state.success,
+            status=self.state.status,
+            validation_state=self.state.validation_state,
             final_response=self.state.final_response,
+            failure_reason=self.state.failure_reason,
+            error_message=self.state.error_message,
             total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
             reasoning_iterations_used=self.state.current_iteration,
             conversation_history=conversation_history,
@@ -3548,6 +3950,12 @@ class AgentExecutionWorkflow:
             "paused": self._paused,
             "pause_reason": self._pause_reason,
             "blocked_reason": self.state.blocked_reason,
+            "validation_state": self.state.validation_state,
+            "validation_repair_attempts": self.state.validation_repair_attempts,
+            "waiting_for_continuation": self._waiting_for_continuation,
+            "continuation_failure_reason": self._continuation_failure_reason,
+            "continuation_message": self._continuation_message,
+            "continuation_count": self._continuation_count,
             "pending_escalations": {
                 eid: {
                     "tool_name": e.tool_name,

@@ -37,19 +37,19 @@
 		"dev": "tsc --watch",
 		"typecheck": "tsc --noEmit",
 		"lint": "prettier --check . && xo",
-		"test": "prettier --check . && tsc --noEmit",
+		"pretest": "pnpm -C ../agentarea-webapp --filter @agentarea/api-client... install --frozen-lockfile && pnpm -C ../agentarea-webapp --filter @agentarea/api-client run build",
+		"test": "prettier --check . && tsc --noEmit && ava",
 		"prepublishOnly": "npm run build"
 	},
 	"files": [
 		"dist"
 	],
 	"dependencies": {
-		"@agentarea/api-client": "file:../agentarea-webapp/packages/api-client",
+		"@agentarea/api-client": "link:../agentarea-webapp/packages/api-client",
 		"ink": "^4.1.0",
 		"meow": "^11.0.0",
 		"react": "^18.2.0",
 		"axios": "^1.16.1",
-		"eventsource": "^2.0.2",
 		"@zowe/secrets-for-zowe-sdk": "^8.8.3",
 		"async-exit-hook": "^2.0.1",
 		"conf": "^12.0.0"
@@ -58,7 +58,6 @@
 		"@sindresorhus/tsconfig": "^8.1.0",
 		"@types/react": "^18.0.32",
 		"@types/node": "^20.0.0",
-		"@types/eventsource": "^1.1.11",
 		"@vdemedes/prettier-config": "^2.0.1",
 		"ava": "^5.2.0",
 		"chalk": "^5.2.0",

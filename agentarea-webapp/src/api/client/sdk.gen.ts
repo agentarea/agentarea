@@ -46,9 +46,9 @@ import type {
   CheckPermissionV1AccessControlCheckPostData,
   CheckPermissionV1AccessControlCheckPostErrors,
   CheckPermissionV1AccessControlCheckPostResponses,
-  CheckToolAccessV1ToolAccessChecksPostData,
-  CheckToolAccessV1ToolAccessChecksPostErrors,
-  CheckToolAccessV1ToolAccessChecksPostResponses,
+  ContinueTaskExecutionV1TasksTaskIdContinuePostData,
+  ContinueTaskExecutionV1TasksTaskIdContinuePostErrors,
+  ContinueTaskExecutionV1TasksTaskIdContinuePostResponses,
   CreateAgentV1AgentsPostData,
   CreateAgentV1AgentsPostErrors,
   CreateAgentV1AgentsPostResponses,
@@ -115,6 +115,9 @@ import type {
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostData,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostErrors,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostResponses,
+  CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostData,
+  CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostErrors,
+  CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostResponses,
   CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostData,
   CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostErrors,
   CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostResponses,
@@ -240,9 +243,6 @@ import type {
   GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetData,
   GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetErrors,
   GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses,
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetData,
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors,
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses,
   GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetData,
   GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetErrors,
   GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponses,
@@ -380,9 +380,6 @@ import type {
   GetWalletV1AgentsAgentIdWalletGetResponses,
   GetWorkspaceSettingsV1WorkspaceSettingsGetData,
   GetWorkspaceSettingsV1WorkspaceSettingsGetResponses,
-  GrantToolAccessV1ToolAccessGrantsPostData,
-  GrantToolAccessV1ToolAccessGrantsPostErrors,
-  GrantToolAccessV1ToolAccessGrantsPostResponses,
   HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostData,
   HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostErrors,
   HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostResponses,
@@ -538,8 +535,6 @@ import type {
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetData,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetErrors,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetResponses,
-  ListToolAccessGrantsV1ToolAccessGrantsGetData,
-  ListToolAccessGrantsV1ToolAccessGrantsGetResponses,
   ListTriggersV1TriggersGetData,
   ListTriggersV1TriggersGetErrors,
   ListTriggersV1TriggersGetResponses,
@@ -626,9 +621,6 @@ import type {
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteData,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteErrors,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteResponses,
-  RevokeToolAccessV1ToolAccessGrantsDeleteData,
-  RevokeToolAccessV1ToolAccessGrantsDeleteErrors,
-  RevokeToolAccessV1ToolAccessGrantsDeleteResponses,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
@@ -1111,7 +1103,7 @@ export const hydraOauth2ProxyOauth2PathPut = <
 /**
  * Check Permission
  *
- * Check whether a subject has a relation on an object.
+ * Check whether a subject has a permission on a resource.
  */
 export const checkPermissionV1AccessControlCheckPost = <
   ThrowOnError extends boolean = false,
@@ -1175,7 +1167,7 @@ export const getGraphV1AccessControlGraphGet = <
 /**
  * Delete Relationship
  *
- * Delete an authorization relationship from the configured graph backend.
+ * Revoke a resource-ownership relation from the configured graph backend.
  */
 export const deleteRelationshipV1AccessControlRelationshipsDelete = <
   ThrowOnError extends boolean = false,
@@ -1212,7 +1204,11 @@ export const deleteRelationshipV1AccessControlRelationshipsDelete = <
 /**
  * List Relationships
  *
- * List authorization relationships enriched with display names.
+ * List resource-ownership grants enriched with display names.
+ *
+ * Grants live on ``resource:<uuid>`` objects; each is mapped back onto the DB
+ * entity (agent / skill collection / MCP server / skill) it represents. The
+ * optional ``namespace`` filter restricts results to one entity kind.
  */
 export const listRelationshipsV1AccessControlRelationshipsGet = <
   ThrowOnError extends boolean = false,
@@ -1245,7 +1241,7 @@ export const listRelationshipsV1AccessControlRelationshipsGet = <
 /**
  * Create Relationship
  *
- * Write an authorization relationship to the configured graph backend.
+ * Grant a resource-ownership relation via the configured graph backend.
  */
 export const createRelationshipV1AccessControlRelationshipsPost = <
   ThrowOnError extends boolean = false,
@@ -1284,8 +1280,10 @@ export const createRelationshipV1AccessControlRelationshipsPost = <
  *
  * Resolve why (and how) a subject can access a resource.
  *
- * ``allowed`` is computed via the graph backend; ``paths`` are derived by
- * traversing workspace relationships directly so the UI can render the derivation.
+ * ``allowed`` is computed via the graph backend; ``paths`` are derived from the
+ * direct ``resource`` grants matching the subject so the UI can render the
+ * derivation. Grants inherited through ``project``/``role`` still affect
+ * ``allowed`` but are not expanded into hops here.
  */
 export const resolveAccessV1AccessControlResolvePost = <
   ThrowOnError extends boolean = false,
@@ -1319,14 +1317,11 @@ export const resolveAccessV1AccessControlResolvePost = <
 /**
  * Sync Grants
  *
- * Mirror existing grants into the graph backend and seed a starter collection.
+ * Mirror workspace membership into the graph backend (idempotent).
  *
- * Idempotent: safe to call repeatedly. Steps:
- * 1. Mirror workspace members into the graph.
- * 2. If no collections exist, create "All skills" containing every workspace
- * skill and grant workspace-member access to the collection.
- * 3. Mirror each collection membership relationship.
- * 4. Mirror each direct agent-to-skill grant.
+ * Resource ownership is granted at create time by ``grant_resource_owner`` and
+ * was backfilled onto the ``resource`` model, so this endpoint only ensures the
+ * workspace-member tuples that gate group defaults are present.
  */
 export const syncGrantsV1AccessControlSyncPost = <
   ThrowOnError extends boolean = false,
@@ -1657,14 +1652,12 @@ export const getAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGet = <
  *
  * Agent-specific well-known discovery endpoint.
  *
- * Returns the agent card for this specific agent.
- * This endpoint can be accessed at:
- * - /v1/agents/{agent_id}/.well-known/agent-card.json
- * - /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)
+ * Returns the agent card for this specific agent, at
+ * /v1/agents/{agent_id}/.well-known/agent-card.json
  *
  * This allows each agent to have its own well-known endpoint, which is A2A compliant.
  * Later, this can be proxied to subdomains:
- * - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
+ * - agent1.domain.com/.well-known/agent-card.json -> /v1/agents/{id}/.well-known/agent-card.json
  */
 export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGet = <
   ThrowOnError extends boolean = false,
@@ -1691,48 +1684,6 @@ export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGet = <
       },
     ],
     url: "/v1/agents/{agent_id}/.well-known/agent-card.json",
-    ...options,
-  });
-
-/**
- * Get Agent Well Known Card
- *
- * Agent-specific well-known discovery endpoint.
- *
- * Returns the agent card for this specific agent.
- * This endpoint can be accessed at:
- * - /v1/agents/{agent_id}/.well-known/agent-card.json
- * - /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)
- *
- * This allows each agent to have its own well-known endpoint, which is A2A compliant.
- * Later, this can be proxied to subdomains:
- * - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
- */
-export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses,
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses,
-    GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/agents/{agent_id}/.well-known/agent.json",
     ...options,
   });
 
@@ -1972,6 +1923,43 @@ export const createTaskForAgentSyncV1AgentsAgentIdTasksSyncPost = <
       ...options.headers,
     },
   });
+
+/**
+ * Create Task For Agent With Attachments
+ *
+ * Commit multipart attachments before dispatching the task workflow.
+ */
+export const createTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostResponses,
+    CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostResponses,
+      CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostErrors,
+      ThrowOnError
+    >({
+      ...formDataBodySerializer,
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/agents/{agent_id}/tasks/with-attachments",
+      ...options,
+      headers: {
+        "Content-Type": null,
+        ...options.headers,
+      },
+    });
 
 /**
  * Cancel Agent Task
@@ -4217,7 +4205,9 @@ export const updateMcpServerInstanceV1McpServerInstancesInstanceIdPatch = <
  *
  * List agents in the workspace that attach this MCP instance, with their enabled tools.
  *
- * A read-only reverse lookup over the agents' ``tools`` JSON — no separate store.
+ * A read-only reverse lookup over the agents' ``tools`` JSON. Which tools need
+ * confirmation is not read from that JSON — it lives in approval policy rules,
+ * the single source of truth — so it is resolved from there per agent.
  */
 export const listMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGet =
   <ThrowOnError extends boolean = false>(
@@ -7154,7 +7144,10 @@ export const updateCollectionV1SkillCollectionsCollectionIdPut = <
 /**
  * Add Skill To Collection
  *
- * Add a skill to a collection and mirror the membership into the graph.
+ * Add a skill to a collection.
+ *
+ * Membership is organizational metadata stored in ``collection_skills``; it is
+ * not an authorization edge, so nothing is written to the relationship graph.
  */
 export const addSkillToCollectionV1SkillCollectionsCollectionIdSkillsPost = <
   ThrowOnError extends boolean = false,
@@ -7191,7 +7184,10 @@ export const addSkillToCollectionV1SkillCollectionsCollectionIdSkillsPost = <
 /**
  * Remove Skill From Collection
  *
- * Remove a skill from a collection and delete the graph membership.
+ * Remove a skill from a collection.
+ *
+ * Membership is organizational metadata stored in ``collection_skills``; it is
+ * not an authorization edge, so nothing is removed from the relationship graph.
  */
 export const removeSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDelete =
   <ThrowOnError extends boolean = false>(
@@ -7725,25 +7721,25 @@ export const getTaskByIdV1TasksTaskIdGet = <
   });
 
 /**
- * Check Tool Access
+ * Continue Task Execution
  *
- * Check whether a user can call a tool.
- *
- * Omitting ``arguments`` checks a whole-tool grant. Passing ``arguments``
- * checks the concrete invocation path used by runtime tool execution.
+ * Grant more iterations or budget to a task waiting on a hard limit.
  */
-export const checkToolAccessV1ToolAccessChecksPost = <
+export const continueTaskExecutionV1TasksTaskIdContinuePost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<CheckToolAccessV1ToolAccessChecksPostData, ThrowOnError>
+  options: Options<
+    ContinueTaskExecutionV1TasksTaskIdContinuePostData,
+    ThrowOnError
+  >
 ): RequestResult<
-  CheckToolAccessV1ToolAccessChecksPostResponses,
-  CheckToolAccessV1ToolAccessChecksPostErrors,
+  ContinueTaskExecutionV1TasksTaskIdContinuePostResponses,
+  ContinueTaskExecutionV1TasksTaskIdContinuePostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    CheckToolAccessV1ToolAccessChecksPostResponses,
-    CheckToolAccessV1ToolAccessChecksPostErrors,
+    ContinueTaskExecutionV1TasksTaskIdContinuePostResponses,
+    ContinueTaskExecutionV1TasksTaskIdContinuePostErrors,
     ThrowOnError
   >({
     security: [
@@ -7753,105 +7749,7 @@ export const checkToolAccessV1ToolAccessChecksPost = <
         type: "http",
       },
     ],
-    url: "/v1/tool-access/checks",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Revoke Tool Access
- *
- * Revoke a whole-tool or exact-arguments grant.
- */
-export const revokeToolAccessV1ToolAccessGrantsDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<RevokeToolAccessV1ToolAccessGrantsDeleteData, ThrowOnError>
-): RequestResult<
-  RevokeToolAccessV1ToolAccessGrantsDeleteResponses,
-  RevokeToolAccessV1ToolAccessGrantsDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    RevokeToolAccessV1ToolAccessGrantsDeleteResponses,
-    RevokeToolAccessV1ToolAccessGrantsDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/tool-access/grants",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * List Tool Access Grants
- *
- * List tool access grants in the configured graph backend.
- */
-export const listToolAccessGrantsV1ToolAccessGrantsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<ListToolAccessGrantsV1ToolAccessGrantsGetData, ThrowOnError>
-): RequestResult<
-  ListToolAccessGrantsV1ToolAccessGrantsGetResponses,
-  unknown,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListToolAccessGrantsV1ToolAccessGrantsGetResponses,
-    unknown,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/tool-access/grants",
-    ...options,
-  });
-
-/**
- * Grant Tool Access
- *
- * Grant a user access to a whole tool, or to an exact argument set.
- */
-export const grantToolAccessV1ToolAccessGrantsPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<GrantToolAccessV1ToolAccessGrantsPostData, ThrowOnError>
-): RequestResult<
-  GrantToolAccessV1ToolAccessGrantsPostResponses,
-  GrantToolAccessV1ToolAccessGrantsPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    GrantToolAccessV1ToolAccessGrantsPostResponses,
-    GrantToolAccessV1ToolAccessGrantsPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/tool-access/grants",
+    url: "/v1/tasks/{task_id}/continue",
     ...options,
     headers: {
       "Content-Type": "application/json",

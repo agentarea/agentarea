@@ -31,7 +31,9 @@ export function useNetwork() {
 
 export function NetworkProvider({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
-  const view = searchParams.get("view") || "dataflow";
+  const requestedView = searchParams.get("view");
+  const view =
+    requestedView === "dataflow" ? "topology" : requestedView || "topology";
 
   const [topology, setTopology] = useState<TopologyResponse | null>(null);
   const [loading, setLoading] = useState(true);

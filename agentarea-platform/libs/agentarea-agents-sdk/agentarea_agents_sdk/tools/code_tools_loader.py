@@ -1,11 +1,10 @@
 """Decorator-driven code tools loader.
 
-Replaces the legacy ``code_tools.yaml``: every ``@toolset(namespace=...)``-
-decorated class self-registers in ``_TOOLSET_REGISTRY`` at import time. This
-module exposes the same public surface (``get_code_tools_metadata``,
-``get_code_tool_class``, ``create_code_tool_instance``) consumed by the agent
-runtime, import/export, and MCP registry — but reads from the live registry
-instead of a YAML file. The class IS the source of truth.
+Every ``@toolset(namespace=...)``-decorated class self-registers in
+``_TOOLSET_REGISTRY`` at import time. This module exposes
+``get_code_tools_metadata``, ``get_code_tool_class`` and
+``create_code_tool_instance`` to the agent runtime, import/export, and MCP
+registry, reading from the live registry. The class IS the source of truth.
 """
 
 from __future__ import annotations
@@ -29,6 +28,7 @@ def _ensure_all_toolsets_imported() -> None:
         "agentarea_agents_sdk.tools.math_toolset",
         "agentarea_agents_sdk.tools.file_toolset",
         "agentarea_agents_sdk.tools.workspace_files_toolset",
+        "agentarea_agents_sdk.tools.context_toolset",
         "agentarea_agents_sdk.tools.web_toolset",
         "agentarea_agents_sdk.tools.shell_toolset",
     ]
@@ -90,8 +90,7 @@ def get_code_tools_metadata() -> dict[str, dict[str, Any]]:
 def get_code_tool_class(tool_name: str):
     """Look up a registered Toolset class by its ``namespace``.
 
-    Returns ``None`` if not found (mirrors legacy behaviour so callers can
-    log+skip rather than crash).
+    Returns ``None`` if not found, so callers can log+skip rather than crash.
     """
     _ensure_all_toolsets_imported()
     registry = get_toolset_registry()

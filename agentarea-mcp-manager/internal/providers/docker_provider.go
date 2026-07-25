@@ -80,7 +80,7 @@ func (p *DockerProvider) CreateInstance(ctx context.Context, instance *models.MC
 		}
 	}
 
-	// Also handle legacy secret_ref: prefix in environment values
+	// Also resolve inline secret_ref: values in the environment
 	if envInterface, exists := resolvedSpec["environment"]; exists {
 		if envMap, ok := envInterface.(map[string]interface{}); ok {
 			stringEnvMap := make(map[string]string)

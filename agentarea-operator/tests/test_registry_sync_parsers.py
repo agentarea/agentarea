@@ -122,20 +122,12 @@ class TestAgentParser:
 
 
 class TestMCPServerParser:
-    def test_legacy_format(self):
-        items = parse_source(
-            "mcp_servers",
-            {
-                "servers": [
-                    {
-                        "registry_id": "io.example/echo",
-                        "connection_type": "url",
-                        "json_spec": {"url": "https://example.com/mcp"},
-                    }
-                ]
-            },
-        )
-        assert items[0]["external_id"] == "io.example/echo"
+    def test_unrecognized_format_raises(self):
+        with pytest.raises(ValueError, match="'server' key"):
+            parse_source(
+                "mcp_servers",
+                {"servers": [{"registry_id": "io.example/echo", "connection_type": "url"}]},
+            )
 
     def test_standard_format_preserves_raw_spec_icons(self):
         items = parse_source(

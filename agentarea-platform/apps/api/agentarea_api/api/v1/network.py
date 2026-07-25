@@ -54,9 +54,6 @@ class NetworkTopologyResponse(BaseModel):
 
 _GOVERNANCE_INTERCEPTORS = [
     GovernanceOverlay(
-        interceptor_name="capability_guard", category="gate", phases=["pre_tool_call"]
-    ),
-    GovernanceOverlay(
         interceptor_name="cost_budget_guard", category="gate", phases=["pre_llm_call"]
     ),
     GovernanceOverlay(
@@ -343,7 +340,7 @@ async def get_network_topology(
                         )
                     continue
 
-                # Fallback: legacy MCP entries identified by id fields.
+                # Fallback: MCP entries identified only by id fields.
                 server_id = (
                     tool.get("tool_server_id")
                     or tool.get("server_id")

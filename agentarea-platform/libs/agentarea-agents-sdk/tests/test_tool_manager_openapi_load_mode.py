@@ -154,8 +154,8 @@ async def test_missing_load_mode_treated_as_explicit():
 
 
 @pytest.mark.asyncio
-async def test_legacy_discover_available_tools_ignores_load_mode():
-    """Old API ignores load_mode and always returns full schemas (back-compat)."""
+async def test_flat_list_discover_available_tools_ignores_load_mode():
+    """The flat-list API ignores load_mode and always returns full schemas."""
     conn = _make_connection(num_ops=2)
     svc = _FakeOpenAPIService(conn)
     manager = ToolManager(openapi_connection_service=svc)

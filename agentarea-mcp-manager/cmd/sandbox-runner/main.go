@@ -12,6 +12,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
+	"github.com/agentarea/mcp-manager/internal/sandboxplacement"
 	"github.com/agentarea/mcp-manager/internal/sandboxrunner"
 )
 
@@ -44,7 +45,23 @@ func main() {
 	}
 	defer func() { _ = backend.Shutdown(context.Background()) }()
 
-	runner := sandboxrunner.New(sandboxrunner.ConfigFromEnv(), store, backend, logger)
+	providerName := os.Getenv("SANDBOX_PROVIDER_NAME")
+	if providerName == "" {
+		providerName = "kubernetes"
+	}
+	placer, err := sandboxplacement.NewRegistry(sandboxplacement.Target{
+		Executor: backend,
+		Capabilities: sandboxplacement.Capabilities{
+			Name:   providerName,
+			Region: os.Getenv("SANDBOX_REGION"),
+		},
+	})
+	if err != nil {
+		logger.Error("failed to build sandbox placement registry", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	runner := sandboxrunner.NewWithPlacer(sandboxrunner.ConfigFromEnv(), store, placer, logger)
 	if err := runner.Run(ctx); err != nil && err != context.Canceled {
 		logger.Error("sandbox runner stopped", slog.String("error", err.Error()))
 		os.Exit(1)

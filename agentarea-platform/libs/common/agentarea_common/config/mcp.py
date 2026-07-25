@@ -1,5 +1,6 @@
 """MCP (Model Context Protocol) configuration."""
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings
 
 from .base import BaseAppSettings
@@ -9,6 +10,7 @@ class MCPSettings(BaseAppSettings):
     """MCP (Model Context Protocol) configuration."""
 
     MCP_MANAGER_URL: str = "http://mcp-manager:8000"
+    SANDBOX_CLEANUP_AUTH_SECRET: SecretStr | None = None
     MCP_GATEWAY_URL: str = "http://agentarea-traefik:8080"
     MCP_CLIENT_TIMEOUT: int = 30
     REDIS_URL: str = "redis://localhost:6379"

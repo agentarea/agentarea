@@ -48,8 +48,25 @@ class TestEventVisibility:
 
     def test_unknown_presentation_falls_back_to_concise(self):
         """Unknown presentation mode should fall back to concise behavior."""
-        assert is_visible("WorkflowCompleted", "unknown_mode")
-        assert not is_visible("LLMCallChunk", "unknown_mode")
+        assert is_visible("task.completed", "unknown_mode")
+        assert not is_visible("llm.call.chunk", "unknown_mode")
+
+    def test_canonical_emit_names_are_visible(self):
+        """The emit-side now canonicalizes event types; the visibility gate must
+        recognize the canonical names for events that flow through channels."""
+        # Terminal (RESULT) — visible everywhere including silent.
+        assert is_visible("task.completed", PresentationMode.SILENT)
+        assert is_visible("task.failed", PresentationMode.SILENT)
+        assert is_visible("task.cancelled", PresentationMode.SILENT)
+        # Interaction — visible except silent.
+        assert is_visible("input.request", PresentationMode.CONCISE)
+        assert not is_visible("input.request", PresentationMode.SILENT)
+        # Status — verbose + concise only.
+        assert is_visible("tool.call", PresentationMode.CONCISE)
+        assert not is_visible("tool.call", PresentationMode.SILENT)
+        # Internal — verbose only.
+        assert is_visible("llm.call.chunk", PresentationMode.VERBOSE)
+        assert not is_visible("llm.call.chunk", PresentationMode.CONCISE)
 
     def test_no_overlap_between_categories(self):
         """Event categories should not overlap."""

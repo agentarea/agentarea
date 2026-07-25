@@ -19,6 +19,16 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import httpx
+from agentarea_common.events.contract import (
+    APPROVAL_REQUEST,
+    APPROVAL_RESPONSE,
+    TASK_CANCELLED,
+    TASK_COMPLETED,
+    TASK_FAILED,
+    TASK_STARTED,
+    TOOL_CALL,
+    canonical_type,
+)
 
 from . import register_adapter
 from .exceptions import FatalError, RetryableError
@@ -106,33 +116,34 @@ def make_formatter(flavor: MarkdownFlavor) -> Callable[[dict[str, Any], str], st
     esc = flavor.escape or (lambda t: t)
 
     def fmt(event: dict[str, Any], presentation: str) -> str:
-        et = event.get("event_type", "")
+        raw_et = event.get("event_type", "")
+        et = canonical_type(raw_et)
         d = event.get("data", {})
 
-        if et == "WorkflowCompleted":
+        if et == TASK_COMPLETED:
             return esc(str(d.get("result") or d.get("final_response") or ""))
-        if et == "WorkflowFailed":
+        if et == TASK_FAILED:
             return f"{e['cross']} {b0}Failed{b1} \u2014 {esc(str(d.get('error', 'Unknown error')))}"
-        if et == "WorkflowCancelled":
+        if et == TASK_CANCELLED:
             return f"{e['stop']} {esc('Task was cancelled.')}"
-        if et == "HumanApprovalRequested":
+        if et == APPROVAL_REQUEST:
             q = esc(str(d.get("question", "Approval needed")))
             return f"{e['question']} {b0}Needs your input:{b1}\n{flavor.quote}{q}"
-        if et == "HumanApprovalReceived":
+        if et == APPROVAL_RESPONSE:
             return f"{e['check']} {esc('Approval received, continuing...')}"
 
         if presentation == "concise":
-            if et in ("WorkflowStarted", "WorkflowCommandReceived"):
+            if et == TASK_STARTED or raw_et == "WorkflowCommandReceived":
                 return f"{e['hourglass']} {esc('Working on it...')}"
-            if et == "ToolCallStarted":
+            if et == TOOL_CALL:
                 tool = d.get("tool_name", "tool")
                 return f"{e['wrench']} {esc('Using ')}{i0}{esc(tool)}{i1}{esc('...')}"
-            if et in ("AgentDelegationStarted", "AgentDelegationCompleted"):
+            if raw_et in ("AgentDelegationStarted", "AgentDelegationCompleted"):
                 agent = d.get("agent_name", "sub-agent")
-                action = "Delegating to" if "Started" in et else "Received from"
+                action = "Delegating to" if "Started" in raw_et else "Received from"
                 return f"{e['robot']} {action} {i0}{esc(agent)}{i1}"
 
-        return f"{e['info']} {esc(et)}"
+        return f"{e['info']} {esc(raw_et)}"
 
     return fmt
 
@@ -418,7 +429,8 @@ def make_telegram_streaming_sender(
     # redis-py types async command results as ResponseT (Awaitable[T] | T), so a
     # precise annotation makes pyright reject the awaits; keep the client loose.
     _redis: Any = aioredis.from_url(redis_url, decode_responses=True)
-    _terminal = {"WorkflowCompleted", "WorkflowFailed", "WorkflowCancelled"}
+    # Canonical terminal types (the vocabulary events now carry directly).
+    _terminal = {TASK_COMPLETED, TASK_FAILED, TASK_CANCELLED}
 
     def _api(token: str, method: str) -> str:
         return f"https://api.telegram.org/bot{token}/{method}"
@@ -430,7 +442,7 @@ def make_telegram_streaming_sender(
 
         chat_id = channel_config.get("chat_id")
         task_id = channel_config.get("task_id")
-        event_type = channel_config.get("event_type", "")
+        event_type = canonical_type(channel_config.get("event_type", ""))
         line = (message or "").strip()
 
         key = f"tg:live:{task_id}" if task_id else None

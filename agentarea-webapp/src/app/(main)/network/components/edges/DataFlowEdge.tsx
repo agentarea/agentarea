@@ -38,12 +38,12 @@ export default function DataFlowEdge({
   const baseColor = RELATION_COLORS[relation] ?? "#94a3b8";
 
   let stroke = baseColor;
-  let strokeWidth = 1.4;
-  let opacity = 0.68;
+  let strokeWidth = 1.6;
+  let opacity = 0.78;
 
   if (highlighted) {
     stroke = "#2563eb";
-    strokeWidth = 2;
+    strokeWidth = 2.4;
     opacity = 1;
   } else if (dimmed) {
     stroke = "#cbd5e1";
@@ -62,8 +62,8 @@ export default function DataFlowEdge({
         d={edgePath}
         fill="none"
         stroke="#ffffff"
-        strokeWidth={strokeWidth + 4}
-        strokeOpacity={dimmed ? 0.08 : 0.55}
+        strokeWidth={strokeWidth + 3}
+        strokeOpacity={dimmed ? 0.08 : 0.7}
       />
       <defs>
         <marker

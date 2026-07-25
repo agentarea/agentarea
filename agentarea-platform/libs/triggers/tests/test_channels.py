@@ -42,28 +42,28 @@ class TestTelegramAdapter:
         return TelegramAdapter(secret_manager=secret_manager)
 
     def test_format_workflow_completed(self, adapter):
-        event = {"event_type": "WorkflowCompleted", "data": {"result": "Done!"}}
+        event = {"event_type": "task.completed", "data": {"result": "Done!"}}
         msg = adapter.format(event, "concise")
         assert "Done" in msg
         assert "Done" in msg or "\\!" in msg
 
     def test_format_workflow_failed(self, adapter):
-        event = {"event_type": "WorkflowFailed", "data": {"error": "Timeout"}}
+        event = {"event_type": "task.failed", "data": {"error": "Timeout"}}
         msg = adapter.format(event, "concise")
         assert "Failed" in msg
 
     def test_format_human_approval(self, adapter):
-        event = {"event_type": "HumanApprovalRequested", "data": {"question": "Proceed?"}}
+        event = {"event_type": "approval.request", "data": {"question": "Proceed?"}}
         msg = adapter.format(event, "concise")
         assert "input" in msg.lower() or "Proceed" in msg
 
     def test_format_status_in_concise(self, adapter):
-        event = {"event_type": "WorkflowStarted", "data": {}}
+        event = {"event_type": "task.started", "data": {}}
         msg = adapter.format(event, "concise")
         assert "Working" in msg
 
     def test_format_tool_call(self, adapter):
-        event = {"event_type": "ToolCallStarted", "data": {"tool_name": "web_search"}}
+        event = {"event_type": "tool.call", "data": {"tool_name": "web_search"}}
         msg = adapter.format(event, "concise")
         assert "web" in msg.lower() or "search" in msg.lower()
 
@@ -120,7 +120,7 @@ class TestComposedTelegramAdapter:
     def test_formatter_escapes_status_punctuation_for_markdown_v2(self):
         formatter = make_formatter(TELEGRAM_MD)
 
-        msg = formatter({"event_type": "WorkflowStarted", "data": {}}, "concise")
+        msg = formatter({"event_type": "task.started", "data": {}}, "concise")
 
         assert "Working on it\\.\\.\\." in msg
 
@@ -225,10 +225,10 @@ class TestComposedTelegramAdapter:
                 "task_id": "task-1",
             }
             await sender(
-                {**base, "event_type": "WorkflowStarted"}, r"⏳ Working on it\.\.\."
+                {**base, "event_type": "task.started"}, r"⏳ Working on it\.\.\."
             )
             await sender(
-                {**base, "event_type": "WorkflowCompleted"}, "Report ready"
+                {**base, "event_type": "task.completed"}, "Report ready"
             )
 
         assert "sendMessage" in posts[0][0]
@@ -250,19 +250,19 @@ class TestEmailAdapter:
         return EmailAdapter()
 
     def test_format_workflow_completed(self, adapter):
-        event = {"event_type": "WorkflowCompleted", "data": {"result": "Report generated"}}
+        event = {"event_type": "task.completed", "data": {"result": "Report generated"}}
         html = adapter.format(event, "summary")
         assert "Report generated" in html
         assert "Complete" in html
 
     def test_format_workflow_failed(self, adapter):
-        event = {"event_type": "WorkflowFailed", "data": {"error": "API timeout"}}
+        event = {"event_type": "task.failed", "data": {"error": "API timeout"}}
         html = adapter.format(event, "summary")
         assert "API timeout" in html
         assert "Failed" in html
 
     def test_format_human_approval(self, adapter):
-        event = {"event_type": "HumanApprovalRequested", "data": {"question": "Approve deploy?"}}
+        event = {"event_type": "approval.request", "data": {"question": "Approve deploy?"}}
         html = adapter.format(event, "summary")
         assert "Approve deploy?" in html
 

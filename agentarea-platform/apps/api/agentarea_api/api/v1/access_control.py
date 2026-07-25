@@ -2,9 +2,15 @@
 
 Surfaces the authorization relationship graph that the frontend access explorer
 renders: nodes (agents, skill collections, MCP servers), access relationships,
-permission checks, path resolution, and a one-shot sync that mirrors existing
-grants into the configured graph backend and seeds a starter "All skills"
-collection.
+permission checks, and path resolution.
+
+Ownership is modelled on the converged ``resource``/``project``/``role`` graph:
+agents, skills, MCP servers, and clients are all ``resource:<uuid>`` objects with
+direct ``reader``/``writer``/``manager`` grants (see ``_access_control_grants``).
+The explorer reads that model and maps each ``resource:<uuid>`` back onto the
+DB-backed node it represents. The retired per-type namespaces (``Skill``,
+``SkillCollection``, ``MCPServer``, and ``Agent`` ownership) are no longer part
+of the graph.
 
 When no graph backend is enabled, read endpoints respond with ``enabled: false``
 and still list the DB-backed nodes; write endpoints return HTTP 503. OpenFGA is
@@ -13,11 +19,9 @@ preferred when enabled; Keto remains supported as a migration fallback.
 
 import logging
 from typing import Annotated, Literal
-from urllib.parse import unquote
 from uuid import UUID
 
-from agentarea_agents.domain.collection_models import collection_skills_table
-from agentarea_agents.domain.skill_models import Skill, agent_skills_table
+from agentarea_agents.domain.skill_models import Skill
 from agentarea_agents.infrastructure.collection_repository import (
     SkillCollectionRepository,
 )
@@ -37,9 +41,7 @@ from agentarea_common.rebac import (
     OpenFGAUnavailableError,
     RelationQuery,
     RelationTuple,
-    SubjectSet,
 )
-from agentarea_common.utils.slug import generate_slug
 from agentarea_common.workspaces.models import Workspace, WorkspaceMembership
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
 from fastapi import APIRouter, Depends, HTTPException
@@ -59,22 +61,47 @@ _COLORS: dict[str, list[str]] = {
     "agent": ["#6366f1", "#8b5cf6", "#a855f7", "#7c3aed", "#4f46e5"],
     "collection": ["#0ea5e9", "#06b6d4", "#0891b2", "#0284c7", "#22d3ee"],
     "mcp": ["#10b981", "#14b8a6", "#059669", "#16a34a", "#34d399"],
+    "skill": ["#f59e0b", "#f97316", "#fbbf24", "#ea580c", "#fb923c"],
 }
 
-# Highest-wins ordering for collection grant relations.
-_RELATION_RANK = {"viewers": 1, "editors": 2, "owners": 3}
-_RELATION_LABEL = {"viewers": "user", "editors": "editor", "owners": "owner"}
+# The ``resource`` model exposes three independent permission bits granted
+# directly to a subject. Map them onto the explorer's grant vocabulary and a
+# highest-wins ordering.
+_GRANT_LABEL = {"reader": "user", "writer": "editor", "manager": "owner"}
+_GRANT_RANK = {"reader": 1, "writer": 2, "manager": 3}
+
+# Verb the frontend resolves per resource kind, and the resource bit it maps to.
 _VERB_BY_KIND = {
     "skill": "use",
     "collection": "use",
     "mcp": "connect",
     "agent": "operate",
 }
-_NAMESPACE_BY_KIND = {
-    "skill": "Skill",
-    "collection": "SkillCollection",
-    "mcp": "MCPServer",
-    "agent": "Agent",
+_VERB_TO_BIT = {
+    "use": "can_read",
+    "view": "can_read",
+    "read": "can_read",
+    "operate": "can_read",
+    "connect": "can_read",
+    "execute": "can_read",
+    "configure": "can_write",
+    "edit": "can_write",
+    "write": "can_write",
+    "manage": "can_manage",
+    "own": "can_manage",
+    "delete": "can_manage",
+}
+# Legacy per-type grant relations the explorer used to write, mapped onto the
+# ``resource`` grant relation they now correspond to.
+_LEGACY_RELATION_TO_GRANT = {
+    "viewers": "reader",
+    "connectors": "reader",
+    "editors": "writer",
+    "owners": "manager",
+    "operators": "manager",
+    "reader": "reader",
+    "writer": "writer",
+    "manager": "manager",
 }
 
 
@@ -230,58 +257,32 @@ class SyncResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _to_graph_relationship(payload: RelationshipWriteRequest) -> RelationTuple:
-    if (payload.subject_id is None) == (payload.subject_set is None):
-        raise HTTPException(
-            status_code=422,
-            detail="exactly one of subject_id or subject_set must be set",
-        )
-    subject_set = (
-        SubjectSet(
-            namespace=payload.subject_set.namespace,
-            object=payload.subject_set.object,
-            relation=payload.subject_set.relation,
-        )
-        if payload.subject_set is not None
-        else None
-    )
-    return RelationTuple(
-        namespace=payload.namespace,
-        object=payload.object,
-        relation=payload.relation,
-        subject_id=payload.subject_id,
-        subject_set=subject_set,
-    )
-
-
-async def _workspace_relationships(client: GraphClient, namespace: str) -> list[RelationTuple]:
-    """Query relationships for a namespace, tolerating graph backend outages."""
+async def _resource_tuples(client: GraphClient) -> list[RelationTuple]:
+    """Query all ``resource`` tuples, tolerating graph backend outages."""
     try:
-        return await client.query_all_tuples(RelationQuery(namespace=namespace))
+        return await client.query_all_tuples(RelationQuery(namespace="resource"))
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
-        logger.exception("Failed to query graph relationships for namespace=%s", namespace)
+        logger.exception("Failed to query resource relationships from graph backend")
         return []
 
 
+# Frontend node/subject namespaces are workspace-scoped by their DB repository.
+# These are DB lookups (not graph types) used to validate that an object the
+# admin references belongs to the caller's workspace.
 _NAMESPACE_REPOS: dict[str, type] = {
     "Agent": AgentRepository,
     "MCPServer": MCPServerRepository,
     "Skill": SkillRepository,
     "SkillCollection": SkillCollectionRepository,
 }
-_VIRTUAL_NAMESPACES = {"Tool", "ToolResource"}
-_READABLE_NAMESPACES = set(_NAMESPACE_REPOS) | _VIRTUAL_NAMESPACES
-
-
-def _virtual_object_workspace_id(namespace: str, object_id: str) -> str | None:
-    if namespace == "ToolResource":
-        object_id = object_id.split("~args~", 1)[0]
-    if namespace not in _VIRTUAL_NAMESPACES:
-        return None
-    workspace_id, separator, _tool_name = object_id.partition("/")
-    if not separator or not workspace_id:
-        return None
-    return unquote(workspace_id)
+_READABLE_NAMESPACES = set(_NAMESPACE_REPOS)
+# Frontend namespace -> the node kind it maps onto, for relationship grouping.
+_NAMESPACE_KIND = {
+    "Agent": "agent",
+    "SkillCollection": "collection",
+    "MCPServer": "mcp",
+    "Skill": "skill",
+}
 
 
 async def _workspace_member_ids(
@@ -300,20 +301,6 @@ async def _workspace_member_ids(
     return member_ids
 
 
-def _workspace_object_ids(
-    agent_ids: set[str],
-    collection_ids: set[str],
-    skill_ids: set[str],
-    mcp_ids: set[str],
-) -> dict[str, set[str]]:
-    return {
-        "Agent": agent_ids,
-        "SkillCollection": collection_ids,
-        "Skill": skill_ids,
-        "MCPServer": mcp_ids,
-    }
-
-
 async def _assert_object_in_workspace(
     namespace: str,
     object_id: str,
@@ -323,19 +310,6 @@ async def _assert_object_in_workspace(
     """Raise 403/422 if namespace:object_id does not belong to the caller's workspace."""
     repo_cls = _NAMESPACE_REPOS.get(namespace)
     if repo_cls is None:
-        if namespace in _VIRTUAL_NAMESPACES:
-            if user_context is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"{namespace} objects require a workspace-scoped id",
-                )
-            object_workspace_id = _virtual_object_workspace_id(namespace, object_id)
-            if object_workspace_id != user_context.workspace_id:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"{namespace}:{object_id} not found in your workspace",
-                )
-            return
         raise HTTPException(status_code=422, detail=f"Unsupported namespace: {namespace!r}")
     try:
         obj_uuid = UUID(object_id)
@@ -375,51 +349,6 @@ async def _assert_subject_in_workspace(
     raise HTTPException(status_code=422, detail=f"Unsupported subject: {subject_id!r}")
 
 
-def _relationship_is_in_workspace(
-    relationship: RelationTuple,
-    *,
-    workspace_id: str,
-    workspace_objects: dict[str, set[str]],
-    workspace_member_ids: set[str],
-) -> bool:
-    if relationship.namespace in _VIRTUAL_NAMESPACES:
-        if (
-            _virtual_object_workspace_id(relationship.namespace, relationship.object)
-            != workspace_id
-        ):
-            return False
-    else:
-        allowed_objects = workspace_objects.get(relationship.namespace)
-        if allowed_objects is None or str(relationship.object) not in allowed_objects:
-            return False
-
-    if relationship.subject_set is not None:
-        subject_set = relationship.subject_set
-        if subject_set.namespace == "Workspace":
-            return subject_set.object == workspace_id
-        allowed_subjects = workspace_objects.get(subject_set.namespace)
-        if allowed_subjects is None:
-            return False
-        return subject_set.object in allowed_subjects
-
-    subject_id = relationship.subject_id or ""
-    if subject_id.startswith("Agent:"):
-        return subject_id.split(":", 1)[1] in workspace_objects["Agent"]
-    if subject_id.startswith("User:"):
-        return subject_id.split(":", 1)[1] in workspace_member_ids
-    if subject_id.startswith("Workspace:"):
-        return subject_id.split(":", 1)[1] == workspace_id
-    return False
-
-
-def _assert_relationship_mutable_namespace(namespace: str) -> None:
-    if namespace in _VIRTUAL_NAMESPACES:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Use the tool-access API to mutate {namespace} grants",
-        )
-
-
 async def _assert_workspace_admin(user_context: UserContext) -> None:
     """Only a workspace owner/admin may mutate the authorization graph.
 
@@ -435,6 +364,33 @@ async def _assert_workspace_admin(user_context: UserContext) -> None:
             status_code=403,
             detail="Only a workspace admin may modify the authorization graph",
         )
+
+
+def _to_resource_grant(payload: RelationshipWriteRequest) -> RelationTuple:
+    """Translate an explorer write onto a ``resource`` grant tuple.
+
+    Group grants (``subject_set``) are not part of the resource-ownership model;
+    those flow through ``project``/``role`` and are rejected here.
+    """
+    if payload.subject_set is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="Group (subject_set) grants are managed via project/role, not the explorer",
+        )
+    if payload.subject_id is None:
+        raise HTTPException(status_code=422, detail="subject_id is required")
+    grant = _LEGACY_RELATION_TO_GRANT.get(payload.relation)
+    if grant is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unsupported relation for a resource grant: {payload.relation!r}",
+        )
+    return RelationTuple(
+        namespace="resource",
+        object=payload.object,
+        relation=grant,
+        subject_id=payload.subject_id,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -459,7 +415,7 @@ async def get_graph(
     mcp_servers = await mcp_repo.list_all()
     counts = await collection_repo.skill_counts()
 
-    # All skills in the workspace (used for stats + node counts).
+    # All skills in the workspace (used for stats + resource-grant mapping).
     skill_count_query = select(Skill.id).where(Skill.workspace_id == user_context.workspace_id)
     skill_ids = {str(row.id) for row in (await db_session.execute(skill_count_query)).all()}
     governed_skill_count = len(skill_ids)
@@ -468,11 +424,14 @@ async def get_graph(
     agent_ids: set[str] = set()
     collection_ids: set[str] = set()
     mcp_ids: set[str] = set()
+    # Map each resource uuid back onto the node id that represents it.
+    node_id_by_uuid: dict[str, str] = {}
 
     for index, agent in enumerate(agents):
+        node_id = f"Agent:{agent.id}"
         nodes.append(
             GraphNode(
-                id=f"Agent:{agent.id}",
+                id=node_id,
                 kind="agent",
                 name=agent.name,
                 subtitle="agent",
@@ -480,12 +439,14 @@ async def get_graph(
             )
         )
         agent_ids.add(str(agent.id))
+        node_id_by_uuid[str(agent.id)] = node_id
 
     for index, collection in enumerate(collections):
         skills_in = counts.get(str(collection.id), 0)
+        node_id = f"SkillCollection:{collection.id}"
         nodes.append(
             GraphNode(
-                id=f"SkillCollection:{collection.id}",
+                id=node_id,
                 kind="collection",
                 name=collection.name,
                 subtitle=f"{skills_in} skills",
@@ -494,11 +455,13 @@ async def get_graph(
             )
         )
         collection_ids.add(str(collection.id))
+        node_id_by_uuid[str(collection.id)] = node_id
 
     for index, server in enumerate(mcp_servers):
+        node_id = f"MCPServer:{server.id}"
         nodes.append(
             GraphNode(
-                id=f"MCPServer:{server.id}",
+                id=node_id,
                 kind="mcp",
                 name=server.name,
                 subtitle="MCP server",
@@ -506,6 +469,7 @@ async def get_graph(
             )
         )
         mcp_ids.add(str(server.id))
+        node_id_by_uuid[str(server.id)] = node_id
 
     graph_client = get_graph_client()
     edges: list[dict] = []
@@ -513,48 +477,30 @@ async def get_graph(
     direct_exception_count = 0
 
     if graph_client is not None:
-        collection_relationships = await _workspace_relationships(graph_client, "SkillCollection")
-        for t in collection_relationships:
-            if str(t.object) not in collection_ids:
+        for t in await _resource_tuples(graph_client):
+            if t.relation not in _GRANT_LABEL:
                 continue
-            if t.relation not in _RELATION_LABEL:
-                continue
-            rule_count += 1
-            if t.subject_id and t.subject_id.startswith("Agent:"):
-                agent_uuid = t.subject_id.split(":", 1)[1]
-                if agent_uuid in agent_ids:
-                    edges.append(
-                        GraphEdge(
-                            from_=f"Agent:{agent_uuid}",
-                            to=f"SkillCollection:{t.object}",
-                            relation=_RELATION_LABEL[t.relation],
-                        ).model_dump()
-                    )
-
-        mcp_relationships = await _workspace_relationships(graph_client, "MCPServer")
-        for t in mcp_relationships:
-            if str(t.object) not in mcp_ids:
-                continue
-            if t.relation != "connectors":
-                continue
-            rule_count += 1
-            if t.subject_id and t.subject_id.startswith("Agent:"):
-                agent_uuid = t.subject_id.split(":", 1)[1]
-                if agent_uuid in agent_ids:
-                    edges.append(
-                        GraphEdge(
-                            from_=f"Agent:{agent_uuid}",
-                            to=f"MCPServer:{t.object}",
-                            relation="connect",
-                        ).model_dump()
-                    )
-
-        skill_relationships = await _workspace_relationships(graph_client, "Skill")
-        for t in skill_relationships:
-            if str(t.object) not in skill_ids:
-                continue
-            if t.relation in _RELATION_LABEL and t.subject_id and t.subject_id.startswith("Agent:"):
+            obj = str(t.object)
+            subject_agent = (
+                t.subject_id.split(":", 1)[1]
+                if t.subject_id and t.subject_id.startswith("Agent:")
+                else None
+            )
+            # Direct agent-to-skill grants are exceptions to collection defaults.
+            if obj in skill_ids and subject_agent in agent_ids:
                 direct_exception_count += 1
+            target = node_id_by_uuid.get(obj)
+            if target is None:
+                continue
+            rule_count += 1
+            if subject_agent in agent_ids and f"Agent:{subject_agent}" != target:
+                edges.append(
+                    GraphEdge(
+                        from_=f"Agent:{subject_agent}",
+                        to=target,
+                        relation=_GRANT_LABEL[t.relation],
+                    ).model_dump()
+                )
 
     stats = GraphStats(
         governed_skill_count=governed_skill_count,
@@ -575,7 +521,12 @@ async def list_relationships(
     db_session: DatabaseSessionDep,
     namespace: str | None = None,
 ) -> RelationshipsResponse:
-    """List authorization relationships enriched with display names."""
+    """List resource-ownership grants enriched with display names.
+
+    Grants live on ``resource:<uuid>`` objects; each is mapped back onto the DB
+    entity (agent / skill collection / MCP server / skill) it represents. The
+    optional ``namespace`` filter restricts results to one entity kind.
+    """
     await _assert_workspace_admin(user_context)
     graph_client = get_graph_client()
     if graph_client is None:
@@ -599,75 +550,68 @@ async def list_relationships(
     skill_names = {
         str(row.id): row.name for row in (await db_session.execute(skill_names_query)).all()
     }
-    workspace_objects = _workspace_object_ids(
-        set(agent_names),
-        set(collection_names),
-        set(skill_names),
-        set(mcp_names),
-    )
+
+    # Which entity namespace each workspace uuid belongs to (for grouping/filter).
+    namespace_by_uuid: dict[str, str] = {}
+    for uuid_str in agent_names:
+        namespace_by_uuid[uuid_str] = "Agent"
+    for uuid_str in collection_names:
+        namespace_by_uuid[uuid_str] = "SkillCollection"
+    for uuid_str in mcp_names:
+        namespace_by_uuid[uuid_str] = "MCPServer"
+    for uuid_str in skill_names:
+        namespace_by_uuid.setdefault(uuid_str, "Skill")
+
     workspace_member_ids = await _workspace_member_ids(user_context, db_session)
 
-    namespaces = (
-        [namespace]
-        if namespace
-        else ["SkillCollection", "Skill", "MCPServer", "Agent", "Tool", "ToolResource"]
-    )
     items: list[RelationshipItem] = []
-    for ns in namespaces:
-        for t in await _workspace_relationships(graph_client, ns):
-            if not _relationship_is_in_workspace(
-                t,
-                workspace_id=user_context.workspace_id,
-                workspace_objects=workspace_objects,
-                workspace_member_ids=workspace_member_ids,
-            ):
+    for t in await _resource_tuples(graph_client):
+        if t.relation not in _GRANT_LABEL:
+            continue
+        object_id = str(t.object)
+        object_namespace = namespace_by_uuid.get(object_id)
+        if object_namespace is None:
+            continue
+        if namespace is not None and object_namespace != namespace:
+            continue
+
+        subject_repr = t.subject_id or ""
+        subject_kind: Literal["agent", "user", "workspace"]
+        subject_name: str
+        if subject_repr.startswith("Agent:"):
+            subject_kind = "agent"
+            sid = subject_repr.split(":", 1)[1]
+            subject_name = agent_names.get(sid, sid)
+        elif subject_repr.startswith("User:"):
+            subject_kind = "user"
+            uid = subject_repr.split(":", 1)[1]
+            if uid not in workspace_member_ids and uid not in agent_names:
                 continue
-            object_id = str(t.object)
-            object_name = (
-                collection_names.get(object_id)
-                or skill_names.get(object_id)
-                or mcp_names.get(object_id)
-                or agent_names.get(object_id)
-                or object_id
-            )
-            subject_kind: Literal["agent", "user", "workspace"]
-            subject_name: str
-            subject_repr: str
-            if t.subject_set is not None:
-                subject_kind = "workspace"
-                subject_repr = str(t.subject_set)
-                subject_name = "workspace members"
-            else:
-                subject_repr = t.subject_id or ""
-                if subject_repr.startswith("Agent:"):
-                    subject_kind = "agent"
-                    sid = subject_repr.split(":", 1)[1]
-                    subject_name = agent_names.get(sid, sid)
-                elif subject_repr.startswith("User:"):
-                    subject_kind = "user"
-                    subject_name = subject_repr.split(":", 1)[1]
-                else:
-                    subject_kind = "user"
-                    subject_name = subject_repr
+            subject_name = uid
+        else:
+            continue
 
-            fanout = None
-            if ns == "SkillCollection":
-                fanout = skill_counts.get(object_id, 0)
-            direct = ns == "Skill" and t.relation in _RELATION_LABEL
-
-            items.append(
-                RelationshipItem(
-                    namespace=ns,
-                    object=object_id,
-                    object_name=object_name,
-                    relation=t.relation,
-                    subject=subject_repr,
-                    subject_kind=subject_kind,
-                    subject_name=subject_name,
-                    fanout=fanout,
-                    direct=direct,
-                )
+        object_name = (
+            agent_names.get(object_id)
+            or collection_names.get(object_id)
+            or mcp_names.get(object_id)
+            or skill_names.get(object_id)
+            or object_id
+        )
+        fanout = skill_counts.get(object_id) if object_namespace == "SkillCollection" else None
+        items.append(
+            RelationshipItem(
+                namespace=object_namespace,
+                object=object_id,
+                object_name=object_name,
+                relation=_GRANT_LABEL[t.relation],
+                subject=subject_repr,
+                subject_kind=subject_kind,
+                subject_name=subject_name,
+                fanout=fanout,
+                direct=object_namespace == "Skill",
             )
+        )
 
     return RelationshipsResponse(relationships=items, count=len(items))
 
@@ -678,29 +622,14 @@ async def create_relationship(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> dict:
-    """Write an authorization relationship to the configured graph backend."""
+    """Grant a resource-ownership relation via the configured graph backend."""
     graph_client = get_graph_client()
     if graph_client is None:
         raise HTTPException(status_code=503, detail="Graph authorization is disabled")
     await _assert_workspace_admin(user_context)
-    _assert_relationship_mutable_namespace(payload.namespace)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
-    # Validate the subject too: a subject_set pointing at one of our entity
-    # namespaces must also belong to the caller's workspace, so admins cannot
-    # grant access to/from an object in another workspace.
-    if payload.subject_set is not None and payload.subject_set.namespace in _NAMESPACE_REPOS:
-        await _assert_object_in_workspace(
-            payload.subject_set.namespace,
-            payload.subject_set.object,
-            user_context,
-            db_session,
-        )
-    elif payload.subject_set is not None and payload.subject_set.namespace == "Workspace":
-        if payload.subject_set.object != user_context.workspace_id:
-            raise HTTPException(status_code=403, detail="Subject workspace is not your workspace")
-    elif payload.subject_id is not None:
-        await _assert_subject_in_workspace(payload.subject_id, user_context, db_session)
-    relationship = _to_graph_relationship(payload)
+    await _assert_subject_in_workspace(payload.subject_id or "", user_context, db_session)
+    relationship = _to_resource_grant(payload)
     try:
         await graph_client.write_tuple(relationship)
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
@@ -715,14 +644,13 @@ async def delete_relationship(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> None:
-    """Delete an authorization relationship from the configured graph backend."""
+    """Revoke a resource-ownership relation from the configured graph backend."""
     graph_client = get_graph_client()
     if graph_client is None:
         raise HTTPException(status_code=503, detail="Graph authorization is disabled")
     await _assert_workspace_admin(user_context)
-    _assert_relationship_mutable_namespace(payload.namespace)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
-    relationship = _to_graph_relationship(payload)
+    relationship = _to_resource_grant(payload)
     try:
         await graph_client.delete_tuple(relationship)
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
@@ -736,27 +664,29 @@ async def check_permission(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> CheckResponse:
-    """Check whether a subject has a relation on an object."""
+    """Check whether a subject has a permission on a resource."""
     await _assert_workspace_admin(user_context)
     graph_client = get_graph_client()
     if graph_client is None:
         return CheckResponse(allowed=False)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     await _assert_subject_in_workspace(payload.subject_id, user_context, db_session)
+    bit = _VERB_TO_BIT.get(payload.relation, payload.relation)
+    if bit not in {"can_read", "can_write", "can_manage"}:
+        return CheckResponse(allowed=False)
     try:
         result = await graph_client.check(
-            namespace=payload.namespace,
+            namespace="resource",
             object=payload.object,
-            relation=payload.relation,
+            relation=bit,
             subject_id=payload.subject_id,
         )
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
         logger.exception(
-            "Graph authorization check failed (subject=%s %s:%s#%s)",
+            "Graph authorization check failed (subject=%s resource:%s#%s)",
             payload.subject_id,
-            payload.namespace,
             payload.object,
-            payload.relation,
+            bit,
         )
         raise HTTPException(status_code=503, detail="Graph authorization check failed") from exc
     return CheckResponse(allowed=result.allowed)
@@ -770,158 +700,89 @@ async def resolve_access(
 ) -> ResolveResponse:
     """Resolve why (and how) a subject can access a resource.
 
-    ``allowed`` is computed via the graph backend; ``paths`` are derived by
-    traversing workspace relationships directly so the UI can render the derivation.
+    ``allowed`` is computed via the graph backend; ``paths`` are derived from the
+    direct ``resource`` grants matching the subject so the UI can render the
+    derivation. Grants inherited through ``project``/``role`` still affect
+    ``allowed`` but are not expanded into hops here.
     """
     await _assert_workspace_admin(user_context)
     verb = _VERB_BY_KIND[payload.resource_kind]
-    namespace = _NAMESPACE_BY_KIND[payload.resource_kind]
+    namespace = {
+        "skill": "Skill",
+        "collection": "SkillCollection",
+        "mcp": "MCPServer",
+        "agent": "Agent",
+    }[payload.resource_kind]
     await _assert_object_in_workspace(namespace, payload.resource_id, user_context, db_session)
     await _assert_subject_in_workspace(payload.subject_id, user_context, db_session)
 
+    bit = _VERB_TO_BIT[verb]
     graph_client = get_graph_client()
     allowed = False
     if graph_client is not None:
         try:
             result = await graph_client.check(
-                namespace=namespace,
+                namespace="resource",
                 object=payload.resource_id,
-                relation=verb,
+                relation=bit,
                 subject_id=payload.subject_id,
             )
             allowed = result.allowed
         except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
             logger.exception(
-                "Graph authorization check failed during resolve (subject=%s %s:%s#%s)",
+                "Graph authorization check failed during resolve (subject=%s resource:%s#%s)",
                 payload.subject_id,
-                namespace,
                 payload.resource_id,
-                verb,
+                bit,
             )
 
     factory = RepositoryFactory(db_session, user_context)
     agent_repo = factory.create_repository(AgentRepository)
-    collection_repo = factory.create_repository(SkillCollectionRepository)
-
     agent_names = {str(a.id): a.name for a in await agent_repo.list_all()}
-    collection_records = await collection_repo.list_all()
-    collection_names = {str(c.id): c.name for c in collection_records}
-    collection_ids = set(collection_names)
 
     agent_uuid = (
         payload.subject_id.split(":", 1)[1]
         if payload.subject_id.startswith("Agent:")
         else payload.subject_id
     )
-    agent_name = agent_names.get(agent_uuid, agent_uuid)
-    agent_hop = ResolveHop(
-        id=f"Agent:{agent_uuid}", name=agent_name, kind="agent", color=_color("agent", 0)
+    subject_name = agent_names.get(agent_uuid, agent_uuid)
+    subject_kind = "agent" if payload.subject_id.startswith("Agent:") else "user"
+    subject_hop = ResolveHop(
+        id=payload.subject_id,
+        name=subject_name,
+        kind=subject_kind,
+        color=_color("agent", 0),
     )
 
     paths: list[ResolvePath] = []
     best_rank = 0
     effective_relation: str | None = None
 
-    if payload.resource_kind == "skill" and graph_client is not None:
-        # Collections that contain this skill.
-        try:
-            skill_uuid = UUID(payload.resource_id)
-        except ValueError:
-            raise HTTPException(status_code=422, detail="resource_id is not a valid UUID") from None
-        membership_query = select(collection_skills_table.c.collection_id).where(
-            collection_skills_table.c.skill_id == skill_uuid
-        )
-        member_collections = {
-            str(row.collection_id) for row in (await db_session.execute(membership_query)).all()
-        }
-        member_collections &= collection_ids
-
-        collection_relationships = await _workspace_relationships(graph_client, "SkillCollection")
-        for t in collection_relationships:
-            if str(t.object) not in member_collections:
-                continue
-            if t.relation not in _RELATION_LABEL:
-                continue
-            if not (t.subject_id and t.subject_id == payload.subject_id):
-                continue
-            label = _RELATION_LABEL[t.relation]
-            cid = str(t.object)
-            paths.append(
-                ResolvePath(
-                    relation=label,
-                    hops=[
-                        agent_hop,
-                        ResolveHop(
-                            id=f"SkillCollection:{cid}",
-                            name=collection_names.get(cid, cid),
-                            kind="collection",
-                            color=_color("collection", 0),
-                        ),
-                    ],
-                    rels=[label, "contains"],
-                )
-            )
-            rank = _RELATION_RANK[t.relation]
-            if rank > best_rank:
-                best_rank = rank
-                effective_relation = label
-
-    if payload.resource_kind == "collection" and graph_client is not None:
-        collection_relationships = await _workspace_relationships(graph_client, "SkillCollection")
-        for t in collection_relationships:
+    if graph_client is not None:
+        for t in await _resource_tuples(graph_client):
             if str(t.object) != payload.resource_id:
                 continue
-            if t.relation not in _RELATION_LABEL:
+            if t.relation not in _GRANT_LABEL:
                 continue
             if not (t.subject_id and t.subject_id == payload.subject_id):
                 continue
-            label = _RELATION_LABEL[t.relation]
+            label = _GRANT_LABEL[t.relation]
             paths.append(
                 ResolvePath(
                     relation=label,
                     hops=[
-                        agent_hop,
+                        subject_hop,
                         ResolveHop(
-                            id=f"SkillCollection:{payload.resource_id}",
-                            name=collection_names.get(payload.resource_id, payload.resource_id),
-                            kind="collection",
+                            id=f"resource:{payload.resource_id}",
+                            name=payload.resource_kind,
+                            kind=payload.resource_kind,
                             color=_color("collection", 0),
                         ),
                     ],
                     rels=[label],
                 )
             )
-            rank = _RELATION_RANK[t.relation]
-            if rank > best_rank:
-                best_rank = rank
-                effective_relation = label
-
-        # Direct skill grants (exceptions).
-        skill_relationships = await _workspace_relationships(graph_client, "Skill")
-        for t in skill_relationships:
-            if str(t.object) != payload.resource_id:
-                continue
-            if t.relation not in _RELATION_LABEL:
-                continue
-            if not (t.subject_id and t.subject_id == payload.subject_id):
-                continue
-            label = _RELATION_LABEL[t.relation]
-            paths.append(
-                ResolvePath(
-                    relation=label,
-                    hops=[
-                        agent_hop,
-                        ResolveHop(
-                            id=f"Skill:{payload.resource_id}",
-                            name="skill",
-                            kind="skill",
-                            color=_color("collection", 1),
-                        ),
-                    ],
-                    rels=[label],
-                )
-            )
-            rank = _RELATION_RANK[t.relation]
+            rank = _GRANT_RANK[t.relation]
             if rank > best_rank:
                 best_rank = rank
                 effective_relation = label
@@ -939,34 +800,19 @@ async def sync_grants(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> SyncResponse:
-    """Mirror existing grants into the graph backend and seed a starter collection.
+    """Mirror workspace membership into the graph backend (idempotent).
 
-    Idempotent: safe to call repeatedly. Steps:
-      1. Mirror workspace members into the graph.
-      2. If no collections exist, create "All skills" containing every workspace
-         skill and grant workspace-member access to the collection.
-      3. Mirror each collection membership relationship.
-      4. Mirror each direct agent-to-skill grant.
+    Resource ownership is granted at create time by ``grant_resource_owner`` and
+    was backfilled onto the ``resource`` model, so this endpoint only ensures the
+    workspace-member tuples that gate group defaults are present.
     """
     graph_client = get_graph_client()
     if graph_client is None:
         raise HTTPException(status_code=503, detail="Graph authorization is disabled")
     await _assert_workspace_admin(user_context)
 
-    factory = RepositoryFactory(db_session, user_context)
-    collection_repo = factory.create_repository(SkillCollectionRepository)
-
     written = 0
-    collections_created = 0
 
-    existing_collections = await collection_repo.list_all()
-
-    # Workspace skill ids.
-    skill_ids_query = select(Skill.id).where(Skill.workspace_id == user_context.workspace_id)
-    skill_ids = [str(row.id) for row in (await db_session.execute(skill_ids_query)).all()]
-
-    # Step 1: mirror workspace members. The OpenFGA model uses Workspace#members
-    # as the graph-native boundary for tool grants and collection defaults.
     owner_query = select(Workspace.owner_user_id).where(Workspace.id == user_context.workspace_id)
     owner_user_id = (await db_session.execute(owner_query)).scalar_one_or_none()
     member_query = select(WorkspaceMembership.user_id).where(
@@ -990,75 +836,4 @@ async def sync_grants(
             logger.exception("Failed to mirror workspace member into graph backend")
             raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
 
-    # Step 2: seed "All skills" if no collections exist.
-    if not existing_collections and skill_ids:
-        all_skills = await collection_repo.create(
-            name="All skills",
-            slug=generate_slug("All skills"),
-            description="Every skill in the workspace.",
-        )
-        collections_created += 1
-        for sid in skill_ids:
-            await collection_repo.add_skill(all_skills.id, UUID(sid))
-        try:
-            await graph_client.write_tuple(
-                RelationTuple(
-                    namespace="SkillCollection",
-                    object=str(all_skills.id),
-                    relation="viewers",
-                    subject_set=SubjectSet(
-                        namespace="Workspace",
-                        object=user_context.workspace_id,
-                        relation="members",
-                    ),
-                )
-            )
-            written += 1
-        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
-            logger.exception("Failed to seed graph default-viewer relationship")
-            raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
-
-    # Step 3: mirror collection memberships (scoped to workspace collections).
-    workspace_cid_uuids = [c.id for c in existing_collections]
-    membership_query = select(
-        collection_skills_table.c.collection_id,
-        collection_skills_table.c.skill_id,
-    ).where(collection_skills_table.c.collection_id.in_(workspace_cid_uuids))
-    for row in (await db_session.execute(membership_query)).all():
-        cid = str(row.collection_id)
-        try:
-            await graph_client.write_tuple(
-                RelationTuple(
-                    namespace="Skill",
-                    object=str(row.skill_id),
-                    relation="collections",
-                    subject_id=f"SkillCollection:{cid}",
-                )
-            )
-            written += 1
-        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
-            logger.exception("Failed to mirror collection membership into graph backend")
-            raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
-
-    # Step 4: mirror direct agent_skills grants (scoped to workspace skills).
-    workspace_skill_uuids = [UUID(s) for s in skill_ids]
-    agent_skill_query = select(
-        agent_skills_table.c.agent_id,
-        agent_skills_table.c.skill_id,
-    ).where(agent_skills_table.c.skill_id.in_(workspace_skill_uuids))
-    for row in (await db_session.execute(agent_skill_query)).all():
-        try:
-            await graph_client.write_tuple(
-                RelationTuple(
-                    namespace="Skill",
-                    object=str(row.skill_id),
-                    relation="viewers",
-                    subject_id=f"Agent:{row.agent_id}",
-                )
-            )
-            written += 1
-        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
-            logger.exception("Failed to mirror agent_skill grant into graph backend")
-            raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
-
-    return SyncResponse(written=written, collections=collections_created)
+    return SyncResponse(written=written, collections=0)

@@ -1,0 +1,38 @@
+---
+- name: Ensure agentarea config directory
+  ansible.builtin.file:
+    path: /etc/agentarea
+    state: directory
+    mode: "0750"
+
+- name: Write executor environment file (holds the HMAC secret)
+  ansible.builtin.template:
+    src: sandbox-executor.env.j2
+    dest: /etc/agentarea/sandbox-executor.env
+    mode: "0600"
+  notify: Restart sandbox-executor
+
+- name: Install the sandbox-executor systemd unit
+  ansible.builtin.template:
+    src: sandbox-executor.service.j2
+    dest: "/etc/systemd/system/{{ sandbox_executor_name }}.service"
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart sandbox-executor
+
+- name: Enable and start the sandbox executor
+  ansible.builtin.systemd:
+    name: "{{ sandbox_executor_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Wait for the executor /health to answer (proves it runs under gVisor)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ sandbox_executor_host_port }}/health"
+    status_code: 200
+  register: _executor_health
+  retries: 15
+  delay: 4
+  until: _executor_health.status == 200

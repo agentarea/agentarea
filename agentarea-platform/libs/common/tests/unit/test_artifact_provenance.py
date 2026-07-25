@@ -23,10 +23,16 @@ class FakeS3Client:
     def __init__(self, exists: bool = False) -> None:
         self.exists = exists
         self.put_calls: list[str] = []
+        self.put_options: list[dict] = []
         self.delete_calls: list[str] = []
 
-    def put_object(self, *, Bucket, Key, Body, ContentType):  # noqa: N803
+    def put_object(
+        self, *, Bucket, Key, Body, ContentType, Metadata, ChecksumSHA256  # noqa: N803
+    ):
         self.put_calls.append(Key)
+        self.put_options.append(
+            {"metadata": Metadata, "checksum_sha256": ChecksumSHA256}
+        )
 
     def delete_object(self, *, Bucket, Key):  # noqa: N803
         self.delete_calls.append(Key)
@@ -81,6 +87,8 @@ async def test_put_new_file_records_created():
     await svc.put(WS, "shared/note.txt", b"hi")
 
     assert client.put_calls  # file actually written
+    assert len(client.put_options[0]["metadata"]["sha256"]) == 64
+    assert client.put_options[0]["checksum_sha256"]
     assert len(recorder.events) == 1
     ev = recorder.events[0]
     assert ev["action"] == ACTION_CREATED

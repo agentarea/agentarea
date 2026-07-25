@@ -12,7 +12,6 @@ import type {
 } from "@/types/access-control";
 import GraphPane from "./GraphPane";
 import ResolveAccessCard from "./ResolveAccessCard";
-import ToolGrantCard from "./ToolGrantCard";
 import {
   createAccessRelationshipAction,
   resolveAccessAction,
@@ -54,14 +53,12 @@ interface AccessControlExplorerProps {
   graph: AccessControlGraph;
   relationships: AccessControlRelationshipsResponse;
   collections: SkillCollection[];
-  currentUserId: string | null;
 }
 
 export default function AccessControlExplorer({
   graph,
   relationships,
   collections,
-  currentUserId,
 }: AccessControlExplorerProps) {
   const router = useRouter();
   const [view, setView] = useState<ViewMode>("relationships");
@@ -463,11 +460,6 @@ export default function AccessControlExplorer({
                 Add relationship
               </button>
             </div>
-
-            <ToolGrantCard
-              currentUserId={currentUserId}
-              initialRelationships={relationships.relationships}
-            />
 
             <div className={styles.scaleNote}>
               <span className={styles.scaleNoteIcon}>

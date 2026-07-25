@@ -681,7 +681,7 @@ class TestAPIEndpoints:
 
 
 class TestNormalizeUrlKeys:
-    """Canonical key is `endpoint_url`; legacy `url`/`external_url` are aliased."""
+    """Canonical key is `endpoint_url`; `url`/`external_url` are accepted aliases."""
 
     def test_canonical_endpoint_url_passes_through(self):
         from agentarea_mcp.application.service import _normalize_url_keys
@@ -689,21 +689,21 @@ class TestNormalizeUrlKeys:
         out = _normalize_url_keys({"type": "url", "endpoint_url": "https://x/mcp"})
         assert out == {"type": "url", "endpoint_url": "https://x/mcp"}
 
-    def test_legacy_url_gets_renamed(self):
+    def test_url_alias_gets_renamed(self):
         from agentarea_mcp.application.service import _normalize_url_keys
 
         out = _normalize_url_keys({"type": "url", "url": "https://x/mcp"})
         assert out == {"type": "url", "endpoint_url": "https://x/mcp"}
         assert "url" not in out
 
-    def test_legacy_external_url_gets_renamed(self):
+    def test_external_url_alias_gets_renamed(self):
         from agentarea_mcp.application.service import _normalize_url_keys
 
         out = _normalize_url_keys({"type": "url", "external_url": "https://x/mcp"})
         assert out == {"type": "url", "endpoint_url": "https://x/mcp"}
         assert "external_url" not in out
 
-    def test_canonical_wins_over_legacy(self):
+    def test_canonical_wins_over_alias(self):
         from agentarea_mcp.application.service import _normalize_url_keys
 
         out = _normalize_url_keys(

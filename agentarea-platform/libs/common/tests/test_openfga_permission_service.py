@@ -18,27 +18,27 @@ def _svc(check_return=None, side_effect=None):
 
 
 @pytest.mark.asyncio
-async def test_skill_use_maps_to_use_relation_and_user_subject():
+async def test_skill_use_maps_to_resource_read_bit_and_user_subject():
     svc, openfga = _svc(check_return=True)
     allowed = await svc.check("u1", "use", "skill", "copywriting")
     assert allowed is True
     openfga.check.assert_awaited_once_with(
-        namespace="Skill", object="copywriting", relation="use", subject_id="User:u1"
+        namespace="resource", object="copywriting", relation="can_read", subject_id="User:u1"
     )
 
 
 @pytest.mark.asyncio
-async def test_mcp_view_maps_to_connect():
+async def test_mcp_view_maps_to_resource_read_bit():
     svc, openfga = _svc(check_return=True)
     await svc.check("u1", "view", "mcp_server", "github")
-    assert openfga.check.await_args.kwargs["namespace"] == "MCPServer"
-    assert openfga.check.await_args.kwargs["relation"] == "connect"
+    assert openfga.check.await_args.kwargs["namespace"] == "resource"
+    assert openfga.check.await_args.kwargs["relation"] == "can_read"
 
 
 @pytest.mark.asyncio
-async def test_unknown_resource_type_allows_without_calling_openfga():
+async def test_ungoverned_resource_type_allows_without_calling_openfga():
     svc, openfga = _svc(check_return=False)
-    allowed = await svc.check("u1", "view", "dashboard", "x")
+    allowed = await svc.check("u1", "view", "model_instance", "x")
     assert allowed is True
     openfga.check.assert_not_awaited()
 
@@ -52,7 +52,8 @@ async def test_unmapped_permission_denies():
 
 
 @pytest.mark.asyncio
-async def test_openfga_error_fails_closed():
+async def test_openfga_error_propagates_to_fail_closed():
     svc, _ = _svc(side_effect=OpenFGAError("down"))
-    allowed = await svc.check("u1", "use", "skill", "x")
-    assert allowed is False
+    # The service fails CLOSED by raising; the caller (require_permission) surfaces it.
+    with pytest.raises(OpenFGAError):
+        await svc.check("u1", "use", "skill", "x")

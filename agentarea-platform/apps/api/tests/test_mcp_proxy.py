@@ -10,11 +10,8 @@ from agentarea_api.api.v1.mcp_proxy import (
     _iter_jsonrpc_tool_calls,
     _resolve_upstream_url,
 )
-from agentarea_common.auth.tool_authorization import (
-    ToolAuthorizationAction,
-    ToolAuthorizationDecision,
-)
 from agentarea_common.testing.flows import MainFlow
+from agentarea_governance.domain.policies import EffectivePolicy, ToolsPolicy
 from fastapi import HTTPException
 
 # ----- _resolve_upstream_url -----
@@ -31,20 +28,6 @@ async def test_resolve_upstream_url_url_type_from_server_remote_url():
 
     assert await _resolve_upstream_url(instance, server_spec) == (
         "https://mcp.clickup.com/mcp",
-        "url",
-    )
-
-
-@pytest.mark.asyncio
-async def test_resolve_upstream_url_legacy_endpoint_url_on_instance():
-    instance = SimpleNamespace(
-        json_spec={"type": "url", "endpoint_url": "https://legacy.example/mcp"},
-        id="i",
-    )
-    server_spec = SimpleNamespace(remote_url=None, cmd=None, json_spec={})
-
-    assert await _resolve_upstream_url(instance, server_spec) == (
-        "https://legacy.example/mcp",
         "url",
     )
 
@@ -177,41 +160,47 @@ def test_iter_jsonrpc_tool_calls_ignores_non_calls():
     assert _iter_jsonrpc_tool_calls({"jsonrpc": "2.0", "method": "tools/list"}) == []
 
 
-@pytest.mark.asyncio
-async def test_authorize_mcp_tool_calls_uses_single_pdp(monkeypatch):
-    seen = []
+class _FakeResolver:
+    """Stand in for GovernancePolicyResolver, returning a fixed snapshot."""
 
-    async def fake_authorize(request):
-        seen.append(request)
-        return ToolAuthorizationDecision(ToolAuthorizationAction.ALLOW, "ok")
+    def __init__(self, policy: EffectivePolicy):
+        self._policy = policy
 
-    monkeypatch.setattr("agentarea_api.api.v1.mcp_proxy.authorize_tool_invocation", fake_authorize)
+    async def resolve(self, **_kwargs) -> EffectivePolicy:
+        return self._policy
 
-    await _authorize_mcp_tool_calls(
-        b'{"jsonrpc":"2.0","method":"tools/call","params":{"name":"github.create_issue","arguments":{"repo":"acme/app"}}}',
-        SimpleNamespace(user_id="u1", workspace_id="ws1"),
+
+def _install_policy(monkeypatch, policy: EffectivePolicy) -> None:
+    monkeypatch.setattr(
+        "agentarea_api.api.v1.mcp_proxy.GovernancePolicyResolver",
+        lambda _repository_factory: _FakeResolver(policy),
     )
 
-    assert len(seen) == 1
-    assert seen[0].tool_name == "github.create_issue"
-    assert seen[0].tool_args == {"repo": "acme/app"}
-    assert seen[0].user_id == "u1"
-    assert seen[0].workspace_id == "ws1"
-    assert seen[0].policy_required is False
+
+_CALL = (
+    b'{"jsonrpc":"2.0","method":"tools/call",'
+    b'"params":{"name":"github.create_issue","arguments":{"repo":"acme/app"}}}'
+)
 
 
 @pytest.mark.asyncio
-async def test_authorize_mcp_tool_calls_denies_pdp_denial(monkeypatch):
-    async def fake_authorize(_request):
-        return ToolAuthorizationDecision(ToolAuthorizationAction.DENY, "missing grant")
+async def test_authorize_mcp_tool_calls_allows_when_policy_permits(monkeypatch):
+    # No governing policy — the proxy runs the same default-allow PDP as the task path.
+    _install_policy(monkeypatch, EffectivePolicy())
 
-    monkeypatch.setattr("agentarea_api.api.v1.mcp_proxy.authorize_tool_invocation", fake_authorize)
+    await _authorize_mcp_tool_calls(
+        _CALL, SimpleNamespace(user_id="u1", workspace_id="ws1"), object()
+    )
+
+
+@pytest.mark.asyncio
+async def test_authorize_mcp_tool_calls_denies_when_policy_denies(monkeypatch):
+    _install_policy(monkeypatch, EffectivePolicy(tools=ToolsPolicy(denied=["github.create_issue"])))
 
     with pytest.raises(HTTPException) as exc:
         await _authorize_mcp_tool_calls(
-            b'{"jsonrpc":"2.0","method":"tools/call","params":{"name":"github.create_issue","arguments":{}}}',
-            SimpleNamespace(user_id="u1", workspace_id="ws1"),
+            _CALL, SimpleNamespace(user_id="u1", workspace_id="ws1"), object()
         )
 
     assert exc.value.status_code == 403
-    assert exc.value.detail == "Tool call denied: github.create_issue: missing grant"
+    assert "github.create_issue" in exc.value.detail

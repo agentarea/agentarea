@@ -106,6 +106,13 @@ class ExecutionServiceInterface(ABC):
         """Send a generic command signal to a running workflow."""
         pass
 
+    @abstractmethod
+    async def continue_execution(
+        self, execution_id: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Request an atomic continuation update from a waiting workflow."""
+        pass
+
 
 class WorkflowServiceInterface(ABC):
     """Interface for workflow orchestration."""

@@ -25,6 +25,8 @@ from agentarea_common.testing.flows import MainFlow
 from agentarea_execution.models import (
     AgentConfigRequest,
     AgentExecutionRequest,
+    ArtifactValidationRequest,
+    ArtifactValidationResult,
     LLMCallRequest,
     MCPToolRequest,
     ResolveModelRequest,
@@ -211,6 +213,13 @@ async def _mock_update_status(request: UpdateTaskStatusRequest) -> bool:
     return True
 
 
+@activity.defn(name="validate_artifacts_activity")
+async def _mock_validate_artifacts(
+    request: ArtifactValidationRequest,
+) -> ArtifactValidationResult:
+    return ArtifactValidationResult(state="no_artifacts", generation=0)
+
+
 _ALL_ACTIVITIES = [
     _mock_build_config,
     _mock_discover_tools,
@@ -219,6 +228,7 @@ _ALL_ACTIVITIES = [
     _mock_execute_mcp,
     _mock_publish_events,
     _mock_update_status,
+    _mock_validate_artifacts,
 ]
 
 
@@ -310,6 +320,7 @@ async def test_request_user_input_waits_for_queued_reply_then_continues():
             _mock_execute_mcp,
             _mock_publish_events,
             _mock_update_status,
+            _mock_validate_artifacts,
         ]
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             worker = Worker(
@@ -339,8 +350,8 @@ async def test_request_user_input_waits_for_queued_reply_then_continues():
                 assert questions[1]["type"] == "secret"
 
                 published_types = {e.get("event_type") for e in _published}
-                assert "HumanInputRequested" in published_types, published_types
-                assert "WorkflowCompleted" not in published_types, published_types
+                assert "input.request" in published_types, published_types
+                assert "task.completed" not in published_types, published_types
 
                 await handle.signal(
                     AgentExecutionWorkflow.workflow_command,
@@ -365,8 +376,8 @@ async def test_request_user_input_waits_for_queued_reply_then_continues():
                 assert result.final_response == "continued with input"
                 assert _request_input_llm_calls == 2
                 published_types = {e.get("event_type") for e in _published}
-                assert "HumanInputReceived" in published_types, published_types
-                assert "WorkflowCompleted" in published_types, published_types
+                assert "input.response" in published_types, published_types
+                assert "task.completed" in published_types, published_types
                 assert "running" in _status_updates
                 assert "completed" in _status_updates
 
