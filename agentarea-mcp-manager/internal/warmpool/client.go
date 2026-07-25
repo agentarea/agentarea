@@ -438,6 +438,149 @@ func PostWriteback(ctx context.Context, executeURL string, req workspace.Writeba
 	return &result, nil
 }
 
+// FilePutRequest writes a single file into a task's sandbox workspace.
+type FilePutRequest struct {
+	WorkspaceID   string `json:"workspace_id"`
+	TaskID        string `json:"task_id"`
+	Path          string `json:"path"`
+	ContentBase64 string `json:"content_base64"`
+}
+
+// FilePutResponse acknowledges a written file.
+type FilePutResponse struct {
+	Path string `json:"path"`
+	Size int    `json:"size"`
+}
+
+// FileGetResponse returns a single file's contents.
+type FileGetResponse struct {
+	ContentBase64 string `json:"content_base64"`
+	Size          int64  `json:"size"`
+}
+
+// FileListResponse lists regular files under a prefix.
+type FileListResponse struct {
+	Paths []string `json:"paths"`
+}
+
+// ErrFileNotFound signals that a requested sandbox file does not exist.
+var ErrFileNotFound = fmt.Errorf("sandbox file not found")
+
+// PutFile writes a file into the task workspace on the executor's filesystem —
+// the same filesystem /execute (bash) uses — signing a ScopeFiles token so the
+// activation secret stays control-plane side.
+func PutFile(ctx context.Context, baseURL string, req FilePutRequest, timeout time.Duration) (*FilePutResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal file put request: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, strings.TrimRight(baseURL, "/")+"/files", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file put request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if err := signFilesRequest(httpReq, req.WorkspaceID, req.TaskID, activationauth.BodySHA256(body)); err != nil {
+		return nil, err
+	}
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("file put request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("file put returned status %d", resp.StatusCode)
+	}
+	var result FilePutResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode file put response: %w", err)
+	}
+	return &result, nil
+}
+
+// GetFile reads a file from the task workspace. It returns ErrFileNotFound when
+// the executor reports a 404 so callers can distinguish "missing" from failure.
+func GetFile(ctx context.Context, baseURL, workspaceID, taskID, path string, timeout time.Duration) (*FileGetResponse, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/files", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file get request: %w", err)
+	}
+	query := httpReq.URL.Query()
+	query.Set("workspace_id", workspaceID)
+	query.Set("task_id", taskID)
+	query.Set("path", path)
+	httpReq.URL.RawQuery = query.Encode()
+	if err := signFilesRequest(httpReq, workspaceID, taskID, activationauth.BodySHA256(nil)); err != nil {
+		return nil, err
+	}
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("file get request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrFileNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("file get returned status %d", resp.StatusCode)
+	}
+	var result FileGetResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode file get response: %w", err)
+	}
+	return &result, nil
+}
+
+// ListFiles lists regular files under prefix in the task workspace.
+func ListFiles(ctx context.Context, baseURL, workspaceID, taskID, prefix string, timeout time.Duration) (*FileListResponse, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/files", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file list request: %w", err)
+	}
+	query := httpReq.URL.Query()
+	query.Set("workspace_id", workspaceID)
+	query.Set("task_id", taskID)
+	query.Set("list", prefix)
+	httpReq.URL.RawQuery = query.Encode()
+	if err := signFilesRequest(httpReq, workspaceID, taskID, activationauth.BodySHA256(nil)); err != nil {
+		return nil, err
+	}
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("file list request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("file list returned status %d", resp.StatusCode)
+	}
+	var result FileListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode file list response: %w", err)
+	}
+	return &result, nil
+}
+
+func signFilesRequest(httpReq *http.Request, workspaceID, taskID, bodySHA256 string) error {
+	token, err := activationauth.SignFromEnv(
+		activationauth.ScopeFiles,
+		activationauth.Identity{
+			WorkspaceID:  workspaceID,
+			TaskID:       taskID,
+			Generation:   0,
+			FencingToken: 1,
+		},
+		bodySHA256,
+		time.Now(),
+	)
+	if err != nil {
+		return fmt.Errorf("create files authorization: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	return nil
+}
+
 func GetRuntimeManifest(ctx context.Context, baseURL string, timeout time.Duration, packageInstall string) (*runtimeinfo.Manifest, error) {
 	if err := runtimeinfo.ValidatePackageInstall(packageInstall); err != nil {
 		return nil, err

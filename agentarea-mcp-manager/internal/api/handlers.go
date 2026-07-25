@@ -70,6 +70,9 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	router.POST("/sandbox/executions", h.createSandboxExecution)
 	router.GET("/sandbox/executions/:id", h.getSandboxExecution)
 	router.POST("/sandbox/executions/:id/events", h.applySandboxExecutionEvent)
+	// Sandbox file API: the file tool writes to the same filesystem bash uses.
+	router.PUT("/sandbox/files", h.sandboxFiles)
+	router.GET("/sandbox/files", h.sandboxFiles)
 	// Per-task sandbox teardown, invoked by the Temporal workflow finalizer.
 	router.DELETE("/sandbox/task/:id", h.deleteSandboxTask)
 

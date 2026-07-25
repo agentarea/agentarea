@@ -265,6 +265,15 @@ def _default_input_secret_name(task_id: UUID, field_name: str) -> str:
     return f"task-input/{task_id}/{sanitized}"
 
 
+def _failure_reason_from_result(result: Any) -> str | None:
+    """Extract the stable failure code the workflow persisted into the result."""
+    if isinstance(result, dict):
+        value = result.get("failure_reason")
+        if value:
+            return str(value)
+    return None
+
+
 class TaskResponse(BaseModel):
     id: UUID
     agent_id: UUID
@@ -272,6 +281,11 @@ class TaskResponse(BaseModel):
     parameters: dict[str, Any]
     status: str
     result: dict[str, Any] | str | None = None
+    # Terminal failure cause for a failed/blocked task. `error` is the durable
+    # human-readable message (tasks.error column); `failure_reason` is a stable
+    # code (validation_failed | iteration_limit | budget_exceeded | ...).
+    error: str | None = None
+    failure_reason: str | None = None
     created_at: UtcDatetime
     execution_id: str | None = None  # Workflow execution ID
     total_cost: float | None = None  # LLM token cost in USD
@@ -297,6 +311,22 @@ class TaskResponse(BaseModel):
             execution_id=execution_id,
         )
 
+    @classmethod
+    def from_agent_task(cls, task: Any) -> "TaskResponse":
+        """Build a response from a service-layer AgentTask, surfacing its failure cause."""
+        return cls(
+            id=task.id,
+            agent_id=task.agent_id,
+            description=task.description,
+            parameters=task.task_parameters or {},
+            status=task.status,
+            result=task.result,
+            error=task.error_message,
+            failure_reason=_failure_reason_from_result(task.result),
+            created_at=task.created_at,
+            execution_id=task.execution_id,
+        )
+
 
 class TaskWithAgent(BaseModel):
     """Task response with agent information for global task listing."""
@@ -308,6 +338,8 @@ class TaskWithAgent(BaseModel):
     parameters: dict[str, Any]
     status: str
     result: dict[str, Any] | str | None = None
+    error: str | None = None
+    failure_reason: str | None = None
     created_at: UtcDatetime
     execution_id: str | None = None
     total_cost: float | None = None  # LLM token cost in USD
@@ -327,6 +359,8 @@ class TaskWithAgent(BaseModel):
             parameters=task.parameters,
             status=task.status,
             result=task.result,
+            error=task.error,
+            failure_reason=task.failure_reason,
             created_at=task.created_at,
             execution_id=task.execution_id,
             total_cost=task.total_cost,
@@ -373,6 +407,8 @@ async def get_all_tasks(
                     parameters=task.parameters,
                     status=task.status,
                     result=task.result,
+                    error=task.error,
+                    failure_reason=_failure_reason_from_result(task.result),
                     created_at=task.created_at,
                     execution_id=task.execution_id,
                     total_cost=total_cost,
@@ -424,6 +460,8 @@ async def get_task_by_id(
             parameters=task.parameters,
             status=task.status,
             result=task.result,
+            error=task.error,
+            failure_reason=_failure_reason_from_result(task.result),
             created_at=task.created_at,
             execution_id=task.execution_id,
             total_cost=total_cost,
@@ -892,18 +930,7 @@ async def create_task_for_agent_sync(
         )
 
         # Convert to API response format
-        task_response = TaskResponse(
-            id=task.id,
-            agent_id=task.agent_id,
-            description=task.description,
-            parameters=task.task_parameters,
-            status=task.status,
-            result=task.result,
-            created_at=task.created_at,
-            execution_id=task.execution_id,
-        )
-
-        return task_response
+        return TaskResponse.from_agent_task(task)
 
     except PolicyValidationError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
@@ -955,17 +982,7 @@ async def list_agent_tasks(
                 continue
 
             # Create TaskResponse from service task
-            task_response = TaskResponse(
-                id=task.id,
-                agent_id=task.agent_id,
-                description=task.description,
-                parameters=task.task_parameters or {},
-                status=task.status,
-                result=task.result,
-                created_at=task.created_at,
-                execution_id=task.execution_id,
-            )
-            task_responses.append(task_response)
+            task_responses.append(TaskResponse.from_agent_task(task))
 
         # Sort by created_at descending (newest first)
         task_responses.sort(key=lambda x: x.created_at, reverse=True)
@@ -1003,16 +1020,7 @@ async def get_agent_task(
             if task.agent_id != agent_id:
                 raise HTTPException(status_code=404, detail="Task not found")
 
-            return TaskResponse(
-                id=task.id,
-                agent_id=task.agent_id,
-                description=task.description,
-                parameters=task.task_parameters or {},
-                status=task.status,
-                result=task.result,
-                created_at=task.created_at,
-                execution_id=task.execution_id,
-            )
+            return TaskResponse.from_agent_task(task)
 
         # Fall back to workflow status for workflow-only tasks.
         execution_id = f"task-{task_id}"
@@ -1023,18 +1031,18 @@ async def get_agent_task(
             raise HTTPException(status_code=404, detail="Task not found")
 
         # Convert workflow status to TaskResponse format
-        task_response = TaskResponse(
+        return TaskResponse(
             id=task_id,
             agent_id=agent_id,
             description="Workflow-based task",  # Description not stored in workflow status
             parameters={},  # Parameters not stored in workflow status
             status=status.get("status", "unknown"),
             result=status.get("result"),
+            error=status.get("error"),
+            failure_reason=status.get("failure_reason"),
             created_at=datetime.now(UTC),  # Could be extracted from start_time if available
             execution_id=execution_id,
         )
-
-        return task_response
 
     except HTTPException:
         raise

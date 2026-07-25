@@ -124,9 +124,6 @@ class Activities:
     DISCOVER_RUNTIME_MANIFEST: Final[str] = "discover_runtime_manifest_activity"
     VALIDATE_ARTIFACTS: Final[str] = "validate_artifacts_activity"
     DISCOVER_AVAILABLE_TOOLS: Final[str] = "discover_available_tools_activity"
-    EXECUTE_ADK_AGENT_WITH_TEMPORAL_BACKBONE: Final[str] = (
-        "execute_adk_agent_with_temporal_backbone"
-    )
     CALL_LLM: Final[str] = "call_llm_activity"
     EXECUTE_MCP_TOOL: Final[str] = "execute_mcp_tool_activity"
     CREATE_EXECUTION_PLAN: Final[str] = "create_execution_plan_activity"

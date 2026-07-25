@@ -9,6 +9,7 @@ e2e harness.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from typing import Any
@@ -71,6 +72,7 @@ class _WorkspaceRepository:
         self.task_id = task_id
         self.imports: list[dict[str, Any]] = []
         self.files: dict[str, bytes] = {}
+        self.content_types: dict[str, str | None] = {}
 
     async def put(
         self,
@@ -83,8 +85,8 @@ class _WorkspaceRepository:
     ) -> Any:
         assert workspace_id
         assert task_id
-        assert content_type == "text/x-shellscript"
         self.files[path] = data
+        self.content_types[path] = content_type
         return self._object(path)
 
     async def get(self, workspace_id: str, task_id: str, path: str):
@@ -450,3 +452,223 @@ async def test_concurrent_bash_calls_keep_independent_ctx():
     assert fake_b.calls[0][1]["workflow_id"] == "task-B"
     assert fake_a.calls[0][1]["command"]["workflow_id"] == "task-A"
     assert fake_b.calls[0][1]["command"]["workflow_id"] == "task-B"
+
+
+class _CopyOutClient(_RecordingClient):
+    """RecordingClient that also serves file reads from a fake sandbox disk."""
+
+    def __init__(
+        self, response: _FakeResponse, sandbox_files: dict[str, bytes], read_status: int = 200
+    ) -> None:
+        super().__init__(response)
+        self.sandbox_files = sandbox_files
+        self.read_status = read_status
+        self.file_reads: list[dict[str, Any]] = []
+
+    async def request(self, method: str, url: str, *, params: dict[str, Any], **_: Any):
+        assert method == "GET"
+        assert url.endswith("/sandbox/files")
+        self.file_reads.append(params)
+        if self.read_status >= 400:
+            return _FakeResponse(status_code=self.read_status, text="routing unavailable")
+        data = self.sandbox_files.get(params["path"])
+        if data is None:
+            return _FakeResponse(status_code=404, text="not found")
+        return _FakeResponse(
+            payload={"content_base64": base64.b64encode(data).decode("ascii"), "size": len(data)}
+        )
+
+
+def _result_with_artifact(
+    repository: _WorkspaceRepository,
+    *,
+    path: str,
+    size: int,
+    content_type: str,
+    sha256: str | None = None,
+) -> dict[str, Any]:
+    result = _refs_result(repository, stdout=b"built it")
+    artifact: dict[str, Any] = {"path": path, "size": size, "content_type": content_type}
+    if sha256 is not None:
+        artifact["sha256"] = sha256
+    result["artifacts"] = [artifact]
+    return result
+
+
+_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+@pytest.mark.asyncio
+async def test_bash_copies_bash_produced_artifact_out_to_durable_store():
+    # A binary the agent creates via bash lands only on the ephemeral sandbox
+    # disk with NO committed object ref. The tool must copy it out to the durable
+    # task workspace before returning, so it survives the pod and /files serves it.
+    repository = _WorkspaceRepository()
+    body = b"PK\x03\x04 fake xlsx bytes"
+    payload = _result_with_artifact(
+        repository,
+        path="reports/model.xlsx",
+        size=len(body),
+        content_type=_XLSX,
+        sha256=hashlib.sha256(body).hexdigest(),
+    )
+    fake = _CopyOutClient(_FakeResponse(payload=payload), {"reports/model.xlsx": body})
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp:8000",
+        ctx=_ctx("w"),
+        workspace_repository=repository,
+        http_client=fake,
+    )
+
+    result = await tool.bash("python make_xlsx.py", artifact_paths=["reports/model.xlsx"])
+
+    # the deliverable is now durable and retrievable
+    assert repository.files["reports/model.xlsx"] == body
+    assert repository.content_types["reports/model.xlsx"] == _XLSX
+    # it was read from the sandbox's live workspace, scoped to this task
+    assert fake.file_reads == [
+        {"workspace_id": "workspace-test", "task_id": "task-w", "path": "reports/model.xlsx"}
+    ]
+    # the returned artifact ref carries a committed object_uri, not an error
+    artifacts = json.loads(result["result"])["artifacts"]
+    assert len(artifacts) == 1
+    assert artifacts[0]["object_uri"]
+    assert "error" not in artifacts[0]
+    assert result["artifact_paths"] == ["reports/model.xlsx"]
+
+
+@pytest.mark.asyncio
+async def test_bash_refuses_to_persist_artifact_over_size_cap():
+    from agentarea_agents_sdk.tools.shell_toolset import MAX_DURABLE_ARTIFACT_BYTES
+
+    repository = _WorkspaceRepository()
+    payload = _result_with_artifact(
+        repository,
+        path="huge.bin",
+        size=MAX_DURABLE_ARTIFACT_BYTES + 1,
+        content_type="application/octet-stream",
+    )
+    fake = _CopyOutClient(_FakeResponse(payload=payload), {})
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp:8000",
+        ctx=_ctx("w"),
+        workspace_repository=repository,
+        http_client=fake,
+    )
+
+    result = await tool.bash("python make_huge.py", artifact_paths=["huge.bin"])
+
+    # over the cap: never read, never persisted, and the failure is loud
+    assert fake.file_reads == []
+    assert "huge.bin" not in repository.files
+    artifacts = json.loads(result["result"])["artifacts"]
+    assert "cap" in artifacts[0]["error"]
+    assert "object_uri" not in artifacts[0]
+
+
+@pytest.mark.asyncio
+async def test_bash_surfaces_sandbox_read_failure_instead_of_silent_loss():
+    repository = _WorkspaceRepository()
+    payload = _result_with_artifact(
+        repository, path="reports/model.xlsx", size=10, content_type=_XLSX
+    )
+    fake = _CopyOutClient(
+        _FakeResponse(payload=payload), {"reports/model.xlsx": b"x"}, read_status=503
+    )
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp:8000",
+        ctx=_ctx("w"),
+        workspace_repository=repository,
+        http_client=fake,
+    )
+
+    result = await tool.bash("python make_xlsx.py", artifact_paths=["reports/model.xlsx"])
+
+    # the read failed (no per-task routing): surfaced as an error, not persisted,
+    # never silently reported as delivered
+    assert "reports/model.xlsx" not in repository.files
+    artifacts = json.loads(result["result"])["artifacts"]
+    assert "failed to persist" in artifacts[0]["error"]
+    assert "object_uri" not in artifacts[0]
+
+
+@pytest.mark.asyncio
+async def test_bash_refuses_artifact_whose_bytes_changed_after_report():
+    # The executor hashed the file it discovered; if the bytes served on read
+    # differ (a swap in the live workspace), refuse to commit content the
+    # executor never declared instead of silently persisting the swap.
+    repository = _WorkspaceRepository()
+    served = b"totally different bytes than declared"
+    payload = _result_with_artifact(
+        repository,
+        path="reports/model.xlsx",
+        size=len(served),
+        content_type=_XLSX,
+        sha256=hashlib.sha256(b"the originally reported bytes").hexdigest(),
+    )
+    fake = _CopyOutClient(_FakeResponse(payload=payload), {"reports/model.xlsx": served})
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp:8000",
+        ctx=_ctx("w"),
+        workspace_repository=repository,
+        http_client=fake,
+    )
+
+    result = await tool.bash("python make_xlsx.py", artifact_paths=["reports/model.xlsx"])
+
+    assert "reports/model.xlsx" not in repository.files
+    artifacts = json.loads(result["result"])["artifacts"]
+    assert "changed between report and read" in artifacts[0]["error"]
+    assert "object_uri" not in artifacts[0]
+
+
+@pytest.mark.asyncio
+async def test_bash_caps_on_actual_read_bytes_not_just_declared_size(monkeypatch):
+    # The pre-read cap trusts the executor-declared size; a misreported small size
+    # must not let oversized ACTUAL bytes get buffered and committed.
+    import agentarea_agents_sdk.tools.shell_toolset as st
+
+    monkeypatch.setattr(st, "MAX_DURABLE_ARTIFACT_BYTES", 8)
+    repository = _WorkspaceRepository()
+    served = b"far more than eight bytes on the wire"
+    payload = _result_with_artifact(
+        repository, path="big.bin", size=3, content_type="application/octet-stream"
+    )
+    fake = _CopyOutClient(_FakeResponse(payload=payload), {"big.bin": served})
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp:8000",
+        ctx=_ctx("w"),
+        workspace_repository=repository,
+        http_client=fake,
+    )
+
+    result = await tool.bash("python make_big.py", artifact_paths=["big.bin"])
+
+    assert "big.bin" not in repository.files
+    artifacts = json.loads(result["result"])["artifacts"]
+    assert "durability cap" in artifacts[0]["error"]
+    assert "object_uri" not in artifacts[0]
+
+
+@pytest.mark.asyncio
+async def test_bash_refuses_unsafe_artifact_path_before_reading():
+    repository = _WorkspaceRepository()
+    payload = _result_with_artifact(
+        repository, path="../../etc/passwd", size=6, content_type="text/plain"
+    )
+    fake = _CopyOutClient(_FakeResponse(payload=payload), {"../../etc/passwd": b"root:x"})
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp:8000",
+        ctx=_ctx("w"),
+        workspace_repository=repository,
+        http_client=fake,
+    )
+
+    result = await tool.bash("python x.py", artifact_paths=["../../etc/passwd"])
+
+    # rejected before the proxy read; nothing persisted
+    assert fake.file_reads == []
+    assert "../../etc/passwd" not in repository.files
+    artifacts = json.loads(result["result"])["artifacts"]
+    assert "unsafe artifact path" in artifacts[0]["error"]
+    assert "object_uri" not in artifacts[0]

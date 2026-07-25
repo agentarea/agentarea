@@ -68,3 +68,22 @@ async def test_file_toolset_rejects_absolute_and_traversal_paths():
     )
     assert "escapes workspace" in await tool.save_file("x", "/tmp/x")
     assert "escapes workspace" in await tool.save_file("x", "../x")
+
+
+import pytest as _pytest
+from agentarea_agents_sdk.tools.file_toolset import FileToolset as _FT
+
+
+@_pytest.mark.asyncio
+async def test_save_file_rejects_binary_extensions():
+    tool = _FT(workspace_id="ws")
+    for name in ("deck.pptx", "model.xlsx", "spec.docx", "chart.png", "out.pdf"):
+        msg = await tool.save_file("whatever", name)
+        assert "text only" in msg and "shell" in msg, f"{name}: {msg}"
+
+
+@_pytest.mark.asyncio
+async def test_save_file_still_accepts_text():
+    tool = _FT(workspace_id="ws")
+    assert await tool.save_file("hello", "notes.md") == "notes.md"
+    assert await tool.save_file("x,y", "data.csv") == "data.csv"

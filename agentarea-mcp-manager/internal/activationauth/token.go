@@ -20,6 +20,7 @@ const (
 	ScopeActivate  = "activate"
 	ScopeExecute   = "execute"
 	ScopeWriteback = "writeback"
+	ScopeFiles     = "files"
 	DefaultTTL     = 5 * time.Minute
 )
 
@@ -67,7 +68,7 @@ func Sign(secret []byte, scope string, identity Identity, bodySHA256 string, now
 	if len(secret) < 32 {
 		return "", errors.New("activation auth secret must contain at least 32 bytes")
 	}
-	if scope != ScopeActivate && scope != ScopeExecute && scope != ScopeWriteback {
+	if scope != ScopeActivate && scope != ScopeExecute && scope != ScopeWriteback && scope != ScopeFiles {
 		return "", fmt.Errorf("unsupported activation auth scope %q", scope)
 	}
 	if identity.WorkspaceID == "" || identity.TaskID == "" || identity.Generation < 0 || identity.FencingToken <= 0 {

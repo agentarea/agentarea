@@ -87,6 +87,18 @@ def render_runtime_prompt(
         f"- {compatibility_policy}\n"
         "- Arbitrary code can still be downloaded and run inside the writable task workspace; "
         "the managed-environment profile is not an egress or workspace-code restriction."
+        "\n\n# Workspace and context\n\n"
+        "- Organization context store: read shared organization files with the context tool "
+        "(read-only). It is never changed by anything you do in the sandbox.\n"
+        "- Your working directory IS your task workspace. Files you create there — with the "
+        "file tool or by running a program in the shell — are captured durably and stay "
+        "visible to the user for this task. Use plain relative paths (e.g. `report.xlsx`); a "
+        "file written to an absolute path outside your working directory is scratch and is "
+        "NOT delivered.\n"
+        "- Binary deliverables (.xlsx, .pptx, .docx, .pdf, images): generate them by running a "
+        "program in the shell that writes the file into your working directory (e.g. python "
+        "with openpyxl/python-pptx/python-docx). The file tool saves text only, so writing "
+        "binary through it corrupts the file."
     )
 
 

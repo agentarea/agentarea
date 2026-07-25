@@ -79,6 +79,27 @@ async def test_invalid_manifest_fails_discovery_closed() -> None:
     assert "Do not assume a browser" in render_runtime_prompt(result)
 
 
+def test_render_runtime_prompt_describes_the_three_surfaces() -> None:
+    from agentarea_execution.models import RuntimeDiscoveryResult, RuntimeManifest
+
+    result = RuntimeDiscoveryResult(manifest=RuntimeManifest.model_validate(_manifest()))
+    prompt = render_runtime_prompt(result, package_install="locked")
+
+    # tier 1: org context store, read-only via a tool
+    assert "Organization context store" in prompt
+    assert "context tool" in prompt
+    # tier 2/3 unified for the agent: its working directory IS the durable task
+    # workspace — files created there (relative paths) are captured, and an
+    # absolute path outside it is scratch that is not delivered.
+    assert "working directory" in prompt
+    assert "captured durably" in prompt
+    assert "relative paths" in prompt
+    assert "NOT delivered" in prompt
+    # binary deliverables must be produced via the shell, not the text file tool
+    assert "Binary deliverables" in prompt
+    assert "corrupts the file" in prompt
+
+
 def test_browser_requirement_is_structured_blocked_result() -> None:
     from agentarea_execution.models import RuntimeDiscoveryResult, RuntimeManifest
 

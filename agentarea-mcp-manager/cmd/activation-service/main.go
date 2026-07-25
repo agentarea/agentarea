@@ -5,10 +5,12 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -96,6 +98,7 @@ func main() {
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/activate", activateHandler)
 	http.HandleFunc("/execute", executeHandler)
+	http.HandleFunc("/files", filesHandler)
 	http.HandleFunc("/workspace/writeback", workspaceWritebackHandler)
 	http.HandleFunc("/runtime/manifest", runtimeManifestHandler)
 
@@ -1245,11 +1248,17 @@ func cleanSandboxRelativePath(path string) (string, error) {
 var autoArtifactExtensions = map[string]bool{
 	".csv":  true,
 	".docx": true,
+	".gif":  true,
+	".jpeg": true,
+	".jpg":  true,
 	".json": true,
 	".md":   true,
 	".pdf":  true,
+	".png":  true,
 	".pptx": true,
+	".svg":  true,
 	".txt":  true,
+	".webp": true,
 	".xlsx": true,
 }
 
@@ -1312,13 +1321,11 @@ func discoverAutoArtifacts(workspace string, since time.Time) []string {
 		if infoErr != nil || info.IsDir() || info.Size() <= 0 {
 			return nil
 		}
-		// Only auto-publish files created or modified by this command. Older
-		// files should already have been persisted by the command that created
-		// them, and this avoids uploading package metadata from prior setup
-		// steps on every no-op command.
-		if !since.IsZero() && info.ModTime().Before(since.Add(-1*time.Second)) {
-			return nil
-		}
+		// Collect any allow-listed workspace file by PRESENCE, not mtime: a
+		// deliverable created in an earlier step (e.g. a chart PNG) must still
+		// be published even though a later command touched nothing. Cache dirs
+		// and the extension allow-list bound the set; dedup by content hash
+		// makes re-collecting an unchanged file harmless.
 		candidates = append(candidates, autoArtifactCandidate{
 			path:    rel,
 			modTime: info.ModTime(),
@@ -1362,6 +1369,230 @@ func shouldSkipAutoArtifactFile(rel string) bool {
 		return true
 	}
 	return strings.HasPrefix(base, ".")
+}
+
+// maxFileContentBytes bounds a single file transferred through the sandbox file
+// API. It mirrors the output-capture ceiling so a stale or hostile client cannot
+// exhaust the pod's emptyDir with one request.
+const maxFileContentBytes = 16 * 1024 * 1024
+
+// FilesPutRequest writes a single file into the per-task workspace on the same
+// filesystem bash executes against, so the agent's file tool and its shell see
+// one workspace.
+type FilesPutRequest struct {
+	WorkspaceID   string `json:"workspace_id"`
+	TaskID        string `json:"task_id"`
+	Path          string `json:"path"`
+	ContentBase64 string `json:"content_base64"`
+}
+
+// FilesPutResponse acknowledges a written file.
+type FilesPutResponse struct {
+	Path string `json:"path"`
+	Size int    `json:"size"`
+}
+
+// FilesGetResponse returns a single file's contents.
+type FilesGetResponse struct {
+	ContentBase64 string `json:"content_base64"`
+	Size          int64  `json:"size"`
+}
+
+// FilesListResponse lists the regular files under a prefix.
+type FilesListResponse struct {
+	Paths []string `json:"paths"`
+}
+
+// filesHandler serves the sandbox file API. Writes and reads target the same
+// per-task workspace directory the /execute command runs in, giving the agent's
+// file tool and its bash a shared filesystem.
+func filesHandler(w http.ResponseWriter, r *http.Request) {
+	beginRequest()
+	defer endRequest()
+	switch r.Method {
+	case http.MethodPut:
+		filesPutHandler(w, r)
+	case http.MethodGet:
+		filesGetHandler(w, r)
+	default:
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+func filesPutHandler(w http.ResponseWriter, r *http.Request) {
+	body, err := readActivationRequestBody(r)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		return
+	}
+	var req FilesPutRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		return
+	}
+	if req.WorkspaceID == "" || req.TaskID == "" {
+		http.Error(w, `{"error": "workspace_id and task_id are required"}`, http.StatusBadRequest)
+		return
+	}
+	if !authorizeActivationRequest(w, r, activationauth.ScopeFiles, activationauth.Identity{
+		WorkspaceID: req.WorkspaceID, TaskID: req.TaskID, Generation: 0, FencingToken: 1,
+	}, activationauth.BodySHA256(body)) {
+		return
+	}
+	clean, err := cleanSandboxRelativePath(req.Path)
+	if err != nil || strings.ContainsRune(req.Path, 0) {
+		http.Error(w, `{"error": "path must be relative and must not contain '..' or NUL"}`, http.StatusBadRequest)
+		return
+	}
+	content, err := base64.StdEncoding.DecodeString(req.ContentBase64)
+	if err != nil {
+		http.Error(w, `{"error": "content_base64 is not valid base64"}`, http.StatusBadRequest)
+		return
+	}
+	if len(content) > maxFileContentBytes {
+		http.Error(w, `{"error": "file content is too large"}`, http.StatusRequestEntityTooLarge)
+		return
+	}
+	// Resolve the non-root identity before writing. When the service runs as
+	// root the file MUST end up owned by the sandbox uid, otherwise the bash
+	// command (which runs as that uid) could not read or overwrite it.
+	credential, err := sandboxCommandCredential()
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+	workspaceDir, err := resolveExecutionWorkspace(req.TaskID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	root, err := os.OpenRoot(workspaceDir)
+	if err != nil {
+		http.Error(w, `{"error": "task workspace is unavailable"}`, http.StatusInternalServerError)
+		return
+	}
+	defer root.Close()
+	if dir := filepath.Dir(clean); dir != "." {
+		if err := root.MkdirAll(dir, 0o700); err != nil {
+			http.Error(w, `{"error": "failed to create parent directory"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := root.WriteFile(clean, content, 0o600); err != nil {
+		http.Error(w, `{"error": "failed to write file"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := prepareTaskWorkspace(workspaceDir, credential); err != nil {
+		http.Error(w, `{"error": "failed to prepare non-root task workspace"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(FilesPutResponse{Path: clean, Size: len(content)})
+}
+
+func filesGetHandler(w http.ResponseWriter, r *http.Request) {
+	body, err := readActivationRequestBody(r)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "invalid request: %v"}`, err), http.StatusBadRequest)
+		return
+	}
+	query := r.URL.Query()
+	workspaceID := query.Get("workspace_id")
+	taskID := query.Get("task_id")
+	if workspaceID == "" || taskID == "" {
+		http.Error(w, `{"error": "workspace_id and task_id are required"}`, http.StatusBadRequest)
+		return
+	}
+	if !authorizeActivationRequest(w, r, activationauth.ScopeFiles, activationauth.Identity{
+		WorkspaceID: workspaceID, TaskID: taskID, Generation: 0, FencingToken: 1,
+	}, activationauth.BodySHA256(body)) {
+		return
+	}
+	workspaceDir, err := resolveExecutionWorkspace(taskID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	root, err := os.OpenRoot(workspaceDir)
+	if err != nil {
+		http.Error(w, `{"error": "task workspace is unavailable"}`, http.StatusInternalServerError)
+		return
+	}
+	defer root.Close()
+
+	if query.Has("list") {
+		paths, err := listWorkspaceFiles(root, query.Get("list"))
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(FilesListResponse{Paths: paths})
+		return
+	}
+
+	pathParam := query.Get("path")
+	clean, err := cleanSandboxRelativePath(pathParam)
+	if err != nil || strings.ContainsRune(pathParam, 0) {
+		http.Error(w, `{"error": "path must be relative and must not contain '..' or NUL"}`, http.StatusBadRequest)
+		return
+	}
+	info, err := root.Stat(clean)
+	if err != nil {
+		http.Error(w, `{"error": "file not found"}`, http.StatusNotFound)
+		return
+	}
+	if info.IsDir() {
+		http.Error(w, `{"error": "path is a directory"}`, http.StatusBadRequest)
+		return
+	}
+	if info.Size() > maxFileContentBytes {
+		http.Error(w, `{"error": "file content is too large"}`, http.StatusRequestEntityTooLarge)
+		return
+	}
+	data, err := root.ReadFile(clean)
+	if err != nil {
+		http.Error(w, `{"error": "file not found"}`, http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(FilesGetResponse{
+		ContentBase64: base64.StdEncoding.EncodeToString(data),
+		Size:          int64(len(data)),
+	})
+}
+
+// listWorkspaceFiles returns the relative paths of regular files under prefix.
+// It walks through os.Root so symlinks can never escape the task workspace.
+func listWorkspaceFiles(root *os.Root, prefix string) ([]string, error) {
+	clean := ""
+	if prefix != "" {
+		var err error
+		clean, err = cleanSandboxRelativePath(prefix)
+		if err != nil || strings.ContainsRune(prefix, 0) {
+			return nil, fmt.Errorf("prefix must be relative and must not contain '..' or NUL")
+		}
+		clean = filepath.ToSlash(clean)
+	}
+	paths := make([]string, 0)
+	err := fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || entry.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+		if clean != "" && name != clean && !strings.HasPrefix(name, clean+"/") {
+			return nil
+		}
+		paths = append(paths, name)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(paths)
+	return paths, nil
 }
 
 func workspaceWritebackHandler(w http.ResponseWriter, r *http.Request) {

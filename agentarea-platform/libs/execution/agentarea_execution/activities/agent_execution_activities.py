@@ -299,33 +299,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
     async def validate_artifacts_activity(
         request: ArtifactValidationRequest,
     ) -> ArtifactValidationResult:
-        """Validate the committed task workspace inside its canonical sandbox replica."""
-        from agentarea_agents_sdk.tools.shell_toolset import ShellToolset
+        """Completion barrier: every declared deliverable must be durable in the task workspace."""
         from agentarea_common.artifacts import WorkspaceRepository
 
-        runtime = await discover_runtime_manifest_activity(request.package_install)
         repository = WorkspaceRepository()
-        shell = ShellToolset(
-            mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
-            ctx=ToolInvocationContext(
-                workflow_id=request.workflow_id,
-                task_id=request.task_id,
-                workspace_id=request.workspace_id,
-                metadata={
-                    "source": "artifact_validation",
-                    "package_install": request.package_install,
-                },
-            ),
-            workspace_repository=repository,
-            workspace_id=request.workspace_id,
-            task_id=request.task_id,
-        )
-        return await validate_workspace_artifacts(
-            request,
-            repository=repository,
-            runtime=runtime,
-            execute_in_sandbox=lambda command: shell.bash(command, timeout_seconds=180),
-        )
+        return await validate_workspace_artifacts(request, repository=repository)
 
     @activity.defn
     async def build_agent_config_activity(
@@ -838,23 +816,45 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     )
 
                     # Build runtime kwargs for tools that need request context.
-                    # The file tool is backed by S3 (RustFS locally) and keyed
-                    # under ``workspaces/{workspace_id}/tasks/{task_id}/`` so
-                    # artifacts are grouped by workspace and scoped per task.
                     extra_kwargs: dict = {}
                     if tool_name in ("agentarea/files", "agentarea/workspace_files"):
+                        # The file tool must write to the same filesystem bash
+                        # (agentarea/shell) runs in, so code the agent saves is
+                        # visible to the commands it runs. SandboxFileStore
+                        # targets the pod /workspace via the control-plane
+                        # sandbox file API instead of the S3 task workspace bash
+                        # cannot see. No workspace_repository is passed, so
+                        # FileToolset resolves against self.storage.
+                        from agentarea_agents_sdk.tools.sandbox_file_store import SandboxFileStore
                         from agentarea_common.artifacts import (
                             DbArtifactEventRecorder,
                             WorkspaceRepository,
                         )
 
                         extra_kwargs = {
-                            "workspace_repository": WorkspaceRepository(
-                                recorder=DbArtifactEventRecorder(),
-                                actor=_agent_artifact_actor(request, user_context),
+                            "storage": SandboxFileStore(
+                                mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+                                workspace_id=str(request.workspace_id),
+                                task_id=str(request.task_id) if request.task_id else "",
+                                # Write-through so saved files reach the durable,
+                                # user-visible task workspace the /files API serves.
+                                durable=WorkspaceRepository(
+                                    recorder=DbArtifactEventRecorder(),
+                                    actor=_agent_artifact_actor(request, user_context),
+                                ),
                             ),
                             "workspace_id": str(request.workspace_id),
-                            "task_id": str(request.task_id) if request.task_id else "",
+                        }
+                    elif tool_name == "agentarea/context":
+                        # Read-only access to the org context store (tier 1).
+                        # ArtifactService is workspace-scoped, so the task can
+                        # only read its own workspace's org context. No recorder
+                        # is wired because this tool never writes.
+                        from agentarea_common.artifacts import ArtifactService
+
+                        extra_kwargs = {
+                            "storage": ArtifactService(),
+                            "workspace_id": str(request.workspace_id),
                         }
                     elif tool_name == "agentarea/web":
                         from agentarea_common.artifacts import (

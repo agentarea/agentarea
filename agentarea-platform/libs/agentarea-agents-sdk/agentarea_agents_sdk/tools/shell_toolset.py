@@ -15,6 +15,8 @@ Temporal — it just consumes a value object.
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import json
 import logging
 import time
@@ -31,6 +33,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT_SECONDS = 120
 MAX_TIMEOUT_SECONDS = 1800
 PACKAGE_INSTALL_PROFILES = frozenset({"allowed", "locked"})
+# Upper bound on a single bash-produced artifact copied out to durable storage.
+# Matches the executor's file-API content ceiling: reads above it fail at the
+# sandbox anyway, so a larger file is refused loudly rather than half-copied.
+# Larger deliverables need a streaming path (not built yet) — see copy-out.
+MAX_DURABLE_ARTIFACT_BYTES = 16 * 1024 * 1024
+# Aggregate ceiling on a task's durable workspace. A per-file cap alone leaves
+# N*16MB unbounded; this bounds the whole task so one run cannot fill the store.
+MAX_DURABLE_TASK_BYTES = 1024 * 1024 * 1024
 
 
 @toolset(
@@ -204,6 +214,10 @@ class ShellToolset(Toolset):
     async def _format_result_with_artifacts(self, data: dict[str, Any]) -> dict[str, Any]:
         artifact_refs: list[dict[str, Any]] = []
         artifacts = data.get("artifacts") or data.get("output_refs") or []
+        # Budget for copy-out this call: how many more durable bytes this task may
+        # take. Computed once from the current task size; decremented as each
+        # artifact is persisted so one call cannot blow past the per-task quota.
+        quota_remaining = await self._durable_bytes_remaining()
         for artifact in artifacts:
             if not isinstance(artifact, dict):
                 continue
@@ -225,9 +239,38 @@ class ShellToolset(Toolset):
 
             object_uri = artifact.get("object_uri") or artifact.get("uri")
             if not object_uri:
-                entry["error"] = "sandbox returned an artifact without a committed object reference"
-                artifact_refs.append(entry)
-                continue
+                # A deliverable the agent created via bash lives only on the
+                # ephemeral sandbox disk. Copy it out to the durable task
+                # workspace NOW — synchronously, before this tool returns and
+                # thus before the agent can claim completion (copy-before-claim).
+                # This is the only path by which a binary produced via bash
+                # becomes durable and retrievable through the /files API.
+                try:
+                    persisted = await self._persist_artifact(
+                        requested_path,
+                        artifact.get("content_type"),
+                        int(artifact.get("size") or 0),
+                        expected_sha=str(artifact.get("sha256") or ""),
+                        quota_remaining=quota_remaining,
+                    )
+                except Exception as exc:
+                    logger.exception("failed to persist bash artifact %r", requested_path)
+                    entry["error"] = f"failed to persist artifact durably: {exc}"
+                    artifact_refs.append(entry)
+                    continue
+                persisted_size = int(getattr(persisted, "size", 0) or 0)
+                quota_remaining -= persisted_size
+                entry["size"] = persisted_size
+                artifact = {
+                    **artifact,
+                    "object_uri": persisted.object_uri,
+                    "object_version_or_etag": getattr(
+                        persisted, "object_version_or_etag", None
+                    ),
+                    "sha256": persisted.sha256,
+                    "generation": getattr(persisted, "generation", None),
+                }
+                object_uri = persisted.object_uri
             entry.update(
                 {
                     "artifact_path": requested_path,
@@ -257,6 +300,119 @@ class ShellToolset(Toolset):
             indent=2,
         )
         return outcome
+
+    async def _durable_bytes_remaining(self) -> int:
+        """How many more durable bytes this task may take (per-task quota headroom)."""
+        if self._workspace_repository is None or not self._workspace_id or not self._task_id:
+            return MAX_DURABLE_TASK_BYTES
+        objects = await self._workspace_repository.list(self._workspace_id, self._task_id)
+        used = sum(int(getattr(obj, "size", 0) or 0) for obj in objects)
+        return max(0, MAX_DURABLE_TASK_BYTES - used)
+
+    async def _persist_artifact(
+        self,
+        relative_path: str,
+        content_type: str | None,
+        size: int,
+        *,
+        expected_sha: str = "",
+        quota_remaining: int = MAX_DURABLE_TASK_BYTES,
+    ):
+        """Copy one bash-produced file out of the sandbox into durable storage.
+
+        Reads the bytes from the sandbox's live workspace and commits them to the
+        durable, user-visible task workspace via the trusted repository (the same
+        path the file tool's write-through uses, so /files lists it). Fails loudly
+        — a deliverable the user cannot reach is a silent loss.
+        """
+        if self._workspace_repository is None:
+            raise RuntimeError("workspace repository is not configured")
+        if not self._workspace_id or not self._task_id:
+            raise RuntimeError("workspace_id and task_id are required to persist artifacts")
+        if not relative_path:
+            raise RuntimeError("artifact has no path")
+        # Defense in depth on the read key (the durable write key is normalized by
+        # the repository sink). Refuse an absolute path, a parent-traversal
+        # segment, or a NUL before it reaches the /sandbox/files proxy.
+        if (
+            relative_path.startswith("/")
+            or "\x00" in relative_path
+            or ".." in PurePosixPath(relative_path).parts
+        ):
+            raise RuntimeError(f"unsafe artifact path {relative_path!r}; not persisted")
+        if size > MAX_DURABLE_ARTIFACT_BYTES:
+            raise RuntimeError(
+                f"artifact is {size} bytes, over the {MAX_DURABLE_ARTIFACT_BYTES}-byte "
+                "durability cap; not persisted"
+            )
+        if size > quota_remaining:
+            raise RuntimeError(
+                f"artifact is {size} bytes but only {quota_remaining} bytes remain of the "
+                f"{MAX_DURABLE_TASK_BYTES}-byte task durability quota; not persisted"
+            )
+        content = await self._read_sandbox_file(relative_path)
+        # The executor hashed the file it discovered; recompute over the bytes we
+        # actually read and refuse a mismatch, so a swap in the live workspace
+        # between report and read cannot commit content the executor never saw.
+        if expected_sha:
+            actual_sha = hashlib.sha256(content).hexdigest()
+            if actual_sha != expected_sha:
+                raise RuntimeError(
+                    f"artifact bytes changed between report and read "
+                    f"(sha256 {actual_sha} != declared {expected_sha}); not persisted"
+                )
+        return await self._workspace_repository.put(
+            self._workspace_id,
+            self._task_id,
+            relative_path,
+            content,
+            content_type,
+        )
+
+    async def _read_sandbox_file(self, relative_path: str) -> bytes:
+        """Read a file from the sandbox's live workspace via the control plane.
+
+        The control plane signs the sandbox token and proxies to the executor;
+        no secret lives here. A 503 means the backend has no per-task file
+        routing yet (K8s warm-pool sticky routing) — surfaced, never silently
+        swallowed.
+        """
+        url = f"{self._mcp_manager_url}/sandbox/files"
+        params = {
+            "workspace_id": self._workspace_id,
+            "task_id": self._task_id,
+            "path": relative_path,
+        }
+        client = self._http_client
+        owned = False
+        if client is None:
+            client = httpx.AsyncClient(timeout=30)
+            owned = True
+        try:
+            response = await client.request("GET", url, params=params)
+        finally:
+            if owned:
+                await client.aclose()
+        if response.status_code == 404:
+            raise FileNotFoundError(relative_path)
+        if response.status_code >= 400:
+            # Do not echo the upstream response body into an agent-visible error.
+            raise RuntimeError(
+                f"sandbox file read failed for {relative_path!r}: HTTP {response.status_code}"
+            )
+        body = response.json()
+        encoded = body.get("content_base64")
+        if not isinstance(encoded, str):
+            raise RuntimeError(f"sandbox file read returned no content for {relative_path!r}")
+        content = base64.b64decode(encoded)
+        # Bound the ACTUAL bytes, independent of the pre-read self-reported size:
+        # a misreported size must not let the worker buffer/commit an oversized object.
+        if len(content) > MAX_DURABLE_ARTIFACT_BYTES:
+            raise RuntimeError(
+                f"sandbox file {relative_path!r} is {len(content)} bytes, over the "
+                f"{MAX_DURABLE_ARTIFACT_BYTES}-byte durability cap; not persisted"
+            )
+        return content
 
 
 async def wait_for_sandbox_execution(

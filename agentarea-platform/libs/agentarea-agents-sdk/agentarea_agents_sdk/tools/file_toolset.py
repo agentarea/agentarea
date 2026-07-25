@@ -21,6 +21,17 @@ from typing import Any, Protocol
 from .decorator_tool import Toolset, tool_method
 from .tool_definition import toolset
 
+# Extensions whose files are binary: writing them as UTF-8 text corrupts the
+# payload. save_file is text-only, so it refuses these and directs the agent to
+# generate them via the shell (enforcement, not a prompt hint).
+_BINARY_EXTENSIONS = frozenset(
+    {
+        "xlsx", "xls", "pptx", "ppt", "docx", "doc", "pdf", "zip", "gz", "tar",
+        "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "tiff",
+        "mp3", "mp4", "wav", "ogg", "webm", "mov", "parquet", "sqlite", "db",
+    }
+)
+
 
 @dataclass(frozen=True)
 class StoredObject:
@@ -218,6 +229,14 @@ class FileToolset(Toolset):
         """
         if not self._save_files_enabled:
             return "Error: save_file is disabled for this toolset instance"
+        _ext = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else ""
+        if _ext in _BINARY_EXTENSIONS:
+            return (
+                f"Error: save_file writes UTF-8 text only and would corrupt a .{_ext} file. "
+                "Produce binary deliverables by running a program in the shell that writes the "
+                "file into your workspace (e.g. python with openpyxl/python-pptx/python-docx/"
+                "reportlab, or matplotlib.savefig for images)."
+            )
         try:
             path = self._resolve(file_name)
             if not overwrite and await self._exists(path):

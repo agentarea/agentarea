@@ -60,6 +60,40 @@ func (d *DockerBackend) ExecuteSandbox(ctx context.Context, req warmpool.Execute
 	return warmpool.PostExecute(ctx, base+"/execute", req, 30*time.Second)
 }
 
+// SandboxFilePut writes a file into a task's sandbox workspace on the executor,
+// the same filesystem ExecuteSandbox (bash) runs against. The control plane
+// signs the ScopeFiles token; the executor secret never reaches the worker.
+//
+// TODO(prod-warm-pool): route per-task file requests to the same warm-pool pod
+// that owns the task's exec session (sticky routing), so files land in the pod
+// bash will actually run in. This dev path targets the single configured
+// executor, matching ExecuteSandbox.
+func (d *DockerBackend) SandboxFilePut(ctx context.Context, req warmpool.FilePutRequest) (*warmpool.FilePutResponse, error) {
+	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
+	if base == "" {
+		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	}
+	return warmpool.PutFile(ctx, base, req, 30*time.Second)
+}
+
+// SandboxFileGet reads a file from a task's sandbox workspace on the executor.
+func (d *DockerBackend) SandboxFileGet(ctx context.Context, workspaceID, taskID, path string) (*warmpool.FileGetResponse, error) {
+	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
+	if base == "" {
+		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	}
+	return warmpool.GetFile(ctx, base, workspaceID, taskID, path, 30*time.Second)
+}
+
+// SandboxFileList lists regular files under prefix in a task's sandbox workspace.
+func (d *DockerBackend) SandboxFileList(ctx context.Context, workspaceID, taskID, prefix string) (*warmpool.FileListResponse, error) {
+	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
+	if base == "" {
+		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	}
+	return warmpool.ListFiles(ctx, base, workspaceID, taskID, prefix, 30*time.Second)
+}
+
 // Initialize initializes the Docker backend
 func (d *DockerBackend) Initialize(ctx context.Context) error {
 	d.logger.Info("Initializing Docker backend")
