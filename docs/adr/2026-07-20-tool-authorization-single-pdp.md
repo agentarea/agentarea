@@ -39,26 +39,32 @@ Zero-trust: нет гранта → deny, без fallback ([[feedback_no_default
 
 Гранты в OpenFGA; условия (seal / scope / validity) считаются **внутри** Check по ctx.
 
-    check(s, t, ctx) ∈ { ALLOW, APPROVAL, DENY }        для t ∈ 𝕋
+```text
+check(s, t, ctx) ∈ { ALLOW, APPROVAL, DENY }        для t ∈ 𝕋
+```
 
 `DENY` — значение при **ответившем** оракуле. Недоступность оракула ≠ DENY: check не
 определён → активити падает и **ретраится** (no fallback).
 
 ### Гранты как разбиение по вердикту
 
-    A(ctx) = { t : check = ALLOW }
-    P(ctx) = { t : check = APPROVAL }
-    Γ(ctx) = A(ctx) ∪ P(ctx)          (granted)
-    deny   = 𝕋 \ Γ(ctx)                (дополнение — НИКОГДА не дисклоузим)
+```text
+A(ctx) = { t : check = ALLOW }
+P(ctx) = { t : check = APPROVAL }
+Γ(ctx) = A(ctx) ∪ P(ctx)          (granted)
+deny   = 𝕋 \ Γ(ctx)                (дополнение — НИКОГДА не дисклоузим)
+```
 
 ### Потолок и динамика (seal)
 
-    G_e     = { грант : created_at ≤ e }          (запечатанная база)
-    G_task  = { грант : scope = task_id }          (авторизованные добавки на лету)
-    Ceiling = G_e ∪ G_task                          (максимальный surface задачи)
-    R(τ)    = { гранты, отозванные к моменту τ }
+```text
+G_e     = { грант : created_at ≤ e }          (запечатанная база)
+G_task  = { грант : scope = task_id }          (авторизованные добавки на лету)
+Ceiling = G_e ∪ G_task                          (максимальный surface задачи)
+R(τ)    = { гранты, отозванные к моменту τ }
 
-    Γ(ctx_τ) = ( Ceiling \ R(τ) ) ∩ { t : ABAC(t, ctx_τ) }      ABAC = scope ∈ resource, τ < valid_until
+Γ(ctx_τ) = ( Ceiling \ R(τ) ) ∩ { t : ABAC(t, ctx_τ) }      ABAC = scope ∈ resource, τ < valid_until
+```
 
 - **Анти-инъекция (инвариант):** `∀ τ ≥ e : Γ(ctx_τ) ⊆ Ceiling`. Грант, созданный после `e` и не привязанный к `task_id`, в задачу не течёт.
 - **Отзыв монотонно-субтрактивен:** `R` только растёт ⇒ `Γ` во времени только сужается.
