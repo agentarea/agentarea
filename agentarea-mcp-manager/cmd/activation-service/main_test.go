@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -426,7 +427,7 @@ func TestObjectStoreEndpointHost(t *testing.T) {
 }
 
 func TestCheckedIntFromUint32(t *testing.T) {
-	for _, value := range []uint32{0, 1000, ^uint32(0)} {
+	for _, value := range []uint32{0, 1000, math.MaxInt32} {
 		got, err := checkedIntFromUint32(value)
 		if err != nil {
 			t.Fatalf("checkedIntFromUint32(%d) errored: %v", value, err)
@@ -434,5 +435,8 @@ func TestCheckedIntFromUint32(t *testing.T) {
 		if got != int(value) {
 			t.Fatalf("checkedIntFromUint32(%d) = %d, want %d", value, got, int(value))
 		}
+	}
+	if _, err := checkedIntFromUint32(math.MaxInt32 + 1); err == nil {
+		t.Fatal("expected an error for a uid/gid above the 32-bit signed int range")
 	}
 }

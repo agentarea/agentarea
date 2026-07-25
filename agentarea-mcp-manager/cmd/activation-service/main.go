@@ -1606,7 +1606,7 @@ func workspaceWritebackHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_, _ = file.Seek(0, io.SeekStart)
-		putRequest, requestErr := http.NewRequestWithContext(r.Context(), http.MethodPut, upload.URL, file)
+		putRequest, requestErr := http.NewRequestWithContext(r.Context(), http.MethodPut, parsed.String(), file)
 		if requestErr != nil {
 			file.Close()
 			http.Error(w, `{"error": "failed to create output upload"}`, http.StatusInternalServerError)
@@ -1702,11 +1702,11 @@ func prepareTaskWorkspace(workspaceDir string, credential *syscall.Credential) e
 }
 
 // checkedIntFromUint32 converts a uid/gid to int, failing hard when the value
-// does not fit the platform int (possible on 32-bit) rather than silently
-// wrapping to a negative id.
+// exceeds the guaranteed signed-int range (int is 32-bit on 32-bit platforms)
+// rather than silently wrapping to a negative id.
 func checkedIntFromUint32(value uint32) (int, error) {
-	if uint64(value) > uint64(math.MaxInt) {
-		return 0, fmt.Errorf("uid/gid %d exceeds the platform int range", value)
+	if value > math.MaxInt32 {
+		return 0, fmt.Errorf("uid/gid %d exceeds the 32-bit signed int range", value)
 	}
 	return int(value), nil
 }
