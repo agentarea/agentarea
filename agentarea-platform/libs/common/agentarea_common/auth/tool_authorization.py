@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-__all__ = ["ToolAuthorizationAction", "ToolAuthorizationRequest", "ToolAuthorizationDecision"]
+__all__ = ["ToolAuthorizationAction", "ToolAuthorizationDecision", "ToolAuthorizationRequest"]
 
 
 class ToolAuthorizationAction(StrEnum):

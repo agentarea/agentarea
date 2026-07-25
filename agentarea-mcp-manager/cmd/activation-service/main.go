@@ -821,7 +821,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Run with timeout
 	if err := cmd.Start(); err != nil {
-		_, _ = stderr.Write([]byte(fmt.Sprintf("failed to start: %v", err)))
+		_, _ = fmt.Fprintf(stderr, "failed to start: %v", err)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(ExecuteResponse{
 			Stderr:          stderr.String(),
@@ -955,89 +955,6 @@ func outputCaptureLimit(requested int64) (int64, error) {
 		return 0, fmt.Errorf("capture limit must be between 1 and %d bytes", maxOutputCaptureBytes)
 	}
 	return requested, nil
-}
-
-func hydrationContainsPath(hydration *workspace.Hydration, commandPath string) bool {
-	if hydration == nil {
-		return false
-	}
-	for _, download := range hydration.Downloads {
-		if download.RelativePath == commandPath {
-			return true
-		}
-	}
-	return false
-}
-
-func hydrateWorkspace(workspaceDir string, ref workspace.ManifestRef, hydration workspace.Hydration) error {
-	if err := ref.Validate(); err != nil {
-		return err
-	}
-	if hydration.Generation != ref.Generation || hydration.FencingToken != ref.FencingToken {
-		return fmt.Errorf("workspace hydration generation/fencing mismatch")
-	}
-	// Keep the task workspace across calls: installs, virtualenvs, and files a
-	// previous command wrote must survive for the session. Manifest inputs are
-	// re-synced by overwrite below; only the durable working set persists.
-	if err := os.MkdirAll(workspaceDir, 0o700); err != nil {
-		return fmt.Errorf("create task workspace: %w", err)
-	}
-	root, err := os.OpenRoot(workspaceDir)
-	if err != nil {
-		return fmt.Errorf("open task workspace: %w", err)
-	}
-	defer root.Close()
-	client := &http.Client{
-		Timeout: 10 * time.Minute,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return fmt.Errorf("workspace transfer redirects are forbidden")
-		},
-	}
-	for _, download := range hydration.Downloads {
-		clean, err := workspace.NormalizeRelativePath(download.RelativePath)
-		if err != nil || download.Size < 0 || len(download.SHA256) != 64 {
-			return fmt.Errorf("invalid workspace input descriptor for %q", download.RelativePath)
-		}
-		parsed, err := url.Parse(download.URL)
-		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-			return fmt.Errorf("invalid signed workspace input URL")
-		}
-		req, err := http.NewRequest(http.MethodGet, download.URL, nil)
-		if err != nil {
-			return fmt.Errorf("create workspace download request: %w", err)
-		}
-		applyTransferHeaders(req, download.Headers)
-		response, err := client.Do(req)
-		if err != nil {
-			return fmt.Errorf("download workspace input %q: %w", clean, err)
-		}
-		if response.StatusCode != http.StatusOK {
-			response.Body.Close()
-			return fmt.Errorf("download workspace input %q returned status %d", clean, response.StatusCode)
-		}
-		if err := root.MkdirAll(filepath.Dir(clean), 0o700); err != nil {
-			response.Body.Close()
-			return fmt.Errorf("create input directory for %q: %w", clean, err)
-		}
-		mode := os.FileMode(download.Mode & 0o777)
-		if mode == 0 {
-			mode = 0o600
-		}
-		_ = root.Remove(clean)
-		file, err := root.OpenFile(clean, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
-		if err != nil {
-			response.Body.Close()
-			return fmt.Errorf("create workspace input %q: %w", clean, err)
-		}
-		hasher := sha256.New()
-		written, copyErr := io.Copy(io.MultiWriter(file, hasher), io.LimitReader(response.Body, download.Size+1))
-		closeErr := file.Close()
-		response.Body.Close()
-		if copyErr != nil || closeErr != nil || written != download.Size || hex.EncodeToString(hasher.Sum(nil)) != download.SHA256 {
-			return fmt.Errorf("workspace input %q failed size/checksum verification", clean)
-		}
-	}
-	return nil
 }
 
 func collectArtifacts(workspace string, paths []string, since time.Time) []SandboxArtifact {

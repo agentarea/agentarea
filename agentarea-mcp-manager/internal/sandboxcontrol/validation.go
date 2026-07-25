@@ -236,6 +236,11 @@ func validateInternalMetadata(values map[string]string) error {
 	return nil
 }
 
+// field/invariant); splitting it would scatter the checks without reducing
+// real complexity. Matches this branch's documented "complexity debt out of
+// scope" stance in .golangci.yml.
+//
+//nolint:gocyclo // A result validator is inherently branchy (one guard per
 func validateExecutionResult(result *warmpool.ExecuteResponse) error {
 	if result == nil {
 		return nil

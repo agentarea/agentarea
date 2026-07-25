@@ -222,7 +222,7 @@ func createRefsOnlyExecution(t *testing.T, ctx context.Context, service *Service
 			ObjectURI:           fmt.Sprintf("s3://trusted/workspaces/workspace-canary/tasks/task-%d/objects/%s", generation, digest),
 			ObjectVersionOrETag: "etag-immutable",
 			SHA256:              digest,
-			Size:                int64(objectSize),
+			Size:                objectSize,
 		}},
 	})
 	if err != nil {
