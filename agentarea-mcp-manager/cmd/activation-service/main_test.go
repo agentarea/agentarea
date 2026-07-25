@@ -392,3 +392,47 @@ func TestRuntimeManifestHandlerRejectsManifestFromDifferentProfile(t *testing.T)
 		t.Fatalf("expected 409, got %d: %s", response.Code, response.Body.String())
 	}
 }
+
+func TestObjectStoreEndpointHost(t *testing.T) {
+	t.Run("fails hard when unset", func(t *testing.T) {
+		t.Setenv("SANDBOX_WORKSPACE_S3_ENDPOINT", "")
+		t.Setenv("AWS_ENDPOINT_URL", "")
+		if _, err := objectStoreEndpointHost(); err == nil {
+			t.Fatal("expected an error when no object store endpoint is configured")
+		}
+	})
+	t.Run("primary variable wins and trailing slash is trimmed", func(t *testing.T) {
+		t.Setenv("SANDBOX_WORKSPACE_S3_ENDPOINT", "http://rustfs:9000/")
+		t.Setenv("AWS_ENDPOINT_URL", "https://s3.amazonaws.com")
+		host, err := objectStoreEndpointHost()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if host != "rustfs:9000" {
+			t.Fatalf("host = %q, want rustfs:9000", host)
+		}
+	})
+	t.Run("falls back to AWS_ENDPOINT_URL", func(t *testing.T) {
+		t.Setenv("SANDBOX_WORKSPACE_S3_ENDPOINT", "")
+		t.Setenv("AWS_ENDPOINT_URL", "https://s3.amazonaws.com")
+		host, err := objectStoreEndpointHost()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if host != "s3.amazonaws.com" {
+			t.Fatalf("host = %q, want s3.amazonaws.com", host)
+		}
+	})
+}
+
+func TestCheckedIntFromUint32(t *testing.T) {
+	for _, value := range []uint32{0, 1000, ^uint32(0)} {
+		got, err := checkedIntFromUint32(value)
+		if err != nil {
+			t.Fatalf("checkedIntFromUint32(%d) errored: %v", value, err)
+		}
+		if got != int(value) {
+			t.Fatalf("checkedIntFromUint32(%d) = %d, want %d", value, got, int(value))
+		}
+	}
+}

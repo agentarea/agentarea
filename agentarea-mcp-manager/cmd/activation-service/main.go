@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -1556,6 +1557,11 @@ func workspaceWritebackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer root.Close()
+	allowedHost, endpointErr := objectStoreEndpointHost()
+	if endpointErr != nil {
+		http.Error(w, `{"error": "object store endpoint is not configured"}`, http.StatusInternalServerError)
+		return
+	}
 	client := &http.Client{
 		Timeout: 10 * time.Minute,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
@@ -1576,6 +1582,10 @@ func workspaceWritebackHandler(w http.ResponseWriter, r *http.Request) {
 		parsed, parseErr := url.Parse(upload.URL)
 		if parseErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 			http.Error(w, `{"error": "invalid signed output URL"}`, http.StatusBadRequest)
+			return
+		}
+		if parsed.Host != allowedHost {
+			http.Error(w, `{"error": "signed output URL host is not the configured object store"}`, http.StatusForbidden)
 			return
 		}
 		file, openErr := root.Open(clean)
@@ -1675,12 +1685,50 @@ func prepareTaskWorkspace(workspaceDir string, credential *syscall.Credential) e
 	if credential == nil {
 		return nil
 	}
+	uid, err := checkedIntFromUint32(credential.Uid)
+	if err != nil {
+		return err
+	}
+	gid, err := checkedIntFromUint32(credential.Gid)
+	if err != nil {
+		return err
+	}
 	return filepath.WalkDir(workspaceDir, func(path string, _ os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		return os.Chown(path, int(credential.Uid), int(credential.Gid))
+		return os.Chown(path, uid, gid)
 	})
+}
+
+// checkedIntFromUint32 converts a uid/gid to int, failing hard when the value
+// does not fit the platform int (possible on 32-bit) rather than silently
+// wrapping to a negative id.
+func checkedIntFromUint32(value uint32) (int, error) {
+	if uint64(value) > uint64(math.MaxInt) {
+		return 0, fmt.Errorf("uid/gid %d exceeds the platform int range", value)
+	}
+	return int(value), nil
+}
+
+// objectStoreEndpointHost returns the host:port that presigned writeback URLs
+// must target. It mirrors the endpoint the control plane presigns against
+// (SANDBOX_WORKSPACE_S3_ENDPOINT, falling back to AWS_ENDPOINT_URL) and fails
+// hard when unset so a misconfigured runner cannot relay control-plane URLs to
+// an attacker-chosen host.
+func objectStoreEndpointHost() (string, error) {
+	endpoint := os.Getenv("SANDBOX_WORKSPACE_S3_ENDPOINT")
+	if endpoint == "" {
+		endpoint = os.Getenv("AWS_ENDPOINT_URL")
+	}
+	if endpoint == "" {
+		return "", fmt.Errorf("object store endpoint is not configured: set SANDBOX_WORKSPACE_S3_ENDPOINT or AWS_ENDPOINT_URL")
+	}
+	parsed, err := url.Parse(strings.TrimRight(endpoint, "/"))
+	if err != nil || parsed.Host == "" {
+		return "", fmt.Errorf("object store endpoint is not a valid URL")
+	}
+	return parsed.Host, nil
 }
 
 func applyTransferHeaders(req *http.Request, headers map[string]string) {
