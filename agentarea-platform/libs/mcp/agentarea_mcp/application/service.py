@@ -9,9 +9,10 @@ from uuid import UUID
 
 from agentarea_common.audit import audited
 from agentarea_common.base.service import BaseCrudService
-from agentarea_common.config import get_database
+from agentarea_common.config import get_database, get_settings
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
 
 from agentarea_mcp.application.auth_service import MCPAuthService, OAuthReauthRequiredError
 from agentarea_mcp.domain.events import (
@@ -1194,6 +1195,17 @@ class MCPServerInstanceService:
     ) -> dict[str, Any]:
         if not url:
             return {"valid": False, "errors": ["URL is required"]}
+
+        # This endpoint returns the upstream tool list to the caller, so an
+        # unguarded URL here is a full-read SSRF, not a blind one. Refuse before
+        # dialing: a check after the request would still reach the internal host.
+        try:
+            validate_outbound_url(url, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
+        except UnsafeUrlError:
+            # Deliberately generic: a specific reason would turn this into a DNS
+            # oracle telling the caller which internal names resolve.
+            logger.warning("Refused MCP connection validation for a non-public URL", exc_info=True)
+            return {"valid": False, "errors": ["URL is not allowed"]}
 
         try:
             result = await self._list_tools_via_mcp(url, headers or {})
