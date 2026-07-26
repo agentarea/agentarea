@@ -108,10 +108,14 @@ class _WorkspaceRepository:
             raise ValueError("tampered object reference")
         return self.files[path], item.content_type
 
-    async def list(self, workspace_id: str, task_id: str):
+    async def list(self, workspace_id: str, task_id: str, prefix: str = "", **_: Any):
         assert workspace_id
         assert task_id
-        return [self._object(path) for path in sorted(self.files)]
+        return [
+            self._object(path)
+            for path in sorted(self.files)
+            if not prefix or path.startswith(prefix)
+        ]
 
     def add_output(self, path: str, data: bytes) -> dict[str, Any]:
         self.files[path] = data
@@ -672,3 +676,88 @@ async def test_bash_refuses_unsafe_artifact_path_before_reading():
     artifacts = json.loads(result["result"])["artifacts"]
     assert "unsafe artifact path" in artifacts[0]["error"]
     assert "object_uri" not in artifacts[0]
+
+
+class _CopyInClient(_RecordingClient):
+    """RecordingClient that also captures file writes to the fake sandbox disk."""
+
+    def __init__(self, response: _FakeResponse) -> None:
+        super().__init__(response)
+        self.file_writes: list[dict[str, Any]] = []
+
+    async def request(self, method: str, url: str, *, json: dict[str, Any], **_: Any):
+        assert method == "PUT"
+        assert url.endswith("/sandbox/files")
+        self.file_writes.append(json)
+        return _FakeResponse(
+            status_code=200, payload={"path": json["path"], "size": len(json["content_base64"])}
+        )
+
+
+@pytest.mark.asyncio
+async def test_bash_copies_durable_inputs_into_sandbox():
+    # A durable task input (an attachment, an imported project file) must land
+    # in the sandbox filesystem before bash runs, so the agent sees one working
+    # directory. The tool pushes each input through the /sandbox/files PUT proxy.
+    repository = _WorkspaceRepository("workspace-1", "task-abc")
+    repository.files["inputs/attachments/data.csv"] = b"a,b\n1,2\n"
+    fake = _CopyInClient(_FakeResponse(payload=_refs_result(repository, stdout=b"ok")))
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp-manager:8000",
+        ctx=_ctx("workflow-abc", task_id="task-abc", workspace_id="workspace-1"),
+        workspace_repository=repository,
+        http_client=fake,
+    )
+
+    await tool.bash("cat inputs/attachments/data.csv")
+
+    # the durable input was written into the sandbox FS at the same relative path
+    assert len(fake.file_writes) == 1
+    write = fake.file_writes[0]
+    assert write["workspace_id"] == "workspace-1"
+    assert write["task_id"] == "task-abc"
+    assert write["path"] == "inputs/attachments/data.csv"
+    assert base64.b64decode(write["content_base64"]) == b"a,b\n1,2\n"
+    # the execution still carries the command; no S3 input_refs on the wire
+    _, payload = fake.calls[0]
+    assert payload["command"]["command_body"] == "cat inputs/attachments/data.csv"
+    assert "input_refs" not in payload["command"]
+
+
+@pytest.mark.asyncio
+async def test_bash_stages_inputs_only_once_per_session():
+    # The session workspace persists inputs across bash calls, so the copy-in
+    # runs once — a second bash in the same session must not re-push them.
+    repository = _WorkspaceRepository("workspace-1", "task-abc")
+    repository.files["inputs/attachments/data.csv"] = b"a,b\n1,2\n"
+    fake = _CopyInClient(_FakeResponse(payload=_refs_result(repository, stdout=b"ok")))
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp-manager:8000",
+        ctx=_ctx("workflow-abc", task_id="task-abc", workspace_id="workspace-1"),
+        workspace_repository=repository,
+        http_client=fake,
+    )
+
+    await tool.bash("head inputs/attachments/data.csv")
+    await tool.bash("wc -l inputs/attachments/data.csv")
+
+    assert len(fake.file_writes) == 1
+
+
+@pytest.mark.asyncio
+async def test_bash_writes_no_inputs_when_none_durable():
+    repository = _WorkspaceRepository("workspace-1", "task-abc")
+    fake = _CopyInClient(_FakeResponse(payload=_refs_result(repository, stdout=b"ok")))
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp-manager:8000",
+        ctx=_ctx("workflow-abc", task_id="task-abc", workspace_id="workspace-1"),
+        workspace_repository=repository,
+        http_client=fake,
+    )
+
+    await tool.bash("echo ok")
+
+    assert fake.file_writes == []
+    _, payload = fake.calls[0]
+    assert "input_refs" not in payload["command"]
+    assert payload["command"]["command_body"] == "echo ok"
