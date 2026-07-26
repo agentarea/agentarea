@@ -37,7 +37,10 @@ def _ensure_all_toolsets_imported() -> None:
     platform_modules = [
         "agentarea_api.tools.agents_toolset",
         "agentarea_api.tools.runs_toolset",
-        "agentarea_api.tools.skills_toolset",
+        # skills_toolset lives in agentarea_agents (a worker-importable lib) so
+        # agents running in the worker can register agentarea/skills; the other
+        # platform toolsets remain API-only until similarly relocated.
+        "agentarea_agents.tools.skills_toolset",
         "agentarea_api.tools.projects_toolset",
         "agentarea_api.tools.openapi_connections_toolset",
         "agentarea_api.tools.mcp_servers_toolset",
