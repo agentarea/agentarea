@@ -141,15 +141,18 @@ def setup_logging(
     }
 
     logging.config.dictConfig(config)
-    install_secret_redaction()
+    install_log_filters()
 
 
-def install_secret_redaction() -> None:
-    """Put the redacting filter on every handler that exists right now.
+def install_log_filters() -> None:
+    """Put the redacting AND sanitizing filters on every handler that exists right now.
 
-    Handler filters only run for records reaching THAT handler, so registering it
+    Handler filters only run for records reaching THAT handler, so registering them
     on our console handler leaves anything logging through its own handlers —
     uvicorn, gunicorn, a library that configured logging first — unprotected.
+    uvicorn in particular gives uvicorn.access/uvicorn.error their own handlers with
+    propagate=False, so those records never reach ours: without this they would keep
+    both the secrets and the CR/LF an attacker can use to forge log lines.
     Re-run this after any code that adds handlers.
     """
     for logger in (
@@ -161,8 +164,10 @@ def install_secret_redaction() -> None:
         ),
     ):
         for handler in logger.handlers:
-            if not any(isinstance(f, SecretRedactingFilter) for f in handler.filters):
-                handler.addFilter(SecretRedactingFilter())
+            # Same order as the console handler: redact first, then strip control chars.
+            for filter_cls in (SecretRedactingFilter, LogSanitizerFilter):
+                if not any(isinstance(f, filter_cls) for f in handler.filters):
+                    handler.addFilter(filter_cls())
 
 
 def _current_trace_ids() -> dict[str, str]:
