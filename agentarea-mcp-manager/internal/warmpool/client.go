@@ -253,7 +253,6 @@ type ExecuteRequest struct {
 	CommandPath          string                 `json:"command_path,omitempty"`
 	PackageInstall       string                 `json:"package_install"`
 	ArtifactPaths        []string               `json:"artifact_paths,omitempty"`
-	InputRefs            []InputRef             `json:"input_refs,omitempty"`
 	TimeoutSeconds       int                    `json:"timeout_seconds,omitempty"`
 	StdoutMaxBytes       int64                  `json:"stdout_max_bytes,omitempty"`
 	StderrMaxBytes       int64                  `json:"stderr_max_bytes,omitempty"`
@@ -262,18 +261,6 @@ type ExecuteRequest struct {
 	WorkspaceID          string                 `json:"workspace_id,omitempty"`
 	WorkspaceManifestRef *workspace.ManifestRef `json:"workspace_manifest_ref,omitempty"`
 	WorkspaceHydration   *workspace.Hydration   `json:"workspace_hydration,omitempty"`
-}
-
-// InputRef is a durable task input the sandbox materializes into its session
-// workspace at first bring-up (copy-in). URL is a short-lived presigned GET
-// minted control-plane side; the sandbox holds no object-store credentials and
-// only fetches it, the same way write-back uploads to a presigned URL.
-type InputRef struct {
-	RelativePath string `json:"relative_path"`
-	URL          string `json:"url"`
-	ObjectURI    string `json:"object_uri,omitempty"`
-	SHA256       string `json:"sha256,omitempty"`
-	Size         int64  `json:"size,omitempty"`
 }
 
 // MaxCommandBodyBytes bounds the inline command carried in an execution request.

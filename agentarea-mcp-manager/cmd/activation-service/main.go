@@ -665,7 +665,6 @@ type ExecuteRequest struct {
 	CommandPath          string                 `json:"command_path,omitempty"`
 	PackageInstall       string                 `json:"package_install"`
 	ArtifactPaths        []string               `json:"artifact_paths,omitempty"`
-	InputRefs            []InputRef             `json:"input_refs,omitempty"`
 	TimeoutSeconds       int                    `json:"timeout_seconds,omitempty"`
 	StdoutMaxBytes       int64                  `json:"stdout_max_bytes,omitempty"`
 	StderrMaxBytes       int64                  `json:"stderr_max_bytes,omitempty"`
@@ -676,22 +675,7 @@ type ExecuteRequest struct {
 	WorkspaceHydration   *workspace.Hydration   `json:"workspace_hydration,omitempty"`
 }
 
-// InputRef is a durable task input to materialize into the session workspace at
-// first bring-up. URL is a short-lived presigned GET; the executor fetches it
-// over the same host-allowlisted transport write-back uses and holds no
-// object-store credentials of its own.
-type InputRef struct {
-	RelativePath string `json:"relative_path"`
-	URL          string `json:"url"`
-	ObjectURI    string `json:"object_uri,omitempty"`
-	SHA256       string `json:"sha256,omitempty"`
-	Size         int64  `json:"size,omitempty"`
-}
-
 const maxCommandBodyBytes = 256 * 1024
-
-// maxInputRefs bounds how many durable inputs one bring-up may materialize.
-const maxInputRefs = 200
 
 // SandboxArtifact is a file produced by a sandbox command and requested by the caller.
 type SandboxArtifact struct {
@@ -794,9 +778,9 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		timeout = req.TimeoutSeconds
 	}
 
-	workspaceDir, provisionStatus, provisionErr := resolveExecutionWorkspaceWithInputs(req.TaskID, req.InputRefs)
-	if provisionErr != "" {
-		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, provisionErr), provisionStatus)
+	workspaceDir, err := resolveExecutionWorkspace(req.TaskID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
 		return
 	}
 	commandsDir := filepath.Join(workspaceDir, ".agentarea", "commands")
@@ -1754,159 +1738,6 @@ func applyTransferHeaders(req *http.Request, headers map[string]string) {
 		}
 		req.Header.Set(key, value)
 	}
-}
-
-// objectStoreBucket returns the bucket a task input's object_uri must belong to.
-// It mirrors the control plane's bucket resolution (SANDBOX_WORKSPACE_S3_BUCKET,
-// then ARTIFACTS_BUCKET_NAME) and fails hard when unset so an input cannot be
-// sourced from an unverifiable bucket.
-func objectStoreBucket() (string, error) {
-	bucket := os.Getenv("SANDBOX_WORKSPACE_S3_BUCKET")
-	if bucket == "" {
-		bucket = os.Getenv("ARTIFACTS_BUCKET_NAME")
-	}
-	if bucket == "" {
-		return "", fmt.Errorf("object store bucket is not configured: set SANDBOX_WORKSPACE_S3_BUCKET or ARTIFACTS_BUCKET_NAME")
-	}
-	return bucket, nil
-}
-
-// resolveExecutionWorkspaceWithInputs resolves the task's session workspace and
-// materializes its durable inputs into it before the command runs. It returns
-// the HTTP status and message to send on failure so executeHandler keeps a
-// single workspace error path. A bad task identity is a client error; an input
-// transfer failure is an internal error surfaced loudly, never swallowed.
-func resolveExecutionWorkspaceWithInputs(taskID string, refs []InputRef) (string, int, string) {
-	workspaceDir, err := resolveExecutionWorkspace(taskID)
-	if err != nil {
-		return "", http.StatusBadRequest, err.Error()
-	}
-	// Provision before prepareTaskWorkspace so the existing chown hands the
-	// inputs to the sandbox uid alongside the command.
-	if err := provisionTaskInputs(workspaceDir, refs); err != nil {
-		return "", http.StatusInternalServerError, err.Error()
-	}
-	return workspaceDir, 0, ""
-}
-
-// provisionTaskInputs materializes a task's durable inputs into the session
-// workspace on the first bring-up of a session, so bash sees them as ordinary
-// files in its one working directory. It is the mirror of copy-out and, like the
-// write-back upload, transfers over a presigned URL and holds no object-store
-// credentials. A marker file makes it run once per session: the persistent
-// workspace already holds the inputs on every later call.
-func provisionTaskInputs(workspaceDir string, refs []InputRef) error {
-	if len(refs) == 0 {
-		return nil
-	}
-	marker := filepath.Join(workspaceDir, ".agentarea", ".inputs_provisioned")
-	if _, err := os.Stat(marker); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("inspect inputs marker: %w", err)
-	}
-	if len(refs) > maxInputRefs {
-		return fmt.Errorf("input_refs exceeds %d entries", maxInputRefs)
-	}
-	allowedHost, err := objectStoreEndpointHost()
-	if err != nil {
-		return err
-	}
-	bucket, err := objectStoreBucket()
-	if err != nil {
-		return err
-	}
-	client := &http.Client{
-		Timeout: 10 * time.Minute,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return fmt.Errorf("workspace transfer redirects are forbidden")
-		},
-	}
-	for _, ref := range refs {
-		if err := fetchTaskInput(client, workspaceDir, allowedHost, bucket, ref); err != nil {
-			return err
-		}
-	}
-	if err := os.MkdirAll(filepath.Dir(marker), 0o700); err != nil {
-		return fmt.Errorf("create inputs marker directory: %w", err)
-	}
-	if err := os.WriteFile(marker, []byte(time.Now().UTC().Format(time.RFC3339)), 0o600); err != nil {
-		return fmt.Errorf("write inputs marker: %w", err)
-	}
-	return nil
-}
-
-// fetchTaskInput downloads one durable input from its presigned URL and writes
-// it into the workspace at its relative path. Every failure is returned, never
-// swallowed: a missing input the agent expects must surface loudly.
-func fetchTaskInput(client *http.Client, workspaceDir, allowedHost, bucket string, ref InputRef) error {
-	clean, err := workspace.NormalizeRelativePath(ref.RelativePath)
-	if err != nil {
-		return fmt.Errorf("invalid input path %q", ref.RelativePath)
-	}
-	if err := validateInputObjectURI(ref.ObjectURI, bucket); err != nil {
-		return err
-	}
-	parsed, err := url.Parse(ref.URL)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return fmt.Errorf("invalid signed input URL for %q", clean)
-	}
-	if parsed.Host != allowedHost {
-		return fmt.Errorf("signed input URL host is not the configured object store for %q", clean)
-	}
-	target := filepath.Join(workspaceDir, filepath.FromSlash(clean))
-	if err := ValidateFilePath(workspaceDir, target); err != nil {
-		return err
-	}
-	request, err := http.NewRequest(http.MethodGet, parsed.String(), nil)
-	if err != nil {
-		return fmt.Errorf("create input download for %q: %w", clean, err)
-	}
-	response, err := client.Do(request)
-	if err != nil {
-		return fmt.Errorf("download input %q: %w", clean, err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("download input %q returned status %d", clean, response.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxFileContentBytes+1))
-	if err != nil {
-		return fmt.Errorf("read input %q: %w", clean, err)
-	}
-	if int64(len(body)) > maxFileContentBytes {
-		return fmt.Errorf("input %q exceeds %d bytes", clean, maxFileContentBytes)
-	}
-	if ref.Size != 0 && int64(len(body)) != ref.Size {
-		return fmt.Errorf("input %q size mismatch: got %d, want %d", clean, len(body), ref.Size)
-	}
-	if ref.SHA256 != "" {
-		sum := sha256.Sum256(body)
-		if hex.EncodeToString(sum[:]) != ref.SHA256 {
-			return fmt.Errorf("input %q checksum mismatch", clean)
-		}
-	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
-		return fmt.Errorf("create input directory for %q: %w", clean, err)
-	}
-	if err := os.WriteFile(target, body, 0o600); err != nil {
-		return fmt.Errorf("write input %q: %w", clean, err)
-	}
-	return nil
-}
-
-// validateInputObjectURI rejects any input whose object_uri is not a well-formed
-// immutable s3 URI under the configured bucket, mirroring the write-back host
-// allowlist so a task cannot be fed an object from an unauthorized bucket.
-func validateInputObjectURI(objectURI, bucket string) error {
-	parsed, err := url.Parse(objectURI)
-	if err != nil || parsed.Scheme != "s3" || parsed.Host == "" || parsed.Path == "" || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("input object_uri must be an immutable s3 URI")
-	}
-	if parsed.Host != bucket {
-		return fmt.Errorf("input object_uri bucket %q is not the configured object store", parsed.Host)
-	}
-	return nil
 }
 
 // beginRequest/endRequest record activity for the idle watchdog.

@@ -69,6 +69,7 @@ class ShellToolset(Toolset):
         self._workspace_id = workspace_id or self._ctx.workspace_id
         self._task_id = task_id or self._ctx.task_id
         self._http_client = http_client
+        self._inputs_materialized = False
 
     @tool_method
     async def bash(
@@ -96,12 +97,10 @@ class ShellToolset(Toolset):
             command_payload["workflow_id"] = self._ctx.workflow_id
         try:
             await self._stage_inputs()
-            input_refs = await self._collect_input_refs()
+            await self._materialize_inputs()
         except Exception as exc:
             logger.exception("failed to stage task workspace inputs")
             return _tool_error(f"failed to prepare workspace: {exc}")
-        if input_refs:
-            command_payload["input_refs"] = input_refs
         command_payload["command_body"] = command
 
         payload: dict[str, Any] = {
@@ -187,21 +186,35 @@ class ShellToolset(Toolset):
             provenance={"source": "project", "project_id": project_id},
         )
 
-    async def _collect_input_refs(self) -> list[dict[str, Any]]:
-        """List the task's durable inputs as presigned refs for the sandbox.
+    async def _materialize_inputs(self) -> None:
+        """Copy the task's durable inputs into the sandbox's live workspace.
 
-        The sandbox materializes these into its working directory on first
-        bring-up (copy-in), the mirror of copy-out. Only refs travel here — the
-        bytes move directly between object storage and the sandbox, never
-        through this process or Redis. An empty list is the legitimate
-        no-inputs case.
+        The mirror of copy-out: the agent works in one directory, so durable
+        input files must land in the sandbox filesystem at the same relative
+        path before bash runs. Reads each input's bytes from the trusted
+        workspace repository and writes them through the /sandbox/files proxy,
+        the same filesystem bash executes against. Runs once per session — the
+        session workspace persists the files across later bash calls. No durable
+        inputs is the legitimate empty case, not a fallback.
         """
+        if self._inputs_materialized:
+            return
         if self._workspace_repository is None or not self._workspace_id or not self._task_id:
-            return []
-        return await self._workspace_repository.list_input_refs(
+            return
+        inputs = await self._workspace_repository.list(
             self._workspace_id,
             self._task_id,
+            prefix="inputs/",
         )
+        for obj in inputs:
+            relative_path = obj.path
+            content, _ = await self._workspace_repository.get(
+                self._workspace_id,
+                self._task_id,
+                relative_path,
+            )
+            await self._write_sandbox_file(relative_path, content)
+        self._inputs_materialized = True
 
     async def _resolve_output_refs(self, data: dict[str, Any]) -> dict[str, Any]:
         """Read stdout/stderr through the trusted canonical workspace repository."""
@@ -385,6 +398,37 @@ class ShellToolset(Toolset):
             content,
             content_type,
         )
+
+    async def _write_sandbox_file(self, relative_path: str, content: bytes) -> None:
+        """Write a file into the sandbox's live workspace via the control plane.
+
+        The write mirror of ``_read_sandbox_file``: the control plane signs the
+        sandbox token and proxies the PUT to the executor, which writes the file
+        into the same per-task session workspace bash runs in. No secret lives
+        here. A non-2xx (e.g. 503 when the backend has no per-task file routing
+        yet) is surfaced, never silently swallowed.
+        """
+        url = f"{self._mcp_manager_url}/sandbox/files"
+        payload = {
+            "workspace_id": self._workspace_id,
+            "task_id": self._task_id,
+            "path": relative_path,
+            "content_base64": base64.b64encode(content).decode("ascii"),
+        }
+        client = self._http_client
+        owned = False
+        if client is None:
+            client = httpx.AsyncClient(timeout=30)
+            owned = True
+        try:
+            response = await client.request("PUT", url, json=payload)
+        finally:
+            if owned:
+                await client.aclose()
+        if response.status_code < 200 or response.status_code >= 300:
+            raise RuntimeError(
+                f"sandbox file write failed for {relative_path!r}: HTTP {response.status_code}"
+            )
 
     async def _read_sandbox_file(self, relative_path: str) -> bytes:
         """Read a file from the sandbox's live workspace via the control plane.
