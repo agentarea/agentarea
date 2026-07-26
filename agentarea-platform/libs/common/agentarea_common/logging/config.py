@@ -164,10 +164,16 @@ def install_log_filters() -> None:
         ),
     ):
         for handler in logger.handlers:
-            # Same order as the console handler: redact first, then strip control chars.
-            for filter_cls in (SecretRedactingFilter, LogSanitizerFilter):
-                if not any(isinstance(f, filter_cls) for f in handler.filters):
-                    handler.addFilter(filter_cls())
+            # Normalize rather than append. The console handler declares
+            # redact-then-sanitize, and only adding whichever filter is missing
+            # would invert that order on a handler that already carried the
+            # sanitizer — leaving the documented order and the real one apart.
+            others = [
+                f
+                for f in handler.filters
+                if not isinstance(f, SecretRedactingFilter | LogSanitizerFilter)
+            ]
+            handler.filters = [*others, SecretRedactingFilter(), LogSanitizerFilter()]
 
 
 def _current_trace_ids() -> dict[str, str]:

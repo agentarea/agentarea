@@ -120,3 +120,30 @@ class TestInstallLogFiltersCoversForeignHandlers:
             assert sum(isinstance(f, SecretRedactingFilter) for f in handler.filters) == 1
         finally:
             logger.removeHandler(handler)
+
+    def test_redaction_runs_before_sanitization_even_if_sanitizer_was_already_there(self):
+        """Order is documented as redact-then-sanitize; it has to hold, not just be stated."""
+        logger, handler, _ = self._foreign_logger("uvicorn.access.test_order")
+        handler.addFilter(LogSanitizerFilter())
+        try:
+            install_log_filters()
+
+            ours = [
+                type(f)
+                for f in handler.filters
+                if isinstance(f, SecretRedactingFilter | LogSanitizerFilter)
+            ]
+            assert ours == [SecretRedactingFilter, LogSanitizerFilter]
+        finally:
+            logger.removeHandler(handler)
+
+    def test_unrelated_filters_are_preserved(self):
+        logger, handler, _ = self._foreign_logger("uvicorn.access.test_preserve")
+        marker = logging.Filter(name="unrelated")
+        handler.addFilter(marker)
+        try:
+            install_log_filters()
+
+            assert marker in handler.filters
+        finally:
+            logger.removeHandler(handler)
