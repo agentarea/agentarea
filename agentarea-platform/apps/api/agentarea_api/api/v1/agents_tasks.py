@@ -24,6 +24,7 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.base import ReadRepositoryFactoryDep
 from agentarea_common.config.app import get_app_settings
 from agentarea_common.events.contract import TASK_CANCELLED, TASK_COMPLETED, TASK_FAILED
 from agentarea_common.money import ZERO, Money, serialize_money
@@ -31,6 +32,7 @@ from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
+from agentarea_tasks.infrastructure.repository import TaskEventRepository
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -1726,7 +1728,7 @@ async def resolve_task_escalation(
 async def get_task_events(
     agent_id: UUID,
     task_id: UUID,
-    user_context: UserContextDep,
+    repository_factory: ReadRepositoryFactoryDep,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of events per page"),
     event_type: str | None = Query(None, description="Filter by event type"),
@@ -1739,74 +1741,39 @@ async def get_task_events(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     try:
-        from agentarea_api.api.deps.database import get_db_session
-        from sqlalchemy import text
+        # Read through the workspace-scoped repository. The check above only
+        # proves the caller owns an agent with this id — `agent_id` is a route
+        # parameter and is never tied to the task — so the workspace filter
+        # inside the repository is the actual authorization boundary here.
+        event_repository = repository_factory.create_repository(TaskEventRepository)
+        records, total_events = await event_repository.list_for_task(
+            task_id,
+            event_type=event_type,
+            limit=page_size,
+            offset=(page - 1) * page_size,
+        )
 
-        # Get database session
-        async with get_db_session() as session:
-            # Build the query with optional event type filter
-            base_query = """
-                SELECT id, task_id, event_type, timestamp, data, event_metadata,
-                       COUNT(*) OVER() as total_count
-                FROM task_events
-                WHERE task_id = :task_id
-            """
-
-            params: dict[str, Any] = {"task_id": str(task_id)}
-
-            if event_type:
-                base_query += " AND event_type = :event_type"
-                params["event_type"] = event_type
-
-            base_query += """
-                ORDER BY timestamp ASC
-                LIMIT :limit OFFSET :offset
-            """
-
-            params.update({"limit": page_size, "offset": (page - 1) * page_size})
-
-            # Execute query
-            result = await session.execute(text(base_query), params)
-            rows = result.fetchall()
-
-        if not rows:
-            # No events found - return empty response
-            return TaskEventResponse(
-                events=[],
-                total=0,
-                page=page,
-                page_size=page_size,
-                has_next=False,
+        events = [
+            TaskEvent(
+                id=str(record.id),
+                task_id=str(record.task_id),
+                agent_id=str(agent_id),
+                execution_id=record.data.get("execution_id")
+                or record.metadata.get("execution_id", "unknown"),
+                timestamp=record.timestamp,
+                event_type=record.event_type,
+                message=record.data.get("message", f"Event: {record.event_type}"),
+                metadata=dict(record.data) if record.data else {},
             )
-
-        # Convert database rows to TaskEvent objects
-        total_events = rows[0].total_count if rows else 0
-        events = []
-
-        for row in rows:
-            events.append(
-                TaskEvent(
-                    id=str(row.id),
-                    task_id=str(row.task_id),
-                    agent_id=str(agent_id),
-                    execution_id=row.data.get("execution_id")
-                    or row.event_metadata.get("execution_id", "unknown"),
-                    timestamp=row.timestamp,
-                    event_type=row.event_type,
-                    message=row.data.get("message", f"Event: {row.event_type}"),
-                    metadata=dict(row.data) if row.data else {},
-                )
-            )
-
-        # Calculate pagination info
-        has_next = (page * page_size) < total_events
+            for record in records
+        ]
 
         return TaskEventResponse(
             events=events,
             total=total_events,
             page=page,
             page_size=page_size,
-            has_next=has_next,
+            has_next=(page * page_size) < total_events,
         )
 
     except Exception as e:

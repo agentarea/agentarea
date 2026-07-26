@@ -411,6 +411,39 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
 
         return [self._orm_to_domain(event_orm) for event_orm in event_orms]
 
+    async def list_for_task(
+        self,
+        task_id: UUID,
+        *,
+        event_type: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[TaskEvent], int]:
+        """Return one workspace-scoped page of a task's events, plus the total.
+
+        Readers of ``task_events`` must come through here rather than hand-writing
+        SQL: the event payload carries message content and tool arguments, and a
+        query filtered on ``task_id`` alone reads across every workspace.
+        """
+        conditions = [TaskEventORM.task_id == task_id, self._get_workspace_filter()]
+        if event_type:
+            conditions.append(TaskEventORM.event_type == event_type)
+
+        total = (
+            await self.session.scalar(
+                select(func.count()).select_from(TaskEventORM).where(*conditions)
+            )
+        ) or 0
+
+        result = await self.session.execute(
+            select(TaskEventORM)
+            .where(*conditions)
+            .order_by(TaskEventORM.timestamp.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return [self._orm_to_domain(orm) for orm in result.scalars().all()], total
+
     async def get_events_by_type(
         self, event_type: str, limit: int = 100, offset: int = 0
     ) -> list[TaskEvent]:
