@@ -29,7 +29,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
 
-const version = "0.0.12"
+const version = "0.0.13"
 
 // backendAdapter adapts the backends.Backend interface to providers.Backend interface
 // to avoid import cycles between providers and backends packages
