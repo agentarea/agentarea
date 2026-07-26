@@ -6,6 +6,7 @@ For external agents, use A2AAgentTool instead.
 
 import asyncio
 import logging
+import os
 import time
 from typing import Any
 from uuid import UUID, uuid4
@@ -15,8 +16,12 @@ from .base_tool import BaseTool, ToolExecutionError
 
 logger = logging.getLogger(__name__)
 
-# Max time to wait for delegated task to complete (seconds)
-DELEGATION_POLL_TIMEOUT = 120.0
+# Max time the coordinator waits for a delegated task to complete (seconds). A
+# delegated task is itself a full agent run — a research sub-agent doing web
+# calls can legitimately need several minutes — so the old 120s abandoned
+# still-working sub-agents and forced the coordinator to fall back. Default to
+# a task-scale horizon; override via env for longer/shorter delegations.
+DELEGATION_POLL_TIMEOUT = float(os.getenv("AGENT_DELEGATION_POLL_TIMEOUT", "600"))
 DELEGATION_POLL_INTERVAL = 2.0
 
 
