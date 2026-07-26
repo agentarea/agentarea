@@ -23,3 +23,35 @@ paths-ignore:
   - "**/*.test.ts"
   - "**/e2e/**"
   - "config/auth/keto/**"
+
+# Queries whose preconditions do not hold in this codebase. Each was verified
+# against every one of its alerts before being excluded here; re-check before
+# adding to this list, and never add a query that has a single true positive.
+#
+# The two clear-text-logging queries are deliberately NOT excluded: today every
+# one of their alerts is a secret *name* rather than a value, but they are the
+# queries that would catch a genuine credential leak, so the handful of false
+# positives is worth keeping them armed.
+query-filters:
+  # log-injection (py + go): forging a log line requires smuggling a CR/LF
+  # through to the output. Python renders every record via
+  # WorkspaceContextFormatter (json.dumps escapes newlines) and setup_logging
+  # installs LogSanitizerFilter on every handler in the process, including
+  # foreign ones such as uvicorn.access — see agentarea_common/logging. Go logs
+  # exclusively through slog attributes, and both JSONHandler and TextHandler
+  # escape or quote control characters in the message and in every value.
+  - exclude:
+      id: py/log-injection
+  - exclude:
+      id: go/log-injection
+
+  # Every alert is an `...` (Ellipsis) body in a typing.Protocol method stub,
+  # which is the required way to spell those declarations.
+  - exclude:
+      id: py/ineffectual-statement
+
+  # agentarea_execution/__init__.py resolves its __all__ names through a PEP 562
+  # module __getattr__ (lazy export, to avoid importing Temporal-hostile modules
+  # at package import time), which the query cannot follow.
+  - exclude:
+      id: py/undefined-export

@@ -2,7 +2,7 @@
 
 from .config import (
     WorkspaceContextFormatter,
-    install_secret_redaction,
+    install_log_filters,
     setup_logging,
     update_logging_context,
 )
@@ -20,7 +20,7 @@ __all__ = [
     "WorkspaceContextFilter",
     "WorkspaceContextFormatter",
     "get_context_logger",
-    "install_secret_redaction",
+    "install_log_filters",
     "setup_logging",
     "update_logging_context",
 ]
