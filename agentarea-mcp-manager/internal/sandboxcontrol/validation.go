@@ -2,6 +2,7 @@ package sandboxcontrol
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
@@ -17,6 +18,7 @@ const (
 	maxPersistedObjectVersion   = 512
 	maxArtifactPaths            = 256
 	maxArtifactPathBytesTotal   = 16 * 1024
+	maxInputRefs                = 200
 	maxOutputRefs               = 10002
 	maxWorkspaceChanges         = 10000
 	maxTimeoutSeconds           = 3600
@@ -211,6 +213,44 @@ func validatePersistedCommand(command warmpool.ExecuteRequest) error {
 			return fmt.Errorf("duplicate artifact_path %q", clean)
 		}
 		seen[clean] = struct{}{}
+	}
+	return validateInputRefs(command.InputRefs)
+}
+
+// validateInputRefs bounds and structurally checks the copy-in refs carried in
+// a command. It stays structural: the executor holds the authoritative host and
+// bucket allowlist for the transfer, so this only rejects malformed refs before
+// they are persisted.
+func validateInputRefs(refs []warmpool.InputRef) error {
+	if len(refs) > maxInputRefs {
+		return fmt.Errorf("input_refs exceeds %d entries", maxInputRefs)
+	}
+	seen := make(map[string]struct{}, len(refs))
+	for _, ref := range refs {
+		clean, err := workspace.NormalizeRelativePath(ref.RelativePath)
+		if err != nil || len(clean) > maxPersistedPathBytes {
+			return fmt.Errorf("invalid bounded input_ref relative_path")
+		}
+		if _, exists := seen[clean]; exists {
+			return fmt.Errorf("duplicate input_ref %q", clean)
+		}
+		seen[clean] = struct{}{}
+		if ref.URL == "" || len(ref.URL) > maxPersistedURIBytes {
+			return fmt.Errorf("input_ref %q must carry a bounded transfer URL", clean)
+		}
+		if len(ref.ObjectURI) > maxPersistedURIBytes {
+			return fmt.Errorf("input_ref %q object_uri exceeds persistence limit", clean)
+		}
+		parsed, parseErr := url.Parse(ref.ObjectURI)
+		if parseErr != nil || parsed.Scheme != "s3" || parsed.Host == "" || parsed.Path == "" {
+			return fmt.Errorf("input_ref %q object_uri must be an s3 URI", clean)
+		}
+		if ref.SHA256 != "" && (len(ref.SHA256) != 64 || !isLowerHex(ref.SHA256)) {
+			return fmt.Errorf("input_ref %q sha256 must be a lowercase digest", clean)
+		}
+		if ref.Size < 0 {
+			return fmt.Errorf("input_ref %q size is negative", clean)
+		}
 	}
 	return nil
 }

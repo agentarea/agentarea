@@ -113,6 +113,25 @@ class _WorkspaceRepository:
         assert task_id
         return [self._object(path) for path in sorted(self.files)]
 
+    async def list_input_refs(self, workspace_id: str, task_id: str, **_: Any):
+        assert workspace_id
+        assert task_id
+        refs = []
+        for path in sorted(self.files):
+            if not path.startswith("inputs/"):
+                continue
+            item = self._object(path)
+            refs.append(
+                {
+                    "relative_path": item.path,
+                    "object_uri": item.object_uri,
+                    "url": f"http://object-store/{item.object_uri.split('://', 1)[1]}",
+                    "sha256": item.sha256,
+                    "size": item.size,
+                }
+            )
+        return refs
+
     def add_output(self, path: str, data: bytes) -> dict[str, Any]:
         self.files[path] = data
         item = self._object(path)
@@ -672,3 +691,41 @@ async def test_bash_refuses_unsafe_artifact_path_before_reading():
     artifacts = json.loads(result["result"])["artifacts"]
     assert "unsafe artifact path" in artifacts[0]["error"]
     assert "object_uri" not in artifacts[0]
+
+
+@pytest.mark.asyncio
+async def test_bash_forwards_durable_input_refs():
+    repository = _WorkspaceRepository("workspace-1", "task-abc")
+    repository.files["inputs/attachments/data.csv"] = b"a,b\n1,2\n"
+    fake = _RecordingClient(_FakeResponse(payload=_refs_result(repository, stdout=b"ok")))
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp-manager:8000",
+        ctx=_ctx("workflow-abc", task_id="task-abc", workspace_id="workspace-1"),
+        workspace_repository=repository,
+        http_client=fake,
+    )
+
+    await tool.bash("cat inputs/attachments/data.csv")
+
+    _, payload = fake.calls[0]
+    refs = payload["command"]["input_refs"]
+    assert [ref["relative_path"] for ref in refs] == ["inputs/attachments/data.csv"]
+    assert refs[0]["url"].startswith("http://object-store/")
+    assert refs[0]["object_uri"].startswith("s3://artifacts/")
+
+
+@pytest.mark.asyncio
+async def test_bash_omits_input_refs_when_no_inputs():
+    repository = _WorkspaceRepository("workspace-1", "task-abc")
+    fake = _RecordingClient(_FakeResponse(payload=_refs_result(repository, stdout=b"ok")))
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp-manager:8000",
+        ctx=_ctx("workflow-abc", task_id="task-abc", workspace_id="workspace-1"),
+        workspace_repository=repository,
+        http_client=fake,
+    )
+
+    await tool.bash("echo ok")
+
+    _, payload = fake.calls[0]
+    assert "input_refs" not in payload["command"]

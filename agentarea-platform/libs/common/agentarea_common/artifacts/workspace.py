@@ -1205,6 +1205,47 @@ class S3WorkspaceRepository:
                 break
         return output
 
+    async def list_input_refs(
+        self,
+        workspace_id: str,
+        task_id: str,
+        *,
+        prefix: str = "inputs/",
+        url_ttl_seconds: int = 3600,
+    ) -> list[dict[str, Any]]:
+        """Presign GET URLs for the durable task inputs under ``prefix``.
+
+        The sandbox executor holds no object-store credentials; it materializes
+        these inputs by fetching each presigned URL, the same way write-back
+        uploads to a presigned URL. The URLs are minted with this repository's S3
+        client, so copy-in shares copy-out's credential path. An empty list is
+        the legitimate no-inputs case, not a fallback.
+        """
+        normalized_prefix = prefix if prefix.endswith("/") else f"{prefix}/"
+        _, entries, _ = await self._snapshot(workspace_id, task_id)
+        refs: list[dict[str, Any]] = []
+        for path in sorted(entries):
+            entry = entries[path]
+            if entry.deleted or not path.startswith(normalized_prefix):
+                continue
+            key = self._validate_uri(workspace_id, task_id, entry.object_uri)
+            url = await asyncio.to_thread(
+                self._client.generate_presigned_url,
+                "get_object",
+                Params={"Bucket": self._bucket, "Key": key},
+                ExpiresIn=url_ttl_seconds,
+            )
+            refs.append(
+                {
+                    "relative_path": entry.relative_path,
+                    "object_uri": entry.object_uri,
+                    "url": url,
+                    "sha256": entry.sha256,
+                    "size": entry.size,
+                }
+            )
+        return refs
+
     async def list_task_ids(self, workspace_id: str) -> list[str]:
         """Discover every canonical task prefix without scanning object histories."""
         if not _IDENTIFIER_RE.fullmatch(workspace_id or ""):

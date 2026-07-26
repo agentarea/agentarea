@@ -96,9 +96,12 @@ class ShellToolset(Toolset):
             command_payload["workflow_id"] = self._ctx.workflow_id
         try:
             await self._stage_inputs()
+            input_refs = await self._collect_input_refs()
         except Exception as exc:
             logger.exception("failed to stage task workspace inputs")
             return _tool_error(f"failed to prepare workspace: {exc}")
+        if input_refs:
+            command_payload["input_refs"] = input_refs
         command_payload["command_body"] = command
 
         payload: dict[str, Any] = {
@@ -182,6 +185,22 @@ class ShellToolset(Toolset):
             source_prefix=f"projects/{project_id}",
             target_prefix="inputs/project",
             provenance={"source": "project", "project_id": project_id},
+        )
+
+    async def _collect_input_refs(self) -> list[dict[str, Any]]:
+        """List the task's durable inputs as presigned refs for the sandbox.
+
+        The sandbox materializes these into its working directory on first
+        bring-up (copy-in), the mirror of copy-out. Only refs travel here — the
+        bytes move directly between object storage and the sandbox, never
+        through this process or Redis. An empty list is the legitimate
+        no-inputs case.
+        """
+        if self._workspace_repository is None or not self._workspace_id or not self._task_id:
+            return []
+        return await self._workspace_repository.list_input_refs(
+            self._workspace_id,
+            self._task_id,
         )
 
     async def _resolve_output_refs(self, data: dict[str, Any]) -> dict[str, Any]:
