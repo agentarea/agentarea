@@ -212,7 +212,12 @@ jobs:
         if: ${{ inputs.push }}
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ inputs.component }}-${{ matrix.arch }}
+          # `.` separates the component from the arch, NOT `-`. The merge job
+          # globs these by component name, and one component name is a prefix of
+          # another (mcp-runner / mcp-runner-locked), so a `-` separator lets
+          # `digests-mcp-runner-*` swallow the locked image's digests and the
+          # manifest step then asks for them under the wrong repository.
+          name: digests-${{ inputs.component }}.${{ matrix.arch }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -241,7 +246,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ${{ runner.temp }}/digests
-          pattern: digests-${{ inputs.component }}-*
+          pattern: digests-${{ inputs.component }}.*
           merge-multiple: true
 
       - name: Set up Docker Buildx
