@@ -443,6 +443,96 @@ class TestServiceCreateInstance:
         await asyncio.sleep(0)
         assert len(verify_called) == 1
 
+    @pytest.mark.asyncio
+    async def test_container_instance_is_marked_lazy_when_enabled(self, monkeypatch):
+        """Nothing else writes lazy_provisioning, so if creation does not stamp
+        it the platform flag is inert: every instance stays eager, is never
+        reaped, and runs until someone deletes it."""
+        monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "true")
+        svc = _make_service()
+
+        with patch("agentarea_mcp.application.service.verify", new=AsyncMock()), \
+             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
+            inst = await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="docker-inst",
+                    server_spec_id="test-spec-id",
+                    json_spec={"type": "docker"},
+                )
+            )
+
+        assert inst is not None
+        assert inst.json_spec.get("lazy_provisioning") is True
+
+    @pytest.mark.asyncio
+    async def test_container_instance_is_eager_when_flag_off(self, monkeypatch):
+        """The decision is recorded at creation, so turning the flag on later
+        must not retroactively shorten the life of an existing instance."""
+        monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "false")
+        svc = _make_service()
+
+        with patch("agentarea_mcp.application.service.verify", new=AsyncMock()), \
+             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
+            inst = await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="docker-inst",
+                    server_spec_id="test-spec-id",
+                    json_spec={"type": "docker"},
+                )
+            )
+
+        assert inst is not None
+        assert inst.json_spec.get("lazy_provisioning") is False
+
+    @pytest.mark.asyncio
+    async def test_url_instance_is_never_lazy(self, monkeypatch):
+        """A url-type instance has no container to start or stop, so marking it
+        lazy would defer a verification that costs nothing to run now."""
+        monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "true")
+        svc = _make_service()
+        url_spec = MagicMock()
+        url_spec.id = "test-spec-id"
+        url_spec.workspace_id = svc.repository.user_context.workspace_id
+        url_spec.remote_url = "http://test.example.com/mcp"
+        url_spec.cmd = None
+        url_spec.docker_image_url = None
+        url_spec.json_spec = {"type": "url", "endpoint_url": "http://test.example.com/mcp"}
+        url_spec.env_schema = []
+        svc.mcp_server_repository.get_server_by_id = AsyncMock(return_value=url_spec)
+
+        fake_verification = {"schema_version": 1, "status": "succeeded", "at": "x", "error": None}
+        with patch("agentarea_mcp.application.service.verify", new=AsyncMock(return_value=fake_verification)), \
+             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
+            inst = await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="url-inst",
+                    server_spec_id="test-spec-id",
+                    json_spec={"type": "url", "endpoint_url": "http://test.example.com/mcp"},
+                )
+            )
+
+        assert inst is not None
+        assert "lazy_provisioning" not in inst.json_spec
+
+    @pytest.mark.asyncio
+    async def test_explicit_lazy_choice_is_not_overridden(self, monkeypatch):
+        """An explicit per-instance choice wins over the platform default."""
+        monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "false")
+        svc = _make_service()
+
+        with patch("agentarea_mcp.application.service.verify", new=AsyncMock()), \
+             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
+            inst = await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="docker-inst",
+                    server_spec_id="test-spec-id",
+                    json_spec={"type": "docker", "lazy_provisioning": True},
+                )
+            )
+
+        assert inst is not None
+        assert inst.json_spec.get("lazy_provisioning") is True
+
     def test_bundle_create_payload_is_rejected(self):
         """Bundle is no longer a valid MCP server instance type."""
         with pytest.raises(ValueError, match="bundle"):
