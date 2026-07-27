@@ -95,10 +95,10 @@ def render_runtime_prompt(
         "visible to the user for this task. Use plain relative paths (e.g. `report.xlsx`); a "
         "file written to an absolute path outside your working directory is scratch and is "
         "NOT delivered.\n"
-        "- Binary deliverables (.xlsx, .pptx, .docx, .pdf, images): generate them by running a "
-        "program in the shell that writes the file into your working directory (e.g. python "
-        "with openpyxl/python-pptx/python-docx). The file tool saves text only, so writing "
-        "binary through it corrupts the file."
+        "- Binary deliverables (.xlsx, .pptx, .docx, .pdf, images): the file tool saves text "
+        "only, so writing binary through it corrupts the file. Generate them by running a "
+        "program in the shell that writes the file into your working directory, using a "
+        "library from the preinstalled packages listed above."
     )
 
 
