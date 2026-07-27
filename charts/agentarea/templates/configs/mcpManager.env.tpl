@@ -23,8 +23,8 @@ KUBERNETES_DEFAULT_CPU_LIMIT: "500m"
 KUBERNETES_DEFAULT_MEMORY_REQUEST: "128Mi"
 KUBERNETES_DEFAULT_MEMORY_LIMIT: "512Mi"
 MCP_FEATURES_ENABLED: "{{ join "," .Values.mcpManager.features.enabled }}"
-MCP_IDLE_TIMEOUT: "{{ .Values.mcpManager.idleTimeout | default "0" }}"
-MCP_IDLE_SWEEP_INTERVAL: "{{ .Values.mcpManager.idleSweepInterval | default "60s" }}"
+MCP_IDLE_TIMEOUT: "{{ if .Values.mcpManager.serverless.enabled }}{{ .Values.mcpManager.serverless.idleTimeout }}{{ else }}0{{ end }}"
+MCP_IDLE_SWEEP_INTERVAL: "{{ .Values.mcpManager.serverless.sweepInterval }}"
 {{- end }}
 
 {{- define "agentarea.mcpManager.envs" }}

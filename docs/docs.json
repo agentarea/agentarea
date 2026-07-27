@@ -34,6 +34,7 @@
           "agent-governance",
           "mcp-integration",
           "mcp-oauth",
+          "serverless-mcp",
           "compound-mcps",
           "event-triggers"
         ]
