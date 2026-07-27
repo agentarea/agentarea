@@ -356,22 +356,9 @@ func (d *DockerBackend) specToCreateRequest(spec *InstanceSpec) (models.CreateCo
 
 	// Resolve the confinement for this workload. An MCP server is third-party
 	// code, so the default is a confined tier, not the daemon's defaults.
-	tier := spec.IsolationTier
-	if tier == "" {
-		tier = d.config.Container.DefaultIsolationTier
-	}
-	isolation, err := config.ResolveIsolation(tier)
+	isolation, err := resolveSpecIsolation(spec, d.config.Container.DefaultIsolationTier)
 	if err != nil {
 		return models.CreateContainerRequest{}, err
-	}
-	// The spec's explicit runtime/writable paths refine the resolved tier; they
-	// never weaken it, since a stricter runtime is the only thing they can add.
-	if spec.RuntimeClass != "" {
-		isolation.Runtime = spec.RuntimeClass
-	}
-	if len(spec.WritablePaths) > 0 {
-		isolation.ReadOnlyRootFilesystem = true
-		isolation.WritablePaths = spec.WritablePaths
 	}
 	req.Isolation = isolation
 

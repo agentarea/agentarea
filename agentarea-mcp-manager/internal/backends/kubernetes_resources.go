@@ -121,18 +121,29 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 		resourceRequirements.Limits[corev1.ResourceMemory] = resource.MustParse(limits.Memory)
 	}
 
+	// Resolve the workload's isolation tier and apply it on top of the
+	// operator's configured context. The tier may only tighten: the operator
+	// hardens the whole cluster, a tier hardens one workload further.
+	isolation, err := resolveSpecIsolation(spec, k.config.Container.DefaultIsolationTier)
+	if err != nil {
+		return err
+	}
+
+	readOnlyRoot := k.k8sConfig.SecurityContext.ReadOnlyRootFilesystem || isolation.ReadOnlyRootFilesystem
+	allowPrivilegeEscalation := k.k8sConfig.SecurityContext.AllowPrivilegeEscalation && !isolation.NoNewPrivileges
+
 	// Security context
 	securityContext := &corev1.SecurityContext{
 		RunAsNonRoot:             &k.k8sConfig.SecurityContext.RunAsNonRoot,
 		RunAsUser:                &k.k8sConfig.SecurityContext.RunAsUser,
-		ReadOnlyRootFilesystem:   &k.k8sConfig.SecurityContext.ReadOnlyRootFilesystem,
-		AllowPrivilegeEscalation: &k.k8sConfig.SecurityContext.AllowPrivilegeEscalation,
+		ReadOnlyRootFilesystem:   &readOnlyRoot,
+		AllowPrivilegeEscalation: &allowPrivilegeEscalation,
 		Capabilities: &corev1.Capabilities{
 			Drop: []corev1.Capability{},
 		},
 	}
 
-	for _, cap := range k.k8sConfig.SecurityContext.DropCapabilities {
+	for _, cap := range tightenDropCapabilities(k.k8sConfig.SecurityContext.DropCapabilities, isolation) {
 		securityContext.Capabilities.Drop = append(securityContext.Capabilities.Drop, corev1.Capability(cap))
 	}
 
@@ -239,10 +250,7 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 	// Determine runtime class. The operator-configured class wins: a caller may
 	// only choose a runtime class when none is enforced cluster-wide, so a request
 	// can never downgrade away a sandbox runtime (e.g. gVisor/Kata) set by config.
-	runtimeClassName := k.k8sConfig.RuntimeClass
-	if runtimeClassName == "" && spec.RuntimeClass != "" {
-		runtimeClassName = spec.RuntimeClass
-	}
+	runtimeClassName := tightenRuntimeClass(k.k8sConfig.RuntimeClass, isolation, spec.RuntimeClass)
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
