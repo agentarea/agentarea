@@ -50,6 +50,7 @@ type Container struct {
 	Labels      map[string]string `json:"labels,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
 	Command     []string          `json:"command,omitempty"`
+	Isolation   Isolation         `json:"isolation,omitzero"`
 }
 
 // VolumeMount represents a volume mount
@@ -70,6 +71,7 @@ type CreateContainerRequest struct {
 	Volumes     []VolumeMount     `json:"volumes,omitempty"`
 	MemoryLimit string            `json:"memory_limit,omitempty"`
 	CPULimit    string            `json:"cpu_limit,omitempty"`
+	Isolation   Isolation         `json:"isolation,omitzero"`
 }
 
 // HealthResponse represents the health check response

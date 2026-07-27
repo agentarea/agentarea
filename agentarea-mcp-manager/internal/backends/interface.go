@@ -57,6 +57,13 @@ type InstanceSpec struct {
 	// Runtime configuration
 	RuntimeClass string `json:"runtime_class,omitempty"`
 
+	// IsolationTier names the confinement this workload gets ("trusted",
+	// "standard", "untrusted"). It declares what we assume about the code
+	// rather than a flag list, so a caller cannot forget one. Empty means the
+	// backend applies its configured default; RuntimeClass and WritablePaths
+	// above still override the resolved profile.
+	IsolationTier string `json:"isolation_tier,omitempty"`
+
 	// Metadata
 	InstanceID  string `json:"instance_id"`
 	WorkspaceID string `json:"workspace_id,omitempty"`
