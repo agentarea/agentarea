@@ -4,15 +4,20 @@ Discovery chain that Cursor / Claude Desktop follow:
 
     1. GET /mcp/{id}  →  401 + WWW-Authenticate: Bearer resource_metadata="…"
     2. GET /.well-known/oauth-protected-resource
-           →  {"resource": "<API>", "authorization_servers": ["<API>"]}
-    3. GET /.well-known/oauth-authorization-server   (we proxy → Hydra OIDC config)
+           →  {"resource": "<API>/mcp", "authorization_servers": ["<Hydra issuer>"]}
+    3. GET <Hydra issuer>/.well-known/oauth-authorization-server
            →  Hydra metadata: authorization_endpoint, token_endpoint, registration_endpoint, …
-    4. POST /oauth2/register   (Hydra DCR — proxied through us so the same AS URL works)
-    5. GET  /oauth2/auth        (Hydra auth — proxied)
-    6. POST /oauth2/token       (Hydra token — proxied)
+    4. POST <registration_endpoint>  →  our /oauth2/register proxy (Hydra has no public DCR)
+    5. GET  <authorization_endpoint> / POST <token_endpoint>  →  Hydra directly
 
-Steps 4-6 are proxied via /.well-known/... and the full oauth2/* proxy below so
-that the single AS URL (API_BASE_URL) works for both discovery and token ops.
+We advertise Hydra as the authorization server because Hydra issues the tokens:
+its issuer is what lands in the token's ``iss``, and clients that validate it
+reject tokens that disagree with the metadata they discovered. Hydra points step
+4 back at our proxy via ``webfinger.oidc_discovery.client_registration_url``.
+
+When Hydra does not advertise a registration endpoint (DCR unconfigured), we
+keep advertising ourselves and serve the AS metadata + oauth2/* proxy below, so
+dynamic client registration still works on deployments that rely on the shim.
 """
 
 import re
@@ -41,18 +46,55 @@ def _hydra_public_url() -> str:
     return get_settings().mcp.HYDRA_PUBLIC_URL.rstrip("/")
 
 
+# Hydra's discovery document, fetched once and reused.
+_hydra_discovery_cache: dict | None = None
+
+
+async def _hydra_discovery() -> dict | None:
+    """Hydra's OIDC discovery document, or None when it is unreachable."""
+    global _hydra_discovery_cache
+    if _hydra_discovery_cache is not None:
+        return _hydra_discovery_cache
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5)) as client:
+            resp = await client.get(f"{_hydra_public_url()}/.well-known/openid-configuration")
+            resp.raise_for_status()
+            doc = resp.json()
+    except Exception:
+        return None
+
+    if isinstance(doc, dict):
+        _hydra_discovery_cache = doc
+    return _hydra_discovery_cache
+
+
 @oauth_as_router.get("/.well-known/oauth-protected-resource")
 async def oauth_protected_resource_metadata() -> JSONResponse:
-    """RFC 9728: point clients at our own API as the AS base URL."""
+    """RFC 9728: advertise the authorization server that actually issues tokens."""
     settings = get_settings()
     api_base = settings.app.API_BASE_URL.rstrip("/")
+
+    # Hydra mints the tokens, so Hydra — not this API — is the authorization
+    # server identity. Its issuer ends up in the token's `iss`, and clients that
+    # validate the issuer (RFC 9207, required by the MCP auth spec) reject a
+    # token whose `iss` disagrees with the metadata they discovered. Pointing at
+    # ourselves therefore only works for clients that skip that check.
+    #
+    # Only delegate when Hydra also advertises a registration endpoint: MCP
+    # clients need dynamic client registration, and Hydra exposes it in its own
+    # discovery document only when webfinger.oidc_discovery.client_registration_url
+    # is configured (it has no public DCR of its own — see the proxy below).
+    # Without it, stay on the local AS shim so DCR keeps working.
+    doc = await _hydra_discovery()
+    issuer = (doc or {}).get("issuer", "").rstrip("/")
+    as_url = issuer if issuer and (doc or {}).get("registration_endpoint") else api_base
+
     return JSONResponse(
         content={
             # MCP spec: canonical URI of the MCP server endpoint, not the API root.
             "resource": f"{api_base}/mcp",
-            # Using ourselves as the AS URL so clients resolve
-            # /.well-known/oauth-authorization-server against us (not Hydra directly).
-            "authorization_servers": [api_base],
+            "authorization_servers": [as_url],
             "bearer_methods_supported": ["header"],
         }
     )
