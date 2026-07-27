@@ -151,6 +151,10 @@ func (m *Manager) Initialize(ctx context.Context) error {
 	}
 	m.logger.Info("Auto-restart check completed")
 
+	// Reclaim instances nobody is calling. Lazy provisioning starts them on
+	// demand; without this half they are never stopped again.
+	go m.runIdleReaper(ctx)
+
 	m.logger.Info("Container manager initialized successfully")
 	return nil
 }

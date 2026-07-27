@@ -20,6 +20,7 @@ Dispatch by instance type:
 
 import json
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -31,6 +32,7 @@ from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_mcp.application.auth_service import MCPAuthService
+from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
@@ -39,6 +41,7 @@ from agentarea_mcp.infrastructure.repository import (
 from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import update
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +211,39 @@ def _guard_and_pin_upstream(
     return request_target, target.original_host, extensions
 
 
+_LAST_USED_WRITE_INTERVAL = timedelta(seconds=60)
+
+
+async def _stamp_last_used(db_session, instance) -> None:
+    """Record that this instance is in use, so the reaper leaves it alone.
+
+    The proxy is the only component that observes MCP traffic — Traefik routes
+    the container path directly — so idleness cannot be inferred anywhere else.
+
+    Throttled: a write per proxied call would put the database on the hot path
+    of every tool call for no extra signal. One write per minute per instance is
+    enough to keep an active instance comfortably outside any sane idle window.
+
+    Failing to stamp must never fail the call. The cost of a missed stamp is an
+    instance stopped a little early and lazily restarted on the next request;
+    the cost of raising here is a broken tool call.
+    """
+    now = datetime.now(UTC)
+    previous = instance.last_used_at
+    if previous is not None and now - previous < _LAST_USED_WRITE_INTERVAL:
+        return
+
+    try:
+        await db_session.execute(
+            update(MCPServerInstance)
+            .where(MCPServerInstance.id == instance.id)
+            .values(last_used_at=now)
+        )
+        await db_session.commit()
+    except Exception:
+        logger.warning("Failed to stamp MCP instance last_used_at", exc_info=True)
+
+
 @router.api_route(
     "/{instance_id}/mcp",
     methods=["GET", "POST", "DELETE"],
@@ -229,6 +265,8 @@ async def proxy_instance(
     if instance.server_spec_id:
         server_repo = MCPServerRepository(db_session, user_context)
         server_spec = await server_repo.get_server_by_id(instance.server_spec_id)
+
+    await _stamp_last_used(db_session, instance)
 
     upstream_url, instance_type = await _resolve_upstream_url(instance, server_spec)
     if not upstream_url:
