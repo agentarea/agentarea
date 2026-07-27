@@ -107,7 +107,13 @@ func (d *DockerBackend) CreateInstance(ctx context.Context, spec *InstanceSpec) 
 		slog.String("image", spec.Image))
 
 	// Convert InstanceSpec to models.CreateContainerRequest
-	req := d.specToCreateRequest(spec)
+	req, err := d.specToCreateRequest(spec)
+	if err != nil {
+		d.logger.Error("Failed to resolve instance isolation",
+			slog.String("name", spec.Name),
+			slog.String("error", err.Error()))
+		return nil, err
+	}
 
 	// Use existing manager to create container
 	container, err := d.manager.CreateContainer(ctx, req)
@@ -338,7 +344,7 @@ func (d *DockerBackend) Shutdown(ctx context.Context) error {
 // Helper methods
 
 // specToCreateRequest converts InstanceSpec to models.CreateContainerRequest
-func (d *DockerBackend) specToCreateRequest(spec *InstanceSpec) models.CreateContainerRequest {
+func (d *DockerBackend) specToCreateRequest(spec *InstanceSpec) (models.CreateContainerRequest, error) {
 	req := models.CreateContainerRequest{
 		ServiceName: spec.ServiceName,
 		Image:       spec.Image,
@@ -347,6 +353,27 @@ func (d *DockerBackend) specToCreateRequest(spec *InstanceSpec) models.CreateCon
 		Labels:      spec.Labels,
 		Command:     spec.Command,
 	}
+
+	// Resolve the confinement for this workload. An MCP server is third-party
+	// code, so the default is a confined tier, not the daemon's defaults.
+	tier := spec.IsolationTier
+	if tier == "" {
+		tier = d.config.Container.DefaultIsolationTier
+	}
+	isolation, err := config.ResolveIsolation(tier)
+	if err != nil {
+		return models.CreateContainerRequest{}, err
+	}
+	// The spec's explicit runtime/writable paths refine the resolved tier; they
+	// never weaken it, since a stricter runtime is the only thing they can add.
+	if spec.RuntimeClass != "" {
+		isolation.Runtime = spec.RuntimeClass
+	}
+	if len(spec.WritablePaths) > 0 {
+		isolation.ReadOnlyRootFilesystem = true
+		isolation.WritablePaths = spec.WritablePaths
+	}
+	req.Isolation = isolation
 
 	// Add resource limits if specified
 	if spec.Resources.Limits.Memory != "" {
@@ -364,7 +391,7 @@ func (d *DockerBackend) specToCreateRequest(spec *InstanceSpec) models.CreateCon
 	req.Environment["MCP_SERVICE_NAME"] = spec.ServiceName
 	req.Environment["MCP_CONTAINER_PORT"] = fmt.Sprintf("%d", spec.Port)
 
-	return req
+	return req, nil
 }
 
 // findServiceNameByID finds the service name by container ID or instance ID

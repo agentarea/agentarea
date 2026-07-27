@@ -30,8 +30,13 @@ sandbox_runsc_smoketest_image: "mirror.gcr.io/library/alpine:3"
 sandbox_registry_mirrors:
   - "https://mirror.gcr.io"
 
-# Sandbox executor image (built from agentarea-mcp-manager/Dockerfile.runner).
-sandbox_executor_image: "agentarea/sandbox-executor:latest"
+# Sandbox executor image. This is the image CI publishes from
+# agentarea-mcp-manager/Dockerfile.runner — the same artifact the Kubernetes
+# warm pool runs, so a release reaches both data planes. It previously named an
+# image that was never published, which meant the pull always failed and the
+# host silently kept running whatever had been loaded onto it by hand: security
+# updates to the preinstalled parsers never arrived.
+sandbox_executor_image: "agentarea/agentarea-mcp-runner:latest"
 # Run the long-lived executor container now. Host provisioning (Docker + gVisor
 # + hardening) is useful on its own, so this can be turned off to prep a host.
 sandbox_executor_enabled: true
