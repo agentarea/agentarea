@@ -500,6 +500,27 @@ export default function FullChat({
     }
 
     try {
+      // Pre-stage each attachment, then reference the returned refs in the JSON
+      // task-create body (task creation is JSON, not multipart).
+      const attachments: string[] = [];
+      for (const file of filesToUpload) {
+        const stagingForm = new FormData();
+        stagingForm.append("file", file, file.name);
+        const stagingResponse = await fetch(`/api/files/staging`, {
+          method: "POST",
+          body: stagingForm,
+        });
+        if (!stagingResponse.ok) {
+          const errorBody = await stagingResponse.text();
+          throw new Error(
+            errorBody ||
+              `File upload failed with status ${stagingResponse.status}`
+          );
+        }
+        const staged = (await stagingResponse.json()) as { ref: string };
+        attachments.push(staged.ref);
+      }
+
       const taskData = {
         description:
           plainContent || "Use the attached files to complete the task.",
@@ -515,25 +536,16 @@ export default function FullChat({
           session_id: `chat-${Date.now()}`,
         },
         enable_agent_communication: true,
+        ...(attachments.length > 0 ? { attachments } : {}),
       };
-      const headers: Record<string, string> = { Accept: "text/event-stream" };
-      let body: BodyInit;
-      if (filesToUpload.length > 0) {
-        const formData = new FormData();
-        formData.append("task_data", JSON.stringify(taskData));
-        for (const file of filesToUpload) {
-          formData.append("files", file, file.name);
-        }
-        body = formData;
-      } else {
-        headers["Content-Type"] = "application/json";
-        body = JSON.stringify(taskData);
-      }
 
       const response = await fetch(`/api/agents/${agent.id}/tasks/create`, {
         method: "POST",
-        headers,
-        body,
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify(taskData),
       });
 
       if (!response.ok) {

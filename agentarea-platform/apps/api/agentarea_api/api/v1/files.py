@@ -15,6 +15,7 @@ import unicodedata
 from pathlib import PurePosixPath
 from typing import Annotated
 from urllib.parse import quote
+from uuid import uuid4
 
 from agentarea_api.api.deps.database import ReadDatabaseSessionDep
 from agentarea_common.artifacts import (
@@ -70,6 +71,13 @@ class WorkspaceFileDownloadResponse(BaseModel):
     path: str
 
 
+class StagedFileResponse(BaseModel):
+    ref: str
+    filename: str
+    size: int
+    content_type: str | None = None
+
+
 class ArtifactEventResponse(BaseModel):
     action: str
     actor_type: str
@@ -105,7 +113,10 @@ def _task_workspace_path(file_path: str) -> tuple[str, str] | None:
 
 
 def _is_task_storage_path(file_path: str) -> bool:
-    parts = PurePosixPath(file_path.lstrip("/")).parts
+    clean = file_path.lstrip("/")
+    if clean.startswith("staging/"):
+        return True
+    parts = PurePosixPath(clean).parts
     return bool(parts and parts[0] == "tasks")
 
 
@@ -175,6 +186,37 @@ async def upload_workspace_file(
         user_context.workspace_id,
         filename,
         content,
+        content_type=file.content_type,
+    )
+
+
+@router.post("/staging", response_model=StagedFileResponse)
+async def upload_staging_file(
+    file: UploadFile,
+    user_context: UserContextDep,
+) -> StagedFileResponse:
+    """Stage a file for a not-yet-created task, referenced by ref in the task body.
+
+    Staging keys live under ``staging/{id}/{filename}`` and are hidden from the
+    workspace file listing; the task-create endpoint consumes and deletes them.
+    """
+    staging_id = uuid4().hex
+    filename = PurePosixPath(file.filename or "unnamed").name or "unnamed"
+    content = await file.read()
+    path = f"staging/{staging_id}/{filename}"
+    await ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    ).put(
+        user_context.workspace_id,
+        path,
+        content,
+        content_type=file.content_type,
+    )
+    return StagedFileResponse(
+        ref=path,
+        filename=filename,
+        size=len(content),
         content_type=file.content_type,
     )
 

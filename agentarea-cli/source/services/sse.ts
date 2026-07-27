@@ -207,6 +207,7 @@ export function submitTaskStream(
 	agentId: string,
 	body: {description: string; parameters?: Record<string, unknown>},
 ): AsyncGenerator<TaskEvent> {
+	// Task creation is JSON; the CLI sends no attachments.
 	return filterTaskEvents(
 		openSseRequest(`/v1/agents/${agentId}/tasks/`, {
 			method: 'POST',

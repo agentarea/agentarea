@@ -276,15 +276,6 @@ export const zAuditLogListResponse = z.object({
 });
 
 /**
- * Body_create_task_for_agent_with_attachments_v1_agents__agent_id__tasks_with_attachments_post
- */
-export const zBodyCreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPost =
-  z.object({
-    files: z.array(z.string()),
-    task_data: z.string(),
-  });
-
-/**
  * Body_import_workspace_config_file_v1_workspace_import_file_post
  */
 export const zBodyImportWorkspaceConfigFileV1WorkspaceImportFilePost = z.object(
@@ -304,6 +295,13 @@ export const zBodyUploadProjectFileV1ProjectsProjectIdFilesPost = z.object({
  * Body_upload_skill_v1_skills_upload_post
  */
 export const zBodyUploadSkillV1SkillsUploadPost = z.object({
+  file: z.string(),
+});
+
+/**
+ * Body_upload_staging_file_v1_files_staging_post
+ */
+export const zBodyUploadStagingFileV1FilesStagingPost = z.object({
   file: z.string(),
 });
 
@@ -2253,6 +2251,16 @@ export const zSpendCard = z.object({
 });
 
 /**
+ * StagedFileResponse
+ */
+export const zStagedFileResponse = z.object({
+  content_type: z.string().nullish(),
+  filename: z.string(),
+  ref: z.string(),
+  size: z.number().int(),
+});
+
+/**
  * SubjectSetBody
  */
 export const zSubjectSetBody = z.object({
@@ -2502,6 +2510,7 @@ export const zEffectivePolicyPreviewRequest = z.object({
  * TaskCreate
  */
 export const zTaskCreate = z.object({
+  attachments: z.array(z.string()).nullish(),
   description: z.string(),
   parameters: z.record(z.unknown()).optional().default({}),
   project_id: z.string().nullish(),
@@ -3188,14 +3197,6 @@ export const zCreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostPath = z.object(
 export const zCreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostResponse =
   zTaskResponse;
 
-export const zCreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostBody =
-  zBodyCreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPost;
-
-export const zCreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostPath =
-  z.object({
-    agent_id: z.string().uuid(),
-  });
-
 export const zCancelAgentTaskV1AgentsAgentIdTasksTaskIdDeletePath = z.object({
   agent_id: z.string().uuid(),
   task_id: z.string().uuid(),
@@ -3614,6 +3615,14 @@ export const zWorkspaceFileHistoryV1FilesHistoryGetQuery = z.object({
  */
 export const zWorkspaceFileHistoryV1FilesHistoryGetResponse =
   zArtifactHistoryResponse;
+
+export const zUploadStagingFileV1FilesStagingPostBody =
+  zBodyUploadStagingFileV1FilesStagingPost;
+
+/**
+ * Successful Response
+ */
+export const zUploadStagingFileV1FilesStagingPostResponse = zStagedFileResponse;
 
 export const zDownloadWorkspaceFileV1FilesFilePathGetPath = z.object({
   file_path: z.string(),
