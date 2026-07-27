@@ -502,6 +502,15 @@ mcpManager:
     type: ClusterIP
     port: 80
 
+  # Stop a lazily-provisioned MCP instance whose workload has gone unused for
+  # this long; the next tool call provisions it again. "0" keeps every instance
+  # running once started, which is the behaviour before this knob existed — so
+  # reclaiming is something an operator turns on, not something a chart upgrade
+  # does to them. Eagerly-provisioned instances are never reaped.
+  idleTimeout: "0"
+  # How often to look for idle instances.
+  idleSweepInterval: "60s"
+
   # Egress restriction for spawned MCP instance pods (which may run untrusted,
   # user-supplied images). Denies cluster-internal + cloud-metadata egress while
   # allowing DNS + public internet. CIDRs are configurable so this is not pinned

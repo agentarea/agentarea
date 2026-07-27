@@ -25,13 +25,18 @@ from typing import Any
 from uuid import UUID
 
 import httpx
-from agentarea_api.api.deps.services import BaseSecretManagerDep, DatabaseSessionDep
+from agentarea_api.api.deps.services import (
+    BaseSecretManagerDep,
+    DatabaseSessionDep,
+    MCPServerInstanceServiceDep,
+)
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.tool_authorization import decide_tool_policy
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_mcp.application.auth_service import MCPAuthService
+from agentarea_mcp.application.service import needs_lazy_provisioning
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
@@ -244,6 +249,31 @@ async def _stamp_last_used(db_session, instance) -> None:
         logger.warning("Failed to stamp MCP instance last_used_at", exc_info=True)
 
 
+async def _ensure_provisioned(instance, instance_service, db_session) -> None:
+    """Bring a lazily-provisioned instance back up before proxying to it.
+
+    The agent tool path already does this; the proxy did not, because until
+    instances could be stopped there was nothing to bring back. Now that idle
+    instances are reclaimed, a proxy client — a registered CLI harness, say —
+    would otherwise be the one caller that gets a dead upstream instead of a
+    cold start.
+    """
+    if not needs_lazy_provisioning(instance):
+        return
+
+    logger.info(
+        "Lazy MCP provisioning on proxied call: instance=%s",
+        instance.id,
+        extra={"instance_id": str(instance.id)},
+    )
+    await instance_service.verify_instance(instance.id)
+
+    # verify() writes through its own session, so this session still holds the
+    # pre-provisioning row. Without the refresh we would resolve the upstream
+    # from a spec that predates the container we just started.
+    await db_session.refresh(instance)
+
+
 @router.api_route(
     "/{instance_id}/mcp",
     methods=["GET", "POST", "DELETE"],
@@ -254,12 +284,15 @@ async def proxy_instance(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
     secret_manager: BaseSecretManagerDep,
+    instance_service: MCPServerInstanceServiceDep,
 ):
     """Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream."""
     instance_repo = MCPServerInstanceRepository(db_session, user_context)
     instance = await instance_repo.get_by_id(instance_id)
     if instance is None:
         raise HTTPException(status_code=404, detail="MCP instance not found")
+
+    await _ensure_provisioned(instance, instance_service, db_session)
 
     server_spec = None
     if instance.server_spec_id:
