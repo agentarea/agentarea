@@ -30,6 +30,11 @@ services:
       # MCP settings
       - MCP_MANAGER_URL=http://mcp-manager:80
       - MCP_GATEWAY_URL=http://agentarea-traefik:8080
+      # Serverless MCPs: a container-backed instance is started on its first
+      # call and stopped again once idle (MCP_IDLE_TIMEOUT on mcp-manager),
+      # instead of running from creation until someone deletes it. The instance
+      # records this at creation, so the flag governs new instances only.
+      - MCP_LAZY_PROVISIONING_ENABLED=${MCP_LAZY_PROVISIONING_ENABLED:-true}
       - REDIS_URL=redis://valkey:6379
       - MCP_CLIENT_TIMEOUT=30
       # Hydra OAuth2 AS
@@ -284,6 +289,11 @@ services:
       # Cold start of git/uvx-based MCP servers (clone + install ~90s) needs more
       # than the 120s default before a container is declared unhealthy.
       STARTUP_TIMEOUT: 300s
+      # Stop lazily-provisioned MCP instances that have gone unused this long;
+      # the next call brings them back. Only instances created as lazy are
+      # eligible — eager ones were asked to stay up. 0 disables reclaiming.
+      MCP_IDLE_TIMEOUT: ${MCP_IDLE_TIMEOUT:-10m}
+      MCP_IDLE_SWEEP_INTERVAL: ${MCP_IDLE_SWEEP_INTERVAL:-60s}
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
       SANDBOX_EMBEDDED_RUNNER: "true"
@@ -437,6 +447,11 @@ services:
       # MCP settings
       - MCP_MANAGER_URL=http://mcp-manager:80
       - MCP_GATEWAY_URL=http://agentarea-traefik:8080
+      # Serverless MCPs: a container-backed instance is started on its first
+      # call and stopped again once idle (MCP_IDLE_TIMEOUT on mcp-manager),
+      # instead of running from creation until someone deletes it. The instance
+      # records this at creation, so the flag governs new instances only.
+      - MCP_LAZY_PROVISIONING_ENABLED=${MCP_LAZY_PROVISIONING_ENABLED:-true}
       - SANDBOX_CLEANUP_AUTH_SECRET=${SANDBOX_CLEANUP_AUTH_SECRET:-agentarea-dev-sandbox-cleanup-secret-change-me}
 
       # Task execution

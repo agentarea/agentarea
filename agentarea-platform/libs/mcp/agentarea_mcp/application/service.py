@@ -539,6 +539,22 @@ class MCPServerInstanceService:
             # health checks against a url-type connection).
             spec.setdefault("type", instance_type)
 
+            # Record whether this instance is serverless — started on its first
+            # call and reclaimed once idle. Nothing else ever writes this field,
+            # so without stamping it here MCP_LAZY_PROVISIONING_ENABLED changes
+            # nothing: both the provisioning path and the reaper key off the
+            # instance, not the platform flag, and every instance stays eager and
+            # runs forever.
+            #
+            # Stored explicitly rather than left absent so the decision is the one
+            # in force when the instance was created. Flipping the platform flag
+            # later must not retroactively change how long existing instances
+            # live — an instance created eagerly was asked to stay up.
+            #
+            # url-type instances have no container to start or stop.
+            if instance_type != "url":
+                spec.setdefault("lazy_provisioning", _lazy_mcp_provisioning_enabled())
+
             create_kwargs: dict[str, Any] = {
                 "name": name,
                 "description": description,
