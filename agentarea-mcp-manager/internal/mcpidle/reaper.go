@@ -125,6 +125,18 @@ func (r *Reaper) Reap(ctx context.Context, db *sql.DB, idleTimeout time.Duration
 		return 0, nil
 	}
 
+	// One sweeper at a time across every manager replica. Without this, two
+	// replicas select the same rows and race to delete the same workloads.
+	lock, acquired, err := acquireSweepLock(ctx, db, r.logger)
+	if err != nil {
+		return 0, err
+	}
+	if !acquired {
+		r.logger.Debug("Skipping MCP idle sweep: another replica holds the sweep lock")
+		return 0, nil
+	}
+	defer lock.release(ctx)
+
 	idle, err := r.findIdle(ctx, db, idleTimeout)
 	if err != nil {
 		return 0, err

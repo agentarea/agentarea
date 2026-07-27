@@ -502,14 +502,24 @@ mcpManager:
     type: ClusterIP
     port: 80
 
-  # Stop a lazily-provisioned MCP instance whose workload has gone unused for
-  # this long; the next tool call provisions it again. "0" keeps every instance
-  # running once started, which is the behaviour before this knob existed — so
-  # reclaiming is something an operator turns on, not something a chart upgrade
-  # does to them. Eagerly-provisioned instances are never reaped.
-  idleTimeout: "0"
-  # How often to look for idle instances.
-  idleSweepInterval: "60s"
+  # Serverless MCP instances: a container-backed instance is started on its
+  # first call and reclaimed once it has gone idle, instead of running from
+  # creation until it is deleted.
+  #
+  # Off by default. Enabling changes two user-visible things: an instance's
+  # first call pays a cold start, and creating a connection no longer verifies
+  # it immediately — a bad image or a missing variable surfaces on first use
+  # rather than in the form. That is a product decision, not a chart upgrade.
+  #
+  # Only instances created while this is on are serverless; the choice is
+  # recorded per instance, so turning it on does not retroactively change the
+  # lifetime of instances that already exist.
+  serverless:
+    enabled: false
+    # How long an instance may go uncalled before its workload is reclaimed.
+    idleTimeout: "10m"
+    # How often to look for idle instances.
+    sweepInterval: "60s"
 
   # Egress restriction for spawned MCP instance pods (which may run untrusted,
   # user-supplied images). Denies cluster-internal + cloud-metadata egress while
