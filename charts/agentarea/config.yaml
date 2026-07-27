@@ -125,6 +125,8 @@ groups:
       KUBERNETES_DEFAULT_MEMORY_REQUEST: '128Mi'
       KUBERNETES_DEFAULT_MEMORY_LIMIT: '512Mi'
       MCP_FEATURES_ENABLED: '{{ join "," .Values.mcpManager.features.enabled }}'
+      MCP_IDLE_TIMEOUT: '{{ .Values.mcpManager.idleTimeout | default "0" }}'
+      MCP_IDLE_SWEEP_INTERVAL: '{{ .Values.mcpManager.idleSweepInterval | default "60s" }}'
 
   temporalUi:
     configVars:

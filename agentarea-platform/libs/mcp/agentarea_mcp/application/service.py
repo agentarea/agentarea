@@ -71,6 +71,21 @@ def _is_lazy_instance(instance: MCPServerInstance) -> bool:
     return bool((instance.json_spec or {}).get("lazy_provisioning"))
 
 
+def needs_lazy_provisioning(instance: MCPServerInstance) -> bool:
+    """True when this instance is started on demand and is not running now.
+
+    Every caller that dispatches to an instance has to answer this, and there is
+    more than one such caller: the agent tool path and the MCP proxy. Keeping the
+    predicate in one place is what stops them from disagreeing about when an
+    instance needs bringing back up.
+    """
+    return (
+        _lazy_mcp_provisioning_enabled()
+        and _is_lazy_instance(instance)
+        and (instance.verification or {}).get("status") != "succeeded"
+    )
+
+
 def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
     """Canonical key for URL-type instances is `endpoint_url`.
 
@@ -950,7 +965,7 @@ class MCPServerInstanceService:
         # Non-bundle: check verification status
         verification = instance.verification or {}
         if verification.get("status") != "succeeded":
-            if _lazy_mcp_provisioning_enabled() and _is_lazy_instance(instance):
+            if needs_lazy_provisioning(instance):
                 logger.info(
                     "Lazy MCP provisioning on first tool call: instance=%s tool=%s",
                     server_instance_id,

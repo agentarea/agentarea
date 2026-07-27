@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 from agentarea_api.api.v1.mcp_proxy import (
     _authorize_mcp_tool_calls,
+    _ensure_provisioned,
     _filter_inbound_headers,
     _filter_outbound_headers,
     _iter_jsonrpc_tool_calls,
@@ -71,6 +72,82 @@ async def test_resolve_upstream_url_url_type_returns_empty_without_remote_url():
     server_spec = SimpleNamespace(remote_url=None, cmd=None, json_spec={})
 
     assert await _resolve_upstream_url(instance, server_spec) == ("", "url")
+
+
+# ----- lazy re-provisioning -----
+
+
+class _SpyInstanceService:
+    def __init__(self):
+        self.verified = []
+
+    async def verify_instance(self, instance_id):
+        self.verified.append(instance_id)
+        return {"status": "succeeded"}
+
+
+class _SpySession:
+    def __init__(self):
+        self.refreshed = []
+
+    async def refresh(self, instance):
+        self.refreshed.append(instance)
+
+
+def _lazy_instance(verification_status: str, *, lazy: bool = True):
+    return SimpleNamespace(
+        id="9f1c1a3e-0000-4000-8000-000000000001",
+        json_spec={"type": "docker", "lazy_provisioning": lazy},
+        verification={"schema_version": 1, "status": verification_status},
+    )
+
+
+@pytest.mark.asyncio
+async def test_ensure_provisioned_starts_a_stopped_lazy_instance(monkeypatch):
+    # An idle instance that the reaper stopped comes back as never_attempted;
+    # a proxied call has to start it again rather than dispatch into nothing.
+    monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "true")
+    service, session = _SpyInstanceService(), _SpySession()
+    instance = _lazy_instance("never_attempted")
+
+    await _ensure_provisioned(instance, service, session)
+
+    assert service.verified == [instance.id]
+    # Without the refresh the proxy would resolve the upstream from the spec as
+    # it looked before provisioning.
+    assert session.refreshed == [instance]
+
+
+@pytest.mark.asyncio
+async def test_ensure_provisioned_leaves_a_running_instance_alone(monkeypatch):
+    monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "true")
+    service, session = _SpyInstanceService(), _SpySession()
+
+    await _ensure_provisioned(_lazy_instance("succeeded"), service, session)
+
+    assert service.verified == []
+
+
+@pytest.mark.asyncio
+async def test_ensure_provisioned_does_not_start_eager_instances(monkeypatch):
+    # An eagerly-provisioned instance is never reaped, so a failed verification
+    # is a real failure — starting it here would paper over it.
+    monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "true")
+    service, session = _SpyInstanceService(), _SpySession()
+
+    await _ensure_provisioned(_lazy_instance("failed", lazy=False), service, session)
+
+    assert service.verified == []
+
+
+@pytest.mark.asyncio
+async def test_ensure_provisioned_respects_the_feature_flag(monkeypatch):
+    monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "false")
+    service, session = _SpyInstanceService(), _SpySession()
+
+    await _ensure_provisioned(_lazy_instance("never_attempted"), service, session)
+
+    assert service.verified == []
 
 
 # ----- header filters -----

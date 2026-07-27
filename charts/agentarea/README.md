@@ -279,6 +279,8 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.image.tag | string | `"latest"` |  |
 | mcpManager.service.type | string | `"ClusterIP"` |  |
 | mcpManager.service.port | int | `80` |  |
+| mcpManager.idleTimeout | string | `"0"` |  |
+| mcpManager.idleSweepInterval | string | `"60s"` |  |
 | mcpManager.instanceNetworkPolicy.enabled | bool | `true` |  |
 | mcpManager.instanceNetworkPolicy.dnsNamespace | string | `"kube-system"` |  |
 | mcpManager.instanceNetworkPolicy.blockedEgressCIDRs[0] | string | `"10.0.0.0/8"` |  |

@@ -21,6 +21,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/environment"
 	"github.com/agentarea/mcp-manager/internal/events"
 	"github.com/agentarea/mcp-manager/internal/features"
+	"github.com/agentarea/mcp-manager/internal/mcpidle"
 	"github.com/agentarea/mcp-manager/internal/providers"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
 	"github.com/agentarea/mcp-manager/internal/sandboxplacement"
@@ -210,6 +211,12 @@ func main() {
 	// so Kubernetes, which runs a dedicated agentarea-sandbox-runner, keeps all
 	// execution work out of the (more privileged) control plane.
 	startEmbeddedSandboxRunner(ctx, cfg, backend, logger)
+
+	// Reclaim MCP instances nobody is calling. Lazy provisioning starts them on
+	// demand; without this half they are never stopped again. It runs against
+	// whichever backend was selected above, so docker and Kubernetes share one
+	// lifecycle rather than only the one that happened to get a sweeper.
+	go mcpidle.Run(ctx, cfg, backend, logger)
 
 	// Start HTTP server
 	server := &http.Server{
