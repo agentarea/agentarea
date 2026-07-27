@@ -11662,7 +11662,7 @@
     },
     "/.well-known/oauth-protected-resource": {
       "get": {
-        "description": "RFC 9728: point clients at our own API as the AS base URL.",
+        "description": "RFC 9728: advertise the authorization server that actually issues tokens.",
         "operationId": "oauth_protected_resource_metadata__well_known_oauth_protected_resource_get",
         "responses": {
           "200": {
