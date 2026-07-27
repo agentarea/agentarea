@@ -551,6 +551,23 @@
     "myConnections": "Мои соединения",
     "myActiveServers": "Мои активные серверы",
     "browseSpecifications": "Просмотр спецификаций MCP",
+    "addConnectionDialog": {
+      "trigger": "Добавить соединение",
+      "title": "Добавить соединение",
+      "description": "Выберите, как предоставить инструменты вашим агентам.",
+      "catalog": {
+        "title": "Просмотр каталога",
+        "description": "Подключите готовую интеграцию (Asana, GitHub, …) из каталога."
+      },
+      "mcp": {
+        "title": "Подключить MCP сервер",
+        "description": "Создайте переиспользуемое соединение из Docker-образа, команды или URL."
+      },
+      "openapi": {
+        "title": "OpenAPI соединение",
+        "description": "Оберните REST API в инструменты агента, импортировав OpenAPI / Swagger спецификацию."
+      }
+    },
     "filters": {
       "type": "Тип",
       "category": "Категория"
