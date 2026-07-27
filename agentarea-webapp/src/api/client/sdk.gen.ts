@@ -824,7 +824,7 @@ export const oauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGe
 /**
  * Oauth Protected Resource Metadata
  *
- * RFC 9728: point clients at our own API as the AS base URL.
+ * RFC 9728: advertise the authorization server that actually issues tokens.
  */
 export const oauthProtectedResourceMetadataWellKnownOauthProtectedResourceGet =
   <ThrowOnError extends boolean = false>(
