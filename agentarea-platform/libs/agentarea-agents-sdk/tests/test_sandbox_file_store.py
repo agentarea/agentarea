@@ -210,6 +210,45 @@ async def test_get_falls_back_to_durable_on_503():
     assert data == b"durable-bytes"
 
 
+@pytest.mark.asyncio
+async def test_get_falls_back_to_durable_on_404_sandbox_miss():
+    """A task input lives in durable storage but is not on the sandbox disk until
+    the first bash copy-in. The file tool must still read it (one coherent view),
+    so a sandbox 404 falls back to the durable task workspace."""
+
+    class _DurableWithGet(_FakeDurable):
+        async def get(self, workspace_id, task_id, path):
+            assert (workspace_id, task_id, path) == ("ws", "task", "inputs/attachments/sales.csv")
+            return b"product,month,revenue\n", "text/csv"
+
+    store = SandboxFileStore(
+        mcp_manager_url="http://mcp-manager:8000",
+        workspace_id="ws",
+        task_id="task",
+        http_client=_FakeControlPlane(),  # returns 404 for the not-yet-copied-in path
+        durable=_DurableWithGet(),
+    )
+    data, _ = await store.get("ws", "inputs/attachments/sales.csv")
+    assert data == b"product,month,revenue\n"
+
+
+@pytest.mark.asyncio
+async def test_get_404_with_durable_miss_still_raises_file_not_found():
+    class _DurableMiss(_FakeDurable):
+        async def get(self, workspace_id, task_id, path):
+            raise FileNotFoundError(path)
+
+    store = SandboxFileStore(
+        mcp_manager_url="http://mcp-manager:8000",
+        workspace_id="ws",
+        task_id="task",
+        http_client=_FakeControlPlane(),
+        durable=_DurableMiss(),
+    )
+    with pytest.raises(FileNotFoundError):
+        await store.get("ws", "genuinely-missing.txt")
+
+
 def test_sandbox_file_store_requires_configuration():
     with pytest.raises(ValueError):
         SandboxFileStore(mcp_manager_url="", workspace_id="ws", task_id="task")

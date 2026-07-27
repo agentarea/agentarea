@@ -1,23 +1,82 @@
-"""Multipart task attachments are committed before workflow dispatch."""
+"""Task attachments follow the staging-ref model.
+
+Files are pre-uploaded to a temp staging area via POST /v1/files/staging, then
+referenced by ref in the JSON task-create body. The task-create path resolves
+each ref into the task workspace under ``inputs/attachments/`` and consumes the
+staged object.
+"""
 
 import hashlib
-import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
-from agentarea_api.api.v1 import agents_tasks
+from agentarea_api.api.v1 import agents_tasks, files
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 
+def _fake_service_factory(store: dict):
+    """ArtifactService stand-in over an in-memory store shared across surfaces."""
+
+    class _Svc:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def put(self, workspace_id, path, data, content_type=None):
+            store[(workspace_id, path)] = (data, content_type)
+            return SimpleNamespace(path=path, size=len(data), content_type=content_type)
+
+        async def get(self, workspace_id, path):
+            if (workspace_id, path) not in store:
+                raise FileNotFoundError(path)
+            return store[(workspace_id, path)]
+
+        async def delete(self, workspace_id, path):
+            store.pop((workspace_id, path), None)
+
+    return _Svc
+
+
+def _fake_repo_factory(committed: dict):
+    class _Repo:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def put_files(
+            self,
+            workspace_id,
+            task_id,
+            staged,
+            content_types=None,
+            provenance=None,
+            owner=None,
+        ):
+            for rel, data in staged.items():
+                committed[(workspace_id, task_id, rel)] = data
+            return SimpleNamespace(generation=1)
+
+    return _Repo
+
+
+def _patch_storage(monkeypatch, store: dict, committed: dict):
+    service = _fake_service_factory(store)
+    repo = _fake_repo_factory(committed)
+    # Staging upload resolves ArtifactService from the files module namespace;
+    # task-create resolves it (and WorkspaceRepository) from the artifacts pkg.
+    monkeypatch.setattr(files, "ArtifactService", service)
+    monkeypatch.setattr("agentarea_common.artifacts.ArtifactService", service)
+    monkeypatch.setattr("agentarea_common.artifacts.WorkspaceRepository", repo)
+
+
 def _app(task_service, agent_service, context: UserContext) -> FastAPI:
     app = FastAPI()
     app.include_router(agents_tasks.router, prefix="/v1")
+    app.include_router(files.router, prefix="/v1")
 
     async def override_task_service():
         return task_service
@@ -34,6 +93,28 @@ def _app(task_service, agent_service, context: UserContext) -> FastAPI:
     return app
 
 
+def _run_task_service():
+    async def reserve_run(payload, **kwargs):
+        return SimpleNamespace(
+            id=kwargs["task_id"],
+            agent_id=payload.agent_id,
+            description=payload.description,
+            task_parameters=payload.parameters,
+            status="running",
+            result=None,
+            error_message=None,
+            created_at=datetime.now(UTC),
+            execution_id=f"task-{kwargs['task_id']}",
+        )
+
+    return SimpleNamespace(
+        reserve_run=AsyncMock(side_effect=reserve_run),
+        dispatch_reserved_run=AsyncMock(side_effect=lambda task: task),
+        start_run=AsyncMock(),
+        update_task_status=AsyncMock(),
+    )
+
+
 def test_unicode_attachment_download_header_has_safe_fallback_and_utf8_name():
     value = agents_tasks._attachment_content_disposition("отчёт 2026.xlsx")
 
@@ -44,148 +125,71 @@ def test_unicode_attachment_download_header_has_safe_fallback_and_utf8_name():
 
 
 @pytest.mark.asyncio
-async def test_multipart_attachments_commit_atomically_before_exact_id_dispatch(monkeypatch):
+async def test_staged_ref_is_committed_into_task_workspace_and_consumed(monkeypatch):
+    store: dict = {}
+    committed: dict = {}
+    _patch_storage(monkeypatch, store, committed)
+
     context = UserContext(user_id="user-a", workspace_id="workspace-a")
-    order: list[str] = []
-    repository = SimpleNamespace()
-
-    async def put_files(*args, **kwargs):
-        order.append("commit")
-        return SimpleNamespace(generation=1)
-
-    repository.put_files = AsyncMock(side_effect=put_files)
-    monkeypatch.setattr(
-        "agentarea_common.artifacts.WorkspaceRepository", lambda **_kwargs: repository
-    )
-
-    async def reserve_run(payload, **kwargs):
-        order.append("reserve")
-        task_id = kwargs["task_id"]
-        return SimpleNamespace(
-            id=task_id,
-            agent_id=payload.agent_id,
-            description=payload.description,
-            task_parameters=payload.parameters,
-            status="failed",
-            result={"error": "test stop"},
-            created_at=datetime.now(UTC),
-            execution_id=None,
-        )
-
-    async def dispatch_reserved_run(task):
-        order.append("dispatch")
-        return task
-
-    task_service = SimpleNamespace(
-        reserve_run=AsyncMock(side_effect=reserve_run),
-        dispatch_reserved_run=AsyncMock(side_effect=dispatch_reserved_run),
-        update_task_status=AsyncMock(),
-    )
+    task_service = _run_task_service()
     agent_service = SimpleNamespace(
         get_with_catalog=AsyncMock(return_value=SimpleNamespace(name="Analyst"))
     )
     app = _app(task_service, agent_service, context)
-    payload = {
-        "description": "Analyze both files",
-        "parameters": {"task_type": "chat"},
-    }
+    agent_id = uuid4()
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(
-            f"/v1/agents/{uuid4()}/tasks/with-attachments",
-            data={"task_data": json.dumps(payload)},
-            files=[
-                ("files", ("../Quarter report.csv", b"revenue", "text/csv")),
-                ("files", ("notes.txt", b"margin", "text/plain")),
-            ],
+        staging_response = await client.post(
+            "/v1/files/staging",
+            files={"file": ("../Quarter report.csv", b"revenue", "text/csv")},
+        )
+        assert staging_response.status_code == 200
+        staged = staging_response.json()
+        ref = staged["ref"]
+        assert ref.startswith("staging/")
+        assert staged["filename"] == "Quarter report.csv"
+        assert staged["size"] == 7
+        # The staged object exists before the task consumes it.
+        assert (context.workspace_id, ref) in store
+
+        task_response = await client.post(
+            f"/v1/agents/{agent_id}/tasks/sync",
+            json={"description": "Analyze it", "attachments": [ref]},
         )
 
-    assert response.status_code == 200
-    assert order == ["reserve", "commit", "dispatch"]
-    commit_args = repository.put_files.await_args
-    reserved_task_id = commit_args.args[1]
-    assert commit_args.args[0] == context.workspace_id
-    assert UUID(reserved_task_id)
-    assert commit_args.args[2] == {
-        "inputs/attachments/Quarter_report.csv": b"revenue",
-        "inputs/attachments/notes.txt": b"margin",
-    }
+    assert task_response.status_code == 200
 
     reserve_call = task_service.reserve_run.await_args
-    assert str(reserve_call.kwargs["task_id"]) == reserved_task_id
+    reserved_task_id = str(reserve_call.kwargs["task_id"])
     descriptors = reserve_call.args[0].parameters["attachments"]
     assert descriptors == [
         {
-            "relative_path": "inputs/attachments/Quarter_report.csv",
-            "filename": "Quarter_report.csv",
+            "relative_path": "inputs/attachments/Quarter report.csv",
+            "filename": "Quarter report.csv",
             "size": 7,
             "content_type": "text/csv",
             "sha256": hashlib.sha256(b"revenue").hexdigest(),
-        },
-        {
-            "relative_path": "inputs/attachments/notes.txt",
-            "filename": "notes.txt",
-            "size": 6,
-            "content_type": "text/plain",
-            "sha256": hashlib.sha256(b"margin").hexdigest(),
-        },
+        }
     ]
-    assert reserve_call.kwargs["trusted_metadata"] == {
-        "workspace_attachments": descriptors
-    }
-    assert b"revenue" not in json.dumps(descriptors).encode()
+    assert reserve_call.kwargs["trusted_metadata"] == {"workspace_attachments": descriptors}
+    task_service.dispatch_reserved_run.assert_awaited_once()
+
+    # The file landed in the task workspace under inputs/attachments/.
+    assert (
+        committed[(context.workspace_id, reserved_task_id, "inputs/attachments/Quarter report.csv")]
+        == b"revenue"
+    )
+    # The staging object was consumed (best-effort delete).
+    assert (context.workspace_id, ref) not in store
 
 
 @pytest.mark.asyncio
-async def test_storage_failure_keeps_authoritative_failed_task_record(monkeypatch):
-    from agentarea_common.artifacts import WorkspaceQuotaError
+async def test_non_staging_ref_is_rejected(monkeypatch):
+    store: dict = {}
+    committed: dict = {}
+    _patch_storage(monkeypatch, store, committed)
 
-    context = UserContext(user_id="user-a", workspace_id="workspace-a")
-    repository = SimpleNamespace(
-        put_files=AsyncMock(side_effect=WorkspaceQuotaError("workspace full"))
-    )
-    monkeypatch.setattr(
-        "agentarea_common.artifacts.WorkspaceRepository", lambda **_kwargs: repository
-    )
-    reserved_task = SimpleNamespace(id=uuid4())
-    task_service = SimpleNamespace(
-        reserve_run=AsyncMock(return_value=reserved_task),
-        dispatch_reserved_run=AsyncMock(),
-        update_task_status=AsyncMock(),
-    )
-    agent_service = SimpleNamespace(
-        get_with_catalog=AsyncMock(return_value=SimpleNamespace(name="Analyst"))
-    )
-    app = _app(task_service, agent_service, context)
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(
-            f"/v1/agents/{uuid4()}/tasks/with-attachments",
-            data={"task_data": json.dumps({"description": "Inspect it"})},
-            files={"files": ("report.csv", b"data", "text/csv")},
-        )
-
-    assert response.status_code == 413
-    task_service.reserve_run.assert_awaited_once()
-    reserved_id = task_service.reserve_run.await_args.kwargs["task_id"]
-    task_service.update_task_status.assert_awaited_once_with(
-        reserved_id, "failed", error="Attachment quota exceeded"
-    )
-    task_service.dispatch_reserved_run.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_attachment_quota_failures_are_explicit_and_prevent_dispatch(monkeypatch):
-    monkeypatch.setattr(agents_tasks, "TASK_ATTACHMENT_MAX_FILE_BYTES", 3)
-    repository = SimpleNamespace(put_files=AsyncMock())
-    monkeypatch.setattr(
-        "agentarea_common.artifacts.WorkspaceRepository", lambda **_kwargs: repository
-    )
-    task_service = SimpleNamespace(
-        reserve_run=AsyncMock(),
-        dispatch_reserved_run=AsyncMock(),
-        update_task_status=AsyncMock(),
-    )
+    task_service = _run_task_service()
     agent_service = SimpleNamespace(
         get_with_catalog=AsyncMock(return_value=SimpleNamespace(name="Analyst"))
     )
@@ -196,56 +200,23 @@ async def test_attachment_quota_failures_are_explicit_and_prevent_dispatch(monke
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        file_size_response = await client.post(
-            f"/v1/agents/{uuid4()}/tasks/with-attachments",
-            data={"task_data": json.dumps({"description": "Inspect it"})},
-            files={"files": ("large.bin", b"four", "application/octet-stream")},
+        response = await client.post(
+            f"/v1/agents/{uuid4()}/tasks/sync",
+            json={"description": "Inspect it", "attachments": ["tasks/other/secret.csv"]},
         )
 
-        monkeypatch.setattr(agents_tasks, "TASK_ATTACHMENT_MAX_FILE_BYTES", 10)
-        monkeypatch.setattr(agents_tasks, "TASK_ATTACHMENT_MAX_FILES", 1)
-        file_count_response = await client.post(
-            f"/v1/agents/{uuid4()}/tasks/with-attachments",
-            data={"task_data": json.dumps({"description": "Inspect them"})},
-            files=[
-                ("files", ("one.txt", b"1", "text/plain")),
-                ("files", ("two.txt", b"2", "text/plain")),
-            ],
-        )
-
-        monkeypatch.setattr(agents_tasks, "TASK_ATTACHMENT_MAX_FILES", 10)
-        monkeypatch.setattr(agents_tasks, "TASK_ATTACHMENT_MAX_TOTAL_BYTES", 3)
-        total_size_response = await client.post(
-            f"/v1/agents/{uuid4()}/tasks/with-attachments",
-            data={"task_data": json.dumps({"description": "Inspect them"})},
-            files=[
-                ("files", ("one.txt", b"12", "text/plain")),
-                ("files", ("two.txt", b"34", "text/plain")),
-            ],
-        )
-
-    assert file_size_response.status_code == 413
-    assert "per-file limit is 3" in file_size_response.json()["detail"]
-    assert file_count_response.status_code == 413
-    assert "Too many attachments: 2; limit is 1" in file_count_response.json()["detail"]
-    assert total_size_response.status_code == 413
-    assert "total limit is 3" in total_size_response.json()["detail"]
-    repository.put_files.assert_not_awaited()
+    assert response.status_code == 422
     task_service.reserve_run.assert_not_awaited()
     task_service.dispatch_reserved_run.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_sanitized_filename_collision_rejects_whole_request(monkeypatch):
-    repository = SimpleNamespace(put_files=AsyncMock())
-    monkeypatch.setattr(
-        "agentarea_common.artifacts.WorkspaceRepository", lambda **_kwargs: repository
-    )
-    task_service = SimpleNamespace(
-        reserve_run=AsyncMock(),
-        dispatch_reserved_run=AsyncMock(),
-        update_task_status=AsyncMock(),
-    )
+async def test_missing_staging_ref_returns_not_found(monkeypatch):
+    store: dict = {}
+    committed: dict = {}
+    _patch_storage(monkeypatch, store, committed)
+
+    task_service = _run_task_service()
     agent_service = SimpleNamespace(
         get_with_catalog=AsyncMock(return_value=SimpleNamespace(name="Analyst"))
     )
@@ -257,16 +228,10 @@ async def test_sanitized_filename_collision_rejects_whole_request(monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            f"/v1/agents/{uuid4()}/tasks/with-attachments",
-            data={"task_data": json.dumps({"description": "Inspect them"})},
-            files=[
-                ("files", ("a b.txt", b"one", "text/plain")),
-                ("files", ("a?b.txt", b"two", "text/plain")),
-            ],
+            f"/v1/agents/{uuid4()}/tasks/sync",
+            json={"description": "Inspect it", "attachments": ["staging/deadbeef/gone.csv"]},
         )
 
-    assert response.status_code == 422
-    assert "collide after sanitization" in response.json()["detail"]
-    repository.put_files.assert_not_awaited()
+    assert response.status_code == 404
     task_service.reserve_run.assert_not_awaited()
     task_service.dispatch_reserved_run.assert_not_awaited()

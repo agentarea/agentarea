@@ -855,15 +855,26 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             "workspace_id": str(request.workspace_id),
                         }
                     elif tool_name == "agentarea/web":
+                        # Web downloads must land on the SAME sandbox filesystem
+                        # bash runs in (via SandboxFileStore), not durable-only,
+                        # so a binary the agent fetches is visible to the shell
+                        # commands it runs next. Durable write-through keeps it
+                        # retrievable through the /files API. Mirrors agentarea/files.
+                        from agentarea_agents_sdk.tools.sandbox_file_store import SandboxFileStore
                         from agentarea_common.artifacts import (
                             DbArtifactEventRecorder,
                             WorkspaceRepository,
                         )
 
                         extra_kwargs = {
-                            "workspace_repository": WorkspaceRepository(
-                                recorder=DbArtifactEventRecorder(),
-                                actor=_agent_artifact_actor(request, user_context),
+                            "storage": SandboxFileStore(
+                                mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+                                workspace_id=str(request.workspace_id),
+                                task_id=str(request.task_id) if request.task_id else "",
+                                durable=WorkspaceRepository(
+                                    recorder=DbArtifactEventRecorder(),
+                                    actor=_agent_artifact_actor(request, user_context),
+                                ),
                             ),
                             "workspace_id": str(request.workspace_id),
                             "task_id": str(request.task_id) if request.task_id else "",

@@ -12,14 +12,9 @@ export async function POST(
     // Keep credentials server-side while forwarding the active workspace slug.
     const token = await getAuthToken();
 
-    const incomingContentType = request.headers.get("content-type") || "";
-    const isMultipart = incomingContentType
-      .toLowerCase()
-      .startsWith("multipart/form-data");
-
     // Create headers for backend request
     const backendHeaders: Record<string, string> = {
-      "Content-Type": incomingContentType || "application/json",
+      "Content-Type": "application/json",
       Accept: "text/event-stream",
     };
 
@@ -37,18 +32,16 @@ export async function POST(
       backendHeaders["X-Workspace-Slug"] = workspaceSlug;
     }
 
-    // Connect to backend task creation endpoint with SSE (server-side only)
+    // Task creation is JSON. Files are pre-staged via POST /v1/files/staging and
+    // referenced by ref in the body's `attachments` array.
     const backendUrl = env.API_URL;
-    const endpoint = isMultipart ? "with-attachments" : "";
-    const createTaskUrl = `${backendUrl}/v1/agents/${agentId}/tasks/${endpoint}`;
+    const createTaskUrl = `${backendUrl}/v1/agents/${agentId}/tasks/`;
 
-    const requestInit: RequestInit & { duplex?: "half" } = {
+    const response = await fetch(createTaskUrl, {
       method: "POST",
       headers: backendHeaders,
-      body: request.body,
-      duplex: "half",
-    };
-    const response = await fetch(createTaskUrl, requestInit);
+      body: await request.text(),
+    });
 
     if (!response.ok) {
       return new Response(await response.text(), {

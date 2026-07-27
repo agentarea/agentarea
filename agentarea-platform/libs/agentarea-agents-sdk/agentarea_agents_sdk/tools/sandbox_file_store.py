@@ -109,6 +109,15 @@ class SandboxFileStore:
         if response.status_code == 503 and self._durable is not None:
             return await self._durable.get(workspace_id or self._workspace_id, self._task_id, path)
         if response.status_code == 404:
+            # Not on the sandbox disk yet — e.g. a task input that copy-in only
+            # materializes on the first bash run. Fall back to the durable task
+            # workspace so the file tool can read inputs regardless of whether a
+            # shell command ran first (one coherent view for the agent). Durable
+            # raises FileNotFoundError itself when the path genuinely does not exist.
+            if self._durable is not None:
+                return await self._durable.get(
+                    workspace_id or self._workspace_id, self._task_id, path
+                )
             raise FileNotFoundError(path)
         if response.status_code >= 400:
             raise RuntimeError(

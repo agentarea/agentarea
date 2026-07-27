@@ -1608,28 +1608,6 @@
         "title": "Blockers",
         "type": "object"
       },
-      "Body_create_task_for_agent_with_attachments_v1_agents__agent_id__tasks_with_attachments_post": {
-        "properties": {
-          "files": {
-            "items": {
-              "contentMediaType": "application/octet-stream",
-              "type": "string"
-            },
-            "title": "Files",
-            "type": "array"
-          },
-          "task_data": {
-            "title": "Task Data",
-            "type": "string"
-          }
-        },
-        "required": [
-          "task_data",
-          "files"
-        ],
-        "title": "Body_create_task_for_agent_with_attachments_v1_agents__agent_id__tasks_with_attachments_post",
-        "type": "object"
-      },
       "Body_import_workspace_config_file_v1_workspace_import_file_post": {
         "properties": {
           "file": {
@@ -1672,6 +1650,20 @@
           "file"
         ],
         "title": "Body_upload_skill_v1_skills_upload_post",
+        "type": "object"
+      },
+      "Body_upload_staging_file_v1_files_staging_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_staging_file_v1_files_staging_post",
         "type": "object"
       },
       "Body_upload_workspace_file_v1_files_post": {
@@ -9124,6 +9116,40 @@
         "title": "SpendCard",
         "type": "object"
       },
+      "StagedFileResponse": {
+        "properties": {
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ref",
+          "filename",
+          "size"
+        ],
+        "title": "StagedFileResponse",
+        "type": "object"
+      },
       "SubjectSetBody": {
         "properties": {
           "namespace": {
@@ -9258,6 +9284,20 @@
       },
       "TaskCreate": {
         "properties": {
+          "attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachments"
+          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -13161,65 +13201,6 @@
         ]
       }
     },
-    "/v1/agents/{agent_id}/tasks/with-attachments": {
-      "post": {
-        "description": "Commit multipart attachments before dispatching the task workflow.",
-        "operationId": "create_task_for_agent_with_attachments_v1_agents__agent_id__tasks_with_attachments_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Agent Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_create_task_for_agent_with_attachments_v1_agents__agent_id__tasks_with_attachments_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Task For Agent With Attachments",
-        "tags": [
-          "v1",
-          "protected",
-          "agent-tasks"
-        ]
-      }
-    },
     "/v1/agents/{agent_id}/tasks/{task_id}": {
       "delete": {
         "description": "Cancel a specific task workflow for the specified agent.",
@@ -15790,6 +15771,55 @@
           }
         ],
         "summary": "Workspace File History",
+        "tags": [
+          "v1",
+          "protected",
+          "files"
+        ]
+      }
+    },
+    "/v1/files/staging": {
+      "post": {
+        "description": "Stage a file for a not-yet-created task, referenced by ref in the task body.\n\nStaging keys live under ``staging/{id}/{filename}`` and are hidden from the\nworkspace file listing; the task-create endpoint consumes and deletes them.",
+        "operationId": "upload_staging_file_v1_files_staging_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_staging_file_v1_files_staging_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagedFileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Staging File",
         "tags": [
           "v1",
           "protected",

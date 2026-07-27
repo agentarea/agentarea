@@ -115,9 +115,6 @@ import type {
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostData,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostErrors,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostResponses,
-  CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostData,
-  CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostErrors,
-  CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostResponses,
   CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostData,
   CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostErrors,
   CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostResponses,
@@ -712,6 +709,9 @@ import type {
   UploadSkillV1SkillsUploadPostData,
   UploadSkillV1SkillsUploadPostErrors,
   UploadSkillV1SkillsUploadPostResponses,
+  UploadStagingFileV1FilesStagingPostData,
+  UploadStagingFileV1FilesStagingPostErrors,
+  UploadStagingFileV1FilesStagingPostResponses,
   UploadWorkspaceFileV1FilesPostData,
   UploadWorkspaceFileV1FilesPostErrors,
   UploadWorkspaceFileV1FilesPostResponses,
@@ -1923,43 +1923,6 @@ export const createTaskForAgentSyncV1AgentsAgentIdTasksSyncPost = <
       ...options.headers,
     },
   });
-
-/**
- * Create Task For Agent With Attachments
- *
- * Commit multipart attachments before dispatching the task workflow.
- */
-export const createTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPost =
-  <ThrowOnError extends boolean = false>(
-    options: Options<
-      CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostData,
-      ThrowOnError
-    >
-  ): RequestResult<
-    CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostResponses,
-    CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostErrors,
-    ThrowOnError
-  > =>
-    (options.client ?? client).post<
-      CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostResponses,
-      CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostErrors,
-      ThrowOnError
-    >({
-      ...formDataBodySerializer,
-      security: [
-        {
-          key: "HTTPBearer",
-          scheme: "bearer",
-          type: "http",
-        },
-      ],
-      url: "/v1/agents/{agent_id}/tasks/with-attachments",
-      ...options,
-      headers: {
-        "Content-Type": null,
-        ...options.headers,
-      },
-    });
 
 /**
  * Cancel Agent Task
@@ -3322,6 +3285,44 @@ export const workspaceFileHistoryV1FilesHistoryGet = <
     ],
     url: "/v1/files/history",
     ...options,
+  });
+
+/**
+ * Upload Staging File
+ *
+ * Stage a file for a not-yet-created task, referenced by ref in the task body.
+ *
+ * Staging keys live under ``staging/{id}/{filename}`` and are hidden from the
+ * workspace file listing; the task-create endpoint consumes and deletes them.
+ */
+export const uploadStagingFileV1FilesStagingPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<UploadStagingFileV1FilesStagingPostData, ThrowOnError>
+): RequestResult<
+  UploadStagingFileV1FilesStagingPostResponses,
+  UploadStagingFileV1FilesStagingPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    UploadStagingFileV1FilesStagingPostResponses,
+    UploadStagingFileV1FilesStagingPostErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/files/staging",
+    ...options,
+    headers: {
+      "Content-Type": null,
+      ...options.headers,
+    },
   });
 
 /**

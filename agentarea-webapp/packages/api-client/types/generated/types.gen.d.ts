@@ -819,19 +819,6 @@ export type Blockers = {
     wallet_exhausted: Array<WalletExhaustedBlocker>;
 };
 /**
- * Body_create_task_for_agent_with_attachments_v1_agents__agent_id__tasks_with_attachments_post
- */
-export type BodyCreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPost = {
-    /**
-     * Files
-     */
-    files: Array<Blob | File>;
-    /**
-     * Task Data
-     */
-    task_data: string;
-};
-/**
  * Body_import_workspace_config_file_v1_workspace_import_file_post
  */
 export type BodyImportWorkspaceConfigFileV1WorkspaceImportFilePost = {
@@ -859,6 +846,15 @@ export type BodyUploadSkillV1SkillsUploadPost = {
      * File
      *
      * ZIP file containing the skill package
+     */
+    file: Blob | File;
+};
+/**
+ * Body_upload_staging_file_v1_files_staging_post
+ */
+export type BodyUploadStagingFileV1FilesStagingPost = {
+    /**
+     * File
      */
     file: Blob | File;
 };
@@ -5182,6 +5178,27 @@ export type SpendCard = {
     today_usd: number;
 };
 /**
+ * StagedFileResponse
+ */
+export type StagedFileResponse = {
+    /**
+     * Content Type
+     */
+    content_type?: string | null;
+    /**
+     * Filename
+     */
+    filename: string;
+    /**
+     * Ref
+     */
+    ref: string;
+    /**
+     * Size
+     */
+    size: number;
+};
+/**
  * SubjectSetBody
  */
 export type SubjectSetBody = {
@@ -5254,6 +5271,10 @@ export type TaskCommandPayload = {
  * TaskCreate
  */
 export type TaskCreate = {
+    /**
+     * Attachments
+     */
+    attachments?: Array<string> | null;
     /**
      * Description
      */
@@ -7334,30 +7355,6 @@ export type CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostResponses = {
     200: TaskResponse;
 };
 export type CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostResponse = CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostResponses[keyof CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostResponses];
-export type CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostData = {
-    body: BodyCreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPost;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/tasks/with-attachments';
-};
-export type CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostError = CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostErrors[keyof CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostErrors];
-export type CreateTaskForAgentWithAttachmentsV1AgentsAgentIdTasksWithAttachmentsPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
 export type CancelAgentTaskV1AgentsAgentIdTasksTaskIdDeleteData = {
     body?: never;
     path: {
@@ -8534,6 +8531,26 @@ export type WorkspaceFileHistoryV1FilesHistoryGetResponses = {
     200: ArtifactHistoryResponse;
 };
 export type WorkspaceFileHistoryV1FilesHistoryGetResponse = WorkspaceFileHistoryV1FilesHistoryGetResponses[keyof WorkspaceFileHistoryV1FilesHistoryGetResponses];
+export type UploadStagingFileV1FilesStagingPostData = {
+    body: BodyUploadStagingFileV1FilesStagingPost;
+    path?: never;
+    query?: never;
+    url: '/v1/files/staging';
+};
+export type UploadStagingFileV1FilesStagingPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UploadStagingFileV1FilesStagingPostError = UploadStagingFileV1FilesStagingPostErrors[keyof UploadStagingFileV1FilesStagingPostErrors];
+export type UploadStagingFileV1FilesStagingPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: StagedFileResponse;
+};
+export type UploadStagingFileV1FilesStagingPostResponse = UploadStagingFileV1FilesStagingPostResponses[keyof UploadStagingFileV1FilesStagingPostResponses];
 export type DownloadWorkspaceFileV1FilesFilePathGetData = {
     body?: never;
     path: {
