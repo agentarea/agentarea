@@ -258,8 +258,7 @@ class FileToolset(Toolset):
             return (
                 f"Error: save_file writes UTF-8 text only and would corrupt a .{_ext} file. "
                 "Produce binary deliverables by running a program in the shell that writes the "
-                "file into your workspace (e.g. python with openpyxl/python-pptx/python-docx/"
-                "reportlab, or matplotlib.savefig for images)."
+                "file into your workspace."
             )
         try:
             path = self._resolve(file_name)

@@ -127,6 +127,26 @@ def main():
                 go_file.write_text(updated)
                 print(f"✅ Updated {go_file.relative_to(root_dir)}")
 
+    # Refresh uv.lock: the workspace members are editable entries carrying their
+    # own version, so bumping the pyproject files alone leaves the lock behind.
+    # CI runs `uv sync` without --frozen and silently rewrites it, which hides
+    # the drift until someone gets an unrelated dirty uv.lock in their diff.
+    platform_dir = root_dir / 'agentarea-platform'
+    if (platform_dir / 'uv.lock').exists():
+        try:
+            subprocess.run(
+                ['uv', 'lock'],
+                cwd=platform_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            print("✅ Updated agentarea-platform/uv.lock")
+        except FileNotFoundError:
+            print("⚠️  Warning: uv not found; uv.lock left stale")
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️  Warning: Failed to refresh uv.lock: {e.stderr}")
+
     print(f"\n✅ All versions bumped to {new_version}")
 
 if __name__ == '__main__':
