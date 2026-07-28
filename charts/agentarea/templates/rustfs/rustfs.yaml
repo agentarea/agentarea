@@ -145,6 +145,9 @@ spec:
             - |
               aws configure set default.s3.addressing_style path
               aws s3 mb s3://{{ .Values.rustfs.defaultBuckets }} --endpoint-url http://{{ .Release.Name }}-rustfs:9000 || true
+              {{- if .Values.global.storage.cors.allowedOrigins }}
+              aws s3api put-bucket-cors --bucket {{ .Values.rustfs.defaultBuckets }} --endpoint-url http://{{ .Release.Name }}-rustfs:9000 --cors-configuration '{"CORSRules":[{"AllowedOrigins":[{{ range $i, $o := .Values.global.storage.cors.allowedOrigins }}{{ if $i }},{{ end }}"{{ $o }}"{{ end }}],"AllowedMethods":["GET","PUT","HEAD"],"AllowedHeaders":["*"],"ExposeHeaders":["ETag"],"MaxAgeSeconds":3600}]}'
+              {{- end }}
           env:
             - name: AWS_ACCESS_KEY_ID
               valueFrom:

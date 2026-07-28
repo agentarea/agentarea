@@ -55,6 +55,9 @@ import type {
   CreateApiKeyV1ApiKeysPostData,
   CreateApiKeyV1ApiKeysPostErrors,
   CreateApiKeyV1ApiKeysPostResponses,
+  CreateAttachmentUploadUrlV1FilesUploadUrlPostData,
+  CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors,
+  CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses,
   CreateClientV1ClientsPostData,
   CreateClientV1ClientsPostErrors,
   CreateClientV1ClientsPostResponses,
@@ -703,18 +706,15 @@ import type {
   UpdateWorkspaceSettingsV1WorkspaceSettingsPutData,
   UpdateWorkspaceSettingsV1WorkspaceSettingsPutErrors,
   UpdateWorkspaceSettingsV1WorkspaceSettingsPutResponses,
+  UploadFileV1FilesPostData,
+  UploadFileV1FilesPostErrors,
+  UploadFileV1FilesPostResponses,
   UploadProjectFileV1ProjectsProjectIdFilesPostData,
   UploadProjectFileV1ProjectsProjectIdFilesPostErrors,
   UploadProjectFileV1ProjectsProjectIdFilesPostResponses,
   UploadSkillV1SkillsUploadPostData,
   UploadSkillV1SkillsUploadPostErrors,
   UploadSkillV1SkillsUploadPostResponses,
-  UploadStagingFileV1FilesStagingPostData,
-  UploadStagingFileV1FilesStagingPostErrors,
-  UploadStagingFileV1FilesStagingPostResponses,
-  UploadWorkspaceFileV1FilesPostData,
-  UploadWorkspaceFileV1FilesPostErrors,
-  UploadWorkspaceFileV1FilesPostResponses,
   UpsertModelSpecV1ModelSpecsUpsertPostData,
   UpsertModelSpecV1ModelSpecsUpsertPostErrors,
   UpsertModelSpecV1ModelSpecsUpsertPostResponses,
@@ -3190,22 +3190,25 @@ export const listWorkspaceFilesV1FilesGet = <
   });
 
 /**
- * Upload Workspace File
+ * Upload File
  *
- * Upload a file to the workspace's artifact root.
+ * Upload a file, server-proxied.
+ *
+ * ``purpose="workspace"`` (the default) lands the file at the workspace
+ * artifact root. ``purpose="attachment"`` stages it under
+ * ``staging/{id}/{filename}`` — hidden from the workspace listing — and
+ * returns a ``ref`` the task-create endpoint resolves into the task workspace.
  */
-export const uploadWorkspaceFileV1FilesPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<UploadWorkspaceFileV1FilesPostData, ThrowOnError>
+export const uploadFileV1FilesPost = <ThrowOnError extends boolean = false>(
+  options: Options<UploadFileV1FilesPostData, ThrowOnError>
 ): RequestResult<
-  UploadWorkspaceFileV1FilesPostResponses,
-  UploadWorkspaceFileV1FilesPostErrors,
+  UploadFileV1FilesPostResponses,
+  UploadFileV1FilesPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    UploadWorkspaceFileV1FilesPostResponses,
-    UploadWorkspaceFileV1FilesPostErrors,
+    UploadFileV1FilesPostResponses,
+    UploadFileV1FilesPostErrors,
     ThrowOnError
   >({
     ...formDataBodySerializer,
@@ -3288,28 +3291,32 @@ export const workspaceFileHistoryV1FilesHistoryGet = <
   });
 
 /**
- * Upload Staging File
+ * Create Attachment Upload Url
  *
- * Stage a file for a not-yet-created task, referenced by ref in the task body.
+ * Mint a presigned PUT for a task attachment uploaded directly to the store.
  *
- * Staging keys live under ``staging/{id}/{filename}`` and are hidden from the
- * workspace file listing; the task-create endpoint consumes and deletes them.
+ * The client-declared sha256 is bound into the signature as ``ChecksumSHA256``,
+ * so the object store rejects a body that does not hash to it — the upload is
+ * content-verified without the API ever seeing the bytes. The returned ``ref``
+ * is consumed by the task-create endpoint exactly like a server-proxied one.
  */
-export const uploadStagingFileV1FilesStagingPost = <
+export const createAttachmentUploadUrlV1FilesUploadUrlPost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<UploadStagingFileV1FilesStagingPostData, ThrowOnError>
+  options: Options<
+    CreateAttachmentUploadUrlV1FilesUploadUrlPostData,
+    ThrowOnError
+  >
 ): RequestResult<
-  UploadStagingFileV1FilesStagingPostResponses,
-  UploadStagingFileV1FilesStagingPostErrors,
+  CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses,
+  CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    UploadStagingFileV1FilesStagingPostResponses,
-    UploadStagingFileV1FilesStagingPostErrors,
+    CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses,
+    CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors,
     ThrowOnError
   >({
-    ...formDataBodySerializer,
     security: [
       {
         key: "HTTPBearer",
@@ -3317,10 +3324,10 @@ export const uploadStagingFileV1FilesStagingPost = <
         type: "http",
       },
     ],
-    url: "/v1/files/staging",
+    url: "/v1/files/upload-url",
     ...options,
     headers: {
-      "Content-Type": null,
+      "Content-Type": "application/json",
       ...options.headers,
     },
   });

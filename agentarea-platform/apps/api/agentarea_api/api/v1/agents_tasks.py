@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import re
 import unicodedata
@@ -84,7 +83,8 @@ class TaskCreate(BaseModel):
     requires_human_approval: bool | None = False
     project_id: str | None = None
     task_policy: PolicyDocument | None = None
-    attachments: list[str] | None = None  # staging refs from POST /v1/files/staging
+    # staging refs from POST /v1/files (purpose=attachment) or POST /v1/files/upload-url
+    attachments: list[str] | None = None
 
 
 def _attachment_content_disposition(filename: str) -> str:
@@ -95,6 +95,25 @@ def _attachment_content_disposition(filename: str) -> str:
     return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
 
 
+def _dedupe_attachment_name(name: str, used: set[str]) -> str:
+    """Return a name unique within ``used`` by inserting ``-N`` before the extension.
+
+    Two attachments can carry the same basename (distinct staging refs, identical
+    filenames); collapsing them into one manifest entry would silently drop a
+    file, so disambiguate deterministically: ``report.csv`` -> ``report-1.csv``.
+    """
+    if name not in used:
+        return name
+    suffix = PurePosixPath(name).suffix
+    base = name[: len(name) - len(suffix)] if suffix else name
+    index = 1
+    while True:
+        candidate = f"{base}-{index}{suffix}"
+        if candidate not in used:
+            return candidate
+        index += 1
+
+
 async def _stage_attachments_into_task(
     workspace_id: str,
     reserved_task_id: UUID,
@@ -103,10 +122,14 @@ async def _stage_attachments_into_task(
 ) -> list[dict[str, Any]]:
     """Resolve staging refs into a reserved task's ``inputs/attachments`` scope.
 
-    Each ref (``staging/{id}/{filename}`` from POST /v1/files/staging) is read
-    from the workspace artifact store, committed into the task workspace, then
-    best-effort deleted. Returns the attachment descriptors persisted alongside
-    the run. Raises HTTP errors mirroring the workspace-commit failure modes.
+    Each ref (``staging/{id}/{filename}`` from ``POST /v1/files`` with
+    ``purpose=attachment`` or a presigned ``POST /v1/files/upload-url``) is HEADed
+    to resolve its verified sha256, size and content type, then copied
+    server-side into the task's content-addressed store via ``attach_object``.
+    The bytes never transit this process. Returns the attachment descriptors
+    persisted alongside the run. Raises HTTP errors mirroring the
+    workspace-commit failure modes. Staging objects are left in place; the
+    caller deletes them only after a successful dispatch.
     """
     from agentarea_common.artifacts import (
         ArtifactActor,
@@ -118,67 +141,87 @@ async def _stage_attachments_into_task(
         WorkspaceValidationError,
     )
 
-    artifact_service = ArtifactService(
+    artifact_service = ArtifactService()
+    workspace_repository = WorkspaceRepository(
         recorder=DbArtifactEventRecorder(),
         actor=ArtifactActor(user_id=user_id),
     )
 
-    staged: dict[str, bytes] = {}
-    content_types: dict[str, str] = {}
     descriptors: list[dict[str, Any]] = []
+    used_names: set[str] = set()
     for ref in refs:
         if not ref.startswith("staging/"):
             raise HTTPException(status_code=422, detail=f"Invalid attachment ref: {ref}")
-        try:
-            bytes_, content_type = await artifact_service.get(workspace_id, ref)
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="attachment ref not found") from exc
-        name = ref.rsplit("/", 1)[-1]
+        head = await artifact_service.head(workspace_id, ref)
+        if head is None:
+            raise HTTPException(status_code=404, detail="attachment ref not found")
+        sha256 = head.get("sha256")
+        if not sha256:
+            raise HTTPException(
+                status_code=422, detail="attachment integrity digest is unavailable"
+            )
+        size = int(head.get("size") or 0)
+        content_type = head.get("content_type") or "application/octet-stream"
+        name = _dedupe_attachment_name(ref.rsplit("/", 1)[-1] or "attachment", used_names)
+        used_names.add(name)
         rel = f"inputs/attachments/{name}"
-        content_type = content_type or "application/octet-stream"
-        staged[rel] = bytes_
-        content_types[rel] = content_type
+        try:
+            await workspace_repository.attach_object(
+                workspace_id,
+                str(reserved_task_id),
+                rel,
+                source_key=ref,
+                expected_sha256=sha256,
+                expected_size=size,
+                content_type=content_type,
+                owner=f"task-attachment-upload-{reserved_task_id}",
+            )
+        except WorkspaceQuotaError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        except WorkspaceConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except WorkspaceValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:
+            logger.error(
+                "Failed to attach staged object for task %s", reserved_task_id, exc_info=True
+            )
+            raise HTTPException(status_code=500, detail="Attachment storage failed") from exc
         descriptors.append(
             {
                 "relative_path": rel,
                 "filename": name,
-                "size": len(bytes_),
+                "size": size,
                 "content_type": content_type,
-                "sha256": hashlib.sha256(bytes_).hexdigest(),
+                "sha256": sha256,
             }
         )
 
-    try:
-        await WorkspaceRepository(
-            recorder=DbArtifactEventRecorder(),
-            actor=ArtifactActor(user_id=user_id),
-        ).put_files(
-            workspace_id,
-            str(reserved_task_id),
-            staged,
-            content_types=content_types,
-            provenance={"source": "task_attachment", "user_id": user_id},
-            owner=f"task-attachment-upload-{reserved_task_id}",
-        )
-    except WorkspaceQuotaError as exc:
-        raise HTTPException(status_code=413, detail=str(exc)) from exc
-    except WorkspaceConflictError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except WorkspaceValidationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except Exception as exc:
-        logger.error("Failed to commit attachments for task %s", reserved_task_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="Attachment storage failed") from exc
+    return descriptors
 
-    # Referenced staging objects are consumed; unreferenced ones are left for
-    # lifecycle cleanup. Deletion is best-effort so it never fails the task.
+
+async def _delete_staging_refs(workspace_id: str, refs: list[str], user_id: str) -> None:
+    """Best-effort delete of consumed staging objects after a successful dispatch.
+
+    Deleting only after dispatch means a failed dispatch leaves the upload intact
+    for a retry instead of consuming it. Never raises: an orphaned staging object
+    is reclaimed by lifecycle cleanup, not worth failing a launched task over.
+    """
+    from agentarea_common.artifacts import (
+        ArtifactActor,
+        ArtifactService,
+        DbArtifactEventRecorder,
+    )
+
+    artifact_service = ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_id),
+    )
     for ref in refs:
         try:
             await artifact_service.delete(workspace_id, ref)
         except Exception:
             logger.warning("Failed to delete consumed staging ref %s", ref, exc_info=True)
-
-    return descriptors
 
 
 class EscalationResolution(BaseModel):
@@ -600,6 +643,12 @@ async def create_task_for_agent_with_stream(
             logger.error("Failed to dispatch attachment task %s", reserved_task_id, exc_info=True)
             raise HTTPException(status_code=503, detail="Task dispatch failed") from exc
 
+        # Consume the staging objects only now that the run is dispatched; a
+        # failed dispatch above leaves them for a retry.
+        await _delete_staging_refs(
+            user_context.workspace_id, data.attachments, user_context.user_id
+        )
+
     async def task_creation_stream() -> AsyncGenerator[str, None]:
         """Generate Server-Sent Events for task creation and execution."""
         task = created_task
@@ -760,6 +809,9 @@ async def create_task_for_agent_sync(
                 trusted_metadata={"workspace_attachments": attachment_descriptors},
             )
             task = await task_service.dispatch_reserved_run(task)
+            await _delete_staging_refs(
+                user_context.workspace_id, data.attachments, user_context.user_id
+            )
         else:
             payload = RunCreate(
                 agent_id=agent_id,

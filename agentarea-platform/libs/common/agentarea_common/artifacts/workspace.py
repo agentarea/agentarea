@@ -34,6 +34,7 @@ from agentarea_common.artifacts.audit import (
     ArtifactActor,
     ArtifactEventRecorder,
 )
+from agentarea_common.artifacts.service import sha256_hex_from_head
 from agentarea_common.config.aws import get_aws_settings, get_s3_client
 
 WORKSPACE_SCHEMA_VERSION = 1
@@ -918,6 +919,146 @@ class S3WorkspaceRepository:
             next_ref = await self._commit(workspace_id, task_id, ref, entries, pointer_etag, lease)
             for path, action in changed_actions:
                 await self._record(workspace_id, task_id, path, action)
+            return next_ref
+        finally:
+            await self._release_lease(workspace_id, task_id, lease)
+
+    async def attach_object(
+        self,
+        workspace_id: str,
+        task_id: str,
+        path: str,
+        *,
+        source_key: str,
+        expected_sha256: str,
+        expected_size: int,
+        content_type: str,
+        owner: str | None = None,
+    ) -> WorkspaceManifestRef:
+        """Attach a staged object into the task workspace by server-side copy.
+
+        ``source_key`` is a staging object key relative to the workspace root
+        (same bucket). The staged bytes never transit this process: they are
+        copied straight into the task's content-addressed ``objects/{sha256}``
+        slot and committed as a new generation. The staging identity is verified
+        against ``expected_sha256``/``expected_size`` before any copy, and the
+        per-file size cap is enforced against the same bound; the total
+        workspace quota, however, is only checked at commit, after the copy
+        has already happened, so (as with ``put_files``) an attach that pushes
+        the workspace over its total-bytes quota can still leave an
+        unreferenced blob behind.
+        """
+        clean = normalize_workspace_path(path)
+        if not _SHA256_RE.fullmatch(expected_sha256):
+            raise WorkspaceValidationError("attach expected_sha256 is not a lowercase hex digest")
+        if (
+            isinstance(expected_size, bool)
+            or not isinstance(expected_size, int)
+            or expected_size < 0
+        ):
+            raise WorkspaceValidationError("attach expected_size must be a non-negative integer")
+        if not content_type:
+            raise WorkspaceValidationError("attach content_type is required")
+        if not _IDENTIFIER_RE.fullmatch(workspace_id or ""):
+            raise WorkspaceValidationError("workspace_id must be an opaque identifier segment")
+        source = source_key.strip("/")
+        if not source or ".." in source.split("/"):
+            raise WorkspaceValidationError("attach source key is invalid")
+        prefix = f"{self._key_prefix}/" if self._key_prefix else ""
+        source_full_key = f"{prefix}workspaces/{workspace_id}/{source}"
+        dest_key = self._key(workspace_id, task_id, f"objects/{expected_sha256}")
+
+        def head_source() -> dict[str, Any] | None:
+            try:
+                return self._client.head_object(
+                    Bucket=self._bucket, Key=source_full_key, ChecksumMode="ENABLED"
+                )
+            except ClientError as exc:
+                if _is_not_found(exc):
+                    return None
+                raise
+
+        head = await asyncio.to_thread(head_source)
+        if head is None:
+            raise WorkspaceValidationError(f"attach source object is missing: {source!r}")
+        # A presigned direct upload only guarantees the S3-native ChecksumSHA256,
+        # not the sha256 user-metadata; resolve both uniformly and fail loudly
+        # when neither is present rather than attaching an unverifiable object.
+        source_sha = sha256_hex_from_head(head)
+        source_size = int(head.get("ContentLength") or -1)
+        if source_sha != expected_sha256 or source_size != expected_size:
+            raise WorkspaceValidationError(
+                "attach source identity does not match the declared sha256/size"
+            )
+        if expected_size > self._max_file_bytes:
+            raise WorkspaceQuotaError(
+                f"attach file has {expected_size} bytes; limit is {self._max_file_bytes}"
+            )
+
+        def copy_into_task_objects() -> str:
+            try:
+                existing = self._client.head_object(Bucket=self._bucket, Key=dest_key)
+            except ClientError as exc:
+                if not _is_not_found(exc):
+                    raise
+                existing = None
+            if existing is not None:
+                existing_sha = (existing.get("Metadata") or {}).get("sha256")
+                if (
+                    int(existing.get("ContentLength") or -1) != expected_size
+                    or existing_sha != expected_sha256
+                ):
+                    raise WorkspaceConflictError(
+                        f"immutable object identity collision at {dest_key}"
+                    )
+                version_id = str(existing.get("VersionId") or "")
+                if version_id:
+                    return f"version:{version_id}"
+                return str(existing.get("ETag") or "").strip('"')
+            self._client.copy_object(
+                Bucket=self._bucket,
+                Key=dest_key,
+                CopySource={"Bucket": self._bucket, "Key": source_full_key},
+                MetadataDirective="REPLACE",
+                Metadata={"sha256": expected_sha256},
+                ContentType=content_type,
+            )
+            head_dest = self._client.head_object(Bucket=self._bucket, Key=dest_key)
+            version_id = str(head_dest.get("VersionId") or "")
+            if version_id:
+                return f"version:{version_id}"
+            return str(head_dest.get("ETag") or "").strip('"')
+
+        identity = await asyncio.to_thread(copy_into_task_objects)
+
+        lease = await self._acquire_lease(
+            workspace_id, task_id, owner or f"python-attach-{uuid.uuid4().hex}"
+        )
+        try:
+            ref, entries, pointer_etag = await self._snapshot(workspace_id, task_id)
+            existing_entry = entries.get(clean)
+            if (
+                existing_entry is not None
+                and not existing_entry.deleted
+                and existing_entry.sha256 == expected_sha256
+            ):
+                return ref
+            existed = existing_entry is not None and not existing_entry.deleted
+            entries[clean] = WorkspaceEntry(
+                relative_path=clean,
+                object_uri=self._uri(dest_key),
+                object_version_or_etag=identity,
+                sha256=expected_sha256,
+                size=expected_size,
+                content_type=content_type,
+                mode=0o644,
+                deleted=False,
+            )
+            self._check_quotas(entries)
+            next_ref = await self._commit(workspace_id, task_id, ref, entries, pointer_etag, lease)
+            await self._record(
+                workspace_id, task_id, clean, ACTION_MODIFIED if existed else ACTION_CREATED
+            )
             return next_ref
         finally:
             await self._release_lease(workspace_id, task_id, lease)

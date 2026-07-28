@@ -37,12 +37,13 @@ def _request(*paths: str) -> ArtifactValidationRequest:
 
 
 @pytest.mark.asyncio
-async def test_no_declared_paths_is_no_artifacts() -> None:
+async def test_no_declared_paths_passes() -> None:
     result = await validate_workspace_artifacts(
         _request(),
         repository=_Repository([_Object("notes.txt"), _Object("scratch.py", generation=4)]),
     )
-    assert result.state == "no_artifacts"
+    assert result.state == "passed"
+    assert result.evidence == []
     # generation is the max across the durable objects
     assert result.generation == 7
 

@@ -1623,6 +1623,25 @@
         "title": "Body_import_workspace_config_file_v1_workspace_import_file_post",
         "type": "object"
       },
+      "Body_upload_file_v1_files_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "workspace",
+            "title": "Purpose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_file_v1_files_post",
+        "type": "object"
+      },
       "Body_upload_project_file_v1_projects__project_id__files_post": {
         "properties": {
           "file": {
@@ -1650,34 +1669,6 @@
           "file"
         ],
         "title": "Body_upload_skill_v1_skills_upload_post",
-        "type": "object"
-      },
-      "Body_upload_staging_file_v1_files_staging_post": {
-        "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file"
-        ],
-        "title": "Body_upload_staging_file_v1_files_staging_post",
-        "type": "object"
-      },
-      "Body_upload_workspace_file_v1_files_post": {
-        "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file"
-        ],
-        "title": "Body_upload_workspace_file_v1_files_post",
         "type": "object"
       },
       "BudgetPolicy-Input": {
@@ -7114,6 +7105,60 @@
         "title": "PolicySubjectType",
         "type": "string"
       },
+      "PresignUploadRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "content_type": {
+            "minLength": 1,
+            "title": "Content Type",
+            "type": "string"
+          },
+          "filename": {
+            "minLength": 1,
+            "title": "Filename",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "filename",
+          "content_type",
+          "sha256",
+          "size"
+        ],
+        "title": "PresignUploadRequest",
+        "type": "object"
+      },
+      "PresignUploadResponse": {
+        "properties": {
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "upload_url": {
+            "title": "Upload Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "upload_url",
+          "expires_in"
+        ],
+        "title": "PresignUploadResponse",
+        "type": "object"
+      },
       "PreviewEntity": {
         "additionalProperties": false,
         "description": "One thing the package will (or won't) create.",
@@ -9114,40 +9159,6 @@
           "projected_eom_usd"
         ],
         "title": "SpendCard",
-        "type": "object"
-      },
-      "StagedFileResponse": {
-        "properties": {
-          "content_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Content Type"
-          },
-          "filename": {
-            "title": "Filename",
-            "type": "string"
-          },
-          "ref": {
-            "title": "Ref",
-            "type": "string"
-          },
-          "size": {
-            "title": "Size",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "ref",
-          "filename",
-          "size"
-        ],
-        "title": "StagedFileResponse",
         "type": "object"
       },
       "SubjectSetBody": {
@@ -15640,20 +15651,25 @@
         ]
       },
       "post": {
-        "description": "Upload a file to the workspace's artifact root.",
-        "operationId": "upload_workspace_file_v1_files_post",
+        "description": "Upload a file, server-proxied.\n\n``purpose=\"workspace\"`` (the default) lands the file at the workspace\nartifact root. ``purpose=\"attachment\"`` stages it under\n``staging/{id}/{filename}`` \u2014 hidden from the workspace listing \u2014 and\nreturns a ``ref`` the task-create endpoint resolves into the task workspace.",
+        "operationId": "upload_file_v1_files_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_upload_workspace_file_v1_files_post"
+                "$ref": "#/components/schemas/Body_upload_file_v1_files_post"
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
             "description": "Successful Response"
           },
           "422": {
@@ -15672,7 +15688,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Upload Workspace File",
+        "summary": "Upload File",
         "tags": [
           "v1",
           "protected",
@@ -15778,15 +15794,15 @@
         ]
       }
     },
-    "/v1/files/staging": {
+    "/v1/files/upload-url": {
       "post": {
-        "description": "Stage a file for a not-yet-created task, referenced by ref in the task body.\n\nStaging keys live under ``staging/{id}/{filename}`` and are hidden from the\nworkspace file listing; the task-create endpoint consumes and deletes them.",
-        "operationId": "upload_staging_file_v1_files_staging_post",
+        "description": "Mint a presigned PUT for a task attachment uploaded directly to the store.\n\nThe client-declared sha256 is bound into the signature as ``ChecksumSHA256``,\nso the object store rejects a body that does not hash to it \u2014 the upload is\ncontent-verified without the API ever seeing the bytes. The returned ``ref``\nis consumed by the task-create endpoint exactly like a server-proxied one.",
+        "operationId": "create_attachment_upload_url_v1_files_upload_url_post",
         "requestBody": {
           "content": {
-            "multipart/form-data": {
+            "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Body_upload_staging_file_v1_files_staging_post"
+                "$ref": "#/components/schemas/PresignUploadRequest"
               }
             }
           },
@@ -15797,7 +15813,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StagedFileResponse"
+                  "$ref": "#/components/schemas/PresignUploadResponse"
                 }
               }
             },
@@ -15819,7 +15835,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Upload Staging File",
+        "summary": "Create Attachment Upload Url",
         "tags": [
           "v1",
           "protected",

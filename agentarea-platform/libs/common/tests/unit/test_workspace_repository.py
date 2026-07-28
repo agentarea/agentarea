@@ -29,7 +29,11 @@ class _Paginator:
         self.client = client
 
     def paginate(
-        self, *, Bucket: str, Prefix: str, Delimiter: str | None = None  # noqa: N803
+        self,
+        *,
+        Bucket: str,
+        Prefix: str,
+        Delimiter: str | None = None,  # noqa: N803
     ):
         matches = [
             (key, value)
@@ -45,12 +49,14 @@ class _Paginator:
                 }
             )
             return [
-                {"CommonPrefixes": [{"Prefix": prefix} for prefix in prefixes[offset : offset + 1000]]}
+                {
+                    "CommonPrefixes": [
+                        {"Prefix": prefix} for prefix in prefixes[offset : offset + 1000]
+                    ]
+                }
                 for offset in range(0, len(prefixes), 1000)
             ] or [{}]
-        contents = [
-            {"Key": key, "Size": len(value["body"])} for key, value in matches
-        ]
+        contents = [{"Key": key, "Size": len(value["body"])} for key, value in matches]
         return [
             {"Contents": contents[offset : offset + 1000]}
             for offset in range(0, len(contents), 1000)
@@ -61,6 +67,7 @@ class FakeS3:
     def __init__(self) -> None:
         self.objects: dict[str, dict[str, Any]] = {}
         self.put_kwargs: list[dict[str, Any]] = []
+        self.copy_kwargs: list[dict[str, Any]] = []
         self.read_calls: list[tuple[str, int]] = []
 
     def put_object(self, **kwargs: Any) -> dict[str, str]:
@@ -106,7 +113,7 @@ class FakeS3:
             "ContentType": value["content_type"],
         }
 
-    def head_object(self, *, Bucket: str, Key: str):  # noqa: N803
+    def head_object(self, *, Bucket: str, Key: str, **kwargs: Any):  # noqa: N803
         if Key not in self.objects:
             raise _error("404", "HeadObject")
         value = self.objects[Key]
@@ -114,7 +121,31 @@ class FakeS3:
             "ContentLength": len(value["body"]),
             "ETag": f'"{value["etag"]}"',
             "Metadata": value["metadata"],
+            "ContentType": value["content_type"],
         }
+
+    def copy_object(self, **kwargs: Any) -> dict[str, Any]:
+        self.copy_kwargs.append(dict(kwargs))
+        source = kwargs["CopySource"]
+        source_key = source["Key"] if isinstance(source, dict) else str(source)
+        if source_key not in self.objects:
+            raise _error("NoSuchKey", "CopyObject")
+        src = self.objects[source_key]
+        if kwargs.get("MetadataDirective") == "REPLACE":
+            metadata = dict(kwargs.get("Metadata") or {})
+            content_type = kwargs.get("ContentType")
+        else:
+            metadata = dict(src["metadata"])
+            content_type = src["content_type"]
+        body = src["body"]
+        etag = hashlib.md5(body).hexdigest()  # noqa: S324 - test S3 ETag stand-in
+        self.objects[kwargs["Key"]] = {
+            "body": body,
+            "etag": etag,
+            "metadata": metadata,
+            "content_type": content_type,
+        }
+        return {"CopyObjectResult": {"ETag": f'"{etag}"'}}
 
     def get_paginator(self, operation: str) -> _Paginator:
         assert operation == "list_objects_v2"
@@ -182,18 +213,12 @@ async def test_stream_reads_verified_object_in_bounded_chunks(repository):
     body = b"0123456789"
     await repo.put("ws", "task", "result.bin", body, "application/octet-stream")
 
-    chunks, content_type, size = await repo.stream(
-        "ws", "task", "result.bin", chunk_size=3
-    )
+    chunks, content_type, size = await repo.stream("ws", "task", "result.bin", chunk_size=3)
 
     assert b"".join([chunk async for chunk in chunks]) == body
     assert content_type == "application/octet-stream"
     assert size == len(body)
-    object_reads = [
-        read_size
-        for key, read_size in client.read_calls
-        if "/objects/" in key
-    ]
+    object_reads = [read_size for key, read_size in client.read_calls if "/objects/" in key]
     assert object_reads
     assert all(0 < read_size <= 3 for read_size in object_reads)
 
@@ -507,6 +532,245 @@ async def test_project_import_streams_directly_into_task_objects(repository):
     manifest_wire = client.objects[manifest_key]["body"]
     assert b"project-input" not in manifest_wire
     assert b"content_base64" not in manifest_wire
+
+
+def _stage(client: FakeS3, key: str, body: bytes, *, content_type: str, sha256: str) -> None:
+    client.put_object(
+        Bucket="artifacts",
+        Key=key,
+        Body=body,
+        ContentType=content_type,
+        Metadata={"sha256": sha256},
+    )
+
+
+@pytest.mark.asyncio
+async def test_attach_object_copies_staging_into_task_objects(repository):
+    repo, client = repository
+    body = b"attached-report-bytes"
+    digest = hashlib.sha256(body).hexdigest()
+    _stage(
+        client,
+        "workspaces/ws-1/staging/upload-1/report.csv",
+        body,
+        content_type="text/csv",
+        sha256=digest,
+    )
+
+    ref = await repo.attach_object(
+        "ws-1",
+        "task-1",
+        "inputs/report.csv",
+        source_key="staging/upload-1/report.csv",
+        expected_sha256=digest,
+        expected_size=len(body),
+        content_type="text/csv",
+    )
+
+    assert ref.generation == 1
+    listed = await repo.list("ws-1", "task-1")
+    assert [item.path for item in listed] == ["inputs/report.csv"]
+    entry = listed[0]
+    assert entry.sha256 == digest
+    assert entry.object_uri == f"s3://artifacts/workspaces/ws-1/tasks/task-1/objects/{digest}"
+    dest_key = f"workspaces/ws-1/tasks/task-1/objects/{digest}"
+    manifest_key = ref.manifest_uri.removeprefix("s3://artifacts/")
+    manifest_entry = json.loads(client.objects[manifest_key]["body"])["entries"][0]
+    assert manifest_entry["object_version_or_etag"] == client.objects[dest_key]["etag"]
+    assert client.objects[dest_key]["metadata"]["sha256"] == digest
+    assert await repo.get("ws-1", "task-1", "inputs/report.csv") == (body, "text/csv")
+    assert client.copy_kwargs
+    assert client.copy_kwargs[0]["MetadataDirective"] == "REPLACE"
+    assert client.copy_kwargs[0]["Metadata"]["sha256"] == digest
+
+
+@pytest.mark.asyncio
+async def test_attach_uses_destination_etag_not_source_multipart_etag(repository):
+    repo, client = repository
+    body = b"multipart-source-body"
+    digest = hashlib.sha256(body).hexdigest()
+    # A multipart-uploaded staging object carries a -partcount etag suffix that
+    # is not the content md5; the manifest must record the copy DESTINATION etag.
+    client.objects["workspaces/ws-1/staging/mp/data.bin"] = {
+        "body": body,
+        "etag": "deadbeefdeadbeefdeadbeefdeadbeef-3",
+        "metadata": {"sha256": digest},
+        "content_type": "application/octet-stream",
+    }
+
+    await repo.attach_object(
+        "ws-1",
+        "task-1",
+        "data.bin",
+        source_key="staging/mp/data.bin",
+        expected_sha256=digest,
+        expected_size=len(body),
+        content_type="application/octet-stream",
+    )
+
+    dest_key = f"workspaces/ws-1/tasks/task-1/objects/{digest}"
+    entry = await repo._entry("ws-1", "task-1", "data.bin")
+    assert entry.object_version_or_etag == client.objects[dest_key]["etag"]
+    assert entry.object_version_or_etag != "deadbeefdeadbeefdeadbeefdeadbeef-3"
+
+
+@pytest.mark.asyncio
+async def test_attach_rejects_sha256_mismatch_without_copying(repository):
+    repo, client = repository
+    body = b"honest-bytes"
+    actual = hashlib.sha256(body).hexdigest()
+    _stage(
+        client,
+        "workspaces/ws-1/staging/x/f.bin",
+        body,
+        content_type="application/octet-stream",
+        sha256=actual,
+    )
+
+    with pytest.raises(WorkspaceValidationError):
+        await repo.attach_object(
+            "ws-1",
+            "task-1",
+            "f.bin",
+            source_key="staging/x/f.bin",
+            expected_sha256="f" * 64,
+            expected_size=len(body),
+            content_type="application/octet-stream",
+        )
+
+    assert await repo.list("ws-1", "task-1") == []
+    assert not client.copy_kwargs
+
+
+@pytest.mark.asyncio
+async def test_attach_rejects_size_mismatch_without_copying(repository):
+    repo, client = repository
+    body = b"honest-bytes"
+    digest = hashlib.sha256(body).hexdigest()
+    _stage(
+        client,
+        "workspaces/ws-1/staging/y/f.bin",
+        body,
+        content_type="application/octet-stream",
+        sha256=digest,
+    )
+
+    with pytest.raises(WorkspaceValidationError):
+        await repo.attach_object(
+            "ws-1",
+            "task-1",
+            "f.bin",
+            source_key="staging/y/f.bin",
+            expected_sha256=digest,
+            expected_size=len(body) + 1,
+            content_type="application/octet-stream",
+        )
+
+    assert not client.copy_kwargs
+
+
+@pytest.mark.asyncio
+async def test_attach_rejects_oversized_before_copy():
+    client = FakeS3()
+    repo = WorkspaceRepository(client=client, bucket="artifacts", max_file_bytes=4)
+    body = b"way too big for the per-file limit"
+    digest = hashlib.sha256(body).hexdigest()
+    _stage(
+        client,
+        "workspaces/ws/staging/o/big.bin",
+        body,
+        content_type="application/octet-stream",
+        sha256=digest,
+    )
+
+    with pytest.raises(WorkspaceQuotaError):
+        await repo.attach_object(
+            "ws",
+            "task",
+            "big.bin",
+            source_key="staging/o/big.bin",
+            expected_sha256=digest,
+            expected_size=len(body),
+            content_type="application/octet-stream",
+        )
+
+    assert not client.copy_kwargs
+    assert (await repo.current_manifest_ref("ws", "task")).generation == 0
+
+
+@pytest.mark.asyncio
+async def test_attach_is_idempotent_on_retry(repository):
+    repo, client = repository
+    body = b"idempotent-bytes"
+    digest = hashlib.sha256(body).hexdigest()
+    _stage(
+        client,
+        "workspaces/ws-1/staging/i/f.bin",
+        body,
+        content_type="text/plain",
+        sha256=digest,
+    )
+    kwargs = {
+        "source_key": "staging/i/f.bin",
+        "expected_sha256": digest,
+        "expected_size": len(body),
+        "content_type": "text/plain",
+    }
+
+    first = await repo.attach_object("ws-1", "task-1", "f.bin", **kwargs)
+    second = await repo.attach_object("ws-1", "task-1", "f.bin", **kwargs)
+
+    assert first.generation == 1
+    assert second.generation == first.generation
+    assert [i.path for i in await repo.list("ws-1", "task-1")] == ["f.bin"]
+    assert len(client.copy_kwargs) == 1
+
+
+@pytest.mark.asyncio
+async def test_attach_restamps_metadata_so_identical_put_files_does_not_collide(repository):
+    repo, client = repository
+    body = b"shared-content-across-paths"
+    digest = hashlib.sha256(body).hexdigest()
+    _stage(
+        client,
+        "workspaces/ws-1/staging/s/a.bin",
+        body,
+        content_type="application/octet-stream",
+        sha256=digest,
+    )
+
+    await repo.attach_object(
+        "ws-1",
+        "task-1",
+        "a.bin",
+        source_key="staging/s/a.bin",
+        expected_sha256=digest,
+        expected_size=len(body),
+        content_type="application/octet-stream",
+    )
+
+    dest_key = f"workspaces/ws-1/tasks/task-1/objects/{digest}"
+    assert client.objects[dest_key]["metadata"]["sha256"] == digest
+
+    await repo.put_files("ws-1", "task-1", {"copy/a.bin": body})
+
+    assert [i.path for i in await repo.list("ws-1", "task-1")] == ["a.bin", "copy/a.bin"]
+
+
+@pytest.mark.asyncio
+async def test_attach_rejects_missing_staging_source(repository):
+    repo, client = repository
+    with pytest.raises(WorkspaceValidationError):
+        await repo.attach_object(
+            "ws-1",
+            "task-1",
+            "f.bin",
+            source_key="staging/missing/f.bin",
+            expected_sha256="a" * 64,
+            expected_size=1,
+            content_type="application/octet-stream",
+        )
+    assert not client.copy_kwargs
 
 
 @pytest.mark.asyncio

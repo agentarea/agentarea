@@ -285,6 +285,14 @@ export const zBodyImportWorkspaceConfigFileV1WorkspaceImportFilePost = z.object(
 );
 
 /**
+ * Body_upload_file_v1_files_post
+ */
+export const zBodyUploadFileV1FilesPost = z.object({
+  file: z.string(),
+  purpose: z.string().optional().default("workspace"),
+});
+
+/**
  * Body_upload_project_file_v1_projects__project_id__files_post
  */
 export const zBodyUploadProjectFileV1ProjectsProjectIdFilesPost = z.object({
@@ -295,20 +303,6 @@ export const zBodyUploadProjectFileV1ProjectsProjectIdFilesPost = z.object({
  * Body_upload_skill_v1_skills_upload_post
  */
 export const zBodyUploadSkillV1SkillsUploadPost = z.object({
-  file: z.string(),
-});
-
-/**
- * Body_upload_staging_file_v1_files_staging_post
- */
-export const zBodyUploadStagingFileV1FilesStagingPost = z.object({
-  file: z.string(),
-});
-
-/**
- * Body_upload_workspace_file_v1_files_post
- */
-export const zBodyUploadWorkspaceFileV1FilesPost = z.object({
   file: z.string(),
 });
 
@@ -1686,6 +1680,25 @@ export const zPolicyRuleUpdateRequest = z.object({
 });
 
 /**
+ * PresignUploadRequest
+ */
+export const zPresignUploadRequest = z.object({
+  content_type: z.string().min(1),
+  filename: z.string().min(1),
+  sha256: z.string(),
+  size: z.number().int(),
+});
+
+/**
+ * PresignUploadResponse
+ */
+export const zPresignUploadResponse = z.object({
+  expires_in: z.number().int(),
+  ref: z.string(),
+  upload_url: z.string(),
+});
+
+/**
  * PreviewEntity
  *
  * One thing the package will (or won't) create.
@@ -2248,16 +2261,6 @@ export const zSpendCard = z.object({
   projected_eom_usd: z.number().nullable(),
   projection_method: z.string().optional().default("linear-mtd"),
   today_usd: z.number(),
-});
-
-/**
- * StagedFileResponse
- */
-export const zStagedFileResponse = z.object({
-  content_type: z.string().nullish(),
-  filename: z.string(),
-  ref: z.string(),
-  size: z.number().int(),
 });
 
 /**
@@ -3594,13 +3597,7 @@ export const zRemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponse 
  */
 export const zListWorkspaceFilesV1FilesGetResponse = zWorkspaceFileListResponse;
 
-export const zUploadWorkspaceFileV1FilesPostBody =
-  zBodyUploadWorkspaceFileV1FilesPost;
-
-/**
- * Successful Response
- */
-export const zUploadWorkspaceFileV1FilesPostResponse = z.void();
+export const zUploadFileV1FilesPostBody = zBodyUploadFileV1FilesPost;
 
 export const zStreamWorkspaceFileV1FilesDownloadFilePathGetPath = z.object({
   file_path: z.string(),
@@ -3616,13 +3613,14 @@ export const zWorkspaceFileHistoryV1FilesHistoryGetQuery = z.object({
 export const zWorkspaceFileHistoryV1FilesHistoryGetResponse =
   zArtifactHistoryResponse;
 
-export const zUploadStagingFileV1FilesStagingPostBody =
-  zBodyUploadStagingFileV1FilesStagingPost;
+export const zCreateAttachmentUploadUrlV1FilesUploadUrlPostBody =
+  zPresignUploadRequest;
 
 /**
  * Successful Response
  */
-export const zUploadStagingFileV1FilesStagingPostResponse = zStagedFileResponse;
+export const zCreateAttachmentUploadUrlV1FilesUploadUrlPostResponse =
+  zPresignUploadResponse;
 
 export const zDownloadWorkspaceFileV1FilesFilePathGetPath = z.object({
   file_path: z.string(),
