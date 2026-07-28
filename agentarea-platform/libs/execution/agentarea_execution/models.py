@@ -300,7 +300,7 @@ class ArtifactValidationRequest(BaseModel):
 class ArtifactValidationResult(BaseModel):
     """Fail-closed outcome returned by the validation activity."""
 
-    state: Literal["passed", "failed", "unavailable", "no_artifacts"]
+    state: Literal["passed", "failed", "unavailable"]
     generation: int
     evidence: list[ArtifactValidationEvidence] = Field(default_factory=list)
     issues: list[ArtifactValidationIssue] = Field(default_factory=list)

@@ -142,7 +142,7 @@ async def mock_update_task_status(request: UpdateTaskStatusRequest) -> bool:
 async def mock_validate_artifacts(
     request: ArtifactValidationRequest,
 ) -> ArtifactValidationResult:
-    return ArtifactValidationResult(state="no_artifacts", generation=0)
+    return ArtifactValidationResult(state="passed", generation=0)
 
 
 ALL_ACTIVITIES = [

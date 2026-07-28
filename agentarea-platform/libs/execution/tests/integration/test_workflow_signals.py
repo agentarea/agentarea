@@ -217,7 +217,7 @@ async def _mock_update_status(request: UpdateTaskStatusRequest) -> bool:
 async def _mock_validate_artifacts(
     request: ArtifactValidationRequest,
 ) -> ArtifactValidationResult:
-    return ArtifactValidationResult(state="no_artifacts", generation=0)
+    return ArtifactValidationResult(state="passed", generation=0)
 
 
 _ALL_ACTIVITIES = [
