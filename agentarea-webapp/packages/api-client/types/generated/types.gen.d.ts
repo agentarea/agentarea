@@ -830,6 +830,19 @@ export type BodyImportWorkspaceConfigFileV1WorkspaceImportFilePost = {
     file: Blob | File;
 };
 /**
+ * Body_upload_file_v1_files_post
+ */
+export type BodyUploadFileV1FilesPost = {
+    /**
+     * File
+     */
+    file: Blob | File;
+    /**
+     * Purpose
+     */
+    purpose?: string;
+};
+/**
  * Body_upload_project_file_v1_projects__project_id__files_post
  */
 export type BodyUploadProjectFileV1ProjectsProjectIdFilesPost = {
@@ -846,24 +859,6 @@ export type BodyUploadSkillV1SkillsUploadPost = {
      * File
      *
      * ZIP file containing the skill package
-     */
-    file: Blob | File;
-};
-/**
- * Body_upload_staging_file_v1_files_staging_post
- */
-export type BodyUploadStagingFileV1FilesStagingPost = {
-    /**
-     * File
-     */
-    file: Blob | File;
-};
-/**
- * Body_upload_workspace_file_v1_files_post
- */
-export type BodyUploadWorkspaceFileV1FilesPost = {
-    /**
-     * File
      */
     file: Blob | File;
 };
@@ -4003,6 +3998,44 @@ export type PolicyRuleUpdateRequest = {
  */
 export type PolicySubjectType = 'workspace' | 'agent' | 'user' | 'group';
 /**
+ * PresignUploadRequest
+ */
+export type PresignUploadRequest = {
+    /**
+     * Content Type
+     */
+    content_type: string;
+    /**
+     * Filename
+     */
+    filename: string;
+    /**
+     * Sha256
+     */
+    sha256: string;
+    /**
+     * Size
+     */
+    size: number;
+};
+/**
+ * PresignUploadResponse
+ */
+export type PresignUploadResponse = {
+    /**
+     * Expires In
+     */
+    expires_in: number;
+    /**
+     * Ref
+     */
+    ref: string;
+    /**
+     * Upload Url
+     */
+    upload_url: string;
+};
+/**
  * PreviewEntity
  *
  * One thing the package will (or won't) create.
@@ -5176,27 +5209,6 @@ export type SpendCard = {
      * Today Usd
      */
     today_usd: number;
-};
-/**
- * StagedFileResponse
- */
-export type StagedFileResponse = {
-    /**
-     * Content Type
-     */
-    content_type?: string | null;
-    /**
-     * Filename
-     */
-    filename: string;
-    /**
-     * Ref
-     */
-    ref: string;
-    /**
-     * Size
-     */
-    size: number;
 };
 /**
  * SubjectSetBody
@@ -8462,26 +8474,25 @@ export type ListWorkspaceFilesV1FilesGetResponses = {
     200: WorkspaceFileListResponse;
 };
 export type ListWorkspaceFilesV1FilesGetResponse = ListWorkspaceFilesV1FilesGetResponses[keyof ListWorkspaceFilesV1FilesGetResponses];
-export type UploadWorkspaceFileV1FilesPostData = {
-    body: BodyUploadWorkspaceFileV1FilesPost;
+export type UploadFileV1FilesPostData = {
+    body: BodyUploadFileV1FilesPost;
     path?: never;
     query?: never;
     url: '/v1/files';
 };
-export type UploadWorkspaceFileV1FilesPostErrors = {
+export type UploadFileV1FilesPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type UploadWorkspaceFileV1FilesPostError = UploadWorkspaceFileV1FilesPostErrors[keyof UploadWorkspaceFileV1FilesPostErrors];
-export type UploadWorkspaceFileV1FilesPostResponses = {
+export type UploadFileV1FilesPostError = UploadFileV1FilesPostErrors[keyof UploadFileV1FilesPostErrors];
+export type UploadFileV1FilesPostResponses = {
     /**
      * Successful Response
      */
-    204: void;
+    200: unknown;
 };
-export type UploadWorkspaceFileV1FilesPostResponse = UploadWorkspaceFileV1FilesPostResponses[keyof UploadWorkspaceFileV1FilesPostResponses];
 export type StreamWorkspaceFileV1FilesDownloadFilePathGetData = {
     body?: never;
     path: {
@@ -8531,26 +8542,26 @@ export type WorkspaceFileHistoryV1FilesHistoryGetResponses = {
     200: ArtifactHistoryResponse;
 };
 export type WorkspaceFileHistoryV1FilesHistoryGetResponse = WorkspaceFileHistoryV1FilesHistoryGetResponses[keyof WorkspaceFileHistoryV1FilesHistoryGetResponses];
-export type UploadStagingFileV1FilesStagingPostData = {
-    body: BodyUploadStagingFileV1FilesStagingPost;
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostData = {
+    body: PresignUploadRequest;
     path?: never;
     query?: never;
-    url: '/v1/files/staging';
+    url: '/v1/files/upload-url';
 };
-export type UploadStagingFileV1FilesStagingPostErrors = {
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type UploadStagingFileV1FilesStagingPostError = UploadStagingFileV1FilesStagingPostErrors[keyof UploadStagingFileV1FilesStagingPostErrors];
-export type UploadStagingFileV1FilesStagingPostResponses = {
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostError = CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors[keyof CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors];
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses = {
     /**
      * Successful Response
      */
-    200: StagedFileResponse;
+    200: PresignUploadResponse;
 };
-export type UploadStagingFileV1FilesStagingPostResponse = UploadStagingFileV1FilesStagingPostResponses[keyof UploadStagingFileV1FilesStagingPostResponses];
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostResponse = CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses[keyof CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses];
 export type DownloadWorkspaceFileV1FilesFilePathGetData = {
     body?: never;
     path: {

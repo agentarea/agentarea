@@ -32,8 +32,8 @@ export async function POST(
       backendHeaders["X-Workspace-Slug"] = workspaceSlug;
     }
 
-    // Task creation is JSON. Files are pre-staged via POST /v1/files/staging and
-    // referenced by ref in the body's `attachments` array.
+    // Task creation is JSON. Files are pre-staged via POST /v1/files/upload-url
+    // (presigned upload) and referenced by ref in the body's `attachments` array.
     const backendUrl = env.API_URL;
     const createTaskUrl = `${backendUrl}/v1/agents/${agentId}/tasks/`;
 
