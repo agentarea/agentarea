@@ -30,13 +30,29 @@ import (
 //	MCPIDLE_TEST_DATABASE_URL=postgres://test:test@localhost:55433/mcpidle?sslmode=disable \
 //	  go test ./internal/mcpidle/...
 
-const testDSNEnv = "MCPIDLE_TEST_DATABASE_URL"
+const (
+	testDSNEnv = "MCPIDLE_TEST_DATABASE_URL"
+	// requireDBEnv turns a skip into a failure. Set by the CI job that provides
+	// the migrated database, so a DSN that fails to reach the test surfaces as a
+	// red build instead of a green one that checked nothing.
+	requireDBEnv = "MCPIDLE_REQUIRE_DB"
+)
 
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 
 	dsn := os.Getenv(testDSNEnv)
 	if dsn == "" {
+		// Skipping is right on a developer's machine, and in the Go CI job, which
+		// runs `go test ./...` with no database on purpose. It is wrong in the job
+		// that stands one up: there a silent skip reports "ok" for the only check
+		// that ever exercises this SQL against a real schema — the exact false
+		// green this file exists to prevent. That job sets the variable below to
+		// say "the database is here; these must run".
+		if os.Getenv(requireDBEnv) != "" {
+			t.Fatalf("%s is set but %s is empty: the schema-backed reaper tests were meant to run here, not skip",
+				requireDBEnv, testDSNEnv)
+		}
 		t.Skipf("%s not set; skipping schema-backed reaper tests", testDSNEnv)
 	}
 
