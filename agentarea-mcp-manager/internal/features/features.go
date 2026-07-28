@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 )
 
 // Feature represents a feature flag
@@ -247,10 +245,6 @@ func (s *Service) GetVariantCtx(ctx context.Context, feature Feature) map[string
 }
 
 // Check helpers for specific features
-func (s *Service) WarmPoolEnabled() bool {
-	return s.IsEnabled(WarmPool)
-}
-
 func (s *Service) KataRuntimeEnabled() bool {
 	return s.IsEnabled(KataRuntime)
 }
@@ -267,37 +261,13 @@ func (s *Service) GatewayAPIEnabled() bool {
 	return s.IsEnabled(GatewayAPI)
 }
 
-// GetWarmPoolConfig returns warm pool configuration
-func (s *Service) GetWarmPoolConfig() WarmPoolConfig {
-	variant := s.GetVariant(WarmPool)
-
-	cfg := WarmPoolConfig{
-		Enabled:     s.WarmPoolEnabled(),
-		Size:        10, // default
-		IdleTimeout: 5 * time.Minute,
-	}
-
-	if size, ok := variant["size"]; ok {
-		if n, err := strconv.Atoi(size); err == nil {
-			cfg.Size = n
-		}
-	}
-
-	if timeout, ok := variant["idle_timeout"]; ok {
-		if d, err := time.ParseDuration(timeout); err == nil {
-			cfg.IdleTimeout = d
-		}
-	}
-
-	return cfg
-}
-
-// WarmPoolConfig holds warm pool configuration
-type WarmPoolConfig struct {
-	Enabled     bool
-	Size        int
-	IdleTimeout time.Duration
-}
+// GetWarmPoolConfig and its WarmPoolConfig struct were removed here. They had no
+// callers: nothing read Size, and nothing read IdleTimeout — the pool size comes
+// from the chart, and MCP instance idleness is owned by internal/mcpidle via
+// MCP_IDLE_TIMEOUT. Keeping them was worse than dead weight, because an
+// `idle_timeout` variant on the warm_pool flag reads as the way to configure
+// exactly the thing it did not configure. Restore from git history if a warm
+// pool ever needs per-variant tuning.
 
 // Reload reloads feature configuration
 func (s *Service) Reload() error {
