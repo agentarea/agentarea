@@ -16,6 +16,19 @@ ExecStartPre=-/usr/bin/docker rm -f {{ sandbox_executor_name }}
 # Best-effort: refresh from the registry when reachable, but still start from a
 # locally-loaded image (e.g. built from Dockerfile.runner and `docker load`ed).
 ExecStartPre=-/usr/bin/docker pull {{ sandbox_executor_image }}
+# The pull above is deliberately non-fatal, which means a failed pull is
+# indistinguishable from a successful one: the executor starts on whatever image
+# is already on disk. For a component whose whole job is confining untrusted
+# code, silently running last month's build after a transient registry failure
+# is the dangerous outcome — a shipped CVE fix would look applied and not be.
+#
+# Hard-failing the pull is the wrong trade: a network blip would take the
+# sandbox down even though a good image is present. So instead: refuse only when
+# there is no image at all (not a transient condition, and otherwise surfaces as
+# an obscure `docker run` error), and log the image id actually being started so
+# `journalctl -u agentarea-sandbox-executor` answers "which build is running"
+# — the same question /runtime/manifest answers from inside the container.
+ExecStartPre=/bin/sh -c 'id=$(/usr/bin/docker images --no-trunc --quiet {{ sandbox_executor_image }}); if [ -z "$id" ]; then echo "sandbox executor image {{ sandbox_executor_image }} is absent locally and could not be pulled - refusing to start"; exit 1; fi; echo "sandbox executor starting from image $id"'
 ExecStart=/usr/bin/docker run --rm --name {{ sandbox_executor_name }} \
   --runtime={{ sandbox_runtime }} \
   --cap-drop ALL \
