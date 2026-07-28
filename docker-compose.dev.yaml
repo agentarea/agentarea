@@ -322,6 +322,12 @@ services:
     build:
       context: agentarea-mcp-manager
       dockerfile: Dockerfile.runner
+      args:
+        # Stamped into /etc/agentarea/runtime.json and served at
+        # /runtime/manifest. Dockerfile.runner declares no default, so this must
+        # be stated here — "dev" is the honest answer for a local build, and it
+        # is now a claim this file makes rather than one the image invents.
+        APP_VERSION: ${VERSION:-dev}
       platforms:
         - linux/amd64
         - linux/arm64

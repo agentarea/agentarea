@@ -47,14 +47,19 @@ COPY runtime/requirements.txt /opt/runtime/requirements.txt
 RUN python -m venv /opt/runtime/venv \
     && pip install --no-cache-dir -r /opt/runtime/requirements.txt
 
-# The version stamped into the runtime manifest. APP_VERSION is what the build
-# workflow already injects into every image from the VERSION file, so reading it
-# here means there is one version source instead of a second one to forget: the
-# previous RUNTIME_VERSION arg was passed by nobody, and every published runner
-# reported "dev" — which made the manifest useless for the one question it
-# exists to answer, "which build is this sandbox actually running".
-# Local builds (compose) pass nothing and keep the dev default.
-ARG APP_VERSION=dev
+# The version stamped into the runtime manifest, from the VERSION file via the
+# build workflow's APP_VERSION — one version source rather than a second one to
+# forget.
+#
+# Deliberately declared with NO default. A default is what caused the bug this
+# replaced: the old `ARG RUNTIME_VERSION=dev` was passed by nobody, so "dev" was
+# not a fallback for local builds, it was the only value any published image
+# ever carried — and the manifest silently lied about which build was running.
+# With no default, a build site that forgets to pass a version fails at
+# generate_manifest.py ("RUNTIME_VERSION must be set at build time") instead of
+# shipping a plausible-looking wrong answer. Every build site now states its
+# own version, including compose.
+ARG APP_VERSION
 ARG MANAGED_ENVIRONMENT=mutable
 COPY runtime/generate_manifest.py /opt/runtime/generate_manifest.py
 COPY runtime/test_locked_profile.sh /opt/runtime/test_locked_profile.sh
