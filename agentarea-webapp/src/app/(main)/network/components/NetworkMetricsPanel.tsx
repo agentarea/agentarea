@@ -12,26 +12,7 @@ import {
 } from "lucide-react";
 import { getAllTasksAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
-
-interface NetworkNodeData {
-  id: string;
-  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
-  label: string;
-  status?: string | null;
-  metadata: Record<string, any>;
-}
-
-interface NetworkEdgeData {
-  id: string;
-  source: string;
-  target: string;
-  relation: string;
-}
-
-interface TopologyResponse {
-  nodes: NetworkNodeData[];
-  edges: NetworkEdgeData[];
-}
+import type { TopologyResponse } from "../types";
 
 interface TaskSummary {
   id: string;
@@ -128,7 +109,7 @@ export default function NetworkMetricsPanel({
     let cancelled = false;
     setTasksUnavailable(false);
     getAllTasksAction()
-      .then((res: any) => {
+      .then((res) => {
         if (cancelled) return;
         const data = res?.data ?? [];
         setTasks(Array.isArray(data) ? data : []);

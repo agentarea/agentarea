@@ -16,7 +16,7 @@ interface ErrorData {
   is_network_error?: boolean;
   retryable?: boolean;
   tool_name?: string;
-  arguments?: Record<string, any>;
+  arguments?: Record<string, unknown>;
 }
 
 const ErrorMessage: React.FC<{ data: ErrorData }> = ({ data }) => {

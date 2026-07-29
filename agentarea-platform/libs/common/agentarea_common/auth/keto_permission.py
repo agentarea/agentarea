@@ -18,6 +18,7 @@ _NAMESPACE_BY_RESOURCE = {
     "skill_collection": "SkillCollection",
     "mcp_server": "MCPServer",
     "agent": "Agent",
+    "client": "Client",
 }
 
 # (namespace, generic permission) -> Keto relation/permission name.
@@ -56,6 +57,15 @@ _RELATION_BY_PERMISSION: dict[str, dict[str, str]] = {
         "manage": "own",
         "edit": "own",
         "delete": "own",
+    },
+    "Client": {
+        "view": "use",
+        "use": "use",
+        "connect": "use",
+        "execute": "use",
+        "manage": "manage",
+        "edit": "manage",
+        "delete": "manage",
     },
 }
 

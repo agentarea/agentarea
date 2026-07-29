@@ -10,6 +10,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/container"
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
 
@@ -18,6 +19,17 @@ type DockerBackend struct {
 	manager *container.Manager
 	config  *config.Config
 	logger  *slog.Logger
+}
+
+func (d *DockerBackend) RuntimeManifest(ctx context.Context, packageInstall string) (*runtimeinfo.Manifest, error) {
+	if err := runtimeinfo.ValidatePackageInstall(packageInstall); err != nil {
+		return nil, err
+	}
+	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
+	if base == "" {
+		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	}
+	return warmpool.GetRuntimeManifest(ctx, base, 10*time.Second, packageInstall)
 }
 
 // NewDockerBackend creates a new Docker backend
@@ -48,6 +60,40 @@ func (d *DockerBackend) ExecuteSandbox(ctx context.Context, req warmpool.Execute
 	return warmpool.PostExecute(ctx, base+"/execute", req, 30*time.Second)
 }
 
+// SandboxFilePut writes a file into a task's sandbox workspace on the executor,
+// the same filesystem ExecuteSandbox (bash) runs against. The control plane
+// signs the ScopeFiles token; the executor secret never reaches the worker.
+//
+// TODO(prod-warm-pool): route per-task file requests to the same warm-pool pod
+// that owns the task's exec session (sticky routing), so files land in the pod
+// bash will actually run in. This dev path targets the single configured
+// executor, matching ExecuteSandbox.
+func (d *DockerBackend) SandboxFilePut(ctx context.Context, req warmpool.FilePutRequest) (*warmpool.FilePutResponse, error) {
+	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
+	if base == "" {
+		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	}
+	return warmpool.PutFile(ctx, base, req, 30*time.Second)
+}
+
+// SandboxFileGet reads a file from a task's sandbox workspace on the executor.
+func (d *DockerBackend) SandboxFileGet(ctx context.Context, workspaceID, taskID, path string) (*warmpool.FileGetResponse, error) {
+	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
+	if base == "" {
+		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	}
+	return warmpool.GetFile(ctx, base, workspaceID, taskID, path, 30*time.Second)
+}
+
+// SandboxFileList lists regular files under prefix in a task's sandbox workspace.
+func (d *DockerBackend) SandboxFileList(ctx context.Context, workspaceID, taskID, prefix string) (*warmpool.FileListResponse, error) {
+	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
+	if base == "" {
+		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	}
+	return warmpool.ListFiles(ctx, base, workspaceID, taskID, prefix, 30*time.Second)
+}
+
 // Initialize initializes the Docker backend
 func (d *DockerBackend) Initialize(ctx context.Context) error {
 	d.logger.Info("Initializing Docker backend")
@@ -61,7 +107,13 @@ func (d *DockerBackend) CreateInstance(ctx context.Context, spec *InstanceSpec) 
 		slog.String("image", spec.Image))
 
 	// Convert InstanceSpec to models.CreateContainerRequest
-	req := d.specToCreateRequest(spec)
+	req, err := d.specToCreateRequest(spec)
+	if err != nil {
+		d.logger.Error("Failed to resolve instance isolation",
+			slog.String("name", spec.Name),
+			slog.String("error", err.Error()))
+		return nil, err
+	}
 
 	// Use existing manager to create container
 	container, err := d.manager.CreateContainer(ctx, req)
@@ -292,7 +344,7 @@ func (d *DockerBackend) Shutdown(ctx context.Context) error {
 // Helper methods
 
 // specToCreateRequest converts InstanceSpec to models.CreateContainerRequest
-func (d *DockerBackend) specToCreateRequest(spec *InstanceSpec) models.CreateContainerRequest {
+func (d *DockerBackend) specToCreateRequest(spec *InstanceSpec) (models.CreateContainerRequest, error) {
 	req := models.CreateContainerRequest{
 		ServiceName: spec.ServiceName,
 		Image:       spec.Image,
@@ -301,6 +353,14 @@ func (d *DockerBackend) specToCreateRequest(spec *InstanceSpec) models.CreateCon
 		Labels:      spec.Labels,
 		Command:     spec.Command,
 	}
+
+	// Resolve the confinement for this workload. An MCP server is third-party
+	// code, so the default is a confined tier, not the daemon's defaults.
+	isolation, err := resolveSpecIsolation(spec, d.config.Container.DefaultIsolationTier)
+	if err != nil {
+		return models.CreateContainerRequest{}, err
+	}
+	req.Isolation = isolation
 
 	// Add resource limits if specified
 	if spec.Resources.Limits.Memory != "" {
@@ -318,7 +378,7 @@ func (d *DockerBackend) specToCreateRequest(spec *InstanceSpec) models.CreateCon
 	req.Environment["MCP_SERVICE_NAME"] = spec.ServiceName
 	req.Environment["MCP_CONTAINER_PORT"] = fmt.Sprintf("%d", spec.Port)
 
-	return req
+	return req, nil
 }
 
 // findServiceNameByID finds the service name by container ID or instance ID

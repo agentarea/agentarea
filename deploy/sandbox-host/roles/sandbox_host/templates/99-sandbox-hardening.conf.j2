@@ -1,0 +1,15 @@
+# Managed by the sandbox_host Ansible role.
+# Defense-in-depth for a multi-tenant sandbox host. gVisor (runsc) already
+# interposes on the syscall surface, so these are belt-and-braces, not the
+# primary boundary. Deliberately NOT disabling user namespaces: runsc relies on
+# them and gVisor is the isolation wall, so user.max_user_namespaces stays > 0.
+# Loose (2), not strict (1): strict reverse-path filtering can drop the asymmetric
+# NAT return traffic Docker relies on. Loose still blocks obvious spoofing.
+net.ipv4.conf.all.rp_filter = 2
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv6.conf.all.accept_redirects = 0
+kernel.dmesg_restrict = 1
+fs.protected_hardlinks = 1
+fs.protected_symlinks = 1
+fs.suid_dumpable = 0

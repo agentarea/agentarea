@@ -13,8 +13,10 @@ from uuid import uuid4
 import pytest
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_governance.domain.policies import EffectivePolicy
+from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
 from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.infrastructure.repository import TaskRepository
+from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
 
 
@@ -147,6 +149,33 @@ async def test_create_and_execute_sets_default_metadata():
     submitted = mocks["task_manager"].submit_task.await_args.args[0]
     assert submitted.metadata["created_via"] == "api"
     assert submitted.metadata["requires_human_approval"] is False
+    assert submitted.metadata["package_install"] == "allowed"
+
+
+@pytest.mark.asyncio
+async def test_run_package_install_overrides_agent_shell_profile():
+    service, mocks = _make_service()
+    agent = await mocks["agent_repo"].get(uuid4())
+    agent.tools = [
+        {
+            "type": "code",
+            "name": "agentarea/shell",
+            "settings": {"package_install": "allowed"},
+        }
+    ]
+
+    await service.start_run(
+        RunCreate(
+            agent_id=uuid4(),
+            description="Use only installed packages",
+            package_install="locked",
+        ),
+        workspace_id="ws-abc",
+        user_id="user-123",
+    )
+
+    submitted = mocks["task_manager"].submit_task.await_args.args[0]
+    assert submitted.metadata["package_install"] == "locked"
     assert submitted.metadata["agent_name"] == "stub-agent"
 
 
@@ -210,6 +239,81 @@ async def test_create_and_execute_routes_to_active_workflow_when_chat_id_present
     assert result.status == "routed"
 
 
+def _model_less_agent():
+    agent = MagicMock(id=uuid4())
+    agent.name = "no-model-agent"
+    agent.model_id = None  # installed catalog agent with no matching workspace model
+    return agent
+
+
+@pytest.mark.asyncio
+async def test_create_and_execute_blocks_agent_without_model():
+    """A run for an agent with no model must fail fast, not dispatch to Temporal."""
+    service, mocks = _make_service()
+    agent = _model_less_agent()
+    mocks["agent_repo"].get = AsyncMock(return_value=agent)
+
+    with pytest.raises(AgentModelNotConfiguredError):
+        await service.create_and_execute_task_with_workflow(
+            agent_id=agent.id,
+            description="do x",
+            workspace_id="ws-abc",
+            user_id="user-123",
+        )
+
+    mocks["task_manager"].submit_task.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_model_override_in_parameters_bypasses_model_guard():
+    """A per-run model_override satisfies the model requirement."""
+    service, mocks = _make_service()
+    agent = _model_less_agent()
+    mocks["agent_repo"].get = AsyncMock(return_value=agent)
+
+    await service.create_and_execute_task_with_workflow(
+        agent_id=agent.id,
+        description="do x",
+        workspace_id="ws-abc",
+        user_id="user-123",
+        parameters={"model_override": "inst-override"},
+    )
+
+    mocks["task_manager"].submit_task.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_followup_routing_is_not_blocked_by_missing_model():
+    """A follow-up routed to a live workflow reuses its model and skips the guard."""
+    executor = MagicMock()
+    executor.send_workflow_command = AsyncMock(return_value=True)
+    service, mocks = _make_service(temporal_executor=executor)
+    agent = _model_less_agent()
+    mocks["agent_repo"].get = AsyncMock(return_value=agent)
+
+    candidate = MagicMock(
+        id=uuid4(),
+        execution_id="task-existing",
+        description="prev",
+        user_id="user-123",
+        workspace_id="ws-abc",
+        agent_id=uuid4(),
+        parameters={},
+    )
+    mocks["task_repo"].find_active_by_agent_and_chat = AsyncMock(return_value=[candidate])
+
+    result = await service.create_and_execute_task_with_workflow(
+        agent_id=agent.id,
+        description="follow-up",
+        workspace_id="ws-abc",
+        parameters={"channel_origin": {"chat_id": "c-99"}},
+        user_id="user-123",
+    )
+
+    assert result.status == "routed"
+    mocks["task_manager"].submit_task.assert_not_awaited()
+
+
 @pytest.mark.asyncio
 async def test_create_and_execute_accepts_task_id_override_for_a2a_callers():
     """A2A pre-assigns a task id (so the JSON-RPC response can echo it). The canonical method must honour it."""
@@ -233,3 +337,68 @@ async def test_create_and_execute_accepts_task_id_override_for_a2a_callers():
     # Canonical defaults still applied
     assert submitted.metadata["created_via"] == "api"
     assert submitted.metadata["requires_human_approval"] is False
+
+
+@pytest.mark.asyncio
+async def test_start_run_forwards_reserved_id_and_trusted_attachment_metadata():
+    service, mocks = _make_service()
+    task_id = uuid4()
+    agent_id = uuid4()
+    attachments = [
+        {
+            "relative_path": "inputs/attachments/report.csv",
+            "filename": "report.csv",
+            "size": 12,
+            "content_type": "text/csv",
+            "sha256": "a" * 64,
+        }
+    ]
+
+    await service.start_run(
+        RunCreate(
+            agent_id=agent_id,
+            description="Analyze the attachment",
+            parameters={"attachments": attachments},
+        ),
+        workspace_id="ws-abc",
+        user_id="user-123",
+        task_id=task_id,
+        trusted_metadata={"workspace_attachments": attachments},
+    )
+
+    submitted = mocks["task_manager"].submit_task.await_args.args[0]
+    assert submitted.id == task_id
+    assert submitted.task_parameters["attachments"] == attachments
+    assert submitted.metadata["workspace_attachments"] == attachments
+
+
+@pytest.mark.asyncio
+async def test_reserve_then_dispatch_persists_before_starting_workflow():
+    service, mocks = _make_service()
+    task_id = uuid4()
+    agent_id = uuid4()
+    reserved = MagicMock(id=task_id, status="preparing")
+    service.create_task_with_policy = AsyncMock(return_value=reserved)
+
+    task = await service.reserve_run(
+        RunCreate(agent_id=agent_id, description="Analyze upload"),
+        workspace_id="ws-abc",
+        user_id="user-123",
+        task_id=task_id,
+        trusted_metadata={"workspace_attachments": [{"filename": "report.csv"}]},
+    )
+
+    assert task is reserved
+    reserve_call = service.create_task_with_policy.await_args
+    assert reserve_call.kwargs["task_id"] == task_id
+    assert reserve_call.kwargs["status"] == "preparing"
+    assert reserve_call.kwargs["require_model"] is True
+    assert reserve_call.kwargs["metadata_overrides"]["workspace_attachments"] == [
+        {"filename": "report.csv"}
+    ]
+    mocks["task_manager"].submit_task.assert_not_awaited()
+
+    await service.dispatch_reserved_run(task)
+
+    assert reserved.status == "running"
+    mocks["task_manager"].submit_task.assert_awaited_once_with(reserved)

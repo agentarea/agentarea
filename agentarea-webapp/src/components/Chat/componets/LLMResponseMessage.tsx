@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { ChevronRight, Lightbulb } from "lucide-react";
 import { Streamdown } from "streamdown";
+import type { Components } from "streamdown";
 import { cn } from "@/lib/utils";
-import { formatTimestamp } from "../../../utils/dateUtils";
+import { useFormatTimestamp } from "../../../utils/dateUtils";
 import { LLMResponseData } from "../types";
 import { fileAwareMarkdownComponents, preprocessFileLinks } from "../utils/markdownComponents";
 import MessageWrapper from "./MessageWrapper";
@@ -35,6 +36,7 @@ export const LLMResponseMessage: React.FC<{
   data: LLMResponseData;
   agent_name?: string;
 }> = ({ data, agent_name }) => {
+  const formatTimestamp = useFormatTimestamp();
   return (
     <MessageWrapper>
       <div className="min-w-0 flex-1 pb-1">
@@ -51,7 +53,7 @@ export const LLMResponseMessage: React.FC<{
 
         <Streamdown
           className="prose prose-sm mt-1 max-w-none text-zinc-700 dark:prose-invert dark:text-zinc-300"
-          components={fileAwareMarkdownComponents as any}
+          components={fileAwareMarkdownComponents as Components}
           linkSafety={{ enabled: false }}
         >
           {preprocessFileLinks(data.content)}

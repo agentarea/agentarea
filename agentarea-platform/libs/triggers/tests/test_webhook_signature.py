@@ -2,6 +2,7 @@
 
 import hashlib
 import hmac
+import time
 
 from agentarea_triggers.webhook_verification import (
     resolve_signing_secret,
@@ -77,3 +78,45 @@ def test_generic_hmac_with_custom_header():
 
 def test_resolve_signing_secret_unknown_type_returns_none():
     assert resolve_signing_secret("telegram", {"signing_secret": "x"}, {}) is None
+
+
+def _stripe_sig_header(secret: str, body: bytes, timestamp: int) -> str:
+    signed = f"{timestamp}.".encode() + body
+    v1 = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+    return f"t={timestamp},v1={v1}"
+
+
+def test_stripe_valid_signature_passes():
+    secret = "whsec_test"  # noqa: S105
+    ts = int(time.time())
+    headers = {"Stripe-Signature": _stripe_sig_header(secret, BODY, ts)}
+    result = verify_webhook_signature(
+        "stripe", {"signing_secret": secret}, {}, headers, BODY
+    )
+    assert result is True
+
+
+def test_stripe_invalid_signature_fails():
+    ts = int(time.time())
+    headers = {"Stripe-Signature": f"t={ts},v1=deadbeef"}
+    result = verify_webhook_signature(
+        "stripe", {"signing_secret": "whsec_test"}, {}, headers, BODY
+    )
+    assert result is False
+
+
+def test_stripe_stale_timestamp_fails():
+    secret = "whsec_test"  # noqa: S105
+    ts = int(time.time()) - 3600
+    headers = {"Stripe-Signature": _stripe_sig_header(secret, BODY, ts)}
+    result = verify_webhook_signature(
+        "stripe", {"signing_secret": secret}, {}, headers, BODY
+    )
+    assert result is False
+
+
+def test_stripe_missing_header_fails():
+    result = verify_webhook_signature(
+        "stripe", {"signing_secret": "whsec_test"}, {}, {}, BODY
+    )
+    assert result is False

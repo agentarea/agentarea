@@ -125,9 +125,12 @@ class DirectTaskManager(BaseTaskManager):
                 messages.append(assistant_msg)
 
                 if not response.tool_calls:
-                    task.status = "completed"
-                    task.result = {"response": response.content or ""}
-                    break
+                    final_response = (response.content or "").strip()
+                    if final_response:
+                        task.status = "completed"
+                        task.result = {"response": final_response}
+                        break
+                    continue
 
                 for tc in response.tool_calls:
                     fn_name = tc["function"]["name"]
@@ -148,9 +151,19 @@ class DirectTaskManager(BaseTaskManager):
                             }
                         )
                     elif fn_name == "completion":
-                        task.status = "completed"
-                        task.result = {"response": fn_args.get("result", "")}
-                        break
+                        final_response = fn_args.get("result", "")
+                        if isinstance(final_response, str) and final_response.strip():
+                            task.status = "completed"
+                            task.result = {"response": final_response.strip()}
+                            break
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc_id,
+                                "name": "completion",
+                                "content": "A non-empty final response is required.",
+                            }
+                        )
                     else:
                         messages.append(
                             {
@@ -164,25 +177,35 @@ class DirectTaskManager(BaseTaskManager):
                 if task.status == "completed":
                     break
             else:
-                task.status = "completed"
-                task.result = {"response": messages[-1].get("content", "Max iterations reached")}
+                task.status = "failed"
+                task.error_message = f"Maximum iterations reached ({max_iterations})"
+                task.result = {
+                    "success": False,
+                    "status": "failed",
+                    "failure_reason": "iteration_limit",
+                    "error": task.error_message,
+                }
 
             # Persist result to DB
+            update_fields: dict[str, Any] = {"result": task.result}
+            if task.error_message:
+                update_fields["error"] = task.error_message
             await self.task_repository.update_status(
                 task.id,
                 task.status,
-                result=task.result,
+                **update_fields,
             )
             self._tasks[task.id] = task
 
         except Exception as e:
             logger.error(f"DirectTaskManager: execution failed: {e}")
             task.status = "failed"
+            task.error_message = str(e)
             task.result = {"error": str(e)}
             await self.task_repository.update_status(
                 task.id,
                 "failed",
-                error_message=str(e),
+                error=str(e),
             )
             self._tasks[task.id] = task
 

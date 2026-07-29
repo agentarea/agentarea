@@ -1,5 +1,4 @@
 from contextlib import suppress
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -7,13 +6,14 @@ from agentarea_api.api.deps.services import get_mcp_server_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.service import MCPServerService
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerUpdate
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ._access_control_grants import grant_user_relation
+from ._access_control_grants import grant_resource_owner
 
 router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])
 
@@ -33,8 +33,8 @@ class MCPServerResponse(BaseModel):
     json_spec: dict[str, Any] | None = None
     registry_url: str | None = None
     status: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     @classmethod
     def from_domain(cls, server: MCPServer) -> "MCPServerResponse":
@@ -73,10 +73,9 @@ async def create_mcp_server(
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
     server = await mcp_server_service.create_mcp_server(data)
-    await grant_user_relation(
-        namespace="MCPServer",
-        object_id=server.id,
-        relation="operators",
+    await grant_resource_owner(
+        resource_id=server.id,
+        workspace_id=user_context.workspace_id,
         user_id=user_context.user_id,
     )
     return MCPServerResponse.from_domain(server)

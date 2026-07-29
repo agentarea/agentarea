@@ -126,12 +126,12 @@ class E2ETemporalTest:
             await session.commit()
 
     async def _setup_activity_dependencies(self):
-        from agentarea_common.events.router import get_event_router
+        from agentarea_common.events.factory import create_event_broker
         from agentarea_secrets import get_real_secret_manager
 
         self.activity_dependencies = ActivityDependencies(
             settings=self.settings,
-            event_broker=get_event_router(self.settings.broker),
+            event_broker=create_event_broker(self.settings.broker),
             secret_manager=get_real_secret_manager(),
         )
 

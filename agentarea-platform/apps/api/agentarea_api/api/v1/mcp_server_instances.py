@@ -1,9 +1,9 @@
 import logging
-from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
-from agentarea_api.api.deps.services import get_mcp_server_instance_service
+from agentarea_api.api.deps.services import AgentServiceDep, get_mcp_server_instance_service
+from agentarea_api.api.v1._approval_policy_sync import approval_targets_for_agents
 from agentarea_api.api.v1.mcp_oauth_links import (
     MCPOAuthLinkService,
     OAuthLinkResponse,
@@ -11,6 +11,8 @@ from agentarea_api.api.v1.mcp_oauth_links import (
 )
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_settings
+from agentarea_common.config.database import get_db_session
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.service import MCPServerInstanceService, derive_bundle_verification
 from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
@@ -23,6 +25,9 @@ from agentarea_mcp.schemas.dto import (
 )
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +49,8 @@ class MCPServerInstanceResponse(BaseModel):
     last_dispatch: dict[str, Any] | None = None
     tools: list[dict[str, Any]] | None = None
     auth_config_id: UUID | str | None = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     @classmethod
     def from_domain(
@@ -346,6 +351,89 @@ async def get_mcp_server_instance(
         return MCPServerInstanceResponse.from_domain(instance, verification_override=derived_v)
 
     return MCPServerInstanceResponse.from_domain(instance)
+
+
+class MCPInstanceConsumer(BaseModel):
+    """An agent that has this MCP instance attached, and which of its tools it enabled."""
+
+    agent_id: UUID
+    agent_name: str
+    agent_slug: str | None = None
+    # None means the agent allows every tool the server exposes (no subset filter).
+    enabled_tools: list[str] | None = None
+    # Subset of enabled_tools that additionally require human confirmation per call.
+    confirm_tools: list[str] = Field(default_factory=list)
+
+
+def _mcp_config_matches(tool_config: dict[str, Any], instance: MCPServerInstance) -> bool:
+    """A raw agent tool-config dict references this instance by UUID or by name."""
+    if tool_config.get("type") != "mcp":
+        return False
+    ref = tool_config.get("name")
+    if not ref:
+        return False
+    return str(ref) == str(instance.id) or str(ref) == instance.name
+
+
+@router.get("/{instance_id}/consumers", response_model=list[MCPInstanceConsumer])
+async def list_mcp_server_instance_consumers(
+    instance_id: UUID,
+    user_context: UserContextDep,
+    session: DatabaseSessionDep,
+    agent_service: AgentServiceDep,
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+):
+    """List agents in the workspace that attach this MCP instance, with their enabled tools.
+
+    A read-only reverse lookup over the agents' ``tools`` JSON. Which tools need
+    confirmation is not read from that JSON — it lives in approval policy rules,
+    the single source of truth — so it is resolved from there per agent.
+    """
+    instance = await service.get(instance_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="MCP Server Instance not found")
+
+    matches: list[tuple[Any, list[str] | None]] = []
+    for agent in await agent_service.list():
+        tools = agent.tools
+        if not isinstance(tools, list):
+            continue
+        for tc in tools:
+            if not isinstance(tc, dict) or not _mcp_config_matches(tc, instance):
+                continue
+            settings = tc.get("settings") or {}
+            allowed = settings.get("allowed_tools")
+            enabled_tools: list[str] | None = None
+            if isinstance(allowed, list):
+                enabled_tools = []
+                for perm in allowed:
+                    if isinstance(perm, dict):
+                        name = perm.get("tool_name")
+                        if name:
+                            enabled_tools.append(str(name))
+                    elif isinstance(perm, str):
+                        enabled_tools.append(perm)
+            matches.append((agent, enabled_tools))
+            break
+
+    targets_by_agent = await approval_targets_for_agents(
+        session, user_context, [agent.id for agent, _ in matches]
+    )
+    consumers: list[MCPInstanceConsumer] = []
+    for agent, enabled_tools in matches:
+        targets = targets_by_agent.get(agent.id, set())
+        confirm_tools = [name for name in (enabled_tools or []) if f"tool:{name}" in targets]
+        consumers.append(
+            MCPInstanceConsumer(
+                agent_id=agent.id,
+                agent_name=agent.name,
+                agent_slug=getattr(agent, "slug", None),
+                enabled_tools=enabled_tools,
+                confirm_tools=confirm_tools,
+            )
+        )
+
+    return consumers
 
 
 @router.patch("/{instance_id}", response_model=MCPServerInstanceResponse)

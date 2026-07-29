@@ -1,111 +1,120 @@
+import { useTranslations } from "next-intl";
+import { Activity, Bot, Shield, Wallet } from "lucide-react";
+import { BoardGrid, BoardSectionHeader } from "@/components/board";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Section titles are static, so we keep them real and skeleton only the
-// right-aligned metadata + body — mirroring DashboardData's two-row layout.
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <header className="flex items-baseline justify-between">
-      <h3 className="text-[13px] font-medium text-foreground">{title}</h3>
-      <Skeleton className="h-3 w-20" />
-    </header>
-  );
-}
-
 function SpendSkeleton() {
+  const t = useTranslations("DashboardPage");
   return (
-    <section>
-      <SectionHeader title="Spend" />
-      <div className="mt-2 flex items-baseline gap-3">
-        <Skeleton className="h-7 w-28" />
-        <Skeleton className="h-4 w-12 rounded-full" />
-        <div className="ml-auto flex flex-col items-end gap-1">
-          <Skeleton className="h-3 w-16" />
-          <Skeleton className="h-3 w-20" />
+    <div className="flex min-h-0 flex-1 flex-col">
+      <BoardSectionHeader
+        icon={<Wallet />}
+        color="hsl(var(--foreground))"
+        title={t("spend")}
+        meta={t("monthToDate")}
+      />
+      <div className="mt-1.5 flex items-start gap-3.5">
+        <div>
+          <Skeleton className="h-7 w-28" />
+          <Skeleton className="mt-2 h-3.5 w-24" />
+        </div>
+        <div className="ml-auto flex flex-col items-end gap-1.5">
+          <Skeleton className="h-3 w-14" />
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="mt-1 h-[5px] w-[150px] rounded-full" />
         </div>
       </div>
-      <Skeleton className="mt-3 h-24 w-full rounded" />
-    </section>
+      <Skeleton className="-mx-6 mt-3 flex-1 rounded-none" />
+    </div>
   );
 }
 
 function ActivitySkeleton() {
+  const t = useTranslations("DashboardPage");
   return (
-    <section>
-      <SectionHeader title="Activity" />
-      <div className="mt-3 grid grid-cols-3 gap-6">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <BoardSectionHeader
+        icon={<Activity />}
+        color="hsl(var(--foreground))"
+        title={t("activity")}
+        meta={t("activityMeta")}
+      />
+      <div className="mt-2.5 flex flex-1 flex-col gap-2 sm:grid sm:grid-cols-3 lg:flex lg:flex-col lg:gap-1.5">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i}>
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="mt-1 h-6 w-12" />
-            <Skeleton className="mt-1.5 h-6 w-full" />
+          <div
+            key={i}
+            className="flex min-h-[46px] flex-1 items-center gap-3.5 rounded-[9px] border px-3.5 py-2"
+          >
+            <div className="flex min-w-[120px] flex-col gap-1.5">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-5 w-10" />
+            </div>
+            <Skeleton className="hidden h-6 flex-1 lg:block" />
           </div>
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 
-function AgentRowsSkeleton() {
+function ListSkeleton({
+  icon,
+  color,
+  title,
+  rows,
+}: {
+  icon: React.ReactNode;
+  color: string;
+  title: string;
+  rows: number;
+}) {
   return (
-    <section>
-      <SectionHeader title="Agents" />
-      <ul className="-mx-2 mt-2 divide-y divide-border/50">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <li key={i}>
-            <div className="flex items-center gap-3 px-2 py-2.5">
-              <Skeleton className="h-6 w-6 shrink-0 rounded-md" />
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <Skeleton className="h-3 w-32" />
-                <Skeleton className="h-3 w-48" />
-              </div>
-              <div className="hidden shrink-0 gap-5 sm:flex">
-                <Skeleton className="h-6 w-8" />
-                <Skeleton className="h-6 w-8" />
-                <Skeleton className="h-6 w-10" />
-              </div>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="px-6 pb-3 pt-4">
+        <BoardSectionHeader icon={icon} color={color} title={title} pill="…" />
+      </div>
+      <div className="min-h-0 flex-1">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-3 border-b border-zinc-200 px-6 py-3 dark:border-zinc-700"
+          >
+            <Skeleton className="h-6 w-6 shrink-0 rounded-md" />
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <Skeleton className="h-3 w-32" />
+              <Skeleton className="h-3 w-48" />
             </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function BlockersSkeleton() {
-  return (
-    <section>
-      <SectionHeader title="Blockers" />
-      <div className="mt-3 space-y-3">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-10 w-full rounded" />
+          </div>
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 
 export default function DashboardSkeleton() {
+  const t = useTranslations("DashboardPage");
   return (
-    <div aria-hidden="true">
-      <div className="grid gap-x-10 gap-y-6 lg:grid-cols-5 lg:divide-x lg:divide-border/50">
-        <div className="lg:col-span-3 lg:pr-10">
-          <SpendSkeleton />
-        </div>
-        <div className="lg:col-span-2 lg:pl-10">
-          <ActivitySkeleton />
-        </div>
-      </div>
-
-      <div className="my-6 border-t border-border/50" />
-
-      <div className="grid gap-x-10 gap-y-6 lg:grid-cols-3 lg:divide-x lg:divide-border/50">
-        <div className="lg:col-span-2 lg:pr-10">
-          <AgentRowsSkeleton />
-        </div>
-        <div className="lg:col-span-1 lg:pl-10">
-          <BlockersSkeleton />
-        </div>
-      </div>
+    <div aria-hidden="true" className="h-full">
+      <BoardGrid
+        topLeft={<SpendSkeleton />}
+        topRight={<ActivitySkeleton />}
+        bottomLeft={
+          <ListSkeleton
+            icon={<Bot />}
+            color="hsl(var(--foreground))"
+            title={t("agents")}
+            rows={5}
+          />
+        }
+        bottomRight={
+          <ListSkeleton
+            icon={<Shield />}
+            color="hsl(var(--foreground))"
+            title={t("blockers")}
+            rows={4}
+          />
+        }
+      />
     </div>
   );
 }

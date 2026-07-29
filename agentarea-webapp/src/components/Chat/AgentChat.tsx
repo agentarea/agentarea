@@ -2,6 +2,8 @@
 
 import React from "react";
 import { ChevronDown } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,21 +12,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { cn } from "@/lib/utils";
-import { resolveEscalationAction as resolveEscalation } from "@/lib/server-actions";
-import { AssistantMessage as AssistantMessageComponent } from "./componets/AssistantMessage";
-import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
-import { MessageRenderer } from "./MessageComponents";
+import { useTaskEvents } from "@/lib/events/useTaskEvents";
+import { PartRenderer } from "@/lib/events/parts/PartRenderer";
+import { useTaskActions } from "@/hooks/useTaskActions";
+import type { HumanInputSecretValue } from "@/components/Chat/types";
 import { ChatInputArea } from "./componets/ChatInputArea";
-import { parseSSEStream } from "./handlers/sseParser";
-import { createSSEEventHandler } from "./handlers/eventHandlers";
-
-// Import hooks
 import { useScrollManagement } from "./hooks/useScrollManagement";
 import { useFileUpload } from "./hooks/useFileUpload";
-import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
-import { useChatMessages, type ChatMessage, type UserChatMessage } from "./hooks/useChatMessages";
-import { useA2UIActions } from "./hooks/useA2UIActions";
 
 interface AgentChatProps {
   agent: {
@@ -32,38 +28,32 @@ interface AgentChatProps {
     name: string;
     description?: string | null;
   };
-  taskId?: string;
-  initialMessages?: ChatMessage[];
-  onTaskCreated?: (taskId: string) => void;
+  taskId: string;
+  /** Live task status; drives send routing (answer input / queue / new task). */
+  status?: string;
   className?: string;
   height?: string;
 }
 
+// Statuses where the workflow is still alive and a free-text message should be
+// queued for the next iteration rather than starting a new task.
+const QUEUEABLE_STATUSES = ["running", "paused", "blocked", "completed"];
+
 export default function AgentChat({
   agent,
   taskId,
-  initialMessages = [],
-  onTaskCreated,
+  status = "",
   className = "",
-  height = "600px",
 }: AgentChatProps) {
-  // Hooks for state management
-  const { messages, setMessages, addUserMessage } = useChatMessages({
-    agentName: agent.name,
-    agentId: agent.id,
-    initialMessages,
-  });
+  const router = useRouter();
 
-  const {
-    currentTaskId,
-    setCurrentTaskId,
-    callbacks,
-  } = useTaskLifecycle(agent.id, {
-    initialTaskId: taskId,
-    onTaskCreated,
-  });
+  const { parts, pendingForm, terminalMessage, status: streamStatus } =
+    useTaskEvents(agent.id, taskId, {
+      includeHistory: true,
+      autoConnect: true,
+    });
 
-  const { dispatchAction: dispatchA2UIAction } = useA2UIActions(agent.id, currentTaskId);
+  const actions = useTaskActions(agent.id, taskId);
 
   const {
     messagesContainerRef,
@@ -72,138 +62,91 @@ export default function AgentChat({
     handleScroll,
     scrollToBottom,
     checkIfAtBottom,
-  } = useScrollManagement({
-    messagesCount: messages.length,
-  });
+  } = useScrollManagement({ messagesCount: parts.length });
 
-  const {
-    selectedFiles,
-    fileInputRef,
-    removeFile,
-    openFileDialog,
-    clearFiles,
-  } = useFileUpload();
+  const { selectedFiles, fileInputRef, removeFile, openFileDialog } =
+    useFileUpload();
 
-  // Callback for resolving tool escalations (approve/deny)
-  const handleResolveEscalation = React.useCallback(
-    async (escalationId: string, approved: boolean, comment: string) => {
-      const tid = currentTaskId || taskId;
-      if (!tid) return;
-      await resolveEscalation(agent.id, tid, escalationId, approved, comment);
-    },
-    [agent.id, currentTaskId, taskId]
-  );
-
-  // State for loading and input
-  const [isLoading, setIsLoading] = React.useState(false);
   const [input, setInput] = React.useState("");
+  const [sending, setSending] = React.useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
-  // Handle input change with auto-resize
+  const isActive =
+    QUEUEABLE_STATUSES.includes(status) || status === "waiting_for_input";
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
-    adjustTextareaHeight();
-  };
-
-  // Auto-resize textarea function
-  const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = "auto";
-      const scrollHeight = textarea.scrollHeight;
-      const maxHeight = 3 * 24; // 3 lines * 24px line height
-      textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 3 * 24)}px`;
     }
   };
 
-  // SSE message handler
-  const handleSSEMessage = React.useCallback(
-    createSSEEventHandler({
-      currentTaskId,
-      setMessages,
-      setIsLoading,
-      setCurrentTaskId,
-      onTaskCreated: callbacks.onTaskCreated.current,
-    }),
-    [currentTaskId, callbacks]
+  const handleFormSubmit = React.useCallback(
+    async (
+      inputRequestId: string,
+      answers: Record<string, unknown>,
+      secrets: Record<string, HumanInputSecretValue>,
+    ) => {
+      const { error } = await actions.submitInput(
+        inputRequestId,
+        answers,
+        secrets,
+      );
+      if (error) toast.error("Failed to submit response");
+    },
+    [actions],
   );
 
-  // Send message handler
-  const sendMessage = async (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!input.trim() && selectedFiles.length === 0) || isLoading) return;
-
-    const userMessage: UserChatMessage = {
-      id: Date.now().toString(),
-      content: input,
-      role: "user",
-      timestamp: new Date().toISOString(),
-      files: selectedFiles.length > 0 ? selectedFiles : undefined,
-    };
-
-    addUserMessage(userMessage);
+    const message = input.trim();
+    if (!message || sending) return;
     setInput("");
-    clearFiles();
-    setIsLoading(true);
-
-    // Reset textarea height
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
-
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    setSending(true);
     try {
-      // Create task with SSE streaming through Next.js API route (handles auth)
-      const response = await fetch(`/api/agents/${agent.id}/tasks/create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        },
-        body: JSON.stringify({
-          description: userMessage.content,
-          parameters: {
-            context: {},
-            task_type: "chat",
-            session_id: `chat-${Date.now()}`,
-          },
-          enable_agent_communication: true,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (pendingForm && pendingForm.eventType === "input.request") {
+        const { error } = await actions.submitInput(
+          pendingForm.partId,
+          { answer: message },
+          {},
+        );
+        if (error) toast.error("Failed to submit response");
+        return;
       }
 
-      if (!response.body) {
-        throw new Error("No response body");
+      if (QUEUEABLE_STATUSES.includes(status)) {
+        const { error } = await actions.queueMessage(message);
+        if (error) toast.error("Failed to send message");
+        return;
       }
 
-      const reader = response.body.getReader();
-
-      await parseSSEStream(reader, {
-        onEvent: handleSSEMessage,
-        buffered: false, // AgentChat uses unbuffered parsing
+      const newTaskId = await actions.createFollowupTask(message);
+      if (newTaskId) router.push(`/tasks/${newTaskId}`);
+      else toast.error("Failed to create new task");
+    } catch (err) {
+      toast.error("Failed to send message", {
+        description: err instanceof Error ? err.message : String(err),
       });
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      const errorMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        content: `Sorry, I couldn't process your message. Error: ${error}`,
-        role: "assistant",
-        timestamp: new Date().toISOString(),
-        agent_id: agent.id,
-      };
-      setMessages((prev) => [...prev, errorMessage]);
     } finally {
-      setIsLoading(false);
+      setSending(false);
     }
   };
+
+  const terminalTone =
+    streamStatus === "failed"
+      ? "danger"
+      : streamStatus === "cancelled"
+        ? "warning"
+        : "success";
 
   return (
     <Card
       className={cn(
         "flex h-full max-h-full cursor-auto flex-col justify-between overflow-hidden p-0 shadow-none hover:shadow-none",
-        className
+        className,
       )}
     >
       <CardHeader className="border-b p-4">
@@ -213,54 +156,26 @@ export default function AgentChat({
       </CardHeader>
 
       <CardContent className="relative flex flex-1 flex-col overflow-auto bg-chatBackground p-0">
-        {/* Messages */}
         <div
           ref={messagesContainerRef}
           onScroll={handleScroll}
           className="flex-1 space-y-3 overflow-y-auto px-3 py-3"
         >
-          {messages.map((message, index) => {
-            // Handle different message types
-            if ("type" in message) {
-              // This is a MessageComponentType - use MessageRenderer
-              return (
-                <MessageRenderer
-                  key={`${message.data.id}-${message.data.event_type}-${index}`}
-                  message={message}
-                  agent_name={agent.name}
-                  onA2UIAction={dispatchA2UIAction}
-                  onResolveEscalation={handleResolveEscalation}
-                />
-              );
-            } else if (message.role === "user") {
-              // User message
-              return (
-                <UserMessageComponent
-                  key={message.id}
-                  id={message.id}
-                  content={message.content}
-                  timestamp={message.timestamp}
-                  files={message.files}
-                />
-              );
-            } else {
-              // Assistant welcome message
-              return (
-                <AssistantMessageComponent
-                  key={message.id}
-                  id={message.id}
-                  content={message.content}
-                  timestamp={message.timestamp}
-                  agent_id={message.agent_id}
-                  agent_name={agent.name}
-                />
-              );
-            }
-          })}
+          {parts.map((part) => (
+            <PartRenderer
+              key={part.partId}
+              part={part}
+              onFormSubmit={handleFormSubmit}
+            />
+          ))}
+          {terminalMessage && (
+            <StatusIndicator tone={terminalTone}>
+              {terminalMessage}
+            </StatusIndicator>
+          )}
           <div ref={messagesEndRef} className="aa-messages-end" />
         </div>
 
-        {/* Scroll to bottom button */}
         <div
           className={`absolute bottom-4 right-4 z-20 transition-opacity duration-200 ${isAtBottom ? "pointer-events-none opacity-0" : "opacity-100"}`}
         >
@@ -269,7 +184,6 @@ export default function AgentChat({
               scrollToBottom();
               requestAnimationFrame(() => {
                 checkIfAtBottom();
-                // isAtBottom state is managed by scroll handler
               });
             }}
             size="sm"
@@ -281,14 +195,17 @@ export default function AgentChat({
       </CardContent>
 
       <CardFooter className="p-0">
-        {/* Input */}
         <div className="w-full border-t p-4">
           <ChatInputArea
             input={input}
             onInputChange={handleInputChange}
-            onSubmit={sendMessage}
-            isLoading={isLoading}
-            placeholder={`Message ${agent.name}...`}
+            onSubmit={handleSend}
+            isLoading={sending}
+            placeholder={
+              isActive
+                ? `Message ${agent.name}...`
+                : `Send a follow-up to ${agent.name}...`
+            }
             selectedFiles={selectedFiles}
             onRemoveFile={removeFile}
             onOpenFileDialog={openFileDialog}
@@ -300,7 +217,7 @@ export default function AgentChat({
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                sendMessage(e);
+                handleSend(e);
               }
             }}
           />

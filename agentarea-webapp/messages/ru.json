@@ -113,6 +113,7 @@
     "build": "Сборка",
     "govern": "Управление",
     "connections": "Соединения",
+    "clients": "Клиенты",
     "explore": "Каталог",
     "providers": "Провайдеры",
     "providerConfigs": "Модели",
@@ -550,6 +551,23 @@
     "myConnections": "Мои соединения",
     "myActiveServers": "Мои активные серверы",
     "browseSpecifications": "Просмотр спецификаций MCP",
+    "addConnectionDialog": {
+      "trigger": "Добавить соединение",
+      "title": "Добавить соединение",
+      "description": "Выберите, как предоставить инструменты вашим агентам.",
+      "catalog": {
+        "title": "Просмотр каталога",
+        "description": "Подключите готовую интеграцию (Asana, GitHub, …) из каталога."
+      },
+      "mcp": {
+        "title": "Подключить MCP сервер",
+        "description": "Создайте переиспользуемое соединение из Docker-образа, команды или URL."
+      },
+      "openapi": {
+        "title": "OpenAPI соединение",
+        "description": "Оберните REST API в инструменты агента, импортировав OpenAPI / Swagger спецификацию."
+      }
+    },
     "filters": {
       "type": "Тип",
       "category": "Категория"
@@ -613,7 +631,8 @@
       },
       "actions": {
         "start": "Запустить",
-        "stop": "Остановить"
+        "stop": "Остановить",
+        "connectOAuth": "Подключить"
       },
       "status": {
         "stopped": "Остановлен",
@@ -900,6 +919,7 @@
     "title": "Задачи",
     "description": "Описание",
     "agent": "Агент",
+    "source": "Источник",
     "statusLabel": "Статус",
     "created": "Создано",
     "cost": "Стоимость",
@@ -919,6 +939,8 @@
       "completed": "Завершено",
       "success": "Успешно",
       "inputRequired": "Требуется ввод",
+      "approvalRequired": "Требуется согласование",
+      "continuationRequired": "Требуется продолжение",
       "failed": "Ошибка",
       "error": "Ошибка",
       "blocked": "Заблокировано",
@@ -1279,6 +1301,10 @@
       "cron": "Cron",
       "webhook": "Webhook"
     },
+    "group": {
+      "byChannel": "Каналы",
+      "none": "Без группировки"
+    },
     "noTriggers": "Триггеров пока нет",
     "noTriggersDescription": "Создайте триггер для автоматизации рабочих процессов агентов.",
     "noMatchingTriggers": "Нет триггеров, соответствующих поиску",
@@ -1290,7 +1316,9 @@
       "status": "Статус",
       "nextRun": "Следующий запуск",
       "lastRun": "Последний запуск",
-      "created": "Создан"
+      "created": "Создан",
+      "channel": "Канал",
+      "when": "Когда"
     },
     "type": {
       "cron": "Cron",
@@ -1375,6 +1403,7 @@
   "NetworkPage": {
     "title": "Сеть",
     "description": "Визуальный обзор топологии рабочего пространства",
+    "topology": "Топология",
     "accessGraph": "Граф доступа",
     "dataFlow": "Поток данных",
     "organization": "Организация"
@@ -1534,6 +1563,7 @@
     "send": "Отправить",
     "toSend": "чтобы отправить",
     "toCreate": "чтобы создать",
+    "toClose": "чтобы закрыть",
     "errorCreate": "Не удалось создать задачу. Попробуйте снова.",
     "noAgents": {
       "title": "Пока нет агентов",
@@ -1625,5 +1655,76 @@
       "acceptFailed": "Не удалось подтвердить авторизацию. Попробуйте ещё раз.",
       "rejectFailed": "Не удалось отменить запрос. Попробуйте ещё раз."
     }
+  },
+  "DashboardPage": {
+    "couldntLoadTitle": "Не удалось загрузить дашборд",
+    "spend": "Расходы",
+    "monthToDate": "С начала месяца",
+    "cumulative": "нарастающим итогом",
+    "today": "Сегодня",
+    "vsPrevDay": "к пред. дню",
+    "budgetUsage": "{pct}% от бюджета {cap}",
+    "activity": "Активность",
+    "activityMeta": "За 14 дней · UTC",
+    "completed": "Завершено",
+    "failed": "Ошибки",
+    "awaiting": "Ожидание",
+    "agents": "Агенты",
+    "agentsActive": "{count} активн.",
+    "statDone": "{count} готово",
+    "statFailed": "{count} с ошибкой",
+    "statMtd": "{amount} MTD",
+    "viewAllAgents": "Все агенты",
+    "noAgents": "Пока нет агентов.",
+    "noAgentsHint": "Создайте — и он появится здесь с активностью.",
+    "createFirstAgent": "Создайте первого агента",
+    "blockers": "Блокеры",
+    "healthy": "Всё в порядке",
+    "nothingBlocking": "Сейчас ничего не блокирует работу.",
+    "allClearHint": "Все агенты работают без сбоёв.",
+    "awaitingInput": "Ожидают ввода",
+    "walletExhausted": "Бюджет исчерпан",
+    "failed24h": "Ошибки (24ч)",
+    "budgetExhausted": "Бюджет исчерпан — {amount} / {period}",
+    "taskFailed": "Задача завершилась ошибкой",
+    "timeAgo": "{time} назад",
+    "relJustNow": "только что",
+    "relMinutes": "{count} мин",
+    "relHours": "{count} ч",
+    "relDays": "{count} д",
+    "period": "Период",
+    "periodLast7": "7 дней",
+    "periodLast30": "30 дней",
+    "periodMonthToDate": "С начала месяца",
+    "periodLast90": "90 дней"
+  },
+  "BudgetsPage": {
+    "couldntLoadTitle": "Не удалось загрузить данные бюджета",
+    "monthOutlook": "Прогноз на месяц",
+    "currentPeriod": "Текущий период",
+    "today": "Сегодня",
+    "todaySub": "Расходы за сегодня",
+    "projectedEom": "Прогноз на конец месяца",
+    "projectedSub": "По темпу за {days} дн.",
+    "monthlyCap": "Месячный лимит",
+    "capProjected": "{pct}% от лимита по прогнозу",
+    "capNotSet": "Не задан",
+    "noProjection": "Нет прогноза",
+    "hintUnderCap": "Прогноз уверенно ниже лимита — в этом периоде действий не требуется.",
+    "hintNearCap": "Прогноз приближается к лимиту — следите за расходами.",
+    "hintOverCap": "Прогноз превышает лимит — новые задачи могут быть отклонены до конца месяца.",
+    "hintNoCap": "Месячный лимит не задан — расходы воркспейса не ограничены.",
+    "capTitle": "Месячный лимит воркспейса",
+    "capDesc": "Новые задачи отклоняются, когда расходы с начала месяца достигают этой суммы.",
+    "capNoCap": "Лимит не задан. Расходы воркспейса не ограничиваются по месяцам.",
+    "capUsed": "{amount} использовано",
+    "capOfTotal": "{pct}% от {cap}",
+    "capField": "Месячный лимит (USD)",
+    "capPlaceholder": "Без лимита",
+    "save": "Сохранить",
+    "capNote": "Изменения применяются сразу во всём воркспейсе.",
+    "capUpdated": "Месячный лимит воркспейса обновлён.",
+    "capInvalid": "Введите положительное число или оставьте поле пустым, чтобы убрать лимит.",
+    "capUpdateFailed": "Не удалось обновить лимит воркспейса"
   }
 }

@@ -11,7 +11,6 @@ from .engines.regex_engine import RegexDetectionEngine
 from .interceptors.filters.mcp_tool_scanner import MCPToolSecurityScanner
 from .interceptors.filters.output_sanitizer import OutputSanitizer
 from .interceptors.filters.prompt_injection_detector import PromptInjectionDetector
-from .interceptors.gates.capability_guard import CapabilityGuard
 from .interceptors.gates.cost_budget_guard import CostBudgetGuard
 from .interceptors.gates.semantic_guard import SemanticGuard
 from .interceptors.gates.service_budget_guard import ServiceBudgetGuard
@@ -45,13 +44,19 @@ def create_governance_pipeline() -> InterceptorPipeline:
 
     # Plan entitlement gate — enterprise only, injected via ExtensionRegistry
     if ExtensionRegistry.has("entitlement_guard"):
-        entitlement_guard = ExtensionRegistry.get_factory("entitlement_guard")()
-        registry.register(entitlement_guard, Phase.PRE_LLM_CALL, priority=120)
-        logger.info("Plan entitlement guard registered (enterprise mode)")
+        entitlement_factory = ExtensionRegistry.get_factory("entitlement_guard")
+        if entitlement_factory is not None:
+            entitlement_guard = entitlement_factory()
+            registry.register(entitlement_guard, Phase.PRE_LLM_CALL, priority=120)
+            logger.info("Plan entitlement guard registered (enterprise mode)")
 
-    # Capability gate
-    registry.register(CapabilityGuard(), Phase.PRE_TOOL_CALL, priority=200)
-    registry.register(CapabilityGuard(), Phase.PRE_DELEGATION, priority=200)
+    # Tool capability authorization is NOT a pipeline gate and NOT a separate
+    # authority. It is the governance policy engine's own decision: the resolved
+    # effective_policy applied as a post-filter at tool disclosure and re-checked
+    # at the tool activity via decide_tool_policy (one predicate, two enforcement
+    # points — Disclosed subset of Authorized). Do NOT re-add a deny-by-default
+    # gate here — a second gate would contradict the single engine (offer a tool,
+    # then reject it), which is why it was removed.
 
     # Security filters — input
     registry.register(PromptInjectionDetector(engine), Phase.PRE_LLM_CALL, priority=300)

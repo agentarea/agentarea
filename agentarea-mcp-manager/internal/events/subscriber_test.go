@@ -37,9 +37,9 @@ func newTestSubscriber(backend *stubBackend) *EventSubscriber {
 	}
 }
 
-// tryHandleInstanceCreated must return true (signals "handled") without
-// invoking CreateInstance on any provider.
-func TestTryHandleInstanceCreated_ReturnsTrue_WithoutCallingProvider(t *testing.T) {
+// handleInstanceCreated must not provision anything: Python verify() owns
+// provisioning via POST /instances.
+func TestHandleInstanceCreated_DoesNotCallProvider(t *testing.T) {
 	backend := &stubBackend{}
 	sub := newTestSubscriber(backend)
 
@@ -55,59 +55,55 @@ func TestTryHandleInstanceCreated_ReturnsTrue_WithoutCallingProvider(t *testing.
 		}
 	}`
 
-	handled := sub.tryHandleInstanceCreated(context.Background(), payload)
+	sub.handleInstanceCreated(payload)
 
-	if !handled {
-		t.Error("tryHandleInstanceCreated must return true so the caller skips the legacy path")
-	}
 	if backend.createCalled {
-		t.Error("tryHandleInstanceCreated must not call CreateInstance on any backend provider")
+		t.Error("handleInstanceCreated must not call CreateInstance on any backend provider")
 	}
 }
 
-// tryHandleInstanceCreated must also return true for a malformed payload
-// (the no-op contract holds regardless of parse outcome).
-func TestTryHandleInstanceCreated_MalformedPayload_StillReturnsTrue(t *testing.T) {
+// The no-op contract holds regardless of parse outcome.
+func TestHandleInstanceCreated_MalformedPayload_NoopNoPanic(t *testing.T) {
 	backend := &stubBackend{}
 	sub := newTestSubscriber(backend)
 
-	handled := sub.tryHandleInstanceCreated(context.Background(), "not-json-at-all")
+	sub.handleInstanceCreated("not-json-at-all")
 
-	if !handled {
-		t.Error("tryHandleInstanceCreated must return true even for malformed payloads")
-	}
 	if backend.createCalled {
-		t.Error("tryHandleInstanceCreated must not call CreateInstance on malformed payload")
+		t.Error("handleInstanceCreated must not call CreateInstance on malformed payload")
 	}
 }
 
-// handleLegacyInstanceCreated is a no-op: it must not call CreateInstance on
-// any backend provider regardless of payload content.
-func TestHandleLegacyInstanceCreated_IsNoop_DoesNotCallProvider(t *testing.T) {
+// A payload that is not the shared CloudEvents format is dropped rather than
+// dispatched to any provider.
+func TestHandleInstanceDeleted_MalformedPayload_DoesNotCallProvider(t *testing.T) {
 	backend := &stubBackend{}
 	sub := newTestSubscriber(backend)
 
-	legacyPayload := `{
-		"data": "{\"event_id\":\"e1\",\"timestamp\":\"2026-04-24T00:00:00Z\",\"event_type\":\"MCPServerInstanceCreated\",\"data\":{\"instance_id\":\"inst-xyz\",\"name\":\"test-server\",\"json_spec\":{\"type\":\"docker\",\"image\":\"nginx:alpine\",\"port\":80}}}",
-		"headers": {}
+	sub.handleInstanceDeleted(context.Background(), "not-json-at-all")
+
+	if backend.deleteCalled {
+		t.Error("handleInstanceDeleted must not call DeleteInstance on malformed payload")
+	}
+}
+
+// instance_id is required; without it there is nothing to delete.
+func TestHandleInstanceDeleted_MissingInstanceID_DoesNotCallProvider(t *testing.T) {
+	backend := &stubBackend{}
+	sub := newTestSubscriber(backend)
+
+	payload := `{
+		"specversion": "1.0",
+		"type": "com.agentarea.mcp.instance.deleted",
+		"source": "/python",
+		"id": "abc-123",
+		"time": "2026-04-24T00:00:00Z",
+		"data": {"name": "my-server"}
 	}`
 
-	sub.handleLegacyInstanceCreated(context.Background(), legacyPayload)
+	sub.handleInstanceDeleted(context.Background(), payload)
 
-	if backend.createCalled {
-		t.Error("handleLegacyInstanceCreated must be a no-op and must not call CreateInstance")
-	}
-}
-
-// handleLegacyInstanceCreated must not panic on an empty payload.
-func TestHandleLegacyInstanceCreated_EmptyPayload_NoopNoPanic(t *testing.T) {
-	backend := &stubBackend{}
-	sub := newTestSubscriber(backend)
-
-	// Should not panic
-	sub.handleLegacyInstanceCreated(context.Background(), "")
-
-	if backend.createCalled {
-		t.Error("handleLegacyInstanceCreated must not call CreateInstance for empty payload")
+	if backend.deleteCalled {
+		t.Error("handleInstanceDeleted must not call DeleteInstance without an instance_id")
 	}
 }

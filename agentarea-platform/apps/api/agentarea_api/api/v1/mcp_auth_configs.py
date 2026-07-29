@@ -1,12 +1,12 @@
 """API endpoints for MCP authentication configurations."""
 
 import logging
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from agentarea_api.api.deps.services import BaseSecretManagerDep, DatabaseSessionDep
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from fastapi import APIRouter, Depends, HTTPException
@@ -49,8 +49,8 @@ class MCPAuthConfigResponse(BaseModel):
     description: str | None
     auth_type: str
     config: dict[str, Any]
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     class Config:
         """Pydantic config."""

@@ -1,4 +1,4 @@
-.PHONY: help install sync run-api run-worker test test-flows lint format build-apps
+.PHONY: help install sync run-api run-worker test test-flows test-integration test-api test-full lint format build-apps
 
 help:
 	@echo "Available commands:"
@@ -6,7 +6,10 @@ help:
 	@echo "  sync        - Sync all workspace dependencies" 
 	@echo "  run-api     - Run the API application"
 	@echo "  run-worker  - Run the worker application"
-	@echo "  test        - Run tests"
+	@echo "  test        - Hermetic per-merge gate (no infra)"
+	@echo "  test-integration - Real-DB repository + Temporal tests (needs Postgres/Temporal)"
+	@echo "  test-api    - OpenAPI contract + CRUD fuzz vs a LIVE stack (API+Kratos+DB up)"
+	@echo "  test-full   - Everything: test + test-integration + test-api"
 	@echo "  lint        - Run linting"
 	@echo "  format      - Format code"
 	@echo "  build-apps  - Build both applications"
@@ -49,6 +52,28 @@ test:
 # coverage guard (run inside `make test`) enforces every flow has a test.
 test-flows:
 	uv run python -m pytest apps/api/tests libs/common/tests $(FLOW_TESTS) -m flow
+
+# Real-DB repository + Temporal integration (needs Postgres + a Temporal dev
+# server). These exercise actual schema constraints the hermetic `test` gate
+# (mocked/sqlite) cannot. Mirrors the steps CI's integration job already trusts.
+test-integration:
+	uv run python -m pytest tests/integration/repositories tests/integration/test_temporal_workflow.py \
+		-m "" --tb=short
+
+# OpenAPI contract + stateful CRUD fuzz against a LIVE stack (API + Kratos + DB
+# must be up, e.g. `make up-dev` from the repo root). This is the only layer that
+# would catch persistence/constraint 5xx on real create paths (e.g. the MCP slug
+# NOT NULL 500). Override *_URL to point at a non-local stack.
+API_URL ?= http://localhost:8000
+KRATOS_ADMIN_URL ?= http://localhost:4434
+KRATOS_PUBLIC_URL ?= http://localhost:4433
+test-api:
+	API_URL=$(API_URL) KRATOS_ADMIN_URL=$(KRATOS_ADMIN_URL) KRATOS_PUBLIC_URL=$(KRATOS_PUBLIC_URL) \
+		uv run python -m pytest tests/e2e/api -p no:cacheprovider -o addopts="" --tb=short
+
+# Everything, in order of infra cost: hermetic gate -> real-DB integration ->
+# live-stack API fuzz. Run before a release or on a labelled PR.
+test-full: test test-integration test-api
 
 lint:
 	uv run --group lint ruff check

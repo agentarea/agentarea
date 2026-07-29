@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import {
   Command,
   CommandEmpty,
@@ -67,9 +68,11 @@ export function MentionMenu({
                 )}
               >
                 {agent.avatar ? (
-                  <img
+                  <Image
                     src={agent.avatar}
                     alt={agent.name}
+                    width={24}
+                    height={24}
                     className="h-6 w-6 rounded-full object-cover flex-shrink-0"
                   />
                 ) : (

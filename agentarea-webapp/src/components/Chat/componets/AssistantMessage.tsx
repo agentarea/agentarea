@@ -1,6 +1,7 @@
 import React from "react";
 import { Streamdown } from "streamdown";
-import { formatTimestamp } from "../../../utils/dateUtils";
+import type { Components } from "streamdown";
+import { useFormatTimestamp } from "../../../utils/dateUtils";
 import BaseMessage from "./BaseMessage";
 import MessageWrapper from "./MessageWrapper";
 
@@ -13,11 +14,12 @@ interface AssistantMessageProps {
 }
 
 export const AssistantMessage: React.FC<AssistantMessageProps> = ({
-  id,
+  id: _id,
   content,
   timestamp,
   agent_name,
 }) => {
+  const formatTimestamp = useFormatTimestamp();
   return (
     <MessageWrapper>
       <BaseMessage
@@ -28,12 +30,12 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
           className="prose prose-sm dark:prose-invert max-w-none"
           components={
             {
-              think: ({ children }: any) => (
+              think: (props: Record<string, unknown>) => (
                 <div className="text-xs text-gray-400 dark:text-gray-300">
-                  {children}
+                  {props.children as React.ReactNode}
                 </div>
               ),
-            } as any
+            } as Components
           }
         >
           {content}

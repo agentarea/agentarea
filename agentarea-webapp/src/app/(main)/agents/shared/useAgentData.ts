@@ -4,25 +4,38 @@ import {
   listMCPServerInstances,
   listMCPServers,
   listModelInstances,
-  MCPServer,
 } from "@/lib/api";
+import type {
+  Agent,
+  MCPServer,
+  MCPServerInstance,
+  ModelInstance,
+} from "@/lib/api";
+import type {
+  CodeToolConfig,
+  McpToolConfigOutput,
+  McpToolPermission,
+  McpToolSettings,
+  OpenApiToolConfig,
+} from "@/api/client/types.gen";
+import type { AgentFormValues, AgentSkill, EventConfig } from "../create/types";
 
 export interface AgentData {
   mcpServers: MCPServer[];
-  llmModelInstances: any[];
-  mcpInstanceList: any[];
-  builtinTools: any[];
+  llmModelInstances: ModelInstance[];
+  mcpInstanceList: MCPServerInstance[];
+  builtinTools: unknown[];
 }
 
 export interface AgentEditData extends AgentData {
-  agent: any;
-  initialData: any;
+  agent: Agent;
+  initialData: Partial<AgentFormValues>;
 }
 
 export async function loadAgentData(): Promise<AgentData> {
   // Fetch MCP servers
   const response = await listMCPServers({ page_size: 100 });
-  const rawServers = (response.data as any)?.items || response.data || [];
+  const rawServers = response.data?.items ?? [];
   const mcpServers: MCPServer[] = rawServers.map((server: MCPServer) => {
     const withDownloads = server as MCPServer & { downloads?: number };
     return {
@@ -66,52 +79,56 @@ export async function loadAgentEditData(
 
   // Fetch agent data
   const agentResponse = await getAgent(agentId);
-  const agent = agentResponse.data;
+  const agent: Agent | undefined = agentResponse.data;
 
   if (!agent) {
     throw new Error("Agent not found");
   }
 
   // Transform agent data to form format
-  const initialData = {
+  const initialData: Partial<AgentFormValues> = {
     name: agent.name,
     description: agent.description || "",
     instruction: agent.instruction || "",
-    model_id: agent.model_id,
+    model_id: agent.model_id ?? "",
     tools_config: {
       mcp_server_configs: (agent.tools || [])
-        .filter((t: any) => t.type === "mcp")
-        .map((t: any) => {
-          const settings = t.settings || {};
+        .filter((t): t is McpToolConfigOutput => t.type === "mcp")
+        .map((t) => {
+          const settings: McpToolSettings & { mcp_server_id?: string } =
+            t.settings ?? {};
           // Transform backend allowed_tools to form format (MCPToolConfig[])
           // Handles both string[] (legacy) and {tool_name, requires_user_confirmation}[] (new)
-          const allowedTools = (settings.allowed_tools || []).map((item: any) => {
-            if (typeof item === "string") {
-              return { tool_name: item, requires_user_confirmation: false };
+          const allowedTools = (settings.allowed_tools || []).map(
+            (item: string | McpToolPermission) => {
+              if (typeof item === "string") {
+                return { tool_name: item, requires_user_confirmation: false };
+              }
+              return {
+                tool_name: item.tool_name,
+                requires_user_confirmation:
+                  item.requires_user_confirmation ?? false,
+              };
             }
-            return {
-              tool_name: item.tool_name || item,
-              requires_user_confirmation: item.requires_user_confirmation ?? false,
-            };
-          });
+          );
           return {
             mcp_server_id: settings.mcp_server_id || t.name,
             allowed_tools: allowedTools,
           };
         }),
       builtin_tools: (agent.tools || [])
-        .filter((t: any) => t.type === "code")
-        .map((t: any) => ({
+        .filter((t): t is CodeToolConfig => t.type === "code")
+        .map((t) => ({
           tool_name: t.name,
           disabled_methods: (t.settings?.disabled_methods || []).reduce(
             (acc: Record<string, boolean>, m: string) => ({ ...acc, [m]: false }),
-            {}
+            {} as Record<string, boolean>
           ),
           requires_user_confirmation: t.settings?.requires_user_confirmation ?? false,
         })),
       openapi_configs: (agent.tools || [])
-        .filter((t: any) => t.type === "openapi")
-        .map((t: any) => ({
+        .filter((t): t is OpenApiToolConfig => t.type === "openapi")
+        .map((t) => ({
           // Prefer settings.openapi_connection_id (new shape, stable across renames);
           // fall back to t.name for legacy entries that stored the display name.
           openapi_connection_id: t.settings?.openapi_connection_id || t.name,
@@ -122,10 +139,10 @@ export async function loadAgentEditData(
         })),
     },
     events_config: {
-      events: (agent as any).events_config?.events || [],
+      events: (agent.events_config?.events as EventConfig[] | undefined) || [],
     },
     planning: agent.planning || false,
-    skills: ((agent as any).skills || []).map((s: any) => ({
+    skills: ((agent.skills ?? []) as unknown as AgentSkill[]).map((s) => ({
       id: s.id,
       name: s.name,
       description: s.description,

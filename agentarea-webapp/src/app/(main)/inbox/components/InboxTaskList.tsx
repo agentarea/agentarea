@@ -5,7 +5,6 @@ import { Check, X } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import type { TaskWithAgent } from "@/lib/api";
 import { getInboxStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { InboxEmptyState } from "@/app/(main)/inbox/components/InboxEmptyState";

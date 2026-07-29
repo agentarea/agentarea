@@ -12,7 +12,10 @@ import type {
 } from "@/types/access-control";
 import GraphPane from "./GraphPane";
 import ResolveAccessCard from "./ResolveAccessCard";
-import ToolGrantCard from "./ToolGrantCard";
+import {
+  createAccessRelationshipAction,
+  resolveAccessAction,
+} from "./actions";
 import { layoutGraph } from "./graph-layout";
 import styles from "./access-control.module.css";
 
@@ -50,14 +53,12 @@ interface AccessControlExplorerProps {
   graph: AccessControlGraph;
   relationships: AccessControlRelationshipsResponse;
   collections: SkillCollection[];
-  currentUserId: string | null;
 }
 
 export default function AccessControlExplorer({
   graph,
   relationships,
   collections,
-  currentUserId,
 }: AccessControlExplorerProps) {
   const router = useRouter();
   const [view, setView] = useState<ViewMode>("relationships");
@@ -133,31 +134,21 @@ export default function AccessControlExplorer({
 
     const selectedObject = object;
     let cancelled = false;
-    const controller = new AbortController();
 
     async function run() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("/api/proxy/v1/access-control/resolve", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            subject_id: subjectId,
-            resource_kind: selectedObject.kind,
-            resource_id: splitObjectId(objectId).object,
-          }),
-          signal: controller.signal,
+        const data = await resolveAccessAction({
+          subject_id: subjectId,
+          resource_kind: selectedObject.kind,
+          resource_id: splitObjectId(objectId).object,
         });
-        if (!response.ok) {
-          throw new Error(`Resolve failed (${response.status})`);
-        }
-        const data = (await response.json()) as AccessControlResolveResponse;
         if (!cancelled) {
           setResult(data);
         }
       } catch (e) {
-        if (cancelled || (e instanceof Error && e.name === "AbortError")) {
+        if (cancelled) {
           return;
         }
         setError(e instanceof Error ? e.message : "Failed to resolve access");
@@ -172,7 +163,6 @@ export default function AccessControlExplorer({
     run();
     return () => {
       cancelled = true;
-      controller.abort();
     };
   }, [graph.enabled, subjectId, objectId, object]);
 
@@ -220,20 +210,12 @@ export default function AccessControlExplorer({
         throw new Error("Create a collection or MCP resource before adding a relationship rule.");
       }
       const target = splitObjectId(ruleObjectId);
-      const response = await fetch("/api/proxy/v1/access-control/relationships", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          namespace: target.namespace,
-          object: target.object,
-          relation: ruleRelation,
-          subject_id: ruleSubjectId,
-        }),
+      await createAccessRelationshipAction({
+        namespace: target.namespace,
+        object: target.object,
+        relation: ruleRelation,
+        subject_id: ruleSubjectId,
       });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.detail || `Create relationship failed (${response.status})`);
-      }
       setRuleStatus("Relationship rule created.");
       setShowRuleForm(false);
       router.refresh();
@@ -478,11 +460,6 @@ export default function AccessControlExplorer({
                 Add relationship
               </button>
             </div>
-
-            <ToolGrantCard
-              currentUserId={currentUserId}
-              initialRelationships={relationships.relationships}
-            />
 
             <div className={styles.scaleNote}>
               <span className={styles.scaleNoteIcon}>

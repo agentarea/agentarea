@@ -15,7 +15,30 @@ interface EmptyStateProps {
     label: string;
     onClick: () => void;
   };
+  /** Tint applied to the emphasized (center / single) icon. */
+  accentClassName?: string;
   className?: string;
+}
+
+function IconTile({
+  icon: Icon,
+  className,
+  iconClassName,
+}: {
+  icon: LucideIcon;
+  className?: string;
+  iconClassName?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "grid size-11 place-items-center rounded-xl bg-background shadow-md ring-1 ring-border transition duration-500 group-hover:duration-200",
+        className
+      )}
+    >
+      <Icon className={cn("h-5 w-5 text-muted-foreground", iconClassName)} />
+    </div>
+  );
 }
 
 export function EmptyState({
@@ -25,6 +48,7 @@ export function EmptyState({
   action,
   className,
   additionAction,
+  accentClassName,
 }: EmptyStateProps) {
   return (
     <div
@@ -38,36 +62,37 @@ export function EmptyState({
       <div className="isolate flex justify-center">
         {icons.length === 3 ? (
           <>
-            <div className="relative left-2.5 top-1.5 grid size-12 -rotate-6 place-items-center rounded-xl bg-background shadow-lg ring-1 ring-border transition duration-500 group-hover:-translate-x-5 group-hover:-translate-y-0.5 group-hover:-rotate-12 group-hover:duration-200">
-              {React.createElement(icons[0], {
-                className: "w-6 h-6 text-muted-foreground",
-              })}
-            </div>
-            <div className="relative z-10 grid size-12 place-items-center rounded-xl bg-background shadow-lg ring-1 ring-border transition duration-500 group-hover:-translate-y-0.5 group-hover:duration-200">
-              {React.createElement(icons[1], {
-                className: "w-6 h-6 text-muted-foreground",
-              })}
-            </div>
-            <div className="relative right-2.5 top-1.5 grid size-12 rotate-6 place-items-center rounded-xl bg-background shadow-lg ring-1 ring-border transition duration-500 group-hover:-translate-y-0.5 group-hover:translate-x-5 group-hover:rotate-12 group-hover:duration-200">
-              {React.createElement(icons[2], {
-                className: "w-6 h-6 text-muted-foreground",
-              })}
-            </div>
+            <IconTile
+              icon={icons[0]}
+              className="relative left-2 top-1 -rotate-6 group-hover:-translate-x-4 group-hover:-translate-y-0.5 group-hover:-rotate-12"
+            />
+            <IconTile
+              icon={icons[1]}
+              iconClassName={accentClassName}
+              className="relative z-10 group-hover:-translate-y-0.5"
+            />
+            <IconTile
+              icon={icons[2]}
+              className="relative right-2 top-1 rotate-6 group-hover:translate-x-4 group-hover:-translate-y-0.5 group-hover:rotate-12"
+            />
           </>
         ) : (
-          <div className="grid size-12 place-items-center rounded-xl bg-background shadow-lg ring-1 ring-border transition duration-500 group-hover:-translate-y-0.5 group-hover:duration-200">
-            {icons[0] &&
-              React.createElement(icons[0], {
-                className: "w-6 h-6 text-muted-foreground",
-              })}
-          </div>
+          icons[0] && (
+            <IconTile
+              icon={icons[0]}
+              iconClassName={accentClassName}
+              className="group-hover:-translate-y-0.5"
+            />
+          )
         )}
       </div>
-      <h3 className="mt-6 font-medium text-foreground">{title}</h3>
-      <p className="mt-1 whitespace-pre-line font-light text-sm text-muted-foreground">
+      <h3 className="mt-5 text-[13.5px] font-semibold text-foreground">
+        {title}
+      </h3>
+      <p className="mx-auto mt-1 max-w-[320px] whitespace-pre-line text-[12px] leading-relaxed text-muted-foreground">
         {description}
       </p>
-      <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
+      <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
         {action && (
           <Button
             size="sm"

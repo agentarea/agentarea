@@ -120,6 +120,6 @@ Key dependencies include:
 - NextAuth.js - Authentication library
 - Tailwind CSS - Styling framework
 - React - UI library
-- openapi-fetch - Type-safe API client
+- @hey-api/openapi-ts - Generated API client and schemas
 
 See `package.json` for the complete list of dependencies.

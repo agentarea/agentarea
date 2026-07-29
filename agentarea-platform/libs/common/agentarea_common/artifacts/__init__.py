@@ -15,7 +15,20 @@ from .audit import (
     ArtifactEventRecorder,
     DbArtifactEventRecorder,
 )
-from .service import ArtifactObject, ArtifactService
+from .service import ArtifactIntegrityError, ArtifactObject, ArtifactService
+from .workspace import (
+    S3WorkspaceRepository,
+    WorkspaceConflictError,
+    WorkspaceEntry,
+    WorkspaceError,
+    WorkspaceManifest,
+    WorkspaceManifestRef,
+    WorkspaceObject,
+    WorkspaceQuotaError,
+    WorkspaceRepository,
+    WorkspaceValidationError,
+    normalize_workspace_path,
+)
 
 __all__ = [
     "ACTION_CREATED",
@@ -26,7 +39,19 @@ __all__ = [
     "ArtifactActor",
     "ArtifactEvent",
     "ArtifactEventRecorder",
+    "ArtifactIntegrityError",
     "ArtifactObject",
     "ArtifactService",
     "DbArtifactEventRecorder",
+    "S3WorkspaceRepository",
+    "WorkspaceConflictError",
+    "WorkspaceEntry",
+    "WorkspaceError",
+    "WorkspaceManifest",
+    "WorkspaceManifestRef",
+    "WorkspaceObject",
+    "WorkspaceQuotaError",
+    "WorkspaceRepository",
+    "WorkspaceValidationError",
+    "normalize_workspace_path",
 ]

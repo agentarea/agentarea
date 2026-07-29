@@ -1,12 +1,12 @@
 "use client";
 
-import { type NodeProps } from "@xyflow/react";
+import { type Node, type NodeProps } from "@xyflow/react";
 import { Clock, Globe, Zap } from "lucide-react";
+import type { NetworkFlowNodeData } from "../../types";
 import NodeCard from "./NodeCard";
 
-export default function TriggerNode({ data }: NodeProps) {
-  const d = data as Record<string, any>;
-  const triggerType: string = d.metadata?.trigger_type || "unknown";
+export default function TriggerNode({ data }: NodeProps<Node<NetworkFlowNodeData>>) {
+  const triggerType = (data.metadata.trigger_type as string | undefined) ?? "unknown";
   const isIngress = triggerType === "webhook";
   const isSchedule = triggerType === "schedule" || triggerType === "cron";
 
@@ -20,12 +20,12 @@ export default function TriggerNode({ data }: NodeProps) {
   return (
     <NodeCard
       icon={<Icon className="h-6 w-6" />}
-      label={d.label}
+      label={data.label}
       subtitle={subtitle}
       color={isIngress ? "amber" : "neutral"}
       hasTarget={false}
-      dimmed={d._dimmed}
-      highlighted={d._highlighted}
+      dimmed={data._dimmed}
+      highlighted={data._highlighted}
     />
   );
 }

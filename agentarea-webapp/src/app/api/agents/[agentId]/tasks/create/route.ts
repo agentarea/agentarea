@@ -9,11 +9,8 @@ export async function POST(
   const { agentId } = await params;
 
   try {
-    // Use session-based token retrieval only; do not handle workspace
+    // Keep credentials server-side while forwarding the active workspace slug.
     const token = await getAuthToken();
-
-    // Get the task creation data from request body
-    const taskData = await request.json();
 
     // Create headers for backend request
     const backendHeaders: Record<string, string> = {
@@ -25,19 +22,34 @@ export async function POST(
       backendHeaders["Authorization"] = `Bearer ${token}`;
     }
 
-    // Connect to backend task creation endpoint with SSE (server-side only)
+    let workspaceSlug = request.headers.get("x-workspace-slug");
+    if (!workspaceSlug) {
+      const referer = request.headers.get("referer");
+      const match = referer?.match(/\/w\/([^/?#]+)/);
+      if (match) workspaceSlug = decodeURIComponent(match[1]);
+    }
+    if (workspaceSlug) {
+      backendHeaders["X-Workspace-Slug"] = workspaceSlug;
+    }
+
+    // Task creation is JSON. Files are pre-staged via POST /v1/files/upload-url
+    // (presigned upload) and referenced by ref in the body's `attachments` array.
     const backendUrl = env.API_URL;
     const createTaskUrl = `${backendUrl}/v1/agents/${agentId}/tasks/`;
 
     const response = await fetch(createTaskUrl, {
       method: "POST",
       headers: backendHeaders,
-      body: JSON.stringify(taskData),
+      body: await request.text(),
     });
 
     if (!response.ok) {
-      return new Response(`Backend task creation error: ${response.status}`, {
+      return new Response(await response.text(), {
         status: response.status,
+        headers: {
+          "Content-Type":
+            response.headers.get("content-type") || "text/plain; charset=utf-8",
+        },
       });
     }
 

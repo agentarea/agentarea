@@ -1,18 +1,22 @@
 import { getTranslations } from "next-intl/server";
+import type { AgentResponse } from "@/api/client/types.gen";
 import { listAgents, listTriggerCatalog } from "@/lib/api";
 import { getTriggersCached } from "./triggersData";
+import type { TriggerCatalogEntry } from "./triggerDisplay";
 import TriggersList from "./TriggersList";
 
 interface TriggersContentProps {
   viewMode: "grid" | "table";
   searchQuery: string;
   typeFilter: string;
+  groupBy: "channel" | "none";
 }
 
 export default async function TriggersContent({
   viewMode,
   searchQuery,
   typeFilter,
+  groupBy,
 }: TriggersContentProps) {
   const t = await getTranslations("TriggersPage");
 
@@ -31,14 +35,14 @@ export default async function TriggersContent({
   }
 
   const triggers = triggersResult.triggers;
-  const agents = (agentsResponse.data as any[]) || [];
-  const catalog = (catalogResponse.data as any[]) || [];
+  const agents: AgentResponse[] = agentsResponse.data ?? [];
+  const catalog = (catalogResponse.data ?? []) as TriggerCatalogEntry[];
 
   // Build agent name lookup
-  const agentMap = new Map(agents.map((a: any) => [a.id, a.name]));
+  const agentMap = new Map(agents.map((a) => [a.id, a.name]));
 
   // Enrich triggers with agent names
-  let enrichedTriggers = triggers.map((trigger: any) => ({
+  let enrichedTriggers = triggers.map((trigger) => ({
     ...trigger,
     agent_name: agentMap.get(trigger.agent_id) || "Unknown Agent",
   }));
@@ -70,6 +74,7 @@ export default async function TriggersContent({
       catalog={catalog}
       viewMode={viewMode}
       searchQuery={searchQuery}
+      groupBy={groupBy}
     />
   );
 }

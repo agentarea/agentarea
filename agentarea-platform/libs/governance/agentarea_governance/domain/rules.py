@@ -37,6 +37,12 @@ class PolicyEffect(StrEnum):
     CAP = "cap"
     APPROVAL = "approval"
     SAFETY = "safety"
+    # Container-level egress allowlist for an MCP (``target=mcp:<id>``). Core
+    # stores and round-trips these rows but does NOT enforce the container network
+    # boundary — that is the enterprise EgressEnforcer. They intentionally do not
+    # compile into the runtime PolicyDocument; read them with
+    # egress_allowlist_from_rules(). Host patterns live in params["allowed_hosts"].
+    EGRESS = "egress"
 
 
 class PolicySubjectType(StrEnum):
@@ -127,6 +133,7 @@ class _DocumentAccumulator:
         self.approval_required: bool = False
         self.escalation_rules: list[str] = []
         self.approvers: list[str] = []
+        self.approvers_by_tool: dict[str, list[str]] = {}
         self.content_safety: dict[str, Any] = {}
 
     def to_document(self) -> PolicyDocument:
@@ -141,11 +148,19 @@ class _DocumentAccumulator:
             )
 
         approval: ApprovalPolicy | None = None
-        if self.approval_required or self.escalation_rules or self.approvers:
+        if (
+            self.approval_required
+            or self.escalation_rules
+            or self.approvers
+            or self.approvers_by_tool
+        ):
             approval = ApprovalPolicy(
                 requires_human_approval=True if self.approval_required else None,
                 escalation_rules=_dedupe(self.escalation_rules),
                 approvers=_dedupe(self.approvers),
+                approvers_by_tool={
+                    tool: _dedupe(refs) for tool, refs in self.approvers_by_tool.items()
+                },
             )
 
         content_safety = ContentSafetyPolicy(**self.content_safety) if self.content_safety else None
@@ -215,6 +230,11 @@ def _apply_rule(
         _apply_safety(acc, params)
         return
 
+    if rule.effect == PolicyEffect.EGRESS:
+        # Enforced at the container network layer (enterprise EgressEnforcer), not
+        # by the in-process guards — never compiles into the runtime document.
+        return
+
     logger.debug(
         "skipping rule %s: unsupported effect/target (%s/%s)",
         rule.id,
@@ -268,18 +288,22 @@ def _apply_approval(
     value: str | None,
     params: dict[str, Any],
 ) -> None:
+    approvers = params.get("approvers") or []
+
     if kind == "all" or (kind == "tool" and value == "*"):
         acc.approval_required = True
+        # Global approval: approvers apply to every tool, so they stay flat.
+        acc.approvers.extend(approvers)
     elif kind == "tool" and value:
         # An approval rule that targets a tool keeps approval-on-tool working:
         # helpers.policy_requires_approval checks escalation_rules membership.
+        # Approvers stay keyed by that tool so distinct tools keep distinct
+        # signoff lists instead of flattening into one shared pool.
         acc.escalation_rules.append(value)
+        if approvers:
+            acc.approvers_by_tool.setdefault(value, []).extend(approvers)
     else:
         logger.debug("skipping approval rule %s: unsupported target %r", rule.id, rule.target)
-
-    approvers = params.get("approvers")
-    if approvers:
-        acc.approvers.extend(approvers)
 
 
 def _apply_safety(acc: _DocumentAccumulator, params: dict[str, Any]) -> None:
@@ -287,6 +311,27 @@ def _apply_safety(acc: _DocumentAccumulator, params: dict[str, Any]) -> None:
         acc.content_safety["prompt_injection_detection_enabled"] = bool(params["prompt_injection"])
     if "output_sanitizer" in params:
         acc.content_safety["output_sanitizer_enabled"] = bool(params["output_sanitizer"])
+
+
+def egress_allowlist_from_rules(rules: list[PolicyRule]) -> dict[str, list[str]]:
+    """Collect enabled egress allowlists keyed by target selector.
+
+    Returns e.g. ``{"mcp:<id>": ["*.github.com", "api.github.com"]}``. Host
+    patterns come from ``params["allowed_hosts"]``. This is the seam the
+    enterprise ``EgressEnforcer`` consumes: core owns the data, enterprise owns
+    the container-network enforcement. A target present with an empty list means
+    default-deny (declared, nothing allowed).
+    """
+    result: dict[str, list[str]] = {}
+    for rule in rules:
+        if not rule.enabled or rule.effect != PolicyEffect.EGRESS:
+            continue
+        hosts = (rule.params or {}).get("allowed_hosts", [])
+        if not isinstance(hosts, list):
+            logger.debug("skipping egress rule %s: allowed_hosts is not a list", rule.id)
+            continue
+        result.setdefault(rule.target, []).extend(str(h) for h in hosts)
+    return {target: _dedupe(hosts) for target, hosts in result.items()}
 
 
 def _dedupe(values: list[str]) -> list[str]:

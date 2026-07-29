@@ -3,12 +3,12 @@
 Sync auto-creates entities for new items. Version updates are manual.
 """
 
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_registry_service
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_registry.application.service import RegistryService
 from agentarea_registry.domain.models import Registry, RegistryItem
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -46,11 +46,11 @@ class RegistryResponse(BaseModel):
     source_url: str
     sync_mode: str
     is_active: bool
-    last_synced_at: datetime | None
+    last_synced_at: UtcDatetime | None
     last_sync_error: str | None
     item_count: int
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     @classmethod
     def from_domain(cls, r: Registry) -> "RegistryResponse":
@@ -83,8 +83,8 @@ class RegistryItemResponse(BaseModel):
     installed_entity_id: UUID | None
     update_available: bool
     installed_version: str | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     @classmethod
     def from_domain(cls, item: RegistryItem) -> "RegistryItemResponse":

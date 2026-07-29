@@ -34,6 +34,85 @@
     background-image: var(--hatch-accent), var(--hatch-soft);
   }
 
+  /* ---- Add-a-connection modal · v2 "blueprint" sheet ---- */
+  /* dashed side rails filled with a fine 135° hatch band */
+  .conn-bp {
+    position: relative;
+    padding: 0 28px 14px;
+  }
+  .conn-bp::before,
+  .conn-bp::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 28px;
+    background: repeating-linear-gradient(
+      135deg,
+      #e9e9ec 0 1px,
+      transparent 1px 8px
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+  .conn-bp::before {
+    left: 0;
+    border-right: 1px dashed #e4e4e7;
+  }
+  .conn-bp::after {
+    right: 0;
+    border-left: 1px dashed #e4e4e7;
+  }
+  .dark .conn-bp::before,
+  .dark .conn-bp::after {
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.09) 0 1px,
+      transparent 1px 8px
+    );
+  }
+  .dark .conn-bp::before {
+    border-right-color: rgba(255, 255, 255, 0.16);
+  }
+  .dark .conn-bp::after {
+    border-left-color: rgba(255, 255, 255, 0.16);
+  }
+  /* full-width dashed divider between options, with crop-mark crosses */
+  .conn-bp-div {
+    position: relative;
+    height: 0;
+    margin: 0 -28px;
+    border-top: 1px dashed #e4e4e7;
+    z-index: 4;
+  }
+  .dark .conn-bp-div {
+    border-top-color: rgba(255, 255, 255, 0.16);
+  }
+  .conn-bp-mkp {
+    position: absolute;
+    top: 0;
+    width: 9px;
+    height: 9px;
+    pointer-events: none;
+    z-index: 5;
+    background:
+      linear-gradient(#bcbfc5, #bcbfc5) center / 1.3px 9px no-repeat,
+      linear-gradient(#bcbfc5, #bcbfc5) center / 9px 1.3px no-repeat;
+  }
+  .dark .conn-bp-mkp {
+    background:
+      linear-gradient(#6b6e76, #6b6e76) center / 1.3px 9px no-repeat,
+      linear-gradient(#6b6e76, #6b6e76) center / 9px 1.3px no-repeat;
+  }
+  .conn-bp-mkp.l {
+    left: 28px;
+    transform: translate(-50%, -50%);
+  }
+  .conn-bp-mkp.r {
+    right: 28px;
+    transform: translate(50%, -50%);
+  }
+
   /* card: soft footer band (idle) that grows upward into a full wash on hover */
   .skill-card-hatch {
     position: absolute;
@@ -202,6 +281,19 @@
       #f1f1f4 9px,
       #f1f1f4 10px
     );
+
+    /* board: dashed line-grid + technical registration markers */
+    --board-line: #e4e4e7;
+    --board-crop: #bcbfc5;
+    /* violet accent — spend hero chart + budget bar */
+    --violet: #5e6ad2;
+    /* amber accent — kept warm in both themes (unlike --chart-4) */
+    --amber: #d99a00;
+    /* semantic status accents — blocker groups, activity tones, dots */
+    --status-success: #10b981;
+    --status-warning: #f59e0b;
+    --status-danger: #ef4444;
+    --status-info: #3b82f6;
   }
   .dark {
     --layout-background: 240 5.9% 10%;
@@ -302,6 +394,20 @@
       #212126 9px,
       #212126 10px
     );
+
+    /* board: dashed line-grid + technical registration markers (dark) */
+    /* matches the row-divider tone (zinc-700) so the 4-up grid stays visible */
+    --board-line: #3f3f46;
+    --board-crop: #4c4f56;
+    /* violet accent — spend hero chart + budget bar (dark) */
+    --violet: #8b93ff;
+    /* amber accent — kept warm in both themes (dark) */
+    --amber: #e8b23e;
+    /* semantic status accents — brighter for dark surfaces (dark) */
+    --status-success: #34d399;
+    --status-warning: #fbbf24;
+    --status-danger: #f87171;
+    --status-info: #60a5fa;
   }
 }
 
@@ -903,4 +1009,16 @@ body div[data-sonner-toast][data-type="warning"] {
     height: auto !important;
     max-width: none !important;
   }
+}
+
+/* recharts: suppress the browser focus-ring "box" drawn when the chart svg is
+   clicked/focused (its surface has tabindex=0 for a11y). Kept UNLAYERED so
+   Tailwind's @layer purge can't strip it — the class only exists at runtime. */
+.recharts-surface:focus,
+.recharts-surface:focus-visible,
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible,
+.recharts-wrapper :focus,
+.recharts-wrapper :focus-visible {
+  outline: none !important;
 }

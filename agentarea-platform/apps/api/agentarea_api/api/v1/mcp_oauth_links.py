@@ -10,12 +10,12 @@ See mcp_access_tokens.py for:
 """
 
 import logging
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from agentarea_api.api.deps.services import DatabaseSessionDep
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.oauth_link_service import MCPOAuthLinkService
 from agentarea_mcp.infrastructure.auth_repository import (
     MCPOAuthLinkRepository,
@@ -52,10 +52,10 @@ class OAuthLinkResponse(BaseModel):
     token: str
     access_control: str
     is_active: bool
-    expires_at: datetime | None
+    expires_at: UtcDatetime | None
     access_count: int
-    last_accessed_at: datetime | None
-    created_at: datetime
+    last_accessed_at: UtcDatetime | None
+    created_at: UtcDatetime
 
     class Config:
         """Pydantic config."""

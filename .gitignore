@@ -12,6 +12,7 @@ eggs/
 .eggs/
 
 parts/
+!agentarea-webapp/src/lib/events/parts/
 sdist/
 var/
 wheels/
@@ -153,6 +154,7 @@ agentarea-talk.html
 /data/rustfs/
 /data/valkey/
 /data/mcp-containers/
+/data/mailpit/
 
 # Build/tool caches and test artifacts
 .cache/

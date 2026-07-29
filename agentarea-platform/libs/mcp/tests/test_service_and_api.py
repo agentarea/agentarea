@@ -11,7 +11,7 @@ from agentarea_mcp.application.service import (
 )
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
-from agentarea_mcp.schemas.dto import MCPServerInstanceCreate
+from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerInstanceCreate
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -117,6 +117,168 @@ def _make_service(instances: dict[str, MCPServerInstance] | None = None) -> MCPS
     svc.mcp_server_repository.get_server_by_id = AsyncMock(return_value=server_spec)
 
     return svc
+
+
+# ---------------------------------------------------------------------------
+# create_instance_with_spec - slug regression
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_create_instance_with_spec_populates_slug():
+    """Regression: the with-spec create path must populate the NOT NULL `slug`.
+
+    It previously built ``MCPServer(...)`` without a slug, so the first real
+    INSERT raised ``NotNullViolationError`` (500) on the UI "Add Server".
+    Mocked-DB tests never caught it because a mock session does not enforce the
+    constraint - so assert the *behavior*: the slug is resolved via the single
+    repository resolver and set on the persisted server.
+    """
+    svc = _make_service()
+    svc.repository.session.flush = AsyncMock()
+    svc.mcp_server_repository.resolve_unique_slug = AsyncMock(return_value="my-server")
+    svc.create_instance = AsyncMock(return_value=MagicMock(spec=MCPServerInstance))
+
+    server_payload = MCPServerCreate(
+        name="My Server",
+        description="created in a regression test",
+        docker_image_url="img:latest",
+        version="1.0.0",
+    )
+    instance_payload = MCPServerInstanceCreate.model_construct(
+        name="My Server",
+        description="created in a regression test",
+        server_spec_id="",
+        json_spec={},
+        auth_config_id=None,
+    )
+
+    await svc.create_instance_with_spec(server_payload, instance_payload)
+
+    svc.mcp_server_repository.resolve_unique_slug.assert_awaited_once_with("My Server")
+    added_server = svc.repository.session.add.call_args[0][0]
+    assert added_server.slug == "my-server"
+
+
+@pytest.mark.asyncio
+async def test_materialize_workspace_spec_copy_populates_slug():
+    """Regression: copy-on-write of a catalog spec must populate the NOT NULL `slug`.
+
+    Connecting a built-in catalog MCP (e.g. the Vercel remote-OAuth entry)
+    materializes a workspace copy. That path built ``MCPServer(...)`` without a
+    slug, so the INSERT raised ``NotNullViolationError``. Assert the slug is
+    resolved and set on the copy that gets added to the session.
+    """
+    svc = _make_service()
+    svc.repository.session.flush = AsyncMock()
+    svc.mcp_server_repository.resolve_unique_slug = AsyncMock(return_value="vercel")
+
+    source = MagicMock()
+    source.name = "Vercel"
+    source.description = "Remote MCP server for Vercel."
+    source.docker_image_url = None
+    source.version = "1.0.0"
+    source.tags = ["registry", "url", "streamable-http"]
+    source.env_schema = []
+    source.cmd = None
+    source.remote_url = "https://mcp.vercel.com"
+    source.registry_item_id = uuid.uuid4()
+    source.json_spec = {"name": "ai.agentarea.catalog/vercel"}
+    source.registry_url = "https://example.com/mcp-remote-oauth-registry.json"
+
+    await svc._materialize_workspace_spec_copy(source)
+
+    svc.mcp_server_repository.resolve_unique_slug.assert_awaited_once_with("Vercel")
+    added_copy = svc.repository.session.add.call_args[0][0]
+    assert added_copy.slug == "vercel"
+
+
+@pytest.mark.asyncio
+async def test_auto_create_spec_for_instance_populates_slug():
+    """Regression: auto-created specs (no server_spec_id) must populate `slug`."""
+    svc = _make_service()
+    svc.repository.session.flush = AsyncMock()
+    svc.mcp_server_repository.resolve_unique_slug = AsyncMock(return_value="my-server")
+
+    payload = MCPServerInstanceCreate.model_construct(
+        name="My Server",
+        description="auto-created in a regression test",
+        server_spec_id="",
+        json_spec={"type": "docker", "image": "img:latest"},
+        auth_config_id=None,
+    )
+
+    await svc._auto_create_spec_for_instance(payload)
+
+    svc.mcp_server_repository.resolve_unique_slug.assert_awaited_once_with("My Server")
+    added_server = svc.repository.session.add.call_args[0][0]
+    assert added_server.slug == "my-server"
+
+
+# ---------------------------------------------------------------------------
+# verify_instance — OAuth reactive re-auth (401/403)
+# ---------------------------------------------------------------------------
+
+
+def _payload(status: str, message: str | None = None):
+    from agentarea_mcp.domain.verification_types import (
+        VERIFICATION_SCHEMA_VERSION,
+        VerificationError,
+        VerificationPayload,
+    )
+
+    return VerificationPayload(
+        schema_version=VERIFICATION_SCHEMA_VERSION,
+        status=status,  # type: ignore[arg-type]
+        at="2026-07-03T00:00:00Z",
+        error=(
+            VerificationError(code="mcp_error", message=message, detail=None) if message else None
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_verify_instance_reactive_refresh_recovers_from_403():
+    """A 403 on an OAuth instance triggers one force-refresh + retry that succeeds."""
+    inst = _make_instance("url")
+    inst.auth_config_id = uuid.uuid4()
+    svc = _make_service({str(inst.id): inst})
+
+    async def resolve(instance, *, force_refresh=False):
+        return {"Authorization": "Bearer fresh"} if force_refresh else {}
+
+    svc._resolve_auth_headers = resolve
+    verify_mock = AsyncMock(
+        side_effect=[_payload("failed", "HTTPStatusError: 403 Forbidden"), _payload("succeeded")]
+    )
+    with patch("agentarea_mcp.application.service.verify", verify_mock):
+        result = await svc.verify_instance(inst.id)
+
+    assert verify_mock.await_count == 2  # initial + one retry
+    assert result["status"] == "succeeded"
+
+
+@pytest.mark.asyncio
+async def test_verify_instance_surfaces_reauth_when_refresh_dead():
+    """When the OAuth session can't be renewed, verify surfaces oauth_reauth_required."""
+    from agentarea_mcp.application.auth_service import OAuthReauthRequiredError
+
+    inst = _make_instance("url")
+    inst.auth_config_id = uuid.uuid4()
+    svc = _make_service({str(inst.id): inst})
+    svc.repository.update = AsyncMock()
+
+    async def resolve(instance, *, force_refresh=False):
+        if force_refresh:
+            raise OAuthReauthRequiredError("no refresh_token")
+        return {}
+
+    svc._resolve_auth_headers = resolve
+    verify_mock = AsyncMock(return_value=_payload("failed", "HTTPStatusError: 403 Forbidden"))
+    with patch("agentarea_mcp.application.service.verify", verify_mock):
+        result = await svc.verify_instance(inst.id)
+
+    assert result["status"] == "failed"
+    assert result["error"]["code"] == "oauth_reauth_required"
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +443,96 @@ class TestServiceCreateInstance:
         await asyncio.sleep(0)
         assert len(verify_called) == 1
 
+    @pytest.mark.asyncio
+    async def test_container_instance_is_marked_lazy_when_enabled(self, monkeypatch):
+        """Nothing else writes lazy_provisioning, so if creation does not stamp
+        it the platform flag is inert: every instance stays eager, is never
+        reaped, and runs until someone deletes it."""
+        monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "true")
+        svc = _make_service()
+
+        with patch("agentarea_mcp.application.service.verify", new=AsyncMock()), \
+             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
+            inst = await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="docker-inst",
+                    server_spec_id="test-spec-id",
+                    json_spec={"type": "docker"},
+                )
+            )
+
+        assert inst is not None
+        assert inst.json_spec.get("lazy_provisioning") is True
+
+    @pytest.mark.asyncio
+    async def test_container_instance_is_eager_when_flag_off(self, monkeypatch):
+        """The decision is recorded at creation, so turning the flag on later
+        must not retroactively shorten the life of an existing instance."""
+        monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "false")
+        svc = _make_service()
+
+        with patch("agentarea_mcp.application.service.verify", new=AsyncMock()), \
+             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
+            inst = await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="docker-inst",
+                    server_spec_id="test-spec-id",
+                    json_spec={"type": "docker"},
+                )
+            )
+
+        assert inst is not None
+        assert inst.json_spec.get("lazy_provisioning") is False
+
+    @pytest.mark.asyncio
+    async def test_url_instance_is_never_lazy(self, monkeypatch):
+        """A url-type instance has no container to start or stop, so marking it
+        lazy would defer a verification that costs nothing to run now."""
+        monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "true")
+        svc = _make_service()
+        url_spec = MagicMock()
+        url_spec.id = "test-spec-id"
+        url_spec.workspace_id = svc.repository.user_context.workspace_id
+        url_spec.remote_url = "http://test.example.com/mcp"
+        url_spec.cmd = None
+        url_spec.docker_image_url = None
+        url_spec.json_spec = {"type": "url", "endpoint_url": "http://test.example.com/mcp"}
+        url_spec.env_schema = []
+        svc.mcp_server_repository.get_server_by_id = AsyncMock(return_value=url_spec)
+
+        fake_verification = {"schema_version": 1, "status": "succeeded", "at": "x", "error": None}
+        with patch("agentarea_mcp.application.service.verify", new=AsyncMock(return_value=fake_verification)), \
+             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
+            inst = await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="url-inst",
+                    server_spec_id="test-spec-id",
+                    json_spec={"type": "url", "endpoint_url": "http://test.example.com/mcp"},
+                )
+            )
+
+        assert inst is not None
+        assert "lazy_provisioning" not in inst.json_spec
+
+    @pytest.mark.asyncio
+    async def test_explicit_lazy_choice_is_not_overridden(self, monkeypatch):
+        """An explicit per-instance choice wins over the platform default."""
+        monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "false")
+        svc = _make_service()
+
+        with patch("agentarea_mcp.application.service.verify", new=AsyncMock()), \
+             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
+            inst = await svc.create_instance(
+                MCPServerInstanceCreate(
+                    name="docker-inst",
+                    server_spec_id="test-spec-id",
+                    json_spec={"type": "docker", "lazy_provisioning": True},
+                )
+            )
+
+        assert inst is not None
+        assert inst.json_spec.get("lazy_provisioning") is True
+
     def test_bundle_create_payload_is_rejected(self):
         """Bundle is no longer a valid MCP server instance type."""
         with pytest.raises(ValueError, match="bundle"):
@@ -290,17 +542,23 @@ class TestServiceCreateInstance:
                 json_spec={"type": "bundle", "members": [str(uuid.uuid4())]},
             )
 
-    def test_secret_heuristic_marks_known_credentials(self):
+    def test_derived_env_schema_defaults_to_secret(self):
+        """When an instance has no explicit env_schema, we never guess a
+        variable's sensitivity from its name — every derived field is secret."""
         svc = _make_service()
-        assert svc._is_secret_header_name("Authorization")
-        assert svc._is_secret_header_name("X-Api-Key")
-        assert svc._is_secret_header_name("X-Custom-Token")
-        assert svc._is_secret_header_name("X-Auth-User")
-        assert not svc._is_secret_header_name("User-Agent")
-        assert svc._is_secret_env_name("GITHUB_TOKEN")
-        assert svc._is_secret_env_name("DATABASE_DSN")
-        assert svc._is_secret_env_name("ADMIN_PASSWORD")
-        assert not svc._is_secret_env_name("LOG_LEVEL")
+        derived = svc._derive_env_schema_from_instance_spec(
+            {
+                "headers": {"Authorization": "x", "User-Agent": "y"},
+                "environment": {"GITHUB_TOKEN": "x", "LOG_LEVEL": "info"},
+            }
+        )
+        by_name = {e["name"]: e["isSecret"] for e in derived}
+        assert by_name == {
+            "Authorization": True,
+            "User-Agent": True,
+            "GITHUB_TOKEN": True,
+            "LOG_LEVEL": True,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +707,7 @@ class TestServiceExecuteTool:
             tool_name,
             tool_args,
             httpx_client_factory=None,
+            transport=None,
         ):
             captured["factory"] = httpx_client_factory
             return MagicMock(content=[MagicMock(type="text", text="ok")], isError=False)
@@ -512,7 +771,7 @@ class TestAPIEndpoints:
 
 
 class TestNormalizeUrlKeys:
-    """Canonical key is `endpoint_url`; legacy `url`/`external_url` are aliased."""
+    """Canonical key is `endpoint_url`; `url`/`external_url` are accepted aliases."""
 
     def test_canonical_endpoint_url_passes_through(self):
         from agentarea_mcp.application.service import _normalize_url_keys
@@ -520,21 +779,21 @@ class TestNormalizeUrlKeys:
         out = _normalize_url_keys({"type": "url", "endpoint_url": "https://x/mcp"})
         assert out == {"type": "url", "endpoint_url": "https://x/mcp"}
 
-    def test_legacy_url_gets_renamed(self):
+    def test_url_alias_gets_renamed(self):
         from agentarea_mcp.application.service import _normalize_url_keys
 
         out = _normalize_url_keys({"type": "url", "url": "https://x/mcp"})
         assert out == {"type": "url", "endpoint_url": "https://x/mcp"}
         assert "url" not in out
 
-    def test_legacy_external_url_gets_renamed(self):
+    def test_external_url_alias_gets_renamed(self):
         from agentarea_mcp.application.service import _normalize_url_keys
 
         out = _normalize_url_keys({"type": "url", "external_url": "https://x/mcp"})
         assert out == {"type": "url", "endpoint_url": "https://x/mcp"}
         assert "external_url" not in out
 
-    def test_canonical_wins_over_legacy(self):
+    def test_canonical_wins_over_alias(self):
         from agentarea_mcp.application.service import _normalize_url_keys
 
         out = _normalize_url_keys(

@@ -20,7 +20,6 @@ from agentarea_governance.domain.enums import (
 )
 from agentarea_governance.domain.exceptions import EscalationRequired, GovernanceDenied
 from agentarea_governance.domain.models import InterceptorContext, InterceptorResult
-from agentarea_governance.interceptors.gates.capability_guard import CapabilityGuard
 from agentarea_governance.interceptors.gates.cost_budget_guard import CostBudgetGuard
 from agentarea_governance.pipeline import InterceptorPipeline
 from agentarea_governance.registry import InterceptorRegistry
@@ -118,6 +117,7 @@ class _FakeLLMResult:
 def _make_fn(name: str):
     async def fn():
         pass
+
     fn.__name__ = name
     return fn
 
@@ -243,30 +243,19 @@ class TestExecutionStateFromPolicy:
         assert not next_interceptor.called
 
     @pytest.mark.asyncio
-    async def test_capability_policy_denies_disallowed_tool(self):
+    async def test_tool_phase_denial_propagates_as_governance_denied(self):
+        # The bridge maps ``execute_mcp_tool_activity`` to PRE_TOOL_CALL and turns
+        # a gate DENY on that phase into GovernanceDenied without calling through.
         registry = InterceptorRegistry()
-        registry.register(CapabilityGuard(), Phase.PRE_TOOL_CALL, priority=200)
-        pipeline = InterceptorPipeline(registry)
-        next_interceptor = _FakeNextInterceptor()
-        bridge = GovernanceActivityInterceptor(next_interceptor, pipeline)
-        request = _FakeMCPToolRequest(
-            tool_name="shell_exec",
-            tool_args={},
-            effective_policy={"tools": {"allowed": ["web_*"], "denied": []}},
+        registry.register(
+            _MockInterceptor(action=InterceptorAction.DENY, reason="tool denied"),
+            Phase.PRE_TOOL_CALL,
+            priority=200,
         )
-        input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
-        with pytest.raises(GovernanceDenied):
-            await bridge.execute_activity(input)
-        assert not next_interceptor.called
-
-    @pytest.mark.asyncio
-    async def test_capability_policy_denies_missing_tool_policy(self):
-        registry = InterceptorRegistry()
-        registry.register(CapabilityGuard(), Phase.PRE_TOOL_CALL, priority=200)
         pipeline = InterceptorPipeline(registry)
         next_interceptor = _FakeNextInterceptor()
         bridge = GovernanceActivityInterceptor(next_interceptor, pipeline)
-        request = _FakeMCPToolRequest(tool_name="web_search", tool_args={})
+        request = _FakeMCPToolRequest(tool_name="shell_exec", tool_args={})
         input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
         with pytest.raises(GovernanceDenied):
             await bridge.execute_activity(input)
@@ -304,7 +293,9 @@ class TestGovernanceActivityInterceptor:
     @pytest.mark.asyncio
     async def test_gate_deny_raises(self):
         registry = InterceptorRegistry()
-        gate = _MockInterceptor("denier", InterceptorCategory.GATE, InterceptorAction.DENY, "blocked")
+        gate = _MockInterceptor(
+            "denier", InterceptorCategory.GATE, InterceptorAction.DENY, "blocked"
+        )
         registry.register(gate, Phase.PRE_LLM_CALL, priority=100)
         pipeline = InterceptorPipeline(registry)
         next_interceptor = _FakeNextInterceptor()
@@ -323,7 +314,9 @@ class TestGovernanceActivityInterceptor:
     @pytest.mark.asyncio
     async def test_gate_escalate_raises(self):
         registry = InterceptorRegistry()
-        gate = _MockInterceptor("escalator", InterceptorCategory.GATE, InterceptorAction.ESCALATE, "needs human")
+        gate = _MockInterceptor(
+            "escalator", InterceptorCategory.GATE, InterceptorAction.ESCALATE, "needs human"
+        )
         registry.register(gate, Phase.PRE_TOOL_CALL, priority=100)
         pipeline = InterceptorPipeline(registry)
         next_interceptor = _FakeNextInterceptor()
@@ -338,8 +331,11 @@ class TestGovernanceActivityInterceptor:
     async def test_post_phase_filter_modifies_output(self):
         registry = InterceptorRegistry()
         filt = _MockInterceptor(
-            "sanitizer", InterceptorCategory.FILTER,
-            InterceptorAction.MODIFY, "ok", modified_content="[REDACTED]",
+            "sanitizer",
+            InterceptorCategory.FILTER,
+            InterceptorAction.MODIFY,
+            "ok",
+            modified_content="[REDACTED]",
         )
         registry.register(filt, Phase.POST_LLM_CALL, priority=100)
         pipeline = InterceptorPipeline(registry)
@@ -367,7 +363,11 @@ class TestGovernanceWorkerInterceptor:
 
 class TestStartupValidation:
     def test_all_activities_present(self, caplog):
-        activities = ["call_llm_activity", "execute_mcp_tool_activity", "discover_available_tools_activity"]
+        activities = [
+            "call_llm_activity",
+            "execute_mcp_tool_activity",
+            "discover_available_tools_activity",
+        ]
         with caplog.at_level("WARNING"):
             validate_activity_mapping(activities)
         assert "not registered" not in caplog.text

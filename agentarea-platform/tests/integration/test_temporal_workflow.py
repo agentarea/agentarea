@@ -5,7 +5,8 @@ import asyncio
 import logging
 from uuid import uuid4
 
-from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.auth.context import UserContext
+from agentarea_common.config.database import get_db_session
 from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.temporal_task_manager import TemporalTaskManager
@@ -26,6 +27,7 @@ async def test_temporal_workflow():
         query="Hello, this is a test task",
         agent_id=uuid4(),
         user_id="test_user",
+        workspace_id="test-workspace-456",
         status="pending",
         task_parameters={},
     )
@@ -34,8 +36,12 @@ async def test_temporal_workflow():
 
     # Create task manager
     async for db_session in get_db_session():
-        task_repository = TaskRepository(db_session)
+        user_context = UserContext(user_id="test_user", workspace_id="test-workspace-456")
+        task_repository = TaskRepository(db_session, user_context)
         task_manager = TemporalTaskManager(task_repository)
+
+        # Persist the task first: submit_task only updates an existing row's status.
+        await task_repository.create_task(task_manager._agent_task_to_task(task))
 
         # Submit task
         logger.info("Submitting task to Temporal...")

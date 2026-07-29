@@ -2,7 +2,6 @@ import asyncio
 import inspect
 import logging
 import os
-import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -10,11 +9,12 @@ from uuid import UUID
 
 from agentarea_common.audit import audited
 from agentarea_common.base.service import BaseCrudService
-from agentarea_common.config import get_database
+from agentarea_common.config import get_database, get_settings
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_common.utils.slug import generate_slug
+from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
 
+from agentarea_mcp.application.auth_service import MCPAuthService, OAuthReauthRequiredError
 from agentarea_mcp.domain.events import (
     MCPServerCreated,
     MCPServerDeleted,
@@ -40,7 +40,12 @@ from agentarea_mcp.schemas.dto import (
     MCPServerInstanceUpdate,
     MCPServerUpdate,
 )
-from agentarea_mcp.verification import verify
+from agentarea_mcp.tool_serialization import serialize_mcp_tool
+from agentarea_mcp.verification import (
+    declared_remote_transport,
+    mcp_transport_candidates,
+    verify,
+)
 
 from .mcp_env_service import MCPEnvironmentService
 from .oauth_client_service import MCPOAuthClientService
@@ -51,12 +56,6 @@ logger = logging.getLogger(__name__)
 # Sentinel value for masked secrets — must match across backend and frontend
 SECRET_MASKED_VALUE = "*" * 6
 INSTANCE_TRANSPORT_FIELDS = {"type", "endpoint_url", "image", "command", "args"}
-SECRET_HEADER_NAMES = {
-    "authorization",
-    "cookie",
-    "proxy-authorization",
-    "x-api-key",
-}
 
 
 def _lazy_mcp_provisioning_enabled() -> bool:
@@ -72,12 +71,26 @@ def _is_lazy_instance(instance: MCPServerInstance) -> bool:
     return bool((instance.json_spec or {}).get("lazy_provisioning"))
 
 
+def needs_lazy_provisioning(instance: MCPServerInstance) -> bool:
+    """True when this instance is started on demand and is not running now.
+
+    Every caller that dispatches to an instance has to answer this, and there is
+    more than one such caller: the agent tool path and the MCP proxy. Keeping the
+    predicate in one place is what stops them from disagreeing about when an
+    instance needs bringing back up.
+    """
+    return (
+        _lazy_mcp_provisioning_enabled()
+        and _is_lazy_instance(instance)
+        and (instance.verification or {}).get("status") != "succeeded"
+    )
+
+
 def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
     """Canonical key for URL-type instances is `endpoint_url`.
 
-    Historically some callers (and the validation layer) accepted `url` or the
-    legacy `external_url`. Normalize on the way in so downstream code only has
-    to read one key.
+    Callers (and the validation layer) also accept `url` and `external_url`.
+    Normalize on the way in so downstream code only has to read one key.
     """
     if spec.get("type") != "url":
         return spec
@@ -186,21 +199,8 @@ class MCPServerService(BaseCrudService[MCPServer]):
         self.event_broker = event_broker
 
     async def _resolve_unique_slug(self, name: str) -> str:
-        """Generate a workspace-unique slug from ``name``.
-
-        Tries ``base``, then ``base-2``, ``base-3``, ... up to ``base-999``.
-        """
-        base = generate_slug(name)
-
-        if await self.repository.get_by_slug(base) is None:
-            return base
-
-        for suffix in range(2, 1000):
-            candidate = f"{base}-{suffix}"
-            if await self.repository.get_by_slug(candidate) is None:
-                return candidate
-
-        raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
+        """Delegate to the repository (single source of truth for slug uniqueness)."""
+        return await self.repository.resolve_unique_slug(name)
 
     async def get_by_slug(self, slug: str) -> MCPServer | None:
         """Get an MCP server spec by workspace-scoped slug."""
@@ -340,21 +340,12 @@ class MCPServerInstanceService:
     def _get_secret_env_names(self, env_schema: list[dict[str, Any]]) -> set[str]:
         return {e["name"] for e in env_schema if isinstance(e, dict) and e.get("isSecret")}
 
-    def _is_secret_header_name(self, name: str) -> bool:
-        lower = name.lower()
-        return (
-            lower in SECRET_HEADER_NAMES
-            or lower.startswith("x-auth-")
-            or lower.endswith("-token")
-            or lower.endswith("-secret")
-            or lower.endswith("-key")
-        )
-
-    def _is_secret_env_name(self, name: str) -> bool:
-        upper = name.upper()
-        return bool(re.search(r"(_TOKEN|_SECRET|_KEY|_PASSWORD|_API_KEY|_DSN)$", upper))
-
     def _derive_env_schema_from_instance_spec(self, spec: dict[str, Any]) -> list[dict[str, Any]]:
+        """Derive an env_schema when an instance is created without an explicit
+        spec. There is no declared schema to read here, so we never guess a
+        variable's sensitivity from its name — every field defaults to secret.
+        The caller can mark a value as plain config explicitly via env_schema.
+        """
         env_schema: list[dict[str, Any]] = []
         headers = spec.get("headers")
         if isinstance(headers, dict):
@@ -363,7 +354,7 @@ class MCPServerInstanceService:
                     {
                         "name": str(name),
                         "description": f"HTTP header {name}",
-                        "isSecret": self._is_secret_header_name(str(name)),
+                        "isSecret": True,
                     }
                 )
         environment = spec.get("environment")
@@ -373,7 +364,7 @@ class MCPServerInstanceService:
                     {
                         "name": str(name),
                         "description": f"Environment variable {name}",
-                        "isSecret": self._is_secret_env_name(str(name)),
+                        "isSecret": True,
                     }
                 )
         return env_schema
@@ -391,6 +382,7 @@ class MCPServerInstanceService:
 
         server = MCPServer(
             name=payload.name,
+            slug=await self.mcp_server_repository.resolve_unique_slug(payload.name),
             description=payload.description or payload.name,
             docker_image_url=transport_spec.get("image") if spec_type == "docker" else None,
             remote_url=transport_spec.get("endpoint_url") if spec_type == "url" else None,
@@ -484,6 +476,7 @@ class MCPServerInstanceService:
         """
         copy = MCPServer(
             name=source.name,
+            slug=await self.mcp_server_repository.resolve_unique_slug(source.name),
             description=source.description or source.name,
             docker_image_url=source.docker_image_url,
             version=source.version or "1.0.0",
@@ -545,6 +538,22 @@ class MCPServerInstanceService:
             # correctly (a missing type defaults to docker and mis-runs container
             # health checks against a url-type connection).
             spec.setdefault("type", instance_type)
+
+            # Record whether this instance is serverless — started on its first
+            # call and reclaimed once idle. Nothing else ever writes this field,
+            # so without stamping it here MCP_LAZY_PROVISIONING_ENABLED changes
+            # nothing: both the provisioning path and the reaper key off the
+            # instance, not the platform flag, and every instance stays eager and
+            # runs forever.
+            #
+            # Stored explicitly rather than left absent so the decision is the one
+            # in force when the instance was created. Flipping the platform flag
+            # later must not retroactively change how long existing instances
+            # live — an instance created eagerly was asked to stay up.
+            #
+            # url-type instances have no container to start or stop.
+            if instance_type != "url":
+                spec.setdefault("lazy_provisioning", _lazy_mcp_provisioning_enabled())
 
             create_kwargs: dict[str, Any] = {
                 "name": name,
@@ -627,8 +636,13 @@ class MCPServerInstanceService:
         server_payload: MCPServerCreate,
         instance_payload: MCPServerInstanceCreate,
     ) -> MCPServerInstance | None:
+        # `slug` is NOT NULL; route through the repository's single slug resolver
+        # so this path can't drift from the others (it previously omitted slug
+        # entirely -> NotNullViolationError 500 on the UI "Add Server").
+        slug = await self.mcp_server_repository.resolve_unique_slug(server_payload.name)
         server = MCPServer(
             name=server_payload.name,
+            slug=slug,
             description=server_payload.description,
             docker_image_url=server_payload.docker_image_url,
             version=server_payload.version,
@@ -723,9 +737,61 @@ class MCPServerInstanceService:
                     logger.debug("bundle member %s lookup failed: %s", mid, e)
             return derive_bundle_verification(instance, members)
 
-        extra_headers = await self._resolve_auth_headers(instance)
-        payload = await verify(instance, extra_headers=extra_headers or None)
+        try:
+            extra_headers = await self._resolve_auth_headers(instance)
+        except OAuthReauthRequiredError:
+            return await self._store_reauth_required(instance.id)
+
+        # User-initiated (Verify / Refresh Tools) → force a re-run so a stale
+        # in_progress from an interrupted verify can't wedge the row in "verifying".
+        payload = await verify(instance, extra_headers=extra_headers or None, force=True)
+
+        # Reactive re-auth: the upstream rejected our token (401/403) and this
+        # instance has an OAuth config → force one refresh and retry once. If the
+        # session can't be renewed, surface an actionable "reconnect" state
+        # instead of the raw 401/403.
+        if instance.auth_config_id and self._is_auth_error_payload(payload):
+            try:
+                extra_headers = await self._resolve_auth_headers(instance, force_refresh=True)
+            except OAuthReauthRequiredError:
+                return await self._store_reauth_required(instance.id)
+            payload = await verify(instance, extra_headers=extra_headers or None, force=True)
+
         return dict(payload)
+
+    @staticmethod
+    def _is_auth_error_payload(payload: Any) -> bool:
+        """True when a verification failure looks like an upstream 401/403.
+
+        The verification payload is a plain (TypedDict) mapping.
+        """
+        if not isinstance(payload, dict) or payload.get("status") != "failed":
+            return False
+        error = payload.get("error") or {}
+        message = (error.get("message") if isinstance(error, dict) else "") or ""
+        return any(marker in message for marker in ("401", "403", "Unauthorized", "Forbidden"))
+
+    async def _store_reauth_required(self, instance_id: UUID) -> dict:
+        """Persist and return a verification payload asking the user to reconnect."""
+        from agentarea_mcp.domain.verification_types import (
+            VERIFICATION_SCHEMA_VERSION,
+        )
+
+        payload = {
+            "schema_version": VERIFICATION_SCHEMA_VERSION,
+            "status": "failed",
+            "at": datetime.now(UTC).isoformat(),
+            "error": {
+                "code": "oauth_reauth_required",
+                "message": "OAuth session expired or was revoked. Reconnect with OAuth.",
+                "detail": None,
+            },
+        }
+        try:
+            await self.repository.update(instance_id, verification=payload)
+        except Exception:
+            logger.warning("Failed to persist reauth state for %s", instance_id, exc_info=True)
+        return payload
 
     async def discover_and_store_tools(self, instance_id: UUID) -> dict:
         """Re-run verification (which lists tools and persists them) and return tools.
@@ -738,18 +804,20 @@ class MCPServerInstanceService:
         tools = (instance.tools if instance else None) or []
         return {"tools": tools, "verification": verification_payload}
 
-    async def _resolve_auth_headers(self, instance: MCPServerInstance) -> dict[str, str]:
+    async def _resolve_auth_headers(
+        self, instance: MCPServerInstance, *, force_refresh: bool = False
+    ) -> dict[str, str]:
         """Resolve auth headers (Bearer / API key) from instance.auth_config_id.
 
-        Returns an empty dict if no auth config is attached or resolution fails.
-        Logged on failure but never raises — callers may still proceed and
-        receive a 401 from the upstream MCP server, which is the more
-        actionable error to surface to the user.
+        Returns an empty dict if no auth config is attached or resolution fails
+        for a non-actionable reason. ``force_refresh`` forces an OAuth token
+        refresh (used to react to an upstream 401/403). Propagates
+        :class:`OAuthReauthRequiredError` so callers can surface a "reconnect" state
+        instead of a raw upstream 401/403.
         """
         if not instance.auth_config_id:
             return {}
         try:
-            from agentarea_mcp.application.auth_service import MCPAuthService
             from agentarea_mcp.infrastructure.auth_repository import (
                 MCPAuthConfigRepository,
             )
@@ -761,7 +829,9 @@ class MCPServerInstanceService:
             auth_config = await auth_service.get(instance.auth_config_id)
             if not auth_config:
                 return {}
-            return await auth_service.get_auth_headers(auth_config)
+            return await auth_service.get_auth_headers(auth_config, force_refresh=force_refresh)
+        except OAuthReauthRequiredError:
+            raise
         except Exception:
             logger.warning(
                 "Failed to resolve auth headers for instance %s",
@@ -911,7 +981,7 @@ class MCPServerInstanceService:
         # Non-bundle: check verification status
         verification = instance.verification or {}
         if verification.get("status") != "succeeded":
-            if _lazy_mcp_provisioning_enabled() and _is_lazy_instance(instance):
+            if needs_lazy_provisioning(instance):
                 logger.info(
                     "Lazy MCP provisioning on first tool call: instance=%s tool=%s",
                     server_instance_id,
@@ -948,7 +1018,7 @@ class MCPServerInstanceService:
             )
 
         try:
-            mcp_url, headers = await self._resolve_mcp_url_and_headers(instance)
+            mcp_url, headers, transport = await self._resolve_mcp_url_and_headers(instance)
         except Exception as e:
             return _fail(
                 f"MCP '{instance.name}' is not available (cannot resolve URL: {e}). "
@@ -970,6 +1040,7 @@ class MCPServerInstanceService:
                 tool_name,
                 tool_args,
                 httpx_client_factory=httpx_client_factory,
+                transport=transport,
             )
         except Exception as e:
             logger.error(
@@ -1026,13 +1097,14 @@ class MCPServerInstanceService:
 
     async def _resolve_mcp_url_and_headers(
         self, instance: MCPServerInstance
-    ) -> tuple[str, dict[str, str]]:
+    ) -> tuple[str, dict[str, str], str | None]:
         transport_spec = await self._get_transport_spec_for_instance(instance)
         mcp_url = self._endpoint_url_from_spec(instance, transport_spec)
         if not mcp_url:
             raise RuntimeError(
                 f"Instance {instance.id} has no endpoint URL (missing url/external_url in json_spec)"
             )
+        transport = declared_remote_transport(transport_spec)
 
         headers: dict[str, str] = {}
         custom_headers = transport_spec.get("headers")
@@ -1054,7 +1126,7 @@ class MCPServerInstanceService:
             except Exception as e:
                 logger.warning("Failed to resolve auth headers for instance %s: %s", instance.id, e)
 
-        return mcp_url, headers
+        return mcp_url, headers, transport
 
     async def _call_tool_via_mcp(
         self,
@@ -1063,31 +1135,37 @@ class MCPServerInstanceService:
         tool_name: str,
         tool_args: dict[str, Any],
         httpx_client_factory: Callable[..., Any] | None = None,
+        transport: str | None = None,
     ):
         from mcp import ClientSession
         from mcp.shared._httpx_utils import create_mcp_http_client
 
-        streamable_url, sse_url = self._mcp_transport_urls(mcp_url)
+        streamable_urls, sse_url = mcp_transport_candidates(mcp_url, transport)
 
-        try:
-            from mcp.client.streamable_http import streamablehttp_client
+        last_err: BaseException | None = None
+        for streamable_url in streamable_urls:
+            try:
+                from mcp.client.streamable_http import streamablehttp_client
 
-            async with streamablehttp_client(
-                streamable_url,
-                timeout=timedelta(seconds=30),
-                headers=headers or None,
-                httpx_client_factory=httpx_client_factory or create_mcp_http_client,
-            ) as (read_stream, write_stream, _):
-                async with ClientSession(read_stream, write_stream) as session:
-                    await session.initialize()
-                    return await session.call_tool(tool_name, tool_args)
-        except Exception as e:
-            logger.info(
-                "Streamable HTTP call failed for %s (%s), trying SSE at %s",
-                streamable_url,
-                e,
-                sse_url,
-            )
+                async with streamablehttp_client(
+                    streamable_url,
+                    timeout=timedelta(seconds=30),
+                    headers=headers or None,
+                    httpx_client_factory=httpx_client_factory or create_mcp_http_client,
+                ) as (read_stream, write_stream, _):
+                    async with ClientSession(read_stream, write_stream) as session:
+                        await session.initialize()
+                        return await session.call_tool(tool_name, tool_args)
+            except Exception as e:
+                last_err = e
+                logger.info(
+                    "Streamable HTTP call failed for %s (%s), trying next transport",
+                    streamable_url,
+                    e,
+                )
+
+        if sse_url is None:
+            raise last_err or RuntimeError(f"No usable MCP transport for {mcp_url}")
 
         from mcp.client.sse import sse_client
 
@@ -1104,27 +1182,34 @@ class MCPServerInstanceService:
                 await session.initialize()
                 return await session.call_tool(tool_name, tool_args)
 
-    async def _list_tools_via_mcp(self, mcp_url: str, headers: dict[str, str]):
+    async def _list_tools_via_mcp(
+        self, mcp_url: str, headers: dict[str, str], transport: str | None = None
+    ):
         from mcp import ClientSession
 
-        streamable_url, sse_url = self._mcp_transport_urls(mcp_url)
+        streamable_urls, sse_url = mcp_transport_candidates(mcp_url, transport)
 
-        try:
-            from mcp.client.streamable_http import streamablehttp_client
+        last_err: BaseException | None = None
+        for streamable_url in streamable_urls:
+            try:
+                from mcp.client.streamable_http import streamablehttp_client
 
-            async with streamablehttp_client(
-                streamable_url, timeout=timedelta(seconds=10), headers=headers or None
-            ) as (read_stream, write_stream, _):
-                async with ClientSession(read_stream, write_stream) as session:
-                    await session.initialize()
-                    return await session.list_tools()
-        except Exception as e:
-            logger.info(
-                "Streamable HTTP failed for %s (%s), trying SSE at %s",
-                streamable_url,
-                e,
-                sse_url,
-            )
+                async with streamablehttp_client(
+                    streamable_url, timeout=timedelta(seconds=10), headers=headers or None
+                ) as (read_stream, write_stream, _):
+                    async with ClientSession(read_stream, write_stream) as session:
+                        await session.initialize()
+                        return await session.list_tools()
+            except Exception as e:
+                last_err = e
+                logger.info(
+                    "Streamable HTTP failed for %s (%s), trying next transport",
+                    streamable_url,
+                    e,
+                )
+
+        if sse_url is None:
+            raise last_err or RuntimeError(f"No usable MCP transport for {mcp_url}")
 
         from mcp.client.sse import sse_client
 
@@ -1136,24 +1221,26 @@ class MCPServerInstanceService:
                 await session.initialize()
                 return await session.list_tools()
 
-    @staticmethod
-    def _mcp_transport_urls(mcp_url: str) -> tuple[str, str]:
-        base = mcp_url.rstrip("/")
-        if base.endswith("/sse"):
-            return base[:-4] + "/mcp", base
-        if base.endswith("/mcp"):
-            return base, base[:-4] + "/sse"
-        return base + "/mcp", base + "/sse"
-
     async def validate_connection(
         self, url: str, headers: dict[str, str] | None = None
     ) -> dict[str, Any]:
         if not url:
             return {"valid": False, "errors": ["URL is required"]}
 
+        # This endpoint returns the upstream tool list to the caller, so an
+        # unguarded URL here is a full-read SSRF, not a blind one. Refuse before
+        # dialing: a check after the request would still reach the internal host.
+        try:
+            validate_outbound_url(url, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
+        except UnsafeUrlError:
+            # Deliberately generic: a specific reason would turn this into a DNS
+            # oracle telling the caller which internal names resolve.
+            logger.warning("Refused MCP connection validation for a non-public URL", exc_info=True)
+            return {"valid": False, "errors": ["URL is not allowed"]}
+
         try:
             result = await self._list_tools_via_mcp(url, headers or {})
-            tools = [{"name": t.name, "description": t.description or ""} for t in result.tools]
+            tools = [serialize_mcp_tool(t) for t in result.tools]
             return {
                 "valid": True,
                 "errors": [],
@@ -1207,7 +1294,9 @@ class MCPServerInstanceService:
                 if resp.status_code in (200, 405):
                     return {"status": "ok", "methods": ["none"]}
 
-                if resp.status_code == 401:
+                # 401 is the spec'd auth challenge; some servers (e.g. Vercel)
+                # answer an unauthenticated request with 403 — treat both the same.
+                if resp.status_code in (401, 403):
                     www_auth = resp.headers.get("www-authenticate", "")
                     has_oauth = (
                         "resource_metadata" in www_auth.lower() or "bearer" in www_auth.lower()

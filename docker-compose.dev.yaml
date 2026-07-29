@@ -30,6 +30,11 @@ services:
       # MCP settings
       - MCP_MANAGER_URL=http://mcp-manager:80
       - MCP_GATEWAY_URL=http://agentarea-traefik:8080
+      # Serverless MCPs: a container-backed instance is started on its first
+      # call and stopped again once idle (MCP_IDLE_TIMEOUT on mcp-manager),
+      # instead of running from creation until someone deletes it. The instance
+      # records this at creation, so the flag governs new instances only.
+      - MCP_LAZY_PROVISIONING_ENABLED=${MCP_LAZY_PROVISIONING_ENABLED:-true}
       - REDIS_URL=redis://valkey:6379
       - MCP_CLIENT_TIMEOUT=30
       # Hydra OAuth2 AS
@@ -268,6 +273,10 @@ services:
     volumes:
       - ./agentarea-mcp-manager:/app:rw # Mount source code for live reload
       - /var/run/docker.sock:/var/run/docker.sock # Docker socket for container management
+      # Where `deploy/sandbox-host` writes the execution cluster's kubeconfig.
+      # Mounted read-only and unused unless MCP_BACKEND_TYPE selects kubernetes;
+      # see the environment block below.
+      - ./deploy/sandbox-host:/etc/agentarea/exec:ro
     networks:
       - mcp-network
       - default
@@ -281,10 +290,43 @@ services:
       REDIS_URL: redis://valkey:6379
       CORE_API_URL: http://agentarea-backend:8000
       CONTAINER_RUNTIME: docker
+      # Where MCP servers and agent sandboxes run.
+      #
+      #   docker      (default) — on this host's Docker daemon, i.e. beside the
+      #                control plane, on its kernel. Fine for development.
+      #   kubernetes  — on the cluster named by KUBERNETES_KUBECONFIG, under the
+      #                runtime class below. This is how you point the stack at
+      #                the gVisor host provisioned by deploy/sandbox-host with
+      #                sandbox_k3s_enabled=true:
+      #
+      #     MCP_BACKEND_TYPE=kubernetes
+      #     MCP_EXECUTION_KUBECONFIG=/etc/agentarea/exec/execution-cluster.kubeconfig
+      #     MCP_RUNTIME_CLASS=gvisor
+      #
+      # An unrecognised value is refused at startup rather than quietly
+      # auto-detected, so a typo cannot land untrusted workloads here.
+      BACKEND_TYPE: ${MCP_BACKEND_TYPE:-docker}
+      KUBERNETES_KUBECONFIG: ${MCP_EXECUTION_KUBECONFIG:-}
+      KUBERNETES_RUNTIME_CLASS: ${MCP_RUNTIME_CLASS:-}
+      # Cold start of git/uvx-based MCP servers (clone + install ~90s) needs more
+      # than the 120s default before a container is declared unhealthy.
+      STARTUP_TIMEOUT: 300s
+      # Stop lazily-provisioned MCP instances that have gone unused this long;
+      # the next call brings them back. Only instances created as lazy are
+      # eligible — eager ones were asked to stay up. 0 disables reclaiming.
+      MCP_IDLE_TIMEOUT: ${MCP_IDLE_TIMEOUT:-10m}
+      MCP_IDLE_SWEEP_INTERVAL: ${MCP_IDLE_SWEEP_INTERVAL:-60s}
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
       SANDBOX_EMBEDDED_RUNNER: "true"
       SANDBOX_EXECUTOR_URL: http://sandbox-executor:8080
+      SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:-agentarea-dev-sandbox-activation-secret-change-me}
+      SANDBOX_CLEANUP_AUTH_SECRET: ${SANDBOX_CLEANUP_AUTH_SECRET:-agentarea-dev-sandbox-cleanup-secret-change-me}
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
+      AWS_REGION: ${RUSTFS_REGION:-us-east-1}
+      ARTIFACTS_BUCKET_NAME: ${ARTIFACTS_BUCKET:-artifacts}
+      AWS_ENDPOINT_URL: http://rustfs:9000
       # Secret manager configuration
       SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
       # Database secret manager settings
@@ -295,25 +337,34 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       SECRET_MANAGER_ENCRYPTION_KEY: ${SECRET_MANAGER_ENCRYPTION_KEY}
 
-  # Sandbox executor — isolated script runner (simulates warm pool pod in dev)
+  # Sandbox executor — isolated script runner (simulates warm pool pod in dev).
+  # Same unified runtime image as the prod warm-pool runner (Dockerfile.runner).
   sandbox-executor:
     image: agentarea/sandbox-executor:${VERSION:-latest}
     build:
       context: agentarea-mcp-manager
-      dockerfile: Dockerfile.sandbox
+      dockerfile: Dockerfile.runner
+      args:
+        # Stamped into /etc/agentarea/runtime.json and served at
+        # /runtime/manifest. Dockerfile.runner declares no default, so this must
+        # be stated here — "dev" is the honest answer for a local build, and it
+        # is now a claim this file makes rather than one the image invents.
+        APP_VERSION: ${VERSION:-dev}
       platforms:
         - linux/amd64
         - linux/arm64
     container_name: sandbox-executor
     restart: unless-stopped
     tmpfs:
-      - /tmp
-      - /workspace
+      - /tmp:mode=1777
+      - /workspace:mode=1777
     networks:
       - mcp-network
       - default
     environment:
       ACTIVATION_PORT: "8080"
+      HOME: /home/sandbox
+      SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:-agentarea-dev-sandbox-activation-secret-change-me}
 
   # Temporal Infrastructure Services
   temporal:
@@ -424,6 +475,12 @@ services:
       # MCP settings
       - MCP_MANAGER_URL=http://mcp-manager:80
       - MCP_GATEWAY_URL=http://agentarea-traefik:8080
+      # Serverless MCPs: a container-backed instance is started on its first
+      # call and stopped again once idle (MCP_IDLE_TIMEOUT on mcp-manager),
+      # instead of running from creation until someone deletes it. The instance
+      # records this at creation, so the flag governs new instances only.
+      - MCP_LAZY_PROVISIONING_ENABLED=${MCP_LAZY_PROVISIONING_ENABLED:-true}
+      - SANDBOX_CLEANUP_AUTH_SECRET=${SANDBOX_CLEANUP_AUTH_SECRET:-agentarea-dev-sandbox-cleanup-secret-change-me}
 
       # Task execution
       - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
@@ -463,13 +520,13 @@ services:
         condition: service_healthy
     environment:
       - RCLONE_CONFIG_RUSTFS_TYPE=s3
-      - RCLONE_CONFIG_RUSTFS_PROVIDER=Rustfs
+      - RCLONE_CONFIG_RUSTFS_PROVIDER=Other
       - RCLONE_CONFIG_RUSTFS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
       - RCLONE_CONFIG_RUSTFS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
       - RCLONE_CONFIG_RUSTFS_ENDPOINT=http://rustfs:9000
       - RCLONE_CONFIG_RUSTFS_ACL=private
     entrypoint: ["/bin/sh", "-c"]
-    command: ["rclone mkdir rustfs:${DOCUMENTS_BUCKET:-documents} || true && rclone mkdir rustfs:${ARTIFACTS_BUCKET:-artifacts} || true && echo 'Buckets created successfully'"]
+    command: ["rclone mkdir rustfs:${DOCUMENTS_BUCKET:-documents} && rclone mkdir rustfs:${ARTIFACTS_BUCKET:-artifacts} && echo 'Buckets created successfully'"]
     networks:
       - default
 
@@ -519,8 +576,11 @@ services:
     environment:
       DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
       LOG_LEVEL: debug
-      # SMTP Configuration - Override courier settings via environment variables
-      COURIER_SMTP_CONNECTION_URI: "${SMTP_PROTOCOL}://${SMTP_USERNAME}:${SMTP_PASSWORD}@${SMTP_HOST}:${SMTP_PORT}/?skip_ssl_verify=${SMTP_SKIP_SSL_VERIFY}"
+      # SMTP Configuration - Override courier settings via environment variables.
+      # disable_starttls defaults to true because the bundled dev catcher (mailpit)
+      # speaks plain SMTP on :1025 with no STARTTLS; set SMTP_DISABLE_STARTTLS=false
+      # (and SMTP_PROTOCOL=smtps) when pointing at a real TLS-capable provider.
+      COURIER_SMTP_CONNECTION_URI: "${SMTP_PROTOCOL}://${SMTP_USERNAME}:${SMTP_PASSWORD}@${SMTP_HOST}:${SMTP_PORT}/?skip_ssl_verify=${SMTP_SKIP_SSL_VERIFY}&disable_starttls=${SMTP_DISABLE_STARTTLS:-true}"
       COURIER_SMTP_FROM_ADDRESS: ${SMTP_FROM_EMAIL}
       COURIER_SMTP_FROM_NAME: ${SMTP_FROM_NAME}
       SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_CLIENT_ID: ${OIDC_GOOGLE_CLIENT_ID:-}
@@ -540,8 +600,10 @@ services:
     restart: unless-stopped
 
   # Ory Keto ReBAC migration
+  # Opt-in only (OpenFGA is the default backend). Enable with: --profile keto
   keto-migrate:
     image: oryd/keto:v0.12.0
+    profiles: ["keto"]
     environment:
       DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KETO_DB:-keto}?sslmode=disable&max_conns=20&max_idle_conns=4
     command: migrate up -y -c /etc/config/keto/keto.yml
@@ -556,8 +618,10 @@ services:
         condition: service_completed_successfully
 
   # Ory Keto ReBAC permission server
+  # Opt-in only (OpenFGA is the default backend). Enable with: --profile keto
   keto:
     image: oryd/keto:v0.12.0
+    profiles: ["keto"]
     ports:
       - "4466:4466" # read API
       - "4467:4467" # write API
@@ -647,14 +711,25 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
-  # MailSlurper for email testing (catches emails in development)
-  mailslurper:
-    image: oryd/mailslurper:latest-smtps
+  # Mailpit — dev email catcher (SMTP sink + web UI + REST API).
+  # Captured mail is persisted to
+  # ./data/mailpit so it survives container recreation. Nothing depends_on this
+  # service: Kratos' courier retries delivery, so a slow mailpit start is harmless.
+  mailpit:
+    image: axllent/mailpit:v1.30.2
     ports:
-      - "4436:4436" # web UI
-      - "4437:4437" # SMTP
+      - "8025:8025" # web UI + REST API (GET /api/v1/messages)
+      # SMTP (1025) stays internal on auth-network; Kratos reaches it as mailpit:1025
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      # The dev courier link is plain SMTP; accept whatever creds it sends.
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    volumes:
+      - ./data/mailpit:/data
     networks:
       - auth-network
+    restart: unless-stopped
 
   # Hydra DB Migration
   hydra-migrate:

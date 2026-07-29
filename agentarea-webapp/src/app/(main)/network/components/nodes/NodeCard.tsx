@@ -82,25 +82,24 @@ export default function NodeCard({
   return (
     <div
       className={cn(
-        "group flex w-[168px] flex-col items-center transition-opacity duration-200",
+        "group flex w-[192px] flex-col items-center transition-opacity duration-200",
         dimmed && !highlighted && "opacity-25"
       )}
     >
       <div
         className={cn(
-          "relative w-full overflow-hidden rounded-lg border bg-white/90 px-3 py-2 shadow-[0_12px_34px_rgba(15,23,42,0.08)] ring-4 ring-transparent backdrop-blur transition-all",
-          "group-hover:-translate-y-0.5 group-hover:shadow-[0_18px_44px_rgba(15,23,42,0.12)]",
+          "relative w-full overflow-hidden rounded-xl border bg-white/95 px-3 py-2.5 shadow-[0_6px_18px_rgba(51,65,85,0.09)] ring-2 ring-transparent backdrop-blur transition-all",
+          "group-hover:-translate-y-0.5 group-hover:shadow-[0_10px_26px_rgba(51,65,85,0.14)]",
           c.border,
           c.bg,
           c.ring,
           riskLevel === "critical" && "border-red-400 dark:border-red-700",
           riskLevel === "warning" && "ring-orange-100 dark:ring-orange-900/30",
           highlighted &&
-            "border-blue-500 ring-blue-200 dark:border-blue-400 dark:ring-blue-900/60"
+            "border-[#4f67e8] ring-indigo-200 dark:border-indigo-400 dark:ring-indigo-900/60"
         )}
       >
-        <span className={cn("absolute inset-x-0 top-0 h-0.5", c.accent)} />
-        <span className="pointer-events-none absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(37,99,235,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(37,99,235,0.07)_1px,transparent_1px)] [background-size:18px_18px]" />
+        <span className={cn("absolute inset-y-0 left-0 w-1", c.accent)} />
         {hasTarget && (
           <Handle
             type="target"
@@ -117,20 +116,20 @@ export default function NodeCard({
           className="!pointer-events-none !h-1 !w-1 !border-0 !bg-transparent !opacity-0"
         />
 
-        <div className="relative flex items-start gap-2.5">
+        <div className="relative flex items-center gap-2.5">
           <span
             className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/80 bg-white/85 shadow-sm dark:border-zinc-700/70 dark:bg-zinc-900/80",
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/80 bg-white/90 shadow-sm dark:border-zinc-700/70 dark:bg-zinc-900/80",
               c.icon
             )}
           >
             {icon}
           </span>
-          <div className="min-w-0 flex-1 pt-0.5">
+          <div className="min-w-0 flex-1">
             <p className="truncate text-[12px] font-semibold leading-tight text-zinc-950 dark:text-zinc-50">
               {label}
             </p>
-            <p className="mt-1 truncate text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 truncate font-mono text-[9px] font-medium uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
               {subtitle}
             </p>
             {(badge || href) && (

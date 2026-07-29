@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentarea-triggers"
-version = "0.0.12"
+version = "0.0.13"
 description = "Trigger system functionality for AgentArea"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.12"
@@ -12,6 +12,7 @@ dependencies = [
     "agentarea-common",
     "pydantic>=2.4.2",
     "temporalio>=1.0.0",
+    "aiosmtplib>=3.0",
 ]
 
 [tool.uv.sources]

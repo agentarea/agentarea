@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/container"
 	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
 )
 
@@ -44,6 +46,7 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 
 	// Health check
 	router.GET("/health", h.healthCheck)
+	router.GET("/runtime/manifest", h.runtimeManifest)
 
 	// Instance management (backend-agnostic)
 	router.GET("/instances", h.listInstances)
@@ -67,12 +70,13 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	router.POST("/sandbox/executions", h.createSandboxExecution)
 	router.GET("/sandbox/executions/:id", h.getSandboxExecution)
 	router.POST("/sandbox/executions/:id/events", h.applySandboxExecutionEvent)
-	router.POST("/sandbox/execute", h.executeSandbox)
-	// Per-workflow sandbox teardown — invoked by Temporal workflow finalizer.
-	// Warm pool path: retires the pod assigned to this workflow.
-	router.DELETE("/sandbox/workflow/:id", h.deleteSandboxWorkflow)
+	// Sandbox file API: the file tool writes to the same filesystem bash uses.
+	router.PUT("/sandbox/files", h.sandboxFiles)
+	router.GET("/sandbox/files", h.sandboxFiles)
+	// Per-task sandbox teardown, invoked by the Temporal workflow finalizer.
+	router.DELETE("/sandbox/task/:id", h.deleteSandboxTask)
 
-	// Legacy container endpoints for backward compatibility (only when container manager is available)
+	// Container endpoints — only the Docker backend supplies a container manager.
 	if h.containerManager != nil {
 		router.GET("/containers", h.listContainers)
 		router.POST("/containers", h.createContainer)
@@ -84,6 +88,39 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 		router.GET("/containers/:service/health/detailed", h.getDetailedContainerHealth)
 		router.GET("/containers/health", h.healthCheckContainers)
 	}
+}
+
+type runtimeManifestProvider interface {
+	RuntimeManifest(context.Context, string) (*runtimeinfo.Manifest, error)
+}
+
+func (h *Handler) runtimeManifest(c *gin.Context) {
+	packageInstall := c.DefaultQuery("package_install", runtimeinfo.PackageInstallAllowed)
+	if err := runtimeinfo.ValidatePackageInstall(packageInstall); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_package_install",
+			"message": err.Error(),
+		})
+		return
+	}
+	provider, ok := h.backend.(runtimeManifestProvider)
+	if !ok {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "runtime_manifest_unavailable",
+			"message": "sandbox backend does not expose a runtime manifest",
+		})
+		return
+	}
+	manifest, err := provider.RuntimeManifest(c.Request.Context(), packageInstall)
+	if err != nil {
+		h.logger.Warn("Runtime manifest discovery failed", slog.String("error", err.Error()))
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "runtime_manifest_unavailable",
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, manifest)
 }
 
 // healthCheck returns the health status of the service
@@ -179,6 +216,16 @@ func (h *Handler) createInstance(c *gin.Context) {
 			req.Environment = make(map[string]string)
 		}
 		for k, v := range environment {
+			if _, exists := req.Environment[k]; !exists {
+				req.Environment[k] = v
+			}
+		}
+
+		// Resolve secret env vars (json_spec.env_vars -> encrypted_secrets) and
+		// merge them in. This HTTP path owns provisioning, so secrets must be
+		// injected here — they are stripped out of json_spec.environment at create
+		// time and only their names travel in the spec. Request-level env wins.
+		for k, v := range h.containerManager.ResolveSecretEnvVars(req.InstanceID, req.JSONSpec) {
 			if _, exists := req.Environment[k]; !exists {
 				req.Environment[k] = v
 			}
@@ -561,8 +608,6 @@ func (h *Handler) healthCheckInstances(c *gin.Context) {
 		})
 	}
 }
-
-// Legacy container management methods (for backward compatibility)
 
 // listContainers returns a list of all managed containers
 func (h *Handler) listContainers(c *gin.Context) {

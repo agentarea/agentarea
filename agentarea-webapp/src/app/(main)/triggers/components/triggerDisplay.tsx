@@ -1,30 +1,46 @@
 import { createElement } from "react";
 import {
   Clock,
+  CreditCard,
   Github,
   Hash,
+  ListTodo,
   Mail,
   MessageSquare,
   Send,
+  Users,
   Webhook,
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import type { TriggerResponse } from "@/api/client/types.gen";
 
 export interface TriggerCatalogEntry {
   id?: string;
   name?: string;
   icon?: string;
+  description?: string;
+  kind?: string;
   webhook_type?: string;
   data_extractor?: string;
 }
 
+export type EnrichedTrigger = TriggerResponse & {
+  agent_name?: string;
+  next_run_at?: string | null;
+};
+
 export interface TriggerLike {
   trigger_type?: string;
-  webhook_type?: string;
-  data_extractor?: string;
+  webhook_type?: string | null;
+  data_extractor?: string | null;
+  cron_expression?: string | null;
+  is_active?: boolean;
+  consecutive_failures?: number;
+  failure_threshold?: number;
   config?: {
-    webhook_type?: string;
+    webhook_type?: string | null;
+    cron_expression?: string | null;
   } | null;
 }
 
@@ -50,15 +66,28 @@ export function findTriggerCatalogEntry(
   );
 }
 
-function triggerIconKey(
+// webhook_type only means anything for webhook triggers — the backend stores a
+// "generic" default on cron triggers too, which must not mask the schedule.
+function effectiveWebhookType(trigger?: TriggerLike) {
+  if (!trigger || trigger.trigger_type === "cron") return "";
+  return (
+    trigger.webhook_type ||
+    trigger.config?.webhook_type ||
+    ""
+  ).toLowerCase();
+}
+
+// For webhook triggers the trigger's own webhook_type wins over the catalog
+// entry: channels missing from the catalog (e.g. github) fall back to the
+// generic "webhook" entry, which must not mask the real event source.
+export function getTriggerSourceKey(
   entry?: TriggerCatalogEntry | null,
   trigger?: TriggerLike
 ) {
-  const webhookType = trigger?.webhook_type || trigger?.config?.webhook_type;
   return (
+    effectiveWebhookType(trigger) ||
     entry?.id ||
     entry?.webhook_type ||
-    webhookType ||
     trigger?.trigger_type ||
     "webhook"
   ).toLowerCase();
@@ -73,6 +102,9 @@ const TRIGGER_ICON_BY_KEY: Record<string, LucideIcon> = {
   email: Mail,
   gmail: Mail,
   github: Github,
+  stripe: CreditCard,
+  linear: ListTodo,
+  teams: Users,
   webhook: Webhook,
   generic: Webhook,
   event: Zap,
@@ -82,7 +114,7 @@ export function getTriggerIconComponent(
   entry?: TriggerCatalogEntry | null,
   trigger?: TriggerLike
 ): LucideIcon {
-  return TRIGGER_ICON_BY_KEY[triggerIconKey(entry, trigger)] ?? Webhook;
+  return TRIGGER_ICON_BY_KEY[getTriggerSourceKey(entry, trigger)] ?? Webhook;
 }
 
 export function renderTriggerIcon(
@@ -93,10 +125,28 @@ export function renderTriggerIcon(
   return createElement(getTriggerIconComponent(entry, trigger), { className });
 }
 
+const WEBHOOK_TYPE_LABELS: Record<string, string> = {
+  github: "GitHub",
+  gmail: "Gmail",
+  teams: "Microsoft Teams",
+};
+
 export function getTriggerDisplayName(
   trigger: TriggerLike,
   entry?: TriggerCatalogEntry | null
 ) {
+  const webhookType = effectiveWebhookType(trigger);
+  const entryMatchesType =
+    !webhookType ||
+    entry?.webhook_type === webhookType ||
+    entry?.id === webhookType;
+  if (entry?.name && entryMatchesType) return entry.name;
+  if (webhookType && webhookType !== "generic") {
+    return (
+      WEBHOOK_TYPE_LABELS[webhookType] ??
+      webhookType.charAt(0).toUpperCase() + webhookType.slice(1)
+    );
+  }
   return entry?.name ?? (trigger.trigger_type === "cron" ? "Cron" : "Webhook");
 }
 
@@ -196,7 +246,7 @@ const WEBHOOK_SCHEDULE_LABEL: Record<string, string> = {
 };
 
 /** Human description of when a trigger fires, shown in the listing. */
-export function describeTriggerSchedule(trigger: any): string {
+export function describeTriggerSchedule(trigger: TriggerLike): string {
   if (trigger?.trigger_type === "cron") {
     return describeCronExpression(
       trigger.cron_expression ?? trigger.config?.cron_expression
@@ -219,7 +269,7 @@ export type TriggerHealth = "active" | "paused" | "error";
  * Derive the listing status pill. A trigger that has hit its failure threshold
  * reads as "error"; otherwise it's "active" or "paused" by its enabled flag.
  */
-export function getTriggerHealth(trigger: any): TriggerHealth {
+export function getTriggerHealth(trigger: TriggerLike): TriggerHealth {
   const failures = Number(trigger?.consecutive_failures ?? 0);
   const threshold = Number(trigger?.failure_threshold ?? 0);
   if (threshold > 0 && failures >= threshold) return "error";

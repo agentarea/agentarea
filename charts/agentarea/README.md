@@ -73,7 +73,7 @@ The following table lists configurable parameters of the chart and their default
 | global.database.port | int | `5432` |  |
 | global.database.name | string | `"agentarea"` |  |
 | global.database.ssl | bool | `false` |  |
-| global.database.sslMode | string | `"prefer"` |  |
+| global.database.sslMode | string | `"disable"` |  |
 | global.database.maxConnections | int | `100` |  |
 | global.database.connectionTimeout | string | `"30s"` |  |
 | global.database.migrations.runAtStartup | bool | `true` |  |
@@ -89,6 +89,7 @@ The following table lists configurable parameters of the chart and their default
 | global.redis.connectionTimeout | string | `"5s"` |  |
 | global.storage.type | string | `"rustfs"` |  |
 | global.storage.endpoint | string | `""` |  |
+| global.storage.publicEndpoint | string | `""` |  |
 | global.storage.bucket | string | `"agentarea-documents"` |  |
 | global.storage.region | string | `"us-east-1"` |  |
 | global.storage.s3.accessKeyId | string | `""` |  |
@@ -98,6 +99,7 @@ The following table lists configurable parameters of the chart and their default
 | global.storage.gcs.credentials | string | `""` |  |
 | global.storage.rustfs.accessKey | string | `""` |  |
 | global.storage.rustfs.secretKey | string | `""` |  |
+| global.storage.cors.allowedOrigins | list | `[]` |  |
 | global.temporal.host | string | `""` |  |
 | global.temporal.port | int | `7233` |  |
 | global.temporal.namespace | string | `"default"` |  |
@@ -114,8 +116,6 @@ The following table lists configurable parameters of the chart and their default
 | global.api.auth.enabled | bool | `false` |  |
 | global.api.auth.headerName | string | `""` |  |
 | global.api.auth.headerValue | string | `""` |  |
-| global.api.rateLimit.enabled | bool | `true` |  |
-| global.api.rateLimit.requestsPerMinute | int | `1000` |  |
 | global.webapp.url | string | `""` |  |
 | global.jobs.kube.namespace | string | `""` |  |
 | global.jobs.kube.serviceAccount | string | `""` |  |
@@ -281,6 +281,9 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.image.tag | string | `"latest"` |  |
 | mcpManager.service.type | string | `"ClusterIP"` |  |
 | mcpManager.service.port | int | `80` |  |
+| mcpManager.serverless.enabled | bool | `false` |  |
+| mcpManager.serverless.idleTimeout | string | `"10m"` |  |
+| mcpManager.serverless.sweepInterval | string | `"60s"` |  |
 | mcpManager.instanceNetworkPolicy.enabled | bool | `true` |  |
 | mcpManager.instanceNetworkPolicy.dnsNamespace | string | `"kube-system"` |  |
 | mcpManager.instanceNetworkPolicy.blockedEgressCIDRs[0] | string | `"10.0.0.0/8"` |  |
@@ -308,9 +311,17 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.features.enabled[1] | string | `"state_reconciler"` |  |
 | mcpManager.features.variants | object | `{}` |  |
 | mcpManager.warmPool.enabled | bool | `false` |  |
-| mcpManager.warmPool.image.repository | string | `"agentarea/mcp-runner"` |  |
-| mcpManager.warmPool.image.tag | string | `"latest"` |  |
-| mcpManager.warmPool.image.pullPolicy | string | `"IfNotPresent"` |  |
+| mcpManager.warmPool.profiles[0].packageInstall | string | `"allowed"` |  |
+| mcpManager.warmPool.profiles[0].managedEnvironment | string | `"mutable"` |  |
+| mcpManager.warmPool.profiles[0].image.repository | string | `"agentarea/agentarea-mcp-runner"` |  |
+| mcpManager.warmPool.profiles[0].image.tag | string | `"latest"` |  |
+| mcpManager.warmPool.profiles[0].image.pullPolicy | string | `"IfNotPresent"` |  |
+| mcpManager.warmPool.profiles[1].packageInstall | string | `"locked"` |  |
+| mcpManager.warmPool.profiles[1].managedEnvironment | string | `"immutable"` |  |
+| mcpManager.warmPool.profiles[1].image.repository | string | `"agentarea/agentarea-mcp-runner-locked"` |  |
+| mcpManager.warmPool.profiles[1].image.tag | string | `"latest"` |  |
+| mcpManager.warmPool.profiles[1].image.pullPolicy | string | `"IfNotPresent"` |  |
+| mcpManager.warmPool.lockedNetworkPolicy.s3EgressCIDRs | list | `[]` |  |
 | mcpManager.warmPool.maxExecutionTimeoutSeconds | int | `1800` |  |
 | mcpManager.warmPool.size | int | `10` |  |
 | mcpManager.warmPool.logLevel | string | `"info"` |  |
@@ -448,7 +459,7 @@ The following table lists configurable parameters of the chart and their default
 | kratos.jwt.kid | string | `"agentarea-jwt-key-1"` |  |
 | kratos.jwt.jwks_b64 | string | `""` |  |
 | kratos.jwt.jwks_public_b64 | string | `""` |  |
-| kratos.jwt.claims_mapper_b64 | string | `"bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7CmxvY2FsIHNlc3Npb24gPSBzdGQuZXh0VmFyKCdzZXNzaW9uJyk7Cgp7CiAgY2xhaW1zOiB7CiAgICAvLyBTdGFuZGFyZCBKV1QgY2xhaW1zIC0gaW5oZXJpdCBmcm9tIGRlZmF1bHQgY2xhaW1zCiAgICBpc3M6ICdodHRwczovL2FnZW50YXJlYS5kZXYnLAogICAgc3ViOiBzZXNzaW9uLmlkZW50aXR5LmlkLAogICAgYXVkOiAnYWdlbnRhcmVhLWFwaScsCiAgICBleHA6IGNsYWltcy5leHAsCiAgICBpYXQ6IGNsYWltcy5pYXQsCgogICAgLy8gQ3VzdG9tIGNsYWltcwogICAgZW1haWw6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICdlbWFpbCcpIHRoZW4gc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMuZW1haWwgZWxzZSBudWxsLAogICAgdXNlcm5hbWU6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICd1c2VybmFtZScpIHRoZW4gc2Vzc2lvbi5pZGVudGl5LnRyYWl0cy51c2VybmFtZSBlbHNlIG51bGwsCiAgICBuYW1lOiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLCAnbmFtZScpIHRoZW4gewogICAgICBmaXJzdDogaWYgc3RkLm9iamVjdEhhcyhzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLCAnZmlyc3QnKSB0aGVuIHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUuZmlyc3QgZWxzZSBudWxsLAogICAgICBsYXN0OiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUsICdsYXN0JykgdGhlbiBzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLmxhc3QgZWxzZSBudWxsLAogICAgfSBlbHNlIG51bGwsCgogICAgLy8gS3JhdG9zIHNwZWNpZmljIGNsYWltcwogICAgc2NoZW1hX2lkOiBzZXNzaW9uLmlkZW50aXR5LnNjaGVtYV9pZCwKICAgIGFhbDogc2Vzc2lvbi5hdXRoZW50aWNhdG9yX2Fzc3VyYW5jZV9sZXZlbCwKICAgIHNlc3Npb25faWQ6IHNlc3Npb24uaWQsCiAgfQp9Cg=="` |  |
+| kratos.jwt.claims_mapper_b64 | string | `""` |  |
 | kratos.jwt.issuer | string | `"https://agentarea.dev"` |  |
 | kratos.jwt.audience | string | `"agentarea-api"` |  |
 | kratos.identitySchema | string | `"{\n  \"$id\": \"https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json\",\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"Person\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"traits\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"email\": {\n          \"type\": \"string\",\n          \"format\": \"email\",\n          \"title\": \"Email\",\n          \"ory.sh/kratos\": {\n            \"credentials\": {\n              \"password\": {\n                \"identifier\": true\n              }\n            },\n            \"recovery\": {\n              \"via\": \"email\"\n            }\n          }\n        },\n        \"name\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"first\": {\n              \"title\": \"First Name\",\n              \"type\": \"string\"\n            },\n            \"last\": {\n              \"title\": \"Last Name\",\n              \"type\": \"string\"\n            }\n          }\n        },\n        \"username\": {\n          \"type\": \"string\",\n          \"title\": \"Username\"\n        }\n      },\n      \"required\": [\n        \"email\"\n      ],\n      \"additionalProperties\": false\n    }\n  }\n}\n"` |  |
@@ -467,7 +478,6 @@ The following table lists configurable parameters of the chart and their default
 | kratos.config.serve.public.cors.allowed_headers[3] | string | `"X-Session-Token"` |  |
 | kratos.config.serve.public.cors.exposed_headers[0] | string | `"Content-Type"` |  |
 | kratos.config.serve.public.cors.exposed_headers[1] | string | `"Set-Cookie"` |  |
-| kratos.config.dsn | string | `"${DSN}"` |  |
 | kratos.config.secrets.cookie[0] | string | `"${KRATOS_SECRETS_COOKIE}"` |  |
 | kratos.config.secrets.cipher[0] | string | `"${KRATOS_SECRETS_CIPHER}"` |  |
 | kratos.config.ciphers.algorithm | string | `"xchacha20-poly1305"` |  |

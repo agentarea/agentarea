@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentarea-wallet"
-version = "0.0.12"
+version = "0.0.13"
 description = "Agent wallet and payment management for AgentArea"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.12"

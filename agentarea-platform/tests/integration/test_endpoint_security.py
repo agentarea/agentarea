@@ -83,15 +83,12 @@ class TestProtectedEndpoints:
         else:
             pytest.fail(f"Unsupported method: {method}")
 
-        # Should be 403 (forbidden) - auth is checked before validation
+        # Should be 401 (missing credentials) - auth is checked before validation.
         # Note: Some endpoints may return 422 if they validate before checking auth
         # 405 means method not allowed (endpoint doesn't exist)
-        assert response.status_code in [403, 405, 422], (
-            f"{method} {endpoint} should return 403, 405, or 422 without auth, got {response.status_code}"
+        assert response.status_code in [401, 403, 405, 422], (
+            f"{method} {endpoint} should return 401, 403, 405, or 422 without auth, got {response.status_code}"
         )
-
-        if response.status_code == 403:
-            assert response.json()["detail"] == "Not authenticated"
 
     @pytest.mark.parametrize("method,endpoint", PROTECTED_ENDPOINTS)
     def test_protected_endpoint_rejects_invalid_token(self, client, method, endpoint):
@@ -151,7 +148,7 @@ class TestA2AEndpoints:
 
         # Well-known endpoints should be accessible
         # (may return 404 if agent doesn't exist, or 422 if validation fails first)
-        response = client.get(f"/v1/agents/{agent_id}/.well-known/agent.json")
+        response = client.get(f"/v1/agents/{agent_id}/.well-known/agent-card.json")
 
         # Should NOT be 401 or 403 (these endpoints use A2A auth, not JWT)
         # May be 404 (not found), 422 (validation), or 200 (success)
@@ -187,8 +184,12 @@ class TestEndpointDiscovery:
         openapi = response.json()
         paths = openapi.get("paths", {})
 
-        # Track which endpoints we've tested
-        public_patterns = ["/v1/auth/"]
+        # Track which endpoints we've tested.
+        # There is no /v1/auth/* router anymore -- public (no-JWT) /v1
+        # endpoints are now: agent well-known/discovery docs, the MCP OAuth
+        # connect flow, and the trigger execute callback (all mounted on
+        # public_v1_router in apps/api/agentarea_api/api/v1/router.py).
+        public_patterns = [".well-known", "/mcp-oauth/callback", "/mcp-oauth/authorize", "/execute"]
         protected_count = 0
         public_count = 0
 
@@ -196,7 +197,7 @@ class TestEndpointDiscovery:
             if not path.startswith("/v1/"):
                 continue
 
-            # Check if it's a public endpoint (auth-related)
+            # Check if it's a public endpoint
             is_public = any(pattern in path for pattern in public_patterns)
 
             if is_public:
@@ -205,7 +206,7 @@ class TestEndpointDiscovery:
                 protected_count += 1
 
         # We should have both public and protected endpoints
-        assert public_count > 0, "Should have at least one public /v1/auth endpoint"
+        assert public_count > 0, "Should have at least one public /v1 endpoint"
         assert protected_count > 0, "Should have at least one protected /v1 endpoint"
 
         # Log the counts for visibility

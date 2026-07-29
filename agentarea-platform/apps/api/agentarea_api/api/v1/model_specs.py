@@ -1,8 +1,8 @@
-from datetime import datetime
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_model_spec_repository
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.domain.models import ModelSpec
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from fastapi import APIRouter, Depends, HTTPException
@@ -46,8 +46,8 @@ class ModelSpecResponse(BaseModel):
     supports_reasoning: bool | None = False
     default_context_strategy: str | None
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     # Related provider info (if loaded)
     provider_name: str | None = None

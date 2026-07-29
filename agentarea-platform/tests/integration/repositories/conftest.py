@@ -116,6 +116,8 @@ async def _populate_test_data(session: AsyncSession):
         provider_type="ollama_chat",
         icon="ollama",
         is_builtin=True,
+        workspace_id="default",
+        created_by="system",
         created_at=datetime.now(),
         updated_at=datetime.now(),
     )
@@ -130,6 +132,8 @@ async def _populate_test_data(session: AsyncSession):
         description="Meta's Llama 3.1 model",
         context_window=4096,
         is_active=True,
+        workspace_id="default",
+        created_by="system",
         created_at=datetime.now(),
         updated_at=datetime.now(),
     )
@@ -143,6 +147,8 @@ async def _populate_test_data(session: AsyncSession):
         description="Meta's Llama 2 model",
         context_window=4096,
         is_active=True,
+        workspace_id="default",
+        created_by="system",
         created_at=datetime.now(),
         updated_at=datetime.now(),
     )
@@ -156,6 +162,8 @@ async def _populate_test_data(session: AsyncSession):
         description="Mistral's open source model",
         context_window=8192,
         is_active=True,
+        workspace_id="default",
+        created_by="system",
         created_at=datetime.now(),
         updated_at=datetime.now(),
     )
@@ -186,6 +194,8 @@ async def _populate_test_data(session: AsyncSession):
         description="Test instance for Qwen 2.5 model",
         is_active=True,
         is_public=True,
+        workspace_id="default",
+        created_by="system",
         created_at=datetime.now(),
         updated_at=datetime.now(),
     )
@@ -199,6 +209,8 @@ async def _populate_test_data(session: AsyncSession):
         description="Test instance for Llama 2 model",
         is_active=True,
         is_public=True,
+        workspace_id="default",
+        created_by="system",
         created_at=datetime.now(),
         updated_at=datetime.now(),
     )
@@ -223,6 +235,8 @@ class ModelFactory:
             "provider_type": "test",
             "icon": "test",
             "is_builtin": True,
+            "workspace_id": "default",
+            "created_by": "system",
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
         }
@@ -243,6 +257,8 @@ class ModelFactory:
             "endpoint_url": "https://test.example.com",
             "is_active": True,
             "is_public": True,
+            "workspace_id": "default",
+            "created_by": "system",
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
         }
@@ -263,6 +279,8 @@ class ModelFactory:
             "description": "Test model specification",
             "context_window": 4096,
             "is_active": True,
+            "workspace_id": "default",
+            "created_by": "system",
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
         }
@@ -457,52 +475,39 @@ def user_context():
 
 # Repository Fixtures
 @pytest_asyncio.fixture
-async def agent_repository(db_session):
+async def agent_repository(db_session, user_context):
     """Provide an AgentRepository instance."""
-    return AgentRepository(db_session)
+    return AgentRepository(db_session, user_context)
 
 
 @pytest_asyncio.fixture
-async def provider_spec_repository(db_session):
+async def provider_spec_repository(db_session, user_context):
     """Provide a ProviderSpecRepository instance."""
-    return ProviderSpecRepository(db_session)
+    return ProviderSpecRepository(db_session, user_context)
 
 
 @pytest_asyncio.fixture
-async def provider_config_repository(db_session):
+async def provider_config_repository(db_session, user_context):
     """Provide a ProviderConfigRepository instance."""
-    return ProviderConfigRepository(db_session)
+    return ProviderConfigRepository(db_session, user_context)
 
 
 @pytest_asyncio.fixture
-async def model_spec_repository(db_session):
+async def model_spec_repository(db_session, user_context):
     """Provide a ModelSpecRepository instance."""
-    return ModelSpecRepository(db_session)
+    return ModelSpecRepository(db_session, user_context)
 
 
 @pytest_asyncio.fixture
-async def model_instance_repository(db_session):
+async def model_instance_repository(db_session, user_context):
     """Provide a ModelInstanceRepository instance."""
-    return ModelInstanceRepository(db_session)
-
-
-# Legacy repository fixtures - still needed for some tests
-# @pytest_asyncio.fixture
-# async def llm_model_repository(db_session):
-#     """Provide an LLMModelRepository instance."""
-#     return LLMModelRepository(db_session)
-
-
-# @pytest_asyncio.fixture
-# async def llm_model_instance_repository(db_session):
-#     """Provide an LLMModelInstanceRepository instance."""
-#     return LLMModelInstanceRepository(db_session)
+    return ModelInstanceRepository(db_session, user_context)
 
 
 @pytest_asyncio.fixture
-async def mcp_server_repository(db_session):
+async def mcp_server_repository(db_session, user_context):
     """Provide an MCPServerRepository instance."""
-    return MCPServerRepository(db_session)
+    return MCPServerRepository(db_session, user_context)
 
 
 @pytest_asyncio.fixture
@@ -512,6 +517,6 @@ async def mcp_server_instance_repository(db_session, user_context):
 
 
 @pytest_asyncio.fixture
-async def task_repository(db_session):
+async def task_repository(db_session, user_context):
     """Provide a TaskRepository instance."""
-    return TaskRepository(db_session)
+    return TaskRepository(db_session, user_context)

@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 from uuid import uuid4
@@ -8,10 +8,30 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PlainSerializer,
     TypeAdapter,
     field_serializer,
     model_serializer,
 )
+
+
+def _utc_z_isoformat(dt: datetime) -> str:
+    """Render a datetime as RFC 3339 UTC with a trailing ``Z``.
+
+    DB timestamps are naive UTC (``TIMESTAMP WITHOUT TIME ZONE``); serialized
+    plainly they come out without an offset (``...042386``), which strict clients
+    reject — notably Zod's ``z.string().datetime()``, which requires a ``Z``. We
+    treat naive values as UTC and emit ``...042386Z``.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+# Reusable field type for API response datetimes: JSON-serializes as UTC ``Z``.
+UtcDatetime = Annotated[
+    datetime, PlainSerializer(_utc_z_isoformat, return_type=str, when_used="json")
+]
 
 
 class TaskState(StrEnum):
@@ -536,9 +556,9 @@ class MissingAPIKeyError(Exception):
 
 
 def sanitize_agent_name(name: str) -> str:
-    """Sanitize agent name to be a valid Python identifier for Google ADK.
+    """Sanitize agent name to be a valid Python identifier.
 
-    Google ADK requires agent names to be valid Python identifiers:
+    A valid Python identifier:
     - Must start with a letter (a-z, A-Z) or underscore (_)
     - Can only contain letters, digits (0-9), and underscores
 

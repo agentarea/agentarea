@@ -20,12 +20,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getTriggerStatusPresentation } from "@/lib/status";
+import type { TriggerCatalogEntry } from "../components/triggerDisplay";
 import { renderTriggerIcon } from "../components/triggerDisplay";
+import type { TriggerResponse } from "@/api/client/types.gen";
+
+type TriggerData = TriggerResponse & {
+  webhook_url?: string;
+  config?: { cron_expression?: string; timezone?: string } | null;
+  last_run_at?: string | null;
+  next_run_at?: string | null;
+};
 
 interface TriggerDetailProps {
-  trigger: any;
+  trigger: TriggerData;
   agentName: string;
-  catalogEntry: any | null;
+  catalogEntry: TriggerCatalogEntry | null;
 }
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
@@ -58,8 +67,8 @@ function TriggerInfoPanel({
   catalogEntry,
   agentName,
 }: {
-  trigger: any;
-  catalogEntry: any | null;
+  trigger: TriggerData;
+  catalogEntry: TriggerCatalogEntry | null;
   agentName: string;
 }) {
   const tStatus = useTranslations("TriggersPage.status");

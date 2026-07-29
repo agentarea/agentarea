@@ -130,9 +130,13 @@ def test_workflow_iteration_limit_allows_configured_final_iteration():
     assert "self.state.current_iteration > max_iterations" in source
 
 
-def test_llm_activity_timeout_allows_large_generations_without_retries():
+def test_llm_activity_timeout_allows_large_generations():
+    # 600s accommodates a large generation without the activity timing out.
     assert LLM_CALL_TIMEOUT.total_seconds() == 600
-    assert LLM_RETRY_ATTEMPTS == 1
+    # Transient failures (rate limit, network, 5xx) retry with backoff; permanent
+    # ones fast-fail via the non_retryable flag, so a retry never duplicates a
+    # costly generation. The bounded-retry invariant is guarded in test_retry_policy.
+    assert LLM_RETRY_ATTEMPTS == 3
 
 
 def test_workflow_continue_as_new_and_activity_payloads_carry_effective_policy():

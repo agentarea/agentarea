@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Bot, Download, Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { TextPreview } from "./text-preview";
 import type { BrowsedFile } from "./file-tree";
 
 const TEXT_EXTS = new Set([
   "txt",
   "md",
+  "mdx",
+  "markdown",
+  "tsv",
   "json",
   "yaml",
   "yml",
@@ -233,8 +238,7 @@ export function FileViewerContent({
 
         {!loading && !error && url && kind === "image" && (
           <div className="flex h-full items-center justify-center p-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={fileName} className="max-h-full max-w-full object-contain" />
+            <Image src={url} alt={fileName} width={1920} height={1080} className="max-h-full max-w-full object-contain" />
           </div>
         )}
 
@@ -255,9 +259,7 @@ export function FileViewerContent({
         )}
 
         {!loading && !error && kind === "text" && text !== null && (
-          <pre className="whitespace-pre-wrap break-words p-4 text-xs font-mono">
-            {text}
-          </pre>
+          <TextPreview path={file.path} text={text} />
         )}
 
         {!loading && !error && kind === "binary" && (

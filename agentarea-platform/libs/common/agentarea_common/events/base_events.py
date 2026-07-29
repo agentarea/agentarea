@@ -17,10 +17,6 @@ class DomainEvent:
         self.data = kwargs
 
 
-# --- Pydantic models for event envelope (non-breaking addition) ---
-# We keep the legacy DomainEvent dataclass while introducing a typed Pydantic
-# envelope that can be used across brokers, SSE, and persistence layers.
-
 from pydantic import BaseModel, Field, field_serializer  # noqa: E402
 
 
@@ -56,7 +52,7 @@ class EventEnvelope(BaseModel):
 
     @classmethod
     def from_domain_event(cls, event: DomainEvent) -> "EventEnvelope":
-        """Create envelope from legacy DomainEvent dataclass."""
+        """Create envelope from a DomainEvent."""
         # DomainEvent.data already contains the payload kwargs
         return cls(
             event_id=event.event_id,

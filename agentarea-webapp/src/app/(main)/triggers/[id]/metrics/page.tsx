@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import type { ExecutionMetricsResponse } from "@/api/client/types.gen";
 import { getTriggerMetrics } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Clock, Hash } from "lucide-react";
@@ -21,7 +22,7 @@ export default async function TriggerMetricsPage({ params }: Props) {
     );
   }
 
-  const metrics = data as any;
+  const metrics = data as ExecutionMetricsResponse;
 
   return (
     <div className="p-6">

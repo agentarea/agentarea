@@ -1,8 +1,9 @@
 """Durable outbound channel delivery on top of a `BrokerClient`.
 
 `ChannelDeliveryEmitter` is the producer side: it takes the formatted
-message + channel config from `ChannelRouter` and writes it onto the
-outbound stream.
+message + channel config from the caller and writes it onto the
+outbound stream. The live producer is `channels.activity_emit`, which
+runs the routing decision inside the Temporal activity and submits here.
 
 `ChannelDeliveryConsumer` is the worker loop: claim via the broker,
 dedup, call the adapter, then ACK / requeue / DLQ depending on the

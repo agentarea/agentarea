@@ -55,7 +55,7 @@ def test_push_token_secret_name():
 
 def test_build_notification_body_terminal_completed():
     event = {
-        "event_type": "WorkflowCompleted",
+        "event_type": "task.completed",
         "event_id": "e1",
         "task_id": "task-1",
         "data": {"task_id": "task-1", "result": "Final answer"},
@@ -70,6 +70,18 @@ def test_build_notification_body_terminal_completed():
     assert "kind" not in su["status"]["message"]["parts"][0]
 
 
+def test_build_notification_body_terminal_completed_canonical():
+    # Emit-side now sends canonical dotted names; the body builder must map them.
+    event = {
+        "event_type": "task.completed",
+        "event_id": "e1",
+        "task_id": "task-1",
+        "data": {"task_id": "task-1", "result": "Final answer"},
+    }
+    body = json.loads(a2a_push.build_push_notification_body(event))
+    assert body["statusUpdate"]["status"]["state"] == "COMPLETED"
+
+
 def test_build_notification_body_skips_non_terminal():
     event = {"event_type": "LLMCallChunk", "data": {"task_id": "t", "chunk": "x"}}
     assert a2a_push.build_push_notification_body(event) is None
@@ -79,7 +91,7 @@ def test_webhook_adapter_formats_terminal_only():
     from agentarea_triggers.channels.adapters import _a2a_webhook_format
 
     terminal = {
-        "event_type": "WorkflowCompleted",
+        "event_type": "task.completed",
         "data": {"task_id": "t", "result": "done"},
     }
     assert (

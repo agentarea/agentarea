@@ -7,22 +7,15 @@ import ModelInfo from "@/components/TaskInfoPanel/components/ModelInfo";
 import Section from "@/components/TaskInfoPanel/components/Section";
 import ActionLink from "@/components/TaskInfoPanel/components/ActionLink";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-interface NetworkNodeData {
-  id: string;
-  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
-  label: string;
-  status?: string | null;
-  metadata: Record<string, any>;
-}
+import type { NetworkNodeData } from "../types";
 
 const TYPE_CONFIG = {
   agent: { icon: Bot, color: "text-blue-500", href: (id: string) => `/agents/${id}` },
-  mcp_instance: { icon: Plug, color: "text-green-500", href: (id: string) => `/mcp-servers/${id}` },
+  mcp_instance: { icon: Plug, color: "text-green-500", href: (id: string) => `/connections/${id}` },
   openapi_connection: {
     icon: Globe,
     color: "text-rose-500",
-    href: (id: string) => `/mcp-servers/openapi/${id}`,
+    href: (id: string) => `/connections/openapi/${id}`,
   },
   skill: { icon: Sparkles, color: "text-sky-500", href: (id: string) => `/skills/${id}` },
   trigger: { icon: Zap, color: "text-amber-500", href: (id: string) => `/triggers/${id}` },

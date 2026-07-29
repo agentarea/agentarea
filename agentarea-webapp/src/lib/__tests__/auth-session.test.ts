@@ -1,38 +1,25 @@
-/**
- * Tests for isProtectedRoute and hasLiveSession (pure functions).
- * Run with: npx tsx src/lib/__tests__/auth-session.test.ts
- */
-import { isProtectedRoute, hasLiveSession } from "../auth-session";
+import { describe, expect, it } from "vitest";
+import { hasLiveSession, isProtectedRoute } from "../auth-session";
 
-let failed = 0;
-function assertEqual<T>(actual: T, expected: T, name: string) {
-  const ok = JSON.stringify(actual) === JSON.stringify(expected);
-  if (!ok) {
-    failed += 1;
-    console.error(
-      `FAIL ${name}\n  expected: ${JSON.stringify(expected)}\n  actual:   ${JSON.stringify(actual)}`,
-    );
-  } else {
-    console.log(`PASS ${name}`);
-  }
-}
-
-// --- isProtectedRoute ---
-assertEqual(isProtectedRoute("/agents"), true, "/agents → true");
-assertEqual(isProtectedRoute("/agents/123"), true, "/agents/123 → true");
-assertEqual(isProtectedRoute("/"), false, "/ → false");
-assertEqual(isProtectedRoute("/auth/login"), false, "/auth/login → false");
-// startsWith semantics: "/agentsfoo" matches the "/agents" prefix, matching
-// the original PROTECTED_ROUTES.some(r => pathname.startsWith(r)) behavior.
-assertEqual(isProtectedRoute("/agentsfoo"), true, "/agentsfoo → true (startsWith semantics)");
-assertEqual(isProtectedRoute("/settings/profile"), true, "/settings/profile → true");
+describe("isProtectedRoute", () => {
+  it.each([
+    ["/agents", true],
+    ["/agents/123", true],
+    ["/", false],
+    ["/auth/login", false],
+    ["/agentsfoo", true],
+    ["/settings/profile", true],
+  ])("marks %s as %s", (pathname, expected) => {
+    expect(isProtectedRoute(pathname)).toBe(expected);
+  });
+});
 
 // --- hasLiveSession ---
 const ORY = "http://ory.internal";
 
 function mockFetch(
   result: { ok: boolean; status: number; json: () => Promise<unknown> } | Error,
-  calls: { count: number },
+  calls: { count: number }
 ): typeof fetch {
   return (async () => {
     calls.count += 1;
@@ -43,78 +30,65 @@ function mockFetch(
   }) as unknown as typeof fetch;
 }
 
-async function run() {
-  // cookie null → false, and fetch NOT called
-  {
+describe("hasLiveSession", () => {
+  it("returns false without a cookie and does not fetch", async () => {
     const calls = { count: 0 };
     const fetchImpl = mockFetch(
       { ok: true, status: 200, json: async () => ({ tokenized: "jwt" }) },
-      calls,
+      calls
     );
-    const res = await hasLiveSession(null, { orySdkUrl: ORY, fetchImpl });
-    assertEqual(res, false, "cookie null → false");
-    assertEqual(calls.count, 0, "cookie null → fetch NOT called");
-  }
+    const result = await hasLiveSession(null, { orySdkUrl: ORY, fetchImpl });
 
-  // 200 + { tokenized: "jwt" } → true
-  {
+    expect(result).toBe(false);
+    expect(calls.count).toBe(0);
+  });
+
+  it("returns true for a live tokenized session", async () => {
     const calls = { count: 0 };
     const fetchImpl = mockFetch(
       { ok: true, status: 200, json: async () => ({ tokenized: "jwt" }) },
-      calls,
+      calls
     );
-    const res = await hasLiveSession("ory_kratos_session=abc", {
+    const result = await hasLiveSession("ory_kratos_session=abc", {
       orySdkUrl: ORY,
       fetchImpl,
     });
-    assertEqual(res, true, "200 + tokenized → true");
-  }
+    expect(result).toBe(true);
+  });
 
-  // 200 + {} (no tokenized) → false
-  {
+  it("returns false when a successful response has no token", async () => {
     const calls = { count: 0 };
     const fetchImpl = mockFetch(
       { ok: true, status: 200, json: async () => ({}) },
-      calls,
+      calls
     );
-    const res = await hasLiveSession("ory_kratos_session=abc", {
+    const result = await hasLiveSession("ory_kratos_session=abc", {
       orySdkUrl: ORY,
       fetchImpl,
     });
-    assertEqual(res, false, "200 + no tokenized → false");
-  }
+    expect(result).toBe(false);
+  });
 
-  // 401 response → false
-  {
+  it("returns false for an unauthorized response", async () => {
     const calls = { count: 0 };
     const fetchImpl = mockFetch(
       { ok: false, status: 401, json: async () => ({}) },
-      calls,
+      calls
     );
-    const res = await hasLiveSession("ory_kratos_session=abc", {
+    const result = await hasLiveSession("ory_kratos_session=abc", {
       orySdkUrl: ORY,
       fetchImpl,
     });
-    assertEqual(res, false, "401 → false");
-  }
+    expect(result).toBe(false);
+  });
 
-  // fetchImpl throws → false
-  {
+  it("returns false when the session request fails", async () => {
     const calls = { count: 0 };
     const fetchImpl = mockFetch(new Error("network down"), calls);
-    const res = await hasLiveSession("ory_kratos_session=abc", {
+    const result = await hasLiveSession("ory_kratos_session=abc", {
       orySdkUrl: ORY,
       fetchImpl,
     });
-    assertEqual(res, false, "fetch throws → false");
-  }
-
-  if (failed > 0) {
-    console.error(`\n${failed} test(s) failed`);
-    process.exit(1);
-  } else {
-    console.log("\nAll tests passed");
-  }
-}
-
-run();
+    expect(result).toBe(false);
+  });
+});

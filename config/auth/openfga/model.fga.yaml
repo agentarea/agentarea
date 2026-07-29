@@ -8,54 +8,122 @@ tuples:
   - user: User:u3
     relation: members
     object: Workspace:ws1
+  - user: User:wsadmin
+    relation: admin
+    object: Workspace:ws1
+  - user: "User:*"
+    relation: can_read
+    object: role:full
+  - user: "User:*"
+    relation: can_write
+    object: role:full
+  - user: "User:*"
+    relation: can_manage
+    object: role:full
+  - user: "User:*"
+    relation: can_write
+    object: role:writeonly
+  - user: User:ua
+    relation: assignee
+    object: role_assignment:ra1
+  - user: role:full
+    relation: role
+    object: role_assignment:ra1
+  - user: User:ub
+    relation: assignee
+    object: role_assignment:ra2
+  - user: role:writeonly
+    relation: role
+    object: role_assignment:ra2
   - user: Workspace:ws1
     relation: workspace
-    object: Tool:ws1/github.create_issue
-  - user: User:u1
-    relation: callers
-    object: Tool:ws1/github.create_issue
-  - user: User:u2
-    relation: callers
-    object: Tool:ws1/github.create_issue
+    object: project:pr1
+  - user: role_assignment:ra1
+    relation: role_assignment
+    object: project:pr1
+  - user: project:pr1
+    relation: project
+    object: resource:res1
+  - user: role_assignment:ra2
+    relation: role_assignment
+    object: resource:res2
+  # Workspace root project + a resource attached to it (the seed_workspace shape).
   - user: Workspace:ws1
     relation: workspace
-    object: ToolResource:ws1/github.create_issue~args~abc
-  - user: Tool:ws1/github.create_issue
-    relation: tool
-    object: ToolResource:ws1/github.create_issue~args~abc
-  - user: User:u3
-    relation: callers
-    object: ToolResource:ws1/github.create_issue~args~abc
-  - user: User:u4
-    relation: callers
-    object: ToolResource:ws1/github.create_issue~args~abc
+    object: project:ws1-root
+  - user: project:ws1-root
+    relation: project
+    object: resource:agent1
+  - user: User:owner1
+    relation: manager
+    object: resource:agent1
+  - user: User:owner1
+    relation: reader
+    object: resource:agent1
+  - user: User:owner1
+    relation: writer
+    object: resource:agent1
 
 tests:
-  - name: tool grant requires workspace membership
+  - name: role_assignment with full role grants all three bits on project
     check:
-      - user: User:u1
-        object: Tool:ws1/github.create_issue
+      - user: User:ua
+        object: project:pr1
         assertions:
-          can_call: true
-      - user: User:u2
-        object: Tool:ws1/github.create_issue
-        assertions:
-          can_call: false
+          can_read: true
+          can_write: true
+          can_manage: true
 
-  - name: exact argument grant requires workspace membership
+  - name: resource inherits can_read from its project
     check:
-      - user: User:u3
-        object: ToolResource:ws1/github.create_issue~args~abc
+      - user: User:ua
+        object: resource:res1
         assertions:
-          can_call: true
-      - user: User:u4
-        object: ToolResource:ws1/github.create_issue~args~abc
-        assertions:
-          can_call: false
+          can_read: true
+          can_write: true
+          can_manage: true
 
-  - name: broad tool grant applies to exact resource in same workspace
+  - name: independent bits - write-only role does not grant read on resource
     check:
-      - user: User:u1
-        object: ToolResource:ws1/github.create_issue~args~abc
+      - user: User:ub
+        object: resource:res2
         assertions:
-          can_call: true
+          can_write: true
+          can_read: false
+          can_manage: false
+
+  - name: workspace admin can manage a project under it
+    check:
+      - user: User:wsadmin
+        object: project:pr1
+        assertions:
+          can_read: true
+          can_write: true
+          can_manage: true
+
+  - name: workspace admin cascades all bits to a resource under the root project
+    check:
+      - user: User:wsadmin
+        object: resource:agent1
+        assertions:
+          can_read: true
+          can_write: true
+          can_manage: true
+
+  - name: resource owner (direct reader/writer/manager) has full access
+    check:
+      - user: User:owner1
+        object: resource:agent1
+        assertions:
+          can_read: true
+          can_write: true
+          can_manage: true
+
+  - name: non-member non-owner is denied on a workspace resource
+    check:
+      - user: User:stranger
+        object: resource:agent1
+        assertions:
+          can_read: false
+          can_write: false
+          can_manage: false

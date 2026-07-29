@@ -249,7 +249,7 @@ class TriggerService:
                         or trigger_update.is_active is not None
                     )
 
-                    if cron_changed:
+                    if cron_changed and self.temporal_schedule_manager:
                         await self.temporal_schedule_manager.update_cron_schedule(
                             trigger_id=updated_trigger.id,
                             cron_expression=updated_trigger.cron_expression,
@@ -277,7 +277,7 @@ class TriggerService:
             return False
 
         # Delete schedule if it's a cron trigger
-        if existing_trigger.trigger_type == TriggerType.CRON:
+        if existing_trigger.trigger_type == TriggerType.CRON and self.temporal_schedule_manager:
             try:
                 await self.temporal_schedule_manager.delete_cron_schedule(trigger_id)
                 logger.info(f"Deleted schedule for cron trigger {trigger_id}")
@@ -362,7 +362,11 @@ class TriggerService:
             trigger = await self.get_trigger(trigger_id)
 
             # Enable schedule if it's a cron trigger
-            if trigger and trigger.trigger_type == TriggerType.CRON:
+            if (
+                trigger
+                and trigger.trigger_type == TriggerType.CRON
+                and self.temporal_schedule_manager
+            ):
                 try:
                     await self.temporal_schedule_manager.unpause_cron_schedule(trigger_id)
                     logger.info(f"Unpaused schedule for cron trigger {trigger_id}")
@@ -391,7 +395,11 @@ class TriggerService:
             trigger = await self.get_trigger(trigger_id)
 
             # Pause schedule if it's a cron trigger
-            if trigger and trigger.trigger_type == TriggerType.CRON:
+            if (
+                trigger
+                and trigger.trigger_type == TriggerType.CRON
+                and self.temporal_schedule_manager
+            ):
                 try:
                     await self.temporal_schedule_manager.pause_cron_schedule(trigger_id)
                     logger.info(f"Paused schedule for cron trigger {trigger_id}")
@@ -1273,7 +1281,8 @@ class TriggerService:
         """Build channel_origin metadata for outbound routing.
 
         Extracts channel-specific routing info from trigger data so the
-        ChannelRouter can send responses back to the originating channel.
+        outbound channel delivery can send responses back to the
+        originating channel.
 
         Returns:
             Channel origin dict or None if no outbound routing needed.

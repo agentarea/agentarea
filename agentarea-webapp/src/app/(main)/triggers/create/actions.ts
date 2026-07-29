@@ -1,18 +1,12 @@
 "use server";
 
+import type { HttpValidationError, TriggerCreate } from "@/api/client/types.gen";
+import {
+  zGetCatalogV1TriggersCatalogGetResponse,
+  zTriggerCreate,
+} from "@/api/client/zod.gen";
+import { createTrigger, listTriggerCatalog, updateTrigger } from "@/lib/api";
 import { z } from "zod";
-import { createTrigger, updateTrigger } from "@/lib/api";
-
-const TriggerCreateSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  trigger_type: z.enum(["cron", "webhook"], {
-    required_error: "Trigger type is required",
-  }),
-  agent_id: z.string().uuid("Agent is required"),
-  config: z.record(z.unknown()),
-  task_parameters: z.record(z.unknown()).optional(),
-  failure_threshold: z.number().int().positive().optional(),
-});
 
 export type TriggerFormState = {
   message: string;
@@ -20,8 +14,42 @@ export type TriggerFormState = {
   success?: boolean;
 };
 
+const zTriggerCatalogEntry = z.object({
+  id: z.string(),
+  name: z.string(),
+  icon: z.string(),
+  description: z.string(),
+  kind: z.enum(["messaging", "event", "schedule"]),
+  backend_type: z.enum(["cron", "webhook"]),
+  webhook_type: z.string().optional(),
+  default_methods: z.array(z.string()).optional(),
+  default_cron: z.string().optional(),
+  data_extractor: z.string().optional(),
+  credential_fields: z
+    .array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+        placeholder: z.string(),
+      })
+    )
+    .optional(),
+  events: z.array(z.string()).optional(),
+});
+
+export type TriggerCatalogEntry = z.infer<typeof zTriggerCatalogEntry>;
+
+export async function listTriggerCatalogAction(): Promise<TriggerCatalogEntry[]> {
+  const { data, error } = await listTriggerCatalog();
+  if (error || !data) {
+    throw new Error("Failed to load trigger catalog");
+  }
+  const records = zGetCatalogV1TriggersCatalogGetResponse.parse(data);
+  return z.array(zTriggerCatalogEntry).parse(records);
+}
+
 function parseTaskParameters(raw: string | null): {
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
   error?: TriggerFormState;
 } {
   if (!raw || !raw.trim()) {
@@ -50,11 +78,58 @@ function parseTaskParameters(raw: string | null): {
   }
 }
 
-function buildConfig(formData: FormData): Record<string, any> {
+function parseJsonObject(
+  raw: string | null,
+  field: string,
+  label: string
+): { data?: Record<string, unknown>; error?: TriggerFormState } {
+  if (!raw || !raw.trim()) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        error: {
+          message: `Invalid JSON in ${label}`,
+          errors: { [field]: [`${label} must be a JSON object`] },
+        },
+      };
+    }
+
+    return { data: parsed };
+  } catch {
+    return {
+      error: {
+        message: `Invalid JSON in ${label}`,
+        errors: { [field]: ["Invalid JSON format"] },
+      },
+    };
+  }
+}
+
+function parseStringArray(raw: string | null): string[] | undefined {
+  if (!raw || !raw.trim()) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string")
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildTriggerCreate(formData: FormData): TriggerCreate {
   const trigger_type = formData.get("trigger_type") as string;
   const data_extractor = formData.get("data_extractor") as string | null;
+  const task_parameters_raw = formData.get("task_parameters") as string | null;
+  const failure_threshold_raw = formData.get("failure_threshold") as string;
 
-  // Collect channel credentials from credential_* form fields
   const channel_credentials: Record<string, string> = {};
   for (const [key, value] of formData.entries()) {
     if (key.startsWith("credential_") && value) {
@@ -62,14 +137,35 @@ function buildConfig(formData: FormData): Record<string, any> {
     }
   }
 
-  let config: Record<string, any> = {};
+  const parsedTaskParameters = parseJsonObject(
+    task_parameters_raw,
+    "task_parameters",
+    "task parameters"
+  );
+  if (parsedTaskParameters.error) {
+    throw parsedTaskParameters.error;
+  }
+
+  const failure_threshold = failure_threshold_raw
+    ? parseInt(failure_threshold_raw, 10)
+    : undefined;
+
+  const body: TriggerCreate = {
+    name: formData.get("name") as string,
+    trigger_type: trigger_type as TriggerCreate["trigger_type"],
+    agent_id: formData.get("agent_id") as string,
+    task_parameters: parsedTaskParameters.data,
+    failure_threshold:
+      failure_threshold && !isNaN(failure_threshold)
+        ? failure_threshold
+        : undefined,
+  };
+
   if (trigger_type === "cron") {
-    config = {
-      cron_expression: formData.get("cron_expression") as string,
-      timezone: (formData.get("timezone") as string) || "UTC",
-    };
+    body.cron_expression = formData.get("cron_expression") as string;
+    body.timezone = (formData.get("timezone") as string) || "UTC";
     if (data_extractor) {
-      config.data_extractor = data_extractor;
+      body.data_extractor = data_extractor;
     }
   } else if (trigger_type === "webhook") {
     const webhook_type = formData.get("webhook_type") as string;
@@ -79,53 +175,30 @@ function buildConfig(formData: FormData): Record<string, any> {
         methods.push(method);
       }
     });
-    config = {
-      webhook_type: webhook_type || "generic",
-      allowed_methods: methods.length > 0 ? methods : ["POST"],
-    };
+    body.webhook_type = webhook_type || "generic";
+    body.allowed_methods = methods.length > 0 ? methods : ["POST"];
+    body.event_types = parseStringArray(formData.get("event_types") as string);
   }
 
   if (Object.keys(channel_credentials).length > 0) {
-    config.channel_credentials = channel_credentials;
+    body.channel_credentials = channel_credentials;
   }
 
-  return config;
+  return body;
 }
 
 export async function createTriggerAction(
   prevState: TriggerFormState,
   formData: FormData
 ): Promise<TriggerFormState> {
-  const name = formData.get("name") as string;
-  const trigger_type = formData.get("trigger_type") as string;
-  const agent_id = formData.get("agent_id") as string;
-  const task_parameters_raw = formData.get("task_parameters") as string;
-  const failure_threshold_raw = formData.get("failure_threshold") as string;
+  let rawData: TriggerCreate;
+  try {
+    rawData = buildTriggerCreate(formData);
+  } catch (error) {
+    return error as TriggerFormState;
+  }
 
-  const config = buildConfig(formData);
-
-  const parsedTaskParameters = parseTaskParameters(task_parameters_raw);
-  if (parsedTaskParameters.error) return parsedTaskParameters.error;
-  const task_parameters = parsedTaskParameters.data;
-
-  // Parse failure threshold
-  const failure_threshold = failure_threshold_raw
-    ? parseInt(failure_threshold_raw, 10)
-    : undefined;
-
-  const rawData = {
-    name,
-    trigger_type,
-    agent_id,
-    config,
-    task_parameters,
-    failure_threshold:
-      failure_threshold && !isNaN(failure_threshold)
-        ? failure_threshold
-        : undefined,
-  };
-
-  const validated = TriggerCreateSchema.safeParse(rawData);
+  const validated = zTriggerCreate.safeParse(rawData);
 
   if (!validated.success) {
     const mappedErrors: { [key: string]: string[] } = {};
@@ -143,10 +216,10 @@ export async function createTriggerAction(
   }
 
   try {
-    const { data, error } = await createTrigger(validated.data);
+    const { data, error } = await createTrigger(validated.data as unknown as Parameters<typeof createTrigger>[0]);
 
     if (error) {
-      const errorMessage = (error as any)?.detail?.[0]?.msg || "Unknown error";
+      const errorMessage = (error as HttpValidationError | undefined)?.detail?.[0]?.msg ?? "Unknown error";
       return {
         message: "Failed to create trigger",
         errors: { _form: [`API error: ${errorMessage}`] },
@@ -203,7 +276,13 @@ export async function updateTriggerAction(
     : undefined;
 
   // Build flat update body matching TriggerUpdateRequest schema
-  const updateBody: Record<string, any> = { name };
+  const updateBody: {
+    name: string;
+    cron_expression?: string;
+    timezone?: string;
+    task_parameters?: Record<string, unknown>;
+    failure_threshold?: number;
+  } = { name };
 
   if (trigger_type === "cron") {
     const cronExpr = formData.get("cron_expression") as string;
@@ -221,13 +300,10 @@ export async function updateTriggerAction(
     const { data, error } = await updateTrigger(id, updateBody);
 
     if (error) {
-      const detail = (error as any)?.detail;
-      const errorMessage =
-        typeof detail === "string"
-          ? detail
-          : Array.isArray(detail)
-            ? detail[0]?.msg || JSON.stringify(detail)
-            : "Unknown error";
+      const detail = (error as HttpValidationError | undefined)?.detail;
+      const errorMessage = detail
+        ? (detail[0]?.msg || JSON.stringify(detail))
+        : "Unknown error";
       return {
         message: "Failed to update trigger",
         errors: { _form: [`API error: ${errorMessage}`] },

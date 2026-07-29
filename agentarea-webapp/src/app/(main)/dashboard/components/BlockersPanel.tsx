@@ -1,13 +1,29 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { Clock, Shield, TriangleAlert, Wallet } from "lucide-react";
+import { AgentAvatar } from "@/components/AgentAvatar";
+import EmptyState from "@/components/EmptyState";
+import { BoardSectionHeader } from "@/components/board";
+import { CollapsibleGroup } from "@/components/ui/group-header";
+import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import type { DashboardData } from "@/lib/api-dashboard";
+import { formatRelTime } from "./relTime";
 
-const SECTION_TONE: Record<
-  "hitl" | "wallet" | "failed",
-  { dot: string; label: string }
-> = {
-  hitl: { dot: "bg-amber-500", label: "Awaiting input" },
-  wallet: { dot: "bg-blue-500", label: "Wallet exhausted" },
-  failed: { dot: "bg-red-500", label: "Failed (24h)" },
+type BlockerRow = {
+  key: string;
+  question: string;
+  agentId: string;
+  agentName: string;
+  ago: string;
+  href: string;
+};
+
+type Group = {
+  label: string;
+  color: string;
+  icon: ReactNode;
+  rows: BlockerRow[];
 };
 
 export function BlockersPanel({
@@ -15,106 +31,117 @@ export function BlockersPanel({
 }: {
   blockers: DashboardData["blockers"];
 }) {
-  const total =
-    blockers.hitl.length +
-    blockers.wallet_exhausted.length +
-    blockers.failed_24h.length;
+  const t = useTranslations("DashboardPage");
+  const ago = (iso: string | null) =>
+    t("timeAgo", { time: formatRelTime(iso, t) });
+
+  const groups: Group[] = [
+    {
+      label: t("awaitingInput"),
+      color: "var(--status-warning)",
+      icon: <Clock />,
+      rows: blockers.hitl.map((b) => ({
+        key: b.task_id,
+        question: b.description,
+        agentId: b.agent_id,
+        agentName: b.agent_name,
+        ago: ago(b.created_at),
+        href: `/tasks/${b.task_id}`,
+      })),
+    },
+    {
+      label: t("walletExhausted"),
+      color: "var(--status-info)",
+      icon: <Wallet />,
+      rows: blockers.wallet_exhausted.map((b) => ({
+        key: b.agent_id,
+        question: t("budgetExhausted", {
+          amount: `$${b.budget_usd.toFixed(2)}`,
+          period: b.period,
+        }),
+        agentId: b.agent_id,
+        agentName: b.agent_name,
+        ago: b.period,
+        href: `/agents/${b.agent_id}`,
+      })),
+    },
+    {
+      label: t("failed24h"),
+      color: "var(--status-danger)",
+      icon: <TriangleAlert />,
+      rows: blockers.failed_24h.map((b) => ({
+        key: b.task_id,
+        question: b.error?.split("\n")[0] || t("taskFailed"),
+        agentId: b.agent_id,
+        agentName: b.agent_name,
+        ago: ago(b.occurred_at),
+        href: `/tasks/${b.task_id}`,
+      })),
+    },
+  ].filter((g) => g.rows.length > 0);
+
+  const total = groups.reduce((n, g) => n + g.rows.length, 0);
 
   return (
-    <section>
-      <header className="flex items-baseline justify-between">
-        <h3 className="text-[13px] font-medium text-foreground">Blockers</h3>
-        <span className="text-[11px] text-muted-foreground tabular-nums">
-          {total === 0 ? "Healthy" : total}
-        </span>
-      </header>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="border-b border-zinc-200 px-6 pb-3 pt-4 dark:border-zinc-700">
+        <BoardSectionHeader
+          icon={<Shield />}
+          color="hsl(var(--foreground))"
+          title={t("blockers")}
+          pill={total > 0 ? total : undefined}
+        />
+      </div>
 
-      <div className="mt-3 space-y-4">
-        {total === 0 && (
-          <div className="py-6 text-center text-[11px] text-muted-foreground">
-            Nothing blocking work right now.
+      <div className="min-h-0 flex-1 lg:overflow-y-auto">
+        {total === 0 ? (
+          <div className="flex min-h-0 flex-1 flex-col justify-center">
+            <EmptyState
+              iconsType="healthy"
+              accentClassName="text-emerald-500"
+              title={t("nothingBlocking")}
+              description={t("allClearHint")}
+              className="border-0 bg-transparent p-6 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent"
+            />
           </div>
-        )}
-
-        {blockers.hitl.length > 0 && (
-          <Section kind="hitl" count={blockers.hitl.length}>
-            {blockers.hitl.slice(0, 5).map((b) => (
-              <Link
-                key={b.task_id}
-                href={`/tasks/${b.task_id}`}
-                className="-mx-2 block rounded px-2 py-1.5 transition-colors hover:bg-muted/50"
-              >
-                <div className="truncate text-[12px]">{b.description}</div>
-                <div className="truncate text-[11px] text-muted-foreground">
-                  {b.agent_name}
-                </div>
-              </Link>
-            ))}
-          </Section>
-        )}
-
-        {blockers.wallet_exhausted.length > 0 && (
-          <Section kind="wallet" count={blockers.wallet_exhausted.length}>
-            {blockers.wallet_exhausted.slice(0, 5).map((b) => (
-              <Link
-                key={b.agent_id}
-                href={`/agents/${b.agent_id}`}
-                className="-mx-2 flex items-center justify-between gap-2 rounded px-2 py-1.5 transition-colors hover:bg-muted/50"
-              >
-                <span className="truncate text-[12px]">{b.agent_name}</span>
-                <span className="text-[11px] tabular-nums text-muted-foreground">
-                  ${b.budget_usd.toFixed(2)} / {b.period}
-                </span>
-              </Link>
-            ))}
-          </Section>
-        )}
-
-        {blockers.failed_24h.length > 0 && (
-          <Section kind="failed" count={blockers.failed_24h.length}>
-            {blockers.failed_24h.slice(0, 5).map((b) => (
-              <Link
-                key={b.task_id}
-                href={`/tasks/${b.task_id}`}
-                className="-mx-2 block rounded px-2 py-1.5 transition-colors hover:bg-muted/50"
-              >
-                <div className="truncate text-[12px]">
-                  {b.error?.split("\n")[0] || "Failed"}
-                </div>
-                <div className="truncate text-[11px] text-muted-foreground">
-                  {b.agent_name}
-                </div>
-              </Link>
-            ))}
-          </Section>
+        ) : (
+          groups.map((g) => (
+            <CollapsibleGroup
+              key={g.label}
+              label={g.label}
+              count={g.rows.length}
+              color={g.color}
+              icon={g.icon}
+              sticky={false}
+              headerClassName="px-6 lg:sticky lg:top-0 lg:z-10"
+            >
+              {g.rows.map((r) => (
+                <Link key={r.key} href={r.href} className="block">
+                  <InteractiveListRow
+                    className="px-6 py-2.5"
+                    contentClassName="items-start"
+                  >
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <span className="truncate text-[13.5px] font-medium text-foreground">
+                        {r.question}
+                      </span>
+                      <span className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">
+                        <AgentAvatar
+                          agent={{ id: r.agentId, name: r.agentName }}
+                          size="xs"
+                        />
+                        <span className="truncate font-medium">{r.agentName}</span>
+                        <span className="h-[2.5px] w-[2.5px] shrink-0 rounded-full bg-muted-foreground/60" />
+                        <span className="shrink-0 font-mono">{r.ago}</span>
+                      </span>
+                    </div>
+                  </InteractiveListRow>
+                </Link>
+              ))}
+            </CollapsibleGroup>
+          ))
         )}
       </div>
-    </section>
-  );
-}
-
-function Section({
-  kind,
-  count,
-  children,
-}: {
-  kind: "hitl" | "wallet" | "failed";
-  count: number;
-  children: React.ReactNode;
-}) {
-  const tone = SECTION_TONE[kind];
-  return (
-    <div>
-      <div className="mb-1 flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
-        <span className="text-[11px] font-medium text-foreground">
-          {tone.label}
-        </span>
-        <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
-          {count}
-        </span>
-      </div>
-      <div className="space-y-0">{children}</div>
     </div>
   );
 }

@@ -11,6 +11,10 @@ type Props = {
   stroke?: string;
   strokeWidth?: number;
   showDot?: boolean;
+  /** When set, fills the area under the curve with this color. */
+  fill?: string;
+  /** Opacity of the area fill (default 0.13). */
+  fillOpacity?: number;
   className?: string;
 };
 
@@ -70,6 +74,8 @@ export function Sparkline({
   stroke = "currentColor",
   strokeWidth = 1.5,
   showDot = true,
+  fill,
+  fillOpacity = 0.13,
   className,
 }: Props) {
   if (values.length === 0) {
@@ -92,6 +98,10 @@ export function Sparkline({
   }));
   const d = monotoneCubicPath(points);
   const last = points[points.length - 1];
+  const areaD =
+    fill && points.length > 1
+      ? `${d} L${last.x.toFixed(2)},${height} L${points[0].x.toFixed(2)},${height} Z`
+      : null;
 
   return (
     <svg
@@ -102,23 +112,19 @@ export function Sparkline({
       preserveAspectRatio="none"
       aria-hidden="true"
     >
+      {areaD && (
+        <path d={areaD} style={{ fill }} fillOpacity={fillOpacity} stroke="none" />
+      )}
       <path
         d={d}
         fill="none"
-        stroke={stroke}
+        style={{ stroke }}
         strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
       />
-      {showDot && (
-        <circle
-          cx={last.x}
-          cy={last.y}
-          r={2}
-          fill={stroke}
-        />
-      )}
+      {showDot && <circle cx={last.x} cy={last.y} r={2} style={{ fill: stroke }} />}
     </svg>
   );
 }
@@ -145,13 +151,19 @@ export function DeltaBadge({
   pct,
   direction,
   goodDirection = "up",
+  className,
 }: {
   pct: number | null;
   direction: DeltaDirection;
   goodDirection?: "up" | "down";
+  className?: string;
 }) {
   if (pct === null || direction === "flat") {
-    return <span className="text-xs text-muted-foreground tabular-nums">—</span>;
+    return (
+      <span className={cn("text-xs text-muted-foreground tabular-nums", className)}>
+        —
+      </span>
+    );
   }
   const isGood =
     (goodDirection === "up" && direction === "up") ||
@@ -163,7 +175,8 @@ export function DeltaBadge({
         "inline-flex items-center gap-0.5 tabular-nums text-xs font-medium",
         isGood
           ? "text-emerald-600 dark:text-emerald-400"
-          : "text-red-600 dark:text-red-400"
+          : "text-red-600 dark:text-red-400",
+        className
       )}
     >
       <span>{arrow}</span>

@@ -19,7 +19,6 @@ _PROVIDER_BASE_URLS: dict[str, str] = {
     "perplexity": "https://api.perplexity.ai",
     "cerebras": "https://api.cerebras.ai",
     "xai": "https://api.x.ai",
-    "ollama": "http://localhost:11434",
     "zai": "https://api.z.ai/api/paas/v4",
 }
 
@@ -58,7 +57,10 @@ class ModelDiscoveryService:
         self._allow_private_endpoints = allow_private_endpoints
 
     def _build_url(self, provider_key: str, endpoint_url: str | None) -> str | None:
-        base = endpoint_url or _PROVIDER_BASE_URLS.get(provider_key, "")
+        if provider_key == "ollama":
+            base = endpoint_url
+        else:
+            base = endpoint_url or _PROVIDER_BASE_URLS.get(provider_key, "")
         if not base:
             return None
         base = base.rstrip("/")

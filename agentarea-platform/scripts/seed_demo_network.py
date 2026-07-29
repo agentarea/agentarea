@@ -22,7 +22,7 @@ import random
 from uuid import uuid4
 
 from agentarea_agents.domain.models import Agent
-from agentarea_common.infrastructure.database import db
+from agentarea_common.config.database import db
 from agentarea_common.utils.slug import generate_slug
 from agentarea_mcp.domain.models import MCPServer
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance

@@ -1,0 +1,126 @@
+{{- if and .Values.mcpManager.enabled .Values.mcpManager.warmPool.enabled (has "warm_pool" .Values.mcpManager.features.enabled) }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentarea.fullname" . }}-sandbox-task-isolation
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sandbox-task-isolation
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values:
+          - warm-pool
+          - workflow-sandbox
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: sandbox-runner
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: mcp-manager
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.mcpManager.gateway.namespace | quote }}
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.mcpManager.instanceNetworkPolicy.dnsNamespace | quote }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: rustfs
+      ports:
+        - protocol: TCP
+          port: 9000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentarea.fullname" . }}-sandbox-allowed-public-egress
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sandbox-allowed-public-egress
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      mcp.agentarea.io/package-install: "allowed"
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values:
+          - warm-pool
+          - workflow-sandbox
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- range .Values.mcpManager.instanceNetworkPolicy.blockedEgressCIDRs }}
+              - {{ . | quote }}
+              {{- end }}
+{{- $lockedS3CIDRs := .Values.mcpManager.warmPool.lockedNetworkPolicy.s3EgressCIDRs | default list }}
+{{- range $cidr := $lockedS3CIDRs }}
+{{- if or (eq $cidr "0.0.0.0/0") (eq $cidr "::/0") }}
+{{- fail "mcpManager.warmPool.lockedNetworkPolicy.s3EgressCIDRs must not permit all public egress" }}
+{{- end }}
+{{- end }}
+{{- if $lockedS3CIDRs }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentarea.fullname" . }}-sandbox-locked-s3-egress
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sandbox-locked-s3-egress
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+      mcp.agentarea.io/package-install: "locked"
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values:
+          - warm-pool
+          - workflow-sandbox
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        {{- range $cidr := $lockedS3CIDRs }}
+        - ipBlock:
+            cidr: {{ $cidr | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 9000
+{{- end }}
+{{- end }}

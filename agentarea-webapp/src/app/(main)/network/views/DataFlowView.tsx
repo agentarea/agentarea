@@ -5,6 +5,7 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  MiniMap,
   ReactFlow,
   type Edge,
   type Node,
@@ -17,30 +18,9 @@ import MCPNode from "../components/nodes/MCPNode";
 import OpenAPINode from "../components/nodes/OpenAPINode";
 import SkillNode from "../components/nodes/SkillNode";
 import TriggerNode from "../components/nodes/TriggerNode";
+import type { NetworkNodeData, TopologyResponse } from "../types";
 import { layoutClusters, type Lane } from "../utils/clusterLayout";
 import { computeHighlightSets } from "../utils/highlight";
-
-interface NetworkNodeData {
-  id: string;
-  type: "agent" | "mcp_instance" | "openapi_connection" | "skill" | "trigger";
-  label: string;
-  status?: string | null;
-  metadata: Record<string, any>;
-}
-
-interface NetworkEdgeData {
-  id: string;
-  source: string;
-  target: string;
-  relation: string;
-}
-
-interface TopologyResponse {
-  nodes: NetworkNodeData[];
-  edges: NetworkEdgeData[];
-  governance: any[];
-  deployment_mode: string;
-}
 
 interface Props {
   topology: TopologyResponse;
@@ -75,30 +55,30 @@ const LANE_META: Record<
   { label: string; sublabel: string; tone: LaneTone; iconKey: Lane }
 > = {
   events: {
-    label: "Events",
-    sublabel: "Triggers · webhooks · schedules",
+    label: "Ingress",
+    sublabel: "Events entering the workspace",
     tone: "blue",
     iconKey: "events",
   },
   agents: {
-    label: "Agents",
-    sublabel: "Internal — governed",
+    label: "Agent fabric",
+    sublabel: "Governed execution boundary",
     tone: "neutral",
     iconKey: "agents",
   },
   external: {
-    label: "External",
-    sublabel: "MCP · OpenAPI · skills",
+    label: "Capabilities",
+    sublabel: "MCP, APIs and reusable skills",
     tone: "rose",
     iconKey: "external",
   },
 };
 
-const ROW_H = 164;
-const CLUSTER_GAP = 104;
+const ROW_H = 144;
+const CLUSTER_GAP = 80;
 const NODE_HALF_W = 104;
 const LANE_PAD = 64;
-const LANE_HEADER = 92;
+const LANE_HEADER = 76;
 
 export default function DataFlowView({
   topology,
@@ -106,7 +86,7 @@ export default function DataFlowView({
   highlightId,
   onPaneClick,
 }: Props) {
-  const { nodes, edges, visibleCount, clusterCount } = useMemo(() => {
+  const { nodes, edges, visibleCount } = useMemo(() => {
     const visibleNodes = topology.nodes.filter(
       (n) =>
         n.type === "agent" ||
@@ -202,51 +182,19 @@ export default function DataFlowView({
       nodes: flowNodes,
       edges: flowEdges,
       visibleCount: visibleNodes.length,
-      clusterCount: clusters.length,
     };
   }, [topology, highlightId]);
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#f8fafc] dark:bg-zinc-950">
+    <div className="relative h-full w-full overflow-hidden bg-[#f4f7fb] dark:bg-zinc-950">
       <div
-        className="pointer-events-none absolute inset-0 opacity-80 dark:opacity-30"
+        className="pointer-events-none absolute inset-0 opacity-90 dark:opacity-20"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(37,99,235,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(37,99,235,0.08) 1px, transparent 1px), radial-gradient(circle at 18% 12%, rgba(37,99,235,0.10), transparent 26%), radial-gradient(circle at 78% 22%, rgba(139,92,246,0.08), transparent 24%)",
-          backgroundSize: "32px 32px, 32px 32px, auto, auto",
+            "linear-gradient(rgba(148,163,184,0.10) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.10) 1px, transparent 1px)",
+          backgroundSize: "24px 24px, 24px 24px",
         }}
       />
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center px-4 pt-4">
-        <div className="flex max-w-[520px] items-center gap-4 rounded-lg border border-blue-100/80 bg-white/85 px-4 py-2 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl dark:border-blue-900/40 dark:bg-zinc-950/80">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
-              Agent Network
-            </p>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-              Governed data flow across boundaries
-            </p>
-          </div>
-          <div className="h-8 w-px bg-zinc-200 dark:bg-zinc-800" />
-          <div className="grid grid-cols-2 gap-3 text-right">
-            <div>
-              <p className="text-sm font-semibold leading-none text-zinc-950 dark:text-zinc-50">
-                {visibleCount}
-              </p>
-              <p className="mt-0.5 text-[9px] uppercase tracking-[0.14em] text-zinc-400">
-                Nodes
-              </p>
-            </div>
-            <div>
-              <p className="text-sm font-semibold leading-none text-zinc-950 dark:text-zinc-50">
-                {clusterCount}
-              </p>
-              <p className="mt-0.5 text-[9px] uppercase tracking-[0.14em] text-zinc-400">
-                Zones
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
       <ReactFlow
         className="relative z-0 !bg-transparent"
         nodes={nodes}
@@ -256,7 +204,7 @@ export default function DataFlowView({
         nodesConnectable={false}
         elementsSelectable
         fitView
-        fitViewOptions={{ padding: 0.18 }}
+        fitViewOptions={{ padding: 0.08 }}
         minZoom={0.1}
         maxZoom={2}
         onPaneClick={onPaneClick}
@@ -267,13 +215,32 @@ export default function DataFlowView({
         }}
       >
         <Background
-          variant={BackgroundVariant.Lines}
-          gap={64}
+          variant={BackgroundVariant.Dots}
+          gap={24}
           size={1}
-          color="#dbeafe"
-          className="opacity-70 dark:opacity-20"
+          color="#cbd5e1"
+          className="opacity-60 dark:opacity-20"
         />
-        <Controls className="!overflow-hidden !rounded-lg !border !border-blue-100 !bg-white/90 !shadow-[0_14px_40px_rgba(15,23,42,0.08)] !backdrop-blur dark:!border-blue-900/50 dark:!bg-zinc-950/85" />
+        {visibleCount > 18 && (
+          <MiniMap
+            position="bottom-right"
+            pannable
+            zoomable
+            nodeStrokeWidth={3}
+            nodeColor={(node) => {
+              if (node.type === "agent") return "#4f67e8";
+              if (node.type === "trigger") return "#f0a53b";
+              if (node.type === "lane") return "transparent";
+              return "#18a37a";
+            }}
+            maskColor="rgba(244,247,251,0.72)"
+            className="!right-3 !bottom-3 !h-[82px] !w-[132px] !rounded-lg !border !border-slate-200 !bg-white/90 !shadow-sm dark:!border-zinc-800 dark:!bg-zinc-950/90"
+          />
+        )}
+        <Controls
+          position="bottom-left"
+          className="!bottom-3 !left-3 !overflow-hidden !rounded-lg !border !border-slate-200 !bg-white/90 !shadow-sm dark:!border-zinc-800 dark:!bg-zinc-950/90"
+        />
       </ReactFlow>
     </div>
   );

@@ -63,6 +63,9 @@ func (s *RedisStore) UpdateExecution(ctx context.Context, record *ExecutionRecor
 }
 
 func (s *RedisStore) GetExecution(ctx context.Context, id string) (*ExecutionRecord, error) {
+	if err := validateExecutionID(id); err != nil {
+		return nil, err
+	}
 	data, err := s.client.Get(ctx, s.key(id)).Bytes()
 	if err == redis.Nil {
 		return nil, ErrExecutionNotFound
@@ -74,12 +77,21 @@ func (s *RedisStore) GetExecution(ctx context.Context, id string) (*ExecutionRec
 	if err := json.Unmarshal(data, &record); err != nil {
 		return nil, fmt.Errorf("decode sandbox execution %s: %w", id, err)
 	}
+	if err := validateExecutionRecord(&record); err != nil {
+		return nil, fmt.Errorf("invalid sandbox execution %s in Redis: %w", id, err)
+	}
 	return &record, nil
 }
 
 func (s *RedisStore) write(ctx context.Context, record *ExecutionRecord) error {
 	if record == nil || record.ID == "" {
 		return fmt.Errorf("execution record id is required")
+	}
+	if err := validateExecutionRecord(record); err != nil {
+		return fmt.Errorf("invalid sandbox execution %s: %w", record.ID, err)
+	}
+	if record.Result != nil && (record.Result.Stdout != "" || record.Result.Stderr != "") {
+		return fmt.Errorf("execution output bodies cannot be persisted in Redis")
 	}
 	data, err := json.Marshal(record)
 	if err != nil {

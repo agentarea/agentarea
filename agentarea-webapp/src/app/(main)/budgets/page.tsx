@@ -13,14 +13,12 @@ export default async function BudgetsPage() {
     <ContentBlock
       header={{
         breadcrumb: [{ label: "Budgets" }],
-        description: "Track workspace spend and tune the monthly cap.",
       }}
+      className="!p-0 lg:!overflow-hidden"
     >
-      <div className="main-content">
-        <Suspense fallback={<BudgetsSkeleton />}>
-          <BudgetsData />
-        </Suspense>
-      </div>
+      <Suspense fallback={<BudgetsSkeleton />}>
+        <BudgetsData />
+      </Suspense>
     </ContentBlock>
   );
 }

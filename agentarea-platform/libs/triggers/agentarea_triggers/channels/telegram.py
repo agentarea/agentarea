@@ -41,29 +41,29 @@ class TelegramAdapter:
         event_type = event.get("event_type", "")
         data = event.get("data", {})
 
-        if event_type == "WorkflowCompleted":
+        if event_type == "task.completed":
             result = data.get("result") or data.get("final_response") or ""
             return _escape_md(str(result))
 
-        if event_type == "WorkflowFailed":
+        if event_type == "task.failed":
             error = data.get("error", "Unknown error")
             return f"\u274c *Failed* \u2014 {_escape_md(str(error))}"
 
-        if event_type == "WorkflowCancelled":
+        if event_type == "task.cancelled":
             return "\u26d4 Task was cancelled."
 
-        if event_type == "HumanApprovalRequested":
+        if event_type == "approval.request":
             question = data.get("question", "Approval needed")
             return f"\u2753 *Needs your input:*\n{_escape_md(str(question))}"
 
-        if event_type == "HumanApprovalReceived":
+        if event_type == "approval.response":
             return "\u2705 Approval received, continuing..."
 
         if presentation == "concise":
             # Status events in concise mode
-            if event_type == "WorkflowStarted":
+            if event_type == "task.started":
                 return "\u23f3 Working on it..."
-            if event_type == "ToolCallStarted":
+            if event_type == "tool.call":
                 tool = data.get("tool_name", "tool")
                 return f"\ud83d\udd27 Using _{_escape_md(tool)}_..."
             if event_type in ("AgentDelegationStarted", "AgentDelegationCompleted"):
@@ -99,10 +99,14 @@ class TelegramAdapter:
             "parse_mode": "MarkdownV2",
         }
 
-        # Reply to original message if available
+        # Reply to original message if available. Use allow_sending_without_reply
+        # so a stale/deleted/unknown message_id never fails the whole delivery —
+        # Telegram returns 400 "message to be replied not found" otherwise, which
+        # DLQs the reply and the user sees nothing.
         reply_to = channel_config.get("message_id")
         if reply_to:
             payload["reply_to_message_id"] = reply_to
+            payload["allow_sending_without_reply"] = True
 
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         try:

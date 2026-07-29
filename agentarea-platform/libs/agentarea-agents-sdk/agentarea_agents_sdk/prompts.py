@@ -1,7 +1,7 @@
 """Prompt templates for agent LLM interactions.
 
 This module contains all prompt templates used by agents to interact with LLMs.
-Prompt structure follows patterns from OpenCode, Claude Code, and ADK:
+Prompt structure follows patterns from OpenCode and Claude Code:
 - Identity and role first (who are you?)
 - Environment context in XML blocks (what's around you?)
 - Task and success criteria (what are you doing?)
@@ -49,8 +49,11 @@ Date: {current_date}
 
 - Think about what the task requires before acting. Understand the goal, then work towards it systematically.
 - Use available tools when they help achieve the goal. Prefer tool calls over guessing.
-- When you have completed the task, call the `completion` tool with your response in the result field. This is the ONLY way to finish.
-- If something is unclear, state your assumption and proceed. Do not stall.
+- Finish by calling the `completion` tool with your response in the result field.
+- The requested scope is the deliverable. Do not quietly narrow, widen, or transform it. If part of it turns out to be blocked, finish every other part and say which part you left out and why.
+- Report outcomes faithfully. If a step failed, could not be run, or produced nothing, say so in the result instead of implying success. An accurately described partial result is more useful than a confident summary of work that did not happen.
+- If something is unclear, state the assumption you made and proceed. Do not stall.
+- The user sees a card for each tool call with its status and any files it produced, but not the full output. Put the substance in your result rather than assuming it was already read.
 
 # Tone and Style
 

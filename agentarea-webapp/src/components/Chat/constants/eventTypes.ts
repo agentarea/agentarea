@@ -25,6 +25,10 @@ export const EVENT_HUMAN_APPROVAL_REQUESTED = "HumanApprovalRequested";
 export const EVENT_HUMAN_APPROVAL_RECEIVED = "HumanApprovalReceived";
 export const EVENT_HUMAN_APPROVAL_DENIED = "HumanApprovalDenied";
 
+// Structured user-input request events (request_user_input tool; supports secret fields)
+export const EVENT_HUMAN_INPUT_REQUESTED = "HumanInputRequested";
+export const EVENT_HUMAN_INPUT_RECEIVED = "HumanInputReceived";
+
 // Context events
 export const EVENT_CONTEXT_WARNING = "ContextWarning";
 export const EVENT_CONTEXT_COMPACTED = "ContextCompacted";

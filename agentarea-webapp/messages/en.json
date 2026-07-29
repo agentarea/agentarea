@@ -112,6 +112,7 @@
     "build": "Build",
     "govern": "Govern",
     "connections": "Connections",
+    "clients": "Clients",
     "explore": "Explore",
     "providers": "Providers",
     "providerConfigs": "Models",
@@ -585,6 +586,23 @@
     "myConnections": "My Connections",
     "myActiveServers": "My Connections",
     "browseSpecifications": "Browse MCP Specifications",
+    "addConnectionDialog": {
+      "trigger": "Add Connection",
+      "title": "Add a connection",
+      "description": "Choose how you want to expose tools to your agents.",
+      "catalog": {
+        "title": "Browse Catalog",
+        "description": "Connect a ready-made integration (Asana, GitHub, …) from the catalog."
+      },
+      "mcp": {
+        "title": "Connect MCP Server",
+        "description": "Create a reusable connection from a Docker image, command, or hosted URL."
+      },
+      "openapi": {
+        "title": "OpenAPI Connection",
+        "description": "Wrap a REST API as agent tools by importing its OpenAPI / Swagger spec."
+      }
+    },
     "filters": {
       "type": "Type",
       "category": "Category"
@@ -648,7 +666,8 @@
       },
       "actions": {
         "start": "Start",
-        "stop": "Stop"
+        "stop": "Stop",
+        "connectOAuth": "Connect"
       },
       "status": {
         "stopped": "Stopped",
@@ -899,6 +918,7 @@
     "title": "Tasks",
     "description": "Description",
     "agent": "Agent",
+    "source": "Source",
     "statusLabel": "Status",
     "created": "Created",
     "cost": "Cost",
@@ -918,6 +938,8 @@
       "completed": "Completed",
       "success": "Success",
       "inputRequired": "Input Required",
+      "approvalRequired": "Approval Required",
+      "continuationRequired": "Continuation Required",
       "failed": "Failed",
       "error": "Error",
       "blocked": "Blocked",
@@ -1278,6 +1300,10 @@
       "cron": "Cron",
       "webhook": "Webhook"
     },
+    "group": {
+      "byChannel": "Channels",
+      "none": "No grouping"
+    },
     "noTriggers": "No triggers yet",
     "noTriggersDescription": "Create a trigger to automate your agent workflows.",
     "noMatchingTriggers": "No triggers match your search",
@@ -1289,7 +1315,9 @@
       "status": "Status",
       "nextRun": "Next Run",
       "lastRun": "Last Run",
-      "created": "Created"
+      "created": "Created",
+      "channel": "Channel",
+      "when": "When"
     },
     "type": {
       "cron": "Cron",
@@ -1374,6 +1402,7 @@
   "NetworkPage": {
     "title": "Network",
     "description": "Visual overview of your workspace topology",
+    "topology": "Topology",
     "accessGraph": "Access Graph",
     "dataFlow": "Data Flow",
     "organization": "Organization"
@@ -1546,6 +1575,7 @@
     "send": "Send",
     "toSend": "to send",
     "toCreate": "to create",
+    "toClose": "to close",
     "errorCreate": "Couldn't create the task. Try again.",
     "noAgents": {
       "title": "No agents yet",
@@ -1637,5 +1667,76 @@
       "acceptFailed": "Authorization didn't go through. Please try again.",
       "rejectFailed": "We couldn't cancel the request. Please try again."
     }
+  },
+  "DashboardPage": {
+    "couldntLoadTitle": "Couldn't load dashboard",
+    "spend": "Spend",
+    "monthToDate": "Month to date",
+    "cumulative": "cumulative",
+    "today": "Today",
+    "vsPrevDay": "vs prev day",
+    "budgetUsage": "{pct}% of {cap} budget",
+    "activity": "Activity",
+    "activityMeta": "Last 14 days · UTC",
+    "completed": "Completed",
+    "failed": "Failed",
+    "awaiting": "Awaiting",
+    "agents": "Agents",
+    "agentsActive": "{count} active",
+    "statDone": "{count} done",
+    "statFailed": "{count} failed",
+    "statMtd": "{amount} MTD",
+    "viewAllAgents": "View all agents",
+    "noAgents": "No agents yet.",
+    "noAgentsHint": "Create one and it'll show up here with live activity.",
+    "createFirstAgent": "Create your first agent",
+    "blockers": "Blockers",
+    "healthy": "Healthy",
+    "nothingBlocking": "Nothing blocking work right now.",
+    "allClearHint": "Every agent is running smoothly.",
+    "awaitingInput": "Awaiting input",
+    "walletExhausted": "Wallet exhausted",
+    "failed24h": "Failed (24h)",
+    "budgetExhausted": "Budget exhausted — {amount} / {period}",
+    "taskFailed": "Task failed",
+    "timeAgo": "{time} ago",
+    "relJustNow": "just now",
+    "relMinutes": "{count}m",
+    "relHours": "{count}h",
+    "relDays": "{count}d",
+    "period": "Period",
+    "periodLast7": "Last 7 days",
+    "periodLast30": "Last 30 days",
+    "periodMonthToDate": "Month to date",
+    "periodLast90": "Last 90 days"
+  },
+  "BudgetsPage": {
+    "couldntLoadTitle": "Couldn't load budget data",
+    "monthOutlook": "Month outlook",
+    "currentPeriod": "Current period",
+    "today": "Today",
+    "todaySub": "Spend so far today",
+    "projectedEom": "Projected end of month",
+    "projectedSub": "Based on {days}-day run rate",
+    "monthlyCap": "Monthly cap",
+    "capProjected": "{pct}% of cap projected",
+    "capNotSet": "Not set",
+    "noProjection": "No projection",
+    "hintUnderCap": "Projection stays well under cap — no action needed this period.",
+    "hintNearCap": "Projection is approaching the cap — keep an eye on spend.",
+    "hintOverCap": "Projection exceeds the cap — new tasks may be refused before month end.",
+    "hintNoCap": "No monthly cap is set — workspace spend is uncapped.",
+    "capTitle": "Workspace monthly cap",
+    "capDesc": "New tasks are refused once month-to-date spend reaches this amount.",
+    "capNoCap": "No cap is set. Workspace spend can continue without a monthly stop.",
+    "capUsed": "{amount} used",
+    "capOfTotal": "{pct}% of {cap}",
+    "capField": "Monthly cap (USD)",
+    "capPlaceholder": "No cap",
+    "save": "Save",
+    "capNote": "Changes apply immediately across the workspace.",
+    "capUpdated": "Workspace monthly cap updated.",
+    "capInvalid": "Enter a positive number, or leave it empty to remove the cap.",
+    "capUpdateFailed": "Failed to update workspace cap"
   }
 }

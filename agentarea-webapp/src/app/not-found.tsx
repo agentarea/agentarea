@@ -10,6 +10,7 @@ const NotFound = () => {
 
   return (
     <ContentBlock
+      showSidebarTrigger={false}
       header={{
         breadcrumb: [
           { label: "Home", href: "/workplace" },

@@ -79,7 +79,7 @@ export function InboxClientPanel({
   const pend = isPending(status);
   const norm = normalizeStatus(status);
   const presentation = getInboxStatusPresentation(status);
-  const agentName = (task as any).agent_name || "Unknown agent";
+  const agentName = task.agent_name || "Unknown agent";
   const result = task.result;
   const resultText =
     typeof result === "string"

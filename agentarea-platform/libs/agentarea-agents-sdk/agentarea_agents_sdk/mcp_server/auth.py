@@ -177,13 +177,15 @@ class MCPAuthMiddleware:
                 get_auth_provider,
             )
 
-            api_key_prefix = "aa_"
+            api_key_prefix = "aat_"
 
             # --- API key path ---
             if bearer_token.startswith(api_key_prefix):
                 user_context = await _validate_api_key(bearer_token, request)
                 if user_context:
                     await _resolve_accessible_workspaces(user_context)
+                    if not await _select_workspace(user_context, request):
+                        return
                     _mcp_user_context_var.set(user_context)
                     return
 
@@ -192,12 +194,15 @@ class MCPAuthMiddleware:
             auth_result = await auth_provider.verify_token(bearer_token)
 
             if auth_result.is_authenticated and auth_result.token:
-                workspace_id = request.headers.get("X-Workspace-ID") or auth_result.token.user_id
+                # Start on the caller's own workspace; an X-Workspace-ID/-Slug
+                # override is applied only after the membership check below.
                 user_context = UserContext(
                     user_id=auth_result.token.user_id,
-                    workspace_id=workspace_id,
+                    workspace_id=auth_result.token.user_id,
                 )
                 await _resolve_accessible_workspaces(user_context)
+                if not await _select_workspace(user_context, request):
+                    return
                 _mcp_user_context_var.set(user_context)
                 return
 
@@ -217,6 +222,32 @@ class MCPAuthMiddleware:
 # ---------------------------------------------------------------------------
 # Helpers (module-level for testability)
 # ---------------------------------------------------------------------------
+
+
+async def _select_workspace(user_context: Any, request: Request) -> bool:
+    """Authorize an X-Workspace-ID/-Slug override, reusing the REST guard.
+
+    `/mcp` is a second authentication path alongside the `/v1` router. It must
+    not re-implement the membership check, or the two drift and only one of them
+    gets hardened — which is exactly how the header became spoofable here.
+
+    Returns False when the caller asked for a workspace they are not a member of;
+    the caller then leaves the context unset so the request fails closed.
+    """
+    from agentarea_common.auth.dependencies import _apply_workspace_selection
+
+    try:
+        await _apply_workspace_selection(user_context, request)
+        return True
+    except Exception:
+        logger.warning(
+            "MCP auth: rejected workspace override user=%s requested=%s accessible=%s",
+            user_context.user_id,
+            request.headers.get("X-Workspace-ID") or request.headers.get("X-Workspace-Slug"),
+            user_context.accessible_workspaces,
+            exc_info=True,
+        )
+        return False
 
 
 def _parse_jsonrpc(body: bytes) -> tuple[str, Any]:

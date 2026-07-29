@@ -37,18 +37,19 @@
 		"dev": "tsc --watch",
 		"typecheck": "tsc --noEmit",
 		"lint": "prettier --check . && xo",
-		"test": "prettier --check . && tsc --noEmit",
+		"pretest": "pnpm -C ../agentarea-webapp --filter @agentarea/api-client... install --frozen-lockfile && pnpm -C ../agentarea-webapp --filter @agentarea/api-client run build",
+		"test": "prettier --check . && tsc --noEmit && ava",
 		"prepublishOnly": "npm run build"
 	},
 	"files": [
 		"dist"
 	],
 	"dependencies": {
+		"@agentarea/api-client": "link:../agentarea-webapp/packages/api-client",
 		"ink": "^4.1.0",
 		"meow": "^11.0.0",
 		"react": "^18.2.0",
-		"axios": "^1.16.1",
-		"eventsource": "^2.0.2",
+		"axios": "^1.18.0",
 		"@zowe/secrets-for-zowe-sdk": "^8.8.3",
 		"async-exit-hook": "^2.0.1",
 		"conf": "^12.0.0"
@@ -57,7 +58,6 @@
 		"@sindresorhus/tsconfig": "^8.1.0",
 		"@types/react": "^18.0.32",
 		"@types/node": "^20.0.0",
-		"@types/eventsource": "^1.1.11",
 		"@vdemedes/prettier-config": "^2.0.1",
 		"ava": "^5.2.0",
 		"chalk": "^5.2.0",
@@ -93,11 +93,16 @@
 	"prettier": "@vdemedes/prettier-config",
 	"overrides": {
 		"@eslint/plugin-kit@<0.3.4": "0.7.1",
-		"axios@>=1.0.0 <1.15.2": "1.16.1",
-		"brace-expansion@<1.1.13": "1.1.14",
-		"brace-expansion@>=4.0.0 <5.0.6": "5.0.6",
+		"@babel/core@<=7.29.0": "7.29.6",
+		"axios@>=1.0.0 <1.18.0": "1.18.0",
+		"brace-expansion@<1.1.16": "1.1.16",
+		"brace-expansion@>=2.0.0 <2.1.2": "2.1.2",
+		"brace-expansion@>=3.0.0 <5.0.8": "5.0.8",
 		"diff@>=4.0.0 <4.0.4": "4.0.4",
-		"fast-uri@<=3.1.1": "3.1.2",
+		"fast-uri@>=3.0.0 <3.1.4": "3.1.4",
+		"form-data@>=4.0.0 <4.0.6": "4.0.6",
+		"js-yaml@>=3.0.0 <3.15.0": "3.15.0",
+		"js-yaml@>=4.0.0 <4.3.0": "4.3.0",
 		"json-schema-typed@8.0.1": "8.0.2",
 		"minimatch@>=3.0.0 <3.1.5": "3.1.5",
 		"ws@>=8.0.0 <8.20.1": "8.21.0"
@@ -105,11 +110,16 @@
 	"pnpm": {
 		"overrides": {
 			"@eslint/plugin-kit@<0.3.4": "0.7.1",
-			"axios@>=1.0.0 <1.15.2": "1.16.1",
-			"brace-expansion@<1.1.13": "1.1.14",
-			"brace-expansion@>=4.0.0 <5.0.6": "5.0.6",
+			"@babel/core@<=7.29.0": "7.29.6",
+			"axios@>=1.0.0 <1.18.0": "1.18.0",
+			"brace-expansion@<1.1.16": "1.1.16",
+			"brace-expansion@>=2.0.0 <2.1.2": "2.1.2",
+			"brace-expansion@>=3.0.0 <5.0.8": "5.0.8",
 			"diff@>=4.0.0 <4.0.4": "4.0.4",
-			"fast-uri@<=3.1.1": "3.1.2",
+			"fast-uri@>=3.0.0 <3.1.4": "3.1.4",
+			"form-data@>=4.0.0 <4.0.6": "4.0.6",
+			"js-yaml@>=3.0.0 <3.15.0": "3.15.0",
+			"js-yaml@>=4.0.0 <4.3.0": "4.3.0",
 			"json-schema-typed@8.0.1": "8.0.2",
 			"minimatch@>=3.0.0 <3.1.5": "3.1.5",
 			"ws@>=8.0.0 <8.20.1": "8.21.0"

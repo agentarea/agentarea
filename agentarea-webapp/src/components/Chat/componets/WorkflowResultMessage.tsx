@@ -17,7 +17,7 @@ interface WorkflowResultData {
 const WorkflowResultMessage: React.FC<{
   data: WorkflowResultData;
   agent_name?: string;
-}> = ({ data, agent_name }) => {
+}> = ({ data, agent_name: _agent_name }) => {
   const content = data.result || data.final_response || "";
   const hasServiceBudget = data.service_budget_usd != null && data.service_budget_usd > 0;
 

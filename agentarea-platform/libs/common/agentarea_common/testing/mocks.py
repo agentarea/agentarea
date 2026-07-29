@@ -33,7 +33,7 @@ class TestEventBroker(EventBroker):
         """Store published events for test verification.
 
         We intentionally keep the event object as-is to allow tests to assert
-        identity/equality with mock events or legacy DomainEvent instances.
+        identity/equality with mock events or DomainEvent instances.
         """
         self.published_events.append(event)
         logger.debug("Test Event Published: %s", event)

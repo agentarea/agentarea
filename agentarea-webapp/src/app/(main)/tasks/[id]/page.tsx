@@ -1,20 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, X } from "lucide-react";
+import { Loader2, Play, X } from "lucide-react";
 import { toast } from "sonner";
 import { ChatInputArea } from "@/components/Chat/componets/ChatInputArea";
 import { UserMessage as UserMessageComponent } from "@/components/Chat/componets/UserMessage";
-import { MessageRenderer } from "@/components/Chat/MessageComponents";
-import type { MessageComponentType } from "@/components/Chat/types";
-import { processEventsToMessages } from "@/components/Chat/utils/eventProcessor";
+import type { HumanInputSecretValue } from "@/components/Chat/types";
 import EmptyState from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { Skeleton } from "@/components/ui/skeleton";
+import { buildActivitySummary } from "@/components/TaskInfoPanel/buildActivitySummary";
 import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
-import { buildActivitySummary } from "@/components/TaskInfoPanel/buildActivitySummary";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,16 +22,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useTaskEvents } from "@/hooks/useTaskEvents";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { useTaskActions } from "@/hooks/useTaskActions";
+import { PartRenderer } from "@/lib/events/parts/PartRenderer";
+import { useTaskEvents } from "@/lib/events/useTaskEvents";
 import {
   cancelAgentTaskAction as cancelAgentTask,
-  sendTaskCommandAction as sendTaskCommand,
+  continueAgentTaskAction as continueAgentTask,
 } from "@/lib/server-actions";
-import { resolveEscalationAction } from "@/lib/server-actions";
 import { useTaskContext } from "./TaskContext";
 
+// Statuses where the workflow is still alive and a free-text message should be
+// queued for the next iteration rather than starting a new task. "completed" is
+// included: a conversational task writes "completed" after each reply but stays
+// alive in its follow-up window.
+const QUEUEABLE_STATUSES = ["running", "paused", "blocked", "completed"];
+
 export default function TaskDetailsPage() {
-  const { task, taskStatus, policy, loading, error, refresh } = useTaskContext();
+  const { task, taskStatus, policy, loading, error, refresh } =
+    useTaskContext();
   const router = useRouter();
 
   const [, setRefreshing] = useState(false);
@@ -42,72 +49,53 @@ export default function TaskDetailsPage() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [optimisticMessages, setOptimisticMessages] = useState<MessageComponentType[]>([]);
+  const [continuationIterations, setContinuationIterations] = useState("10");
+  const [continuationBudget, setContinuationBudget] = useState("");
+  const [continuing, setContinuing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleResolveEscalation = async (escalationId: string, approved: boolean, comment: string) => {
-    if (!task) return;
-    try {
-      await resolveEscalationAction(task.agent_id, task.id, escalationId, approved, comment);
-      refresh();
-    } catch (e) {
-      console.error("Failed to resolve escalation:", e);
-    }
-  };
+  const status = taskStatus?.status || task?.status || "";
+  const agentId = task?.agent_id || null;
+  const taskId = task?.id || null;
 
-  // Events hook for real-time events + historical replay
+  // Unified event core: one SSE hook folds history + live tail into ordered
+  // parts (supersede-by-id), a lifecycle timeline, the single active form, and
+  // the terminal message/status.
   const {
-    events: taskEvents,
+    parts,
+    status: streamStatus,
+    pendingForm,
+    terminalMessage,
     loading: eventsLoading,
-    refresh: refreshEvents,
-  } = useTaskEvents(task?.agent_id || null, task?.id || null, {
+  } = useTaskEvents(agentId, taskId, {
     includeHistory: true,
     autoConnect: true,
   });
 
-  // Convert historical events to chat message components using shared processor
-  const executionMessages = useMemo((): MessageComponentType[] => {
-    if (!task) return [];
+  const actions = useTaskActions(agentId, taskId);
 
-    const processed = processEventsToMessages(
-      taskEvents.map((e) => ({
-        type: e.type,
-        timestamp: e.timestamp,
-        data: e.data,
-      })),
-      { taskId: task.id, agentId: task.agent_id }
-    );
-
-    // Merge optimistic messages, filtering out any that have been confirmed by events
-    const confirmedContents = new Set(
-      processed
-        .filter((m) => m.type === "user_message")
-        .map((m) => (m.data as any).content)
-    );
-    const pendingOptimistic = optimisticMessages.filter(
-      (m) => !confirmedContents.has((m.data as any).content)
-    );
-
-    return [...processed, ...pendingOptimistic];
-  }, [task, taskEvents, optimisticMessages]);
-
-  // Side-panel activity summary (tools/skills used, failures, LLM calls)
+  // Side-panel activity summary derived from the reduced parts.
   const activitySummary = useMemo(
-    () => buildActivitySummary(executionMessages, taskEvents.length, taskEvents),
-    [executionMessages, taskEvents]
+    () => buildActivitySummary(parts, parts.length),
+    [parts]
   );
 
-  // Auto-scroll to bottom when new messages arrive
+  const isActive =
+    QUEUEABLE_STATUSES.includes(status) || status === "waiting_for_input";
+  // Whether the task is still executing, from the event stream (the record's
+  // status can lag). Drives the info panel's live/idle indicators.
+  const isRunning = streamStatus === "running";
+
+  // Auto-scroll to bottom as parts arrive.
   const messagesEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [executionMessages.length]);
+  }, [parts.length, terminalMessage]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await refresh();
-    await refreshEvents();
     setRefreshing(false);
   };
 
@@ -121,7 +109,7 @@ export default function TaskDetailsPage() {
       if (error) {
         const errorMessage =
           error.detail?.[0]?.msg ||
-          (error as any).message ||
+          (error as { message?: string }).message ||
           "An error occurred while cancelling the task";
         toast.error("Failed to cancel task", {
           description: errorMessage,
@@ -130,7 +118,7 @@ export default function TaskDetailsPage() {
         toast.success("Task cancelled successfully");
         await refresh();
       }
-    } catch (err) {
+    } catch {
       toast.error("Failed to cancel task", {
         description: "An unexpected error occurred",
       });
@@ -140,89 +128,91 @@ export default function TaskDetailsPage() {
     }
   };
 
-  // Chat input handler
+  const handleContinueTask = async () => {
+    if (!taskId) return;
+    const iterations = Number.parseInt(continuationIterations, 10);
+    const budget = continuationBudget.trim();
+    if (
+      !Number.isInteger(iterations) ||
+      iterations < 0 ||
+      (iterations === 0 && !budget)
+    ) {
+      toast.error("Grant at least one iteration or a budget top-up.");
+      return;
+    }
+
+    setContinuing(true);
+    try {
+      const { error: continuationError } = await continueAgentTask(
+        taskId,
+        iterations,
+        budget || undefined
+      );
+      if (continuationError) {
+        toast.error("Couldn't continue task", {
+          description:
+            "The task is no longer waiting, or the grant does not lift its limit.",
+        });
+        return;
+      }
+      toast.success("Task continued");
+      await refresh();
+    } catch {
+      toast.error("Couldn't continue task", {
+        description: "An unexpected error occurred.",
+      });
+    } finally {
+      setContinuing(false);
+    }
+  };
+
+  // Answer the single active form (input request) — resumes the workflow.
+  const handleFormSubmit = useCallback(
+    async (
+      inputRequestId: string,
+      answers: Record<string, unknown>,
+      secrets: Record<string, HumanInputSecretValue>
+    ) => {
+      const { error } = await actions.submitInput(
+        inputRequestId,
+        answers,
+        secrets
+      );
+      if (error) toast.error("Failed to submit response");
+    },
+    [actions]
+  );
+
+  // Free-text send routes by task state: answer a pending form, queue for a
+  // live task, or start a follow-up task and navigate to it.
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || !task || sendingMessage) return;
-
     const message = chatInput.trim();
+    if (!message || sendingMessage) return;
+
     setChatInput("");
     setSendingMessage(true);
-
     try {
-      if (isActive) {
-        // Optimistically show user message immediately
-        setOptimisticMessages((prev) => [
-          ...prev,
-          {
-            type: "user_message",
-            data: {
-              id: `optimistic-${Date.now()}`,
-              timestamp: new Date().toISOString(),
-              agent_id: task.agent_id,
-              event_type: "MessageQueued",
-              content: message,
-            },
-          },
-        ]);
-
-        const { error } = await sendTaskCommand(task.agent_id, task.id, {
-          command: "queue_message",
-          message: message,
-        });
-        if (error) {
-          toast.error("Failed to send message");
-          // Remove optimistic message on error
-          setOptimisticMessages((prev) =>
-            prev.filter((m) => (m.data as any).content !== message)
-          );
-        }
-      } else {
-        // Task is completed — create a new task for the same agent
-        const response = await fetch(`/api/agents/${task.agent_id}/tasks/create`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            description: message,
-            parameters: {
-              context: {},
-              task_type: "chat",
-              session_id: `chat-${Date.now()}`,
-            },
-            enable_agent_communication: true,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        // Extract task_id from the SSE stream to navigate
-        const reader = response.body?.getReader();
-        if (reader) {
-          const decoder = new TextDecoder();
-          let newTaskId: string | null = null;
-          let done = false;
-          while (!done) {
-            const { value, done: readerDone } = await reader.read();
-            done = readerDone;
-            if (value) {
-              const text = decoder.decode(value, { stream: true });
-              const match = text.match(/"task_id"\s*:\s*"([^"]+)"/);
-              if (match && !newTaskId) {
-                newTaskId = match[1];
-              }
-            }
-          }
-          if (newTaskId) {
-            router.push(`/tasks/${newTaskId}`);
-            return;
-          }
-        }
-        toast.error("Failed to create new task");
+      if (pendingForm && pendingForm.eventType === "input.request") {
+        const { error } = await actions.submitInput(
+          pendingForm.partId,
+          { answer: message },
+          {}
+        );
+        if (error) toast.error("Failed to submit response");
+        return;
       }
+
+      if (QUEUEABLE_STATUSES.includes(status)) {
+        const { error } = await actions.queueMessage(message);
+        if (error) toast.error("Failed to send message");
+        return;
+      }
+
+      const newTaskId = await actions.createFollowupTask(message);
+      if (newTaskId) router.push(`/tasks/${newTaskId}`);
+      else toast.error("Failed to create new task");
     } catch (err) {
-      console.error("Failed to send message:", err);
       toast.error("Failed to send message", {
         description: err instanceof Error ? err.message : String(err),
       });
@@ -238,7 +228,10 @@ export default function TaskDetailsPage() {
   // Show loading state — chat-shaped placeholder (alternating message bubbles).
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-3xl space-y-4 p-4" aria-hidden="true">
+      <div
+        className="mx-auto w-full max-w-3xl space-y-4 p-4"
+        aria-hidden="true"
+      >
         {Array.from({ length: 5 }).map((_, i) => (
           <div
             key={i}
@@ -266,11 +259,6 @@ export default function TaskDetailsPage() {
     );
   }
 
-  // Determine if task is active based on status
-  // Completed tasks stay alive (workflow waits for follow-ups), so we always use queue_message
-  const isActive = ["running", "paused", "blocked", "completed"].includes(task.status);
-
-  // Get current status from taskStatus or fallback to task.status
   const currentStatus = taskStatus?.status || task.status;
   const executionTime = taskStatus?.execution_time || "N/A";
   const startTime = taskStatus?.start_time || task.created_at || "";
@@ -282,13 +270,29 @@ export default function TaskDetailsPage() {
     task.result?.total_cost;
   const totalCost =
     rawCost != null && !Number.isNaN(Number(rawCost)) ? Number(rawCost) : null;
-  // Prefer the resolved policy's run budget; fall back to the creation param.
   const rawBudget =
     policy?.budget?.run_budget_usd ?? task.parameters?.budget_usd;
   const budgetLimit =
     rawBudget != null && !Number.isNaN(Number(rawBudget))
       ? Number(rawBudget)
       : null;
+
+  const terminalTone =
+    streamStatus === "failed"
+      ? "danger"
+      : streamStatus === "cancelled"
+        ? "warning"
+        : "success";
+
+  // A successful task's answer already renders as the last assistant part, so a
+  // terminal message that just repeats it would double up. Show the terminal
+  // banner only when it adds something (a failure reason, or a completion whose
+  // text isn't already in the transcript).
+  const lastAssistantText = [...parts].reverse().find((p) => p.kind === "llm")
+    ?.data?.content as string | undefined;
+  const showTerminalMessage =
+    !!terminalMessage &&
+    terminalMessage.trim() !== (lastAssistantText || "").trim();
 
   return (
     <>
@@ -314,18 +318,25 @@ export default function TaskDetailsPage() {
                 </div>
               )}
 
-              {/* Execution events rendered directly */}
-              {executionMessages.map((message, index) => (
-                <MessageRenderer
-                  key={`${message.data.id}-${message.data.event_type}-${index}`}
-                  message={message}
-                  agent_name={task.agent_name || undefined}
-                  onResolveEscalation={handleResolveEscalation}
+              {/* Ordered event parts (supersede-by-id → stable React keys). */}
+              {parts.map((part) => (
+                <PartRenderer
+                  key={part.partId}
+                  part={part}
+                  onFormSubmit={handleFormSubmit}
                 />
               ))}
 
+              {/* Terminal message from the last lifecycle event (only when it
+                  adds info beyond the last assistant part). */}
+              {showTerminalMessage && (
+                <StatusIndicator tone={terminalTone}>
+                  {terminalMessage}
+                </StatusIndicator>
+              )}
+
               {/* Empty state */}
-              {!eventsLoading && executionMessages.length === 0 && (
+              {!eventsLoading && parts.length === 0 && !terminalMessage && (
                 <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                   No execution events yet.
                 </div>
@@ -338,32 +349,82 @@ export default function TaskDetailsPage() {
           {/* Chat input — matches the workplace composer (borderless textarea
               inside a soft rounded card) so both surfaces look identical. */}
           <div className="border-t bg-background px-3 py-3">
-            <div className="rounded-2xl border bg-white px-2 pb-2 pt-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-500 ease-out hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]">
-              <ChatInputArea
-                input={chatInput}
-                onInputChange={handleInputChange}
-                onSubmit={handleSendMessage}
-                isLoading={sendingMessage}
-                placeholder={
-                  isActive
-                    ? `Message ${task.agent_name || "agent"}...`
-                    : `Send a follow-up to ${task.agent_name || "agent"}...`
-                }
-                selectedFiles={[]}
-                onRemoveFile={() => {}}
-                onOpenFileDialog={() => {}}
-                fileInputRef={fileInputRef}
-                textareaRef={textareaRef}
-                variant="centered"
-                rows={1}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage(e);
+            {currentStatus === "waiting_for_continuation" ? (
+              <div className="space-y-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+                <div>
+                  <p className="text-sm font-medium text-amber-950 dark:text-amber-100">
+                    The task reached its iteration or budget limit.
+                  </p>
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    Grant only the resources you want it to use. It will wait
+                    for up to 24 hours.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="space-y-1 text-xs font-medium">
+                    Additional iterations
+                    <input
+                      className="block h-9 w-32 rounded-md border bg-background px-3 text-sm"
+                      min="0"
+                      max="1000"
+                      type="number"
+                      value={continuationIterations}
+                      onChange={(event) =>
+                        setContinuationIterations(event.target.value)
+                      }
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs font-medium">
+                    Budget top-up (USD, optional)
+                    <input
+                      className="block h-9 w-44 rounded-md border bg-background px-3 text-sm"
+                      min="0.01"
+                      step="0.01"
+                      type="number"
+                      value={continuationBudget}
+                      onChange={(event) =>
+                        setContinuationBudget(event.target.value)
+                      }
+                    />
+                  </label>
+                  <Button onClick={handleContinueTask} disabled={continuing}>
+                    {continuing ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Play className="mr-2 h-4 w-4" />
+                    )}
+                    Continue task
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border bg-white px-2 pb-2 pt-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-500 ease-out hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]">
+                <ChatInputArea
+                  input={chatInput}
+                  onInputChange={handleInputChange}
+                  onSubmit={handleSendMessage}
+                  isLoading={sendingMessage}
+                  placeholder={
+                    isActive
+                      ? `Message ${task.agent_name || "agent"}...`
+                      : `Send a follow-up to ${task.agent_name || "agent"}...`
                   }
-                }}
-              />
-            </div>
+                  selectedFiles={[]}
+                  onRemoveFile={() => {}}
+                  onOpenFileDialog={() => {}}
+                  fileInputRef={fileInputRef}
+                  textareaRef={textareaRef}
+                  variant="centered"
+                  rows={1}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e);
+                    }
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -382,7 +443,7 @@ export default function TaskDetailsPage() {
                 result: task.result,
               }}
               currentStatus={currentStatus}
-              isActive={isActive}
+              isActive={isRunning}
               startTime={startTime}
               endTime={endTime}
               executionTime={executionTime}

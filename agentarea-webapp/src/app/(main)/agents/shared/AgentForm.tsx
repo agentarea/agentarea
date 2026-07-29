@@ -1,10 +1,14 @@
 "use client";
 
+import type {
+  McpServerInstanceResponse,
+  McpServerResponse,
+  ModelInstanceResponse,
+} from "@/api/client/types.gen";
 import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
-import type { components } from "@/api/schema";
 import FullChat from "@/components/Chat/FullChat";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import Divider from "@/components/ui/divider";
@@ -27,24 +31,25 @@ import {
   SkillsConfig,
   ToolConfig,
 } from "../create/components";
+import type { AddAgentFormState } from "../create/actions";
 import type { AgentFormValues, AgentSkill } from "../create/types";
 import { useChat } from "./ChatContext";
 
-type MCPServer = components["schemas"]["MCPServerResponse"];
-type LLMModelInstance = components["schemas"]["ModelInstanceResponse"];
+type MCPServer = McpServerResponse;
+type LLMModelInstance = ModelInstanceResponse;
 
 interface AgentFormProps {
   mcpServers: MCPServer[];
   llmModelInstances: LLMModelInstance[];
-  mcpInstanceList: any[];
-  builtinTools: any[];
+  mcpInstanceList: McpServerInstanceResponse[];
+  builtinTools: unknown[];
   initialData?: Partial<AgentFormValues>;
   agentId?: string;
-  onSubmit: (data: AgentFormValues) => Promise<any>;
+  onSubmit: (data: AgentFormValues) => Promise<AddAgentFormState>;
   submitButtonText?: string;
   submitButtonLoadingText?: string;
-  onSuccess?: (result: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (result: AddAgentFormState) => void;
+  onError?: (error: unknown) => void;
   isLoading?: boolean;
   className?: string;
   placeholder?: string;
@@ -60,8 +65,6 @@ export default function AgentForm({
   initialData,
   agentId,
   onSubmit,
-  submitButtonText = "Save Agent",
-  submitButtonLoadingText = "Saving...",
   onSuccess,
   onError,
   isLoading = false,
@@ -184,7 +187,7 @@ export default function AgentForm({
 
           if (onSuccess) {
             // Check if this is a creation (has id in result) - keep submitting state until navigation
-            const createdId = (result.fieldValues as any)?.id;
+            const createdId = result.fieldValues?.id;
             if (createdId) {
               shouldKeepSubmitting = true;
             }

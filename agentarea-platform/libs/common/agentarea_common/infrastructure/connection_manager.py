@@ -50,14 +50,10 @@ class ConnectionManager:
         if self._event_broker_singleton is None:
             try:
                 from agentarea_common.config import get_settings
-                from agentarea_common.events.router import (
-                    create_event_broker_from_router,
-                    get_event_router,
-                )
+                from agentarea_common.events.factory import create_event_broker
 
                 settings = get_settings()
-                router = get_event_router(settings.broker)
-                self._event_broker_singleton = create_event_broker_from_router(router)
+                self._event_broker_singleton = create_event_broker(settings.broker)
                 logger.info(
                     f"Created Redis event broker singleton: "
                     f"{type(self._event_broker_singleton).__name__}"
@@ -119,28 +115,15 @@ class ConnectionManager:
         """Shutdown all connections with proper cleanup."""
         logger.info("Shutting down connection manager")
 
-        # Clean up event broker with more thorough cleanup
+        # Clean up event broker
         if self._event_broker_singleton:
             try:
-                # Try async context manager exit first
-                if hasattr(self._event_broker_singleton, "__aexit__"):
-                    await self._event_broker_singleton.__aexit__(None, None, None)
-
-                # Also try to close the underlying Redis broker directly
-                if hasattr(self._event_broker_singleton, "redis_broker"):
-                    redis_broker = self._event_broker_singleton.redis_broker
-                    if hasattr(redis_broker, "close"):
-                        await redis_broker.close()
-                    elif hasattr(redis_broker, "_connection") and redis_broker._connection:
-                        # Force close the connection if it exists
-                        try:
-                            await redis_broker._connection.close()
-                        except Exception as conn_e:
-                            logger.debug(f"Error closing Redis connection: {conn_e}")
-
+                close = getattr(self._event_broker_singleton, "close", None)
+                if close is not None:
+                    await close()
                 logger.info("Cleaned up event broker singleton")
             except Exception as e:
-                logger.warning(f"Error cleaning up event broker: {e}")
+                logger.warning(f"Error cleaning up event broker: {e}", exc_info=True)
             finally:
                 self._event_broker_singleton = None
 

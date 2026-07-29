@@ -1,7 +1,7 @@
 # ADR-002: Event Architecture — Transactional Outbox + Relay
 
 **Date:** 2026-05-21
-**Status:** **Superseded** (same day, before any implementation)
+**Status:** **Superseded** (same day, before any implementation) — partially revived 2026-07-17 (`event_outbox` + relay built; see the last supersession-note update)
 **Deciders:** Engineering team
 **Related plan:** `~/.claude/plans/rosy-roaming-rabin.md`
 
@@ -26,6 +26,38 @@
 > The final outbound delivery design is open and will be decided when the work
 > resumes. This ADR is preserved as a reference for the generic event_outbox pattern
 > in case a real multi-subscriber demand emerges later.
+>
+> **Correction (2026-06-29):** The "what actually shipped" claim above is stale. The
+> `channel_inbox` table + `ss1_add_channel_inbox` migration are **not in tree** (only
+> orphaned `.pyc` remain; the source was never committed). Inbound dedup was reworked
+> to a broker-native primitive: `agentarea_common/broker/dedup.py` (`DedupCache`, Redis
+> SETNX + TTL). `channels/inbound_subscriber.py` claims a stable `dedup_key` before
+> side effects and ACKs duplicates. There is no `channel_inbox` DB table; do not rely
+> on this note's original wording.
+>
+> **Update (2026-07-17):** The `event_outbox` + relay rejected above as YAGNI has
+> been built after all (commit 39651229, unified event pipeline), with a narrower
+> motivation than this ADR's generic fanout: `base_service._publish_task_event`
+> used to swallow broker publish errors, losing domain events silently.
+> `OutboxPublisher` enqueues on the service's own session (commits or rolls back
+> with the aggregate); `OutboxRelay` in `apps/worker` drains via
+> `SELECT … FOR UPDATE SKIP LOCKED` and publishes through `RedisEventBroker`.
+> Scope boundaries, to avoid re-confusing future readers:
+>
+> - **Workflow/task-feed events do NOT go through this outbox.** They keep their
+>   own durable pair: `task_events` (history/catch-up) + per-task Redis stream
+>   (live tail) — see `events/task_stream.py`. The outbox carries service-layer
+>   domain events (task CRUD lifecycle from `base_service`, more producers later).
+> - **Inbound channel dedup stays broker-native** (`DedupCache`); no inbox table.
+> - `processed_events` (consumer-side dedup table) remains unbuilt.
+>
+> Known gap as of this note: **no consumer subscribes to the channels the relay
+> publishes to** — today's value is the loss-proof transactional enqueue plus the
+> outbox table as an SQL-queryable domain-event audit log. When the first real
+> consumer lands (planned: trigger/subscription router on the bus), it must
+> consume via a durable primitive (Redis Streams consumer group or the outbox
+> table itself), not bare pub/sub — otherwise the offline-consumer loss this
+> pattern exists to prevent comes straight back on the last hop.
 
 ---
 

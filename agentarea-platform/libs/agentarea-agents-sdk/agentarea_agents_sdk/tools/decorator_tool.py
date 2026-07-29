@@ -4,7 +4,7 @@ import inspect
 import types
 from abc import ABC
 from collections.abc import Callable
-from typing import Any, Union, get_args, get_origin, get_type_hints
+from typing import Any, TypeVar, Union, cast, get_args, get_origin, get_type_hints, overload
 
 from .base_tool import BaseTool
 from .tool_definition import (
@@ -31,13 +31,30 @@ class ToolMethodMetadata:
         self.requires_user_confirmation = requires_user_confirmation
 
 
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+@overload
+def tool_method(func: F) -> F: ...
+
+
+@overload
 def tool_method(
-    func: Callable | None = None,
+    func: None = None,
     *,
     display_name: str = "",
     description: str = "",
     requires_user_confirmation: bool = False,
-):
+) -> Callable[[F], F]: ...
+
+
+def tool_method(
+    func: Callable[..., Any] | None = None,
+    *,
+    display_name: str = "",
+    description: str = "",
+    requires_user_confirmation: bool = False,
+) -> Callable[..., Any]:
     """Mark a method as a tool function.
 
     Description falls back to the docstring's first line. Optional metadata
@@ -52,16 +69,17 @@ def tool_method(
         async def create(self, payload: AgentCreate) -> AgentSummary: ...
     """
 
-    def decorator(f: Callable) -> Callable:
-        f._is_tool_method = True
+    def decorator(f: F) -> F:
+        tagged = cast(Any, f)
+        tagged._is_tool_method = True
         if description:
             resolved_desc = description
         elif f.__doc__:
             resolved_desc = f.__doc__.strip().split("\n")[0]
         else:
             resolved_desc = f"Method: {f.__name__}"
-        f._tool_description = resolved_desc
-        f._tool_meta = ToolMethodMetadata(
+        tagged._tool_description = resolved_desc
+        tagged._tool_meta = ToolMethodMetadata(
             display_name=display_name or f.__name__.replace("_", " ").title(),
             description=resolved_desc,
             requires_user_confirmation=requires_user_confirmation,
@@ -101,7 +119,7 @@ class Toolset(ABC):
         when the metadata is set — necessary because mechanical CamelCase
         →snake_case mangles initialisms (``OpenAPIConnectionsToolset`` would
         become ``open_a_p_i_connections``). Falls back to a class-name
-        derivation for legacy toolsets without ``@toolset``.
+        derivation for toolsets without ``@toolset``.
         """
         meta = getattr(self.__class__, "__toolset_meta__", None)
         if meta and meta.namespace:
@@ -262,6 +280,20 @@ class Toolset(ABC):
 
         return schema
 
+    def _as_tool_result(self, result: Any) -> dict[str, Any]:
+        """Shape a method's return value into a tool result.
+
+        A method that returns a structured outcome carrying ``success`` keeps it.
+        Stamping ``success=True`` on everything that returns without raising
+        leaves a tool no way to say "I ran, and the work failed" — the case MCP
+        calls a tool execution error, and the one a shell command exiting
+        non-zero lands in. Plain returns are still successes: not raising is
+        exactly what success means for a tool with nothing structured to report.
+        """
+        if isinstance(result, dict) and "success" in result:
+            return {"tool_name": self.name, "error": None, **result}
+        return {"success": True, "result": result, "tool_name": self.name, "error": None}
+
     async def execute(self, **kwargs) -> dict[str, Any]:
         """Execute the appropriate tool method based on parameters."""
         try:
@@ -287,7 +319,7 @@ class Toolset(ABC):
                 method_kwargs = self._filter_kwargs_for_method(action, kwargs)
                 result = await self._execute_method(method, method_kwargs)
 
-            return {"success": True, "result": result, "tool_name": self.name, "error": None}
+            return self._as_tool_result(result)
 
         except Exception as e:
             return {

@@ -20,7 +20,13 @@ permissions:
   contents: write
 
 jobs:
+  # Reuse the exact same static validation that gates PRs (env templates,
+  # helm-docs README, lint + render) so release can't diverge from CI.
+  validate:
+    uses: ./.github/workflows/validate-helm.yml
+
   release:
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - name: Generate GitHub App Token
@@ -43,7 +49,7 @@ jobs:
           python-version: "3.12"
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
         with:
           version: v3.13.2
 
@@ -90,23 +96,8 @@ jobs:
         run: |
           helm dependency build charts/agentarea
 
-      - name: Lint chart
-        run: |
-          helm lint charts/agentarea
-
-      - name: Generate chart documentation
-        run: |
-          HELM_DOCS_VERSION=1.14.2
-          curl -sSL "https://github.com/norwoodj/helm-docs/releases/download/v${HELM_DOCS_VERSION}/helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz" \
-            | tar -xz -C /usr/local/bin helm-docs
-          helm-docs --chart-search-root charts/agentarea --sort-values-order file
-
-      - name: Verify chart documentation up-to-date
-        run: |
-          if ! git diff --quiet charts/agentarea/README.md; then
-            echo "README.md is not up-to-date; run helm-docs and commit"
-            exit 1
-          fi
+      # Lint, helm-docs and env-template checks run in the reusable `validate`
+      # job above (.github/workflows/validate-helm.yml).
 
       - name: Package chart
         run: |

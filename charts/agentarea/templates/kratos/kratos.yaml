@@ -4,6 +4,7 @@
 {{- $kratosAdminUrl := .Values.kratos.urls.admin | default (printf "http://%s-kratos-admin:4434" (include "agentarea.fullname" .)) | trimSuffix "/" -}}
 {{- $kratosConfigMapName := default (printf "%s-kratos-config" (include "agentarea.fullname" .)) .Values.kratos.configMapOverrideName -}}
 {{- $kratosRuntimeSecretName := default (printf "%s-kratos-runtime" .Release.Name) .Values.kratos.runtimeSecretName -}}
+{{- $defaultClaimsMapper := printf "local claims = std.extVar('claims');\nlocal session = std.extVar('session');\n\n{\n  claims: {\n    iss: %q,\n    sub: session.identity.id,\n    aud: %q,\n    exp: claims.exp,\n    iat: claims.iat,\n    email: if std.objectHas(session.identity.traits, 'email') then session.identity.traits.email else null,\n    username: if std.objectHas(session.identity.traits, 'username') then session.identity.traits.username else null,\n    name: if std.objectHas(session.identity.traits, 'name') then {\n      first: if std.objectHas(session.identity.traits.name, 'first') then session.identity.traits.name.first else null,\n      last: if std.objectHas(session.identity.traits.name, 'last') then session.identity.traits.name.last else null,\n    } else null,\n    schema_id: session.identity.schema_id,\n    aal: session.authenticator_assurance_level,\n    session_id: session.id,\n  }\n}\n" .Values.kratos.jwt.issuer .Values.kratos.jwt.audience | b64enc -}}
 {{- if not .Values.kratos.configMapOverrideName }}
 apiVersion: v1
 kind: ConfigMap
@@ -97,7 +98,7 @@ data:
 {{- $templates := get $tokenizer "templates" | default dict -}}
 {{- $agentJwt := get $templates "agentarea_jwt" | default dict -}}
 {{- $_ = set $agentJwt "jwks_url" "file:///etc/config/kratos/keys/jwks.json" -}}
-{{- $_ = set $agentJwt "claims_mapper_url" (printf "base64://%s" (default "bG9jYWwgY2xhaW1zID0gc3RkLmV4dFZhcignY2xhaW1zJyk7CmxvY2FsIHNlc3Npb24gPSBzdGQuZXh0VmFyKCdzZXNzaW9uJyk7Cgp7CiAgY2xhaW1zOiB7CiAgICAvLyBTdGFuZGFyZCBKV1QgY2xhaW1zIC0gaW5oZXJpdCBmcm9tIGRlZmF1bHQgY2xhaW1zCiAgICBpc3M6ICdodHRwczovL2FnZW50YXJlYS5kZXYnLAogICAgc3ViOiBzZXNzaW9uLmlkZW50aXR5LmlkLAogICAgYXVkOiAnYWdlbnRhcmVhLWFwaScsCiAgICBleHA6IGNsYWltcy5leHAsCiAgICBpYXQ6IGNsYWltcy5pYXQsCgogICAgLy8gQ3VzdG9tIGNsYWltcwogICAgZW1haWw6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMsICdlbWFpbCcpIHRoZW4gc2Vzc2lvbi5pZGVudGl0eS50cmFpdHMuZW1haWwgZWxzZSBudWxsLAogICAgdXNlcm5hbWU6IGlmIHN0ZC5vYmplY3RIYXMoc2Vzc2lvbi5pZGVudGl5LnRyYWl0cy51c2VybmFtZSBlbHNlIG51bGwsCiAgICBuYW1lOiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLCAnbmFtZScpIHRoZW4gewogICAgICBmaXJzdDogaWYgc3RkLm9iamVjdEhhcyhzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLCAnZmlyc3QnKSB0aGVuIHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUuZmlyc3QgZWxzZSBudWxsLAogICAgICBsYXN0OiBpZiBzdGQub2JqZWN0SGFzKHNlc3Npb24uaWRlbnRpdHkudHJhaXRzLm5hbWUsICdsYXN0JykgdGhlbiBzZXNzaW9uLmlkZW50aXR5LnRyYWl0cy5uYW1lLmxhc3QgZWxzZSBudWxsLAogICAgfSBlbHNlIG51bGwsCgogICAgLy8gS3JhdG9zIHNwZWNpZmljIGNsYWltcwogICAgc2NoZW1hX2lkOiBzZXNzaW9uLmlkZW50aXR5LnNjaGVtYV9pZCwKICAgIGFhbDogc2Vzc2lvbi5hdXRoZW50aWNhdG9yX2Fzc3VyYW5jZV9sZXZlbCwKICAgIHNlc3Npb25faWQ6IHNlc3Npb24uaWQsCiAgfQp9Cg==" .Values.kratos.jwt.claims_mapper_b64)) -}}
+{{- $_ = set $agentJwt "claims_mapper_url" (printf "base64://%s" (default $defaultClaimsMapper .Values.kratos.jwt.claims_mapper_b64)) -}}
 {{- $_ = set $agentJwt "ttl" "30m" -}}
 {{- $_ = set $templates "agentarea_jwt" $agentJwt -}}
 {{- $_ = set $tokenizer "templates" $templates -}}
@@ -129,6 +130,12 @@ spec:
       labels:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: kratos
+      annotations:
+        checksum/kratos-config: {{ toYaml .Values.kratos.config | sha256sum }}
+        checksum/kratos-files: {{ toYaml .Values.kratos.files | sha256sum }}
+        checksum/kratos-jwt: {{ toYaml .Values.kratos.jwt | sha256sum }}
+        checksum/kratos-urls: {{ toYaml .Values.kratos.urls | sha256sum }}
+        checksum/kratos-webapp-url: {{ .Values.global.webapp.url | quote | sha256sum }}
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
@@ -155,7 +162,7 @@ spec:
                   name: "{{ .Values.global.secrets.postgresql }}"
                   key: password
             - name: DSN
-              value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "agentarea.database.host" . }}:{{ .Values.global.database.port }}/{{ .Values.kratos.database.name | default "kratos" }}?sslmode=disable&max_conns=20&max_idle_conns=4"
+              value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "agentarea.database.host" . }}:{{ .Values.global.database.port }}/{{ .Values.kratos.database.name | default "kratos" }}?sslmode=disable"
             - name: KRATOS_SECRETS_COOKIE
               valueFrom:
                 secretKeyRef:
@@ -172,7 +179,11 @@ spec:
               echo "Checking Env...";
               env | grep POSTGRES;
               echo "DSN: $DSN";
-              kratos serve -c /etc/config/kratos/kratos.yml --watch-courier
+              sed
+              -e "s|\${KRATOS_SECRETS_COOKIE}|$KRATOS_SECRETS_COOKIE|g"
+              -e "s|\${KRATOS_SECRETS_CIPHER}|$KRATOS_SECRETS_CIPHER|g"
+              /etc/config/kratos/kratos.yml > /tmp/kratos.yml;
+              kratos serve -c /tmp/kratos.yml --watch-courier
           volumeMounts:
             - name: kratos-config
               mountPath: /etc/config/kratos
@@ -268,7 +279,7 @@ spec:
               echo "Checking environment..."
               env | grep POSTGRES
               echo "Constructing DSN..."
-              export DSN="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@{{ include "agentarea.database.host" . }}:{{ .Values.global.database.port }}/{{ .Values.kratos.database.name | default "kratos" }}?sslmode=disable&max_conns=20&max_idle_conns=4"
+              export DSN="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@{{ include "agentarea.database.host" . }}:{{ .Values.global.database.port }}/{{ .Values.kratos.database.name | default "kratos" }}?sslmode=disable"
               if [ -z "$DSN" ]; then
                 echo "Error: DSN is empty"
                 exit 1

@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Brain, Check, Eye, RefreshCw, Search, Wrench } from "lucide-react";
+import { Brain, Check, Eye, RefreshCw, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Badge } from "@/components/ui/badge";
 import { ProviderIcon } from "@/components/ui/provider-icon";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   discoverModelsAction,
   discoverModelsPreviewAction,
 } from "@/lib/server-actions";
-import { ModelSpec } from "@/types/provider";
+import { ModelSpec, ProviderSpec } from "@/types/provider";
+import { filterModelsByDiscovery } from "./modelDiscovery";
 
 interface SelectedModel {
   modelSpecId: string;
@@ -21,7 +21,7 @@ interface SelectedModel {
 }
 
 type ModelInstancesProps = {
-  selectedProvider: any;
+  selectedProvider: ProviderSpec;
   availableModels: ModelSpec[];
   selectedModels: SelectedModel[];
   setSelectedModels: (models: SelectedModel[]) => void;
@@ -45,21 +45,29 @@ export default function ModelInstances({
 }: ModelInstancesProps) {
   const t = useTranslations("ProviderConfigForm");
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const [discoveredModelNames, setDiscoveredModelNames] =
+    useState<ReadonlySet<string> | null>(null);
   // In edit mode, the existing model instances are the source of truth and
   // should be visible immediately. In create mode, hide the registry-wide
   // model list until the user runs Discover so they only see models they
   // actually pulled from THIS provider/key.
   const [hasDiscovered, setHasDiscovered] = useState<boolean>(isEdit);
-  const [filter, setFilter] = useState<string>("");
+  const [filter] = useState<string>("");
+
+  const visibleModels = useMemo(
+    () => filterModelsByDiscovery(availableModels, discoveredModelNames),
+    [availableModels, discoveredModelNames]
+  );
 
   const filteredModels = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return availableModels;
-    return availableModels.filter((m) => {
-      const haystack = `${m.display_name ?? ""} ${m.model_name ?? ""} ${m.description ?? ""}`.toLowerCase();
+    if (!q) return visibleModels;
+    return visibleModels.filter((m) => {
+      const haystack =
+        `${m.display_name ?? ""} ${m.model_name ?? ""} ${m.description ?? ""}`.toLowerCase();
       return haystack.includes(q);
     });
-  }, [availableModels, filter]);
+  }, [visibleModels, filter]);
 
   const formatTokens = (tokens?: number | null) => {
     if (tokens == null) return "-";
@@ -89,20 +97,21 @@ export default function ModelInstances({
     try {
       let totalCount = 0;
       let newCount = 0;
+      let discoveredNames: string[] = [];
 
       if (providerConfigId) {
         const { data, error } = await discoverModelsAction(providerConfigId);
         if (error) {
-          const detail = (error as any)?.detail ?? t("failedToDiscover");
+          const detail = (error as { detail?: unknown })?.detail;
           toast.error(typeof detail === "string" ? detail : t("failedToDiscover"));
           return;
         }
-        const result = data as { total_discovered?: number; new_model_instances?: number };
-        totalCount = result?.total_discovered ?? 0;
-        newCount = result?.new_model_instances ?? 0;
+        totalCount = data?.discovered ?? 0;
+        newCount = data?.new_models ?? 0;
+        discoveredNames = data?.models.map((model) => model.model_name) ?? [];
       } else {
         const { data, error } = await discoverModelsPreviewAction({
-          provider_key: providerKey!,
+          provider_key: providerKey ?? "",
           api_key: apiKey?.trim() || "",
           endpoint_url: endpointUrl || null,
         });
@@ -110,19 +119,22 @@ export default function ModelInstances({
           // Surface the real backend error. Only fall back to a NEUTRAL generic
           // message — never blame the API key for non-auth failures (e.g. a 500
           // would otherwise be reported as "Check API key", which is misleading).
-          const d = (error as any)?.detail;
+          const e = error as { detail?: unknown; message?: unknown };
+          const d = e?.detail;
           const msg =
             typeof d === "string" && d
               ? d
-              : Array.isArray(d) && d[0]?.msg
+              : Array.isArray(d) && typeof d[0]?.msg === "string"
                 ? d[0].msg
-                : (error as any)?.message || t("failedToDiscover");
+                : typeof e?.message === "string"
+                  ? e.message
+                  : t("failedToDiscover");
           toast.error(msg);
           return;
         }
-        const result = data as { discovered?: number; new_models?: number };
-        totalCount = result?.discovered ?? 0;
-        newCount = result?.new_models ?? 0;
+        totalCount = data?.discovered ?? 0;
+        newCount = data?.new_models ?? 0;
+        discoveredNames = data?.models.map((model) => model.model_name) ?? [];
       }
 
       if (newCount > 0) {
@@ -130,6 +142,7 @@ export default function ModelInstances({
       } else {
         toast.success(t("discoveredCountNoNew", { totalCount }));
       }
+      setDiscoveredModelNames(new Set(discoveredNames));
       setHasDiscovered(true);
       await onModelsDiscovered?.();
     } catch (err) {
@@ -145,9 +158,10 @@ export default function ModelInstances({
   useEffect(() => {
     if (!isEdit) {
       setHasDiscovered(false);
+      setDiscoveredModelNames(null);
       setSelectedModels([]);
     }
-  }, [selectedProvider?.id, isEdit]);
+  }, [selectedProvider?.id, isEdit, setSelectedModels]);
 
   // Note: we deliberately do NOT auto-select discovered models. Providers like
   // OpenRouter return hundreds of models and selecting them all would create
@@ -233,7 +247,7 @@ export default function ModelInstances({
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          {hasDiscovered && availableModels.length > 0 && (
+          {hasDiscovered && visibleModels.length > 0 && (
             <div className="mx-3 flex items-center space-x-2">
               <button
                 type="button"
@@ -246,7 +260,7 @@ export default function ModelInstances({
               <span className="note cursor-pointer text-xs font-normal">
                 {t("selectedModelsCount", {
                   selectedCount: selectedModels.length,
-                  totalCount: availableModels.length,
+                  totalCount: visibleModels.length,
                 })}
               </span>
             </div>
@@ -261,7 +275,7 @@ export default function ModelInstances({
               {t("noModelsLoadedHint", { action: t("testAndDiscover") })}
             </p>
           </div>
-        ) : availableModels.length === 0 ? (
+        ) : visibleModels.length === 0 ? (
           <div className="rounded-lg bg-gray-50 p-4 text-center text-sm text-muted-foreground">
             {t("noModelsAvailableForThisProvider")}
           </div>
@@ -277,7 +291,7 @@ export default function ModelInstances({
               <div>Capabilities</div>
             </div>
 
-            {availableModels.map((model: ModelSpec) => {
+            {visibleModels.map((model: ModelSpec) => {
               const isSelected = selectedModels.some((m) => m.modelSpecId === model.id);
               return (
                 <div
@@ -305,29 +319,29 @@ export default function ModelInstances({
                     {formatTokens(model.context_window)}
                   </div>
                   <div className="text-right text-xs text-muted-foreground">
-                    {formatTokens((model as any).max_output_tokens)}
+                    {formatTokens(model.max_output_tokens)}
                   </div>
                   <div className="text-right text-xs text-muted-foreground">
-                    {formatCostPerMillion((model as any).input_cost_per_token)}
+                    {formatCostPerMillion(model.input_cost_per_token)}
                   </div>
                   <div className="text-right text-xs text-muted-foreground">
-                    {formatCostPerMillion((model as any).output_cost_per_token)}
+                    {formatCostPerMillion(model.output_cost_per_token)}
                   </div>
 
                   <div className="flex flex-wrap gap-1">
-                    {(model as any).supports_function_calling && (
+                    {model.supports_function_calling && (
                       <Badge variant="secondary" className="gap-1 px-1.5 py-0 text-[10px]">
                         <Wrench className="h-2.5 w-2.5" />
                         Tools
                       </Badge>
                     )}
-                    {(model as any).supports_vision && (
+                    {model.supports_vision && (
                       <Badge variant="secondary" className="gap-1 px-1.5 py-0 text-[10px]">
                         <Eye className="h-2.5 w-2.5" />
                         Vision
                       </Badge>
                     )}
-                    {(model as any).supports_reasoning && (
+                    {model.supports_reasoning && (
                       <Badge variant="secondary" className="gap-1 px-1.5 py-0 text-[10px]">
                         <Brain className="h-2.5 w-2.5" />
                         Reasoning

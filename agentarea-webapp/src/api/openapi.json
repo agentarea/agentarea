@@ -68,14 +68,12 @@
             "type": "integer"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "expires_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -96,7 +94,6 @@
           "last_accessed_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -140,14 +137,12 @@
             "type": "integer"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "expires_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -168,7 +163,6 @@
           "last_accessed_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -304,11 +298,6 @@
             "title": "Pushnotifications",
             "type": "boolean"
           },
-          "stateTransitionHistory": {
-            "default": false,
-            "title": "Statetransitionhistory",
-            "type": "boolean"
-          },
           "streaming": {
             "default": false,
             "title": "Streaming",
@@ -381,11 +370,6 @@
             "title": "Name",
             "type": "string"
           },
-          "protocolVersion": {
-            "default": "0.3.0",
-            "title": "Protocolversion",
-            "type": "string"
-          },
           "provider": {
             "anyOf": [
               {
@@ -436,27 +420,11 @@
             "type": "array"
           },
           "supportedInterfaces": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/AgentInterface"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Supportedinterfaces"
-          },
-          "supportsAuthenticatedExtendedCard": {
-            "default": true,
-            "title": "Supportsauthenticatedextendedcard",
-            "type": "boolean"
-          },
-          "url": {
-            "title": "Url",
-            "type": "string"
+            "items": {
+              "$ref": "#/components/schemas/AgentInterface"
+            },
+            "title": "Supportedinterfaces",
+            "type": "array"
           },
           "version": {
             "default": "1.0.0",
@@ -466,7 +434,7 @@
         },
         "required": [
           "name",
-          "url",
+          "supportedInterfaces",
           "capabilities",
           "skills"
         ],
@@ -610,21 +578,17 @@
         "type": "object"
       },
       "AgentInterface": {
+        "description": "A2A v1.0.0 AgentInterface \u2014 a (url, protocolBinding, protocolVersion) tuple.",
         "properties": {
           "protocolBinding": {
+            "default": "JSONRPC",
             "title": "Protocolbinding",
             "type": "string"
           },
           "protocolVersion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Protocolversion"
+            "default": "1.0",
+            "title": "Protocolversion",
+            "type": "string"
           },
           "tenant": {
             "anyOf": [
@@ -643,8 +607,7 @@
           }
         },
         "required": [
-          "url",
-          "protocolBinding"
+          "url"
         ],
         "title": "AgentInterface",
         "type": "object"
@@ -676,7 +639,6 @@
           "last_activity_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -929,7 +891,6 @@
           "last_activity_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -1033,6 +994,26 @@
               }
             ],
             "title": "Outputmodes"
+          },
+          "securityRequirements": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Securityrequirements"
           },
           "tags": {
             "anyOf": [
@@ -1335,6 +1316,16 @@
             "title": "Approvers",
             "type": "array"
           },
+          "approvers_by_tool": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Approvers By Tool",
+            "type": "object"
+          },
           "escalation_rules": {
             "items": {
               "type": "string"
@@ -1472,7 +1463,6 @@
             "title": "Changes"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -1633,6 +1623,25 @@
         "title": "Body_import_workspace_config_file_v1_workspace_import_file_post",
         "type": "object"
       },
+      "Body_upload_file_v1_files_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "workspace",
+            "title": "Purpose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_file_v1_files_post",
+        "type": "object"
+      },
       "Body_upload_project_file_v1_projects__project_id__files_post": {
         "properties": {
           "file": {
@@ -1774,6 +1783,13 @@
             "title": "Automations",
             "type": "array"
           },
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/BundleChannel"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
           "description": {
             "default": "",
             "title": "Description",
@@ -1855,6 +1871,13 @@
               "$ref": "#/components/schemas/BundleAutomation"
             },
             "title": "Automations",
+            "type": "array"
+          },
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/BundleChannel"
+            },
+            "title": "Channels",
             "type": "array"
           },
           "description": {
@@ -2028,6 +2051,63 @@
           "prompt"
         ],
         "title": "BundleAutomation",
+        "type": "object"
+      },
+      "BundleChannel": {
+        "additionalProperties": false,
+        "description": "A messaging channel that lets an agent receive and reply to messages.\n\nInstalls as an inbound trigger (e.g. a Telegram webhook): a message to the\nbot becomes a task for ``agent``, and the reply is delivered back on the same\nchannel. Credentials (a bot token) enter via ``bindings`` \u2192 ``${setup.x}``,\nexactly like an MCP's secret bindings, so the token is never inlined.",
+        "properties": {
+          "agent": {
+            "description": "BundleAgent key that handles inbound messages.",
+            "minLength": 1,
+            "title": "Agent",
+            "type": "string"
+          },
+          "bindings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Maps a credential the channel needs to a ${setup.x} reference, e.g. {'bot_token': '${setup.telegram_bot_token}'}.",
+            "title": "Bindings",
+            "type": "object"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name for the created channel trigger.",
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "prompt": {
+            "default": "Handle the incoming message: {{ message_text }}",
+            "description": "Task query template used for each inbound message.",
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "type": {
+            "const": "telegram",
+            "default": "telegram",
+            "description": "Channel provider. Only Telegram in v0.1.0.",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "agent"
+        ],
+        "title": "BundleChannel",
         "type": "object"
       },
       "BundleMcp": {
@@ -2330,6 +2410,212 @@
         "title": "CheckResponse",
         "type": "object"
       },
+      "ClientCreate": {
+        "additionalProperties": false,
+        "description": "Payload for registering a client (agent-proxy).",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "kind": {
+            "default": "harness",
+            "maxLength": 32,
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "source_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Project Id"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ClientCreate",
+        "type": "object"
+      },
+      "ClientRef": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ClientRef",
+        "type": "object"
+      },
+      "ClientResponse": {
+        "properties": {
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "mcp_endpoint_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mcp Endpoint Url"
+          },
+          "mcp_instances": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ClientRef"
+            },
+            "title": "Mcp Instances",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "skills": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ClientRef"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
+          "source_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Project Id"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "created_by",
+          "name",
+          "description",
+          "kind",
+          "source_project_id"
+        ],
+        "title": "ClientResponse",
+        "type": "object"
+      },
+      "ClientUpdate": {
+        "additionalProperties": false,
+        "description": "Patch payload for a client. Unset fields remain unchanged.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "source_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Project Id"
+          }
+        },
+        "title": "ClientUpdate",
+        "type": "object"
+      },
       "CodeToolConfig": {
         "properties": {
           "name": {
@@ -2375,6 +2661,21 @@
               }
             ],
             "title": "Disabled Methods"
+          },
+          "package_install": {
+            "anyOf": [
+              {
+                "enum": [
+                  "allowed",
+                  "locked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Install"
           },
           "requires_user_confirmation": {
             "anyOf": [
@@ -2546,6 +2847,40 @@
         "title": "ContentSafetyPolicy",
         "type": "object"
       },
+      "ContinueTaskPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "additional_budget_usd": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "gt": "0"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Additional Budget Usd"
+          },
+          "additional_iterations": {
+            "default": 0,
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Additional Iterations",
+            "type": "integer"
+          }
+        },
+        "title": "ContinueTaskPayload",
+        "type": "object"
+      },
       "CreateInvitationBody": {
         "properties": {
           "email": {
@@ -2625,6 +2960,21 @@
           "wallet_type"
         ],
         "title": "CreateWalletRequest",
+        "type": "object"
+      },
+      "CreateWorkspaceBody": {
+        "properties": {
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateWorkspaceBody",
         "type": "object"
       },
       "DailySpendPoint": {
@@ -3060,6 +3410,7 @@
           "mcp",
           "skill",
           "agent",
+          "channel",
           "automation",
           "policy"
         ],
@@ -3345,7 +3696,6 @@
             "title": "Error"
           },
           "occurred_at": {
-            "format": "date-time",
             "title": "Occurred At",
             "type": "string"
           },
@@ -3589,7 +3939,6 @@
             "type": "string"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -3904,7 +4253,6 @@
           "accepted_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -3925,7 +4273,6 @@
             "title": "Accepted By User Id"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -3941,7 +4288,6 @@
             "title": "Email"
           },
           "expires_at": {
-            "format": "date-time",
             "title": "Expires At",
             "type": "string"
           },
@@ -3987,7 +4333,6 @@
           "accepted_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -4008,7 +4353,6 @@
             "title": "Accepted By User Id"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4024,7 +4368,6 @@
             "title": "Email"
           },
           "expires_at": {
-            "format": "date-time",
             "title": "Expires At",
             "type": "string"
           },
@@ -4123,7 +4466,6 @@
             "type": "object"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4148,7 +4490,6 @@
             "type": "string"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -4215,6 +4556,58 @@
           }
         },
         "title": "MCPAuthConfigUpdateRequest",
+        "type": "object"
+      },
+      "MCPInstanceConsumer": {
+        "description": "An agent that has this MCP instance attached, and which of its tools it enabled.",
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "agent_name": {
+            "title": "Agent Name",
+            "type": "string"
+          },
+          "agent_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Slug"
+          },
+          "confirm_tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Confirm Tools",
+            "type": "array"
+          },
+          "enabled_tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled Tools"
+          }
+        },
+        "required": [
+          "agent_id",
+          "agent_name"
+        ],
+        "title": "MCPInstanceConsumer",
         "type": "object"
       },
       "MCPServerConnectionCreateRequest": {
@@ -4470,7 +4863,6 @@
             "title": "Auth Config Id"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4531,7 +4923,6 @@
             "title": "Tools"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -4615,7 +5006,6 @@
             "title": "Cmd"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -4705,7 +5095,6 @@
             "type": "array"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -4963,6 +5352,30 @@
         "title": "MPPConfigSchema",
         "type": "object"
       },
+      "McpInstanceAssociationBody": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "namespace_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Namespace Prefix"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "McpInstanceAssociationBody",
+        "type": "object"
+      },
       "McpToolConfig-Input": {
         "properties": {
           "name": {
@@ -5022,12 +5435,18 @@
         "type": "object"
       },
       "McpToolPermission": {
-        "description": "A single MCP tool the agent may call, with its per-call approval gate.\n\nReplaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).",
+        "description": "A single MCP tool the agent may call.\n\nReplaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).\n``requires_user_confirmation`` is transport only: the API translates it into\nan agent-scoped approval policy rule and does not persist it here, so it is\n``None`` at rest and reconstituted from rules on read.",
         "properties": {
           "requires_user_confirmation": {
-            "default": false,
-            "title": "Requires User Confirmation",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires User Confirmation"
           },
           "tool_name": {
             "title": "Tool Name",
@@ -5114,7 +5533,6 @@
             "title": "Invitation Id"
           },
           "joined_at": {
-            "format": "date-time",
             "title": "Joined At",
             "type": "string"
           },
@@ -5267,7 +5685,6 @@
             "title": "Config Name"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -5362,7 +5779,6 @@
             "title": "Provider Name"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -5774,14 +6190,12 @@
             "type": "integer"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "expires_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -5802,7 +6216,6 @@
           "last_accessed_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -6317,7 +6730,6 @@
           "created_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -6468,7 +6880,8 @@
           "deny",
           "cap",
           "approval",
-          "safety"
+          "safety",
+          "egress"
         ],
         "title": "PolicyEffect",
         "type": "string"
@@ -6691,6 +7104,60 @@
         ],
         "title": "PolicySubjectType",
         "type": "string"
+      },
+      "PresignUploadRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "content_type": {
+            "minLength": 1,
+            "title": "Content Type",
+            "type": "string"
+          },
+          "filename": {
+            "minLength": 1,
+            "title": "Filename",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "filename",
+          "content_type",
+          "sha256",
+          "size"
+        ],
+        "title": "PresignUploadRequest",
+        "type": "object"
+      },
+      "PresignUploadResponse": {
+        "properties": {
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "upload_url": {
+            "title": "Upload Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "upload_url",
+          "expires_in"
+        ],
+        "title": "PresignUploadResponse",
+        "type": "object"
       },
       "PreviewEntity": {
         "additionalProperties": false,
@@ -7157,7 +7624,6 @@
       "ProviderConfigResponse": {
         "properties": {
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -7227,7 +7693,6 @@
             "title": "Provider Spec Name"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -7337,7 +7802,6 @@
       "ProviderSpecResponse": {
         "properties": {
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -7395,7 +7859,6 @@
             "type": "string"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -7418,7 +7881,6 @@
       "ProviderSpecWithModelsResponse": {
         "properties": {
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -7483,7 +7945,6 @@
             "type": "string"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -7556,7 +8017,6 @@
       "RegistryItemResponse": {
         "properties": {
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -7629,7 +8089,6 @@
             "type": "boolean"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -7666,7 +8125,6 @@
       "RegistryResponse": {
         "properties": {
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -7708,7 +8166,6 @@
           "last_synced_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -7738,7 +8195,6 @@
             "type": "string"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -8539,6 +8995,23 @@
         "title": "SkillUpdateRequest",
         "type": "object"
       },
+      "SourceProjectBody": {
+        "properties": {
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          }
+        },
+        "title": "SourceProjectBody",
+        "type": "object"
+      },
       "SpecPreviewRequest": {
         "properties": {
           "spec_content": {
@@ -8767,6 +9240,10 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -8818,6 +9295,20 @@
       },
       "TaskCreate": {
         "properties": {
+          "attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachments"
+          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -8902,7 +9393,6 @@
             "type": "string"
           },
           "timestamp": {
-            "format": "date-time",
             "title": "Timestamp",
             "type": "string"
           }
@@ -9000,13 +9490,23 @@
             "type": "string"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "description": {
             "title": "Description",
             "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
           },
           "execution_id": {
             "anyOf": [
@@ -9018,6 +9518,17 @@
               }
             ],
             "title": "Execution Id"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
           },
           "id": {
             "format": "uuid",
@@ -9113,7 +9624,6 @@
           "ended_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -9162,7 +9672,6 @@
           "started_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -9217,13 +9726,23 @@
             "type": "string"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "description": {
             "title": "Description",
             "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
           },
           "escalation_id": {
             "anyOf": [
@@ -9257,6 +9776,17 @@
               }
             ],
             "title": "Execution Id"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
           },
           "id": {
             "format": "uuid",
@@ -9339,175 +9869,6 @@
           }
         },
         "title": "TokenPolicy",
-        "type": "object"
-      },
-      "ToolAccessCheckRequest": {
-        "properties": {
-          "arguments": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional exact argument set. Omit to check the whole-tool grant.",
-            "title": "Arguments"
-          },
-          "tool_name": {
-            "minLength": 1,
-            "title": "Tool Name",
-            "type": "string"
-          },
-          "user_id": {
-            "description": "User UUID or User:<uuid> subject.",
-            "title": "User Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "user_id",
-          "tool_name"
-        ],
-        "title": "ToolAccessCheckRequest",
-        "type": "object"
-      },
-      "ToolAccessCheckResponse": {
-        "properties": {
-          "allowed": {
-            "title": "Allowed",
-            "type": "boolean"
-          },
-          "grant": {
-            "$ref": "#/components/schemas/ToolAccessGrant"
-          }
-        },
-        "required": [
-          "allowed",
-          "grant"
-        ],
-        "title": "ToolAccessCheckResponse",
-        "type": "object"
-      },
-      "ToolAccessGrant": {
-        "properties": {
-          "arguments_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Arguments Hash"
-          },
-          "object_id": {
-            "title": "Object Id",
-            "type": "string"
-          },
-          "scope": {
-            "enum": [
-              "tool",
-              "arguments"
-            ],
-            "title": "Scope",
-            "type": "string"
-          },
-          "tool_name": {
-            "title": "Tool Name",
-            "type": "string"
-          },
-          "user_id": {
-            "title": "User Id",
-            "type": "string"
-          },
-          "workspace_id": {
-            "title": "Workspace Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "scope",
-          "workspace_id",
-          "user_id",
-          "tool_name",
-          "object_id"
-        ],
-        "title": "ToolAccessGrant",
-        "type": "object"
-      },
-      "ToolAccessGrantListResponse": {
-        "properties": {
-          "count": {
-            "title": "Count",
-            "type": "integer"
-          },
-          "grants": {
-            "items": {
-              "$ref": "#/components/schemas/ToolAccessGrant"
-            },
-            "title": "Grants",
-            "type": "array"
-          }
-        },
-        "required": [
-          "grants",
-          "count"
-        ],
-        "title": "ToolAccessGrantListResponse",
-        "type": "object"
-      },
-      "ToolAccessGrantRequest": {
-        "properties": {
-          "arguments": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional exact argument set. Omit for a whole-tool grant.",
-            "title": "Arguments"
-          },
-          "tool_name": {
-            "minLength": 1,
-            "title": "Tool Name",
-            "type": "string"
-          },
-          "user_id": {
-            "description": "User UUID or User:<uuid> subject.",
-            "title": "User Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "user_id",
-          "tool_name"
-        ],
-        "title": "ToolAccessGrantRequest",
-        "type": "object"
-      },
-      "ToolAccessGrantResponse": {
-        "properties": {
-          "grant": {
-            "$ref": "#/components/schemas/ToolAccessGrant"
-          },
-          "ok": {
-            "title": "Ok",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "ok",
-          "grant"
-        ],
-        "title": "ToolAccessGrantResponse",
         "type": "object"
       },
       "ToolResponse": {
@@ -9654,7 +10015,7 @@
                 "type": "null"
               }
             ],
-            "description": "Polling extractor identifier (e.g. 'mailslurper', 'imap').",
+            "description": "Polling extractor identifier (e.g. 'imap', 'rss').",
             "title": "Data Extractor"
           },
           "data_extractor_config": {
@@ -9809,7 +10170,6 @@
             "title": "Error Message"
           },
           "executed_at": {
-            "format": "date-time",
             "title": "Executed At",
             "type": "string"
           },
@@ -9914,7 +10274,6 @@
             "type": "integer"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -9976,7 +10335,6 @@
           "last_execution_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -9992,7 +10350,6 @@
           "next_run_time": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -10022,7 +10379,6 @@
             "type": "string"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           },
@@ -10105,7 +10461,6 @@
           "last_execution_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -10220,7 +10575,7 @@
                 "type": "null"
               }
             ],
-            "description": "Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (legacy).",
+            "description": "Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (alias).",
             "title": "Enabled"
           },
           "failure_threshold": {
@@ -10325,7 +10680,6 @@
             "title": "Cron Expression"
           },
           "fires_at": {
-            "format": "date-time",
             "title": "Fires At",
             "type": "string"
           },
@@ -10646,7 +11000,6 @@
           "created_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -10691,7 +11044,6 @@
           "updated_at": {
             "anyOf": [
               {
-                "format": "date-time",
                 "type": "string"
               },
               {
@@ -10929,7 +11281,6 @@
             "type": "integer"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -11070,7 +11421,6 @@
             "title": "Supports Vision"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -11097,7 +11447,6 @@
             "type": "integer"
           },
           "created_at": {
-            "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
@@ -11205,7 +11554,6 @@
             "title": "Supports Vision"
           },
           "updated_at": {
-            "format": "date-time",
             "title": "Updated At",
             "type": "string"
           }
@@ -11325,7 +11673,7 @@
     },
     "/.well-known/oauth-protected-resource": {
       "get": {
-        "description": "RFC 9728: point clients at our own API as the AS base URL.",
+        "description": "RFC 9728: advertise the authorization server that actually issues tokens.",
         "operationId": "oauth_protected_resource_metadata__well_known_oauth_protected_resource_get",
         "responses": {
           "200": {
@@ -11644,7 +11992,7 @@
     },
     "/v1/access-control/check": {
       "post": {
-        "description": "Check whether a subject has a relation on an object.",
+        "description": "Check whether a subject has a permission on a resource.",
         "operationId": "check_permission_v1_access_control_check_post",
         "requestBody": {
           "content": {
@@ -11722,7 +12070,7 @@
     },
     "/v1/access-control/relationships": {
       "delete": {
-        "description": "Delete an authorization relationship from the configured graph backend.",
+        "description": "Revoke a resource-ownership relation from the configured graph backend.",
         "operationId": "delete_relationship_v1_access_control_relationships_delete",
         "requestBody": {
           "content": {
@@ -11762,7 +12110,7 @@
         ]
       },
       "get": {
-        "description": "List authorization relationships enriched with display names.",
+        "description": "List resource-ownership grants enriched with display names.\n\nGrants live on ``resource:<uuid>`` objects; each is mapped back onto the DB\nentity (agent / skill collection / MCP server / skill) it represents. The\noptional ``namespace`` filter restricts results to one entity kind.",
         "operationId": "list_relationships_v1_access_control_relationships_get",
         "parameters": [
           {
@@ -11817,7 +12165,7 @@
         ]
       },
       "post": {
-        "description": "Write an authorization relationship to the configured graph backend.",
+        "description": "Grant a resource-ownership relation via the configured graph backend.",
         "operationId": "create_relationship_v1_access_control_relationships_post",
         "requestBody": {
           "content": {
@@ -11868,7 +12216,7 @@
     },
     "/v1/access-control/resolve": {
       "post": {
-        "description": "Resolve why (and how) a subject can access a resource.\n\n``allowed`` is computed via the graph backend; ``paths`` are derived by\ntraversing workspace relationships directly so the UI can render the derivation.",
+        "description": "Resolve why (and how) a subject can access a resource.\n\n``allowed`` is computed via the graph backend; ``paths`` are derived from the\ndirect ``resource`` grants matching the subject so the UI can render the\nderivation. Grants inherited through ``project``/``role`` still affect\n``allowed`` but are not expanded into hops here.",
         "operationId": "resolve_access_v1_access_control_resolve_post",
         "requestBody": {
           "content": {
@@ -11917,7 +12265,7 @@
     },
     "/v1/access-control/sync": {
       "post": {
-        "description": "Mirror existing grants into the graph backend and seed a starter collection.\n\nIdempotent: safe to call repeatedly. Steps:\n  1. Mirror workspace members into the graph.\n  2. If no collections exist, create \"All skills\" containing every workspace\n     skill and grant workspace-member access to the collection.\n  3. Mirror each collection membership relationship.\n  4. Mirror each direct agent-to-skill grant.",
+        "description": "Mirror workspace membership into the graph backend (idempotent).\n\nResource ownership is granted at create time by ``grant_resource_owner`` and\nwas backfilled onto the ``resource`` model, so this endpoint only ensures the\nworkspace-member tuples that gate group defaults are present.",
         "operationId": "sync_grants_v1_access_control_sync_post",
         "responses": {
           "200": {
@@ -12397,60 +12745,8 @@
     },
     "/v1/agents/{agent_id}/.well-known/agent-card.json": {
       "get": {
-        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent.\nThis endpoint can be accessed at:\n- /v1/agents/{agent_id}/.well-known/agent-card.json\n- /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json",
+        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent, at\n/v1/agents/{agent_id}/.well-known/agent-card.json\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent-card.json -> /v1/agents/{id}/.well-known/agent-card.json",
         "operationId": "get_agent_well_known_card_v1_agents__agent_id___well_known_agent_card_json_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Agent Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentCard"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Agent Well Known Card",
-        "tags": [
-          "v1",
-          "protected",
-          "agents",
-          "agents-well-known"
-        ]
-      }
-    },
-    "/v1/agents/{agent_id}/.well-known/agent.json": {
-      "get": {
-        "description": "Agent-specific well-known discovery endpoint.\n\nReturns the agent card for this specific agent.\nThis endpoint can be accessed at:\n- /v1/agents/{agent_id}/.well-known/agent-card.json\n- /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)\n\nThis allows each agent to have its own well-known endpoint, which is A2A compliant.\nLater, this can be proxied to subdomains:\n- agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json",
-        "operationId": "get_agent_well_known_card_v1_agents__agent_id___well_known_agent_json_get",
         "parameters": [
           {
             "in": "path",
@@ -13446,6 +13742,18 @@
               "format": "uuid",
               "title": "Task Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Include incremental llm.call.chunk token events in the stream",
+            "in": "query",
+            "name": "include_chunks",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Include incremental llm.call.chunk token events in the stream",
+              "title": "Include Chunks",
+              "type": "boolean"
             }
           }
         ],
@@ -14784,6 +15092,537 @@
         ]
       }
     },
+    "/v1/clients/": {
+      "get": {
+        "operationId": "list_clients_v1_clients__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ClientResponse"
+                  },
+                  "title": "Response List Clients V1 Clients  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Clients",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      },
+      "post": {
+        "operationId": "create_client_v1_clients__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/clients/{client_id}": {
+      "delete": {
+        "operationId": "delete_client_v1_clients__client_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      },
+      "get": {
+        "operationId": "get_client_v1_clients__client_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      },
+      "patch": {
+        "operationId": "update_client_v1_clients__client_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/clients/{client_id}/mcp-instances": {
+      "post": {
+        "operationId": "add_mcp_instance_to_client_v1_clients__client_id__mcp_instances_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpInstanceAssociationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Mcp Instance To Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/clients/{client_id}/mcp-instances/{mcp_instance_id}": {
+      "delete": {
+        "operationId": "remove_mcp_instance_from_client_v1_clients__client_id__mcp_instances__mcp_instance_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mcp_instance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mcp Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Mcp Instance From Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/clients/{client_id}/pull-from-project": {
+      "post": {
+        "operationId": "pull_from_project_v1_clients__client_id__pull_from_project_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceProjectBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Pull From Project",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/clients/{client_id}/skills": {
+      "post": {
+        "operationId": "add_skill_to_client_v1_clients__client_id__skills_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssociationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Skill To Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/clients/{client_id}/skills/{skill_id}": {
+      "delete": {
+        "operationId": "remove_skill_from_client_v1_clients__client_id__skills__skill_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "skill_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Skill Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Skill From Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
     "/v1/files": {
       "get": {
         "operationId": "list_workspace_files_v1_files_get",
@@ -14805,6 +15644,51 @@
           }
         ],
         "summary": "List Workspace Files",
+        "tags": [
+          "v1",
+          "protected",
+          "files"
+        ]
+      },
+      "post": {
+        "description": "Upload a file, server-proxied.\n\n``purpose=\"workspace\"`` (the default) lands the file at the workspace\nartifact root. ``purpose=\"attachment\"`` stages it under\n``staging/{id}/{filename}`` \u2014 hidden from the workspace listing \u2014 and\nreturns a ``ref`` the task-create endpoint resolves into the task workspace.",
+        "operationId": "upload_file_v1_files_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_file_v1_files_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload File",
         "tags": [
           "v1",
           "protected",
@@ -14903,6 +15787,55 @@
           }
         ],
         "summary": "Workspace File History",
+        "tags": [
+          "v1",
+          "protected",
+          "files"
+        ]
+      }
+    },
+    "/v1/files/upload-url": {
+      "post": {
+        "description": "Mint a presigned PUT for a task attachment uploaded directly to the store.\n\nThe client-declared sha256 is bound into the signature as ``ChecksumSHA256``,\nso the object store rejects a body that does not hash to it \u2014 the upload is\ncontent-verified without the API ever seeing the bytes. The returned ``ref``\nis consumed by the task-create endpoint exactly like a server-proxied one.",
+        "operationId": "create_attachment_upload_url_v1_files_upload_url_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresignUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignUploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Attachment Upload Url",
         "tags": [
           "v1",
           "protected",
@@ -15162,7 +16095,7 @@
     },
     "/v1/invitations/accept": {
       "post": {
-        "description": "Accept an invitation as the authenticated user.\n\nIdempotent: accepting twice (or accepting when already a member)\nreturns the same membership.",
+        "description": "Accept an invitation as the authenticated user.\n\nIdempotent for the same acceptor.",
         "operationId": "accept_invitation_v1_invitations_accept_post",
         "requestBody": {
           "content": {
@@ -16220,6 +17153,61 @@
           }
         ],
         "summary": "Update Mcp Server Instance",
+        "tags": [
+          "v1",
+          "protected",
+          "mcp-server-instances"
+        ]
+      }
+    },
+    "/v1/mcp-server-instances/{instance_id}/consumers": {
+      "get": {
+        "description": "List agents in the workspace that attach this MCP instance, with their enabled tools.\n\nA read-only reverse lookup over the agents' ``tools`` JSON. Which tools need\nconfirmation is not read from that JSON \u2014 it lives in approval policy rules,\nthe single source of truth \u2014 so it is resolved from there per agent.",
+        "operationId": "list_mcp_server_instance_consumers_v1_mcp_server_instances__instance_id__consumers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MCPInstanceConsumer"
+                  },
+                  "title": "Response List Mcp Server Instance Consumers V1 Mcp Server Instances  Instance Id  Consumers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Mcp Server Instance Consumers",
         "tags": [
           "v1",
           "protected",
@@ -21187,7 +22175,7 @@
     },
     "/v1/skill-collections/{collection_id}/skills": {
       "post": {
-        "description": "Add a skill to a collection and mirror the membership into the graph.",
+        "description": "Add a skill to a collection.\n\nMembership is organizational metadata stored in ``collection_skills``; it is\nnot an authorization edge, so nothing is written to the relationship graph.",
         "operationId": "add_skill_to_collection_v1_skill_collections__collection_id__skills_post",
         "parameters": [
           {
@@ -21241,7 +22229,7 @@
     },
     "/v1/skill-collections/{collection_id}/skills/{skill_id}": {
       "delete": {
-        "description": "Remove a skill from a collection and delete the graph membership.",
+        "description": "Remove a skill from a collection.\n\nMembership is organizational metadata stored in ``collection_skills``; it is\nnot an authorization edge, so nothing is removed from the relationship graph.",
         "operationId": "remove_skill_from_collection_v1_skill_collections__collection_id__skills__skill_id__delete",
         "parameters": [
           {
@@ -22314,15 +23302,27 @@
         ]
       }
     },
-    "/v1/tool-access/checks": {
+    "/v1/tasks/{task_id}/continue": {
       "post": {
-        "description": "Check whether a user can call a tool.\n\nOmitting ``arguments`` checks a whole-tool grant. Passing ``arguments``\nchecks the concrete invocation path used by runtime tool execution.",
-        "operationId": "check_tool_access_v1_tool_access_checks_post",
+        "description": "Grant more iterations or budget to a task waiting on a hard limit.",
+        "operationId": "continue_task_execution_v1_tasks__task_id__continue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ToolAccessCheckRequest"
+                "$ref": "#/components/schemas/ContinueTaskPayload"
               }
             }
           },
@@ -22332,9 +23332,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ToolAccessCheckResponse"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -22355,133 +23353,17 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Check Tool Access",
+        "summary": "Continue Task Execution",
         "tags": [
           "v1",
           "protected",
-          "tool-access"
-        ]
-      }
-    },
-    "/v1/tool-access/grants": {
-      "delete": {
-        "description": "Revoke a whole-tool or exact-arguments grant.",
-        "operationId": "revoke_tool_access_v1_tool_access_grants_delete",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ToolAccessGrantRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Revoke Tool Access",
-        "tags": [
-          "v1",
-          "protected",
-          "tool-access"
-        ]
-      },
-      "get": {
-        "description": "List tool access grants in the configured graph backend.",
-        "operationId": "list_tool_access_grants_v1_tool_access_grants_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ToolAccessGrantListResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Tool Access Grants",
-        "tags": [
-          "v1",
-          "protected",
-          "tool-access"
-        ]
-      },
-      "post": {
-        "description": "Grant a user access to a whole tool, or to an exact argument set.",
-        "operationId": "grant_tool_access_v1_tool_access_grants_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ToolAccessGrantRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ToolAccessGrantResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Grant Tool Access",
-        "tags": [
-          "v1",
-          "protected",
-          "tool-access"
+          "tasks"
         ]
       }
     },
     "/v1/triggers/": {
       "get": {
-        "description": "List triggers with optional filtering.\n\nReturns a list of triggers that match the specified criteria. Supports\nfiltering by agent ID, trigger type, and active status.\n\nAccess Control:\n    Returns all triggers within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace triggers.\n\nArgs:\n    agent_id: Optional agent ID filter\n    trigger_type: Optional trigger type filter\n    active_only: Whether to only return active triggers\n    limit: Maximum number of triggers to return\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    List of triggers matching the criteria",
+        "description": "List triggers with optional filtering.\n\nReturns a list of triggers that match the specified criteria. Supports\nfiltering by agent ID, trigger type, and active status.\n\nAccess Control:\n    Returns all triggers within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace triggers.\n\nArgs:\n    secret_manager: Injected secret manager (to resolve credential presence)\n    agent_id: Optional agent ID filter\n    trigger_type: Optional trigger type filter\n    active_only: Whether to only return active triggers\n    limit: Maximum number of triggers to return\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    List of triggers matching the criteria",
         "operationId": "list_triggers_v1_triggers__get",
         "parameters": [
           {
@@ -22779,7 +23661,7 @@
         ]
       },
       "get": {
-        "description": "Get a specific trigger by ID.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    The trigger data\n\nRaises:\n    HTTPException: If trigger not found",
+        "description": "Get a specific trigger by ID.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    secret_manager: Injected secret manager (to resolve credential presence)\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    The trigger data\n\nRaises:\n    HTTPException: If trigger not found",
         "operationId": "get_trigger_v1_triggers__trigger_id__get",
         "parameters": [
           {
@@ -23752,6 +24634,53 @@
           "protected",
           "workspaces"
         ]
+      },
+      "post": {
+        "description": "Create a new shared workspace owned by the current user.\n\nProvisions the workspace row (baseline governance policies are seeded by\nthe creation hook in ``get_workspace_service``) and grants the creator\nmembership in the relationship graph so the workspace immediately shows up\nin their accessible list and the switcher.",
+        "operationId": "create_workspace_v1_workspaces_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkspaceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Workspace",
+        "tags": [
+          "v1",
+          "protected",
+          "workspaces"
+        ]
       }
     },
     "/v1/workspaces/{workspace_id}/invitations": {
@@ -23974,7 +24903,7 @@
     },
     "/v1/workspaces/{workspace_id}/members/{user_id}": {
       "delete": {
-        "description": "Remove a member from the workspace. Self-removal allowed; removing\nothers requires the caller to be a member of the workspace (owner-only\ncheck belongs to the permissions PR).",
+        "description": "Remove a member from the workspace.",
         "operationId": "remove_member_v1_workspaces__workspace_id__members__user_id__delete",
         "parameters": [
           {

@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/agentarea/mcp-manager/internal/backends"
@@ -132,16 +133,16 @@ func TestForceEnvironment_RespectsAliases(t *testing.T) {
 		func() (string, error) { return "/home/test", nil },
 	)
 
-	if got := detector.ForceEnvironment("k8s"); got != EnvironmentKubernetes {
+	if got, err := detector.ForceEnvironment("k8s"); err != nil || got != EnvironmentKubernetes {
 		t.Fatalf("expected %q, got %q", EnvironmentKubernetes, got)
 	}
 
-	if got := detector.ForceEnvironment("podman"); got != EnvironmentDocker {
+	if got, err := detector.ForceEnvironment("podman"); err != nil || got != EnvironmentDocker {
 		t.Fatalf("expected %q, got %q", EnvironmentDocker, got)
 	}
 }
 
-func TestForceEnvironment_InvalidFallsBackToDetection(t *testing.T) {
+func TestForceEnvironment_InvalidIsRefusedNotDetected(t *testing.T) {
 	detector := newTestDetector(
 		func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
 		func(key string) string {
@@ -153,8 +154,18 @@ func TestForceEnvironment_InvalidFallsBackToDetection(t *testing.T) {
 		func() (string, error) { return "/home/test", nil },
 	)
 
-	if got := detector.ForceEnvironment("not-a-real-env"); got != EnvironmentKubernetes {
-		t.Fatalf("expected %q, got %q", EnvironmentKubernetes, got)
+	// This used to assert the opposite — that an unrecognised value fell back to
+	// auto-detection. That is the wrong recovery: the operator declared where
+	// workloads run, and a typo would silently start the docker backend,
+	// creating untrusted workloads on the control plane's own host. Note the
+	// fixture here detects Kubernetes, so the old behaviour would return
+	// Kubernetes and look like a success.
+	got, err := detector.ForceEnvironment("not-a-real-env")
+	if err == nil {
+		t.Fatalf("an unknown backend environment was accepted, resolving to %q", got)
+	}
+	if !strings.Contains(err.Error(), "not-a-real-env") {
+		t.Errorf("error does not name the rejected value, so the typo is not findable: %v", err)
 	}
 }
 

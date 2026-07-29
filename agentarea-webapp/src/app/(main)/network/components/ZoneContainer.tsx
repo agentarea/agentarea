@@ -1,10 +1,13 @@
 "use client";
 
-import { type NodeProps } from "@xyflow/react";
+import { type Node, type NodeProps } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 
-export default function ZoneContainer({ data }: NodeProps) {
-  const d = data as Record<string, any>;
+interface ZoneData extends Record<string, unknown> {
+  label: string;
+}
+
+export default function ZoneContainer({ data }: NodeProps<Node<ZoneData>>) {
   return (
     <div
       className={cn(
@@ -13,7 +16,7 @@ export default function ZoneContainer({ data }: NodeProps) {
       )}
     >
       <span className="px-3 pt-2.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-        {d.label as string}
+        {data.label}
       </span>
     </div>
   );

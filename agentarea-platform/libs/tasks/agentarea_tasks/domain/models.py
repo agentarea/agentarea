@@ -206,7 +206,7 @@ class AgentTask(BaseModel):
         """Surface illogical datetime relationships without breaking hydration.
 
         This runs on every construction, including loading existing rows from
-        the database. Raising here would make any task with legacy-inconsistent
+        the database. Raising here would make any task with inconsistent
         timestamps un-loadable and 500 every read path that touches it (e.g. the
         SSE event stream). Such skew exists in practice — e.g. a past bulk
         migration that overwrote ``created_at`` while preserving the original

@@ -14,7 +14,7 @@ class TestMCPServerInstanceRepository:
     def user_context(self):
         """Create a test user context."""
         return UserContext(
-            user_id="test-user-123", workspace_id="test-workspace-456", roles=["user"]
+            user_id="test-user-123", workspace_id="test-workspace-456"
         )
 
     def create_test_instance(
@@ -23,7 +23,6 @@ class TestMCPServerInstanceRepository:
         description: str = "Test description",
         server_spec_id: str = "test_spec_id",
         json_spec: dict = None,
-        status: str = "active",
         workspace_id: str = "test-workspace-456",
         created_by: str = "test-user-123",
     ) -> MCPServerInstance:
@@ -33,7 +32,6 @@ class TestMCPServerInstanceRepository:
             description=description,
             server_spec_id=server_spec_id,
             json_spec=json_spec or {"env_vars": ["API_KEY", "SECRET_TOKEN"]},
-            status=status,
             workspace_id=workspace_id,
             created_by=created_by,
         )
@@ -51,7 +49,6 @@ class TestMCPServerInstanceRepository:
             description="OpenAI integration server",
             server_spec_id="openai_spec_v1",
             json_spec={"env_vars": ["OPENAI_API_KEY"], "config": {"model": "gpt-4"}},
-            status="active",
         )
 
         # Verify creation
@@ -63,7 +60,6 @@ class TestMCPServerInstanceRepository:
             "env_vars": ["OPENAI_API_KEY"],
             "config": {"model": "gpt-4"},
         }
-        assert created_instance.status == "active"
         assert created_instance.workspace_id == user_context.workspace_id
         assert created_instance.created_by == user_context.user_id
         assert created_instance.created_at is not None
@@ -84,13 +80,13 @@ class TestMCPServerInstanceRepository:
 
         # Create multiple instances using the new workspace-scoped create method
         await repository.create(
-            name="GitHub MCP Server", description="GitHub integration", status="active"
+            name="GitHub MCP Server", description="GitHub integration", server_spec_id="github_v1"
         )
         await repository.create(
-            name="Slack MCP Server", description="Slack integration", status="inactive"
+            name="Slack MCP Server", description="Slack integration", server_spec_id="slack_v1"
         )
         await repository.create(
-            name="Database MCP Server", description="Database connector", status="pending"
+            name="Database MCP Server", description="Database connector", server_spec_id="db_v1"
         )
 
         # List all instances
@@ -111,7 +107,7 @@ class TestMCPServerInstanceRepository:
         created_instance = await repository.create(
             name="Original Server",
             description="Original description",
-            status="pending",
+            server_spec_id="original_spec_v1",
             json_spec={"env_vars": ["OLD_KEY"]},
         )
 
@@ -120,20 +116,17 @@ class TestMCPServerInstanceRepository:
             created_instance.id,
             name="Updated Server",
             description="Updated description",
-            status="active",
             json_spec={"env_vars": ["NEW_KEY", "ANOTHER_KEY"], "updated": True},
         )
 
         assert updated_instance.name == "Updated Server"
         assert updated_instance.description == "Updated description"
-        assert updated_instance.status == "active"
         assert updated_instance.json_spec["env_vars"] == ["NEW_KEY", "ANOTHER_KEY"]
         assert updated_instance.json_spec["updated"] is True
 
         # Verify the update persisted
         retrieved_instance = await repository.get_by_id(created_instance.id)
         assert retrieved_instance.name == "Updated Server"
-        assert retrieved_instance.status == "active"
         assert retrieved_instance.json_spec["updated"] is True
 
     @pytest.mark.asyncio
@@ -143,7 +136,7 @@ class TestMCPServerInstanceRepository:
 
         # Create instance using the new workspace-scoped create method
         created_instance = await repository.create(
-            name="Temporary Server", description="Will be deleted"
+            name="Temporary Server", description="Will be deleted", server_spec_id="temp_spec_v1"
         )
 
         # Delete the instance
@@ -179,23 +172,12 @@ class TestMCPServerInstanceRepository:
         assert result is False
 
     @pytest.mark.asyncio
+    @pytest.mark.skip(reason="MCPServerInstance has no status field; list_by_status not applicable")
     async def test_list_instances_by_status(
         self, db_session: AsyncSession, user_context: UserContext
     ):
         """Test filtering instances by status."""
-        repository = MCPServerInstanceRepository(db_session, user_context)
-
-        # Create instances with different statuses using the new workspace-scoped create method
-        await repository.create(name="Active Server", status="active")
-        await repository.create(name="Pending Server", status="pending")
-        await repository.create(name="Inactive Server", status="inactive")
-
-        # Filter by active status using the new method
-        active_instances = await repository.list_by_status("active")
-        active_names = [instance.name for instance in active_instances]
-        assert "Active Server" in active_names
-        assert "Pending Server" not in active_names
-        assert "Inactive Server" not in active_names
+        pass
 
     @pytest.mark.asyncio
     async def test_list_instances_by_server_spec_id(
@@ -224,22 +206,12 @@ class TestMCPServerInstanceRepository:
         repository = MCPServerInstanceRepository(db_session, user_context)
 
         # Create various instances using the new workspace-scoped create method
-        await repository.create(name="Target Server", server_spec_id="target_spec", status="active")
-        await repository.create(
-            name="Non-matching 1",
-            server_spec_id="target_spec",
-            status="inactive",  # Different status
-        )
-        await repository.create(
-            name="Non-matching 2",
-            server_spec_id="other_spec",  # Different spec
-            status="active",
-        )
+        await repository.create(name="Target Server", server_spec_id="target_spec")
+        await repository.create(name="Non-matching 1", server_spec_id="other_spec")
+        await repository.create(name="Non-matching 2", server_spec_id="other_spec")
 
-        # Filter with multiple criteria using the new list_all method
-        filtered_instances = await repository.list_all(
-            server_spec_id="target_spec", status="active"
-        )
+        # Filter by server_spec_id using list_all
+        filtered_instances = await repository.list_all(server_spec_id="target_spec")
 
         assert len(filtered_instances) == 1
         assert filtered_instances[0].name == "Target Server"
@@ -257,7 +229,7 @@ class TestMCPServerInstanceRepository:
         }
 
         created_instance = await repository.create(
-            name="JSON Test Server", json_spec=complex_json_spec
+            name="JSON Test Server", server_spec_id="json_test_spec_v1", json_spec=complex_json_spec
         )
 
         # Verify JSON spec is stored and retrieved correctly

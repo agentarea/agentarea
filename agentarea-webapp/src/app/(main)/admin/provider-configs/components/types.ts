@@ -6,7 +6,7 @@ export interface ProviderSpec {
   provider_type: string;
   icon_url: string | null;
   is_builtin: boolean;
-  models: any[];
+  models: unknown[];
 }
 
 export interface ModelInstance {

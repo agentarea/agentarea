@@ -19,6 +19,18 @@ def _duration_seconds(value: Any) -> float | None:
     return None
 
 
+def _result_field(result: Any, name: str, default: Any = None) -> Any:
+    """Read a workflow result field from either Pydantic or dict payloads."""
+    if isinstance(result, dict):
+        return result.get(name, default)
+    return getattr(result, name, default)
+
+
+def _has_final_response(value: Any) -> bool:
+    """A successful agent task must return a user-visible response."""
+    return isinstance(value, str) and bool(value.strip())
+
+
 class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
     """Temporal-specific implementation of workflow orchestration."""
 
@@ -174,7 +186,8 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         try:
             handle = client.get_workflow_handle(execution_id)
             description = await handle.describe()
-            temporal_status = description.status.name.lower()
+            status = description.status
+            temporal_status = status.name.lower() if status is not None else "unknown"
 
             status_map = {
                 "running": "running",
@@ -189,7 +202,10 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
             response: dict[str, Any] = {
                 "status": mapped_status,
-                "success": True if mapped_status == "completed" else None,
+                # Temporal completion means the workflow function returned; it
+                # does not imply that the agent task achieved its goal.
+                "execution_status": mapped_status,
+                "success": None,
                 "result": None,
                 "start_time": description.start_time.isoformat()
                 if description.start_time
@@ -200,12 +216,42 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
 
             if mapped_status == "completed":
                 result = await handle.result()
+                task_success = _result_field(result, "success")
+                task_status = _result_field(result, "status")
+                final_response = _result_field(result, "final_response")
+                failure_reason = _result_field(result, "failure_reason")
+                error_message = _result_field(result, "error_message")
+
+                if task_status == "blocked":
+                    outcome_status = "blocked"
+                    task_success = False
+                    failure_reason = failure_reason or "blocked"
+                elif task_status in {"failed", "cancelled"} or task_success is False:
+                    outcome_status = "cancelled" if task_status == "cancelled" else "failed"
+                    task_success = False
+                    failure_reason = failure_reason or "task_unsuccessful"
+                elif not _has_final_response(final_response):
+                    outcome_status = "failed"
+                    task_success = False
+                    failure_reason = failure_reason or "missing_final_response"
+                    error_message = error_message or "Task ended without a final response"
+                else:
+                    outcome_status = "completed"
+                    task_success = True
+
+                response["status"] = outcome_status
+                response["success"] = task_success
+                response["failure_reason"] = failure_reason
+                if error_message:
+                    response["error"] = error_message
                 response["result"] = {
-                    "response": getattr(result, "final_response", str(result)),
-                    "conversation_history": getattr(result, "conversation_history", []),
-                    "execution_metrics": getattr(result, "execution_metrics", {}),
+                    "response": final_response,
+                    "conversation_history": _result_field(result, "conversation_history", []),
+                    "execution_metrics": _result_field(result, "execution_metrics", {}),
+                    "success": task_success,
+                    "status": outcome_status,
+                    "failure_reason": failure_reason,
                 }
-                response["success"] = True
             elif mapped_status in {"failed", "cancelled"}:
                 # Best-effort extraction of terminal failure details.
                 try:
@@ -338,7 +384,14 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
     async def send_workflow_command(
         self, execution_id: str, command: str, payload: dict[str, Any]
     ) -> bool:
-        """Send a generic command signal to a running Temporal workflow."""
+        """Send a generic command signal to a running Temporal workflow.
+
+        Returns True when the signal was accepted. Returns False only when
+        the target workflow is not running (completed / timed out / evicted
+        history) — an expected outcome the API maps to 409, not a server
+        error. Any other failure is re-raised so it can't masquerade as
+        "task not running".
+        """
         client = await self._get_client()
 
         try:
@@ -348,5 +401,35 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send workflow command '{command}' to {execution_id}: {e}")
-            return False
+            msg = str(e).lower()
+            if "not found" in msg or "already completed" in msg or "no execution" in msg:
+                logger.info(
+                    "Workflow command '%s' not delivered: workflow %s is not running",
+                    command,
+                    execution_id,
+                )
+                return False
+            logger.error(
+                f"Failed to send workflow command '{command}' to {execution_id}: {e}",
+                exc_info=True,
+            )
+            raise
+
+    async def continue_workflow(self, execution_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Execute the workflow update that validates and applies a continuation."""
+        client = await self._get_client()
+        handle = client.get_workflow_handle(execution_id)
+        try:
+            result = await handle.execute_update("continue_execution", payload)
+        except Exception as exc:
+            message = str(exc).lower()
+            if (
+                "not found" in message
+                or "already completed" in message
+                or "no execution" in message
+            ):
+                return {"accepted": False, "reason": "workflow_not_running"}
+            raise
+        if not isinstance(result, dict):
+            raise RuntimeError("Continuation update returned an invalid response")
+        return result

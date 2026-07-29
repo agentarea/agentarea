@@ -20,7 +20,8 @@ export function computeHighlightSets<E extends HasEndpoints>(
   const walk = (start: string, adj: Record<string, string[]>) => {
     const queue = [start];
     while (queue.length) {
-      const cur = queue.shift()!;
+      const cur = queue.shift();
+      if (cur === undefined) continue;
       for (const next of adj[cur] || []) {
         if (!nodeSet.has(next)) {
           nodeSet.add(next);

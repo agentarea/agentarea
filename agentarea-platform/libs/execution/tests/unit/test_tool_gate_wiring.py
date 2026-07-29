@@ -13,12 +13,12 @@ from unittest.mock import AsyncMock
 import pytest
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 
-# The four capability branches that must enforce policy. Control primitives
+# The capability branches that must enforce policy. Control primitives
 # (completion, user-input, recall, read_output, activate_source, load_tools)
-# are intentionally exempt and not listed here.
+# are intentionally exempt and not listed here. Sandbox execution is not a
+# branch of its own: it is the shell tool, gated via _execute_mcp_tool.
 CAPABILITY_BRANCHES = [
     "_execute_mcp_tool",
-    "_execute_skill_script",
     "_execute_agent_delegation",
     "_execute_skill_activation",
 ]

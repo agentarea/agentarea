@@ -65,7 +65,7 @@ async function handleRequest(
       try {
         const requestBody = await request.json();
         body = JSON.stringify(requestBody);
-      } catch (e) {
+      } catch (_e) {
         // No body or invalid JSON
       }
     }
@@ -92,7 +92,7 @@ async function handleRequest(
     let jsonData;
     try {
       jsonData = JSON.parse(responseData);
-    } catch (e) {
+    } catch (_e) {
       jsonData = responseData;
     }
 
@@ -102,10 +102,10 @@ async function handleRequest(
         "Content-Type": "application/json",
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("API Proxy Error:", error);
     return NextResponse.json(
-      { error: "Proxy request failed", message: error.message },
+      { error: "Proxy request failed", message: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

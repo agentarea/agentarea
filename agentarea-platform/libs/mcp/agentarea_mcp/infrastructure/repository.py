@@ -239,6 +239,21 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def resolve_unique_slug(self, name: str) -> str:
+        """Workspace-unique slug for ``name``: ``base``, then ``base-2``..``base-999``.
+
+        Single source of truth for the NOT NULL ``slug`` column - every persisting
+        create path must route slugs through here so none can forget it.
+        """
+        base = generate_slug(name)
+        if await self.get_by_slug(base) is None:
+            return base
+        for suffix in range(2, 1000):
+            candidate = f"{base}-{suffix}"
+            if await self.get_by_slug(candidate) is None:
+                return candidate
+        raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
+
     async def get_server_by_id(
         self,
         server_id: str,

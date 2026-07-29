@@ -1,22 +1,22 @@
 "use client";
 
-import { type NodeProps } from "@xyflow/react";
+import { type Node, type NodeProps } from "@xyflow/react";
 import { Globe } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import type { NetworkFlowNodeData } from "../../types";
 import NodeCard from "./NodeCard";
 
-export default function OpenAPINode({ data }: NodeProps) {
-  const d = data as Record<string, any>;
-  const toolCount: number = d.metadata?.tool_count ?? 0;
+export default function OpenAPINode({ data }: NodeProps<Node<NetworkFlowNodeData>>) {
+  const toolCount = (data.metadata.tool_count as number | undefined) ?? 0;
 
   return (
     <NodeCard
       icon={<Globe className="h-6 w-6" />}
-      label={d.label}
+      label={data.label}
       subtitle="OpenAPI · Egress"
       color="rose"
-      dimmed={d._dimmed}
-      highlighted={d._highlighted}
+      dimmed={data._dimmed}
+      highlighted={data._highlighted}
       badge={
         toolCount > 0 ? (
           <Badge

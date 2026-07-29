@@ -10,7 +10,16 @@ from .auth import AuthSettings, get_auth_settings
 from .aws import AWSSettings, get_aws_settings, get_s3_client
 from .base import BaseAppSettings
 from .broker import BrokerSettings, KafkaSettings, RedisSettings
-from .database import Database, DatabaseSettings, get_database, get_db, get_db_settings, get_sync_db
+from .database import (
+    Database,
+    DatabaseSettings,
+    get_database,
+    get_db,
+    get_db_session,
+    get_db_settings,
+    get_read_db_session,
+    get_sync_db,
+)
 from .mcp import MCPManagerSettings, MCPSettings
 from .observability import ObservabilitySettings
 from .openfga import OpenFGASettings
@@ -44,7 +53,9 @@ __all__ = [
     "get_aws_settings",
     "get_database",
     "get_db",
+    "get_db_session",
     "get_db_settings",
+    "get_read_db_session",
     "get_s3_client",
     "get_secret_manager_settings",
     "get_settings",

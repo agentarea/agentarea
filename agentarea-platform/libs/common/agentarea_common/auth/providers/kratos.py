@@ -39,9 +39,14 @@ class KratosAuthProvider(BaseAuthProvider):
         if not self.jwks_b64:
             raise ValueError("jwks_b64 is required for KratosAuthProvider")
 
-        # Decode and parse JWKS
+        # Decode and parse JWKS. In local/docker deployments this is usually a
+        # base64 env var; in Kubernetes Secret env vars it may already be
+        # decoded into the raw JWKS JSON.
         try:
-            jwks_json = base64.b64decode(self.jwks_b64).decode("utf-8")
+            if str(self.jwks_b64).lstrip().startswith("{"):
+                jwks_json = str(self.jwks_b64)
+            else:
+                jwks_json = base64.b64decode(self.jwks_b64).decode("utf-8")
             self._jwks = json.loads(jwks_json)
         except Exception as e:
             raise ValueError(f"Failed to decode JWKS: {e}") from e

@@ -1,589 +1,563 @@
 {
-  "schema_version": "1.1",
-  "type_definitions": [
-    {
-      "type": "User",
-      "relations": {},
-      "metadata": {
-        "relations": {}
-      }
-    },
-    {
-      "type": "Workspace",
-      "relations": {
-        "members": {
-          "this": {}
+    "schema_version": "1.1",
+    "type_definitions": [
+        {
+            "type": "User"
+        },
+        {
+            "type": "Agent"
+        },
+        {
+            "metadata": {
+                "relations": {
+                    "admin": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User"
+                            }
+                        ]
+                    },
+                    "members": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User"
+                            },
+                            {
+                                "type": "Agent"
+                            }
+                        ]
+                    }
+                }
+            },
+            "relations": {
+                "admin": {
+                    "this": {}
+                },
+                "members": {
+                    "this": {}
+                }
+            },
+            "type": "Workspace"
+        },
+        {
+            "metadata": {
+                "relations": {
+                    "can_manage": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User",
+                                "wildcard": {}
+                            },
+                            {
+                                "type": "Agent",
+                                "wildcard": {}
+                            }
+                        ]
+                    },
+                    "can_read": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User",
+                                "wildcard": {}
+                            },
+                            {
+                                "type": "Agent",
+                                "wildcard": {}
+                            }
+                        ]
+                    },
+                    "can_write": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User",
+                                "wildcard": {}
+                            },
+                            {
+                                "type": "Agent",
+                                "wildcard": {}
+                            }
+                        ]
+                    }
+                }
+            },
+            "relations": {
+                "can_manage": {
+                    "this": {}
+                },
+                "can_read": {
+                    "this": {}
+                },
+                "can_write": {
+                    "this": {}
+                }
+            },
+            "type": "role"
+        },
+        {
+            "metadata": {
+                "relations": {
+                    "assignee": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User"
+                            },
+                            {
+                                "type": "Agent"
+                            }
+                        ]
+                    },
+                    "can_manage": {},
+                    "can_read": {},
+                    "can_write": {},
+                    "role": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "role"
+                            }
+                        ]
+                    }
+                }
+            },
+            "relations": {
+                "assignee": {
+                    "this": {}
+                },
+                "can_manage": {
+                    "intersection": {
+                        "child": [
+                            {
+                                "computedUserset": {
+                                    "relation": "assignee"
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_manage"
+                                    },
+                                    "tupleset": {
+                                        "relation": "role"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "can_read": {
+                    "intersection": {
+                        "child": [
+                            {
+                                "computedUserset": {
+                                    "relation": "assignee"
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_read"
+                                    },
+                                    "tupleset": {
+                                        "relation": "role"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "can_write": {
+                    "intersection": {
+                        "child": [
+                            {
+                                "computedUserset": {
+                                    "relation": "assignee"
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_write"
+                                    },
+                                    "tupleset": {
+                                        "relation": "role"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "role": {
+                    "this": {}
+                }
+            },
+            "type": "role_assignment"
+        },
+        {
+            "metadata": {
+                "relations": {
+                    "can_manage": {},
+                    "can_read": {},
+                    "can_write": {},
+                    "manager": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User"
+                            },
+                            {
+                                "type": "Agent"
+                            }
+                        ]
+                    },
+                    "parent": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "project"
+                            }
+                        ]
+                    },
+                    "reader": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User"
+                            },
+                            {
+                                "type": "Agent"
+                            }
+                        ]
+                    },
+                    "role_assignment": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "role_assignment"
+                            }
+                        ]
+                    },
+                    "workspace": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "Workspace"
+                            }
+                        ]
+                    },
+                    "writer": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User"
+                            },
+                            {
+                                "type": "Agent"
+                            }
+                        ]
+                    }
+                }
+            },
+            "relations": {
+                "can_manage": {
+                    "union": {
+                        "child": [
+                            {
+                                "computedUserset": {
+                                    "relation": "manager"
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_manage"
+                                    },
+                                    "tupleset": {
+                                        "relation": "role_assignment"
+                                    }
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_manage"
+                                    },
+                                    "tupleset": {
+                                        "relation": "parent"
+                                    }
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "admin"
+                                    },
+                                    "tupleset": {
+                                        "relation": "workspace"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "can_read": {
+                    "union": {
+                        "child": [
+                            {
+                                "computedUserset": {
+                                    "relation": "reader"
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_read"
+                                    },
+                                    "tupleset": {
+                                        "relation": "role_assignment"
+                                    }
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_read"
+                                    },
+                                    "tupleset": {
+                                        "relation": "parent"
+                                    }
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "admin"
+                                    },
+                                    "tupleset": {
+                                        "relation": "workspace"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "can_write": {
+                    "union": {
+                        "child": [
+                            {
+                                "computedUserset": {
+                                    "relation": "writer"
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_write"
+                                    },
+                                    "tupleset": {
+                                        "relation": "role_assignment"
+                                    }
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_write"
+                                    },
+                                    "tupleset": {
+                                        "relation": "parent"
+                                    }
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "admin"
+                                    },
+                                    "tupleset": {
+                                        "relation": "workspace"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "manager": {
+                    "this": {}
+                },
+                "parent": {
+                    "this": {}
+                },
+                "reader": {
+                    "this": {}
+                },
+                "role_assignment": {
+                    "this": {}
+                },
+                "workspace": {
+                    "this": {}
+                },
+                "writer": {
+                    "this": {}
+                }
+            },
+            "type": "project"
+        },
+        {
+            "metadata": {
+                "relations": {
+                    "can_manage": {},
+                    "can_read": {},
+                    "can_write": {},
+                    "manager": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User"
+                            },
+                            {
+                                "type": "Agent"
+                            }
+                        ]
+                    },
+                    "project": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "project"
+                            }
+                        ]
+                    },
+                    "reader": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User"
+                            },
+                            {
+                                "type": "Agent"
+                            }
+                        ]
+                    },
+                    "role_assignment": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "role_assignment"
+                            }
+                        ]
+                    },
+                    "writer": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User"
+                            },
+                            {
+                                "type": "Agent"
+                            }
+                        ]
+                    }
+                }
+            },
+            "relations": {
+                "can_manage": {
+                    "union": {
+                        "child": [
+                            {
+                                "computedUserset": {
+                                    "relation": "manager"
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_manage"
+                                    },
+                                    "tupleset": {
+                                        "relation": "role_assignment"
+                                    }
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_manage"
+                                    },
+                                    "tupleset": {
+                                        "relation": "project"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "can_read": {
+                    "union": {
+                        "child": [
+                            {
+                                "computedUserset": {
+                                    "relation": "reader"
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_read"
+                                    },
+                                    "tupleset": {
+                                        "relation": "role_assignment"
+                                    }
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_read"
+                                    },
+                                    "tupleset": {
+                                        "relation": "project"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "can_write": {
+                    "union": {
+                        "child": [
+                            {
+                                "computedUserset": {
+                                    "relation": "writer"
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_write"
+                                    },
+                                    "tupleset": {
+                                        "relation": "role_assignment"
+                                    }
+                                }
+                            },
+                            {
+                                "tupleToUserset": {
+                                    "computedUserset": {
+                                        "relation": "can_write"
+                                    },
+                                    "tupleset": {
+                                        "relation": "project"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "manager": {
+                    "this": {}
+                },
+                "project": {
+                    "this": {}
+                },
+                "reader": {
+                    "this": {}
+                },
+                "role_assignment": {
+                    "this": {}
+                },
+                "writer": {
+                    "this": {}
+                }
+            },
+            "type": "resource"
         }
-      },
-      "metadata": {
-        "relations": {
-          "members": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "type": "SkillCollection",
-      "relations": {
-        "parents": {
-          "this": {}
-        },
-        "viewers": {
-          "this": {}
-        },
-        "editors": {
-          "this": {}
-        },
-        "owners": {
-          "this": {}
-        },
-        "use": {
-          "union": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "viewers"
-                }
-              },
-              {
-                "computedUserset": {
-                  "relation": "editors"
-                }
-              },
-              {
-                "computedUserset": {
-                  "relation": "owners"
-                }
-              }
-            ]
-          }
-        },
-        "configure": {
-          "union": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "editors"
-                }
-              },
-              {
-                "computedUserset": {
-                  "relation": "owners"
-                }
-              }
-            ]
-          }
-        },
-        "manage": {
-          "computedUserset": {
-            "relation": "owners"
-          }
-        }
-      },
-      "metadata": {
-        "relations": {
-          "parents": {
-            "directly_related_user_types": [
-              {
-                "type": "Workspace"
-              }
-            ]
-          },
-          "viewers": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              },
-              {
-                "type": "Workspace",
-                "relation": "members"
-              }
-            ]
-          },
-          "editors": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              },
-              {
-                "type": "Workspace",
-                "relation": "members"
-              }
-            ]
-          },
-          "owners": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "type": "Skill",
-      "relations": {
-        "collections": {
-          "this": {}
-        },
-        "viewers": {
-          "this": {}
-        },
-        "editors": {
-          "this": {}
-        },
-        "owners": {
-          "this": {}
-        },
-        "use": {
-          "union": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "viewers"
-                }
-              },
-              {
-                "computedUserset": {
-                  "relation": "editors"
-                }
-              },
-              {
-                "computedUserset": {
-                  "relation": "owners"
-                }
-              },
-              {
-                "tupleToUserset": {
-                  "tupleset": {
-                    "relation": "collections"
-                  },
-                  "computedUserset": {
-                    "relation": "use"
-                  }
-                }
-              }
-            ]
-          }
-        },
-        "configure": {
-          "union": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "editors"
-                }
-              },
-              {
-                "computedUserset": {
-                  "relation": "owners"
-                }
-              },
-              {
-                "tupleToUserset": {
-                  "tupleset": {
-                    "relation": "collections"
-                  },
-                  "computedUserset": {
-                    "relation": "configure"
-                  }
-                }
-              }
-            ]
-          }
-        },
-        "manage": {
-          "union": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "owners"
-                }
-              },
-              {
-                "tupleToUserset": {
-                  "tupleset": {
-                    "relation": "collections"
-                  },
-                  "computedUserset": {
-                    "relation": "manage"
-                  }
-                }
-              }
-            ]
-          }
-        }
-      },
-      "metadata": {
-        "relations": {
-          "collections": {
-            "directly_related_user_types": [
-              {
-                "type": "SkillCollection"
-              }
-            ]
-          },
-          "viewers": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              }
-            ]
-          },
-          "editors": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              }
-            ]
-          },
-          "owners": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "type": "MCPServer",
-      "relations": {
-        "connectors": {
-          "this": {}
-        },
-        "operators": {
-          "this": {}
-        },
-        "connect": {
-          "union": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "connectors"
-                }
-              },
-              {
-                "computedUserset": {
-                  "relation": "operators"
-                }
-              }
-            ]
-          }
-        },
-        "manage": {
-          "computedUserset": {
-            "relation": "operators"
-          }
-        }
-      },
-      "metadata": {
-        "relations": {
-          "connectors": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              },
-              {
-                "type": "Workspace",
-                "relation": "members"
-              }
-            ]
-          },
-          "operators": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "type": "Agent",
-      "relations": {
-        "tasks": {
-          "this": {}
-        },
-        "operators": {
-          "this": {}
-        },
-        "owners": {
-          "this": {}
-        },
-        "operate": {
-          "union": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "operators"
-                }
-              },
-              {
-                "computedUserset": {
-                  "relation": "owners"
-                }
-              }
-            ]
-          }
-        },
-        "own": {
-          "computedUserset": {
-            "relation": "owners"
-          }
-        },
-        "run_task": {
-          "computedUserset": {
-            "relation": "tasks"
-          }
-        }
-      },
-      "metadata": {
-        "relations": {
-          "tasks": {
-            "directly_related_user_types": [
-              {
-                "type": "Task"
-              }
-            ]
-          },
-          "operators": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Agent"
-              },
-              {
-                "type": "Workspace",
-                "relation": "members"
-              }
-            ]
-          },
-          "owners": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "type": "Session",
-      "relations": {
-        "tasks": {
-          "this": {}
-        }
-      },
-      "metadata": {
-        "relations": {
-          "tasks": {
-            "directly_related_user_types": [
-              {
-                "type": "Task"
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "type": "Task",
-      "relations": {},
-      "metadata": {
-        "relations": {}
-      }
-    },
-    {
-      "type": "Tool",
-      "relations": {
-        "workspace": {
-          "this": {}
-        },
-        "callers": {
-          "this": {}
-        },
-        "can_call": {
-          "intersection": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "callers"
-                }
-              },
-              {
-                "tupleToUserset": {
-                  "tupleset": {
-                    "relation": "workspace"
-                  },
-                  "computedUserset": {
-                    "relation": "members"
-                  }
-                }
-              }
-            ]
-          }
-        }
-      },
-      "metadata": {
-        "relations": {
-          "workspace": {
-            "directly_related_user_types": [
-              {
-                "type": "Workspace"
-              }
-            ]
-          },
-          "callers": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Task"
-              },
-              {
-                "type": "Session",
-                "relation": "tasks"
-              },
-              {
-                "type": "Agent",
-                "relation": "tasks"
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "type": "ToolResource",
-      "relations": {
-        "workspace": {
-          "this": {}
-        },
-        "tool": {
-          "this": {}
-        },
-        "callers": {
-          "this": {}
-        },
-        "direct_call": {
-          "intersection": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "callers"
-                }
-              },
-              {
-                "tupleToUserset": {
-                  "tupleset": {
-                    "relation": "workspace"
-                  },
-                  "computedUserset": {
-                    "relation": "members"
-                  }
-                }
-              }
-            ]
-          }
-        },
-        "can_call": {
-          "union": {
-            "child": [
-              {
-                "computedUserset": {
-                  "relation": "direct_call"
-                }
-              },
-              {
-                "tupleToUserset": {
-                  "tupleset": {
-                    "relation": "tool"
-                  },
-                  "computedUserset": {
-                    "relation": "can_call"
-                  }
-                }
-              }
-            ]
-          }
-        }
-      },
-      "metadata": {
-        "relations": {
-          "workspace": {
-            "directly_related_user_types": [
-              {
-                "type": "Workspace"
-              }
-            ]
-          },
-          "tool": {
-            "directly_related_user_types": [
-              {
-                "type": "Tool"
-              }
-            ]
-          },
-          "callers": {
-            "directly_related_user_types": [
-              {
-                "type": "User"
-              },
-              {
-                "type": "Task"
-              },
-              {
-                "type": "Session",
-                "relation": "tasks"
-              },
-              {
-                "type": "Agent",
-                "relation": "tasks"
-              }
-            ]
-          }
-        }
-      }
-    }
-  ]
+    ]
 }

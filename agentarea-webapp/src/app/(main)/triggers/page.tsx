@@ -6,6 +6,7 @@ import SearchInput from "@/components/SearchInput";
 import TriggersContent from "./components/TriggersContent";
 import TriggersHeaderTabs from "./components/TriggersHeaderTabs";
 import TriggersSkeleton from "./components/TriggersSkeleton";
+import TriggersGroupSelect from "./components/TriggersGroupSelect";
 import TriggersTypeFilterSection from "./components/TriggersTypeFilterSection";
 import CreateTriggerButton from "./components/CreateTriggerButton";
 
@@ -39,6 +40,11 @@ export default async function TriggersPage({
       ? resolvedSearchParams.type
       : "all";
 
+  const groupBy =
+    resolvedSearchParams.group === "none"
+      ? ("none" as const)
+      : ("channel" as const);
+
   return (
     <ContentBlock
       header={{
@@ -56,19 +62,21 @@ export default async function TriggersPage({
               urlPath="/triggers"
               placeholder={t("searchPlaceholder")}
             />
+            <TriggersGroupSelect currentGroup={groupBy} />
             <TriggersHeaderTabs currentTab={viewMode} />
           </div>
         </>
       }
     >
       <Suspense
-        key={`${viewMode}-${searchQuery}-${typeFilter}`}
+        key={`${viewMode}-${searchQuery}-${typeFilter}-${groupBy}`}
         fallback={<TriggersSkeleton viewMode={viewMode} />}
       >
         <TriggersContent
           viewMode={viewMode}
           searchQuery={searchQuery}
           typeFilter={typeFilter}
+          groupBy={groupBy}
         />
       </Suspense>
     </ContentBlock>

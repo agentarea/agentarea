@@ -1,8 +1,6 @@
 .PHONY: help dev build up down restart down-clean \
 	frontend-dev docs-dev agentarea-platform-api agentarea-platform-worker agentarea-platform-test agentarea-platform-lint \
 	k8s-setup k8s-test k8s-build-images helm-test helm-gen \
-	mcp-start mcp-stop mcp-test \
-	test-e2e test-mcp cleanup-validation \
 	lint-go build-go preflight
 
 .DEFAULT_GOAL := help
@@ -108,36 +106,10 @@ helm-test: ## Test Helm chart installation
 helm-gen: ## Generate per-group env tpl files from config.yaml
 	python3 scripts/generate_env_tpls.py
 
-##@ MCP Infrastructure
-
-mcp-start: ## Start MCP infrastructure
-	@bash agentarea-mcp-manager/scripts/start.sh
-
-mcp-stop: ## Stop MCP infrastructure
-	@bash agentarea-mcp-manager/scripts/stop.sh
-
-mcp-test: ## Test MCP echo server
-	@bash agentarea-mcp-manager/scripts/test-mcp.sh
-
-mcp-test-echo: ## Test MCP echo server (detailed)
-	@bash agentarea-mcp-manager/scripts/test-echo.sh
-
 ##@ Testing
 
 preflight: ## Run all CI checks locally before pushing (lint, tests, schema, helm). Use SKIP=python,go,schema,env-tpl,helm-docs,helm-lint to skip groups.
 	@bash scripts/preflight.sh
-
-test-e2e: ## Run end-to-end tests
-	@python scripts/test_e2e.py
-
-test-mcp-nginx: ## Run nginx MCP tests
-	@python scripts/test_nginx_mcp.py
-
-test-mcp-run: ## Run MCP tests
-	@python scripts/run_mcp_tests.py
-
-cleanup-validation: ## Run cleanup validation
-	@python scripts/cleanup_validation.py
 
 ##@ Utilities
 

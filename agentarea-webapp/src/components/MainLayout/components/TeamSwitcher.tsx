@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { ChevronsUpDown, Plus } from "lucide-react";
 import {
   DropdownMenu,
@@ -46,7 +47,7 @@ export function TeamSwitcher({
             >
               <div className="flex aspect-square size-8 items-center justify-center bg-transparent text-sidebar-primary-foreground">
                 {activeTeam.logoFile ? (
-                  <img
+                  <Image
                     src={activeTeam.logoFile}
                     alt={activeTeam.name}
                     width={32}
@@ -85,7 +86,7 @@ export function TeamSwitcher({
               >
                 <div className="flex size-6 items-center justify-center rounded-md border">
                   {team.logoFile ? (
-                    <img
+                    <Image
                       src={team.logoFile}
                       alt={team.name}
                       width={32}

@@ -65,6 +65,29 @@ export function str(v: unknown): string | null {
 export function arr(v: unknown): Record<string, unknown>[] {
   return Array.isArray(v) ? (v as Record<string, unknown>[]) : [];
 }
+export function strArr(v: unknown): string[] {
+  return Array.isArray(v)
+    ? v.filter((x): x is string => typeof x === "string" && x.length > 0)
+    : [];
+}
+
+// Normalize a model slug for tolerant matching: drop the provider prefix
+// ("openai/gpt-4o-mini" → "gpt-4o-mini"), lowercase, strip non-alphanumerics.
+export function normalizeModelSlug(s: string): string {
+  const tail = s.includes("/") ? s.slice(s.lastIndexOf("/") + 1) : s;
+  return tail.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Does a workspace model name plausibly satisfy a catalog "preferred" slug?
+// Tolerant (substring either way) because catalog slugs are bare ("gpt-4o")
+// while real instances are provider-prefixed/variant ("openai/gpt-4o-mini").
+// Non-binding — it only drives a UI suggestion, never a backend choice.
+export function modelNameMatchesPreferred(modelName: string, preferred: string): boolean {
+  const m = normalizeModelSlug(modelName);
+  const p = normalizeModelSlug(preferred);
+  if (!m || !p) return false;
+  return m.includes(p) || p.includes(m);
+}
 
 // Best-effort logo URL from whatever the source preserved. MCP registry items
 // keep the full upstream server object under spec.raw_spec, whose `icons` is a
@@ -81,10 +104,19 @@ export function extractIcon(spec: RawSpec): string | null {
 }
 
 // Registry skill ids look like "action-creator--owner-repo--<hash>": the part
-// before the first "--" is the human name, the rest is provenance. Turn the
-// leading segment into a readable title ("action-creator" -> "Action Creator").
-function prettifySkillName(name: string): string {
-  const head = name.split("--")[0].replace(/[-_]+/g, " ").trim();
+// before the first "--" is the human name, the rest is provenance. Some sources
+// instead append "-<repo-slug>" without the "--" separator
+// ("frontend-design-anthropics-claude-code"); strip that using the repo tag so
+// the title doesn't carry the repo. Turn the result into a readable title.
+function prettifySkillName(name: string, repo?: string | null): string {
+  let head = name.split("--")[0];
+  if (head === name && repo) {
+    const repoSlug = repo.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    if (repoSlug && head.toLowerCase().endsWith(`-${repoSlug}`)) {
+      head = head.slice(0, head.length - repoSlug.length - 1);
+    }
+  }
+  head = head.replace(/[-_]+/g, " ").trim();
   return head.replace(/\b\w/g, (c) => c.toUpperCase()) || name;
 }
 
@@ -113,6 +145,7 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
     n("agents", "agent");
     n("skills", "skill");
     n("mcps", "connection");
+    n("channels", "channel");
     n("automations", "automation");
     return {
       ...base,
@@ -123,6 +156,10 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
     };
   }
   if (type === "agents") {
+    // Catalog agents declare model *preferences* (slugs, priority order) — a hint
+    // for the UI to suggest a model. The backend never binds a concrete model on
+    // install.
+    const models = strArr(spec.preferred_models);
     return {
       ...base,
       title: item.name,
@@ -130,18 +167,22 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
       // first one is a sensible category.
       category: str(item.tags?.[0]),
       integrations: [],
-      meta: [str(spec.model_id) ?? "model not set"],
+      meta: models,
     };
   }
   if (type === "skills") {
-    // Skills encode their category as a "category:<x>" tag.
-    const catTag = (item.tags ?? []).find((t) => t.startsWith("category:"));
+    // Skills encode their category and source repo as "category:<x>" / "repo:<x>"
+    // tags. Show the repo as the card fact (the "content" source_type is noise);
+    // use it to strip the repo from the generated title too.
+    const tagVal = (prefix: string) =>
+      (item.tags ?? []).find((t) => t.startsWith(prefix))?.slice(prefix.length) ?? null;
+    const repo = tagVal("repo:");
     return {
       ...base,
-      title: str(spec.display_name) ?? prettifySkillName(item.name),
-      category: catTag ? catTag.slice("category:".length) : null,
+      title: str(spec.display_name) ?? prettifySkillName(item.name, repo),
+      category: tagVal("category:"),
       integrations: [],
-      meta: [str(spec.source_type) ?? "content"],
+      meta: repo ? [repo] : [],
     };
   }
   // mcp_servers (connections). Category comes from curated metadata when the

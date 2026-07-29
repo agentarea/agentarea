@@ -25,10 +25,10 @@ export default function TaskSubheader({ taskId }: { taskId: string }) {
       const href = tab.key ? `/tasks/${taskId}/${tab.key}` : `/tasks/${taskId}`;
       return pathname === href;
     });
-    if (activeIndex !== -1 && linkRefs.current[activeIndex]) {
-      const activeLink = linkRefs.current[activeIndex]!;
+    if (activeIndex !== -1) {
+      const activeLink = linkRefs.current[activeIndex];
       const container = containerRef.current;
-      if (container) {
+      if (activeLink && container) {
         const containerRect = container.getBoundingClientRect();
         const linkRect = activeLink.getBoundingClientRect();
         setIndicatorStyle({

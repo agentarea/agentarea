@@ -2,59 +2,44 @@
 
 import logging
 
-from ..rebac.openfga_client import OpenFGAClient, OpenFGAError
+from ..rebac.openfga_client import OpenFGAClient
 from .permission import PermissionService
 
 logger = logging.getLogger(__name__)
 
-_NAMESPACE_BY_RESOURCE = {
-    "skill": "Skill",
-    "skill_collection": "SkillCollection",
-    "mcp_server": "MCPServer",
-    "agent": "Agent",
-}
+# Resource types intentionally NOT governed by the relationship graph. They are
+# scoped by the database/workspace layer only, so a graph check would deny a
+# legitimate owner that has no tuple. Anything NOT listed here is treated as a
+# ``resource:<id>`` object and fails CLOSED when it has no tuples.
+_UNGOVERNED_RESOURCE_TYPES = {"model_instance", "model"}
 
-_RELATION_BY_PERMISSION: dict[str, dict[str, str]] = {
-    "Skill": {
-        "view": "use",
-        "use": "use",
-        "execute": "use",
-        "edit": "configure",
-        "configure": "configure",
-        "manage": "manage",
-        "delete": "manage",
-    },
-    "SkillCollection": {
-        "view": "use",
-        "use": "use",
-        "edit": "configure",
-        "configure": "configure",
-        "manage": "manage",
-        "delete": "manage",
-    },
-    "MCPServer": {
-        "view": "connect",
-        "use": "connect",
-        "connect": "connect",
-        "execute": "connect",
-        "manage": "manage",
-        "edit": "manage",
-        "delete": "manage",
-    },
-    "Agent": {
-        "view": "operate",
-        "use": "operate",
-        "execute": "operate",
-        "operate": "operate",
-        "manage": "own",
-        "edit": "own",
-        "delete": "own",
-    },
+# Generic verb -> independent permission bit on the ``resource`` model. The bits
+# do NOT imply each other (no roll-up): a creator is granted all three at create.
+_BIT_BY_PERMISSION = {
+    "view": "can_read",
+    "use": "can_read",
+    "read": "can_read",
+    "execute": "can_read",
+    "operate": "can_read",
+    "connect": "can_read",
+    "edit": "can_write",
+    "write": "can_write",
+    "update": "can_write",
+    "configure": "can_write",
+    "manage": "can_manage",
+    "own": "can_manage",
+    "delete": "can_manage",
 }
 
 
 class OpenFGAPermissionService(PermissionService):
-    """Resolve permissions via OpenFGA tuple checks."""
+    """Resolve permissions via OpenFGA ``resource`` tuple checks.
+
+    Agents, skills, MCP servers, and clients are all ``resource:<id>`` objects;
+    their "kind" lives in the DB, not the graph. The generic verb maps onto one
+    of the three independent permission bits (``can_read`` / ``can_write`` /
+    ``can_manage``).
+    """
 
     def __init__(self, openfga_client: OpenFGAClient) -> None:
         self._openfga = openfga_client
@@ -66,29 +51,21 @@ class OpenFGAPermissionService(PermissionService):
         resource_type: str,
         resource_id: str,
     ) -> bool:
-        namespace = _NAMESPACE_BY_RESOURCE.get(resource_type)
-        if namespace is None:
+        if resource_type in _UNGOVERNED_RESOURCE_TYPES:
             return True
-        relation = _RELATION_BY_PERMISSION.get(namespace, {}).get(permission)
+
+        relation = _BIT_BY_PERMISSION.get(permission)
         if relation is None:
             logger.warning(
-                "No OpenFGA relation mapping for %s.%s; denying", resource_type, permission
+                "No resource permission mapping for %s.%s; denying", resource_type, permission
             )
             return False
-        try:
-            result = await self._openfga.check(
-                namespace=namespace,
-                object=resource_id,
-                relation=relation,
-                subject_id=f"User:{user_id}",
-            )
-        except OpenFGAError:
-            logger.exception(
-                "OpenFGA check failed (user=%s perm=%s res=%s/%s); denying",
-                user_id,
-                permission,
-                resource_type,
-                resource_id,
-            )
-            return False
+        # Fail CLOSED: on an OpenFGA outage we raise rather than coerce the check
+        # to allow OR deny. The caller (require_permission) surfaces the failure.
+        result = await self._openfga.check(
+            namespace="resource",
+            object=resource_id,
+            relation=relation,
+            subject_id=f"User:{user_id}",
+        )
         return result.allowed

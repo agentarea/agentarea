@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentarea-workspace"
-version = "0.0.12"
+version = "0.0.13"
 authors = [
     { name="Artem Astapenko", email="artem.astapenko@agentarea.ai" },
     { name="Julia Astapenko", email="julia.astapenko@agentarea.ai" },
@@ -35,7 +35,6 @@ members = [
     "libs/wallet",
     "libs/payment",
     "libs/execution",
-    "libs/context",
     "libs/triggers",
     "libs/governance",
     "libs/openapi",
@@ -46,12 +45,15 @@ members = [
 
 [tool.uv]
 constraint-dependencies = [
-    "cryptography>=46.0.7",
+    "cryptography>=48.0.1",
     "idna>=3.15",
+    "joserfc>=1.6.8",
     "litellm>=1.83.11",
     "mako>=1.3.12",
-    "python-multipart>=0.0.27",
-    "starlette>=1.0.1",
+    "pyasn1>=0.6.4",
+    "pydantic-settings>=2.14.2",
+    "python-multipart>=0.0.30",
+    "starlette>=1.3.1",
     "torch>=2.12.0",
     "urllib3>=2.7.0",
     "web3>=7.15.0",
@@ -68,7 +70,6 @@ agentarea-secrets = { workspace = true }
 agentarea-wallet = { workspace = true }
 agentarea-payment = { workspace = true }
 agentarea-execution = { workspace = true }
-agentarea-context = { workspace = true }
 agentarea-triggers = { workspace = true }
 agentarea-governance = { workspace = true }
 agentarea-openapi = { workspace = true }
@@ -97,7 +98,6 @@ dev = [
     "agentarea-wallet",
     "agentarea-payment",
     "agentarea-execution",
-    "agentarea-context[faiss]",
     "agentarea-triggers",
     "agentarea-api",
     "agentarea-worker",
@@ -208,7 +208,6 @@ addopts = [
     "--cov=agentarea_secrets",
     "--cov=agentarea_wallet",
     "--cov=agentarea_payment",
-    "--cov=agentarea_context",
     "--cov=agentarea_triggers",
     "--cov-report=term-missing",
     "--cov-report=html",
@@ -256,7 +255,6 @@ source = [
     "libs/wallet/agentarea_wallet",
     "libs/payment/agentarea_payment",
     "libs/execution/agentarea_execution",
-    "libs/context/agentarea_context",
     "libs/triggers/agentarea_triggers",
     "apps/api/agentarea_api",
     "apps/worker/agentarea_worker",
@@ -307,45 +305,57 @@ exclude = [
     "**/build",
     "tests"
 ]
-typeCheckingMode = "basic"
+typeCheckingMode = "standard"
 defineConstant = { DEBUG = true }
 pythonVersion = "3.12"
 pythonPlatform = "All"
 reportMissingImports = true
 reportMissingTypeStubs = false
 reportUnusedImport = true
+# Ratchet policy: diagnostics that catch real bugs (None access, undefined
+# names, bad awaits, type mismatches) stay "error" and are currently at zero, so
+# CI blocks any NEW real bug from landing. Annotation-completeness and style
+# diagnostics are "warning" — a visible, non-blocking backlog we burn down over
+# time without gating the branch. Do not silence a bug-catcher to pass CI; fix
+# it or narrow the type. See the pyright ratchet discussion in the PR.
+#
+# Bug-catchers (keep "error"):
+reportDuplicateImport = "error"
+reportOptionalSubscript = "error"
+reportOptionalMemberAccess = "error"
+reportOptionalCall = "error"
+reportOptionalIterable = "error"
+reportOptionalContextManager = "error"
+reportOptionalOperand = "error"
+reportTypedDictNotRequiredAccess = "error"
+reportAttributeAccessIssue = "error"
+reportTypeCommentUsage = "error"
+reportInconsistentConstructor = "error"
+reportPossiblyUnboundVariable = "error"
+reportUnusedExpression = "error"
+reportMatchNotExhaustive = "error"
+reportMissingSuperCall = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportCallInDefaultInitializer = false
+reportUnusedCallResult = false
+# Annotation/style noise (non-blocking "warning" backlog):
 reportUnusedClass = "warning"
 reportUnusedFunction = "warning"
 reportUnusedVariable = "warning"
-reportDuplicateImport = "warning"
-reportOptionalSubscript = "warning"
-reportOptionalMemberAccess = "warning"
-reportOptionalCall = "warning"
-reportOptionalIterable = "warning"
-reportOptionalContextManager = "warning"
-reportOptionalOperand = "warning"
-reportTypedDictNotRequiredAccess = "warning"
 reportPrivateUsage = "warning"
-reportTypeCommentUsage = "warning"
 reportIncompatibleMethodOverride = "warning"
 reportIncompatibleVariableOverride = "warning"
-reportInconsistentConstructor = "warning"
-reportPossiblyUnboundVariable = "warning"
-reportMissingSuperCall = false
 reportUninitializedInstanceVariable = "warning"
 reportUnknownParameterType = "warning"
 reportUnknownArgumentType = "warning"
 reportUnknownLambdaType = "warning"
-reportUnknownMemberType = false
-reportUnknownVariableType = false
-reportCallInDefaultInitializer = false
 reportUnnecessaryIsInstance = "warning"
 reportUnnecessaryCast = "warning"
+reportFunctionMemberAccess = "warning"
 reportImplicitStringConcatenation = "warning"
-reportUnusedCallResult = false
-reportUnusedExpression = "warning"
 reportUnnecessaryTypeIgnoreComment = "warning"
-reportMatchNotExhaustive = "warning"
+reportUnsupportedDunderAll = "warning"
 
 # Hatch build configuration for workspace root
 [tool.hatch.build.targets.wheel]

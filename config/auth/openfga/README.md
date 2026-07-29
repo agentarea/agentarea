@@ -6,7 +6,14 @@ authorization work. Keto remains supported as a fallback during migration.
 - `model.fga` is the human-readable OpenFGA DSL model.
 - `model.fga.yaml` is the FGA CLI test fixture for the model.
 - `authorization-model.json` is the deployable OpenFGA HTTP API model loaded by
-  the AgentArea app and worker during bootstrap.
+  the AgentArea app and worker during bootstrap. Generated from `model.fga`, not
+  hand-edited:
+
+  ```bash
+  fga model transform --file model.fga > authorization-model.json
+  cp authorization-model.json ../../../charts/agentarea/files/openfga/authorization-model.json
+  fga model test --tests model.fga.yaml   # must pass before commit
+  ```
 - The `/access-control` API can operate against OpenFGA when
   `ACCESS_CONTROL_BACKEND=openfga`.
 - Graph object and user refs intentionally keep the current PascalCase names

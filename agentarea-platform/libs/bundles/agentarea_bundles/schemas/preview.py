@@ -13,6 +13,7 @@ class EntityKind(StrEnum):
     MCP = "mcp"
     SKILL = "skill"
     AGENT = "agent"
+    CHANNEL = "channel"
     AUTOMATION = "automation"
     POLICY = "policy"
 

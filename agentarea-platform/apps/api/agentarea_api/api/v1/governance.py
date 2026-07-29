@@ -12,7 +12,7 @@ from agentarea_agents.application.temporal_workflow_service import TemporalWorkf
 from agentarea_api.api.deps.services import get_temporal_workflow_service
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base.repository_factory import RepositoryFactory
-from agentarea_common.infrastructure.database import get_db_session
+from agentarea_common.config.database import get_db_session
 from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_governance.domain.policies import (
     EffectivePolicy,

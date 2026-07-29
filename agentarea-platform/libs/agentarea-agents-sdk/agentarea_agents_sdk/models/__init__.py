@@ -6,7 +6,6 @@ from .llm_model import LLMModel, LLMRequest, LLMResponse, LLMUsage
 from .messages import (
     AssistantMessage,
     BaseMessage,
-    Message,
     Messages,
     SystemMessage,
     ToolMessage,
@@ -31,7 +30,6 @@ __all__ = [
     "SystemMessage",
     "AssistantMessage",
     "ToolMessage",
-    "Message",
     "Messages",
     # Message Factory Functions
     "create_system_message",

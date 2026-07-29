@@ -1,3 +1,4 @@
+import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import { getTranslations } from "next-intl/server";
 import ProviderConfigForm from "@/components/ProviderConfigForm";
 import { getProviderConfig, listModelInstances } from "@/lib/api";
@@ -15,7 +16,7 @@ export default async function ProviderConfigFormWrapper({
 
   // Load initial data if in edit mode
   let initialData = undefined;
-  let existingModelInstances: any[] = [];
+  let existingModelInstances: ModelInstanceResponse[] = [];
 
   if (isEdit && preselectedProviderId) {
     try {
@@ -28,7 +29,7 @@ export default async function ProviderConfigFormWrapper({
       ]);
 
       initialData = configResponse;
-      existingModelInstances = instancesResponse.data || [];
+      existingModelInstances = (instancesResponse.data as ModelInstanceResponse[]) || [];
     } catch (error) {
       console.error("Failed to load provider config for editing:", error);
       return (

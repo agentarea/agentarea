@@ -1,9 +1,10 @@
+from datetime import datetime
 from importlib import import_module
 from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, ForeignKey, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,6 +28,12 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         JSON, nullable=False, default=lambda: dict(DEFAULT_VERIFICATION)
     )
     last_dispatch: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
+    # Stamped by the MCP proxy on each call so the control plane can tell an
+    # idle instance from a busy one. Lazy provisioning starts instances on
+    # demand but nothing stopped them, so they accumulated and ran forever.
+    last_used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
     tools: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
     network_scope: Mapped[str] = mapped_column(String(20), nullable=False, default="private")
     auth_config_id: Mapped[UUID | None] = mapped_column(

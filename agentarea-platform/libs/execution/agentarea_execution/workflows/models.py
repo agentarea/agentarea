@@ -125,6 +125,29 @@ class ContinueAsNewState(BaseModel):
     # Cached model resolution — preserved across continue-as-new
     resolved_model: dict | None = None
     effective_policy: dict[str, Any] | None = None
+    # Signal/update state must survive Temporal history rollover verbatim.
+    message_queue: list[dict[str, Any]] = Field(default_factory=list)
+    pending_escalations: dict[str, PendingEscalation] = Field(default_factory=dict)
+    pending_input_requests: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    a2ui_action_queue: list[dict[str, Any]] = Field(default_factory=list)
+    awaiting_input: bool = False
+    paused: bool = False
+    pause_reason: str = ""
+    workflow_metadata: dict[str, Any] = Field(default_factory=dict)
+    completion_event_published: bool = False
+    waiting_for_continuation: bool = False
+    continuation_failure_reason: str | None = None
+    continuation_message: str | None = None
+    continuation_count: int = 0
+    status: str = "executing"
+    success: bool = False
+    final_response: str | None = None
+    failure_reason: str | None = None
+    error_message: str | None = None
+    blocked_reason: str | None = None
+    validation_state: str = "pending"
+    validation_repair_attempts: int = 0
+    validation_terminal: bool = False
 
 
 class AgentExecutionState(BaseModel):
@@ -143,7 +166,12 @@ class AgentExecutionState(BaseModel):
     available_tools: list[dict[str, Any]] = Field(default_factory=list)
     final_response: str | None = None
     success: bool = False
+    failure_reason: str | None = None
+    error_message: str | None = None
     blocked_reason: str | None = None
+    validation_state: str = "pending"
+    validation_repair_attempts: int = 0
+    validation_terminal: bool = False
     budget_usd: Money | None = None
     tokens_used: int = 0  # Cumulative tokens consumed across the run (governance)
     context_window: int = 128000  # From ModelSpec, for context window management

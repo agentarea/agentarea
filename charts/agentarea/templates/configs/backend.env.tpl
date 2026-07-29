@@ -8,12 +8,12 @@ PORT: "8000"
 LOG_LEVEL: "info"
 MCP_MANAGER_URL: "http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}"
 MCP_CLIENT_TIMEOUT: "30"
+MCP_LAZY_PROVISIONING_ENABLED: "{{ .Values.mcpManager.serverless.enabled }}"
 API_HOST: "{{ .Values.global.api.host }}"
 API_PORT: "{{ .Values.global.api.port }}"
 API_BASE_URL: "{{ include "agentarea.backend.apiUrl" . }}"
 API_AUTH_ENABLED: "{{ .Values.global.api.auth.enabled }}"
-API_RATE_LIMIT_ENABLED: "{{ .Values.global.api.rateLimit.enabled }}"
-API_RATE_LIMIT_REQUESTS_PER_MINUTE: "{{ .Values.global.api.rateLimit.requestsPerMinute }}"
+PUBLIC_S3_ENDPOINT: "{{ .Values.global.storage.publicEndpoint }}"
 METRICS_ENABLED: "{{ .Values.global.monitoring.prometheus.enabled }}"
 METRICS_PORT: "{{ .Values.global.monitoring.prometheus.port }}"
 HEALTH_CHECK_ENABLED: "{{ .Values.global.monitoring.health.enabled }}"
@@ -43,6 +43,11 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-backend
       key: MCP_CLIENT_TIMEOUT
+- name: MCP_LAZY_PROVISIONING_ENABLED
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-backend
+      key: MCP_LAZY_PROVISIONING_ENABLED
 - name: API_HOST
   valueFrom:
     configMapKeyRef:
@@ -63,16 +68,11 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-backend
       key: API_AUTH_ENABLED
-- name: API_RATE_LIMIT_ENABLED
+- name: PUBLIC_S3_ENDPOINT
   valueFrom:
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-backend
-      key: API_RATE_LIMIT_ENABLED
-- name: API_RATE_LIMIT_REQUESTS_PER_MINUTE
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-backend
-      key: API_RATE_LIMIT_REQUESTS_PER_MINUTE
+      key: PUBLIC_S3_ENDPOINT
 - name: METRICS_ENABLED
   valueFrom:
     configMapKeyRef:
@@ -113,4 +113,11 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
     secretKeyRef:
       name: "{{ .Values.global.secrets.application }}"
       key: api-auth-header-value
+{{- if .Values.kratos.enabled }}
+- name: KRATOS_JWKS_B64
+  valueFrom:
+    secretKeyRef:
+      name: {{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName | quote }}
+      key: jwks_b64
+{{- end }}
 {{- end }}

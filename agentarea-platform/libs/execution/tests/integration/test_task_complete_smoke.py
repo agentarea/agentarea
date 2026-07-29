@@ -11,6 +11,8 @@ from agentarea_common.testing.flows import MainFlow
 from agentarea_execution.models import (
     AgentConfigRequest,
     AgentExecutionRequest,
+    ArtifactValidationRequest,
+    ArtifactValidationResult,
     LLMCallRequest,
     MCPToolRequest,
     ResolveModelRequest,
@@ -136,6 +138,13 @@ async def mock_update_task_status(request: UpdateTaskStatusRequest) -> bool:
     return True
 
 
+@activity.defn(name="validate_artifacts_activity")
+async def mock_validate_artifacts(
+    request: ArtifactValidationRequest,
+) -> ArtifactValidationResult:
+    return ArtifactValidationResult(state="passed", generation=0)
+
+
 ALL_ACTIVITIES = [
     mock_build_config,
     mock_discover_tools,
@@ -144,6 +153,7 @@ ALL_ACTIVITIES = [
     mock_execute_mcp_tool,
     mock_publish_events,
     mock_update_task_status,
+    mock_validate_artifacts,
 ]
 
 

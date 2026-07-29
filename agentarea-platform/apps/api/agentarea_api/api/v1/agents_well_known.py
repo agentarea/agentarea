@@ -1,8 +1,8 @@
 """Agent-specific well-known endpoints for A2A protocol.
 
 This module provides well-known endpoints for individual agents.
-Each agent gets its own /.well-known/agent.json endpoint at
-/v1/agents/{agent_id}/.well-known/agent.json
+Each agent gets its own /.well-known/agent-card.json endpoint at
+/v1/agents/{agent_id}/.well-known/agent-card.json
 
 This allows for proper A2A compliance where each agent can be discovered
 individually, and later can be proxied to subdomains
@@ -13,7 +13,7 @@ import logging
 from uuid import UUID
 
 from agentarea_agents.domain.models import Agent
-from agentarea_common.infrastructure.database import get_read_db_session
+from agentarea_common.config.database import get_read_db_session
 from agentarea_common.utils.types import (
     AgentCapabilities,
     AgentCard,
@@ -96,7 +96,6 @@ async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> A
     )
 
 
-@router.get("/.well-known/agent.json")
 @router.get("/.well-known/agent-card.json")
 async def get_agent_well_known_card(
     agent_id: UUID,
@@ -105,14 +104,12 @@ async def get_agent_well_known_card(
 ) -> AgentCard:
     """Agent-specific well-known discovery endpoint.
 
-    Returns the agent card for this specific agent.
-    This endpoint can be accessed at:
-    - /v1/agents/{agent_id}/.well-known/agent-card.json
-    - /v1/agents/{agent_id}/.well-known/agent.json (legacy alias)
+    Returns the agent card for this specific agent, at
+    /v1/agents/{agent_id}/.well-known/agent-card.json
 
     This allows each agent to have its own well-known endpoint, which is A2A compliant.
     Later, this can be proxied to subdomains:
-    - agent1.domain.com/.well-known/agent.json -> /v1/agents/{id}/.well-known/agent.json
+    - agent1.domain.com/.well-known/agent-card.json -> /v1/agents/{id}/.well-known/agent-card.json
     """
     try:
         # Get the specific agent
@@ -170,7 +167,6 @@ async def get_agent_a2a_info(
             },
             "endpoints": {
                 "agent_card": f"{base_url}/v1/agents/{agent_id}/.well-known/agent-card.json",
-                "legacy_agent_card": f"{base_url}/v1/agents/{agent_id}/.well-known/agent.json",
                 "rpc": f"{base_url}/v1/agents/{agent_id}/rpc",
                 "stream": f"{base_url}/v1/agents/{agent_id}/stream",
                 "tasks": f"{base_url}/v1/agents/{agent_id}/tasks/",
@@ -229,7 +225,6 @@ async def get_agent_well_known_index(
             "agent": {"id": str(agent_id), "name": agent.name, "description": agent.description},
             "endpoints": {
                 "agent-card.json": f"{base_url}/v1/agents/{agent_id}/.well-known/agent-card.json",
-                "agent.json": f"{base_url}/v1/agents/{agent_id}/.well-known/agent.json",
                 "a2a-info.json": f"{base_url}/v1/agents/{agent_id}/.well-known/a2a-info.json",
             },
             "specification": "https://a2aproject.github.io/A2A/latest/specification/",

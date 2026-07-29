@@ -20,6 +20,6 @@ async def test_create_event_publisher_accepts_event_broker_instance() -> None:
     await publish_chunk("pong", 0, is_final=True)
 
     assert len(broker.events) == 1
-    assert broker.events[0].event_type == "workflow.LLMCallChunk"
+    assert broker.events[0].event_type == "workflow.llm.call.chunk"
     assert broker.events[0].data["original_data"]["task_id"] == "task-1"
     assert broker.events[0].data["original_data"]["chunk"] == "pong"

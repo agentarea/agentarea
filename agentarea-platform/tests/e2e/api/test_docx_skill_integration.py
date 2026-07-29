@@ -15,13 +15,11 @@ Run with:
     cd agentarea-platform
     uv run pytest -m integration tests/e2e/test_docx_skill_integration.py -v -s
 
-Required: full docker-compose stack up (make up-dev). The mcp-manager must be
-reachable at http://localhost:7999 (default port mapping).
+Required: full docker-compose stack up (make up-dev).
 """
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import io
 import os
@@ -37,7 +35,6 @@ from tests.e2e.api.conftest import _psql, wait_for_workflow
 from tests.e2e.api.test_skill_mcp_orchestration import _ensure_artifacts_bucket
 
 API_URL = os.environ.get("API_URL", "http://localhost:8000")
-MCP_MANAGER_URL = os.environ.get("MCP_MANAGER_URL", "http://localhost:7999")
 
 # OpenRouter / Kimi K2 credentials must come from the environment.
 # DO NOT hardcode keys here — this file is checked into version control.
@@ -419,33 +416,19 @@ def _tool_calls_observed(events: list[dict]) -> list[str]:
     return names
 
 
-def _read_docx_from_sandbox(workflow_id: str) -> bytes:
-    """Pull /workspace/wf-<workflow_id>/output.docx out via mcp-manager.
-
-    Uses a fresh script invocation that base64-emits the file so we don't
-    rely on the agent's tool result being parseable from event metadata.
-    """
-    payload = {
-        "workflow_id": workflow_id,
-        "script_name": "read.sh",
-        "script_content": (
-            "if [ ! -f output.docx ]; then echo MISSING; exit 1; fi; base64 output.docx"
-        ),
-        "timeout_seconds": 30,
-    }
-    resp = httpx.post(f"{MCP_MANAGER_URL}/sandbox/execute", json=payload, timeout=40.0)
-    resp.raise_for_status()
-    body = resp.json()
-    if body.get("exit_code") != 0:
-        raise AssertionError(
-            f"sandbox readback failed: exit={body.get('exit_code')} "
-            f"stdout={body.get('stdout')!r} stderr={body.get('stderr')!r}"
-        )
-    encoded = (body.get("stdout") or "").strip()
-    if not encoded or encoded == "MISSING":
-        raise AssertionError(f"output.docx not present in workspace: {body!r}")
-    # base64 may include newlines; b64decode tolerates them.
-    return base64.b64decode(encoded)
+def _read_docx_artifact(client: httpx.Client, agent_id: str, task_id: str) -> bytes:
+    """Read the committed DOCX through the authenticated artifact API."""
+    listing = client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts", timeout=30.0)
+    listing.raise_for_status()
+    artifact = next(
+        (item for item in listing.json() if item["path"].endswith("/output.docx")),
+        None,
+    )
+    if artifact is None:
+        raise AssertionError(f"output.docx not present in task artifacts: {listing.json()!r}")
+    response = client.get(artifact["download_url"], timeout=40.0)
+    response.raise_for_status()
+    return response.content
 
 
 # ---------------------------------------------------------------------------
@@ -567,9 +550,8 @@ def test_docx_skill_end_to_end(
             f"run_skill_script returned non-zero exit code: {last_run!r}"
         )
 
-    # Pull the .docx out of the sandbox -------------------------------------
-    workflow_id = f"task-{task_id}"
-    docx_bytes = _read_docx_from_sandbox(workflow_id)
+    # Pull the committed .docx through the canonical workspace API ----------
+    docx_bytes = _read_docx_artifact(alice_client, agent_id, task_id)
 
     sha = hashlib.sha256(docx_bytes).hexdigest()
     saved_path = ARTIFACT_DIR / f"{task_id}-{sha[:12]}.docx"

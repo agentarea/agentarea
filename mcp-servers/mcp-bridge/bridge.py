@@ -56,6 +56,12 @@ class StdioBridge:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            # MCP messages are newline-delimited JSON on stdout. asyncio's default
+            # StreamReader limit is 64 KiB; a `tools/list` reply from a tool-rich
+            # server (e.g. 100+ tools with input schemas) easily exceeds that,
+            # which would overflow readline() and silently kill the reader — every
+            # subsequent request then times out. Give it generous headroom.
+            limit=16 * 1024 * 1024,
         )
         self._reader_task = asyncio.create_task(self._read_stdout())
         asyncio.create_task(self._read_stderr())

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { CreateWalletRequest } from "@/api/client/types.gen";
 import {
-  getAgentWalletAction,
   createAgentWalletAction,
-  updateAgentWalletAction,
   deleteAgentWalletAction,
+  getAgentWalletAction,
   getAgentWalletPaymentsAction,
+  updateAgentWalletAction,
 } from "@/lib/server-actions";
 
 export interface AgentWallet {
@@ -112,10 +113,15 @@ export function useAgentWallet(agentId: string) {
 export function useCreateWallet(agentId: string) {
   const [loading, setLoading] = useState(false);
 
-  const createWallet = async (data: Record<string, unknown>): Promise<AgentWallet> => {
+  const createWallet = async (
+    data: CreateWalletRequest
+  ): Promise<AgentWallet> => {
     setLoading(true);
     try {
-      const { data: result, error } = await createAgentWalletAction(agentId, data as any);
+      const { data: result, error } = await createAgentWalletAction(
+        agentId,
+        data
+      );
       if (error) throw new Error("Failed to create wallet");
       if (!isAgentWallet(result)) throw new Error("Invalid wallet response");
       return result;
@@ -130,10 +136,15 @@ export function useCreateWallet(agentId: string) {
 export function useUpdateWallet(agentId: string) {
   const [loading, setLoading] = useState(false);
 
-  const updateWallet = async (data: Record<string, unknown>): Promise<AgentWallet> => {
+  const updateWallet = async (
+    data: Record<string, unknown>
+  ): Promise<AgentWallet> => {
     setLoading(true);
     try {
-      const { data: result, error } = await updateAgentWalletAction(agentId, data as any);
+      const { data: result, error } = await updateAgentWalletAction(
+        agentId,
+        data
+      );
       if (error) throw new Error("Failed to update wallet");
       if (!isAgentWallet(result)) throw new Error("Invalid wallet response");
       return result;
@@ -172,17 +183,27 @@ export function useWalletPayments(
   const [data, setData] = useState<PaginatedPayments | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const protocol = filters?.protocol;
+  const status = filters?.status;
+  const page = filters?.page;
+  const page_size = filters?.page_size;
+
   const fetchPayments = useCallback(async () => {
     try {
       setLoading(true);
-      const { data: result } = await getAgentWalletPaymentsAction(agentId, filters);
+      const { data: result } = await getAgentWalletPaymentsAction(agentId, {
+        protocol,
+        status,
+        page,
+        page_size,
+      });
       if (isPaginatedPayments(result)) {
         setData(result);
       }
     } finally {
       setLoading(false);
     }
-  }, [agentId, filters?.protocol, filters?.status, filters?.page, filters?.page_size]);
+  }, [agentId, protocol, status, page, page_size]);
 
   useEffect(() => {
     fetchPayments();

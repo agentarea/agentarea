@@ -124,6 +124,12 @@ class TestParseMCPServers:
             ]
         }
 
+    def test_unrecognized_format_raises(self):
+        with pytest.raises(ValueError, match="'server' key"):
+            RegistryService._parse_mcp_servers(
+                {"servers": [{"registry_id": "io.example/echo", "connection_type": "url"}]}
+            )
+
     def test_pypi_package_parses_to_uvx_command(self):
         items = RegistryService._parse_mcp_servers(self._telegram_entry())
 
@@ -313,6 +319,14 @@ class TestParseDefaultAgents:
         tools = items[0]["spec"]["tools"]
         assert len(tools) == 2
         assert tools[0]["type"] == "mcp"
+
+    def test_preferred_models_carried_into_spec(self):
+        data = {"agents": [{"name": "A", "preferred_models": ["gpt-4o", "o3"]}]}
+        items = RegistryService._parse_agents(data)
+        spec = items[0]["spec"]
+        assert spec["preferred_models"] == ["gpt-4o", "o3"]
+        # The catalog never carries a runnable instance UUID under model_id.
+        assert "model_id" not in spec
 
 
 class TestParseBundles:

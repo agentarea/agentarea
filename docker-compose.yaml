@@ -191,6 +191,17 @@ services:
       # compose) and route code-execution to the sandbox-executor container.
       SANDBOX_EMBEDDED_RUNNER: "true"
       SANDBOX_EXECUTOR_URL: http://sandbox-executor:8080
+      SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:?SANDBOX_ACTIVATION_AUTH_SECRET must be set}
+      SANDBOX_CLEANUP_AUTH_SECRET: ${SANDBOX_CLEANUP_AUTH_SECRET:?SANDBOX_CLEANUP_AUTH_SECRET must be set}
+      # The trusted control plane resolves immutable workspace refs in S3 and
+      # gives the executor signed URLs. These credentials are not passed to the
+      # executor or to task processes.
+      SANDBOX_WORKSPACE_S3_BUCKET: ${ARTIFACTS_BUCKET:-artifacts}
+      SANDBOX_WORKSPACE_S3_ENDPOINT: http://rustfs:9000
+      SANDBOX_WORKSPACE_S3_REGION: ${RUSTFS_REGION:-us-east-1}
+      SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE: "true"
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
       # Secret manager configuration
       SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
       # Database secret manager settings
@@ -205,7 +216,7 @@ services:
   # mcp-manager (control plane) delegates executions here so untrusted code
   # never runs inside the manager. In K8s this role is the warm-pool pods.
   sandbox-executor:
-    image: agentarea/sandbox-executor:${VERSION:-latest}
+    image: agentarea/agentarea-mcp-runner:${VERSION:-latest}
     container_name: agentarea-sandbox-executor
     restart: unless-stopped
     tmpfs:
@@ -216,6 +227,7 @@ services:
       - default
     environment:
       ACTIVATION_PORT: "8080"
+      SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:?SANDBOX_ACTIVATION_AUTH_SECRET must be set}
 
   # Temporal Infrastructure Services
   temporal:
@@ -295,7 +307,8 @@ services:
       # Task execution
       - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
       - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
-      - MCP_MANAGER_URL=http://agentarea-mcp-manager:80/api/mcp
+      - MCP_MANAGER_URL=http://agentarea-mcp-manager:80
+      - SANDBOX_CLEANUP_AUTH_SECRET=${SANDBOX_CLEANUP_AUTH_SECRET:?SANDBOX_CLEANUP_AUTH_SECRET must be set}
 
       # Development
       # - DEBUG=true

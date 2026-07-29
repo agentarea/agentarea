@@ -3,6 +3,24 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+# Real (SQLite-backed) Temporal server fixtures, shared across packages. Needed
+# for schedule tests: the time-skipping test server does not implement the
+# Schedules API. See agentarea_common.testing.temporal for details. This module
+# imports temporalio lazily (inside the fixture), so it is safe to import here
+# even before the shim below.
+from agentarea_common.testing.temporal import (  # noqa: F401
+    temporal_sqlite_client,
+    temporal_sqlite_env,
+)
+
+
+def pytest_configure(config):
+    """Register markers used by this package's tests."""
+    config.addinivalue_line(
+        "markers", "integration: marks tests as integration tests (requiring real services)"
+    )
+
+
 # Only install the temporalio MagicMock shim when the real package is NOT
 # importable. When temporalio is actually installed we must use the real
 # modules so that ``except SomeTemporalError`` clauses catch genuine exception

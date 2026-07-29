@@ -2,7 +2,6 @@ package events
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"strings"
 
@@ -46,14 +45,9 @@ func NewEventSubscriber(redisURL string, providerManager *providers.ProviderMana
 func (s *EventSubscriber) Start(ctx context.Context) error {
 	s.logger.Info("Starting event subscriber")
 
-	// Subscribe to MCP events using new shared format channels
-	// Also subscribe to legacy channels for backward compatibility
 	pubsub := s.redisClient.Subscribe(ctx,
 		"agentarea.events.mcp.instance.created",
 		"agentarea.events.mcp.instance.deleted",
-		// Legacy channels for backward compatibility
-		"MCPServerInstanceCreated",
-		"MCPServerInstanceDeleted",
 	)
 	defer pubsub.Close()
 
@@ -88,61 +82,45 @@ func (s *EventSubscriber) handleMessage(ctx context.Context, msg *redis.Message)
 		slog.String("channel", msg.Channel),
 		slog.String("payload", msg.Payload))
 
-	// Check if this is a legacy channel
-	// Try shared format first (new events from Python use this format)
-	// If that fails, fall back to legacy format
 	switch msg.Channel {
-	case "MCPServerInstanceCreated", "agentarea.events.mcp.instance.created":
-		// Try shared format first
-		if s.tryHandleInstanceCreated(ctx, msg.Payload) {
-			return
-		}
-		// Fall back to legacy format
-		s.handleLegacyInstanceCreated(ctx, msg.Payload)
-	case "MCPServerInstanceDeleted", "agentarea.events.mcp.instance.deleted":
-		// Try shared format first
-		if s.tryHandleInstanceDeleted(ctx, msg.Payload) {
-			return
-		}
-		// Fall back to legacy format
-		s.handleLegacyInstanceDeleted(ctx, msg.Payload)
+	case "agentarea.events.mcp.instance.created":
+		s.handleInstanceCreated(msg.Payload)
+	case "agentarea.events.mcp.instance.deleted":
+		s.handleInstanceDeleted(ctx, msg.Payload)
 	default:
 		s.logger.Warn("Unknown event channel", slog.String("channel", msg.Channel))
 	}
 }
 
-// tryHandleInstanceCreated attempts to parse and handle instance creation using shared format.
-// Returns true if successful, false if parsing failed (caller should try legacy format).
-func (s *EventSubscriber) tryHandleInstanceCreated(_ context.Context, payload string) bool {
-	// Phase 1: Python verify() calls POST /instances synchronously and owns
-	// provisioning. Acting on this event causes a double-create race with the
-	// HTTP path, leaving orphan configmaps/secrets. Return true to signal
-	// "handled" so the caller skips the legacy path.
-	s.logger.Debug("Ignoring tryHandleInstanceCreated event (provisioning is owned by Python verify())",
+// handleInstanceCreated ignores the event: Python verify() calls POST /instances
+// synchronously and owns provisioning, so acting on this event races the HTTP path
+// and leaves orphan configmaps/secrets.
+func (s *EventSubscriber) handleInstanceCreated(payload string) {
+	s.logger.Debug("Ignoring InstanceCreated event (provisioning is owned by Python verify())",
 		slog.String("payload", payload))
-	return true
 }
 
-// tryHandleInstanceDeleted attempts to parse and handle instance deletion using shared format.
-// Returns true if successful, false if parsing failed (caller should try legacy format).
-func (s *EventSubscriber) tryHandleInstanceDeleted(ctx context.Context, payload string) bool {
-	// Try to parse as shared format
+// handleInstanceDeleted parses the shared event format and deletes the instance
+// from every provider that might hold it.
+func (s *EventSubscriber) handleInstanceDeleted(ctx context.Context, payload string) {
 	event, err := ParseSharedEvent(payload)
 	if err != nil {
-		s.logger.Debug("Failed to parse as shared format, will try legacy",
-			slog.String("error", err.Error()))
-		return false
+		s.logger.Error("Failed to parse InstanceDeleted event",
+			slog.String("error", err.Error()),
+			slog.String("payload", payload))
+		return
 	}
 
 	instanceID, ok := event.GetDataString("instance_id")
 	if !ok || instanceID == "" {
-		s.logger.Debug("Missing instance_id in shared format, will try legacy")
-		return false
+		s.logger.Error("InstanceDeleted event is missing instance_id",
+			slog.String("payload", payload))
+		return
 	}
 
 	name, _ := event.GetDataString("name")
 
-	s.logger.Info("Processing MCP instance deletion (shared format)",
+	s.logger.Info("Processing MCP instance deletion",
 		slog.String("instance_id", instanceID))
 
 	// Try Docker provider
@@ -163,62 +141,8 @@ func (s *EventSubscriber) tryHandleInstanceDeleted(ctx context.Context, payload 
 			slog.String("instance_id", instanceID))
 	}
 
-	s.logger.Info("Processed MCP instance deletion (shared format)",
+	s.logger.Info("Processed MCP instance deletion",
 		slog.String("instance_id", instanceID))
-
-	return true
-}
-
-// Legacy format types for backward compatibility
-
-// LegacyEventMessage represents the old FastStream wrapper
-type LegacyEventMessage struct {
-	Data    string         `json:"data"`
-	Headers map[string]any `json:"headers"`
-}
-
-// LegacyEventData represents the old inner event data
-type LegacyEventData struct {
-	EventID   string         `json:"event_id"`
-	Timestamp string         `json:"timestamp"`
-	EventType string         `json:"event_type"`
-	Data      map[string]any `json:"data"`
-}
-
-// handleLegacyInstanceCreated is a no-op — provisioning is owned by Python
-// verify() since Phase 1 of the MCP lifecycle refactor.
-func (s *EventSubscriber) handleLegacyInstanceCreated(_ context.Context, payload string) {
-	s.logger.Debug("Ignoring legacy InstanceCreated event (provisioning is owned by Python verify())",
-		slog.String("payload", payload))
-}
-
-// handleLegacyInstanceDeleted handles old format deletion events
-func (s *EventSubscriber) handleLegacyInstanceDeleted(ctx context.Context, payload string) {
-	var message LegacyEventMessage
-	if err := json.Unmarshal([]byte(payload), &message); err != nil {
-		s.logger.Error("Failed to parse legacy event", slog.String("error", err.Error()))
-		return
-	}
-
-	var eventData LegacyEventData
-	if err := json.Unmarshal([]byte(message.Data), &eventData); err != nil {
-		s.logger.Error("Failed to parse legacy event data", slog.String("error", err.Error()))
-		return
-	}
-
-	instanceID, _ := eventData.Data["instance_id"].(string)
-	name, _ := eventData.Data["name"].(string)
-
-	// Try both providers
-	dockerProvider, _ := s.providerManager.GetProvider(&models.MCPServerInstance{
-		JSONSpec: map[string]any{"type": "docker"},
-	})
-	_ = dockerProvider.DeleteInstance(ctx, instanceID, name)
-
-	urlProvider, _ := s.providerManager.GetProvider(&models.MCPServerInstance{
-		JSONSpec: map[string]any{"type": "url"},
-	})
-	_ = urlProvider.DeleteInstance(ctx, instanceID, name)
 }
 
 // Close closes the Redis connection

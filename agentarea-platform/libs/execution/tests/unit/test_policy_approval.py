@@ -3,6 +3,7 @@ for whether a tool call needs a human, replacing the old per-tool config.
 """
 
 from agentarea_execution.workflows.helpers import (
+    approvers_for_tool,
     caller_can_approve,
     policy_approvers,
     policy_requires_approval,
@@ -39,6 +40,31 @@ def test_policy_approvers_extracts_subject_refs():
     assert policy_approvers({"approval": {"approvers": ["user:alice"]}}) == ["user:alice"]
     assert policy_approvers(None) == []
     assert policy_approvers({"approval": {}}) == []
+
+
+def test_approvers_for_tool_returns_the_per_tool_list():
+    policy = {
+        "approval": {
+            "approvers": ["user:root"],
+            "approvers_by_tool": {"launch_task": ["user:alice"]},
+        }
+    }
+    assert approvers_for_tool(policy, "launch_task") == ["user:alice"]
+
+
+def test_approvers_for_tool_falls_back_to_the_global_list():
+    policy = {
+        "approval": {
+            "approvers": ["user:root"],
+            "approvers_by_tool": {"launch_task": ["user:alice"]},
+        }
+    }
+    assert approvers_for_tool(policy, "delete_file") == ["user:root"]
+
+
+def test_approvers_for_tool_empty_when_neither_present():
+    assert approvers_for_tool({"approval": {}}, "launch_task") == []
+    assert approvers_for_tool(None, "launch_task") == []
 
 
 def test_empty_approvers_allows_any_caller():

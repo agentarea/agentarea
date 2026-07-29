@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { Bot, Check, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -110,9 +111,11 @@ export function SearchableSelect({
   const renderIcon = (option: SelectOption) => {
     if (option.icon) {
       return (
-        <img
+        <Image
           src={option.icon}
           alt={option.label}
+          width={20}
+          height={20}
           className="h-5 w-5 rounded dark:invert"
           onError={(e) => {
             if (defaultIcon) {

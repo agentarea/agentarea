@@ -24,6 +24,16 @@ VALID_A2UI_EVENT_TYPES = frozenset(
     }
 )
 
+# A2UI v0.9 protocol message type (what the LLM emits) -> canonical dotted event
+# type (the wire vocabulary). The protocol names are the LLM-facing contract; the
+# emitted event speaks the canonical taxonomy like every other part.
+A2UI_TYPE_TO_CANONICAL = {
+    "A2UICreateSurface": "a2ui.create",
+    "A2UIUpdateComponents": "a2ui.update.components",
+    "A2UIUpdateDataModel": "a2ui.update.data",
+    "A2UIDeleteSurface": "a2ui.delete",
+}
+
 MAX_JSON_SIZE = 100 * 1024  # 100KB limit for A2UI JSON payloads
 MAX_A2UI_EVENTS = 50  # Maximum events per LLM response
 

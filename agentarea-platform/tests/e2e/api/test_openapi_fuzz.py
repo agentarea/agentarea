@@ -60,6 +60,10 @@ _schema = schemathesis.openapi.from_url(
 
 @_schema.parametrize()
 @settings(
+    # NB: per-operation example count is a speed/coverage knob, not the thing that
+    # makes this suite valuable - getting it RUN in CI is. Empirically, bumping
+    # 3->30 caught nothing extra on this API (219 passed either way); a 5xx that
+    # fires on every valid body (e.g. a NOT NULL create bug) is caught at 3.
     max_examples=3,
     deadline=2000,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],

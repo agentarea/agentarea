@@ -33,7 +33,6 @@ import {
   normalizeStatus,
   type FilterValue,
 } from "@/app/(main)/inbox/components/inboxShared";
-import type { TaskWithAgent } from "@/lib/api";
 import { getInboxAction, resolveEscalationAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 

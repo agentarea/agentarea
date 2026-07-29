@@ -16,13 +16,12 @@ import json
 import logging
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_api.api.deps.services import (
     get_agent_service,
-    get_event_stream_service,
     get_secret_manager,
     get_task_service,
 )
@@ -31,9 +30,16 @@ from agentarea_api.api.v1.a2a_auth import (
     allow_public_access,
     require_a2a_execute_auth,
 )
+from agentarea_api.api.v1.task_event_feed import open_task_event_feed
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.context_manager import ContextManager
-from agentarea_common.events.event_stream_service import EventStreamService
+from agentarea_common.events.contract import (
+    LLM_CHUNK,
+    TASK_CANCELLED,
+    TASK_COMPLETED,
+    TASK_FAILED,
+    canonical_type,
+)
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.a2a_push import (
     delete_push_config,
@@ -107,7 +113,7 @@ def log_a2a_operation(
         extra_metadata: Additional metadata to include in logs
     """
     # Build structured log data
-    log_data = {
+    log_data: dict[str, Any] = {
         "a2a_operation": operation,
         "agent_id": str(agent_id),
         "request_id": request_id,
@@ -134,7 +140,7 @@ def log_a2a_operation(
 
     # Add client metadata from auth context
     if auth_context.metadata:
-        client_metadata = {}
+        client_metadata: dict[str, Any] = {}
         for key in ["user_agent", "client_ip", "forwarded_for"]:
             if auth_context.metadata.get(key):
                 client_metadata[key] = auth_context.metadata[key]
@@ -188,7 +194,7 @@ def set_user_context_from_a2a_auth(auth_context: A2AAuthContext) -> None:
 
     logger.debug(
         f"Set user context for A2A request: user_id={auth_context.user_id}, "
-        f"workspace_id={auth_context.workspace_id}"
+        + f"workspace_id={auth_context.workspace_id}"
     )
 
 
@@ -266,7 +272,7 @@ def validate_message_send_params(params: dict[str, Any]) -> MessageSendParams:
     try:
         return MessageSendParams(**params)
     except ValidationError as e:
-        error_details = []
+        error_details: list[str] = []
         for error in e.errors():
             field = ".".join(str(x) for x in error["loc"])
             error_details.append(f"{field}: {error['msg']}")
@@ -299,9 +305,11 @@ def validate_task_id_param(params: dict[str, Any]) -> UUID:
         raise A2AValidationError(f"Invalid task ID format: {task_id_str}", -32602) from e
 
 
-def _extract_text_from_parts(parts):
+def _extract_text_from_parts(parts: list[Any]) -> str:
     return "".join(
-        part.get("text", "") for part in parts if isinstance(part, dict) and "text" in part
+        cast("str", part.get("text", ""))
+        for part in parts
+        if isinstance(part, dict) and "text" in part
     )
 
 
@@ -310,7 +318,7 @@ def convert_a2a_message_to_task(
     agent_id: UUID,
     auth_context: A2AAuthContext,
     a2a_method: str,
-    request_id: str,
+    request_id: str | int | None,
     task_id: str | None = None,
 ) -> AgentTask:
     """Convert A2A message to AgentTask with proper authentication context and user metadata."""
@@ -336,7 +344,7 @@ def convert_a2a_message_to_task(
     workspace_id = auth_context.workspace_id
 
     # Create comprehensive A2A metadata with security context and monitoring information
-    a2a_metadata = {
+    a2a_metadata: dict[str, Any] = {
         "source": "a2a",
         "a2a_method": a2a_method,
         "a2a_request_id": request_id,
@@ -378,17 +386,20 @@ def convert_a2a_message_to_task(
 
     # Add client metadata for audit trail
     if auth_context.metadata:
-        client_metadata = {}
+        client_metadata: dict[str, Any] = {}
         for key in ["user_agent", "client_ip", "forwarded_for"]:
             if auth_context.metadata.get(key):
                 client_metadata[key] = auth_context.metadata[key]
         if client_metadata:
             a2a_metadata["client_metadata"] = client_metadata
 
+    _first_line = (message_content or "").strip().splitlines()[0] if message_content else ""
     return AgentTask(
         id=UUID(task_id) if task_id else uuid4(),
-        title="A2A Message Task",
-        description="Task created from A2A message",
+        title=(_first_line[:80] or "A2A Message Task"),
+        description=(
+            message_content.strip() if message_content else "Task created from A2A message"
+        ),
         query=message_content,
         user_id=user_id,
         workspace_id=workspace_id,
@@ -438,9 +449,6 @@ def extract_final_text_from_task(task: AgentTask) -> str | None:
             value = result.get(key)
             if isinstance(value, str) and value.strip():
                 return value
-        return None
-    if isinstance(result, str) and result.strip():
-        return result
     return None
 
 
@@ -453,7 +461,7 @@ def extract_text_from_event_data(event_data: dict[str, Any]) -> str:
     """
     payload = event_data.get("original_data")
     if not isinstance(payload, dict):
-        payload = event_data if isinstance(event_data, dict) else {}
+        payload = event_data
     for key in ("chunk", "content", "text", "result", "final_response", "delta"):
         value = payload.get(key)
         if isinstance(value, str) and value:
@@ -461,17 +469,17 @@ def extract_text_from_event_data(event_data: dict[str, Any]) -> str:
     return ""
 
 
-# Real workflow terminal event types (prefixed by EventStreamService as ``workflow.*``).
+# Canonical terminal event type -> A2A task state (the vocabulary rows/streams
+# now carry directly).
 _TERMINAL_EVENT_STATES = {
-    "workflow.WorkflowCompleted": TaskState.COMPLETED,
-    "workflow.WorkflowFailed": TaskState.FAILED,
-    "workflow.WorkflowCancelled": TaskState.CANCELED,
-    "WorkflowCompleted": TaskState.COMPLETED,
-    "WorkflowFailed": TaskState.FAILED,
-    "WorkflowCancelled": TaskState.CANCELED,
+    TASK_COMPLETED: TaskState.COMPLETED,
+    TASK_FAILED: TaskState.FAILED,
+    TASK_CANCELLED: TaskState.CANCELED,
 }
-# Incremental output event types.
-_CHUNK_EVENT_TYPES = {"workflow.LLMCallChunk", "LLMCallChunk"}
+# Incremental output event type (canonical).
+_CHUNK_EVENT_TYPES = {LLM_CHUNK}
+# Terminal task event types the feed watches to end an A2A stream (canonical).
+_A2A_TERMINAL_TYPES = frozenset({TASK_COMPLETED, TASK_FAILED, TASK_CANCELLED})
 
 
 def _sse(response: JSONRPCResponse) -> str:
@@ -490,8 +498,8 @@ def map_workflow_event_to_sse(
     Returns ``(frames, is_terminal)``. Terminal events emit a final artifact-update
     (when text is present) followed by a final status-update with ``final=True``.
     """
-    event_type = event.get("event_type", "")
-    event_data = event.get("event_data", {}) or {}
+    event_type = canonical_type(event.get("event_type", ""))
+    event_data: dict[str, Any] = event.get("event_data", {}) or {}
     frames: list[str] = []
 
     state = _TERMINAL_EVENT_STATES.get(event_type)
@@ -616,13 +624,17 @@ def convert_agent_task_to_a2a_task(task: AgentTask) -> Task:
 
 
 async def _maybe_register_send_push_config(
-    params, task_service, secret_manager, created_task
+    params: dict[str, Any],
+    task_service: TaskService,
+    secret_manager: BaseSecretManager | None,
+    created_task: AgentTask,
 ) -> None:
     """Register a push config supplied inline via configuration.pushNotificationConfig."""
     if secret_manager is None:
         return
     # v1.0.0: flat config under configuration.taskPushNotificationConfig.
-    push_cfg = (params.get("configuration") or {}).get("taskPushNotificationConfig")
+    configuration: dict[str, Any] = params.get("configuration") or {}
+    push_cfg = configuration.get("taskPushNotificationConfig")
     if not push_cfg or not push_cfg.get("url"):
         return
     try:
@@ -632,8 +644,14 @@ async def _maybe_register_send_push_config(
 
 
 async def handle_task_send(
-    request_id, params, task_service, agent_id, auth_context, agent_service, secret_manager=None
-):
+    request_id: str | int | None,
+    params: dict[str, Any],
+    task_service: TaskService,
+    agent_id: UUID,
+    auth_context: A2AAuthContext,
+    agent_service: AgentService,
+    secret_manager: BaseSecretManager | None = None,
+) -> JSONRPCResponse:
     """Handle A2A task/send method with proper TaskService integration and validation."""
     start_time = time.time()
 
@@ -741,8 +759,14 @@ async def handle_task_send(
 
 
 async def handle_message_send(
-    request_id, params, task_service, agent_id, auth_context, agent_service, secret_manager=None
-):
+    request_id: str | int | None,
+    params: dict[str, Any],
+    task_service: TaskService,
+    agent_id: UUID,
+    auth_context: A2AAuthContext,
+    agent_service: AgentService,
+    secret_manager: BaseSecretManager | None = None,
+) -> JSONRPCResponse:
     """Handle A2A message/send method with proper TaskService integration and validation."""
     start_time = time.time()
 
@@ -869,15 +893,14 @@ async def handle_message_send(
 
 
 async def handle_message_stream_sse(
-    request,
-    request_id,
-    params,
-    task_service,
-    agent_id,
-    auth_context,
-    agent_service,
-    event_stream_service,
-    secret_manager=None,
+    request: Request,
+    request_id: str | int | None,
+    params: dict[str, Any],
+    task_service: TaskService,
+    agent_id: UUID,
+    auth_context: A2AAuthContext,
+    agent_service: AgentService,
+    secret_manager: BaseSecretManager | None = None,
 ) -> JSONRPCResponse | Response:
     """Handle A2A message/stream method with proper TaskService integration.
 
@@ -979,13 +1002,17 @@ async def handle_message_stream_sse(
                 yield f"data: {initial.model_dump_json(by_alias=True)}\n\n"
                 event_count += 1
 
-                # 2. Stream workflow events, mapping each to A2A SSE frames
-                async for event in event_stream_service.stream_events_for_task(
-                    created_task.id, event_patterns=["workflow.*"]
+                # 2. Stream task events (catch-up + live), mapping each to A2A
+                # SSE frames. Chunks are included so A2A streams live tokens.
+                async for env in open_task_event_feed(
+                    created_task.id, terminal_types=_A2A_TERMINAL_TYPES
                 ):
                     event_count += 1
                     frames, is_terminal = map_workflow_event_to_sse(
-                        event, request_id, str(created_task.id), task_context_id
+                        {"event_type": env.event_type, "event_data": env.data},
+                        request_id,
+                        str(created_task.id),
+                        task_context_id,
                     )
                     for frame in frames:
                         yield frame
@@ -1115,7 +1142,13 @@ async def handle_message_stream_sse(
         return StreamingResponse(error_stream(), media_type="text/event-stream")
 
 
-async def handle_task_get(request_id, params, task_service, agent_id, auth_context):
+async def handle_task_get(
+    request_id: str | int | None,
+    params: dict[str, Any],
+    task_service: TaskService,
+    agent_id: UUID,
+    auth_context: A2AAuthContext,
+) -> JSONRPCResponse:
     """Handle A2A tasks/get method with current workflow status and proper validation."""
     start_time = time.time()
 
@@ -1195,7 +1228,13 @@ async def handle_task_get(request_id, params, task_service, agent_id, auth_conte
         return create_error_response(request_id, -32603, f"Task get failed: {e}")
 
 
-async def handle_task_cancel(request_id, params, task_service, agent_id, auth_context):
+async def handle_task_cancel(
+    request_id: str | int | None,
+    params: dict[str, Any],
+    task_service: TaskService,
+    agent_id: UUID,
+    auth_context: A2AAuthContext,
+) -> JSONRPCResponse:
     """Handle A2A tasks/cancel method with TaskService cancellation and proper validation."""
     start_time = time.time()
 
@@ -1268,7 +1307,7 @@ async def handle_task_cancel(request_id, params, task_service, agent_id, auth_co
             )
 
             # Convert to A2A protocol Task format
-            a2a_task = convert_agent_task_to_a2a_task(updated_task)
+            a2a_task = convert_agent_task_to_a2a_task(updated_task or task)
 
             return CancelTaskResponse(jsonrpc="2.0", id=request_id, result=a2a_task)
         else:
@@ -1312,8 +1351,13 @@ async def handle_task_cancel(request_id, params, task_service, agent_id, auth_co
 
 
 async def handle_task_resubscribe(
-    request, request_id, params, task_service, agent_id, auth_context, event_stream_service
-):
+    request: Request,
+    request_id: str | int | None,
+    params: dict[str, Any],
+    task_service: TaskService,
+    agent_id: UUID,
+    auth_context: A2AAuthContext,
+) -> JSONRPCResponse | Response:
     """Handle tasks/resubscribe — re-attach to SSE stream for an existing task."""
     time.time()
     log_a2a_operation("task_resubscribe", agent_id, auth_context, request_id, status="started")
@@ -1368,13 +1412,14 @@ async def handle_task_resubscribe(
                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
 
-        # Stream live events for active task
+        # Stream task events (catch-up + live) for active task
         async def event_stream():
-            async for event in event_stream_service.stream_events_for_task(
-                task_id, event_patterns=["workflow.*"]
-            ):
+            async for env in open_task_event_feed(task_id, terminal_types=_A2A_TERMINAL_TYPES):
                 frames, is_terminal = map_workflow_event_to_sse(
-                    event, request_id, str(task_id), context_id
+                    {"event_type": env.event_type, "event_data": env.data},
+                    request_id,
+                    str(task_id),
+                    context_id,
                 )
                 for frame in frames:
                     yield frame
@@ -1393,7 +1438,13 @@ async def handle_task_resubscribe(
         return create_error_response(request_id, -32603, f"Resubscribe failed: {e}")
 
 
-async def handle_task_list(request_id, params, task_service, agent_id, auth_context):
+async def handle_task_list(
+    request_id: str | int | None,
+    params: dict[str, Any],
+    task_service: TaskService,
+    agent_id: UUID,
+    auth_context: A2AAuthContext,
+) -> JSONRPCResponse:
     """Handle tasks/list — list tasks for an agent."""
     set_user_context_from_a2a_auth(auth_context)
 
@@ -1407,9 +1458,9 @@ async def handle_task_list(request_id, params, task_service, agent_id, auth_cont
 
 
 async def register_push_config(
-    task_service,
+    task_service: TaskService,
     secret_manager: BaseSecretManager,
-    task,
+    task: AgentTask,
     push_config: dict[str, Any],
 ) -> dict[str, Any]:
     """Validate, persist (non-secret in task_parameters, token in secret store), and
@@ -1432,8 +1483,13 @@ async def register_push_config(
 
 
 async def handle_push_config_set(
-    request_id, params, task_service, agent_id, auth_context, secret_manager
-):
+    request_id: str | int | None,
+    params: dict[str, Any],
+    task_service: TaskService,
+    agent_id: UUID,
+    auth_context: A2AAuthContext,
+    secret_manager: BaseSecretManager,
+) -> JSONRPCResponse:
     """Handle CreateTaskPushNotificationConfig (flat v1.0.0 params)."""
     set_user_context_from_a2a_auth(auth_context)
     task_id = params.get("taskId")
@@ -1460,7 +1516,13 @@ async def handle_push_config_set(
     )
 
 
-async def handle_push_config_get(request_id, params, task_service, agent_id, auth_context):
+async def handle_push_config_get(
+    request_id: str | int | None,
+    params: dict[str, Any],
+    task_service: TaskService,
+    agent_id: UUID,
+    auth_context: A2AAuthContext,
+) -> JSONRPCResponse:
     """Handle tasks/pushNotificationConfig/get."""
     set_user_context_from_a2a_auth(auth_context)
     task_id = params.get("id") or params.get("taskId")
@@ -1486,7 +1548,13 @@ async def handle_push_config_get(request_id, params, task_service, agent_id, aut
     )
 
 
-async def handle_push_config_list(request_id, params, task_service, agent_id, auth_context):
+async def handle_push_config_list(
+    request_id: str | int | None,
+    params: dict[str, Any],
+    task_service: TaskService,
+    agent_id: UUID,
+    auth_context: A2AAuthContext,
+) -> JSONRPCResponse:
     """Handle tasks/pushNotificationConfig/list — array of configs for a task."""
     set_user_context_from_a2a_auth(auth_context)
     task_id = params.get("id") or params.get("taskId")
@@ -1505,8 +1573,13 @@ async def handle_push_config_list(request_id, params, task_service, agent_id, au
 
 
 async def handle_push_config_delete(
-    request_id, params, task_service, agent_id, auth_context, secret_manager
-):
+    request_id: str | int | None,
+    params: dict[str, Any],
+    task_service: TaskService,
+    agent_id: UUID,
+    auth_context: A2AAuthContext,
+    secret_manager: BaseSecretManager,
+) -> JSONRPCResponse:
     """Handle tasks/pushNotificationConfig/delete — returns null on success."""
     set_user_context_from_a2a_auth(auth_context)
     task_id = params.get("id") or params.get("taskId")
@@ -1534,7 +1607,14 @@ async def handle_push_config_delete(
     return JSONRPCResponse(jsonrpc="2.0", id=request_id, result=None)
 
 
-async def handle_agent_card(request_id, params, agent_service, agent_id, base_url, auth_context):
+async def handle_agent_card(
+    request_id: str | int | None,
+    params: dict[str, Any],
+    agent_service: AgentService,
+    agent_id: UUID,
+    base_url: str | None,
+    auth_context: A2AAuthContext,
+) -> JSONRPCResponse:
     """Handle A2A GetExtendedAgentCard method.
 
     Includes current agent data and proper validation.
@@ -1561,7 +1641,7 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
         )
 
         # Build skills based on agent configuration and tools
-        skills = []
+        skills: list[AgentSkill] = []
 
         # Base text processing skill for all agents
         skills.append(
@@ -1686,16 +1766,15 @@ async def handle_agent_card(request_id, params, agent_service, agent_id, base_ur
 async def _dispatch_rpc_method(
     method: str,
     *,
-    request_id,
-    params,
-    request,
-    task_service,
-    agent_service,
-    agent_id,
-    auth_context,
-    event_stream_service,
-    secret_manager,
-):
+    request_id: str | int | None,
+    params: dict[str, Any],
+    request: Request,
+    task_service: TaskService,
+    agent_service: AgentService,
+    agent_id: UUID,
+    auth_context: A2AAuthContext,
+    secret_manager: BaseSecretManager,
+) -> JSONRPCResponse | Response:
     """Dispatch A2A RPC method calls with proper error handling."""
     base_url = f"{request.url.scheme}://{request.url.netloc}" if request else None
     handlers = {
@@ -1710,7 +1789,6 @@ async def _dispatch_rpc_method(
             agent_id,
             auth_context,
             agent_service,
-            event_stream_service,
             secret_manager,
         ),
         "GetTask": lambda: handle_task_get(
@@ -1720,7 +1798,7 @@ async def _dispatch_rpc_method(
             request_id, params, task_service, agent_id, auth_context
         ),
         "SubscribeToTask": lambda: handle_task_resubscribe(
-            request, request_id, params, task_service, agent_id, auth_context, event_stream_service
+            request, request_id, params, task_service, agent_id, auth_context
         ),
         "ListTasks": lambda: handle_task_list(
             request_id, params, task_service, agent_id, auth_context
@@ -1764,7 +1842,6 @@ async def handle_agent_jsonrpc(
     auth_context: A2AAuthContext = Depends(require_a2a_execute_auth),
     task_service: TaskService = Depends(get_task_service),
     agent_service: AgentService = Depends(get_agent_service),
-    event_stream_service: EventStreamService = Depends(get_event_stream_service),
     secret_manager: BaseSecretManager = Depends(get_secret_manager),
 ) -> JSONRPCResponse | Response:
     """Handle A2A JSON-RPC requests with comprehensive error handling and validation."""
@@ -1821,7 +1898,7 @@ async def handle_agent_jsonrpc(
         try:
             rpc_request = JSONRPCRequest(**request_data)
         except ValidationError as e:
-            error_details = []
+            error_details: list[str] = []
             for error in e.errors():
                 field = ".".join(str(x) for x in error["loc"])
                 error_details.append(f"{field}: {error['msg']}")
@@ -1849,7 +1926,7 @@ async def handle_agent_jsonrpc(
             status="started",
             extra_metadata={
                 "method": method,
-                "params_keys": list(params.keys()) if isinstance(params, dict) else [],
+                "params_keys": list(params.keys()),
                 "request_size_bytes": len(body),
                 "client_ip": request.client.host if request.client else None,
                 "user_agent": request.headers.get("user-agent"),
@@ -1872,7 +1949,6 @@ async def handle_agent_jsonrpc(
             agent_service=agent_service,
             agent_id=agent_id,
             auth_context=auth_context,
-            event_stream_service=event_stream_service,
             secret_manager=secret_manager,
         )
 
@@ -1978,7 +2054,7 @@ async def get_agent_well_known(
         )
 
         # Build skills based on current agent configuration and tools
-        skills = []
+        skills: list[AgentSkill] = []
 
         # Base text processing skill for all agents
         skills.append(

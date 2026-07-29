@@ -25,12 +25,19 @@ from agentarea_mcp.domain.verification_types import (
     VerificationError,
     VerificationPayload,
 )
+from agentarea_mcp.tool_serialization import serialize_mcp_tool
 
 logger = logging.getLogger(__name__)
 
 _LIST_TOOLS_ATTEMPT_TIMEOUT = 5  # seconds per attempt
-_LIST_TOOLS_BACKOFF_DELAYS = [2, 4, 8, 16, 30, 30]  # seconds between retries
-_TOTAL_DEADLINE = 120  # seconds total budget (cold image pulls can take 60-90s)
+_LIST_TOOLS_RETRY_DELAY = 5  # steady poll interval while the container provisions
+# Absolute safety cap. Verification is liveness-driven: while a docker/command
+# container is alive and still provisioning (pulling its image, or running a
+# cold `uvx`/`npx` install that can take minutes) we keep polling list_tools and
+# do NOT fail on a wall-clock. We only fail early when the runtime reports the
+# container actually died. This cap is the backstop against a genuinely wedged
+# container that never errors and never becomes ready.
+_SAFETY_DEADLINE = 600  # seconds
 
 
 def _transport_spec_from_server(server: MCPServer) -> dict:
@@ -131,35 +138,83 @@ def _make_payload(
     )
 
 
-async def _list_tools(endpoint_url: str, headers: dict | None = None) -> list[dict]:
+def declared_remote_transport(spec: dict | None) -> str | None:
+    """Declared MCP wire transport from a ServerJSON-style spec, else None.
+
+    Registry entries carry ``remotes: [{"type": "streamable-http"|"sse", "url": ...}]``.
+    When present this is authoritative — we connect with exactly that transport
+    and skip URL probing. Returns None for manually-entered URLs (unknown), where
+    probing is the only option.
+    """
+    if not isinstance(spec, dict):
+        return None
+    remotes = spec.get("remotes")
+    if isinstance(remotes, list):
+        for remote in remotes:
+            if isinstance(remote, dict) and remote.get("type"):
+                return str(remote["type"])
+    return None
+
+
+def mcp_transport_candidates(
+    endpoint_url: str, transport: str | None = None
+) -> tuple[list[str], str | None]:
+    """Ordered streamable-HTTP candidate URLs plus the SSE fallback URL (or None).
+
+    Single source of truth for URL→transport selection across verification and
+    runtime tool calls.
+
+    When ``transport`` is declared by the registry spec, honor it exactly (no
+    probing): ``streamable-http`` → connect at the URL as-given; ``sse`` → SSE at
+    the URL as-given. When it's unknown (None — e.g. a manually-entered URL),
+    fall back to suffix heuristics:
+    - URL ends with /sse  → ([], url)              SSE only (explicit intent)
+    - URL ends with /mcp  → ([url], <base>/sse)    streamable-HTTP, sibling /sse fallback
+    - URL has no suffix   → ([url, url/mcp], url/sse)
+
+    The registry gives the canonical endpoint (e.g. Vercel serves streamable-HTTP
+    at the root https://mcp.vercel.com), so the bare URL is tried first; /mcp and
+    /sse are only invented as heuristic fallbacks when the transport is unknown.
+    """
+    url = endpoint_url.rstrip("/")
+
+    # Declared transport is authoritative — no probing, no cross-transport fallback.
+    # These are the only two values in the MCP ServerJSON remotes[].type enum;
+    # anything else falls through to the suffix heuristics below.
+    normalized = (transport or "").lower().replace("_", "-")
+    if normalized == "streamable-http":
+        return [url], None
+    if normalized == "sse":
+        return [], url
+
+    # Unknown transport → suffix heuristics.
+    if url.endswith("/sse"):
+        return [], url
+    if url.endswith("/mcp"):
+        return [url], url[:-4] + "/sse"
+    return [url, f"{url}/mcp"], f"{url}/sse"
+
+
+async def _list_tools(
+    endpoint_url: str, headers: dict | None = None, transport: str | None = None
+) -> list[dict]:
     """Connect to running MCP server and list tools.
 
-    URL transport selection:
-    - URL ends with /sse  → SSE transport only (preserves explicit intent)
-    - URL ends with /mcp  → streamable-HTTP, fall back to sibling /sse
-    - URL has no suffix   → try <url>/mcp, fall back to <url>/sse
+    Transport selection is delegated to :func:`mcp_transport_candidates`; a
+    declared ``transport`` is honored exactly (no probing).
 
     Raises on any connection or protocol error — caller handles retries.
     """
     from mcp import ClientSession
 
-    url = endpoint_url.rstrip("/")
     custom_headers = dict(headers) if headers else None
     timeout_seconds = float(_LIST_TOOLS_ATTEMPT_TIMEOUT)
 
-    # Decide transport(s) based on URL suffix.
-    if url.endswith("/sse"):
-        streamable_url: str | None = None
-        sse_url: str = url
-    elif url.endswith("/mcp"):
-        streamable_url = url
-        sse_url = url[:-4] + "/sse"
-    else:
-        streamable_url = f"{url}/mcp"
-        sse_url = f"{url}/sse"
+    streamable_urls, sse_url = mcp_transport_candidates(endpoint_url, transport)
 
     result = None
-    if streamable_url is not None:
+    last_streamable_err: BaseException | None = None
+    for streamable_url in streamable_urls:
         try:
             from mcp.client.streamable_http import streamablehttp_client
 
@@ -171,15 +226,16 @@ async def _list_tools(endpoint_url: str, headers: dict | None = None) -> list[di
                 async with ClientSession(read_stream, write_stream) as sess:
                     await sess.initialize()
                     result = await sess.list_tools()
+            break
         except Exception as transport_err:
+            last_streamable_err = transport_err
             logger.debug(
-                "Streamable HTTP failed for %s (%s), trying SSE at %s",
+                "Streamable HTTP failed for %s (%s), trying next transport",
                 streamable_url,
                 transport_err,
-                sse_url,
             )
 
-    if result is None:
+    if result is None and sse_url is not None:
         from mcp.client.sse import sse_client
 
         async with sse_client(
@@ -191,14 +247,12 @@ async def _list_tools(endpoint_url: str, headers: dict | None = None) -> list[di
                 await sess.initialize()
                 result = await sess.list_tools()
 
-    return [
-        {
-            "name": t.name,
-            "description": t.description or "",
-            "inputSchema": t.inputSchema if t.inputSchema else {},
-        }
-        for t in result.tools
-    ]
+    if result is None:
+        # Declared streamable-http with no SSE fallback and it failed — surface
+        # the real transport error rather than a confusing None.
+        raise last_streamable_err or RuntimeError(f"No usable MCP transport for {endpoint_url}")
+
+    return [serialize_mcp_tool(t) for t in result.tools]
 
 
 async def _go_create_instance(instance: MCPServerInstance, mcp_manager_url: str) -> dict:
@@ -232,11 +286,33 @@ async def _go_health(instance_id: str, mcp_manager_url: str) -> dict:
         return {"healthy": False, "state": "error", "details": {}}
 
 
+def _in_progress_is_stale(verification: dict) -> bool:
+    """True when an ``in_progress`` verification is old enough to be abandoned.
+
+    verify() releases the row lock before the expensive list_tools work, so an
+    interrupted run (deploy/crash/timeout) leaves ``in_progress`` persisted. Any
+    live run writes a terminal state within ``_SAFETY_DEADLINE``; an ``in_progress``
+    older than that (or with no/invalid timestamp) is stale and must not block a
+    re-verify — otherwise the instance is wedged in "verifying" forever.
+    """
+    at = verification.get("at")
+    if not at:
+        return True
+    try:
+        started = datetime.fromisoformat(at)
+    except (TypeError, ValueError):
+        return True
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - started).total_seconds() > _SAFETY_DEADLINE
+
+
 async def verify(
     instance: MCPServerInstance,
     session=None,
     *,
     extra_headers: dict[str, str] | None = None,
+    force: bool = False,
     _list_tools_fn=None,  # test seam
     _go_create_fn=None,  # test seam
     _go_health_fn=None,  # test seam
@@ -253,6 +329,8 @@ async def verify(
         session: An open AsyncSession.  If None, a new session is created.
         extra_headers: Optional headers merged into the verification HTTP probe
             (e.g. caller-supplied Authorization for ad-hoc URL checks).
+        force: Re-run even if the row is already ``in_progress`` (user-initiated
+            Verify/Refresh). Prevents a stale in_progress from wedging the row.
         _list_tools_fn / _go_create_fn / _go_health_fn: Test seams.
 
     Returns:
@@ -261,7 +339,6 @@ async def verify(
     if (instance.json_spec or {}).get("type") == "bundle":
         raise NotImplementedError("Bundle verification is derived at read time")
 
-    list_tools_fn = _list_tools_fn or _list_tools
     go_create_fn = _go_create_fn or _go_create_instance
     go_health_fn = _go_health_fn or _go_health
 
@@ -317,11 +394,17 @@ async def verify(
             if instance_type == "bundle":
                 raise NotImplementedError("Bundle verification is derived at read time")
 
-            # If another concurrent verify() is already in progress on this row,
-            # return its current state — the in-flight caller will write the final
-            # result. Terminal states (succeeded/failed) fall through: the user
-            # clicked Verify precisely to re-run.
-            if locked.verification.get("status") == "in_progress":
+            # If another verify() is genuinely in progress on this row, return its
+            # current state — the in-flight caller will write the final result.
+            # But NOT when the caller forced a re-run (user clicked Verify), nor
+            # when the in_progress is stale (a previous run died before writing a
+            # terminal state) — otherwise the row is wedged in "verifying" forever.
+            # Terminal states (succeeded/failed) always fall through.
+            if (
+                locked.verification.get("status") == "in_progress"
+                and not force
+                and not _in_progress_is_stale(locked.verification)
+            ):
                 logger.info(
                     "verify: instance %s already in_progress, skipping",
                     instance_id,
@@ -403,13 +486,19 @@ async def verify(
         headers = dict(runtime_instance.json_spec.get("headers", {}))
         if extra_headers:
             headers.update(extra_headers)
-        deadline = asyncio.get_event_loop().time() + _TOTAL_DEADLINE
+        # Registry remote servers declare their wire transport; honor it exactly
+        # (e.g. Vercel = streamable-http at the root) instead of probing suffixes.
+        remote_transport = declared_remote_transport(runtime_instance.json_spec)
+        deadline = asyncio.get_event_loop().time() + _SAFETY_DEADLINE
         last_error: BaseException | None = None
 
-        for delay in _LIST_TOOLS_BACKOFF_DELAYS:
+        while True:
             try:
                 async with asyncio.timeout(_LIST_TOOLS_ATTEMPT_TIMEOUT):
-                    tools = await list_tools_fn(endpoint_url, headers or None)
+                    if _list_tools_fn is None:
+                        tools = await _list_tools(endpoint_url, headers or None, remote_transport)
+                    else:
+                        tools = await _list_tools_fn(endpoint_url, headers or None)
 
                 payload = _make_payload("succeeded")
                 async with db.async_session_factory() as save_sess:
@@ -438,15 +527,54 @@ async def verify(
                 is_transient, leaf = _classify_list_tools_error(e)
                 if is_transient:
                     last_error = leaf
+                    # The MCP endpoint isn't answering yet. For docker/command
+                    # that's expected while the container is still pulling its
+                    # image or running a cold `uvx`/`npx` install (can take
+                    # minutes). Don't fail on a wall-clock — only fail when the
+                    # runtime says the container actually died. While it's alive
+                    # we keep polling, bounded only by the safety cap.
+                    if instance_type in ("docker", "command"):
+                        try:
+                            health = await go_health_fn(instance_id, mcp_manager_url)
+                        except Exception:
+                            health = None
+                            logger.debug(
+                                "verify: health poll during provisioning failed (non-fatal)",
+                                extra={"instance_id": instance_id},
+                            )
+                        if health and health.get("state") == "error":
+                            detail = health.get("details") or health.get("message")
+                            payload = _make_payload(
+                                "failed",
+                                VerificationError(
+                                    code="container_failed",
+                                    message=str(detail)
+                                    if detail
+                                    else "Container entered error state.",
+                                    detail=None,
+                                ),
+                            )
+                            await _save_verification(locked.id, payload, db)
+                            logger.warning(
+                                "verify: container died during provisioning",
+                                extra={
+                                    "instance_id": instance_id,
+                                    "type": instance_type,
+                                    "stage": "list_tools",
+                                    "result": "failed",
+                                    "error_code": "container_failed",
+                                },
+                            )
+                            return payload
                     logger.debug(
-                        "verify: list_tools transient error (will retry): %s: %s",
+                        "verify: list_tools transient (still provisioning): %s: %s",
                         type(leaf).__name__,
                         leaf,
-                        extra={"instance_id": instance_id, "delay": delay},
+                        extra={"instance_id": instance_id, "delay": _LIST_TOOLS_RETRY_DELAY},
                     )
-                    if asyncio.get_event_loop().time() + delay > deadline:
+                    if asyncio.get_event_loop().time() + _LIST_TOOLS_RETRY_DELAY > deadline:
                         break
-                    await asyncio.sleep(delay)
+                    await asyncio.sleep(_LIST_TOOLS_RETRY_DELAY)
                     continue
 
                 # MCP protocol-level error — fail fast, no retry.
@@ -475,7 +603,7 @@ async def verify(
 
         # Step 3 — deadline exhausted; enrich error via health endpoint.
         error_code = "list_tools_timeout"
-        error_msg = f"MCP did not respond within {_TOTAL_DEADLINE}s: {last_error}"
+        error_msg = f"MCP did not become ready within {_SAFETY_DEADLINE}s: {last_error}"
 
         if instance_type in ("docker", "command"):
             try:

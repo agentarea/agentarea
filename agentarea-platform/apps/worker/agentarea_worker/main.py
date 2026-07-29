@@ -16,8 +16,10 @@ import dotenv
 # Initialize DI container with proper config injection
 from agentarea_agents.infrastructure.di_container import initialize_di_container
 from agentarea_common.config import get_settings
-from agentarea_common.events.router import create_event_broker_from_router, get_event_router
+from agentarea_common.events.factory import create_event_broker
+from agentarea_common.logging import setup_logging
 from agentarea_common.observability import get_temporal_plugins, setup_otel
+from agentarea_common.workflow.sandbox import create_workflow_runner
 from agentarea_execution import create_activities_for_worker
 from agentarea_execution.interfaces import ActivityDependencies
 
@@ -33,10 +35,10 @@ from temporalio.worker import Worker
 # Load environment variables
 dotenv.load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Configure structured (JSON) logging. Routing every record through
+# WorkspaceContextFormatter escapes newlines, so untrusted values in log
+# messages can't forge log lines (see LogSanitizerFilter for the plain-text path).
+setup_logging(level="DEBUG", enable_structured_logging=True)
 logger = logging.getLogger(__name__)
 
 
@@ -50,8 +52,7 @@ def create_activity_dependencies() -> ActivityDependencies:
     settings = get_settings()
 
     # Get event broker
-    event_router = get_event_router(settings.broker)
-    event_broker = create_event_broker_from_router(event_router)
+    event_broker = create_event_broker(settings.broker)
 
     # Create secret manager factory with settings
     from agentarea_secrets import SecretManagerFactory
@@ -87,6 +88,7 @@ class AgentAreaWorker:
         self.inbound_autoclaimer = None
         self.delivery_consumer = None
         self.delivery_autoclaimer = None
+        self.outbox_relay = None
         self._broker = None
         self._dedup = None
         self._inbound_dedup = None
@@ -240,6 +242,7 @@ class AgentAreaWorker:
             ],
             activities=activities + mcp_activities,
             interceptors=[GovernanceWorkerInterceptor(governance_pipeline)],
+            workflow_runner=create_workflow_runner(),
             max_concurrent_workflow_tasks=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
             max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
         )
@@ -263,6 +266,7 @@ class AgentAreaWorker:
             task_queue=trigger_task_queue,
             workflows=[TriggerExecutionWorkflow],
             activities=trigger_activities,
+            workflow_runner=create_workflow_runner(),
             max_concurrent_workflow_tasks=5,
             max_concurrent_activities=5,
         )
@@ -336,7 +340,8 @@ class AgentAreaWorker:
         # Register adapters; they raise typed Retryable/Fatal errors that the
         # delivery consumer translates into ACK / requeue / DLQ.
         secret_reader = LazySecretReader(dependencies.secret_manager_factory)
-        register_all_adapters(secret_reader)
+        # redis_url enables the Telegram streaming (edit-in-place) sender.
+        register_all_adapters(secret_reader, redis_url)
 
         self.delivery_consumer = ChannelDeliveryConsumer(
             broker=self._broker,
@@ -358,6 +363,18 @@ class AgentAreaWorker:
             interval_seconds=delivery_cfg.AUTOCLAIM_INTERVAL_SECONDS,
         )
 
+        # Transactional outbox relay: drains event_outbox rows (written in the
+        # same txn as the aggregate change by domain services) and publishes them
+        # to the event broker. FOR UPDATE SKIP LOCKED lets it co-reside with any
+        # number of workers without coordination.
+        from agentarea_common.config.database import get_database
+        from agentarea_common.events.outbox_relay import OutboxRelay
+
+        self.outbox_relay = OutboxRelay(
+            session_factory=get_database().async_session_factory,
+            event_broker=dependencies.event_broker,
+        )
+
     async def run(self) -> None:
         """Run the worker until shutdown signal."""
         if not self.worker:
@@ -374,6 +391,8 @@ class AgentAreaWorker:
             await self.delivery_consumer.start()
         if self.delivery_autoclaimer:
             await self.delivery_autoclaimer.start()
+        if self.outbox_relay:
+            await self.outbox_relay.start()
 
         # Start MCP container monitor in background
         from agentarea_mcp.container_monitor import start_container_monitoring
@@ -422,6 +441,9 @@ class AgentAreaWorker:
         if self.container_monitor:
             await self.container_monitor.stop()
             self.container_monitor = None
+        if self.outbox_relay:
+            await self.outbox_relay.stop()
+            self.outbox_relay = None
         if self.inbound_subscriber:
             await self.inbound_subscriber.stop()
             self.inbound_subscriber = None

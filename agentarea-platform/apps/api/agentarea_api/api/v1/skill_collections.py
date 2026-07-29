@@ -1,8 +1,8 @@
 """Skill collection CRUD + membership API endpoints.
 
-Collections group skills so that a single access-control grant fans out to
-every contained skill. Membership changes are mirrored into the configured
-authorization graph.
+Collections group skills as organizational metadata. Membership lives solely in
+the ``collection_skills`` join table (the source of truth); it is not authorization
+and is not mirrored into the relationship graph.
 """
 
 import logging
@@ -14,19 +14,10 @@ from agentarea_agents.infrastructure.collection_repository import SkillCollectio
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base.repository_factory import RepositoryFactory
-from agentarea_common.infrastructure.database import get_db_session
-from agentarea_common.rebac import (
-    KetoError,
-    KetoUnavailableError,
-    OpenFGAError,
-    OpenFGAUnavailableError,
-    RelationTuple,
-)
+from agentarea_common.config.database import get_db_session
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from .access_control import get_graph_client
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +160,11 @@ async def add_skill_to_collection(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> None:
-    """Add a skill to a collection and mirror the membership into the graph."""
+    """Add a skill to a collection.
+
+    Membership is organizational metadata stored in ``collection_skills``; it is
+    not an authorization edge, so nothing is written to the relationship graph.
+    """
     factory = RepositoryFactory(db_session, user_context)
     service = SkillCollectionService(factory)
     if await factory.create_repository(SkillCollectionRepository).get_by_id(collection_id) is None:
@@ -177,28 +172,6 @@ async def add_skill_to_collection(
     if await factory.create_repository(SkillRepository).get_by_id(payload.skill_id) is None:
         raise HTTPException(status_code=404, detail="Skill not found")
 
-    # Write graph relationship first; if authz is down the DB is not mutated.
-    graph_client = get_graph_client()
-    if graph_client is not None:
-        try:
-            await graph_client.write_tuple(
-                RelationTuple(
-                    namespace="Skill",
-                    object=str(payload.skill_id),
-                    relation="collections",
-                    subject_id=f"SkillCollection:{collection_id}",
-                )
-            )
-        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
-            logger.exception(
-                "Failed to write graph membership relationship for skill=%s collection=%s",
-                payload.skill_id,
-                collection_id,
-            )
-            raise HTTPException(
-                status_code=503,
-                detail="Graph auth unavailable; membership relationship not written",
-            ) from None
     await service.add_skill(collection_id, payload.skill_id)
 
 
@@ -209,32 +182,14 @@ async def remove_skill_from_collection(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> None:
-    """Remove a skill from a collection and delete the graph membership."""
+    """Remove a skill from a collection.
+
+    Membership is organizational metadata stored in ``collection_skills``; it is
+    not an authorization edge, so nothing is removed from the relationship graph.
+    """
     factory = RepositoryFactory(db_session, user_context)
     service = SkillCollectionService(factory)
     if await factory.create_repository(SkillCollectionRepository).get_by_id(collection_id) is None:
         raise HTTPException(status_code=404, detail="Collection not found")
 
-    # Delete graph relationship first; if authz is down the DB is not mutated.
-    graph_client = get_graph_client()
-    if graph_client is not None:
-        try:
-            await graph_client.delete_tuple(
-                RelationTuple(
-                    namespace="Skill",
-                    object=str(skill_id),
-                    relation="collections",
-                    subject_id=f"SkillCollection:{collection_id}",
-                )
-            )
-        except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError):
-            logger.exception(
-                "Failed to delete graph membership relationship for skill=%s collection=%s",
-                skill_id,
-                collection_id,
-            )
-            raise HTTPException(
-                status_code=503,
-                detail="Graph auth unavailable; membership relationship not deleted",
-            ) from None
     await service.remove_skill(collection_id, skill_id)

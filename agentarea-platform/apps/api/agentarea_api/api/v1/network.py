@@ -54,9 +54,6 @@ class NetworkTopologyResponse(BaseModel):
 
 _GOVERNANCE_INTERCEPTORS = [
     GovernanceOverlay(
-        interceptor_name="capability_guard", category="gate", phases=["pre_tool_call"]
-    ),
-    GovernanceOverlay(
         interceptor_name="cost_budget_guard", category="gate", phases=["pre_llm_call"]
     ),
     GovernanceOverlay(
@@ -119,14 +116,14 @@ async def get_network_topology(
 
     from agentarea_agents.domain.models import Agent
     from agentarea_agents.domain.skill_models import Skill, skill_members_table
-    from agentarea_common.infrastructure.database import db
+    from agentarea_common.config.database import get_database
 
     accessible_workspaces = user_context.accessible_workspaces or [user_context.workspace_id]
 
     # --- Parallel fetches, each with its own session ---
 
     async def fetch_agents() -> list:
-        async with db.session() as session:
+        async with get_database().session() as session:
             query = (
                 select(Agent)
                 .where(Agent.workspace_id.in_(accessible_workspaces))
@@ -136,7 +133,7 @@ async def get_network_topology(
             return list(result.scalars().all())
 
     async def fetch_skills() -> tuple[list, list]:
-        async with db.session() as session:
+        async with get_database().session() as session:
             # Skills within accessible workspaces
             skill_query = select(Skill).where(Skill.workspace_id.in_(accessible_workspaces))
             skill_result = await session.execute(skill_query)
@@ -163,7 +160,7 @@ async def get_network_topology(
             from agentarea_common.base import RepositoryFactory
             from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
 
-            async with db.session() as session:
+            async with get_database().session() as session:
                 repo = RepositoryFactory(session, user_context).create_repository(
                     MCPServerInstanceRepository
                 )
@@ -176,7 +173,7 @@ async def get_network_topology(
         try:
             from agentarea_triggers.infrastructure.orm import TriggerORM
 
-            async with db.session() as session:
+            async with get_database().session() as session:
                 query = select(TriggerORM).where(TriggerORM.workspace_id.in_(accessible_workspaces))
                 result = await session.execute(query)
                 return list(result.scalars().all())
@@ -188,7 +185,7 @@ async def get_network_topology(
         try:
             from agentarea_openapi.domain.models import OpenAPIConnection
 
-            async with db.session() as session:
+            async with get_database().session() as session:
                 query = select(OpenAPIConnection).where(
                     OpenAPIConnection.workspace_id.in_(accessible_workspaces)
                 )
@@ -343,7 +340,7 @@ async def get_network_topology(
                         )
                     continue
 
-                # Fallback: legacy MCP entries identified by id fields.
+                # Fallback: MCP entries identified only by id fields.
                 server_id = (
                     tool.get("tool_server_id")
                     or tool.get("server_id")
