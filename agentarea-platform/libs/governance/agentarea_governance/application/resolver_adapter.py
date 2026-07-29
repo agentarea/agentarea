@@ -41,7 +41,10 @@ class GovernancePolicyResolver:
         user_id: str | None = None,
     ) -> EffectivePolicy:
         if not workspace_id:
-            return EffectivePolicy()
+            raise ValueError(
+                "workspace_id is required to resolve an effective policy; "
+                "refusing to default to an allow-all policy"
+            )
 
         layers: list[PolicyDocument | None] = []
         source_ids: list[str] = []
