@@ -1,20 +1,22 @@
 "use client";
 
+import type { MouseEvent } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { Activity, Clock, Pencil } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import Table, { type Column } from "@/components/Table/Table";
+import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getTriggerStatusPresentation } from "@/lib/status";
-import { cn } from "@/lib/utils";
 import {
   describeTriggerSchedule,
   findTriggerCatalogEntry,
   formatCompactDistance,
+  getTriggerColor,
   getTriggerDisplayName,
   getTriggerHealth,
-  renderTriggerIcon,
+  getTriggerIconComponent,
+  TriggerTile,
   type EnrichedTrigger,
   type TriggerCatalogEntry,
 } from "./triggerDisplay";
@@ -30,148 +32,120 @@ export default function TriggersTable({
   catalog = [],
   hideChannelColumn = false,
 }: TriggersTableProps) {
-  const t = useTranslations("TriggersPage.table");
   const tStatus = useTranslations("TriggersPage.status");
   const router = useRouter();
 
-  const columns: Column<EnrichedTrigger>[] = [
-    {
-      header: t("name"),
-      accessor: "name",
-      render: (_value, trigger) => {
-        if (!trigger) return null;
-        const entry = findTriggerCatalogEntry(trigger, catalog);
-        const isCron = trigger.trigger_type === "cron";
-        return (
-          <span className="flex min-w-0 items-center gap-2.5">
-            <span
-              className={cn(
-                "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
-                isCron
-                  ? "bg-primary/10 text-primary"
-                  : "bg-violet-100 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
-              )}
-            >
-              {renderTriggerIcon(entry, trigger, "h-3.5 w-3.5")}
-            </span>
-            <span className="truncate text-[13px] font-medium text-foreground group-hover:text-primary">
-              {trigger.name}
-            </span>
-          </span>
-        );
-      },
-    },
-    ...(hideChannelColumn
-      ? []
-      : [
-          {
-            header: t("channel"),
-            accessor: "channel",
-            headerClassName: "hidden sm:table-cell",
-            cellClassName: "hidden sm:table-cell",
-            render: (_value, trigger) =>
-              trigger ? (
-                <span className="text-[13px] text-muted-foreground">
-                  {getTriggerDisplayName(
-                    trigger,
-                    findTriggerCatalogEntry(trigger, catalog)
-                  )}
-                </span>
-              ) : null,
-          } satisfies Column<EnrichedTrigger>,
-        ]),
-    {
-      header: t("when"),
-      accessor: "when",
-      headerClassName: "hidden md:table-cell",
-      cellClassName: "hidden md:table-cell",
-      render: (_value, trigger) =>
-        trigger ? (
-          <span className="text-[13px] text-muted-foreground">
-            {describeTriggerSchedule(trigger)}
-          </span>
-        ) : null,
-    },
-    {
-      header: t("agent"),
-      accessor: "agent_name",
-      headerClassName: "hidden md:table-cell",
-      cellClassName: "hidden md:table-cell",
-      render: (_value, trigger) =>
-        trigger ? (
-          <span className="flex min-w-0 items-center gap-2">
-            {trigger.agent_name && (
-              <AgentAvatar
-                agent={{
-                  id: trigger.agent_id || trigger.agent_name,
-                  name: trigger.agent_name,
-                }}
-                size="xs"
-              />
-            )}
-            <span className="truncate text-[13px] text-muted-foreground">
-              {trigger.agent_name || "—"}
-            </span>
-          </span>
-        ) : null,
-    },
-    {
-      header: t("lastRun"),
-      accessor: "last_run",
-      headerClassName: "hidden lg:table-cell",
-      cellClassName: "hidden lg:table-cell",
-      render: (_value, trigger) => {
-        if (!trigger?.last_execution_at) {
-          return <span className="text-[13px] text-muted-foreground/60">—</span>;
-        }
-        const failing = Number(trigger.consecutive_failures ?? 0) > 0;
-        return (
-          <span className="flex items-center gap-1 text-[13px] text-muted-foreground">
-            {failing ? (
-              <XCircle className="h-3.5 w-3.5 text-red-500" />
-            ) : (
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-            )}
-            {formatCompactDistance(trigger.last_execution_at)}
-          </span>
-        );
-      },
-    },
-    {
-      header: t("created"),
-      accessor: "created",
-      headerClassName: "hidden xl:table-cell",
-      cellClassName: "hidden xl:table-cell",
-      render: (_value, trigger) =>
-        trigger?.created_at ? (
-          <span className="text-[13px] text-muted-foreground">
-            {formatCompactDistance(trigger.created_at)}
-          </span>
-        ) : (
-          <span className="text-[13px] text-muted-foreground/60">—</span>
-        ),
-    },
-    {
-      header: t("status"),
-      accessor: "status",
-      render: (_value, trigger) => {
-        if (!trigger) return null;
-        const health = getTriggerHealth(trigger);
-        const status = getTriggerStatusPresentation(health);
-        return (
-          <StatusIndicator size="sm" tone={status.tone} pulse={status.pulse}>
-            {tStatus(health)}
-          </StatusIndicator>
-        );
-      },
-    },
-  ];
+  const stop = (event: MouseEvent) => event.stopPropagation();
 
   return (
-    <Table
-      data={triggers}
-      columns={columns}
-      onRowClick={(trigger) => router.push(`/triggers/${trigger.id}`)}
-    />
+    <div>
+      {triggers.map((trigger) => {
+        const entry = findTriggerCatalogEntry(trigger, catalog);
+        const Icon = getTriggerIconComponent(entry, trigger);
+        const color = getTriggerColor(entry, trigger);
+        const typeLabel = getTriggerDisplayName(trigger, entry);
+        const schedule = describeTriggerSchedule(trigger);
+        const health = getTriggerHealth(trigger);
+        const status = getTriggerStatusPresentation(health);
+        const nextRun = trigger.next_run_time ?? trigger.next_run_at;
+
+        return (
+          <InteractiveListRow
+            key={trigger.id}
+            onClick={() => router.push(`/triggers/${trigger.id}`)}
+            start={<TriggerTile color={color} icon={Icon} variant="row" />}
+            contentClassName="gap-3"
+            endClassName="gap-4"
+            end={
+              <>
+                {!hideChannelColumn && (
+                  <span className="flex w-auto shrink-0 justify-start sm:w-[112px]">
+                    <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
+                      <span
+                        className="h-[7px] w-[7px] rounded-full"
+                        style={{ backgroundColor: color }}
+                      />
+                      {typeLabel}
+                    </span>
+                  </span>
+                )}
+
+                <span className="hidden w-[180px] shrink-0 items-center gap-1.5 md:flex">
+                  {trigger.agent_name && (
+                    <AgentAvatar
+                      agent={{
+                        id: trigger.agent_id || trigger.agent_name,
+                        name: trigger.agent_name,
+                      }}
+                      size="xs"
+                    />
+                  )}
+                  <span className="truncate text-[11.5px] text-muted-foreground">
+                    {trigger.agent_name || "—"}
+                  </span>
+                </span>
+
+                <span className="hidden w-14 shrink-0 items-center justify-end gap-1 text-[11.5px] text-muted-foreground/80 lg:flex">
+                  {nextRun ? (
+                    <>
+                      <Clock className="h-3 w-3" strokeWidth={1.7} />
+                      {formatCompactDistance(nextRun)}
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground/60">—</span>
+                  )}
+                </span>
+
+                <span className="hidden w-[116px] shrink-0 items-center justify-start sm:flex">
+                  <StatusIndicator
+                    size="sm"
+                    tone={status.tone}
+                    pulse={status.pulse}
+                  >
+                    {tStatus(health)}
+                  </StatusIndicator>
+                </span>
+              </>
+            }
+            hoverActionsClassName="bg-gradient-to-l from-muted/60 via-muted/60 to-transparent dark:from-zinc-800/50 dark:via-zinc-800/50"
+            hoverActions={
+              <>
+                <button
+                  type="button"
+                  title="Executions"
+                  onClick={(event) => {
+                    stop(event);
+                    router.push(`/triggers/${trigger.id}/executions`);
+                  }}
+                  className="grid h-[26px] w-[26px] place-items-center rounded-md text-muted-foreground hover:bg-zinc-200/70 hover:text-foreground dark:hover:bg-zinc-700"
+                >
+                  <Activity className="h-[15px] w-[15px]" />
+                </button>
+                <button
+                  type="button"
+                  title="Edit"
+                  onClick={(event) => {
+                    stop(event);
+                    router.push(`/triggers/${trigger.id}/edit`);
+                  }}
+                  className="grid h-[26px] w-[26px] place-items-center rounded-md text-muted-foreground hover:bg-zinc-200/70 hover:text-foreground dark:hover:bg-zinc-700"
+                >
+                  <Pencil className="h-[15px] w-[15px]" />
+                </button>
+              </>
+            }
+          >
+            <>
+              <span className="min-w-0 max-w-[280px] shrink truncate text-[13px] font-medium text-foreground">
+                {trigger.name}
+              </span>
+              <span className="hidden min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground sm:block">
+                {schedule}
+              </span>
+            </>
+          </InteractiveListRow>
+        );
+      })}
+    </div>
   );
 }

@@ -68,7 +68,7 @@ export default async function TriggersPage({
           }
         />
 
-        <div className="min-h-0 flex-1 overflow-auto px-4 py-5">
+        <div className="min-h-0 flex-1 overflow-auto">
           <Suspense
             key={`${viewMode}-${searchQuery}-${typeFilter}-${groupBy}`}
             fallback={<TriggersSkeleton viewMode={viewMode} />}

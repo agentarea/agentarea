@@ -10,7 +10,7 @@ function TriggerCardSkeleton() {
 // Mirrors a TriggersTable row: tile · name · schedule · type · agent · next · status.
 function TriggersTableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="-mx-4 -mt-5" aria-hidden="true">
+    <div aria-hidden="true">
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
@@ -43,7 +43,7 @@ interface TriggersSkeletonProps {
 export default function TriggersSkeleton({ viewMode = "table" }: TriggersSkeletonProps) {
   if (viewMode === "table") return <TriggersTableSkeleton />;
   return (
-    <div className={CARD_GRID_DENSE} aria-hidden="true">
+    <div className={`p-4 ${CARD_GRID_DENSE}`} aria-hidden="true">
       {Array.from({ length: 10 }).map((_, i) => (
         <TriggerCardSkeleton key={i} />
       ))}
