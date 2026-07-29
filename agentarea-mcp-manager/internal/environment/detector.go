@@ -1,6 +1,7 @@
 package environment
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -142,18 +143,21 @@ func (d *Detector) checkContainerEnvironment() bool {
 }
 
 // ForceEnvironment allows overriding environment detection via configuration
-func (d *Detector) ForceEnvironment(env string) Environment {
+func (d *Detector) ForceEnvironment(env string) (Environment, error) {
 	switch env {
 	case "kubernetes", "k8s":
 		d.logger.Info("Forced Kubernetes environment via configuration")
-		return EnvironmentKubernetes
+		return EnvironmentKubernetes, nil
 	case "docker", "podman":
 		d.logger.Info("Forced Docker environment via configuration")
-		return EnvironmentDocker
+		return EnvironmentDocker, nil
 	default:
-		d.logger.Warn("Invalid forced environment, falling back to auto-detection",
-			slog.String("forced_env", env))
-		return d.DetectEnvironment()
+		// Auto-detecting past an unrecognised value is the wrong recovery: the
+		// operator said where workloads should run, and a typo like
+		// "kubernets" would otherwise start the docker backend, quietly
+		// creating untrusted workloads on the control plane's own host.
+		return "", fmt.Errorf(
+			"unknown backend environment %q (expected one of: kubernetes, k8s, docker, podman)", env)
 	}
 }
 
@@ -178,16 +182,18 @@ func (d *Detector) GetEnvironmentInfo() map[string]interface{} {
 }
 
 // DetectEnvironment is a simple function that matches the main.go interface
-func DetectEnvironment(forceEnv string, logger *slog.Logger) string {
+func DetectEnvironment(forceEnv string, logger *slog.Logger) (string, error) {
 	detector := NewDetector(logger)
 
-	// Check for forced environment override
+	// A declared environment is honoured or refused — never quietly replaced by
+	// a guess. Only an absent one is detected.
 	if forceEnv != "" {
-		env := detector.ForceEnvironment(forceEnv)
-		return string(env)
+		env, err := detector.ForceEnvironment(forceEnv)
+		if err != nil {
+			return "", err
+		}
+		return string(env), nil
 	}
 
-	// Auto-detect environment
-	env := detector.DetectEnvironment()
-	return string(env)
+	return string(detector.DetectEnvironment()), nil
 }

@@ -273,6 +273,10 @@ services:
     volumes:
       - ./agentarea-mcp-manager:/app:rw # Mount source code for live reload
       - /var/run/docker.sock:/var/run/docker.sock # Docker socket for container management
+      # Where `deploy/sandbox-host` writes the execution cluster's kubeconfig.
+      # Mounted read-only and unused unless MCP_BACKEND_TYPE selects kubernetes;
+      # see the environment block below.
+      - ./deploy/sandbox-host:/etc/agentarea/exec:ro
     networks:
       - mcp-network
       - default
@@ -286,6 +290,24 @@ services:
       REDIS_URL: redis://valkey:6379
       CORE_API_URL: http://agentarea-backend:8000
       CONTAINER_RUNTIME: docker
+      # Where MCP servers and agent sandboxes run.
+      #
+      #   docker      (default) — on this host's Docker daemon, i.e. beside the
+      #                control plane, on its kernel. Fine for development.
+      #   kubernetes  — on the cluster named by KUBERNETES_KUBECONFIG, under the
+      #                runtime class below. This is how you point the stack at
+      #                the gVisor host provisioned by deploy/sandbox-host with
+      #                sandbox_k3s_enabled=true:
+      #
+      #     MCP_BACKEND_TYPE=kubernetes
+      #     MCP_EXECUTION_KUBECONFIG=/etc/agentarea/exec/execution-cluster.kubeconfig
+      #     MCP_RUNTIME_CLASS=gvisor
+      #
+      # An unrecognised value is refused at startup rather than quietly
+      # auto-detected, so a typo cannot land untrusted workloads here.
+      BACKEND_TYPE: ${MCP_BACKEND_TYPE:-docker}
+      KUBERNETES_KUBECONFIG: ${MCP_EXECUTION_KUBECONFIG:-}
+      KUBERNETES_RUNTIME_CLASS: ${MCP_RUNTIME_CLASS:-}
       # Cold start of git/uvx-based MCP servers (clone + install ~90s) needs more
       # than the 120s default before a container is declared unhealthy.
       STARTUP_TIMEOUT: 300s

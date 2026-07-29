@@ -115,7 +115,11 @@ func main() {
 		logger.Info("Using forced environment", slog.String("environment", cfg.Environment))
 	}
 
-	envType := environment.DetectEnvironment(cfg.Environment, logger)
+	envType, err := environment.DetectEnvironment(cfg.Environment, logger)
+	if err != nil {
+		logger.Error("Refusing to start", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 	logger.Info("Environment detected", slog.String("type", envType))
 
 	switch envType {
