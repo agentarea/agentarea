@@ -100,6 +100,12 @@ global:
     # Storage type (s3, rustfs, gcs)
     type: "rustfs"
     endpoint: ""  # Auto-set from rustfs service if empty
+    # Client-reachable endpoint used to sign presigned URLs for browser-direct
+    # uploads/downloads. Leave empty to fall back to the internal endpoint
+    # (works only when the object store is itself reachable from the browser,
+    # e.g. local dev). Required in prod whenever the object store's internal
+    # endpoint is cluster-only.
+    publicEndpoint: ""
     bucket: "agentarea-documents"
     region: "us-east-1"
     # S3 settings
@@ -115,6 +121,11 @@ global:
     rustfs:
       accessKey: ""
       secretKey: ""
+    # CORS rule applied to the artifacts bucket during bootstrap, required for
+    # browser-direct presigned uploads. Leave allowedOrigins empty to skip
+    # (no-op) -- e.g. when the object store is not browser-reachable.
+    cors:
+      allowedOrigins: []
 
   # Temporal configuration - Workflow engine
   temporal:
@@ -275,6 +286,16 @@ ingress:
           pathType: Prefix
     kratos:
       host: ""  # e.g., auth.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+    # S3 API endpoint of the bundled object store, exposed for browser-direct
+    # presigned uploads/downloads. Only the S3 API port (9000) is routed; the
+    # admin console (9001) is never exposed. Set the host to enable, and point
+    # global.storage.publicEndpoint at the same host so presigned URLs are signed
+    # against it. Leave host empty to keep the store cluster-internal.
+    rustfs:
+      host: ""  # e.g., storage.example.com
       paths:
         - path: /
           pathType: Prefix

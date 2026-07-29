@@ -12,6 +12,7 @@ API_HOST: "{{ .Values.global.api.host }}"
 API_PORT: "{{ .Values.global.api.port }}"
 API_BASE_URL: "{{ include "agentarea.backend.apiUrl" . }}"
 API_AUTH_ENABLED: "{{ .Values.global.api.auth.enabled }}"
+PUBLIC_S3_ENDPOINT: "{{ .Values.global.storage.publicEndpoint }}"
 METRICS_ENABLED: "{{ .Values.global.monitoring.prometheus.enabled }}"
 METRICS_PORT: "{{ .Values.global.monitoring.prometheus.port }}"
 HEALTH_CHECK_ENABLED: "{{ .Values.global.monitoring.health.enabled }}"
@@ -61,6 +62,11 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-backend
       key: API_AUTH_ENABLED
+- name: PUBLIC_S3_ENDPOINT
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-backend
+      key: PUBLIC_S3_ENDPOINT
 - name: METRICS_ENABLED
   valueFrom:
     configMapKeyRef:

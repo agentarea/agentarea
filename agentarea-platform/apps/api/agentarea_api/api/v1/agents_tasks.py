@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import re
 import unicodedata
@@ -24,16 +23,17 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.config.app import get_app_settings
+from agentarea_common.base import ReadRepositoryFactoryDep
 from agentarea_common.events.contract import TASK_CANCELLED, TASK_COMPLETED, TASK_FAILED
 from agentarea_common.money import ZERO, Money, serialize_money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
+from agentarea_tasks.infrastructure.repository import TaskEventRepository
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
@@ -83,39 +83,8 @@ class TaskCreate(BaseModel):
     requires_human_approval: bool | None = False
     project_id: str | None = None
     task_policy: PolicyDocument | None = None
-
-
-_APP_SETTINGS = get_app_settings()
-TASK_ATTACHMENT_MAX_FILES = _APP_SETTINGS.TASK_ATTACHMENT_MAX_FILES
-TASK_ATTACHMENT_MAX_FILE_BYTES = _APP_SETTINGS.TASK_ATTACHMENT_MAX_FILE_BYTES
-TASK_ATTACHMENT_MAX_TOTAL_BYTES = _APP_SETTINGS.TASK_ATTACHMENT_MAX_TOTAL_BYTES
-_ATTACHMENT_READ_CHUNK_BYTES = 1024 * 1024
-_ATTACHMENT_FILENAME_MAX_CHARS = 180
-
-
-def _sanitize_attachment_filename(filename: str | None) -> str:
-    """Return one safe filename segment for ``inputs/attachments``."""
-    raw = unicodedata.normalize("NFKC", filename or "")
-    basename = PurePosixPath(raw.replace("\\", "/")).name
-    sanitized = "".join(
-        character if character.isalnum() or character in {".", "_", "-"} else "_"
-        for character in basename
-    )
-    sanitized = re.sub(r"_+", "_", sanitized).strip("._-")
-    if not sanitized:
-        raise HTTPException(status_code=422, detail="Attachment filename is empty or invalid")
-    return sanitized[:_ATTACHMENT_FILENAME_MAX_CHARS]
-
-
-def _attachment_content_type(value: str | None) -> str:
-    content_type = (value or "application/octet-stream").strip()
-    if (
-        not content_type
-        or len(content_type) > 255
-        or any(character in content_type for character in "\r\n\x00")
-    ):
-        return "application/octet-stream"
-    return content_type
+    # staging refs from POST /v1/files (purpose=attachment) or POST /v1/files/upload-url
+    attachments: list[str] | None = None
 
 
 def _attachment_content_disposition(filename: str) -> str:
@@ -126,77 +95,133 @@ def _attachment_content_disposition(filename: str) -> str:
     return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
 
 
-async def _read_task_attachments(
-    files: list[UploadFile],
-) -> tuple[dict[str, bytes], dict[str, str], list[dict[str, Any]]]:
-    """Read multipart uploads incrementally and enforce all request quotas."""
-    if not files:
-        raise HTTPException(status_code=422, detail="At least one attachment is required")
-    if len(files) > TASK_ATTACHMENT_MAX_FILES:
-        for upload in files:
-            await upload.close()
-        raise HTTPException(
-            status_code=413,
-            detail=(f"Too many attachments: {len(files)}; limit is {TASK_ATTACHMENT_MAX_FILES}"),
+def _dedupe_attachment_name(name: str, used: set[str]) -> str:
+    """Return a name unique within ``used`` by inserting ``-N`` before the extension.
+
+    Two attachments can carry the same basename (distinct staging refs, identical
+    filenames); collapsing them into one manifest entry would silently drop a
+    file, so disambiguate deterministically: ``report.csv`` -> ``report-1.csv``.
+    """
+    if name not in used:
+        return name
+    suffix = PurePosixPath(name).suffix
+    base = name[: len(name) - len(suffix)] if suffix else name
+    index = 1
+    while True:
+        candidate = f"{base}-{index}{suffix}"
+        if candidate not in used:
+            return candidate
+        index += 1
+
+
+async def _stage_attachments_into_task(
+    workspace_id: str,
+    reserved_task_id: UUID,
+    refs: list[str],
+    user_id: str,
+) -> list[dict[str, Any]]:
+    """Resolve staging refs into a reserved task's ``inputs/attachments`` scope.
+
+    Each ref (``staging/{id}/{filename}`` from ``POST /v1/files`` with
+    ``purpose=attachment`` or a presigned ``POST /v1/files/upload-url``) is HEADed
+    to resolve its verified sha256, size and content type, then copied
+    server-side into the task's content-addressed store via ``attach_object``.
+    The bytes never transit this process. Returns the attachment descriptors
+    persisted alongside the run. Raises HTTP errors mirroring the
+    workspace-commit failure modes. Staging objects are left in place; the
+    caller deletes them only after a successful dispatch.
+    """
+    from agentarea_common.artifacts import (
+        ArtifactActor,
+        ArtifactService,
+        DbArtifactEventRecorder,
+        WorkspaceConflictError,
+        WorkspaceQuotaError,
+        WorkspaceRepository,
+        WorkspaceValidationError,
+    )
+
+    artifact_service = ArtifactService()
+    workspace_repository = WorkspaceRepository(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_id),
+    )
+
+    descriptors: list[dict[str, Any]] = []
+    used_names: set[str] = set()
+    for ref in refs:
+        if not ref.startswith("staging/"):
+            raise HTTPException(status_code=422, detail=f"Invalid attachment ref: {ref}")
+        head = await artifact_service.head(workspace_id, ref)
+        if head is None:
+            raise HTTPException(status_code=404, detail="attachment ref not found")
+        sha256 = head.get("sha256")
+        if not sha256:
+            raise HTTPException(
+                status_code=422, detail="attachment integrity digest is unavailable"
+            )
+        size = int(head.get("size") or 0)
+        content_type = head.get("content_type") or "application/octet-stream"
+        name = _dedupe_attachment_name(ref.rsplit("/", 1)[-1] or "attachment", used_names)
+        used_names.add(name)
+        rel = f"inputs/attachments/{name}"
+        try:
+            await workspace_repository.attach_object(
+                workspace_id,
+                str(reserved_task_id),
+                rel,
+                source_key=ref,
+                expected_sha256=sha256,
+                expected_size=size,
+                content_type=content_type,
+                owner=f"task-attachment-upload-{reserved_task_id}",
+            )
+        except WorkspaceQuotaError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        except WorkspaceConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except WorkspaceValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:
+            logger.error(
+                "Failed to attach staged object for task %s", reserved_task_id, exc_info=True
+            )
+            raise HTTPException(status_code=500, detail="Attachment storage failed") from exc
+        descriptors.append(
+            {
+                "relative_path": rel,
+                "filename": name,
+                "size": size,
+                "content_type": content_type,
+                "sha256": sha256,
+            }
         )
 
-    staged: dict[str, bytes] = {}
-    content_types: dict[str, str] = {}
-    descriptors: list[dict[str, Any]] = []
-    total_size = 0
+    return descriptors
 
-    try:
-        for upload in files:
-            sanitized_name = _sanitize_attachment_filename(upload.filename)
-            relative_path = f"inputs/attachments/{sanitized_name}"
-            if relative_path in staged:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Attachment filenames collide after sanitization: {sanitized_name}",
-                )
 
-            digest = hashlib.sha256()
-            body = bytearray()
-            while chunk := await upload.read(_ATTACHMENT_READ_CHUNK_BYTES):
-                body.extend(chunk)
-                digest.update(chunk)
-                file_size = len(body)
-                total_size += len(chunk)
-                if file_size > TASK_ATTACHMENT_MAX_FILE_BYTES:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=(
-                            f"Attachment {sanitized_name} has {file_size} bytes; "
-                            f"per-file limit is {TASK_ATTACHMENT_MAX_FILE_BYTES}"
-                        ),
-                    )
-                if total_size > TASK_ATTACHMENT_MAX_TOTAL_BYTES:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=(
-                            f"Attachments have {total_size} bytes; "
-                            f"total limit is {TASK_ATTACHMENT_MAX_TOTAL_BYTES}"
-                        ),
-                    )
+async def _delete_staging_refs(workspace_id: str, refs: list[str], user_id: str) -> None:
+    """Best-effort delete of consumed staging objects after a successful dispatch.
 
-            content_type = _attachment_content_type(upload.content_type)
-            data = bytes(body)
-            staged[relative_path] = data
-            content_types[relative_path] = content_type
-            descriptors.append(
-                {
-                    "relative_path": relative_path,
-                    "filename": sanitized_name,
-                    "size": len(data),
-                    "content_type": content_type,
-                    "sha256": digest.hexdigest(),
-                }
-            )
-    finally:
-        for upload in files:
-            await upload.close()
+    Deleting only after dispatch means a failed dispatch leaves the upload intact
+    for a retry instead of consuming it. Never raises: an orphaned staging object
+    is reclaimed by lifecycle cleanup, not worth failing a launched task over.
+    """
+    from agentarea_common.artifacts import (
+        ArtifactActor,
+        ArtifactService,
+        DbArtifactEventRecorder,
+    )
 
-    return staged, content_types, descriptors
+    artifact_service = ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_id),
+    )
+    for ref in refs:
+        try:
+            await artifact_service.delete(workspace_id, ref)
+        except Exception:
+            logger.warning("Failed to delete consumed staging ref %s", ref, exc_info=True)
 
 
 class EscalationResolution(BaseModel):
@@ -574,9 +599,59 @@ async def create_task_for_agent_with_stream(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
+    created_task = None
+    if data.attachments:
+        reserved_task_id = uuid4()
+        attachment_descriptors = await _stage_attachments_into_task(
+            user_context.workspace_id,
+            reserved_task_id,
+            data.attachments,
+            user_context.user_id,
+        )
+        parameters = {**data.parameters, "attachments": attachment_descriptors}
+        try:
+            payload = RunCreate(
+                agent_id=agent_id,
+                description=data.description,
+                parameters=parameters,
+                requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+                task_policy=data.task_policy,
+            )
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+        try:
+            created_task = await task_service.reserve_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
+                task_id=reserved_task_id,
+                trusted_metadata={"workspace_attachments": attachment_descriptors},
+            )
+        except PolicyValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except AgentModelNotConfiguredError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        try:
+            created_task = await task_service.dispatch_reserved_run(created_task)
+        except Exception as exc:
+            await task_service.update_task_status(
+                reserved_task_id, "failed", error="Task dispatch failed"
+            )
+            logger.error("Failed to dispatch attachment task %s", reserved_task_id, exc_info=True)
+            raise HTTPException(status_code=503, detail="Task dispatch failed") from exc
+
+        # Consume the staging objects only now that the run is dispatched; a
+        # failed dispatch above leaves them for a retry.
+        await _delete_staging_refs(
+            user_context.workspace_id, data.attachments, user_context.user_id
+        )
+
     async def task_creation_stream() -> AsyncGenerator[str, None]:
         """Generate Server-Sent Events for task creation and execution."""
-        task = None
+        task = created_task
         try:
             # Send initial connection event
             yield _format_sse_event(
@@ -589,20 +664,21 @@ async def create_task_for_agent_with_stream(
                 },
             )
 
-            # Create and execute task using service layer
-            payload = RunCreate(
-                agent_id=agent_id,
-                description=data.description,
-                parameters=data.parameters,
-                requires_human_approval=data.requires_human_approval or False,
-                project_id=data.project_id,
-                task_policy=data.task_policy,
-            )
-            task = await task_service.start_run(
-                payload,
-                workspace_id=user_context.workspace_id,
-                user_id=user_context.user_id,
-            )
+            if task is None:
+                # Create and execute task using service layer
+                payload = RunCreate(
+                    agent_id=agent_id,
+                    description=data.description,
+                    parameters=data.parameters,
+                    requires_human_approval=data.requires_human_approval or False,
+                    project_id=data.project_id,
+                    task_policy=data.task_policy,
+                )
+                task = await task_service.start_run(
+                    payload,
+                    workspace_id=user_context.workspace_id,
+                    user_id=user_context.user_id,
+                )
 
             # Send task created event
             yield _format_sse_event(
@@ -698,211 +774,6 @@ async def create_task_for_agent_with_stream(
     )
 
 
-@router.post("/with-attachments")
-async def create_task_for_agent_with_attachments(
-    agent_id: UUID,
-    user_context: UserContextDep,
-    task_data: str = Form(...),
-    files: list[UploadFile] = File(...),
-    task_service: TaskService = Depends(get_task_service),
-    agent_service: AgentService = Depends(get_agent_service),
-):
-    """Commit multipart attachments before dispatching the task workflow."""
-    try:
-        data = TaskCreate.model_validate_json(task_data)
-    except ValidationError as exc:
-        for upload in files:
-            await upload.close()
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
-
-    agent = await agent_service.get_with_catalog(agent_id)
-    if not agent:
-        for upload in files:
-            await upload.close()
-        raise HTTPException(status_code=404, detail="Agent not found")
-
-    reserved_task_id = uuid4()
-    staged, content_types, attachment_descriptors = await _read_task_attachments(files)
-    parameters = dict(data.parameters)
-    parameters["attachments"] = attachment_descriptors
-    try:
-        payload = RunCreate(
-            agent_id=agent_id,
-            description=data.description,
-            parameters=parameters,
-            requires_human_approval=data.requires_human_approval or False,
-            project_id=data.project_id,
-            task_policy=data.task_policy,
-        )
-    except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
-
-    try:
-        task = await task_service.reserve_run(
-            payload,
-            workspace_id=user_context.workspace_id,
-            user_id=user_context.user_id,
-            task_id=reserved_task_id,
-            trusted_metadata={"workspace_attachments": attachment_descriptors},
-        )
-    except PolicyValidationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except AgentModelNotConfiguredError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    from agentarea_common.artifacts import (
-        ArtifactActor,
-        DbArtifactEventRecorder,
-        WorkspaceConflictError,
-        WorkspaceQuotaError,
-        WorkspaceRepository,
-        WorkspaceValidationError,
-    )
-
-    try:
-        await WorkspaceRepository(
-            recorder=DbArtifactEventRecorder(),
-            actor=ArtifactActor(user_id=user_context.user_id),
-        ).put_files(
-            user_context.workspace_id,
-            str(reserved_task_id),
-            staged,
-            content_types=content_types,
-            provenance={"source": "task_attachment", "user_id": user_context.user_id},
-            owner=f"task-attachment-upload-{reserved_task_id}",
-        )
-    except WorkspaceQuotaError as exc:
-        await task_service.update_task_status(
-            reserved_task_id, "failed", error="Attachment quota exceeded"
-        )
-        raise HTTPException(status_code=413, detail=str(exc)) from exc
-    except WorkspaceConflictError as exc:
-        await task_service.update_task_status(
-            reserved_task_id, "failed", error="Attachment workspace conflict"
-        )
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except WorkspaceValidationError as exc:
-        await task_service.update_task_status(
-            reserved_task_id, "failed", error="Attachment validation failed"
-        )
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except Exception as exc:
-        await task_service.update_task_status(
-            reserved_task_id, "failed", error="Attachment storage failed"
-        )
-        logger.error("Failed to commit attachments for task %s", reserved_task_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="Attachment storage failed") from exc
-
-    try:
-        task = await task_service.dispatch_reserved_run(task)
-    except Exception as exc:
-        await task_service.update_task_status(
-            reserved_task_id, "failed", error="Task dispatch failed"
-        )
-        logger.error("Failed to dispatch attachment task %s", reserved_task_id, exc_info=True)
-        raise HTTPException(status_code=503, detail="Task dispatch failed") from exc
-
-    async def task_creation_stream() -> AsyncGenerator[str, None]:
-        try:
-            yield _format_sse_event(
-                "connected",
-                {
-                    "agent_id": str(agent_id),
-                    "agent_name": agent.name,
-                    "message": "Attachments committed; task started",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            )
-            yield _format_sse_event(
-                "task_created",
-                {
-                    "task_id": str(task.id),
-                    "agent_id": str(agent_id),
-                    "description": task.description,
-                    "status": task.status,
-                    "execution_id": task.execution_id,
-                    "created_at": task.created_at.isoformat(),
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            )
-
-            if task.execution_id and task.status in ["running", "pending"]:
-                async for chunk in _tail_task_events_sse(
-                    task.id, agent_id, task.execution_id, emit_connected=False
-                ):
-                    yield chunk
-            else:
-                yield _format_sse_event(
-                    "task_failed",
-                    {
-                        "task_id": str(task.id),
-                        "agent_id": str(agent_id),
-                        "error": "Task failed to start workflow",
-                        "status": task.status,
-                        "result": task.result,
-                        "timestamp": datetime.now(UTC).isoformat(),
-                    },
-                )
-        except PolicyValidationError as exc:
-            yield _format_sse_event(
-                "error",
-                {
-                    "agent_id": str(agent_id),
-                    "error": str(exc),
-                    "error_type": "policy_validation_error",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            )
-        except AgentModelNotConfiguredError as exc:
-            yield _format_sse_event(
-                "error",
-                {
-                    "agent_id": str(agent_id),
-                    "error": str(exc),
-                    "error_type": "model_not_configured",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            )
-        except ValueError:
-            yield _format_sse_event(
-                "error",
-                {
-                    "agent_id": str(agent_id),
-                    "error": "Agent validation error",
-                    "error_type": "agent_not_found",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            )
-        except Exception as exc:
-            logger.error(
-                "Failed to create task %s with attachments: %s",
-                reserved_task_id,
-                exc,
-                exc_info=True,
-            )
-            yield _format_sse_event(
-                "error",
-                {
-                    "task_id": str(task.id) if task else str(reserved_task_id),
-                    "agent_id": str(agent_id),
-                    "error": "Task creation failed",
-                    "error_type": "creation_failed",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            )
-
-    return StreamingResponse(
-        task_creation_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Cache-Control",
-        },
-    )
-
-
 @router.post("/sync", response_model=TaskResponse)
 async def create_task_for_agent_sync(
     agent_id: UUID,
@@ -914,23 +785,53 @@ async def create_task_for_agent_sync(
     try:
         # Create and execute task using shared payload-style entry point so REST
         # /sync, REST streaming and MCP toolset all share the same lifecycle.
-        payload = RunCreate(
-            agent_id=agent_id,
-            description=data.description,
-            parameters=data.parameters,
-            requires_human_approval=data.requires_human_approval or False,
-            project_id=data.project_id,
-            task_policy=data.task_policy,
-        )
-        task = await task_service.start_run(
-            payload,
-            workspace_id=user_context.workspace_id,
-            user_id=user_context.user_id,
-        )
+        if data.attachments:
+            reserved_task_id = uuid4()
+            attachment_descriptors = await _stage_attachments_into_task(
+                user_context.workspace_id,
+                reserved_task_id,
+                data.attachments,
+                user_context.user_id,
+            )
+            payload = RunCreate(
+                agent_id=agent_id,
+                description=data.description,
+                parameters={**data.parameters, "attachments": attachment_descriptors},
+                requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+                task_policy=data.task_policy,
+            )
+            task = await task_service.reserve_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
+                task_id=reserved_task_id,
+                trusted_metadata={"workspace_attachments": attachment_descriptors},
+            )
+            task = await task_service.dispatch_reserved_run(task)
+            await _delete_staging_refs(
+                user_context.workspace_id, data.attachments, user_context.user_id
+            )
+        else:
+            payload = RunCreate(
+                agent_id=agent_id,
+                description=data.description,
+                parameters=data.parameters,
+                requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+                task_policy=data.task_policy,
+            )
+            task = await task_service.start_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
+            )
 
         # Convert to API response format
         return TaskResponse.from_agent_task(task)
 
+    except HTTPException:
+        raise
     except PolicyValidationError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     except AgentModelNotConfiguredError as e:
@@ -1726,7 +1627,7 @@ async def resolve_task_escalation(
 async def get_task_events(
     agent_id: UUID,
     task_id: UUID,
-    user_context: UserContextDep,
+    repository_factory: ReadRepositoryFactoryDep,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of events per page"),
     event_type: str | None = Query(None, description="Filter by event type"),
@@ -1739,74 +1640,39 @@ async def get_task_events(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     try:
-        from agentarea_api.api.deps.database import get_db_session
-        from sqlalchemy import text
+        # Read through the workspace-scoped repository. The check above only
+        # proves the caller owns an agent with this id — `agent_id` is a route
+        # parameter and is never tied to the task — so the workspace filter
+        # inside the repository is the actual authorization boundary here.
+        event_repository = repository_factory.create_repository(TaskEventRepository)
+        records, total_events = await event_repository.list_for_task(
+            task_id,
+            event_type=event_type,
+            limit=page_size,
+            offset=(page - 1) * page_size,
+        )
 
-        # Get database session
-        async with get_db_session() as session:
-            # Build the query with optional event type filter
-            base_query = """
-                SELECT id, task_id, event_type, timestamp, data, event_metadata,
-                       COUNT(*) OVER() as total_count
-                FROM task_events
-                WHERE task_id = :task_id
-            """
-
-            params: dict[str, Any] = {"task_id": str(task_id)}
-
-            if event_type:
-                base_query += " AND event_type = :event_type"
-                params["event_type"] = event_type
-
-            base_query += """
-                ORDER BY timestamp ASC
-                LIMIT :limit OFFSET :offset
-            """
-
-            params.update({"limit": page_size, "offset": (page - 1) * page_size})
-
-            # Execute query
-            result = await session.execute(text(base_query), params)
-            rows = result.fetchall()
-
-        if not rows:
-            # No events found - return empty response
-            return TaskEventResponse(
-                events=[],
-                total=0,
-                page=page,
-                page_size=page_size,
-                has_next=False,
+        events = [
+            TaskEvent(
+                id=str(record.id),
+                task_id=str(record.task_id),
+                agent_id=str(agent_id),
+                execution_id=record.data.get("execution_id")
+                or record.metadata.get("execution_id", "unknown"),
+                timestamp=record.timestamp,
+                event_type=record.event_type,
+                message=record.data.get("message", f"Event: {record.event_type}"),
+                metadata=dict(record.data) if record.data else {},
             )
-
-        # Convert database rows to TaskEvent objects
-        total_events = rows[0].total_count if rows else 0
-        events = []
-
-        for row in rows:
-            events.append(
-                TaskEvent(
-                    id=str(row.id),
-                    task_id=str(row.task_id),
-                    agent_id=str(agent_id),
-                    execution_id=row.data.get("execution_id")
-                    or row.event_metadata.get("execution_id", "unknown"),
-                    timestamp=row.timestamp,
-                    event_type=row.event_type,
-                    message=row.data.get("message", f"Event: {row.event_type}"),
-                    metadata=dict(row.data) if row.data else {},
-                )
-            )
-
-        # Calculate pagination info
-        has_next = (page * page_size) < total_events
+            for record in records
+        ]
 
         return TaskEventResponse(
             events=events,
             total=total_events,
             page=page,
             page_size=page_size,
-            has_next=has_next,
+            has_next=(page * page_size) < total_events,
         )
 
     except Exception as e:

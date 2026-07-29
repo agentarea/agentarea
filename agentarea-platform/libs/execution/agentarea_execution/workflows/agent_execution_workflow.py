@@ -2111,7 +2111,7 @@ class AgentExecutionWorkflow:
             declared_paths = []
 
         validation = await self._validate_completion_artifacts(declared_paths)
-        if validation.state not in {"passed", "no_artifacts"}:
+        if validation.state != "passed":
             self.state.success = False
             self.state.final_response = None
             self._awaiting_input = False

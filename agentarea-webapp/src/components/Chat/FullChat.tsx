@@ -165,6 +165,68 @@ function toStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
+function bufferToHex(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function bufferToBase64(buffer: ArrayBuffer): string {
+  let binary = "";
+  for (const b of new Uint8Array(buffer)) {
+    binary += String.fromCharCode(b);
+  }
+  return btoa(binary);
+}
+
+// Upload one attachment via the presigned two-step: mint a presigned PUT
+// bound to the file's sha256, then PUT the bytes directly to the object
+// store. Returns the ref the task-create body references.
+async function uploadAttachment(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  const sha256Hex = bufferToHex(digest);
+  const sha256Base64 = bufferToBase64(digest);
+  const contentType = file.type || "application/octet-stream";
+
+  const presignResponse = await fetch("/api/files/upload-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filename: file.name,
+      content_type: contentType,
+      sha256: sha256Hex,
+      size: file.size,
+    }),
+  });
+  if (!presignResponse.ok) {
+    const errorBody = await presignResponse.text();
+    throw new Error(
+      errorBody || `Upload presign failed with status ${presignResponse.status}`
+    );
+  }
+  const { ref, upload_url } = (await presignResponse.json()) as {
+    ref: string;
+    upload_url: string;
+  };
+
+  const putResponse = await fetch(upload_url, {
+    method: "PUT",
+    headers: {
+      "x-amz-checksum-sha256": sha256Base64,
+      "Content-Type": contentType,
+    },
+    body: file,
+  });
+  if (!putResponse.ok) {
+    const errorBody = await putResponse.text();
+    throw new Error(
+      errorBody || `File upload failed with status ${putResponse.status}`
+    );
+  }
+
+  return ref;
+}
+
 interface FullChatProps {
   agent: Agent;
   availableAgents?: Agent[];
@@ -500,6 +562,14 @@ export default function FullChat({
     }
 
     try {
+      // Upload each attachment directly to the object store via a presigned
+      // PUT, then reference the returned refs in the JSON task-create body
+      // (task creation is JSON, not multipart).
+      const attachments: string[] = [];
+      for (const file of filesToUpload) {
+        attachments.push(await uploadAttachment(file));
+      }
+
       const taskData = {
         description:
           plainContent || "Use the attached files to complete the task.",
@@ -515,25 +585,16 @@ export default function FullChat({
           session_id: `chat-${Date.now()}`,
         },
         enable_agent_communication: true,
+        ...(attachments.length > 0 ? { attachments } : {}),
       };
-      const headers: Record<string, string> = { Accept: "text/event-stream" };
-      let body: BodyInit;
-      if (filesToUpload.length > 0) {
-        const formData = new FormData();
-        formData.append("task_data", JSON.stringify(taskData));
-        for (const file of filesToUpload) {
-          formData.append("files", file, file.name);
-        }
-        body = formData;
-      } else {
-        headers["Content-Type"] = "application/json";
-        body = JSON.stringify(taskData);
-      }
 
       const response = await fetch(`/api/agents/${agent.id}/tasks/create`, {
         method: "POST",
-        headers,
-        body,
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify(taskData),
       });
 
       if (!response.ok) {

@@ -89,6 +89,7 @@ The following table lists configurable parameters of the chart and their default
 | global.redis.connectionTimeout | string | `"5s"` |  |
 | global.storage.type | string | `"rustfs"` |  |
 | global.storage.endpoint | string | `""` |  |
+| global.storage.publicEndpoint | string | `""` |  |
 | global.storage.bucket | string | `"agentarea-documents"` |  |
 | global.storage.region | string | `"us-east-1"` |  |
 | global.storage.s3.accessKeyId | string | `""` |  |
@@ -98,6 +99,7 @@ The following table lists configurable parameters of the chart and their default
 | global.storage.gcs.credentials | string | `""` |  |
 | global.storage.rustfs.accessKey | string | `""` |  |
 | global.storage.rustfs.secretKey | string | `""` |  |
+| global.storage.cors.allowedOrigins | list | `[]` |  |
 | global.temporal.host | string | `""` |  |
 | global.temporal.port | int | `7233` |  |
 | global.temporal.namespace | string | `"default"` |  |

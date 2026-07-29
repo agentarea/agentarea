@@ -122,6 +122,46 @@ def parse_target(selector: str) -> tuple[str, str | None]:
     return kind, value
 
 
+def assert_enforceable(rule: PolicyRule) -> None:
+    """Reject a rule the engine would silently ignore at runtime.
+
+    The compiler debug-skips unenforceable rules, so without this guard the write
+    API returns 201 for rules that never take effect (fail-open). Fail loudly at
+    the write boundary instead, mirroring the compiler's skip conditions.
+
+    Raises:
+        ValueError: with a caller-facing reason when the rule cannot be enforced.
+    """
+    if rule.subject_type == PolicySubjectType.GROUP:
+        raise ValueError(
+            "group subjects are not resolved yet (issue #198); bind the rule to a "
+            "workspace, agent, or user"
+        )
+    if rule.condition is not None:
+        raise ValueError("conditions (CEL) are not evaluated yet; omit 'condition'")
+
+    kind, _value = parse_target(rule.target)  # raises ValueError on an unknown kind
+
+    # Spend/service caps that reach the compiler without a usable amount are
+    # silently dropped — reject them here so a cap can never be a no-op.
+    if rule.effect == PolicyEffect.CAP and kind in ("spend", "service"):
+        amount = rule.params.get("amount_usd")
+        if amount is None:
+            raise ValueError(f"cap on {rule.target!r} requires 'amount_usd' in params")
+        try:
+            to_money(amount)
+        except (TypeError, ValueError, ArithmeticError) as exc:
+            raise ValueError(
+                f"cap on {rule.target!r} has a non-numeric 'amount_usd': {amount!r}"
+            ) from exc
+        if kind == "spend":
+            period = rule.params.get("period", "month")
+            if period not in ("month", "run"):
+                raise ValueError(
+                    f"spend cap period must be 'month' or 'run', got {period!r}"
+                )
+
+
 class _DocumentAccumulator:
     """Mutable scratch space that the compiler folds rules into."""
 

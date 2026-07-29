@@ -15,7 +15,7 @@ import logging
 import mimetypes
 import re
 import tempfile
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,6 +38,30 @@ logger = logging.getLogger(__name__)
 
 _WORKSPACE_PREFIX = "workspaces"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def sha256_hex_from_head(head: Mapping[str, Any]) -> str | None:
+    """Resolve an object's lowercase-hex sha256 from a HEAD response.
+
+    Prefers the ``sha256`` user-metadata that :meth:`ArtifactService.put` writes;
+    otherwise derives it from the S3-native ``ChecksumSHA256`` (base64 of the raw
+    32-byte digest), which is all a presigned direct upload can guarantee. Returns
+    ``None`` when neither is present so the caller can fail loudly rather than
+    guess a digest. The HEAD must have been issued with ``ChecksumMode=ENABLED``
+    for ``ChecksumSHA256`` to be populated.
+    """
+    meta_sha = str((head.get("Metadata") or {}).get("sha256") or "")
+    if _SHA256_RE.fullmatch(meta_sha):
+        return meta_sha
+    checksum_b64 = head.get("ChecksumSHA256")
+    if checksum_b64:
+        try:
+            digest = base64.b64decode(str(checksum_b64), validate=True)
+        except (ValueError, TypeError):
+            return None
+        if len(digest) == 32:
+            return digest.hex()
+    return None
 
 
 class ArtifactIntegrityError(RuntimeError):
@@ -311,5 +335,98 @@ class ArtifactService:
                 Params={"Bucket": self._bucket, "Key": key},
                 ExpiresIn=expires_in,
             )
+
+        return await asyncio.to_thread(_call)
+
+    async def presigned_put_url(
+        self,
+        workspace_id: str,
+        path: str,
+        *,
+        content_type: str | None = None,
+        sha256_b64: str | None = None,
+        expires_in: int = 3600,
+    ) -> str:
+        """Sign a direct-upload URL against the externally reachable endpoint.
+
+        When ``sha256_b64`` is supplied the digest is bound into the signature
+        as ``ChecksumSHA256``; the object store then rejects a body whose
+        content does not hash to it, so the upload is content-verified without
+        trusting the client.
+        """
+        key = self._key(workspace_id, path)
+
+        def _call() -> str:
+            params: dict[str, Any] = {"Bucket": self._bucket, "Key": key}
+            if content_type is not None:
+                params["ContentType"] = content_type
+            if sha256_b64 is not None:
+                params["ChecksumSHA256"] = sha256_b64
+            return self._public_client.generate_presigned_url(
+                "put_object",
+                Params=params,
+                ExpiresIn=expires_in,
+            )
+
+        return await asyncio.to_thread(_call)
+
+    async def copy_object(
+        self,
+        workspace_id: str,
+        src_path: str,
+        dst_path: str,
+        *,
+        content_type: str,
+        sha256_hex: str,
+    ) -> str:
+        """Server-side same-bucket copy that re-stamps the integrity metadata.
+
+        ``MetadataDirective=REPLACE`` guarantees the destination carries the
+        expected ``sha256`` regardless of what the source object recorded.
+        Returns the destination version id or ETag.
+        """
+        src_key = self._key(workspace_id, src_path)
+        dst_key = self._key(workspace_id, dst_path)
+
+        def _call() -> str:
+            response = self._client.copy_object(
+                Bucket=self._bucket,
+                Key=dst_key,
+                CopySource={"Bucket": self._bucket, "Key": src_key},
+                MetadataDirective="REPLACE",
+                Metadata={"sha256": sha256_hex},
+                ContentType=content_type,
+            )
+            version_id = str(response.get("VersionId") or "")
+            if version_id:
+                return f"version:{version_id}"
+            etag = str((response.get("CopyObjectResult") or {}).get("ETag") or "").strip('"')
+            if etag:
+                return etag
+            head = self._client.head_object(Bucket=self._bucket, Key=dst_key)
+            return str(head.get("ETag") or "").strip('"')
+
+        return await asyncio.to_thread(_call)
+
+    async def head(self, workspace_id: str, path: str) -> dict[str, Any] | None:
+        """Return ``{size, content_type, metadata}`` or ``None`` when absent."""
+        key = self._key(workspace_id, path)
+
+        def _call() -> dict[str, Any] | None:
+            try:
+                resp = self._client.head_object(
+                    Bucket=self._bucket, Key=key, ChecksumMode="ENABLED"
+                )
+            except ClientError as e:
+                code = e.response.get("Error", {}).get("Code")
+                if code in {"NoSuchKey", "404", "NotFound"}:
+                    return None
+                raise
+            return {
+                "size": int(resp.get("ContentLength") or 0),
+                "content_type": resp.get("ContentType"),
+                "metadata": dict(resp.get("Metadata") or {}),
+                "sha256": sha256_hex_from_head(resp),
+            }
 
         return await asyncio.to_thread(_call)

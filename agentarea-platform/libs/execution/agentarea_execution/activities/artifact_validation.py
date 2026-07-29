@@ -193,6 +193,4 @@ async def validate_workspace_artifacts(
         return ArtifactValidationResult(
             state="failed", generation=generation, evidence=evidence, issues=issues
         )
-    if not evidence:
-        return ArtifactValidationResult(state="no_artifacts", generation=generation)
     return ArtifactValidationResult(state="passed", generation=generation, evidence=evidence)
