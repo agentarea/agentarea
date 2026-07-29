@@ -141,7 +141,7 @@ export function getTriggerColor(
   entry?: TriggerCatalogEntry | null,
   trigger?: TriggerLike
 ): string {
-  return TRIGGER_COLOR_BY_KEY[triggerIconKey(entry, trigger)] ?? "#8a5cf6";
+  return TRIGGER_COLOR_BY_KEY[getTriggerSourceKey(entry, trigger)] ?? "#8a5cf6";
 }
 
 /**

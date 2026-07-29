@@ -1305,6 +1305,10 @@
       "byChannel": "Channels",
       "none": "No grouping"
     },
+    "display": {
+      "display": "Display",
+      "grouping": "Grouping"
+    },
     "noTriggers": "No triggers yet",
     "noTriggersDescription": "Create a trigger to automate your agent workflows.",
     "noMatchingTriggers": "No triggers match your search",

@@ -10,20 +10,14 @@ import {
   Inbox,
   Layers,
   Rows3,
-  SlidersHorizontal,
   Tag,
   X,
 } from "lucide-react";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
+import DisplayMenu from "@/components/DisplayMenu/DisplayMenu";
 import EmptyState from "@/components/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { GroupHeader } from "@/components/ui/group-header";
-import { MenuRow, MenuSectionLabel, MenuSeparator } from "@/components/ui/menu-row";
 import { ToolbarButton } from "@/components/ui/toolbar-button";
 import {
   Select,
@@ -332,48 +326,59 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
         </ToolbarButton>
 
         {/* Display menu */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <ToolbarButton icon={SlidersHorizontal} labelClassName="skills-btn-label">
-              {t("display.display")}
-            </ToolbarButton>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-52 p-1.5">
-            <MenuSectionLabel>{t("display.grouping")}</MenuSectionLabel>
-            <MenuRow
-              icon={<Layers className="h-3.5 w-3.5" />}
-              label={t("display.source")}
-              selected={group === "source"}
-              onClick={() => onGroup("source")}
-            />
-            <MenuRow
-              icon={<Tag className="h-3.5 w-3.5" />}
-              label={t("display.scope")}
-              selected={group === "scope"}
-              onClick={() => onGroup("scope")}
-            />
-            <MenuRow
-              icon={<Rows3 className="h-3.5 w-3.5" />}
-              label={t("display.none")}
-              selected={group === "none"}
-              onClick={() => onGroup("none")}
-            />
-            <MenuSeparator />
-            <MenuSectionLabel>{t("display.ordering")}</MenuSectionLabel>
-            <MenuRow
-              icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
-              label={t("display.name")}
-              selected={order === "name"}
-              onClick={() => onOrder("name")}
-            />
-            <MenuRow
-              icon={<Clock className="h-3.5 w-3.5" />}
-              label={t("display.created")}
-              selected={order === "created"}
-              onClick={() => onOrder("created")}
-            />
-          </PopoverContent>
-        </Popover>
+        <DisplayMenu
+          label={t("display.display")}
+          labelClassName="skills-btn-label"
+          sections={[
+            {
+              key: "grouping",
+              label: t("display.grouping"),
+              items: [
+                {
+                  key: "source",
+                  icon: <Layers className="h-3.5 w-3.5" />,
+                  label: t("display.source"),
+                  selected: group === "source",
+                  onSelect: () => onGroup("source"),
+                },
+                {
+                  key: "scope",
+                  icon: <Tag className="h-3.5 w-3.5" />,
+                  label: t("display.scope"),
+                  selected: group === "scope",
+                  onSelect: () => onGroup("scope"),
+                },
+                {
+                  key: "none",
+                  icon: <Rows3 className="h-3.5 w-3.5" />,
+                  label: t("display.none"),
+                  selected: group === "none",
+                  onSelect: () => onGroup("none"),
+                },
+              ],
+            },
+            {
+              key: "ordering",
+              label: t("display.ordering"),
+              items: [
+                {
+                  key: "name",
+                  icon: <ArrowDownAZ className="h-3.5 w-3.5" />,
+                  label: t("display.name"),
+                  selected: order === "name",
+                  onSelect: () => onOrder("name"),
+                },
+                {
+                  key: "created",
+                  icon: <Clock className="h-3.5 w-3.5" />,
+                  label: t("display.created"),
+                  selected: order === "created",
+                  onSelect: () => onOrder("created"),
+                },
+              ],
+            },
+          ]}
+        />
 
         {/* list / grid segment */}
         <HeaderTabs

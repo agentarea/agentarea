@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import TriggersContent from "./components/TriggersContent";
-import TriggersGroupSelect from "./components/TriggersGroupSelect";
+import TriggersDisplayMenu from "./components/TriggersDisplayMenu";
 import TriggersHeaderTabs from "./components/TriggersHeaderTabs";
 import TriggersSkeleton from "./components/TriggersSkeleton";
 import TriggersToolbar from "./components/TriggersToolbar";
@@ -62,7 +62,7 @@ export default async function TriggersPage({
           }
           tabsSlot={
             <div className="flex items-center gap-2">
-              <TriggersGroupSelect currentGroup={groupBy} />
+              <TriggersDisplayMenu currentGroup={groupBy} />
               <TriggersHeaderTabs currentTab={viewMode} />
             </div>
           }
