@@ -43,8 +43,22 @@ spec:
         mcp.agentarea.io/status: "waiting"
         mcp.agentarea.io/package-install: {{ $profile.packageInstall | quote }}
     spec:
-      {{- if has "kata_runtime" $root.Values.mcpManager.features.enabled }}
-      runtimeClassName: kata-qemu
+      {{- /*
+        Sandbox pods run LLM-written shell commands — the least trusted workload
+        on the platform. They take their isolation from mcpManager.runtimeClass,
+        the same value that drives MCP instance pods, so one setting governs both
+        and neither can silently end up weaker than the other.
+
+        Previously this hardcoded `kata-qemu` behind the kata_runtime flag, which
+        pinned the chart to one vendor's runtime and offered nothing to clusters
+        without KVM. The runtime class is now declared, not chosen for you.
+      */ -}}
+      {{- $runtimeClass := $root.Values.mcpManager.runtimeClass }}
+      {{- if and (has "kata_runtime" $root.Values.mcpManager.features.enabled) (not $runtimeClass) }}
+        {{- fail "mcpManager.features.enabled includes kata_runtime but mcpManager.runtimeClass is empty. The runtime class is no longer hardcoded: set mcpManager.runtimeClass explicitly (\"kata-qemu\" to keep the previous behaviour, or \"gvisor\")." }}
+      {{- end }}
+      {{- if $runtimeClass }}
+      runtimeClassName: {{ $runtimeClass | quote }}
       {{- end }}
       serviceAccountName: {{ include "agentarea.mcpRuntimeServiceAccountName" $root }}
       automountServiceAccountToken: false
