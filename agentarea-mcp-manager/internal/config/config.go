@@ -200,6 +200,7 @@ func loadKubernetesConfig() KubernetesConfig {
 	config.Enabled = getEnvBool("KUBERNETES_ENABLED", config.Enabled)
 	config.Namespace = getEnv("KUBERNETES_NAMESPACE", config.Namespace)
 	config.RuntimeClass = getEnv("KUBERNETES_RUNTIME_CLASS", config.RuntimeClass)
+	config.Kubeconfig = getEnv("KUBERNETES_KUBECONFIG", config.Kubeconfig)
 	config.PodServiceAccountName = getEnv("KUBERNETES_POD_SERVICE_ACCOUNT_NAME", config.PodServiceAccountName)
 	config.ImagePullPolicy = getEnv("K8S_IMAGE_PULL_POLICY", config.ImagePullPolicy)
 	config.GatewayName = getEnv("KUBERNETES_GATEWAY_NAME", config.GatewayName)
