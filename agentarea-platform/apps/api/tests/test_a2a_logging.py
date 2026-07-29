@@ -205,14 +205,13 @@ class TestA2ALogging:
 
     def test_a2a_event_enhancement(self):
         """Test that A2A events are enhanced with monitoring information."""
-        from agentarea_common.events.router import RedisRouter
+        from agentarea_common.events.broker import EventBroker
         from agentarea_execution.activities.agent_execution_activities import make_agent_activities
         from agentarea_execution.interfaces import ActivityDependencies
 
         # Mock dependencies
         mock_deps = MagicMock(spec=ActivityDependencies)
-        mock_deps.event_broker = MagicMock(spec=RedisRouter)
-        mock_deps.event_broker.broker = MagicMock()
+        mock_deps.event_broker = MagicMock(spec=EventBroker)
 
         # Create activities
         activities = make_agent_activities(mock_deps)
@@ -246,15 +245,9 @@ class TestA2ALogging:
         }
 
         # Mock the event broker and repository
-        with (
-            patch(
-                "agentarea_common.events.router.create_event_broker_from_router"
-            ) as mock_create_broker,
-            patch("agentarea_execution.activities.dependencies.ActivityContext") as mock_context,
-        ):
-            mock_redis_broker = MagicMock()
-            mock_create_broker.return_value = mock_redis_broker
-
+        with patch(
+            "agentarea_execution.activities.dependencies.ActivityContext"
+        ) as mock_context:
             mock_context_instance = MagicMock()
             mock_context.return_value.__aenter__.return_value = mock_context_instance
             mock_context.return_value.__aexit__.return_value = None

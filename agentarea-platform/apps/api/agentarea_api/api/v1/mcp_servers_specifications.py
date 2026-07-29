@@ -13,7 +13,7 @@ from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerUpdate
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ._access_control_grants import grant_user_relation
+from ._access_control_grants import grant_resource_owner
 
 router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])
 
@@ -73,10 +73,9 @@ async def create_mcp_server(
     mcp_server_service: MCPServerService = Depends(get_mcp_server_service),
 ):
     server = await mcp_server_service.create_mcp_server(data)
-    await grant_user_relation(
-        namespace="MCPServer",
-        object_id=server.id,
-        relation="operators",
+    await grant_resource_owner(
+        resource_id=server.id,
+        workspace_id=user_context.workspace_id,
         user_id=user_context.user_id,
     )
     return MCPServerResponse.from_domain(server)

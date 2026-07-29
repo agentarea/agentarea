@@ -17,7 +17,15 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-from agentarea_execution.models import AgentExecutionRequest, ResolveModelRequest
+from agentarea_execution.models import (
+    AgentConfigRequest,
+    AgentExecutionRequest,
+    LLMCallRequest,
+    ResolveModelRequest,
+    ToolDiscoveryRequest,
+    ToolDiscoveryResult,
+    WorkflowEventsRequest,
+)
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
@@ -59,13 +67,10 @@ def _base_activities(
 
         @activity.defn(name="build_agent_config_activity")
         async def build_agent_config_activity(
-            agent_id: uuid.UUID,
-            execution_context: dict[str, Any] | None = None,
-            step_type: str | None = None,
-            override_model: str | None = None,
+            request: AgentConfigRequest,
         ) -> dict[str, Any]:
             return {
-                "id": str(agent_id),
+                "id": str(request.agent_id),
                 "name": "Test Agent",
                 "model_id": "gpt-4",
                 "instruction": "You are a helpful assistant.",
@@ -78,8 +83,10 @@ def _base_activities(
 
     # ── discover tools ──
     @activity.defn(name="discover_available_tools_activity")
-    async def discover_available_tools_activity(agent_id: uuid.UUID) -> list[dict[str, Any]]:
-        return []
+    async def discover_available_tools_activity(
+        request: ToolDiscoveryRequest,
+    ) -> ToolDiscoveryResult:
+        return ToolDiscoveryResult(tools=[])
 
     # ── resolve model ──
     @activity.defn(name="resolve_model_activity")
@@ -101,10 +108,7 @@ def _base_activities(
 
         @activity.defn(name="call_llm_activity")
         async def call_llm_activity(
-            messages: list[dict[str, Any]],
-            model_id: str,
-            tools: list[dict[str, Any]] | None = None,
-            user_context_data: dict[str, Any] | None = None,
+            request: LLMCallRequest,
         ) -> dict[str, Any]:
             return {
                 "content": "Done.",
@@ -172,11 +176,14 @@ def _make_request(**overrides) -> AgentExecutionRequest:
 
 
 def _extract_error_from_published_events(captured: list[list[str]]) -> str | None:
-    """Find the WorkflowFailed event payload and return its 'error' field."""
+    """Find the failure event payload and return its 'error' field.
+
+    The emit-side canonicalizes ``WorkflowFailed`` to ``task.failed``.
+    """
     for batch in captured:
         for event_json in batch:
             event = json.loads(event_json)
-            if event.get("event_type") == "WorkflowFailed":
+            if event.get("event_type") == "task.failed":
                 return event["data"]["error"]
     return None
 
@@ -204,10 +211,7 @@ class TestWorkflowErrorSanitization:
 
             @activity.defn(name="build_agent_config_activity")
             async def failing_build(
-                agent_id: uuid.UUID,
-                execution_context: dict[str, Any] | None = None,
-                step_type: str | None = None,
-                override_model: str | None = None,
+                request: AgentConfigRequest,
             ) -> dict[str, Any]:
                 raise ValueError(
                     "model_id\n  Input should be a valid string [type=string_type, "
@@ -215,8 +219,8 @@ class TestWorkflowErrorSanitization:
                 )
 
             @activity.defn(name="publish_workflow_events_activity")
-            async def capture_events(events_json: list[str]) -> bool:
-                captured_events.append(events_json)
+            async def capture_events(request: WorkflowEventsRequest) -> bool:
+                captured_events.append(request.events_json)
                 return True
 
             activities = _base_activities(build_agent_config_fn=failing_build)
@@ -257,16 +261,13 @@ class TestWorkflowErrorSanitization:
 
             @activity.defn(name="call_llm_activity")
             async def failing_llm(
-                messages: list[dict[str, Any]],
-                model_id: str,
-                tools: list[dict[str, Any]] | None = None,
-                user_context_data: dict[str, Any] | None = None,
+                request: LLMCallRequest,
             ) -> dict[str, Any]:
                 raise RuntimeError("call_llm: Unauthorized - invalid api_key for provider openai")
 
             @activity.defn(name="publish_workflow_events_activity")
-            async def capture_events(events_json: list[str]) -> bool:
-                captured_events.append(events_json)
+            async def capture_events(request: WorkflowEventsRequest) -> bool:
+                captured_events.append(request.events_json)
                 return True
 
             activities = _base_activities(call_llm_fn=failing_llm)
@@ -306,10 +307,7 @@ class TestWorkflowErrorSanitization:
 
             @activity.defn(name="build_agent_config_activity")
             async def failing_build(
-                agent_id: uuid.UUID,
-                execution_context: dict[str, Any] | None = None,
-                step_type: str | None = None,
-                override_model: str | None = None,
+                request: AgentConfigRequest,
             ) -> dict[str, Any]:
                 raise RuntimeError(
                     "Traceback (most recent call last):\n"
@@ -319,8 +317,8 @@ class TestWorkflowErrorSanitization:
                 )
 
             @activity.defn(name="publish_workflow_events_activity")
-            async def capture_events(events_json: list[str]) -> bool:
-                captured_events.append(events_json)
+            async def capture_events(request: WorkflowEventsRequest) -> bool:
+                captured_events.append(request.events_json)
                 return True
 
             activities = _base_activities(build_agent_config_fn=failing_build)

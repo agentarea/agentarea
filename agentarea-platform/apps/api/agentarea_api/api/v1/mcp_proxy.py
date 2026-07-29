@@ -1,4 +1,4 @@
-"""Per-instance MCP reverse proxy (Streamable HTTP only — no SSE legacy).
+"""Per-instance MCP reverse proxy (Streamable HTTP only — no SSE transport).
 
 Each MCP instance gets a stable governed endpoint:
 
@@ -20,18 +20,24 @@ Dispatch by instance type:
 
 import json
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 import httpx
-from agentarea_api.api.deps.services import BaseSecretManagerDep, DatabaseSessionDep
-from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.tool_authorization import (
-    ToolAuthorizationRequest,
-    authorize_tool_invocation,
+from agentarea_api.api.deps.services import (
+    BaseSecretManagerDep,
+    DatabaseSessionDep,
+    MCPServerInstanceServiceDep,
 )
+from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.tool_authorization import decide_tool_policy
+from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
+from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_mcp.application.auth_service import MCPAuthService
+from agentarea_mcp.application.service import needs_lazy_provisioning
+from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
@@ -40,6 +46,7 @@ from agentarea_mcp.infrastructure.repository import (
 from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import update
 
 logger = logging.getLogger(__name__)
 
@@ -106,8 +113,14 @@ def _iter_jsonrpc_tool_calls(payload: Any) -> list[tuple[str, dict[str, Any]]]:
     return calls
 
 
-async def _authorize_mcp_tool_calls(body: bytes, user_context) -> None:
-    """Deny JSON-RPC tool calls unless the tool authorization PDP allows them."""
+async def _authorize_mcp_tool_calls(body: bytes, user_context, session) -> None:
+    """Deny JSON-RPC tool calls the governance policy does not permit.
+
+    The proxy has no task snapshot, so it resolves the workspace+user policy at
+    request time and runs the same PDP (``decide_tool_policy``) the disclosure,
+    workflow gate, and tool activity use — one authorization vocabulary across
+    every tool path. Resolving here (outside the Temporal sandbox) is fine.
+    """
     if not body:
         return
     try:
@@ -118,16 +131,15 @@ async def _authorize_mcp_tool_calls(body: bytes, user_context) -> None:
     if not tool_calls:
         return
 
-    for tool_name, tool_args in tool_calls:
-        decision = await authorize_tool_invocation(
-            ToolAuthorizationRequest(
-                tool_name=tool_name,
-                tool_args=tool_args,
-                user_id=user_context.user_id,
-                workspace_id=user_context.workspace_id,
-                policy_required=False,
-            )
-        )
+    resolver = GovernancePolicyResolver(RepositoryFactory(session, user_context))
+    snapshot = await resolver.resolve(
+        workspace_id=user_context.workspace_id,
+        user_id=user_context.user_id,
+    )
+    policy = snapshot.to_json_dict()
+
+    for tool_name, _tool_args in tool_calls:
+        decision = decide_tool_policy(policy, tool_name)
         if not decision.allowed:
             raise HTTPException(
                 status_code=403,
@@ -154,9 +166,6 @@ async def _resolve_upstream_url(instance, server_spec) -> tuple[str, str | None]
             instance_type = "docker"
 
     if instance_type == "url":
-        legacy = json_spec.get("endpoint_url") or json_spec.get("url")
-        if legacy:
-            return legacy, instance_type
         if server_spec is not None and getattr(server_spec, "remote_url", None):
             return server_spec.remote_url, instance_type
         spec_json = getattr(server_spec, "json_spec", None) or {}
@@ -207,6 +216,64 @@ def _guard_and_pin_upstream(
     return request_target, target.original_host, extensions
 
 
+_LAST_USED_WRITE_INTERVAL = timedelta(seconds=60)
+
+
+async def _stamp_last_used(db_session, instance) -> None:
+    """Record that this instance is in use, so the reaper leaves it alone.
+
+    The proxy is the only component that observes MCP traffic — Traefik routes
+    the container path directly — so idleness cannot be inferred anywhere else.
+
+    Throttled: a write per proxied call would put the database on the hot path
+    of every tool call for no extra signal. One write per minute per instance is
+    enough to keep an active instance comfortably outside any sane idle window.
+
+    Failing to stamp must never fail the call. The cost of a missed stamp is an
+    instance stopped a little early and lazily restarted on the next request;
+    the cost of raising here is a broken tool call.
+    """
+    now = datetime.now(UTC)
+    previous = instance.last_used_at
+    if previous is not None and now - previous < _LAST_USED_WRITE_INTERVAL:
+        return
+
+    try:
+        await db_session.execute(
+            update(MCPServerInstance)
+            .where(MCPServerInstance.id == instance.id)
+            .values(last_used_at=now)
+        )
+        await db_session.commit()
+    except Exception:
+        logger.warning("Failed to stamp MCP instance last_used_at", exc_info=True)
+
+
+async def _ensure_provisioned(instance, instance_service, db_session) -> None:
+    """Bring a lazily-provisioned instance back up before proxying to it.
+
+    The agent tool path already does this; the proxy did not, because until
+    instances could be stopped there was nothing to bring back. Now that idle
+    instances are reclaimed, a proxy client — a registered CLI harness, say —
+    would otherwise be the one caller that gets a dead upstream instead of a
+    cold start.
+    """
+    if not needs_lazy_provisioning(instance):
+        return
+
+    logger.info(
+        "Lazy MCP provisioning on proxied call: instance=%s",
+        instance.id,
+        extra={"instance_id": str(instance.id)},
+    )
+    await instance_service.verify_instance(instance.id)
+
+    # verify() writes through its own session, so this session still holds the
+    # pre-provisioning row. Without the refresh we would resolve the upstream
+    # from a spec that predates the container we just started.
+    await db_session.refresh(instance)
+
+
 @router.api_route(
     "/{instance_id}/mcp",
     methods=["GET", "POST", "DELETE"],
@@ -217,6 +284,7 @@ async def proxy_instance(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
     secret_manager: BaseSecretManagerDep,
+    instance_service: MCPServerInstanceServiceDep,
 ):
     """Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream."""
     instance_repo = MCPServerInstanceRepository(db_session, user_context)
@@ -224,10 +292,14 @@ async def proxy_instance(
     if instance is None:
         raise HTTPException(status_code=404, detail="MCP instance not found")
 
+    await _ensure_provisioned(instance, instance_service, db_session)
+
     server_spec = None
     if instance.server_spec_id:
         server_repo = MCPServerRepository(db_session, user_context)
         server_spec = await server_repo.get_server_by_id(instance.server_spec_id)
+
+    await _stamp_last_used(db_session, instance)
 
     upstream_url, instance_type = await _resolve_upstream_url(instance, server_spec)
     if not upstream_url:
@@ -271,7 +343,7 @@ async def proxy_instance(
 
     body = await request.body() if request.method in ("POST", "DELETE") else None
     if request.method == "POST" and body is not None:
-        await _authorize_mcp_tool_calls(body, user_context)
+        await _authorize_mcp_tool_calls(body, user_context, db_session)
     params = dict(request.query_params)
 
     client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=None, write=30, pool=10))

@@ -12,10 +12,7 @@ if TYPE_CHECKING:
 class EventBroker(ABC):
     @abstractmethod
     async def publish(self, event: DomainEvent | EventEnvelope | BaseEvent) -> None:
-        """Publish an event through the broker.
-
-        Supports DomainEvent (legacy), EventEnvelope, or typed BaseEvent models.
-        """
+        """Publish an event through the broker."""
         raise NotImplementedError
 
     async def subscribe(self, pattern: str) -> None:

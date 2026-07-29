@@ -157,7 +157,10 @@ async def test_stream_run_on_agent_without_model_emits_model_not_configured(asyn
     agent_service.get_with_catalog = AsyncMock(return_value=_agent(model_id=None))
     wire(svc, agent_service=agent_service)
 
-    resp = await async_client.post(f"/v1/agents/{uuid4()}/tasks/", json={"description": "do x"})
+    resp = await async_client.post(
+        f"/v1/agents/{uuid4()}/tasks/",
+        json={"description": "do x"},
+    )
 
     assert resp.status_code == 200  # SSE stream opens, the error is an event in the body
     assert '"error_type": "model_not_configured"' in resp.text

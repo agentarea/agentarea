@@ -9,6 +9,10 @@ from uuid import uuid4
 
 import pytest
 from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.tool_authorization import (
+    ToolAuthorizationAction,
+    decide_tool_policy,
+)
 from agentarea_common.base.models import BaseModel
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_governance.application import GovernancePolicyResolver
@@ -106,11 +110,100 @@ async def test_resolve_merges_workspace_and_agent_tighter_wins(session_factory):
         )
 
         resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
-        effective = await resolver.resolve(
-            workspace_id=context.workspace_id, agent_id=agent_id
-        )
+        effective = await resolver.resolve(workspace_id=context.workspace_id, agent_id=agent_id)
 
         assert str(effective.budget.monthly_spend_cap_usd) == "25.00"
+
+
+async def test_agent_scoped_approval_rule_reaches_the_pdp_verdict(session_factory):
+    # The per-tool "requires approval" toggle in the agent editor becomes one of
+    # these rows. Everything downstream already exists — this pins the whole
+    # chain: rule -> snapshot -> the verdict the workflow gate acts on.
+    async with session_factory() as session:
+        context = _context()
+        agent_id = uuid4()
+        repo = PolicyRuleRepository(session, context)
+        await repo.create(
+            _rule(
+                PolicySubjectType.WORKSPACE,
+                context.workspace_id,
+                "tool:shell",
+                PolicyEffect.ALLOW,
+            )
+        )
+        await repo.create(
+            _rule(
+                PolicySubjectType.AGENT,
+                str(agent_id),
+                "tool:shell",
+                PolicyEffect.APPROVAL,
+            )
+        )
+
+        resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
+        effective = await resolver.resolve(workspace_id=context.workspace_id, agent_id=agent_id)
+
+        assert "shell" in effective.approval.escalation_rules
+        assert (
+            decide_tool_policy(effective.to_json_dict(), "shell").action
+            is ToolAuthorizationAction.REQUIRE_APPROVAL
+        )
+
+
+async def test_user_scoped_deny_tightens_the_snapshot_for_that_creator(session_factory):
+    # "Disable shell for Alice" — a per-user restriction lives in policy, resolved
+    # at task creation from the task creator. Under default-allow shell needs no
+    # allow rule; the USER-scoped deny is what removes it, and only for this user.
+    async with session_factory() as session:
+        context = _context()
+        agent_id = uuid4()
+        repo = PolicyRuleRepository(session, context)
+        await repo.create(
+            _rule(PolicySubjectType.USER, context.user_id, "tool:shell", PolicyEffect.DENY)
+        )
+
+        resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
+
+        effective = await resolver.resolve(
+            workspace_id=context.workspace_id, agent_id=agent_id, user_id=context.user_id
+        )
+        assert "shell" in (effective.tools.denied if effective.tools else [])
+        assert (
+            decide_tool_policy(effective.to_json_dict(), "shell").action
+            is ToolAuthorizationAction.DENY
+        )
+
+        # A different creator does not carry this user's deny — shell stays allowed.
+        other = await resolver.resolve(
+            workspace_id=context.workspace_id, agent_id=agent_id, user_id="user-other"
+        )
+        assert not (other.tools.denied if other.tools else [])
+        assert (
+            decide_tool_policy(other.to_json_dict(), "shell").action
+            is ToolAuthorizationAction.ALLOW
+        )
+
+
+async def test_disabling_the_rule_is_how_approval_is_waived(session_factory):
+    # No dedicated opt-out field: the resolver reads enabled=True rules only, so
+    # switching the row off removes the escalation. The engine is the opt-out.
+    async with session_factory() as session:
+        context = _context()
+        agent_id = uuid4()
+        repo = PolicyRuleRepository(session, context)
+        rule = _rule(
+            PolicySubjectType.AGENT,
+            str(agent_id),
+            "tool:shell",
+            PolicyEffect.APPROVAL,
+        )
+        rule.enabled = False
+        await repo.create(rule)
+
+        resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
+        effective = await resolver.resolve(workspace_id=context.workspace_id, agent_id=agent_id)
+
+        assert not (effective.approval.escalation_rules if effective.approval else [])
 
 
 async def test_resolve_rejects_agent_loosening(session_factory):
@@ -184,9 +277,7 @@ async def test_resolve_with_tightening_task_policy(session_factory):
         resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
         effective = await resolver.resolve(
             workspace_id=context.workspace_id,
-            task_policy=PolicyDocument(
-                budget=BudgetPolicy(monthly_spend_cap_usd="10.00")
-            ),
+            task_policy=PolicyDocument(budget=BudgetPolicy(monthly_spend_cap_usd="10.00")),
         )
 
         assert str(effective.budget.monthly_spend_cap_usd) == "10.00"

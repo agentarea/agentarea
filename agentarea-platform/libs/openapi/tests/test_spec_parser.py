@@ -55,27 +55,6 @@ SAMPLE_SPEC = {
 }
 
 
-class TestParseOpenAPISpecMethodPath:
-    """parse_openapi_spec must surface HTTP method + path so the UI can render
-    method badges and the request path without re-fetching/re-parsing the spec.
-    """
-
-    def test_includes_method_and_path_per_tool(self):
-        tools = parse_openapi_spec(SAMPLE_SPEC)
-        by_name = {t["name"]: t for t in tools}
-        assert by_name["listUsers"]["method"] == "GET"
-        assert by_name["listUsers"]["path"] == "/users"
-        assert by_name["createUser"]["method"] == "POST"
-        assert by_name["createUser"]["path"] == "/users"
-        assert by_name["getUser"]["method"] == "GET"
-        assert by_name["getUser"]["path"] == "/users/{user_id}"
-
-    def test_method_is_uppercase(self):
-        tools = parse_openapi_spec(SAMPLE_SPEC)
-        for t in tools:
-            assert t["method"] == t["method"].upper()
-
-
 class TestParseOpenAPISpec:
     def test_extracts_all_operations(self):
         tools = parse_openapi_spec(SAMPLE_SPEC)
@@ -310,13 +289,13 @@ class TestParseOpenAPIOperations:
         with pytest.raises(ValueError, match="OpenAPI 3.x"):
             parse_openapi_operations(spec)
 
-    def test_parse_openapi_spec_still_returns_legacy_shape(self):
+    def test_parse_openapi_spec_returns_ui_contract_shape(self):
         """parse_openapi_spec must return {name, description, inputSchema} for UI contract."""
         tools = parse_openapi_spec(SAMPLE_SPEC)
         for t in tools:
             assert "name" in t
             assert "description" in t
             assert "inputSchema" in t
-            # Must NOT have enriched fields in the legacy output
+            # Must NOT have enriched fields in the UI-contract output
             assert "method" not in t
             assert "path" not in t

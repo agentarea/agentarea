@@ -191,6 +191,13 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		Labels:      req.Labels,
 		Environment: req.Environment,
 		Command:     req.Command,
+		Isolation:   req.Isolation,
+	}
+
+	// Refuse rather than silently downgrade: starting third-party code without
+	// the isolation it was assigned is worse than not starting it.
+	if err := m.ensureRuntimeAvailable(ctx, container.Isolation); err != nil {
+		return nil, err
 	}
 
 	// Build container run command (Traefik labels are added automatically)
@@ -554,6 +561,11 @@ func (m *Manager) buildContainerRunArgs(container *models.Container) []string {
 		"--label", fmt.Sprintf("traefik.http.middlewares.%s-strip.stripprefix.prefixes=/mcp/%s", slug, slug),
 		"--label", fmt.Sprintf("traefik.http.routers.%s.middlewares=%s-strip", slug, slug),
 	)
+
+	// Add isolation flags. MCP servers are third-party code; without these the
+	// container runs with the daemon's full default capability set next to the
+	// control plane.
+	args = append(args, isolationRunArgs(container.Isolation)...)
 
 	// Add default resource limits
 	if m.config.Container.DefaultMemoryLimit != "" {

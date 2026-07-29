@@ -3,7 +3,6 @@ import {
   listAccessControlRelationships,
   listSkillCollections,
 } from "@/lib/api";
-import { getAuthContext } from "@/lib/getAuthContext";
 import type {
   AccessControlEdge,
   AccessControlGraph,
@@ -76,17 +75,13 @@ export default async function AccessControlData() {
     count: 0,
   };
   let collections: SkillCollection[] = [];
-  let currentUserId: string | null = null;
 
   try {
-    const [graphRes, relationshipsRes, collectionsRes, authContext] =
-      await Promise.all([
-        getAccessControlGraph(),
-        listAccessControlRelationships(),
-        listSkillCollections(),
-        getAuthContext(),
-      ]);
-    currentUserId = authContext.userId;
+    const [graphRes, relationshipsRes, collectionsRes] = await Promise.all([
+      getAccessControlGraph(),
+      listAccessControlRelationships(),
+      listSkillCollections(),
+    ]);
 
     if (graphRes.error) {
       console.error("Failed to fetch access-control graph:", graphRes.error);
@@ -118,7 +113,6 @@ export default async function AccessControlData() {
       graph={graph}
       relationships={relationships}
       collections={collections}
-      currentUserId={currentUserId}
     />
   );
 }

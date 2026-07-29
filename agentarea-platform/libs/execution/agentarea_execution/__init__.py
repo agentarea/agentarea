@@ -6,8 +6,6 @@ Core Components:
 - Models: Data models for agent task execution
 - Activities: Atomic agent execution activities (focused on LLM and tool execution)
 - Interfaces: Service container for AgentArea service injection
-- TemporalFlow: Custom ADK flow that routes LLM calls through Temporal activities
-- TemporalLlmAgent: LlmAgent that uses TemporalFlow for execution
 - Workflows: LangGraph-based workflows that orchestrate activities
 - LLM Integration: Direct LiteLLM integration for model execution
 - MCP Integration: Tool execution via MCP server instances
@@ -25,7 +23,7 @@ This architecture allows for:
 - Integration with existing AgentArea services
 """
 
-from .interfaces import ActivityDependencies, ActivityServicesInterface
+from .interfaces import ActivityDependencies
 
 # Lazy imports to avoid Temporal sandbox issues.
 # agentarea_execution.models imports agentarea_common.money which triggers
@@ -79,7 +77,6 @@ def create_activities_for_worker(dependencies: ActivityDependencies):
 
 __all__ = [
     "ActivityDependencies",
-    "ActivityServicesInterface",  # Keep for backward compatibility
     "AgentExecutionRequest",
     "AgentExecutionResult",
     "LLMReasoningRequest",

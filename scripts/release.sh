@@ -154,7 +154,7 @@ else
 fi
 
 # ─── DockerHub images ─────────────────────────────────────────────────
-COMPONENTS=(api worker frontend operator mcp-manager mcp-runner events)
+COMPONENTS=(api worker frontend operator mcp-manager mcp-runner mcp-runner-locked events)
 
 if $SKIP_IMAGES; then
   warn "Skipping DockerHub image check (--skip-images)"

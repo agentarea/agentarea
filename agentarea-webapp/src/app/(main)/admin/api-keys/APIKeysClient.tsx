@@ -283,7 +283,7 @@ export default function APIKeysClient({
       <Table data={keys} columns={columns} />
 
       <Dialog open={revokeOpen} onOpenChange={setRevokeOpen}>
-        <DialogContent className="max-w-[400px] overflow-hidden dark:bg-zinc-800">
+        <DialogContent className="max-w-[400px] overflow-hidden">
           <ModalIconBackground type="delete" />
           <DialogHeader className="relative z-10 mt-3">
             <DialogTitle className="pb-2">{t("revoke.title")}</DialogTitle>
@@ -317,7 +317,7 @@ export default function APIKeysClient({
         open={!!newToken}
         onOpenChange={(open) => !open && handleCloseTokenModal()}
       >
-        <DialogContent className="max-w-[530px] overflow-hidden dark:bg-zinc-800">
+        <DialogContent className="max-w-[530px] overflow-hidden">
           <ModalIconBackground type="success" />
           <DialogHeader className="relative z-10 mt-3">
             <DialogTitle className="pb-2">{t("created.title")}</DialogTitle>

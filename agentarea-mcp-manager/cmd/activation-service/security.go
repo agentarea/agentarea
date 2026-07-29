@@ -98,8 +98,10 @@ func ValidateFilePath(baseDir, targetPath string) error {
 	cleanBase := filepath.Clean(baseDir)
 	cleanTarget := filepath.Clean(targetPath)
 
-	// Ensure the target path starts with the base directory
-	if !strings.HasPrefix(cleanTarget, cleanBase) {
+	// Ensure the target is the base dir itself or a path *inside* it. A bare
+	// HasPrefix would also accept a sibling like "/workspace-evil" for base
+	// "/workspace"; require a path-separator boundary.
+	if cleanTarget != cleanBase && !strings.HasPrefix(cleanTarget, cleanBase+string(filepath.Separator)) {
 		return fmt.Errorf("path traversal detected: %s is outside of %s", targetPath, baseDir)
 	}
 

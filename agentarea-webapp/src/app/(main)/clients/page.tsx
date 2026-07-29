@@ -1,24 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+  type ComponentType,
+  type SVGProps,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import type { ClientResponse } from "@/api/client/types.gen";
-import { Plus, Loader2, Bot, Terminal, Plug, type LucideIcon } from "lucide-react";
+import { Plus, Loader2, Plug } from "lucide-react";
+import { ClaudeIcon, CodexIcon } from "@/components/brand-icons";
 import ContentBlock from "@/components/ContentBlock";
 import EmptyState from "@/components/EmptyState/EmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { Badge } from "@/components/ui/badge";
-import { ENTITY_ICONS, EntityIcon } from "@/lib/entity-icons";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
 
 const McpIcon = ENTITY_ICONS.mcp;
 const SkillIcon = ENTITY_ICONS.skill;
 
 // Harness kinds a client can represent. `kind` is set at creation and updated by
 // `agentarea mcp sync --target=<harness>`.
-const HARNESSES: Record<string, { label: string; icon: LucideIcon }> = {
-  claude: { label: "Claude Code", icon: Bot },
-  "claude-code": { label: "Claude Code", icon: Bot },
-  codex: { label: "Codex", icon: Terminal },
+type HarnessIcon = ComponentType<SVGProps<SVGSVGElement>>;
+
+const HARNESSES: Record<string, { label: string; icon: HarnessIcon }> = {
+  claude: { label: "Claude Code", icon: ClaudeIcon },
+  "claude-code": { label: "Claude Code", icon: ClaudeIcon },
+  codex: { label: "Codex", icon: CodexIcon },
   harness: { label: "Generic", icon: Plug },
 };
 
@@ -26,11 +34,21 @@ function harnessOf(kind?: string | null) {
   return HARNESSES[kind ?? ""] ?? { label: kind || "Generic", icon: Plug };
 }
 
+function HarnessIcon({
+  kind,
+  className,
+}: {
+  kind?: string | null;
+  className?: string;
+}) {
+  const { icon: Icon } = harnessOf(kind);
+  return <Icon aria-hidden="true" className={className} />;
+}
+
 function HarnessBadge({ kind }: { kind?: string | null }) {
-  const { label, icon: Icon } = harnessOf(kind);
+  const { label } = harnessOf(kind);
   return (
-    <Badge variant="outline" className="gap-1 text-xs">
-      <Icon className="h-3 w-3" />
+    <Badge variant="outline" className="text-xs">
       {label}
     </Badge>
   );
@@ -123,7 +141,10 @@ export default function ClientsPage() {
       accessor: "name",
       render: (name: string, client: ClientResponse) => (
         <div className="flex items-center gap-2">
-          <EntityIcon kind="client" className="text-primary" />
+          <HarnessIcon
+            kind={client.kind}
+            className="h-5 w-5 shrink-0 text-primary"
+          />
           <div>
             <div className="font-medium">{name}</div>
             {client.description && (
@@ -189,7 +210,10 @@ export default function ClientsPage() {
             cardContent={(client: ClientResponse) => (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2 text-[16px] font-[500]">
-                  <EntityIcon kind="client" className="text-primary" />
+                  <HarnessIcon
+                    kind={client.kind}
+                    className="h-5 w-5 shrink-0 text-primary"
+                  />
                   {client.name}
                 </div>
                 {client.description && (

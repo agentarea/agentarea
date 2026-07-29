@@ -1,6 +1,10 @@
-"""Tests for the single tool invocation authorization PDP."""
+"""Tests for the single tool invocation authorization PDP.
 
-from unittest.mock import AsyncMock
+The resolved policy snapshot (composition + policy) is authoritative: disclosure,
+the workflow gate, and the tool activity read one answer. ``decide_tool_policy``
+is that judgment; ``authorize_tool_invocation`` is the request-shaped wrapper the
+tool activity calls.
+"""
 
 import pytest
 from agentarea_common.auth.tool_authorization import (
@@ -9,74 +13,45 @@ from agentarea_common.auth.tool_authorization import (
     authorize_tool_invocation,
     decide_tool_policy,
 )
-from agentarea_common.config import get_settings
-from agentarea_common.rebac.models import CheckResult
+
+# --- decide_tool_policy: default-allow -----------------------------------------
 
 
-@pytest.fixture(autouse=True)
-def _clear_settings_cache(monkeypatch):
-    monkeypatch.delenv("ACCESS_CONTROL_BACKEND", raising=False)
-    monkeypatch.setenv("WORKFLOW__TEMPORAL_SERVER_URL", "localhost:7233")
-    monkeypatch.setenv("WORKFLOW__TEMPORAL_NAMESPACE", "default")
-    monkeypatch.setenv("WORKFLOW__TEMPORAL_TASK_QUEUE", "test-task-queue")
-    get_settings.cache_clear()
-    yield
-    get_settings.cache_clear()
+def test_policy_allows_an_unrestricted_composed_tool():
+    # A composed tool with no governing policy is allowed — deny-by-default is gone.
+    assert decide_tool_policy(None, "web_search").action is ToolAuthorizationAction.ALLOW
+    assert decide_tool_policy({}, "web_search").action is ToolAuthorizationAction.ALLOW
 
 
-def test_policy_denies_when_allowlist_missing():
-    assert decide_tool_policy(None, "web_search").action is ToolAuthorizationAction.DENY
-    assert decide_tool_policy({}, "web_search").action is ToolAuthorizationAction.DENY
-
-
-def test_policy_deny_beats_allow_all_and_approval():
+def test_policy_deny_beats_allowlist_and_approval():
     policy = {
         "tools": {"allowed": ["*"], "denied": ["shell_exec"]},
         "approval": {"requires_human_approval": True},
     }
 
-    decision = decide_tool_policy(policy, "shell_exec")
-
-    assert decision.action is ToolAuthorizationAction.DENY
+    assert decide_tool_policy(policy, "shell_exec").action is ToolAuthorizationAction.DENY
 
 
-def test_policy_requires_approval_only_after_explicit_allow():
-    policy = {
-        "tools": {"allowed": ["shell_exec"]},
-        "approval": {"escalation_rules": ["shell_exec"]},
-    }
+def test_policy_escalation_requires_approval():
+    policy = {"approval": {"escalation_rules": ["shell_exec"]}}
 
-    decision = decide_tool_policy(policy, "shell_exec")
-
-    assert decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL
-
-
-@pytest.mark.asyncio
-async def test_task_policy_allow_all_bypasses_graph(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "disabled")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-
-    decision = await authorize_tool_invocation(
-        ToolAuthorizationRequest(
-            tool_name="web_search",
-            tool_args={"query": "x"},
-            user_id="u1",
-            workspace_id="ws-1",
-            effective_policy={"tools": {"allowed": ["*"]}},
-        ),
-        openfga_client=openfga,
+    assert decide_tool_policy(policy, "shell_exec").action is (
+        ToolAuthorizationAction.REQUIRE_APPROVAL
     )
 
-    assert decision.action is ToolAuthorizationAction.ALLOW
-    openfga.check.assert_not_awaited()
+
+def test_a_non_empty_allowlist_still_restricts():
+    policy = {"tools": {"allowed": ["web_*"]}}
+
+    assert decide_tool_policy(policy, "web_search").action is ToolAuthorizationAction.ALLOW
+    assert decide_tool_policy(policy, "shell_exec").action is ToolAuthorizationAction.DENY
+
+
+# --- authorize_tool_invocation: the request-shaped policy verdict ---------------
 
 
 @pytest.mark.asyncio
-async def test_scoped_task_policy_denies_when_graph_disabled(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "disabled")
-    get_settings.cache_clear()
-
+async def test_authorize_returns_the_policy_decision():
     decision = await authorize_tool_invocation(
         ToolAuthorizationRequest(
             tool_name="web_search",
@@ -87,112 +62,28 @@ async def test_scoped_task_policy_denies_when_graph_disabled(monkeypatch):
         )
     )
 
-    assert decision.action is ToolAuthorizationAction.DENY
-    assert decision.reason == "OpenFGA tool authorization is disabled"
+    assert decision.action is ToolAuthorizationAction.ALLOW
 
 
 @pytest.mark.asyncio
-async def test_scoped_task_policy_allows_when_graph_allows(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-    openfga.check.return_value = CheckResult(allowed=True)
-
+async def test_authorize_denies_a_policy_denied_tool():
     decision = await authorize_tool_invocation(
         ToolAuthorizationRequest(
-            tool_name="web_search",
-            tool_args={"query": "x"},
+            tool_name="shell",
+            tool_args={},
             user_id="u1",
             workspace_id="ws-1",
-            effective_policy={"tools": {"allowed": ["web_*"]}},
-        ),
-        openfga_client=openfga,
+            effective_policy={"tools": {"denied": ["shell"]}},
+        )
+    )
+
+    assert decision.action is ToolAuthorizationAction.DENY
+
+
+@pytest.mark.asyncio
+async def test_authorize_allows_when_no_policy_restricts():
+    decision = await authorize_tool_invocation(
+        ToolAuthorizationRequest(tool_name="shell", tool_args={}, effective_policy=None)
     )
 
     assert decision.action is ToolAuthorizationAction.ALLOW
-    openfga.check.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_scoped_task_policy_denies_when_graph_denies(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-    openfga.check.return_value = CheckResult(allowed=False)
-
-    decision = await authorize_tool_invocation(
-        ToolAuthorizationRequest(
-            tool_name="web_search",
-            tool_args={"query": "x"},
-            user_id="u1",
-            workspace_id="ws-1",
-            effective_policy={"tools": {"allowed": ["web_*"]}},
-        ),
-        openfga_client=openfga,
-    )
-
-    assert decision.action is ToolAuthorizationAction.DENY
-    assert decision.reason == "OpenFGA denied this tool invocation"
-
-
-@pytest.mark.asyncio
-async def test_scoped_task_policy_requires_user_id(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-
-    decision = await authorize_tool_invocation(
-        ToolAuthorizationRequest(
-            tool_name="web_search",
-            tool_args={"query": "x"},
-            effective_policy={"tools": {"allowed": ["web_*"]}},
-        ),
-        openfga_client=openfga,
-    )
-
-    assert decision.action is ToolAuthorizationAction.DENY
-    assert decision.reason == "missing user_id for tool authorization"
-    openfga.check.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_scoped_task_policy_requires_workspace_id(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-
-    decision = await authorize_tool_invocation(
-        ToolAuthorizationRequest(
-            tool_name="web_search",
-            tool_args={"query": "x"},
-            user_id="u1",
-            effective_policy={"tools": {"allowed": ["web_*"]}},
-        ),
-        openfga_client=openfga,
-    )
-
-    assert decision.action is ToolAuthorizationAction.DENY
-    assert decision.reason == "missing workspace_id for tool authorization"
-    openfga.check.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_direct_proxy_graph_only_mode_does_not_require_task_policy(monkeypatch):
-    monkeypatch.setenv("ACCESS_CONTROL_BACKEND", "openfga")
-    get_settings.cache_clear()
-    openfga = AsyncMock()
-    openfga.check.return_value = CheckResult(allowed=True)
-
-    decision = await authorize_tool_invocation(
-        ToolAuthorizationRequest(
-            tool_name="github.create_issue",
-            tool_args={"repo": "acme/app"},
-            user_id="u1",
-            workspace_id="ws-1",
-            policy_required=False,
-        ),
-        openfga_client=openfga,
-    )
-
-    assert decision.action is ToolAuthorizationAction.ALLOW
-    openfga.check.assert_awaited_once()

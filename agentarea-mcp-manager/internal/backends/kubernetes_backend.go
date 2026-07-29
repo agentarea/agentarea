@@ -18,8 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -37,14 +35,9 @@ type KubernetesBackend struct {
 
 // NewKubernetesBackend creates a new Kubernetes backend
 func NewKubernetesBackend(cfg *config.Config, logger *slog.Logger) (*KubernetesBackend, error) {
-	// Get Kubernetes configuration
-	k8sConfig, err := rest.InClusterConfig()
+	k8sConfig, err := resolveClusterConfig(cfg.Kubernetes.Kubeconfig, logger)
 	if err != nil {
-		// Fallback to kubeconfig
-		k8sConfig, err = ctrl.GetConfig()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get kubernetes config: %w", err)
-		}
+		return nil, err
 	}
 
 	// Create controller-runtime client

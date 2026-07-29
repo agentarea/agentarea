@@ -129,7 +129,9 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
     },
     # ``task_policy`` is a governance-set field (budget/policy snapshot applied by
     # the caller/PEP), not an agent-facing kwarg — agents don't set their own policy.
-    "runs.start": {"task_policy"},
+    # ``package_install`` is likewise a runtime-policy field (whether the sandbox may
+    # install packages), set by policy/governance rather than chosen per tool call.
+    "runs.start": {"task_policy", "package_install"},
     "projects.create": set(),
     "projects.update": set(),
     "providers.create_config": set(),

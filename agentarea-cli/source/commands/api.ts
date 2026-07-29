@@ -1,7 +1,9 @@
 import * as sdk from '@agentarea/api-client';
-import {taskService} from '../services/task.js';
-import {sseService} from '../services/sse.js';
-import {type TaskOutputEvent} from '../types/index.js';
+import {
+	streamTaskEvents,
+	submitTaskStream,
+	TASK_FAILED,
+} from '../services/sse.js';
 import {printJson, reportResult, type SdkResult} from './output.js';
 
 type SdkFn = (options?: unknown) => Promise<SdkResult>;
@@ -91,12 +93,21 @@ export async function runTasksSubmit(
 		}
 	}
 
-	const task = await taskService.submitTask({
-		agentId,
-		title: description,
-		parameters,
-	});
-	printJson(task);
+	try {
+		for await (const event of submitTaskStream(agentId, {
+			description,
+			parameters,
+		})) {
+			printJson(event);
+			if (event.event_type === TASK_FAILED) {
+				return 1;
+			}
+		}
+	} catch (error) {
+		console.error(`Failed to submit task: ${(error as Error).message}`);
+		return 1;
+	}
+
 	return 0;
 }
 
@@ -109,34 +120,17 @@ export async function runTasksWatch(
 		return 1;
 	}
 
-	return new Promise<number>(resolve => {
-		let settled = false;
-		const done = (code: number) => {
-			if (!settled) {
-				settled = true;
-				sseService.disconnect(taskId);
-				resolve(code);
+	try {
+		for await (const event of streamTaskEvents(agentId, taskId)) {
+			printJson(event);
+			if (event.event_type === TASK_FAILED) {
+				return 1;
 			}
-		};
+		}
+	} catch (error) {
+		console.error(`Failed to watch task: ${(error as Error).message}`);
+		return 1;
+	}
 
-		sseService
-			.connect(
-				agentId,
-				taskId,
-				(event: TaskOutputEvent) => {
-					printJson(event);
-					if (event.eventType === 'complete' || event.eventType === 'error') {
-						done(0);
-					}
-				},
-				(error: Error) => {
-					console.error(`Stream error: ${error.message}`);
-					done(1);
-				},
-			)
-			.catch((error: unknown) => {
-				console.error(`Failed to watch task: ${(error as Error).message}`);
-				done(1);
-			});
-	});
+	return 0;
 }

@@ -5,12 +5,16 @@ into the workflow's RetryPolicy, so a missing agent/model fails fast instead of
 exhausting the retry budget.
 """
 
+from agentarea_execution.activities.event_publisher import _is_non_retryable_error
 from agentarea_execution.exceptions import (
     AgentNotFoundError,
     ModelInstanceNotFoundError,
     PermanentError,
 )
-from agentarea_execution.workflows.constants import DEFAULT_RETRY_ATTEMPTS
+from agentarea_execution.workflows.constants import (
+    DEFAULT_RETRY_ATTEMPTS,
+    LLM_RETRY_ATTEMPTS,
+)
 from agentarea_execution.workflows.retry import (
     NON_RETRYABLE_ERROR_TYPES,
     make_retry_policy,
@@ -51,3 +55,28 @@ def test_make_retry_policy_wires_non_retryable_types():
 
 def test_make_retry_policy_respects_custom_attempts():
     assert make_retry_policy(2).maximum_attempts == 2
+
+
+def test_llm_calls_retry_transient_failures():
+    """LLM calls must allow more than one attempt, else no transient failure
+    (rate limit, network) is ever retried regardless of classification."""
+    assert LLM_RETRY_ATTEMPTS > 1
+
+
+def test_rate_limit_is_retryable_even_when_message_says_exceeded():
+    """A 429 'rate limit exceeded' must retry — the quota check's broad
+    'exceeded' match must not swallow it into fail-fast."""
+    assert _is_non_retryable_error(Exception("429 Rate limit exceeded, retry")) is False
+    assert _is_non_retryable_error(Exception("Too Many Requests")) is False
+
+
+def test_transient_errors_are_retryable():
+    assert _is_non_retryable_error(TimeoutError("request timeout")) is False
+    assert _is_non_retryable_error(ConnectionError("connection reset")) is False
+    assert _is_non_retryable_error(Exception("503 service unavailable")) is False
+
+
+def test_permanent_llm_errors_fail_fast():
+    assert _is_non_retryable_error(Exception("401 unauthorized: invalid api key")) is True
+    assert _is_non_retryable_error(Exception("insufficient balance, please recharge")) is True
+    assert _is_non_retryable_error(Exception("model gpt-x does not exist")) is True

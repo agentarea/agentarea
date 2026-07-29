@@ -586,6 +586,23 @@
     "myConnections": "My Connections",
     "myActiveServers": "My Connections",
     "browseSpecifications": "Browse MCP Specifications",
+    "addConnectionDialog": {
+      "trigger": "Add Connection",
+      "title": "Add a connection",
+      "description": "Choose how you want to expose tools to your agents.",
+      "catalog": {
+        "title": "Browse Catalog",
+        "description": "Connect a ready-made integration (Asana, GitHub, …) from the catalog."
+      },
+      "mcp": {
+        "title": "Connect MCP Server",
+        "description": "Create a reusable connection from a Docker image, command, or hosted URL."
+      },
+      "openapi": {
+        "title": "OpenAPI Connection",
+        "description": "Wrap a REST API as agent tools by importing its OpenAPI / Swagger spec."
+      }
+    },
     "filters": {
       "type": "Type",
       "category": "Category"
@@ -901,6 +918,7 @@
     "title": "Tasks",
     "description": "Description",
     "agent": "Agent",
+    "source": "Source",
     "statusLabel": "Status",
     "created": "Created",
     "cost": "Cost",
@@ -920,6 +938,8 @@
       "completed": "Completed",
       "success": "Success",
       "inputRequired": "Input Required",
+      "approvalRequired": "Approval Required",
+      "continuationRequired": "Continuation Required",
       "failed": "Failed",
       "error": "Error",
       "blocked": "Blocked",
@@ -1281,6 +1301,10 @@
       "webhook": "Webhook",
       "button": "Filter"
     },
+    "group": {
+      "byChannel": "Channels",
+      "none": "No grouping"
+    },
     "noTriggers": "No triggers yet",
     "noTriggersDescription": "Create a trigger to automate your agent workflows.",
     "noMatchingTriggers": "No triggers match your search",
@@ -1292,7 +1316,9 @@
       "status": "Status",
       "nextRun": "Next Run",
       "lastRun": "Last Run",
-      "created": "Created"
+      "created": "Created",
+      "channel": "Channel",
+      "when": "When"
     },
     "type": {
       "cron": "Cron",
@@ -1377,6 +1403,7 @@
   "NetworkPage": {
     "title": "Network",
     "description": "Visual overview of your workspace topology",
+    "topology": "Topology",
     "accessGraph": "Access Graph",
     "dataFlow": "Data Flow",
     "organization": "Organization"
@@ -1683,5 +1710,34 @@
     "periodLast30": "Last 30 days",
     "periodMonthToDate": "Month to date",
     "periodLast90": "Last 90 days"
+  },
+  "BudgetsPage": {
+    "couldntLoadTitle": "Couldn't load budget data",
+    "monthOutlook": "Month outlook",
+    "currentPeriod": "Current period",
+    "today": "Today",
+    "todaySub": "Spend so far today",
+    "projectedEom": "Projected end of month",
+    "projectedSub": "Based on {days}-day run rate",
+    "monthlyCap": "Monthly cap",
+    "capProjected": "{pct}% of cap projected",
+    "capNotSet": "Not set",
+    "noProjection": "No projection",
+    "hintUnderCap": "Projection stays well under cap — no action needed this period.",
+    "hintNearCap": "Projection is approaching the cap — keep an eye on spend.",
+    "hintOverCap": "Projection exceeds the cap — new tasks may be refused before month end.",
+    "hintNoCap": "No monthly cap is set — workspace spend is uncapped.",
+    "capTitle": "Workspace monthly cap",
+    "capDesc": "New tasks are refused once month-to-date spend reaches this amount.",
+    "capNoCap": "No cap is set. Workspace spend can continue without a monthly stop.",
+    "capUsed": "{amount} used",
+    "capOfTotal": "{pct}% of {cap}",
+    "capField": "Monthly cap (USD)",
+    "capPlaceholder": "No cap",
+    "save": "Save",
+    "capNote": "Changes apply immediately across the workspace.",
+    "capUpdated": "Workspace monthly cap updated.",
+    "capInvalid": "Enter a positive number, or leave it empty to remove the cap.",
+    "capUpdateFailed": "Failed to update workspace cap"
   }
 }

@@ -6,7 +6,7 @@ import logging.config
 from typing import Any, cast
 
 from ..auth.context import UserContext
-from .filters import LogSanitizerFilter, WorkspaceContextFilter
+from .filters import LogSanitizerFilter, SecretRedactingFilter, WorkspaceContextFilter
 
 
 class WorkspaceContextFormatter(logging.Formatter):
@@ -31,6 +31,19 @@ class WorkspaceContextFormatter(logging.Formatter):
         trace_ids = _current_trace_ids()
         if trace_ids:
             log_entry.update(trace_ids)
+
+        # The whole point of logger.exception()/exc_info=True is the cause; this
+        # formatter replaces the base class's rendering, so it has to carry the
+        # traceback itself or the reason is silently dropped. json.dumps escapes
+        # the embedded newlines, so the record stays one physical line.
+        # exc_text first: it is the cache filters redact into. Re-rendering
+        # from exc_info would undo that and put the secret back.
+        if record.exc_text:
+            log_entry["exception"] = record.exc_text
+        elif record.exc_info:
+            log_entry["exception"] = self.formatException(record.exc_info)
+        if record.stack_info:
+            log_entry["stack"] = self.formatStack(record.stack_info)
 
         # Add audit event data if present
         if hasattr(record, "audit_event"):
@@ -102,13 +115,17 @@ def setup_logging(
             "sanitize": {
                 "()": LogSanitizerFilter,
             },
+            "redact_secrets": {
+                "()": SecretRedactingFilter,
+            },
         },
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
                 "level": level,
                 "formatter": "structured" if enable_structured_logging else "standard",
-                "filters": (["workspace_context"] if user_context else []) + ["sanitize"],
+                "filters": (["workspace_context"] if user_context else [])
+                + ["redact_secrets", "sanitize"],
                 "stream": "ext://sys.stdout",
             }
         },
@@ -124,6 +141,39 @@ def setup_logging(
     }
 
     logging.config.dictConfig(config)
+    install_log_filters()
+
+
+def install_log_filters() -> None:
+    """Put the redacting AND sanitizing filters on every handler that exists right now.
+
+    Handler filters only run for records reaching THAT handler, so registering them
+    on our console handler leaves anything logging through its own handlers —
+    uvicorn, gunicorn, a library that configured logging first — unprotected.
+    uvicorn in particular gives uvicorn.access/uvicorn.error their own handlers with
+    propagate=False, so those records never reach ours: without this they would keep
+    both the secrets and the CR/LF an attacker can use to forge log lines.
+    Re-run this after any code that adds handlers.
+    """
+    for logger in (
+        logging.getLogger(),
+        *(
+            logging.getLogger(name)
+            for name in list(logging.Logger.manager.loggerDict)
+            if isinstance(logging.getLogger(name), logging.Logger)
+        ),
+    ):
+        for handler in logger.handlers:
+            # Normalize rather than append. The console handler declares
+            # redact-then-sanitize, and only adding whichever filter is missing
+            # would invert that order on a handler that already carried the
+            # sanitizer — leaving the documented order and the real one apart.
+            others = [
+                f
+                for f in handler.filters
+                if not isinstance(f, SecretRedactingFilter | LogSanitizerFilter)
+            ]
+            handler.filters = [*others, SecretRedactingFilter(), LogSanitizerFilter()]
 
 
 def _current_trace_ids() -> dict[str, str]:

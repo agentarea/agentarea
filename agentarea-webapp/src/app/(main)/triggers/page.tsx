@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import TriggersContent from "./components/TriggersContent";
+import TriggersGroupSelect from "./components/TriggersGroupSelect";
 import TriggersHeaderTabs from "./components/TriggersHeaderTabs";
 import TriggersSkeleton from "./components/TriggersSkeleton";
 import TriggersToolbar from "./components/TriggersToolbar";
@@ -21,7 +22,6 @@ export default async function TriggersPage({
   const t = await getTranslations("TriggersPage");
   const resolvedSearchParams = await searchParams;
 
-  // Read tab from URL or fallback to cookie
   const cookieStore = await cookies();
   const cookieTab = cookieStore.get("tab_triggers")?.value;
   const viewMode =
@@ -39,6 +39,11 @@ export default async function TriggersPage({
       ? resolvedSearchParams.type
       : "all";
 
+  const groupBy =
+    resolvedSearchParams.group === "none"
+      ? ("none" as const)
+      : ("channel" as const);
+
   return (
     <ContentBlock
       header={{
@@ -55,18 +60,24 @@ export default async function TriggersPage({
               <TriggersTypeFilterSection currentType={typeFilter} />
             </Suspense>
           }
-          tabsSlot={<TriggersHeaderTabs currentTab={viewMode} />}
+          tabsSlot={
+            <div className="flex items-center gap-2">
+              <TriggersGroupSelect currentGroup={groupBy} />
+              <TriggersHeaderTabs currentTab={viewMode} />
+            </div>
+          }
         />
 
         <div className="min-h-0 flex-1 overflow-auto px-4 py-5">
           <Suspense
-            key={`${viewMode}-${searchQuery}-${typeFilter}`}
+            key={`${viewMode}-${searchQuery}-${typeFilter}-${groupBy}`}
             fallback={<TriggersSkeleton viewMode={viewMode} />}
           >
             <TriggersContent
               viewMode={viewMode}
               searchQuery={searchQuery}
               typeFilter={typeFilter}
+              groupBy={groupBy}
             />
           </Suspense>
         </div>

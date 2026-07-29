@@ -1,17 +1,9 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
-import {
-  Bot,
-  Check,
-  Clock,
-  Pause,
-  Play,
-  Square,
-} from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
+import { Bot, Check, Clock, Pause, Play, Square } from "lucide-react";
 import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import AgentChat from "@/components/Chat/AgentChat";
-import type { ChatMessage } from "@/components/Chat/hooks/useChatMessages";
 import { Button } from "@/components/ui/button";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
 import { StatusIndicator } from "@/components/ui/status-indicator";
@@ -19,7 +11,7 @@ import { getTaskStatusPresentation } from "@/lib/status";
 import {
   cancelTask,
   changeTaskModel,
-  getTaskMessages,
+  continueTask,
   getTaskStatus,
   listTaskModelOptions,
   pauseTask,
@@ -61,7 +53,6 @@ interface Props {
 
 export default function AgentTaskClient({ agent, taskId, task }: Props) {
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [modelInstances, setModelInstances] = useState<ModelInstanceResponse[]>(
     []
@@ -72,24 +63,21 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
   const [changingModel, setChangingModel] = useState(false);
   const [modelApplied, setModelApplied] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
+  const [continuationIterations, setContinuationIterations] = useState("10");
+  const [continuationBudget, setContinuationBudget] = useState("");
+  const [continuing, setContinuing] = useState(false);
+  const [continuationError, setContinuationError] = useState<string | null>(
+    null
+  );
 
   const loadTaskData = useCallback(async () => {
     setLoading(true);
     try {
-      // Load task status
+      // Load task status. The conversation itself is streamed by AgentChat
+      // (live events), so no separate message fetch is needed here.
       const statusResponse = await getTaskStatus(agent.id, taskId);
       if (statusResponse.data) {
         setTaskStatus(statusResponse.data as TaskStatus);
-      }
-
-      // Load task messages if available
-      try {
-        const messagesResponse = await getTaskMessages(agent.id, taskId);
-        if (messagesResponse.data) {
-          setMessages(messagesResponse.data as ChatMessage[]);
-        }
-      } catch {
-        // Messages endpoint might not exist yet, that's okay
       }
     } catch {
       // Failed to load task data
@@ -164,8 +152,43 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
     }
   };
 
+  const handleContinue = async () => {
+    const iterations = Number.parseInt(continuationIterations, 10);
+    const budget = continuationBudget.trim();
+    if (
+      !Number.isInteger(iterations) ||
+      iterations < 0 ||
+      (iterations === 0 && !budget)
+    ) {
+      setContinuationError("Grant at least one iteration or a budget top-up.");
+      return;
+    }
+
+    setContinuing(true);
+    setContinuationError(null);
+    try {
+      const result = await continueTask(
+        taskId,
+        iterations,
+        budget || undefined
+      );
+      if (result.error) {
+        setContinuationError(
+          "The task is no longer waiting, or the grant does not lift its limit."
+        );
+        return;
+      }
+      await loadTaskData();
+    } catch (error) {
+      console.error("Failed to continue task:", error);
+      setContinuationError("Couldn't continue the task. Please try again.");
+    } finally {
+      setContinuing(false);
+    }
+  };
+
   const getStatusBadge = () => {
-    const status = task?.status || taskStatus?.status;
+    const status = taskStatus?.status || task?.status;
     const presentation = getTaskStatusPresentation(status || "unknown");
 
     return (
@@ -180,9 +203,8 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
     );
   };
 
-  const isActiveTask = ["running", "paused", "blocked"].includes(
-    task?.status || taskStatus?.status || ""
-  );
+  const currentStatus = taskStatus?.status || task?.status || "";
+  const isActiveTask = ["running", "paused", "blocked"].includes(currentStatus);
 
   // The model-switch signal only lands on a live workflow. A conversational
   // task (e.g. Telegram) writes "completed" to the DB after each reply but
@@ -225,7 +247,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
             {getStatusBadge()}
             {isActiveTask && (
               <div className="flex gap-1">
-                {task?.status === "running" && (
+                {currentStatus === "running" && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -235,7 +257,8 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
                     Pause
                   </Button>
                 )}
-                {(task?.status === "paused" || task?.status === "blocked") && (
+                {(currentStatus === "paused" ||
+                  currentStatus === "blocked") && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -257,6 +280,57 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
             )}
           </div>
         </div>
+
+        {currentStatus === "waiting_for_continuation" && (
+          <div className="mb-4 space-y-3 rounded-md border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+            <div>
+              <p className="text-sm font-medium text-amber-950 dark:text-amber-100">
+                This task reached its iteration or budget limit.
+              </p>
+              <p className="text-xs text-amber-800 dark:text-amber-300">
+                Grant only the resources you want it to use. The workflow waits
+                for up to 24 hours.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="space-y-1 text-xs font-medium text-gray-700 dark:text-gray-200">
+                Additional iterations
+                <input
+                  className="block h-9 w-32 rounded-md border border-gray-300 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
+                  min="0"
+                  max="1000"
+                  type="number"
+                  value={continuationIterations}
+                  onChange={(event) =>
+                    setContinuationIterations(event.target.value)
+                  }
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-gray-700 dark:text-gray-200">
+                Budget top-up (USD, optional)
+                <input
+                  className="block h-9 w-44 rounded-md border border-gray-300 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
+                  min="0.01"
+                  step="0.01"
+                  type="number"
+                  value={continuationBudget}
+                  onChange={(event) =>
+                    setContinuationBudget(event.target.value)
+                  }
+                />
+              </label>
+              <Button size="sm" onClick={handleContinue} disabled={continuing}>
+                <Play className="mr-2 h-4 w-4" />
+                {continuing ? "Continuing…" : "Continue task"}
+              </Button>
+            </div>
+            {continuationError && (
+              <p className="text-xs text-red-700 dark:text-red-300">
+                {continuationError}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* On-the-fly model switch — only while the workflow is actually live
             (running, incl. the follow-up window), so the signal can land. */}
@@ -344,7 +418,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
         <AgentChat
           agent={agent}
           taskId={taskId}
-          initialMessages={messages}
+          status={taskStatus?.status || task?.status}
           className="w-full border-0"
           height="600px"
         />

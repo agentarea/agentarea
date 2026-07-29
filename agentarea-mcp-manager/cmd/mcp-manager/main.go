@@ -21,14 +21,16 @@ import (
 	"github.com/agentarea/mcp-manager/internal/environment"
 	"github.com/agentarea/mcp-manager/internal/events"
 	"github.com/agentarea/mcp-manager/internal/features"
+	"github.com/agentarea/mcp-manager/internal/mcpidle"
 	"github.com/agentarea/mcp-manager/internal/providers"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
+	"github.com/agentarea/mcp-manager/internal/sandboxplacement"
 	"github.com/agentarea/mcp-manager/internal/sandboxrunner"
 	"github.com/agentarea/mcp-manager/internal/secrets"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
 
-const version = "0.0.12"
+const version = "0.0.13"
 
 // backendAdapter adapts the backends.Backend interface to providers.Backend interface
 // to avoid import cycles between providers and backends packages
@@ -113,7 +115,11 @@ func main() {
 		logger.Info("Using forced environment", slog.String("environment", cfg.Environment))
 	}
 
-	envType := environment.DetectEnvironment(cfg.Environment, logger)
+	envType, err := environment.DetectEnvironment(cfg.Environment, logger)
+	if err != nil {
+		logger.Error("Refusing to start", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 	logger.Info("Environment detected", slog.String("type", envType))
 
 	switch envType {
@@ -199,7 +205,7 @@ func main() {
 	if features.IsEnabled(features.WarmPool) {
 		if k8sBackend, ok := backend.(*backends.KubernetesBackend); ok {
 			if wpClient := k8sBackend.GetWarmPoolClient(); wpClient != nil {
-				startSandboxWorkflowGC(ctx, logger, wpClient)
+				startSandboxTaskGC(ctx, logger, wpClient)
 			}
 		}
 	}
@@ -209,6 +215,12 @@ func main() {
 	// so Kubernetes, which runs a dedicated agentarea-sandbox-runner, keeps all
 	// execution work out of the (more privileged) control plane.
 	startEmbeddedSandboxRunner(ctx, cfg, backend, logger)
+
+	// Reclaim MCP instances nobody is calling. Lazy provisioning starts them on
+	// demand; without this half they are never stopped again. It runs against
+	// whichever backend was selected above, so docker and Kubernetes share one
+	// lifecycle rather than only the one that happened to get a sweeper.
+	go mcpidle.Run(ctx, cfg, backend, logger)
 
 	// Start HTTP server
 	server := &http.Server{
@@ -345,14 +357,14 @@ func getLogLevel(level string) slog.Level {
 	}
 }
 
-func startSandboxWorkflowGC(ctx context.Context, logger *slog.Logger, client *warmpool.Client) {
-	interval := getDurationEnv("SANDBOX_WORKFLOW_GC_INTERVAL", 30*time.Second)
+func startSandboxTaskGC(ctx context.Context, logger *slog.Logger, client *warmpool.Client) {
+	interval := getDurationEnv("SANDBOX_TASK_GC_INTERVAL", 30*time.Second)
 	if interval <= 0 {
-		logger.Info("Sandbox workflow GC disabled")
+		logger.Info("Sandbox task GC disabled")
 		return
 	}
 
-	logger.Info("Starting sandbox workflow GC", slog.Duration("interval", interval))
+	logger.Info("Starting sandbox task GC", slog.Duration("interval", interval))
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -361,13 +373,13 @@ func startSandboxWorkflowGC(ctx context.Context, logger *slog.Logger, client *wa
 			case <-ctx.Done():
 				return
 			case now := <-ticker.C:
-				deleted, err := client.DeleteExpiredWorkflowPods(ctx, now.UTC())
+				deleted, err := client.DeleteExpiredTaskPods(ctx, now.UTC())
 				if err != nil {
-					logger.Warn("Sandbox workflow GC failed", slog.String("error", err.Error()))
+					logger.Warn("Sandbox task GC failed", slog.String("error", err.Error()))
 					continue
 				}
 				if deleted > 0 {
-					logger.Info("Sandbox workflow GC deleted expired pods", slog.Int("deleted", deleted))
+					logger.Info("Sandbox task GC deleted expired pods", slog.Int("deleted", deleted))
 				}
 			}
 		}
@@ -398,13 +410,31 @@ func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, backend
 		return
 	}
 
-	runner := sandboxrunner.New(sandboxrunner.ConfigFromEnv(), store, executor, logger)
+	providerName := os.Getenv("SANDBOX_PROVIDER_NAME")
+	if providerName == "" {
+		providerName = "docker"
+	}
+	placer, err := sandboxplacement.NewRegistry(sandboxplacement.Target{
+		Executor: executor,
+		Capabilities: sandboxplacement.Capabilities{
+			Name:   providerName,
+			Region: os.Getenv("SANDBOX_REGION"),
+		},
+	})
+	if err != nil {
+		logger.Warn("Embedded sandbox runner not started: placement registry invalid", slog.String("error", err.Error()))
+		return
+	}
+
+	runner := sandboxrunner.NewWithPlacer(sandboxrunner.ConfigFromEnv(), store, placer, logger)
 	go func() {
 		if err := runner.Run(ctx); err != nil && err != context.Canceled {
 			logger.Error("Embedded sandbox runner stopped", slog.String("error", err.Error()))
 		}
 	}()
-	logger.Info("Embedded sandbox runner started")
+	logger.Info("Embedded sandbox runner started",
+		slog.String("sandbox_target", providerName),
+		slog.String("sandbox_region", os.Getenv("SANDBOX_REGION")))
 }
 
 func getDurationEnv(name string, fallback time.Duration) time.Duration {

@@ -1,0 +1,53 @@
+---
+- name: Add gVisor apt GPG key
+  ansible.builtin.get_url:
+    url: https://gvisor.dev/archive.key
+    dest: /etc/apt/keyrings/gvisor.asc
+    mode: "0644"
+
+- name: Add gVisor apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ apt_arch }} signed-by=/etc/apt/keyrings/gvisor.asc]
+      https://storage.googleapis.com/gvisor/releases release main
+    filename: gvisor
+    state: present
+
+- name: Install runsc (gVisor)
+  ansible.builtin.apt:
+    name:
+      - runsc
+    update_cache: true
+    state: present
+
+- name: Register runsc runtime + hardening defaults in daemon.json
+  ansible.builtin.template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+    validate: python3 -c "import json,sys; json.load(open('%s'))"
+  notify: Restart docker
+
+- name: Apply daemon.json now (flush handlers before the executor starts)
+  ansible.builtin.meta: flush_handlers
+
+# runsc fails hard if the platform (systrap) cannot initialize on this kernel.
+# Prove it at provision time against a public image, not in production. Retries
+# the pull to ride out transient registry hiccups, then asserts the container
+# actually booted the gVisor kernel (dmesg banner).
+- name: Smoke-test that runsc actually runs a container under gVisor
+  ansible.builtin.shell: |
+    set -o pipefail
+    out=""
+    for i in 1 2 3 4 5; do
+      if out=$(docker run --rm --runtime=runsc {{ sandbox_runsc_smoketest_image }} dmesg 2>&1); then
+        break
+      fi
+      sleep 6
+    done
+    printf '%s\n' "$out"
+    printf '%s' "$out" | grep -qi 'gvisor'
+  args:
+    executable: /bin/bash
+  register: _runsc_smoke
+  changed_when: false

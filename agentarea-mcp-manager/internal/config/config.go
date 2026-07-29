@@ -71,6 +71,18 @@ type ContainerConfig struct {
 	DefaultMemoryLimit string `json:"default_memory_limit"`
 	DefaultCPULimit    string `json:"default_cpu_limit"`
 
+	// DefaultIsolationTier is the confinement applied to instances whose spec
+	// does not name one. It defaults to "standard" rather than "trusted"
+	// because the containers this manager starts are third-party MCP servers.
+	DefaultIsolationTier string `json:"default_isolation_tier"`
+
+	// MCPIdleTimeout stops a lazily-provisioned instance whose container has
+	// gone unused for this long; the next call provisions it again. Zero
+	// disables reaping, which is the pre-existing behaviour of running forever.
+	MCPIdleTimeout time.Duration `json:"mcp_idle_timeout"`
+	// MCPIdleSweepInterval is how often the reaper looks for idle instances.
+	MCPIdleSweepInterval time.Duration `json:"mcp_idle_sweep_interval"`
+
 	// SandboxExecutorURL is the HTTP endpoint of the sandbox-executor data
 	// plane used by the docker backend (dev/compose). When set, sandbox
 	// executions are routed here instead of a Kubernetes warm pod.
@@ -111,6 +123,13 @@ func Load() *Config {
 			DefaultMemoryLimit: getEnv("DEFAULT_MEMORY_LIMIT", "512m"),
 			DefaultCPULimit:    getEnv("DEFAULT_CPU_LIMIT", "1.0"),
 			SandboxExecutorURL: getEnv("SANDBOX_EXECUTOR_URL", ""),
+
+			DefaultIsolationTier: getEnv("DEFAULT_ISOLATION_TIER", IsolationStandard),
+
+			// Off by default: enabling reaping changes how long an instance
+			// lives, so an operator opts in rather than discovering it.
+			MCPIdleTimeout:       getEnvDuration("MCP_IDLE_TIMEOUT", 0),
+			MCPIdleSweepInterval: getEnvDuration("MCP_IDLE_SWEEP_INTERVAL", 60*time.Second),
 		},
 		Logging: LoggingConfig{
 			Level:  getEnv("LOG_LEVEL", "INFO"),
@@ -121,7 +140,7 @@ func Load() *Config {
 		},
 		CoreAPIURL:  getEnv("CORE_API_URL", "http://localhost:8000"),
 		Kubernetes:  loadKubernetesConfig(),
-		Environment: getEnv("BACKEND_ENVIRONMENT", ""),
+		Environment: backendEnvironment(),
 		Features:    loadFeaturesConfig(),
 	}
 }
@@ -181,6 +200,7 @@ func loadKubernetesConfig() KubernetesConfig {
 	config.Enabled = getEnvBool("KUBERNETES_ENABLED", config.Enabled)
 	config.Namespace = getEnv("KUBERNETES_NAMESPACE", config.Namespace)
 	config.RuntimeClass = getEnv("KUBERNETES_RUNTIME_CLASS", config.RuntimeClass)
+	config.Kubeconfig = getEnv("KUBERNETES_KUBECONFIG", config.Kubeconfig)
 	config.PodServiceAccountName = getEnv("KUBERNETES_POD_SERVICE_ACCOUNT_NAME", config.PodServiceAccountName)
 	config.ImagePullPolicy = getEnv("K8S_IMAGE_PULL_POLICY", config.ImagePullPolicy)
 	config.GatewayName = getEnv("KUBERNETES_GATEWAY_NAME", config.GatewayName)

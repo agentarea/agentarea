@@ -161,8 +161,8 @@ async def test_delete_collection(session_factory):
 # ---------------------------------------------------------------------------
 
 
-async def test_api_add_skill_without_session_graph(session_factory, monkeypatch):
-    monkeypatch.setattr(skill_collections, "get_graph_client", lambda: None)
+async def test_api_add_skill_is_db_only(session_factory):
+    """Collection membership is organizational metadata; no graph write happens."""
     async with session_factory() as session:
         context = _context()
         service = SkillCollectionService(RepositoryFactory(session, context))
@@ -178,30 +178,6 @@ async def test_api_add_skill_without_session_graph(session_factory, monkeypatch)
 
         repo = SkillCollectionRepository(session, context)
         assert await repo.skill_count(collection.id) == 1
-
-
-async def test_api_add_skill_writes_graph_relationship(session_factory, monkeypatch):
-    graph = AsyncMock()
-    monkeypatch.setattr(skill_collections, "get_graph_client", lambda: graph)
-    async with session_factory() as session:
-        context = _context()
-        service = SkillCollectionService(RepositoryFactory(session, context))
-        collection = await service.create(name="Pack")
-        skill = await _make_skill(session, context, "S")
-
-        await skill_collections.add_skill_to_collection(
-            collection.id,
-            skill_collections.AddSkillRequest(skill_id=skill.id),
-            context,
-            session,
-        )
-
-        graph.write_tuple.assert_awaited_once()
-        written = graph.write_tuple.call_args.args[0]
-        assert written.namespace == "Skill"
-        assert written.object == str(skill.id)
-        assert written.relation == "collections"
-        assert written.subject_id == f"SkillCollection:{collection.id}"
 
 
 # ---------------------------------------------------------------------------
@@ -250,12 +226,12 @@ async def test_graph_builds_edges_from_graph_relationships(session_factory, monk
         graph = AsyncMock()
 
         async def fake_query_all(query):
-            if query.namespace == "SkillCollection":
+            if query.namespace == "resource":
                 return [
                     RelationTuple(
-                        namespace="SkillCollection",
+                        namespace="resource",
                         object=str(collection.id),
-                        relation="editors",
+                        relation="writer",
                         subject_id=f"Agent:{agent.id}",
                     )
                 ]
@@ -309,12 +285,12 @@ async def test_relationships_maps_collection_grant(session_factory, monkeypatch)
         graph = AsyncMock()
 
         async def fake_query_all(query):
-            if query.namespace == "SkillCollection":
+            if query.namespace == "resource":
                 return [
                     RelationTuple(
-                        namespace="SkillCollection",
+                        namespace="resource",
                         object=str(collection.id),
-                        relation="editors",
+                        relation="writer",
                         subject_id=f"Agent:{agent.id}",
                     )
                 ]
@@ -328,7 +304,9 @@ async def test_relationships_maps_collection_grant(session_factory, monkeypatch)
 
         assert result.count == 1
         item = result.relationships[0]
+        assert item.namespace == "SkillCollection"
         assert item.object_name == "Pack"
+        assert item.relation == "editor"
         assert item.subject_kind == "agent"
         assert item.subject_name == "Writer"
         assert item.fanout == 1
@@ -345,18 +323,18 @@ async def test_relationships_filters_cross_workspace_tuples(session_factory, mon
         graph = AsyncMock()
 
         async def fake_query_all(query):
-            if query.namespace == "SkillCollection":
+            if query.namespace == "resource":
                 return [
                     RelationTuple(
-                        namespace="SkillCollection",
+                        namespace="resource",
                         object=str(collection.id),
-                        relation="viewers",
+                        relation="reader",
                         subject_id=f"User:{context.user_id}",
                     ),
                     RelationTuple(
-                        namespace="SkillCollection",
+                        namespace="resource",
                         object=str(uuid4()),
-                        relation="viewers",
+                        relation="reader",
                         subject_id="User:other-workspace-user",
                     ),
                 ]
@@ -372,7 +350,7 @@ async def test_relationships_filters_cross_workspace_tuples(session_factory, mon
         assert result.relationships[0].object == str(collection.id)
 
 
-async def test_resolve_computes_collection_path(session_factory, monkeypatch):
+async def test_resolve_computes_direct_grant_path(session_factory, monkeypatch):
     async with session_factory() as session:
         context = _context()
         agent = Agent(
@@ -385,10 +363,7 @@ async def test_resolve_computes_collection_path(session_factory, monkeypatch):
         await session.commit()
         await session.refresh(agent)
 
-        service = SkillCollectionService(RepositoryFactory(session, context))
-        collection = await service.create(name="Pack")
         skill = await _make_skill(session, context, "S")
-        await service.add_skill(collection.id, skill.id)
 
         from agentarea_common.rebac import CheckResult, RelationTuple
 
@@ -396,12 +371,12 @@ async def test_resolve_computes_collection_path(session_factory, monkeypatch):
         graph.check.return_value = CheckResult(allowed=True)
 
         async def fake_query_all(query):
-            if query.namespace == "SkillCollection":
+            if query.namespace == "resource":
                 return [
                     RelationTuple(
-                        namespace="SkillCollection",
-                        object=str(collection.id),
-                        relation="editors",
+                        namespace="resource",
+                        object=str(skill.id),
+                        relation="writer",
                         subject_id=f"Agent:{agent.id}",
                     )
                 ]
@@ -424,8 +399,8 @@ async def test_resolve_computes_collection_path(session_factory, monkeypatch):
         assert len(result.paths) == 1
         path = result.paths[0]
         assert path.relation == "editor"
-        assert [h.kind for h in path.hops] == ["agent", "collection"]
-        assert path.rels == ["editor", "contains"]
+        assert [h.kind for h in path.hops] == ["agent", "skill"]
+        assert path.rels == ["editor"]
 
 
 async def test_check_rejects_object_outside_workspace(session_factory, monkeypatch):

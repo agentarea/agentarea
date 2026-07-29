@@ -584,22 +584,22 @@ class RegistryService:
 
     @staticmethod
     def _parse_mcp_servers(data: dict[str, Any]) -> list[dict[str, Any]]:
-        """Parse MCP servers from either standard registry format or legacy format.
+        """Parse MCP servers from the standard registry format.
 
         Standard format (registry.modelcontextprotocol.io):
             {"servers": [{"server": {"name": ..., "remotes": [...], "packages": [...]}, "_meta": {...}}]}
-        Legacy format:
-            {"servers": [{"registry_id": ..., "connection_type": ..., "json_spec": {...}}]}
         """
         servers = data.get("servers", [])
         if not servers:
             return []
 
-        # Detect format: standard has nested "server" key
         first = servers[0]
-        if "server" in first:
-            return RegistryService._parse_standard_mcp_registry(servers)
-        return RegistryService._parse_legacy_mcp_servers(servers)
+        if "server" not in first:
+            raise ValueError(
+                "Unrecognized MCP registry format: each entry of 'servers' must contain a "
+                f"'server' key (got keys: {sorted(first)})"
+            )
+        return RegistryService._parse_standard_mcp_registry(servers)
 
     @staticmethod
     def _parse_standard_mcp_registry(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -746,45 +746,6 @@ class RegistryService:
         return items
 
     @staticmethod
-    def _parse_legacy_mcp_servers(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Parse legacy agentarea format (registry_id + connection_type + json_spec)."""
-        items = []
-        for entry in servers:
-            external_id = entry.get("registry_id", entry.get("name", ""))
-            if not external_id:
-                continue
-
-            conn_type = entry.get("connection_type", "url")
-            json_spec = entry.get("json_spec", {})
-
-            ext_id = f"{external_id}/{conn_type}" if conn_type != "url" else external_id
-
-            tags = []
-            if entry.get("package_registry"):
-                tags.append(entry["package_registry"])
-            if entry.get("requires_auth"):
-                tags.append("requires-auth")
-            transport = entry.get("transport") or json_spec.get("transport", "")
-            if transport:
-                tags.append(transport)
-
-            spec = {**json_spec, "connection_type": conn_type}
-            if entry.get("env_schema"):
-                spec["env_schema"] = entry["env_schema"]
-
-            items.append(
-                {
-                    "external_id": ext_id,
-                    "name": external_id,
-                    "description": (entry.get("description") or "")[:500],
-                    "version": entry.get("version") or "latest",
-                    "spec": spec,
-                    "tags": tags,
-                }
-            )
-        return items
-
-    @staticmethod
     def _parse_skills(data: dict[str, Any]) -> list[dict[str, Any]]:
         skills = data.get("skills", [])
         items = []
@@ -889,8 +850,7 @@ class RegistryService:
                         # Catalog is global; model instances are per-workspace. Carry
                         # model *preferences* (slugs, priority order) — never a concrete
                         # ``model_id`` (instance UUID), which is resolved per workspace
-                        # at install time. Falls back to legacy ``model_id`` slugs from
-                        # not-yet-resynced catalog data.
+                        # at install time.
                         "preferred_models": _agent_preferred_models(entry),
                         "tools": tools,
                         "planning": entry.get("planning", False),
@@ -933,18 +893,10 @@ class RegistryService:
 
 
 def _agent_preferred_models(entry: dict[str, Any]) -> list[str]:
-    """Extract a catalog agent's preferred model slugs in priority order.
-
-    Prefers the ``preferred_models`` list. Older catalog entries stored a single
-    model slug under ``model_id`` (e.g. ``"gpt-4o"``) — never an instance UUID —
-    so that is accepted as a one-element fallback for backward compatibility.
-    """
+    """Extract a catalog agent's preferred model slugs in priority order."""
     preferred = entry.get("preferred_models")
     if isinstance(preferred, list):
         return [m for m in preferred if isinstance(m, str) and m]
-    legacy = entry.get("model_id")
-    if isinstance(legacy, str) and legacy:
-        return [legacy]
     return []
 
 

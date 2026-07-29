@@ -148,7 +148,7 @@ class TestA2AEndpoints:
 
         # Well-known endpoints should be accessible
         # (may return 404 if agent doesn't exist, or 422 if validation fails first)
-        response = client.get(f"/v1/agents/{agent_id}/.well-known/agent.json")
+        response = client.get(f"/v1/agents/{agent_id}/.well-known/agent-card.json")
 
         # Should NOT be 401 or 403 (these endpoints use A2A auth, not JWT)
         # May be 404 (not found), 422 (validation), or 200 (success)

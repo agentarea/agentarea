@@ -3,11 +3,7 @@
 from decimal import Decimal
 
 import pytest
-
-from agentarea_execution.workflows.models import (
-    AgentGoal,
-    ContinueAsNewState,
-)
+from agentarea_execution.workflows.models import AgentGoal, ContinueAsNewState
 
 
 class TestContinueAsNewState:
@@ -113,3 +109,75 @@ class TestContinueAsNewState:
         data = sample_state.model_dump()
         assert isinstance(data["messages"][0], dict)
         assert data["messages"][0]["role"] == "system"
+
+    def test_pending_queues_default_empty(self, sample_state):
+        """Queue fields default to empty so old payloads keep deserializing."""
+        data = sample_state.model_dump()
+        restored = ContinueAsNewState(**data)
+
+        assert restored.message_queue == []
+        assert restored.pending_escalations == {}
+        assert restored.pending_input_requests == {}
+        assert restored.a2ui_action_queue == []
+        assert restored.awaiting_input is False
+        assert restored.paused is False
+        assert restored.workflow_metadata == {}
+
+    def test_pending_queues_roundtrip(self, sample_goal):
+        """Undrained queues and HITL state must survive continue-as-new."""
+        from agentarea_execution.workflows.models import PendingEscalation
+
+        state = ContinueAsNewState(
+            execution_id="exec-1",
+            agent_id="agent-1",
+            task_id="task-1",
+            user_id="user-1",
+            workspace_id="ws-1",
+            goal=sample_goal,
+            messages=[],
+            agent_config={},
+            available_tools=[],
+            current_iteration=3,
+            total_cost=0.0,
+            message_queue=[{"id": "m1", "content": "queued reply"}],
+            pending_escalations={
+                "esc-1": PendingEscalation(
+                    escalation_id="esc-1",
+                    tool_call_id="call-1",
+                    tool_name="dangerous_tool",
+                    resolved=True,
+                    approved=True,
+                )
+            },
+            pending_input_requests={
+                "inp-1": {"resolved": True, "submission": {"answers": {"a": "b"}}, "questions": []}
+            },
+            a2ui_action_queue=[{"name": "click", "surface_id": "s1"}],
+            awaiting_input=True,
+            paused=True,
+            pause_reason="user pause",
+            workflow_metadata={
+                "source": "agent_delegation",
+                "workspace_manifest_ref": {"generation": 7, "manifest_sha256": "abc"},
+            },
+            validation_state="failed",
+            validation_repair_attempts=1,
+        )
+
+        restored = ContinueAsNewState(**state.model_dump())
+
+        assert restored.message_queue == [{"id": "m1", "content": "queued reply"}]
+        assert restored.pending_escalations["esc-1"].approved is True
+        assert restored.pending_escalations["esc-1"].tool_name == "dangerous_tool"
+        assert restored.pending_input_requests["inp-1"]["submission"] == {"answers": {"a": "b"}}
+        assert restored.a2ui_action_queue == [{"name": "click", "surface_id": "s1"}]
+        assert restored.awaiting_input is True
+        assert restored.paused is True
+        assert restored.pause_reason == "user pause"
+        assert restored.workflow_metadata == {
+            "source": "agent_delegation",
+            "workspace_manifest_ref": {"generation": 7, "manifest_sha256": "abc"},
+        }
+        assert restored.validation_state == "failed"
+        assert restored.validation_repair_attempts == 1
+        assert restored.validation_terminal is False

@@ -1,5 +1,6 @@
 """Helper classes and utilities for agent execution workflows."""
 
+import re
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, cast
@@ -8,6 +9,7 @@ from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
     decide_tool_policy,
 )
+from agentarea_common.events.contract import canonical_type, ensure_terminal_message
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
@@ -25,7 +27,7 @@ def resolve_effective_budget(
 ) -> Money | None:
     """Single source of truth for the run budget.
 
-    The legacy ``request.budget_usd`` and the governance policy ceiling
+    The per-request ``request.budget_usd`` and the governance policy ceiling
     (``effective_policy.budget.run_budget_usd``) are reconciled so the
     loop-level PEP (BudgetTracker) and the call-level PEP (CostBudgetGuard)
     enforce the same number. The tightest of the two wins — a lower ceiling
@@ -56,8 +58,23 @@ def policy_requires_approval(effective_policy: dict[str, Any] | None, tool_name:
 
 
 def policy_approvers(effective_policy: dict[str, Any] | None) -> list[str]:
-    """Subject refs allowed to approve, from ApprovalPolicy.approvers."""
+    """Global subject refs allowed to approve, from ApprovalPolicy.approvers."""
     return list(((effective_policy or {}).get("approval") or {}).get("approvers") or [])
+
+
+def approvers_for_tool(effective_policy: dict[str, Any] | None, tool_name: str) -> list[str]:
+    """Subject refs allowed to approve a specific tool.
+
+    Per-tool approvers (ApprovalPolicy.approvers_by_tool) win when present, so a
+    tool signed off by one team does not inherit another tool's approvers. Falls
+    back to the global approvers list, and finally to empty (any member — the
+    existing soft default, see issue #198).
+    """
+    approval = (effective_policy or {}).get("approval") or {}
+    per_tool = (approval.get("approvers_by_tool") or {}).get(tool_name)
+    if per_tool:
+        return list(per_tool)
+    return list(approval.get("approvers") or [])
 
 
 class ToolAction(StrEnum):
@@ -78,6 +95,53 @@ def decide_tool_action(effective_policy: dict[str, Any] | None, tool_name: str) 
     return ToolAction.DENY
 
 
+# Workflow control flow, not capabilities: these tools reach no external system,
+# are never policy-gated on execution, and must survive a deny-by-default policy
+# — without completion the agent can never finish, without request_user_input it
+# can never ask. Keep in sync with the ungated branches of _execute_tool_calls.
+CONTROL_FLOW_TOOLS = frozenset(
+    {
+        "completion",
+        "task_complete",
+        "request_user_input",
+        "recall_history",
+        "read_tool_output",
+        "activate_tool_source",
+        "load_tools",
+    }
+)
+
+
+def tool_definition_name(tool: dict[str, Any]) -> str | None:
+    """Read a tool's name from either definition shape (OpenAI function or bare)."""
+    if tool.get("type") == "function":
+        return cast(dict[str, Any], tool.get("function") or {}).get("name")
+    return tool.get("name")
+
+
+def filter_disclosed_tools(
+    effective_policy: dict[str, Any] | None, tools: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Offer the model only the capability tools policy would actually let it call.
+
+    Disclosure is a PDP decision, not a presentation detail: showing a tool the
+    gate will reject pollutes the context with capabilities the agent cannot
+    have and invites calls that can only fail. Tools needing approval stay
+    disclosed — the gate escalates them to a human rather than rejecting them.
+    """
+    disclosed: list[dict[str, Any]] = []
+    for tool in tools:
+        name = tool_definition_name(tool)
+        if not name:
+            continue
+        if name in CONTROL_FLOW_TOOLS:
+            disclosed.append(tool)
+            continue
+        if decide_tool_action(effective_policy, name) is not ToolAction.DENY:
+            disclosed.append(tool)
+    return disclosed
+
+
 def caller_can_approve(approvers: list[str], caller_user_id: str) -> bool:
     """Whether the caller may resolve an escalation.
 
@@ -89,6 +153,97 @@ def caller_can_approve(approvers: list[str], caller_user_id: str) -> bool:
     if not approvers:
         return True
     return bool(caller_user_id) and f"user:{caller_user_id}" in approvers
+
+
+_EVENT_CONTENT_KEYS = frozenset(
+    {
+        "base64",
+        "blob",
+        "body",
+        "bytes",
+        "code",
+        "content",
+        "contents",
+        "data",
+        "file_content",
+        "payload",
+        "result",
+        "script",
+        "stderr",
+        "stdout",
+    }
+)
+_EVENT_SECRET_KEYS = frozenset(
+    {"api_key", "authorization", "credential", "password", "secret", "token"}
+)
+_BASE64_LIKE = re.compile(r"^[A-Za-z0-9+/=_-]{256,}$")
+_MAX_EVENT_STRING_CHARS = 2000
+
+
+def _event_omission(value: Any) -> str:
+    size = len(value) if isinstance(value, str | bytes | bytearray) else 0
+    return f"[omitted from event log: {size} units]"
+
+
+def _looks_binary_or_bulk(value: str) -> bool:
+    if len(value) > _MAX_EVENT_STRING_CHARS or _BASE64_LIKE.fullmatch(value):
+        return True
+    if "\x00" in value:
+        return True
+    controls = sum(ord(character) < 32 and character not in "\n\r\t" for character in value)
+    return bool(value) and controls / len(value) > 0.02
+
+
+def sanitize_tool_event_value(value: Any, *, field_name: str = "", _depth: int = 0) -> Any:
+    """Bound event metadata without file bodies, secrets, or binary blobs.
+
+    This helper applies only to Redis/DB event projections. Activities and the
+    LLM still receive the original tool arguments and results.
+    """
+    if _depth >= 10:
+        return "[nested value omitted from event log]"
+    normalized_name = field_name.lower()
+    if any(fragment in normalized_name for fragment in _EVENT_SECRET_KEYS):
+        return "[redacted]"
+    if normalized_name in _EVENT_CONTENT_KEYS:
+        return _event_omission(value)
+    if normalized_name == "command":
+        return _event_omission(value)
+    if isinstance(value, str):
+        return _event_omission(value) if _looks_binary_or_bulk(value) else value
+    if isinstance(value, bytes | bytearray):
+        return _event_omission(value)
+    if isinstance(value, dict):
+        return {
+            str(key): sanitize_tool_event_value(item, field_name=str(key), _depth=_depth + 1)
+            for key, item in list(value.items())[:100]
+        }
+    if isinstance(value, list | tuple):
+        return [sanitize_tool_event_value(item, _depth=_depth + 1) for item in value[:100]]
+    if value is None or isinstance(value, bool | int | float):
+        return value
+    return f"[{type(value).__name__} omitted from event log]"
+
+
+def _bounded_llm_display_content(value: Any) -> str:
+    if not isinstance(value, str):
+        return str(sanitize_tool_event_value(value, field_name="llm_content"))
+    if len(value) <= _MAX_EVENT_STRING_CHARS:
+        return value
+    omitted = len(value) - _MAX_EVENT_STRING_CHARS
+    return f"{value[:_MAX_EVENT_STRING_CHARS]}\n[truncated {omitted} characters from event log]"
+
+
+def _sanitize_llm_completed_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Keep display text useful while making nested LLM event data bounded."""
+    sanitized = dict(data)
+    sanitized["content"] = _bounded_llm_display_content(data.get("content", ""))
+    sanitized["tool_calls"] = sanitize_tool_event_value(data.get("tool_calls", []))
+    if "thinking" in sanitized:
+        sanitized["thinking"] = sanitize_tool_event_value(
+            sanitized["thinking"], field_name="thinking"
+        )
+    return sanitized
 
 
 class EventManager:
@@ -105,17 +260,38 @@ class EventManager:
         self._pending_events: list[dict[str, Any]] = []
 
     def add_event(self, event_type: str, data: dict[str, Any]) -> None:
-        """Add an event to the workflow event log."""
+        """Add an event to the workflow event log.
+
+        The ``EventTypes`` constants already hold canonical dotted names, so the
+        wire speaks one vocabulary. ``canonical_type`` is applied defensively
+        (it only strips a leading ``workflow.`` prefix; a no-op for canonical
+        inputs).
+
+        Terminal events (completed/failed/cancelled) get a user-facing
+        ``message`` (and ``reason``) so a client attaching after completion
+        renders the final state from catch-up alone. No-op for other types.
+        """
+        event_type = canonical_type(event_type)
+        if event_type == "llm.call.completed":
+            data = _sanitize_llm_completed_data(data)
+        elif event_type == "tool.result":
+            sanitized = sanitize_tool_event_value(data)
+            if not isinstance(sanitized, dict):
+                raise ValueError("tool result event data must be a mapping")
+            data = sanitized
         event = {
             "event_id": str(uuid4()),
             "event_type": event_type,
             "timestamp": datetime.now(UTC).isoformat(),
-            "data": {
-                "task_id": self.task_id,
-                "agent_id": self.agent_id,
-                "execution_id": self.execution_id,
-                **data,
-            },
+            "data": ensure_terminal_message(
+                event_type,
+                {
+                    "task_id": self.task_id,
+                    "agent_id": self.agent_id,
+                    "execution_id": self.execution_id,
+                    **data,
+                },
+            ),
         }
         if self.publish_immediately:
             # Add only to pending events for immediate publishing; NOT to _events
@@ -176,6 +352,22 @@ class BudgetTracker:
         added = to_money(amount)
         self.cost += added
         workflow.logger.info(f"Added cost: ${added}, total: ${self.cost}")
+
+    def set_limit(self, amount: Money | float) -> None:
+        """Replace the inference budget with a validated positive limit."""
+        limit = to_money(amount)
+        if limit <= ZERO:
+            raise ValueError("budget limit must be greater than zero")
+        self.budget_limit = limit
+        self._warning_sent = False
+
+    def add_budget(self, amount: Money | float) -> None:
+        """Increase the inference budget without changing accumulated cost."""
+        additional = to_money(amount)
+        if additional <= ZERO:
+            raise ValueError("additional budget must be greater than zero")
+        self.budget_limit += additional
+        self._warning_sent = False
 
     def get_remaining(self) -> Money:
         """Get remaining budget."""

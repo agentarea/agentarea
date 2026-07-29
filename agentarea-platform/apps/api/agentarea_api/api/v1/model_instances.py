@@ -278,10 +278,15 @@ async def validate_model_instance(
                 model_name=model_name,
             )
 
-        # Prepare endpoint URL defaults
+        if provider_type == "ollama_chat" and not endpoint_url:
+            return ModelInstanceTestResponse(
+                success=False,
+                message="An Ollama endpoint URL is required. Configure the endpoint explicitly.",
+                error_type="MissingEndpoint",
+                provider_type=provider_type,
+                model_name=model_name,
+            )
         resolved_endpoint_url = endpoint_url
-        if not resolved_endpoint_url and provider_type == "ollama_chat":
-            resolved_endpoint_url = "http://host.docker.internal:11434"
 
         logger.info(f"Testing LLM configuration via SDK: {provider_type}/{model_name}")
 

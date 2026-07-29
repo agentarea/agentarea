@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useTaskEvents } from "@/hooks/useTaskEvents";
+import { useTaskEvents } from "@/lib/events/useTaskEvents";
 import type { DisplayEvent, EventLevel } from "@/types/events";
 import { useTaskContext } from "../TaskContext";
 
@@ -83,7 +83,7 @@ export default function TaskEventsPage() {
   const [levelFilter, setLevelFilter] = useState<EventLevel | "all">("all");
 
   const {
-    events,
+    rawEvents: events,
     loading: eventsLoading,
     error: eventsError,
     connected,

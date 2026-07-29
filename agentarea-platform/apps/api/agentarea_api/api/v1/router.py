@@ -40,7 +40,6 @@ from . import (
     registries,
     skill_collections,
     skills,
-    tool_access,
     triggers,
     wallet,
     workspace_config,
@@ -116,10 +115,6 @@ protected_v1_router.include_router(bundles.router)
 protected_v1_router.include_router(skill_collections.router)
 
 protected_v1_router.include_router(access_control.router, prefix="/access-control")
-
-# Tool invocation grants/checks. This is the public product API; callers should
-# not write graph relationships directly for tool access.
-protected_v1_router.include_router(tool_access.router)
 
 # MCP Auth Configs - PROTECTED
 protected_v1_router.include_router(mcp_auth_configs.router)

@@ -100,6 +100,12 @@ global:
     # Storage type (s3, rustfs, gcs)
     type: "rustfs"
     endpoint: ""  # Auto-set from rustfs service if empty
+    # Client-reachable endpoint used to sign presigned URLs for browser-direct
+    # uploads/downloads. Leave empty to fall back to the internal endpoint
+    # (works only when the object store is itself reachable from the browser,
+    # e.g. local dev). Required in prod whenever the object store's internal
+    # endpoint is cluster-only.
+    publicEndpoint: ""
     bucket: "agentarea-documents"
     region: "us-east-1"
     # S3 settings
@@ -115,6 +121,11 @@ global:
     rustfs:
       accessKey: ""
       secretKey: ""
+    # CORS rule applied to the artifacts bucket during bootstrap, required for
+    # browser-direct presigned uploads. Leave allowedOrigins empty to skip
+    # (no-op) -- e.g. when the object store is not browser-reachable.
+    cors:
+      allowedOrigins: []
 
   # Temporal configuration - Workflow engine
   temporal:
@@ -502,6 +513,25 @@ mcpManager:
     type: ClusterIP
     port: 80
 
+  # Serverless MCP instances: a container-backed instance is started on its
+  # first call and reclaimed once it has gone idle, instead of running from
+  # creation until it is deleted.
+  #
+  # Off by default. Enabling changes two user-visible things: an instance's
+  # first call pays a cold start, and creating a connection no longer verifies
+  # it immediately — a bad image or a missing variable surfaces on first use
+  # rather than in the form. That is a product decision, not a chart upgrade.
+  #
+  # Only instances created while this is on are serverless; the choice is
+  # recorded per instance, so turning it on does not retroactively change the
+  # lifetime of instances that already exist.
+  serverless:
+    enabled: false
+    # How long an instance may go uncalled before its workload is reclaimed.
+    idleTimeout: "10m"
+    # How often to look for idle instances.
+    sweepInterval: "60s"
+
   # Egress restriction for spawned MCP instance pods (which may run untrusted,
   # user-supplied images). Denies cluster-internal + cloud-metadata egress while
   # allowing DNS + public internet. CIDRs are configurable so this is not pinned
@@ -557,13 +587,25 @@ mcpManager:
     name: "envoy-gateway"              # Name of the Gateway resource
     namespace: "envoy-gateway-system"  # Namespace where Gateway is deployed
   
-  # Runtime configuration for VM isolation (optional)
-  # Set to "kata-qemu" for Kata Containers (requires Kata runtime)
-  # Leave empty "" for standard container runtime
+  # Container runtime class for every workload that executes code we did not
+  # write: MCP server instances AND agent sandbox pods. One setting governs
+  # both, so the sandbox can never end up less confined than an MCP server.
+  #
+  #   "gvisor"    — gVisor/runsc. Needs no KVM or nested virtualization, so it
+  #                 works on ordinary cloud VMs. Requires runsc + the containerd
+  #                 shim installed on the nodes and a matching RuntimeClass.
+  #   "kata-qemu" — Kata Containers. A real kernel per pod, but requires KVM,
+  #                 which managed clusters on virtualized nodes rarely expose.
+  #   ""          — the node's default runtime (runc). NO kernel isolation:
+  #                 untrusted code shares the host kernel. Acceptable for local
+  #                 development only.
+  #
+  # The name must match a RuntimeClass that exists in the cluster; Kubernetes
+  # refuses to schedule the pod otherwise, which is the correct failure.
   runtimeClass: ""
 
-  # Runtime MCP server pods use a separate ServiceAccount so their registry
-  # access can point at the managed MCP runtime registry, not platform images.
+  # Untrusted MCP runtime and sandbox task pods use this zero-RBAC
+  # ServiceAccount instead of the control-plane ServiceAccount.
   runtime:
     serviceAccount:
       create: true
@@ -597,13 +639,31 @@ mcpManager:
   # Warm pool configuration for fast cold starts
   warmPool:
     enabled: false  # Enable for fast activation (200-500ms vs 5-15s)
-    image:
-      repository: agentarea/mcp-runner
-      tag: "latest"
-      pullPolicy: IfNotPresent
+    # Pools are profile-specific. `allowed` must point at a mutable image build;
+    # `locked` must point at an immutable image build. The manager routes by the
+    # exact package-install label and never falls back across profiles.
+    profiles:
+      - packageInstall: allowed
+        managedEnvironment: mutable
+        image:
+          repository: agentarea/agentarea-mcp-runner
+          tag: "latest"
+          pullPolicy: IfNotPresent
+      - packageInstall: locked
+        managedEnvironment: immutable
+        image:
+          repository: agentarea/agentarea-mcp-runner-locked
+          tag: "latest"
+          pullPolicy: IfNotPresent
 
-    # Maximum duration of a single sandbox command. Workflow pod lifetime is
-    # controlled separately by MCP Manager workflow lease/idle TTL settings.
+    # Locked pods get no public egress. Add only stable S3 endpoint CIDRs here
+    # when object storage is external to the cluster. Broad public routes are
+    # rejected by the template; DNS and in-cluster RustFS are already allowed.
+    lockedNetworkPolicy:
+      s3EgressCIDRs: []
+
+    # Maximum duration of a single sandbox command. Task pod lifetime is
+    # controlled separately by MCP Manager task lease/idle TTL settings.
     maxExecutionTimeoutSeconds: 1800
     
     # Number of warm pods per node

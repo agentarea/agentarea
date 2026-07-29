@@ -1,11 +1,12 @@
 import logging
 import re
+import unicodedata
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import quote
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.temporal_workflow_service import (
@@ -22,15 +23,19 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.base import ReadRepositoryFactoryDep
+from agentarea_common.events.contract import TASK_CANCELLED, TASK_COMPLETED, TASK_FAILED
+from agentarea_common.money import ZERO, Money, serialize_money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
+from agentarea_tasks.infrastructure.repository import TaskEventRepository
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
@@ -78,6 +83,145 @@ class TaskCreate(BaseModel):
     requires_human_approval: bool | None = False
     project_id: str | None = None
     task_policy: PolicyDocument | None = None
+    # staging refs from POST /v1/files (purpose=attachment) or POST /v1/files/upload-url
+    attachments: list[str] | None = None
+
+
+def _attachment_content_disposition(filename: str) -> str:
+    """Return an ASCII fallback plus an RFC 5987 UTF-8 filename."""
+    fallback = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode()
+    fallback = re.sub(r"[^A-Za-z0-9._-]+", "_", fallback).strip("._-") or "artifact.bin"
+    encoded = quote(filename, safe="")
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
+
+
+def _dedupe_attachment_name(name: str, used: set[str]) -> str:
+    """Return a name unique within ``used`` by inserting ``-N`` before the extension.
+
+    Two attachments can carry the same basename (distinct staging refs, identical
+    filenames); collapsing them into one manifest entry would silently drop a
+    file, so disambiguate deterministically: ``report.csv`` -> ``report-1.csv``.
+    """
+    if name not in used:
+        return name
+    suffix = PurePosixPath(name).suffix
+    base = name[: len(name) - len(suffix)] if suffix else name
+    index = 1
+    while True:
+        candidate = f"{base}-{index}{suffix}"
+        if candidate not in used:
+            return candidate
+        index += 1
+
+
+async def _stage_attachments_into_task(
+    workspace_id: str,
+    reserved_task_id: UUID,
+    refs: list[str],
+    user_id: str,
+) -> list[dict[str, Any]]:
+    """Resolve staging refs into a reserved task's ``inputs/attachments`` scope.
+
+    Each ref (``staging/{id}/{filename}`` from ``POST /v1/files`` with
+    ``purpose=attachment`` or a presigned ``POST /v1/files/upload-url``) is HEADed
+    to resolve its verified sha256, size and content type, then copied
+    server-side into the task's content-addressed store via ``attach_object``.
+    The bytes never transit this process. Returns the attachment descriptors
+    persisted alongside the run. Raises HTTP errors mirroring the
+    workspace-commit failure modes. Staging objects are left in place; the
+    caller deletes them only after a successful dispatch.
+    """
+    from agentarea_common.artifacts import (
+        ArtifactActor,
+        ArtifactService,
+        DbArtifactEventRecorder,
+        WorkspaceConflictError,
+        WorkspaceQuotaError,
+        WorkspaceRepository,
+        WorkspaceValidationError,
+    )
+
+    artifact_service = ArtifactService()
+    workspace_repository = WorkspaceRepository(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_id),
+    )
+
+    descriptors: list[dict[str, Any]] = []
+    used_names: set[str] = set()
+    for ref in refs:
+        if not ref.startswith("staging/"):
+            raise HTTPException(status_code=422, detail=f"Invalid attachment ref: {ref}")
+        head = await artifact_service.head(workspace_id, ref)
+        if head is None:
+            raise HTTPException(status_code=404, detail="attachment ref not found")
+        sha256 = head.get("sha256")
+        if not sha256:
+            raise HTTPException(
+                status_code=422, detail="attachment integrity digest is unavailable"
+            )
+        size = int(head.get("size") or 0)
+        content_type = head.get("content_type") or "application/octet-stream"
+        name = _dedupe_attachment_name(ref.rsplit("/", 1)[-1] or "attachment", used_names)
+        used_names.add(name)
+        rel = f"inputs/attachments/{name}"
+        try:
+            await workspace_repository.attach_object(
+                workspace_id,
+                str(reserved_task_id),
+                rel,
+                source_key=ref,
+                expected_sha256=sha256,
+                expected_size=size,
+                content_type=content_type,
+                owner=f"task-attachment-upload-{reserved_task_id}",
+            )
+        except WorkspaceQuotaError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        except WorkspaceConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except WorkspaceValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:
+            logger.error(
+                "Failed to attach staged object for task %s", reserved_task_id, exc_info=True
+            )
+            raise HTTPException(status_code=500, detail="Attachment storage failed") from exc
+        descriptors.append(
+            {
+                "relative_path": rel,
+                "filename": name,
+                "size": size,
+                "content_type": content_type,
+                "sha256": sha256,
+            }
+        )
+
+    return descriptors
+
+
+async def _delete_staging_refs(workspace_id: str, refs: list[str], user_id: str) -> None:
+    """Best-effort delete of consumed staging objects after a successful dispatch.
+
+    Deleting only after dispatch means a failed dispatch leaves the upload intact
+    for a retry instead of consuming it. Never raises: an orphaned staging object
+    is reclaimed by lifecycle cleanup, not worth failing a launched task over.
+    """
+    from agentarea_common.artifacts import (
+        ArtifactActor,
+        ArtifactService,
+        DbArtifactEventRecorder,
+    )
+
+    artifact_service = ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_id),
+    )
+    for ref in refs:
+        try:
+            await artifact_service.delete(workspace_id, ref)
+        except Exception:
+            logger.warning("Failed to delete consumed staging ref %s", ref, exc_info=True)
 
 
 class EscalationResolution(BaseModel):
@@ -89,9 +233,49 @@ class EscalationResolution(BaseModel):
 class TaskCommandPayload(BaseModel):
     command: str
     model_instance_id: str | None = None
-    budget_usd: float | None = None
+    budget_usd: Money | None = None
     message: str | None = None
     message_id: str | None = None
+
+
+class ContinueTaskPayload(BaseModel):
+    additional_iterations: int = Field(default=0, ge=0, le=1000)
+    additional_budget_usd: Money | None = Field(default=None, gt=ZERO)
+
+    model_config = {"extra": "forbid"}
+
+
+@global_tasks_router.post("/{task_id}/continue")
+async def continue_task_execution(
+    task_id: UUID,
+    payload: ContinueTaskPayload,
+    user_context: UserContextDep,
+    task_service: TaskService = Depends(get_task_service),
+):
+    """Grant more iterations or budget to a task waiting on a hard limit."""
+    _ = user_context
+    if payload.additional_iterations == 0 and payload.additional_budget_usd is None:
+        raise HTTPException(
+            status_code=422,
+            detail="At least one continuation resource must be granted",
+        )
+
+    result = await task_service.continue_execution(
+        task_id,
+        additional_iterations=payload.additional_iterations,
+        additional_budget_usd=payload.additional_budget_usd,
+    )
+    if result.get("reason") == "task_not_found":
+        raise HTTPException(status_code=404, detail="Task not found")
+    if not result.get("accepted"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Task is not waiting for continuation",
+                "reason": result.get("reason", "continuation_rejected"),
+            },
+        )
+    return result
 
 
 _SECRET_NAME_SAFE_RE = re.compile(r"[^A-Za-z0-9_.:/-]+")
@@ -105,6 +289,15 @@ def _default_input_secret_name(task_id: UUID, field_name: str) -> str:
     return f"task-input/{task_id}/{sanitized}"
 
 
+def _failure_reason_from_result(result: Any) -> str | None:
+    """Extract the stable failure code the workflow persisted into the result."""
+    if isinstance(result, dict):
+        value = result.get("failure_reason")
+        if value:
+            return str(value)
+    return None
+
+
 class TaskResponse(BaseModel):
     id: UUID
     agent_id: UUID
@@ -112,6 +305,11 @@ class TaskResponse(BaseModel):
     parameters: dict[str, Any]
     status: str
     result: dict[str, Any] | str | None = None
+    # Terminal failure cause for a failed/blocked task. `error` is the durable
+    # human-readable message (tasks.error column); `failure_reason` is a stable
+    # code (validation_failed | iteration_limit | budget_exceeded | ...).
+    error: str | None = None
+    failure_reason: str | None = None
     created_at: UtcDatetime
     execution_id: str | None = None  # Workflow execution ID
     total_cost: float | None = None  # LLM token cost in USD
@@ -137,6 +335,22 @@ class TaskResponse(BaseModel):
             execution_id=execution_id,
         )
 
+    @classmethod
+    def from_agent_task(cls, task: Any) -> "TaskResponse":
+        """Build a response from a service-layer AgentTask, surfacing its failure cause."""
+        return cls(
+            id=task.id,
+            agent_id=task.agent_id,
+            description=task.description,
+            parameters=task.task_parameters or {},
+            status=task.status,
+            result=task.result,
+            error=task.error_message,
+            failure_reason=_failure_reason_from_result(task.result),
+            created_at=task.created_at,
+            execution_id=task.execution_id,
+        )
+
 
 class TaskWithAgent(BaseModel):
     """Task response with agent information for global task listing."""
@@ -148,6 +362,8 @@ class TaskWithAgent(BaseModel):
     parameters: dict[str, Any]
     status: str
     result: dict[str, Any] | str | None = None
+    error: str | None = None
+    failure_reason: str | None = None
     created_at: UtcDatetime
     execution_id: str | None = None
     total_cost: float | None = None  # LLM token cost in USD
@@ -167,6 +383,8 @@ class TaskWithAgent(BaseModel):
             parameters=task.parameters,
             status=task.status,
             result=task.result,
+            error=task.error,
+            failure_reason=task.failure_reason,
             created_at=task.created_at,
             execution_id=task.execution_id,
             total_cost=task.total_cost,
@@ -213,6 +431,8 @@ async def get_all_tasks(
                     parameters=task.parameters,
                     status=task.status,
                     result=task.result,
+                    error=task.error,
+                    failure_reason=_failure_reason_from_result(task.result),
                     created_at=task.created_at,
                     execution_id=task.execution_id,
                     total_cost=total_cost,
@@ -264,6 +484,8 @@ async def get_task_by_id(
             parameters=task.parameters,
             status=task.status,
             result=task.result,
+            error=task.error,
+            failure_reason=_failure_reason_from_result(task.result),
             created_at=task.created_at,
             execution_id=task.execution_id,
             total_cost=total_cost,
@@ -305,15 +527,11 @@ class TaskSSEEvent(BaseModel):
     data: dict[str, Any]
 
 
+# Canonical terminal types (the vocabulary rows/streams now carry directly).
 _TERMINAL_EVENT_TYPES = {
-    "task_completed",
-    "task_failed",
-    "task_cancelled",
-    "workflow_completed",
-    "workflow_failed",
-    "WorkflowCompleted",
-    "WorkflowFailed",
-    "WorkflowCancelled",
+    TASK_COMPLETED,
+    TASK_FAILED,
+    TASK_CANCELLED,
 }
 
 
@@ -323,6 +541,7 @@ async def _tail_task_events_sse(
     execution_id: str | None,
     *,
     emit_connected: bool = True,
+    include_chunks: bool = True,
 ) -> AsyncGenerator[str, None]:
     """Stream a task's events as SSE: catch-up (DB) then live (Redis stream).
 
@@ -347,13 +566,13 @@ async def _tail_task_events_sse(
             },
         )
 
-    # Exclude high-volume incremental chunks: this SSE historically carried only
-    # DB-persisted events (chunks are stream-only). Flip this to surface live
-    # tokens in the UI as a deliberate, separately-verified change.
+    # Chunks are surfaced by default (include_chunks=True). Clients can opt out
+    # via ?include_chunks=false, which drops the high-volume incremental
+    # llm.call.chunk events.
     async for env in open_task_event_feed(
         task_id,
         terminal_types=frozenset(_TERMINAL_EVENT_TYPES),
-        exclude_types=frozenset({"LLMCallChunk"}),
+        include_chunks=include_chunks,
     ):
         sse_event = {
             "event_type": env.event_type,
@@ -380,9 +599,59 @@ async def create_task_for_agent_with_stream(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
+    created_task = None
+    if data.attachments:
+        reserved_task_id = uuid4()
+        attachment_descriptors = await _stage_attachments_into_task(
+            user_context.workspace_id,
+            reserved_task_id,
+            data.attachments,
+            user_context.user_id,
+        )
+        parameters = {**data.parameters, "attachments": attachment_descriptors}
+        try:
+            payload = RunCreate(
+                agent_id=agent_id,
+                description=data.description,
+                parameters=parameters,
+                requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+                task_policy=data.task_policy,
+            )
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+        try:
+            created_task = await task_service.reserve_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
+                task_id=reserved_task_id,
+                trusted_metadata={"workspace_attachments": attachment_descriptors},
+            )
+        except PolicyValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except AgentModelNotConfiguredError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        try:
+            created_task = await task_service.dispatch_reserved_run(created_task)
+        except Exception as exc:
+            await task_service.update_task_status(
+                reserved_task_id, "failed", error="Task dispatch failed"
+            )
+            logger.error("Failed to dispatch attachment task %s", reserved_task_id, exc_info=True)
+            raise HTTPException(status_code=503, detail="Task dispatch failed") from exc
+
+        # Consume the staging objects only now that the run is dispatched; a
+        # failed dispatch above leaves them for a retry.
+        await _delete_staging_refs(
+            user_context.workspace_id, data.attachments, user_context.user_id
+        )
+
     async def task_creation_stream() -> AsyncGenerator[str, None]:
         """Generate Server-Sent Events for task creation and execution."""
-        task = None
+        task = created_task
         try:
             # Send initial connection event
             yield _format_sse_event(
@@ -395,20 +664,21 @@ async def create_task_for_agent_with_stream(
                 },
             )
 
-            # Create and execute task using service layer
-            payload = RunCreate(
-                agent_id=agent_id,
-                description=data.description,
-                parameters=data.parameters,
-                requires_human_approval=data.requires_human_approval or False,
-                project_id=data.project_id,
-                task_policy=data.task_policy,
-            )
-            task = await task_service.start_run(
-                payload,
-                workspace_id=user_context.workspace_id,
-                user_id=user_context.user_id,
-            )
+            if task is None:
+                # Create and execute task using service layer
+                payload = RunCreate(
+                    agent_id=agent_id,
+                    description=data.description,
+                    parameters=data.parameters,
+                    requires_human_approval=data.requires_human_approval or False,
+                    project_id=data.project_id,
+                    task_policy=data.task_policy,
+                )
+                task = await task_service.start_run(
+                    payload,
+                    workspace_id=user_context.workspace_id,
+                    user_id=user_context.user_id,
+                )
 
             # Send task created event
             yield _format_sse_event(
@@ -515,34 +785,53 @@ async def create_task_for_agent_sync(
     try:
         # Create and execute task using shared payload-style entry point so REST
         # /sync, REST streaming and MCP toolset all share the same lifecycle.
-        payload = RunCreate(
-            agent_id=agent_id,
-            description=data.description,
-            parameters=data.parameters,
-            requires_human_approval=data.requires_human_approval or False,
-            project_id=data.project_id,
-            task_policy=data.task_policy,
-        )
-        task = await task_service.start_run(
-            payload,
-            workspace_id=user_context.workspace_id,
-            user_id=user_context.user_id,
-        )
+        if data.attachments:
+            reserved_task_id = uuid4()
+            attachment_descriptors = await _stage_attachments_into_task(
+                user_context.workspace_id,
+                reserved_task_id,
+                data.attachments,
+                user_context.user_id,
+            )
+            payload = RunCreate(
+                agent_id=agent_id,
+                description=data.description,
+                parameters={**data.parameters, "attachments": attachment_descriptors},
+                requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+                task_policy=data.task_policy,
+            )
+            task = await task_service.reserve_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
+                task_id=reserved_task_id,
+                trusted_metadata={"workspace_attachments": attachment_descriptors},
+            )
+            task = await task_service.dispatch_reserved_run(task)
+            await _delete_staging_refs(
+                user_context.workspace_id, data.attachments, user_context.user_id
+            )
+        else:
+            payload = RunCreate(
+                agent_id=agent_id,
+                description=data.description,
+                parameters=data.parameters,
+                requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+                task_policy=data.task_policy,
+            )
+            task = await task_service.start_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
+            )
 
         # Convert to API response format
-        task_response = TaskResponse(
-            id=task.id,
-            agent_id=task.agent_id,
-            description=task.description,
-            parameters=task.task_parameters,
-            status=task.status,
-            result=task.result,
-            created_at=task.created_at,
-            execution_id=task.execution_id,
-        )
+        return TaskResponse.from_agent_task(task)
 
-        return task_response
-
+    except HTTPException:
+        raise
     except PolicyValidationError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     except AgentModelNotConfiguredError as e:
@@ -593,17 +882,7 @@ async def list_agent_tasks(
                 continue
 
             # Create TaskResponse from service task
-            task_response = TaskResponse(
-                id=task.id,
-                agent_id=task.agent_id,
-                description=task.description,
-                parameters=task.task_parameters or {},
-                status=task.status,
-                result=task.result,
-                created_at=task.created_at,
-                execution_id=task.execution_id,
-            )
-            task_responses.append(task_response)
+            task_responses.append(TaskResponse.from_agent_task(task))
 
         # Sort by created_at descending (newest first)
         task_responses.sort(key=lambda x: x.created_at, reverse=True)
@@ -641,18 +920,9 @@ async def get_agent_task(
             if task.agent_id != agent_id:
                 raise HTTPException(status_code=404, detail="Task not found")
 
-            return TaskResponse(
-                id=task.id,
-                agent_id=task.agent_id,
-                description=task.description,
-                parameters=task.task_parameters or {},
-                status=task.status,
-                result=task.result,
-                created_at=task.created_at,
-                execution_id=task.execution_id,
-            )
+            return TaskResponse.from_agent_task(task)
 
-        # Fall back to workflow status for legacy workflow-only tasks.
+        # Fall back to workflow status for workflow-only tasks.
         execution_id = f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
 
@@ -661,18 +931,18 @@ async def get_agent_task(
             raise HTTPException(status_code=404, detail="Task not found")
 
         # Convert workflow status to TaskResponse format
-        task_response = TaskResponse(
+        return TaskResponse(
             id=task_id,
             agent_id=agent_id,
             description="Workflow-based task",  # Description not stored in workflow status
             parameters={},  # Parameters not stored in workflow status
             status=status.get("status", "unknown"),
             result=status.get("result"),
+            error=status.get("error"),
+            failure_reason=status.get("failure_reason"),
             created_at=datetime.now(UTC),  # Could be extracted from start_time if available
             execution_id=execution_id,
         )
-
-        return task_response
 
     except HTTPException:
         raise
@@ -724,10 +994,13 @@ async def get_agent_task_status(
             "execution_id": execution_id,
             # Authoritative lifecycle status/result come from the persisted task.
             "status": task.status,
+            "execution_status": status.get("execution_status", status.get("status")),
+            "success": status.get("success"),
+            "failure_reason": status.get("failure_reason"),
             "start_time": status.get("start_time"),
             "end_time": status.get("end_time"),
             "execution_time": status.get("execution_time"),
-            "error": status.get("error"),
+            "error": task.error_message or status.get("error"),
             "result": task.result if task.result is not None else status.get("result"),
             # A2A-compatible fields for frontend
             "message": status.get("message"),
@@ -756,24 +1029,38 @@ async def _list_task_artifact_items(
     workspace_id: str,
     task_id: UUID,
 ) -> list[TaskArtifactItem]:
-    from agentarea_common.artifacts import ArtifactService
-
-    svc = ArtifactService()
-    prefix = f"tasks/{task_id}/"
-    objects = await svc.list(workspace_id, prefix=prefix)
+    from agentarea_common.artifacts import WorkspaceRepository
 
     items: list[TaskArtifactItem] = []
-    for obj in objects:
+    workspace_repository = WorkspaceRepository()
+    workspace_objects = await workspace_repository.list(workspace_id, str(task_id))
+    for obj in workspace_objects:
+        public_path = f"tasks/{task_id}/workspace/{obj.path}"
         items.append(
             TaskArtifactItem(
-                path=obj.path,
+                path=public_path,
                 size=obj.size,
                 content_type=obj.content_type,
-                last_modified=obj.last_modified,
-                download_url=_task_artifact_download_url(agent_id, task_id, obj.path),
+                last_modified=None,
+                download_url=_task_artifact_download_url(agent_id, task_id, public_path),
             )
         )
     return items
+
+
+def _task_artifact_parts(path: str, task_id: UUID) -> tuple[str, ...] | None:
+    clean = path.lstrip("/")
+    parts = PurePosixPath(clean).parts
+    if (
+        len(parts) < 3
+        or parts[0] != "tasks"
+        or parts[1] != str(task_id)
+        or clean != "/".join(parts)
+        or "\\" in clean
+        or any(part in {".", ".."} for part in parts)
+    ):
+        return None
+    return parts
 
 
 def _task_artifact_download_url(agent_id: UUID, task_id: UUID, artifact_path: str) -> str:
@@ -822,20 +1109,33 @@ async def download_task_artifact(
 ):
     """Stream a task artifact through the AgentArea API."""
     await _verify_task_for_agent(task_service, agent_id, task_id)
-    if not artifact_path.startswith(f"tasks/{task_id}/"):
+    parts = _task_artifact_parts(artifact_path, task_id)
+    if parts is None:
         raise HTTPException(status_code=404, detail="Artifact not found")
 
-    from agentarea_common.artifacts import ArtifactService
+    from agentarea_common.artifacts import (
+        WorkspaceRepository,
+        WorkspaceValidationError,
+        normalize_workspace_path,
+    )
 
-    svc = ArtifactService()
     try:
-        data, content_type = await svc.get(user_context.workspace_id, artifact_path)
-    except FileNotFoundError:
+        if parts[2] == "workspace" and len(parts) >= 4:
+            relative_path = normalize_workspace_path("/".join(parts[3:]))
+            body, content_type, size = await WorkspaceRepository().stream(
+                user_context.workspace_id, str(task_id), relative_path
+            )
+        else:
+            raise FileNotFoundError(artifact_path)
+    except (FileNotFoundError, WorkspaceValidationError):
         raise HTTPException(status_code=404, detail="Artifact not found") from None
 
     filename = PurePosixPath(artifact_path).name or "artifact.bin"
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return StreamingResponse(iter([data]), media_type=content_type, headers=headers)
+    headers = {
+        "Content-Disposition": _attachment_content_disposition(filename),
+        "Content-Length": str(size),
+    }
+    return StreamingResponse(body, media_type=content_type, headers=headers)
 
 
 class TaskSummary(BaseModel):
@@ -1247,8 +1547,14 @@ async def send_task_command(
             )
 
         elif payload.command == "update_budget":
+            if payload.budget_usd is None:
+                raise HTTPException(
+                    status_code=400, detail="budget_usd is required for update_budget"
+                )
             delivered = await workflow_task_service.send_workflow_command(
-                execution_id, "update_budget", {"budget_usd": payload.budget_usd}
+                execution_id,
+                "update_budget",
+                {"budget_usd": serialize_money(payload.budget_usd)},
             )
 
         else:
@@ -1321,7 +1627,7 @@ async def resolve_task_escalation(
 async def get_task_events(
     agent_id: UUID,
     task_id: UUID,
-    user_context: UserContextDep,
+    repository_factory: ReadRepositoryFactoryDep,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of events per page"),
     event_type: str | None = Query(None, description="Filter by event type"),
@@ -1334,74 +1640,39 @@ async def get_task_events(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     try:
-        from agentarea_api.api.deps.database import get_db_session
-        from sqlalchemy import text
+        # Read through the workspace-scoped repository. The check above only
+        # proves the caller owns an agent with this id — `agent_id` is a route
+        # parameter and is never tied to the task — so the workspace filter
+        # inside the repository is the actual authorization boundary here.
+        event_repository = repository_factory.create_repository(TaskEventRepository)
+        records, total_events = await event_repository.list_for_task(
+            task_id,
+            event_type=event_type,
+            limit=page_size,
+            offset=(page - 1) * page_size,
+        )
 
-        # Get database session
-        async with get_db_session() as session:
-            # Build the query with optional event type filter
-            base_query = """
-                SELECT id, task_id, event_type, timestamp, data, event_metadata,
-                       COUNT(*) OVER() as total_count
-                FROM task_events
-                WHERE task_id = :task_id
-            """
-
-            params: dict[str, Any] = {"task_id": str(task_id)}
-
-            if event_type:
-                base_query += " AND event_type = :event_type"
-                params["event_type"] = event_type
-
-            base_query += """
-                ORDER BY timestamp ASC
-                LIMIT :limit OFFSET :offset
-            """
-
-            params.update({"limit": page_size, "offset": (page - 1) * page_size})
-
-            # Execute query
-            result = await session.execute(text(base_query), params)
-            rows = result.fetchall()
-
-        if not rows:
-            # No events found - return empty response
-            return TaskEventResponse(
-                events=[],
-                total=0,
-                page=page,
-                page_size=page_size,
-                has_next=False,
+        events = [
+            TaskEvent(
+                id=str(record.id),
+                task_id=str(record.task_id),
+                agent_id=str(agent_id),
+                execution_id=record.data.get("execution_id")
+                or record.metadata.get("execution_id", "unknown"),
+                timestamp=record.timestamp,
+                event_type=record.event_type,
+                message=record.data.get("message", f"Event: {record.event_type}"),
+                metadata=dict(record.data) if record.data else {},
             )
-
-        # Convert database rows to TaskEvent objects
-        total_events = rows[0].total_count if rows else 0
-        events = []
-
-        for row in rows:
-            events.append(
-                TaskEvent(
-                    id=str(row.id),
-                    task_id=str(row.task_id),
-                    agent_id=str(agent_id),
-                    execution_id=row.data.get("execution_id")
-                    or row.event_metadata.get("execution_id", "unknown"),
-                    timestamp=row.timestamp,
-                    event_type=row.event_type,
-                    message=row.data.get("message", f"Event: {row.event_type}"),
-                    metadata=dict(row.data) if row.data else {},
-                )
-            )
-
-        # Calculate pagination info
-        has_next = (page * page_size) < total_events
+            for record in records
+        ]
 
         return TaskEventResponse(
             events=events,
             total=total_events,
             page=page,
             page_size=page_size,
-            has_next=has_next,
+            has_next=(page * page_size) < total_events,
         )
 
     except Exception as e:
@@ -1414,6 +1685,9 @@ async def stream_task_events(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
+    include_chunks: bool = Query(
+        True, description="Include incremental llm.call.chunk token events in the stream"
+    ),
     agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
 ):
@@ -1433,7 +1707,9 @@ async def stream_task_events(
         # truth, no pub/sub race) via the shared helper.
         async def event_stream() -> AsyncGenerator[str, None]:
             try:
-                async for chunk in _tail_task_events_sse(task_id, agent_id, task.execution_id):
+                async for chunk in _tail_task_events_sse(
+                    task_id, agent_id, task.execution_id, include_chunks=include_chunks
+                ):
                     yield chunk
 
             except Exception as e:
@@ -1484,10 +1760,9 @@ def _filter_domain_fields(data: dict[str, Any]) -> dict[str, Any]:
     # {
     #   "event_id": "...",
     #   "timestamp": "...",
-    #   "event_type": "workflow.LLMCallChunk",
+    #   "event_type": "llm.call.chunk",
     #   "data": {
     #       "aggregate_id": "...",
-    #       "original_event_type": "LLMCallChunk",
     #       "original_data": {"task_id": "...", "chunk": "...", ...}
     #   }
     # }

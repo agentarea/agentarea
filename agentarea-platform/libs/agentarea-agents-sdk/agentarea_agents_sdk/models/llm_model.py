@@ -191,7 +191,7 @@ class LLMModel:
         if isinstance(msg, dict | list):
             return msg
 
-        # If it's a legacy SDK message dict-like
+        # Any object exposing role/content
         if hasattr(msg, "role") and hasattr(msg, "content"):
             return {"role": getattr(msg, "role"), "content": getattr(msg, "content")}
 
@@ -228,9 +228,6 @@ class LLMModel:
             if not url.startswith("http"):
                 url = f"http://{url}"
             params["base_url"] = url
-        # elif self.provider_type == "ollama_chat":
-        # Default Ollama URL - use localhost for local development
-        # params["base_url"] = "http://host.docker.internal:11434"
 
         # Add tools if provided
         if request.tools:
@@ -252,9 +249,6 @@ class LLMModel:
             if not url.startswith("http"):
                 url = f"http://{url}"
             return url.rstrip("/")
-        # Default Ollama URL
-        if self.provider_type and "ollama" in self.provider_type:
-            return "http://localhost:11434"
         return None
 
     def _supports_direct_streaming(self) -> bool:

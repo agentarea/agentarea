@@ -10,6 +10,7 @@ Network and storage are both stubbed:
 from __future__ import annotations
 
 import json
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -93,6 +94,59 @@ async def test_binary_response_is_persisted_as_artifact(monkeypatch) -> None:
     data, ct = await storage.get("ws-7", expected_path)
     assert data == png
     assert ct == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_binary_response_is_committed_to_canonical_task_workspace(monkeypatch) -> None:
+    png = b"\x89PNG\r\n\x1a\ncanonical"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=png, headers={"content-type": "image/png"})
+
+    monkeypatch.setattr(
+        "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",
+        _patched_client_factory(httpx.MockTransport(handler)),
+    )
+
+    repository = AsyncMock()
+    tool = WebToolset(
+        workspace_repository=repository,
+        workspace_id="ws-7",
+        task_id="task-9",
+        lease_owner="workflow-9",
+    )
+
+    payload = json.loads(await tool.fetch_webpage("https://cdn.example.test/foo.png"))
+
+    assert payload["artifact_path"] == "tasks/task-9/workspace/downloads/foo.png"
+    repository.put.assert_awaited_once_with(
+        "ws-7",
+        "task-9",
+        "downloads/foo.png",
+        png,
+        "image/png",
+        owner="workflow-9",
+    )
+
+
+@pytest.mark.asyncio
+async def test_canonical_binary_write_requires_task_id(monkeypatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"png", headers={"content-type": "image/png"})
+
+    monkeypatch.setattr(
+        "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",
+        _patched_client_factory(httpx.MockTransport(handler)),
+    )
+    repository = AsyncMock()
+
+    result = await WebToolset(
+        workspace_repository=repository,
+        workspace_id="ws-7",
+    ).fetch_webpage("https://cdn.example.test/foo.png")
+
+    assert result == "Error: task_id is required for canonical workspace writes"
+    repository.put.assert_not_awaited()
 
 
 @pytest.mark.asyncio

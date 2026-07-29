@@ -1,0 +1,129 @@
+---
+# Turn this host into a single-node Kubernetes cluster that runs BOTH agent
+# sandboxes and MCP servers under gVisor.
+#
+# Why Kubernetes on a box that already runs Docker: the control plane already
+# speaks Kubernetes — it creates Deployments, honours RuntimeClass/nodeSelector,
+# and has warm pools, task->pod pinning and idle reaping implemented against the
+# Kubernetes backend. Speaking that API here means MCP servers stop running next
+# to the control plane without anyone writing an adapter, and both untrusted
+# workloads end up on one mechanism instead of two that drift apart.
+#
+# k3s is used rather than a managed cluster because registering a custom
+# container runtime requires editing containerd's config — which k3s supports
+# through a documented template, and managed providers (DOKS among them) revert.
+
+- name: Install k3s server
+  ansible.builtin.shell: |
+    set -o pipefail
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="{{ sandbox_k3s_exec_args }}" sh -
+  args:
+    executable: /bin/bash
+    creates: /usr/local/bin/k3s
+
+- name: Wait for the k3s node to be ready
+  ansible.builtin.command: k3s kubectl wait --for=condition=Ready node --all --timeout=180s
+  changed_when: false
+
+# k3s renders containerd's config from a template. Which file it reads depends
+# on the containerd major version k3s ships, and the plugin key changed with it
+# — writing the wrong one silently produces a cluster with no runsc runtime, so
+# detect rather than assume.
+- name: Detect the containerd config k3s generated
+  ansible.builtin.stat:
+    path: /var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml
+  register: _containerd_v3
+
+- name: Select the containerd template name and runtime plugin key
+  ansible.builtin.set_fact:
+    _containerd_tmpl: >-
+      {{ '/var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl'
+         if _containerd_v3.stat.exists
+         else '/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl' }}
+    _containerd_runtime_key: >-
+      {{ 'io.containerd.cri.v1.runtime'
+         if _containerd_v3.stat.exists
+         else 'io.containerd.grpc.v1.cri' }}
+
+- name: Register runsc as a containerd runtime
+  ansible.builtin.copy:
+    dest: "{{ _containerd_tmpl }}"
+    mode: "0600"
+    content: |
+      {% raw %}{{ template "base" . }}{% endraw %}
+
+      [plugins."{{ _containerd_runtime_key }}".containerd.runtimes.runsc]
+        runtime_type = "io.containerd.runsc.v1"
+  notify: Restart k3s
+
+- name: Apply the containerd change now
+  ansible.builtin.meta: flush_handlers
+
+- name: Label this node as gVisor-capable
+  ansible.builtin.command: >-
+    k3s kubectl label node --all --overwrite {{ sandbox_k3s_node_label }}
+  changed_when: false
+
+# scheduling.nodeSelector/tolerations on the RuntimeClass mean a pod only has to
+# say `runtimeClassName: gvisor` — Kubernetes adds the placement itself. The
+# control plane therefore needs no knowledge of nodes, only of the class.
+- name: Define the gvisor RuntimeClass
+  ansible.builtin.copy:
+    dest: /var/lib/rancher/k3s/server/manifests/runtimeclass-gvisor.yaml
+    mode: "0600"
+    content: |
+      apiVersion: node.k8s.io/v1
+      kind: RuntimeClass
+      metadata:
+        name: {{ sandbox_k3s_runtime_class }}
+      handler: runsc
+      scheduling:
+        nodeSelector:
+          {{ sandbox_k3s_node_label.split('=')[0] }}: "{{ sandbox_k3s_node_label.split('=')[1] }}"
+
+- name: Wait for the RuntimeClass to be registered
+  ansible.builtin.command: k3s kubectl get runtimeclass {{ sandbox_k3s_runtime_class }}
+  register: _runtimeclass
+  until: _runtimeclass.rc == 0
+  retries: 12
+  delay: 5
+  changed_when: false
+
+# Proves the whole chain — k3s scheduled it, containerd found the runsc handler,
+# and the kernel the workload sees is gVisor's rather than the host's. A green
+# provisioning run that skipped this would mean nothing.
+- name: Smoke-test that a pod actually runs under gVisor
+  ansible.builtin.shell: |
+    set -o pipefail
+    k3s kubectl delete pod gvisor-smoke --ignore-not-found >/dev/null 2>&1
+    k3s kubectl run gvisor-smoke \
+      --image={{ sandbox_runsc_smoketest_image }} \
+      --restart=Never \
+      --overrides='{"spec":{"runtimeClassName":"{{ sandbox_k3s_runtime_class }}"}}' \
+      --command -- dmesg
+    k3s kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/gvisor-smoke --timeout=120s
+    out=$(k3s kubectl logs gvisor-smoke)
+    k3s kubectl delete pod gvisor-smoke --ignore-not-found >/dev/null 2>&1
+    printf '%s\n' "$out"
+    printf '%s' "$out" | grep -qi 'gvisor'
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Read the cluster kubeconfig
+  ansible.builtin.slurp:
+    src: /etc/rancher/k3s/k3s.yaml
+  register: _k3s_kubeconfig
+
+# k3s writes 127.0.0.1 because it assumes local use. The control plane is not
+# local, so rewrite the server address to one it can reach before handing the
+# file over.
+- name: Save a kubeconfig the control plane can use
+  ansible.builtin.copy:
+    dest: "{{ sandbox_k3s_kubeconfig_local_path }}"
+    mode: "0600"
+    content: >-
+      {{ _k3s_kubeconfig.content | b64decode
+         | replace('https://127.0.0.1:6443', 'https://' ~ sandbox_k3s_advertise_host ~ ':6443') }}
+  delegate_to: localhost
+  become: false

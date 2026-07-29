@@ -1,4 +1,3 @@
-import {keyring} from '@zowe/secrets-for-zowe-sdk';
 import {logger} from './logger.js';
 import {StorageError} from './error.js';
 import {type AuthToken} from '../types/index.js';
@@ -6,10 +5,22 @@ import {type AuthToken} from '../types/index.js';
 const SERVICE_NAME = 'agentarea-cli';
 const TOKEN_KEY = 'auth_token';
 
+// Load the native OS keychain addon lazily on first token operation rather than
+// at module import. The dependency is still required — a broken load throws
+// here as it always would — but merely importing this module (e.g. from a
+// unit test or a headless environment) no longer forces the native binding.
+type Keyring = typeof import('@zowe/secrets-for-zowe-sdk')['keyring'];
+let keyringPromise: Promise<Keyring> | undefined;
+async function getKeyring(): Promise<Keyring> {
+	keyringPromise ??= import('@zowe/secrets-for-zowe-sdk').then(m => m.keyring);
+	return keyringPromise;
+}
+
 export class TokenStorage {
 	async saveToken(token: AuthToken): Promise<void> {
 		try {
 			const tokenString = JSON.stringify(token);
+			const keyring = await getKeyring();
 			await keyring.setPassword(SERVICE_NAME, TOKEN_KEY, tokenString);
 			logger.debug('Token saved to keychain');
 		} catch (error) {
@@ -20,6 +31,7 @@ export class TokenStorage {
 
 	async getToken(): Promise<AuthToken | null> {
 		try {
+			const keyring = await getKeyring();
 			const tokenString = await keyring.getPassword(SERVICE_NAME, TOKEN_KEY);
 
 			if (!tokenString) {
@@ -40,6 +52,7 @@ export class TokenStorage {
 
 	async clearToken(): Promise<void> {
 		try {
+			const keyring = await getKeyring();
 			await keyring.deletePassword(SERVICE_NAME, TOKEN_KEY);
 			logger.debug('Token cleared from keychain');
 		} catch (error) {

@@ -688,6 +688,12 @@ export type ApprovalPolicy = {
    */
   approvers?: Array<string>;
   /**
+   * Approvers By Tool
+   */
+  approvers_by_tool?: {
+    [key: string]: Array<string>;
+  };
+  /**
    * Escalation Rules
    */
   escalation_rules?: Array<string>;
@@ -862,6 +868,20 @@ export type BodyImportWorkspaceConfigFileV1WorkspaceImportFilePost = {
 };
 
 /**
+ * Body_upload_file_v1_files_post
+ */
+export type BodyUploadFileV1FilesPost = {
+  /**
+   * File
+   */
+  file: Blob | File;
+  /**
+   * Purpose
+   */
+  purpose?: string;
+};
+
+/**
  * Body_upload_project_file_v1_projects__project_id__files_post
  */
 export type BodyUploadProjectFileV1ProjectsProjectIdFilesPost = {
@@ -879,16 +899,6 @@ export type BodyUploadSkillV1SkillsUploadPost = {
    * File
    *
    * ZIP file containing the skill package
-   */
-  file: Blob | File;
-};
-
-/**
- * Body_upload_workspace_file_v1_files_post
- */
-export type BodyUploadWorkspaceFileV1FilesPost = {
-  /**
-   * File
    */
   file: Blob | File;
 };
@@ -1515,6 +1525,10 @@ export type CodeToolSettings = {
    */
   disabled_methods?: Array<string> | null;
   /**
+   * Package Install
+   */
+  package_install?: "allowed" | "locked" | null;
+  /**
    * Requires User Confirmation
    */
   requires_user_confirmation?: boolean | null;
@@ -1606,6 +1620,20 @@ export type ContentSafetyPolicy = {
    * Prompt Injection Detection Enabled
    */
   prompt_injection_detection_enabled?: boolean | null;
+};
+
+/**
+ * ContinueTaskPayload
+ */
+export type ContinueTaskPayload = {
+  /**
+   * Additional Budget Usd
+   */
+  additional_budget_usd?: number | string | null;
+  /**
+   * Additional Iterations
+   */
+  additional_iterations?: number;
 };
 
 /**
@@ -3197,15 +3225,18 @@ export type McpToolConfigOutput = {
 /**
  * McpToolPermission
  *
- * A single MCP tool the agent may call, with its per-call approval gate.
+ * A single MCP tool the agent may call.
  *
  * Replaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).
+ * ``requires_user_confirmation`` is transport only: the API translates it into
+ * an agent-scoped approval policy rule and does not persist it here, so it is
+ * ``None`` at rest and reconstituted from rules on read.
  */
 export type McpToolPermission = {
   /**
    * Requires User Confirmation
    */
-  requires_user_confirmation?: boolean;
+  requires_user_confirmation?: boolean | null;
   /**
    * Tool Name
    */
@@ -4136,6 +4167,46 @@ export type PolicyRuleUpdateRequest = {
  * The kind of subject a rule binds to.
  */
 export type PolicySubjectType = "workspace" | "agent" | "user" | "group";
+
+/**
+ * PresignUploadRequest
+ */
+export type PresignUploadRequest = {
+  /**
+   * Content Type
+   */
+  content_type: string;
+  /**
+   * Filename
+   */
+  filename: string;
+  /**
+   * Sha256
+   */
+  sha256: string;
+  /**
+   * Size
+   */
+  size: number;
+};
+
+/**
+ * PresignUploadResponse
+ */
+export type PresignUploadResponse = {
+  /**
+   * Expires In
+   */
+  expires_in: number;
+  /**
+   * Ref
+   */
+  ref: string;
+  /**
+   * Upload Url
+   */
+  upload_url: string;
+};
 
 /**
  * PreviewEntity
@@ -5412,7 +5483,7 @@ export type TaskCommandPayload = {
   /**
    * Budget Usd
    */
-  budget_usd?: number | null;
+  budget_usd?: number | string | null;
   /**
    * Command
    */
@@ -5435,6 +5506,10 @@ export type TaskCommandPayload = {
  * TaskCreate
  */
 export type TaskCreate = {
+  /**
+   * Attachments
+   */
+  attachments?: Array<string> | null;
   /**
    * Description
    */
@@ -5567,9 +5642,17 @@ export type TaskResponse = {
    */
   description: string;
   /**
+   * Error
+   */
+  error?: string | null;
+  /**
    * Execution Id
    */
   execution_id?: string | null;
+  /**
+   * Failure Reason
+   */
+  failure_reason?: string | null;
   /**
    * Id
    */
@@ -5708,6 +5791,10 @@ export type TaskWithAgent = {
    */
   description: string;
   /**
+   * Error
+   */
+  error?: string | null;
+  /**
    * Escalation Id
    */
   escalation_id?: string | null;
@@ -5719,6 +5806,10 @@ export type TaskWithAgent = {
    * Execution Id
    */
   execution_id?: string | null;
+  /**
+   * Failure Reason
+   */
+  failure_reason?: string | null;
   /**
    * Id
    */
@@ -5762,120 +5853,6 @@ export type TokenPolicy = {
    * Max Tokens Per Call
    */
   max_tokens_per_call?: number | null;
-};
-
-/**
- * ToolAccessCheckRequest
- */
-export type ToolAccessCheckRequest = {
-  /**
-   * Arguments
-   *
-   * Optional exact argument set. Omit to check the whole-tool grant.
-   */
-  arguments?: {
-    [key: string]: unknown;
-  } | null;
-  /**
-   * Tool Name
-   */
-  tool_name: string;
-  /**
-   * User Id
-   *
-   * User UUID or User:<uuid> subject.
-   */
-  user_id: string;
-};
-
-/**
- * ToolAccessCheckResponse
- */
-export type ToolAccessCheckResponse = {
-  /**
-   * Allowed
-   */
-  allowed: boolean;
-  grant: ToolAccessGrant;
-};
-
-/**
- * ToolAccessGrant
- */
-export type ToolAccessGrant = {
-  /**
-   * Arguments Hash
-   */
-  arguments_hash?: string | null;
-  /**
-   * Object Id
-   */
-  object_id: string;
-  /**
-   * Scope
-   */
-  scope: "tool" | "arguments";
-  /**
-   * Tool Name
-   */
-  tool_name: string;
-  /**
-   * User Id
-   */
-  user_id: string;
-  /**
-   * Workspace Id
-   */
-  workspace_id: string;
-};
-
-/**
- * ToolAccessGrantListResponse
- */
-export type ToolAccessGrantListResponse = {
-  /**
-   * Count
-   */
-  count: number;
-  /**
-   * Grants
-   */
-  grants: Array<ToolAccessGrant>;
-};
-
-/**
- * ToolAccessGrantRequest
- */
-export type ToolAccessGrantRequest = {
-  /**
-   * Arguments
-   *
-   * Optional exact argument set. Omit for a whole-tool grant.
-   */
-  arguments?: {
-    [key: string]: unknown;
-  } | null;
-  /**
-   * Tool Name
-   */
-  tool_name: string;
-  /**
-   * User Id
-   *
-   * User UUID or User:<uuid> subject.
-   */
-  user_id: string;
-};
-
-/**
- * ToolAccessGrantResponse
- */
-export type ToolAccessGrantResponse = {
-  grant: ToolAccessGrant;
-  /**
-   * Ok
-   */
-  ok: boolean;
 };
 
 /**
@@ -6322,7 +6299,7 @@ export type TriggerUpdate = {
   /**
    * Enabled
    *
-   * Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (legacy).
+   * Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (alias).
    */
   enabled?: boolean | null;
   /**
@@ -7610,39 +7587,6 @@ export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetRespons
 export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponse =
   GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses];
 
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetData = {
-  body?: never;
-  path: {
-    /**
-     * Agent Id
-     */
-    agent_id: string;
-  };
-  query?: never;
-  url: "/v1/agents/{agent_id}/.well-known/agent.json";
-};
-
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetError =
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors];
-
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses =
-  {
-    /**
-     * Successful Response
-     */
-    200: AgentCard;
-  };
-
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponse =
-  GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses];
-
 export type HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostData = {
   body?: never;
   path: {
@@ -8167,7 +8111,14 @@ export type StreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetData = {
      */
     task_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * Include Chunks
+     *
+     * Include incremental llm.call.chunk token events in the stream
+     */
+    include_chunks?: boolean;
+  };
   url: "/v1/agents/{agent_id}/tasks/{task_id}/events/stream";
 };
 
@@ -9240,32 +9191,29 @@ export type ListWorkspaceFilesV1FilesGetResponses = {
 export type ListWorkspaceFilesV1FilesGetResponse =
   ListWorkspaceFilesV1FilesGetResponses[keyof ListWorkspaceFilesV1FilesGetResponses];
 
-export type UploadWorkspaceFileV1FilesPostData = {
-  body: BodyUploadWorkspaceFileV1FilesPost;
+export type UploadFileV1FilesPostData = {
+  body: BodyUploadFileV1FilesPost;
   path?: never;
   query?: never;
   url: "/v1/files";
 };
 
-export type UploadWorkspaceFileV1FilesPostErrors = {
+export type UploadFileV1FilesPostErrors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type UploadWorkspaceFileV1FilesPostError =
-  UploadWorkspaceFileV1FilesPostErrors[keyof UploadWorkspaceFileV1FilesPostErrors];
+export type UploadFileV1FilesPostError =
+  UploadFileV1FilesPostErrors[keyof UploadFileV1FilesPostErrors];
 
-export type UploadWorkspaceFileV1FilesPostResponses = {
+export type UploadFileV1FilesPostResponses = {
   /**
    * Successful Response
    */
-  204: void;
+  200: unknown;
 };
-
-export type UploadWorkspaceFileV1FilesPostResponse =
-  UploadWorkspaceFileV1FilesPostResponses[keyof UploadWorkspaceFileV1FilesPostResponses];
 
 export type StreamWorkspaceFileV1FilesDownloadFilePathGetData = {
   body?: never;
@@ -9327,6 +9275,33 @@ export type WorkspaceFileHistoryV1FilesHistoryGetResponses = {
 
 export type WorkspaceFileHistoryV1FilesHistoryGetResponse =
   WorkspaceFileHistoryV1FilesHistoryGetResponses[keyof WorkspaceFileHistoryV1FilesHistoryGetResponses];
+
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostData = {
+  body: PresignUploadRequest;
+  path?: never;
+  query?: never;
+  url: "/v1/files/upload-url";
+};
+
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostError =
+  CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors[keyof CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors];
+
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: PresignUploadResponse;
+};
+
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostResponse =
+  CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses[keyof CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses];
 
 export type DownloadWorkspaceFileV1FilesFilePathGetData = {
   body?: never;
@@ -13688,103 +13663,34 @@ export type GetTaskByIdV1TasksTaskIdGetResponses = {
 export type GetTaskByIdV1TasksTaskIdGetResponse =
   GetTaskByIdV1TasksTaskIdGetResponses[keyof GetTaskByIdV1TasksTaskIdGetResponses];
 
-export type CheckToolAccessV1ToolAccessChecksPostData = {
-  body: ToolAccessCheckRequest;
-  path?: never;
+export type ContinueTaskExecutionV1TasksTaskIdContinuePostData = {
+  body: ContinueTaskPayload;
+  path: {
+    /**
+     * Task Id
+     */
+    task_id: string;
+  };
   query?: never;
-  url: "/v1/tool-access/checks";
+  url: "/v1/tasks/{task_id}/continue";
 };
 
-export type CheckToolAccessV1ToolAccessChecksPostErrors = {
+export type ContinueTaskExecutionV1TasksTaskIdContinuePostErrors = {
   /**
    * Validation Error
    */
   422: HttpValidationError;
 };
 
-export type CheckToolAccessV1ToolAccessChecksPostError =
-  CheckToolAccessV1ToolAccessChecksPostErrors[keyof CheckToolAccessV1ToolAccessChecksPostErrors];
+export type ContinueTaskExecutionV1TasksTaskIdContinuePostError =
+  ContinueTaskExecutionV1TasksTaskIdContinuePostErrors[keyof ContinueTaskExecutionV1TasksTaskIdContinuePostErrors];
 
-export type CheckToolAccessV1ToolAccessChecksPostResponses = {
+export type ContinueTaskExecutionV1TasksTaskIdContinuePostResponses = {
   /**
    * Successful Response
    */
-  200: ToolAccessCheckResponse;
+  200: unknown;
 };
-
-export type CheckToolAccessV1ToolAccessChecksPostResponse =
-  CheckToolAccessV1ToolAccessChecksPostResponses[keyof CheckToolAccessV1ToolAccessChecksPostResponses];
-
-export type RevokeToolAccessV1ToolAccessGrantsDeleteData = {
-  body: ToolAccessGrantRequest;
-  path?: never;
-  query?: never;
-  url: "/v1/tool-access/grants";
-};
-
-export type RevokeToolAccessV1ToolAccessGrantsDeleteErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type RevokeToolAccessV1ToolAccessGrantsDeleteError =
-  RevokeToolAccessV1ToolAccessGrantsDeleteErrors[keyof RevokeToolAccessV1ToolAccessGrantsDeleteErrors];
-
-export type RevokeToolAccessV1ToolAccessGrantsDeleteResponses = {
-  /**
-   * Successful Response
-   */
-  204: void;
-};
-
-export type RevokeToolAccessV1ToolAccessGrantsDeleteResponse =
-  RevokeToolAccessV1ToolAccessGrantsDeleteResponses[keyof RevokeToolAccessV1ToolAccessGrantsDeleteResponses];
-
-export type ListToolAccessGrantsV1ToolAccessGrantsGetData = {
-  body?: never;
-  path?: never;
-  query?: never;
-  url: "/v1/tool-access/grants";
-};
-
-export type ListToolAccessGrantsV1ToolAccessGrantsGetResponses = {
-  /**
-   * Successful Response
-   */
-  200: ToolAccessGrantListResponse;
-};
-
-export type ListToolAccessGrantsV1ToolAccessGrantsGetResponse =
-  ListToolAccessGrantsV1ToolAccessGrantsGetResponses[keyof ListToolAccessGrantsV1ToolAccessGrantsGetResponses];
-
-export type GrantToolAccessV1ToolAccessGrantsPostData = {
-  body: ToolAccessGrantRequest;
-  path?: never;
-  query?: never;
-  url: "/v1/tool-access/grants";
-};
-
-export type GrantToolAccessV1ToolAccessGrantsPostErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type GrantToolAccessV1ToolAccessGrantsPostError =
-  GrantToolAccessV1ToolAccessGrantsPostErrors[keyof GrantToolAccessV1ToolAccessGrantsPostErrors];
-
-export type GrantToolAccessV1ToolAccessGrantsPostResponses = {
-  /**
-   * Successful Response
-   */
-  201: ToolAccessGrantResponse;
-};
-
-export type GrantToolAccessV1ToolAccessGrantsPostResponse =
-  GrantToolAccessV1ToolAccessGrantsPostResponses[keyof GrantToolAccessV1ToolAccessGrantsPostResponses];
 
 export type ListTriggersV1TriggersGetData = {
   body?: never;

@@ -83,10 +83,14 @@ groups:
       LOG_LEVEL: 'info'
       MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
       MCP_CLIENT_TIMEOUT: '30'
+      # Read where instances are created and where tool calls are dispatched, so
+      # the API and the worker must agree with the manager on this.
+      MCP_LAZY_PROVISIONING_ENABLED: '{{ .Values.mcpManager.serverless.enabled }}'
       API_HOST: '{{ .Values.global.api.host }}'
       API_PORT: '{{ .Values.global.api.port }}'
       API_BASE_URL: '{{ include "agentarea.backend.apiUrl" . }}'
       API_AUTH_ENABLED: '{{ .Values.global.api.auth.enabled }}'
+      PUBLIC_S3_ENDPOINT: '{{ .Values.global.storage.publicEndpoint }}'
       METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
       METRICS_PORT: '{{ .Values.global.monitoring.prometheus.port }}'
       HEALTH_CHECK_ENABLED: '{{ .Values.global.monitoring.health.enabled }}'
@@ -125,6 +129,14 @@ groups:
       KUBERNETES_DEFAULT_MEMORY_REQUEST: '128Mi'
       KUBERNETES_DEFAULT_MEMORY_LIMIT: '512Mi'
       MCP_FEATURES_ENABLED: '{{ join "," .Values.mcpManager.features.enabled }}'
+      # Reaping is derived from serverless.enabled rather than configured
+      # separately: only instances created as lazy are ever eligible, so a
+      # timeout without lazy start reclaims nothing, and lazy start without a
+      # timeout brings instances up on demand and then leaves them up forever.
+      # Deriving both from one switch makes the half-configured states
+      # unreachable.
+      MCP_IDLE_TIMEOUT: '{{ if .Values.mcpManager.serverless.enabled }}{{ .Values.mcpManager.serverless.idleTimeout }}{{ else }}0{{ end }}'
+      MCP_IDLE_SWEEP_INTERVAL: '{{ .Values.mcpManager.serverless.sweepInterval }}'
 
   temporalUi:
     configVars:
@@ -141,6 +153,9 @@ groups:
       DEBUG: 'false'
       ENVIRONMENT: 'production'
       MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
+      # The worker dispatches agent tool calls, so it is a provisioning trigger
+      # in its own right; without this a reaped instance stays down for agents.
+      MCP_LAZY_PROVISIONING_ENABLED: '{{ .Values.mcpManager.serverless.enabled }}'
 
   application:
     secrets:

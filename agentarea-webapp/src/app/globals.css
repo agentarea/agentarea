@@ -34,6 +34,85 @@
     background-image: var(--hatch-accent), var(--hatch-soft);
   }
 
+  /* ---- Add-a-connection modal · v2 "blueprint" sheet ---- */
+  /* dashed side rails filled with a fine 135° hatch band */
+  .conn-bp {
+    position: relative;
+    padding: 0 28px 14px;
+  }
+  .conn-bp::before,
+  .conn-bp::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 28px;
+    background: repeating-linear-gradient(
+      135deg,
+      #e9e9ec 0 1px,
+      transparent 1px 8px
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+  .conn-bp::before {
+    left: 0;
+    border-right: 1px dashed #e4e4e7;
+  }
+  .conn-bp::after {
+    right: 0;
+    border-left: 1px dashed #e4e4e7;
+  }
+  .dark .conn-bp::before,
+  .dark .conn-bp::after {
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.09) 0 1px,
+      transparent 1px 8px
+    );
+  }
+  .dark .conn-bp::before {
+    border-right-color: rgba(255, 255, 255, 0.16);
+  }
+  .dark .conn-bp::after {
+    border-left-color: rgba(255, 255, 255, 0.16);
+  }
+  /* full-width dashed divider between options, with crop-mark crosses */
+  .conn-bp-div {
+    position: relative;
+    height: 0;
+    margin: 0 -28px;
+    border-top: 1px dashed #e4e4e7;
+    z-index: 4;
+  }
+  .dark .conn-bp-div {
+    border-top-color: rgba(255, 255, 255, 0.16);
+  }
+  .conn-bp-mkp {
+    position: absolute;
+    top: 0;
+    width: 9px;
+    height: 9px;
+    pointer-events: none;
+    z-index: 5;
+    background:
+      linear-gradient(#bcbfc5, #bcbfc5) center / 1.3px 9px no-repeat,
+      linear-gradient(#bcbfc5, #bcbfc5) center / 9px 1.3px no-repeat;
+  }
+  .dark .conn-bp-mkp {
+    background:
+      linear-gradient(#6b6e76, #6b6e76) center / 1.3px 9px no-repeat,
+      linear-gradient(#6b6e76, #6b6e76) center / 9px 1.3px no-repeat;
+  }
+  .conn-bp-mkp.l {
+    left: 28px;
+    transform: translate(-50%, -50%);
+  }
+  .conn-bp-mkp.r {
+    right: 28px;
+    transform: translate(50%, -50%);
+  }
+
   /* card: soft footer band (idle) that grows upward into a full wash on hover */
   .skill-card-hatch {
     position: absolute;

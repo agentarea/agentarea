@@ -16,7 +16,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from agentarea_agents_sdk import (
@@ -35,6 +35,7 @@ from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationRequest,
     authorize_tool_invocation,
 )
+from agentarea_common.events.contract import LLM_FAILED, canonical_type
 from agentarea_common.money import to_money
 from prometheus_client import Counter
 
@@ -48,19 +49,21 @@ from ..interfaces import ActivityDependencies
 from ..models import (
     AgentConfigRequest,
     AgentConfigResult,
+    ArtifactValidationRequest,
+    ArtifactValidationResult,
     CompactMessagesRequest,
     CompactMessagesResult,
     CreateDelegationTaskRequest,
     CreateDelegationTaskResult,
     DiscoverToolProvidersResult,
-    ExecuteSkillScriptRequest,
-    ExecuteSkillScriptResult,
     ExecutionPlanRequest,
     ExecutionPlanResult,
     GoalEvaluationRequest,
     GoalEvaluationResult,
     LLMCallRequest,
     LLMCallResult,
+    MaterializeSkillFilesRequest,
+    MaterializeSkillFilesResult,
     MCPToolRequest,
     MCPToolResult,
     ReadOutputRequest,
@@ -71,11 +74,10 @@ from ..models import (
     ResolveAgentToolsResult,
     ResolvedModelInfo,
     ResolveModelRequest,
+    RuntimeDiscoveryResult,
     SearchableToolEntry,
     SearchHistoryRequest,
     SearchHistoryResult,
-    SkillFileRequest,
-    SkillFileResult,
     SkillInfo,
     StoreHistoryRequest,
     StoreHistoryResult,
@@ -90,8 +92,10 @@ from ..models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from .artifact_validation import validate_workspace_artifacts
 from .event_publisher import create_event_publisher, publish_enriched_llm_error_event
 from .heartbeat import auto_heartbeater
+from .runtime_discovery import fetch_runtime_manifest, render_runtime_prompt, runtime_event_data
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +108,30 @@ def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _agent_runtime_profile(value: Any) -> str:
+    """Read the shell tool's managed-environment selection."""
+    for tool in _as_tool_config_list(value):
+        if tool.get("name") != "agentarea/shell":
+            continue
+        settings = tool.get("settings")
+        if isinstance(settings, dict) and settings.get("package_install") is not None:
+            return str(settings["package_install"])
+    return "allowed"
+
+
+def _effective_runtime_profile(
+    execution_context: dict[str, Any] | None,
+    tools: Any,
+) -> Literal["allowed", "locked"]:
+    value = (execution_context or {}).get(
+        "package_install",
+        _agent_runtime_profile(tools),
+    )
+    if not isinstance(value, str) or value not in {"allowed", "locked"}:
+        raise ValueError("package_install must be allowed or locked")
+    return cast(Literal["allowed", "locked"], value)
 
 
 def _deny_tool_result(tool_name: str, reason: str) -> MCPToolResult:
@@ -188,88 +216,14 @@ def _agent_artifact_actor(request, user_context):
     """Build the provenance actor for files an agent writes during a task."""
     from agentarea_common.artifacts import ACTOR_AGENT, ArtifactActor
 
+    agent_id = getattr(request, "agent_id", None)
+    task_id = getattr(request, "task_id", None)
     return ArtifactActor(
         user_id=str(user_context.user_id),
         actor_type=ACTOR_AGENT,
-        agent_id=str(request.agent_id) if request.agent_id else None,
-        task_id=str(request.task_id) if request.task_id else None,
+        agent_id=str(agent_id) if agent_id else None,
+        task_id=str(task_id) if task_id else None,
     )
-
-
-async def _store_sandbox_artifacts(
-    *,
-    workspace_id: str | None,
-    task_id: str | None,
-    artifacts: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Persist sandbox-returned artifacts into task artifact storage.
-
-    Provenance is not recorded here: the skill-script request carries neither
-    the acting agent nor the user, so these objects show no history. Agent file
-    writes that go through the file/web/shell toolsets are attributed normally.
-    """
-    import base64
-    from pathlib import PurePosixPath
-
-    if not artifacts:
-        return []
-
-    stored_refs: list[dict[str, Any]] = []
-    if not workspace_id:
-        return [
-            {
-                "requested_path": item.get("path") if isinstance(item, dict) else "",
-                "error": "workspace_id is required to store sandbox artifacts",
-            }
-            for item in artifacts
-        ]
-
-    from agentarea_common.artifacts import ArtifactService
-
-    storage = ArtifactService()
-    base_prefix = f"tasks/{task_id}" if task_id else "shared"
-    for item in artifacts:
-        if not isinstance(item, dict):
-            continue
-        requested_path = str(item.get("path") or "")
-        entry: dict[str, Any] = {
-            "requested_path": requested_path,
-            "size": item.get("size") or 0,
-            "content_type": item.get("content_type"),
-        }
-        if item.get("error"):
-            entry["error"] = item.get("error")
-            stored_refs.append(entry)
-            continue
-
-        content_b64 = item.get("content_base64") or ""
-        if not content_b64:
-            entry["error"] = "sandbox returned an empty artifact payload"
-            stored_refs.append(entry)
-            continue
-
-        try:
-            clean_name = PurePosixPath(requested_path.replace("\\", "/")).name or "artifact.bin"
-            artifact_path = f"{base_prefix}/sandbox/{clean_name}"
-            data = base64.b64decode(content_b64)
-            stored = await storage.put(
-                str(workspace_id),
-                artifact_path,
-                data,
-                item.get("content_type"),
-            )
-            entry.update(
-                {
-                    "artifact_path": stored.path,
-                    "size": stored.size,
-                    "content_type": stored.content_type,
-                }
-            )
-        except Exception as exc:
-            entry["error"] = f"failed to store artifact: {exc}"
-        stored_refs.append(entry)
-
-    return stored_refs
 
 
 # Bounded queue for fire-and-forget last_dispatch persistence (instance_id, payload)
@@ -332,12 +286,31 @@ def make_agent_activities(dependencies: ActivityDependencies):
     container = ActivityServiceContainer(dependencies)
 
     @activity.defn
+    async def discover_runtime_manifest_activity(
+        package_install: Literal["allowed", "locked"] = "allowed",
+    ) -> RuntimeDiscoveryResult:
+        """Discover the manifest exposed by the active sandbox data plane."""
+        return await fetch_runtime_manifest(
+            dependencies.settings.mcp.MCP_MANAGER_URL,
+            package_install=package_install,
+        )
+
+    @activity.defn(name="validate_artifacts_activity")
+    async def validate_artifacts_activity(
+        request: ArtifactValidationRequest,
+    ) -> ArtifactValidationResult:
+        """Completion barrier: every declared deliverable must be durable in the task workspace."""
+        from agentarea_common.artifacts import WorkspaceRepository
+
+        repository = WorkspaceRepository()
+        return await validate_workspace_artifacts(request, repository=repository)
+
+    @activity.defn
     async def build_agent_config_activity(
         request: AgentConfigRequest,
     ) -> AgentConfigResult:
         """Build agent configuration including skills."""
         user_context = create_user_context(request.user_context_data)
-
         async with ActivityContext(container, user_context) as ctx:
             agent_service = await ctx.get_agent_service()
 
@@ -351,6 +324,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 agent = await agent_service.get_with_catalog(request.agent_id)
             if not agent:
                 raise AgentNotFoundError(f"Agent {request.agent_id} not found")
+
+            package_install = _effective_runtime_profile(
+                request.execution_context,
+                agent.tools,
+            )
+            runtime = await discover_runtime_manifest_activity(package_install)
 
             # Build skill information
             skills_info = []
@@ -394,7 +373,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 id=str(agent.id),
                 name=agent.name,
                 description=agent.description or "",
-                instruction=agent.instruction or "",
+                instruction=(agent.instruction or "")
+                + render_runtime_prompt(runtime, package_install=package_install),
                 agent_type=getattr(agent, "agent_type", "stateless") or "stateless",
                 model_id=model_id_str or "",
                 context_window=context_window,
@@ -406,6 +386,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 execution_context=request.execution_context,
                 step_type=request.step_type,
                 skills=skills_info,
+                runtime=runtime,
+                runtime_event_data=runtime_event_data(runtime, package_install=package_install),
             )
 
     @activity.defn
@@ -684,6 +666,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 event_publisher = create_event_publisher(
                     dependencies.event_broker,
                     request.task_id,
+                    execution_id=request.execution_id,
+                    iteration=request.iteration,
                     broker_client=dependencies.broker_client,
                 )
 
@@ -757,7 +741,6 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     event_broker=dependencies.event_broker,
                 )
 
-            # Legacy error handling for backward compatibility
             error_type = type(e).__name__
             error_message = str(e)
 
@@ -831,28 +814,70 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     )
 
                     # Build runtime kwargs for tools that need request context.
-                    # The file tool is backed by S3 (RustFS locally) and keyed
-                    # under ``workspaces/{workspace_id}/tasks/{task_id}/`` so
-                    # artifacts are grouped by workspace and scoped per task.
                     extra_kwargs: dict = {}
-                    if tool_name in (
-                        "agentarea/files",
-                        "agentarea/web",
-                        "agentarea/workspace_files",
-                    ):
+                    if tool_name in ("agentarea/files", "agentarea/workspace_files"):
+                        # The file tool must write to the same filesystem bash
+                        # (agentarea/shell) runs in, so code the agent saves is
+                        # visible to the commands it runs. SandboxFileStore
+                        # targets the pod /workspace via the control-plane
+                        # sandbox file API instead of the S3 task workspace bash
+                        # cannot see. No workspace_repository is passed, so
+                        # FileToolset resolves against self.storage.
+                        from agentarea_agents_sdk.tools.sandbox_file_store import SandboxFileStore
                         from agentarea_common.artifacts import (
-                            ArtifactService,
                             DbArtifactEventRecorder,
+                            WorkspaceRepository,
                         )
 
-                        base_prefix = f"tasks/{request.task_id}" if request.task_id else "shared"
                         extra_kwargs = {
-                            "storage": ArtifactService(
-                                recorder=DbArtifactEventRecorder(),
-                                actor=_agent_artifact_actor(request, user_context),
+                            "storage": SandboxFileStore(
+                                mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+                                workspace_id=str(request.workspace_id),
+                                task_id=str(request.task_id) if request.task_id else "",
+                                # Write-through so saved files reach the durable,
+                                # user-visible task workspace the /files API serves.
+                                durable=WorkspaceRepository(
+                                    recorder=DbArtifactEventRecorder(),
+                                    actor=_agent_artifact_actor(request, user_context),
+                                ),
                             ),
                             "workspace_id": str(request.workspace_id),
-                            "base_prefix": base_prefix,
+                        }
+                    elif tool_name == "agentarea/context":
+                        # Read-only access to the org context store (tier 1).
+                        # ArtifactService is workspace-scoped, so the task can
+                        # only read its own workspace's org context. No recorder
+                        # is wired because this tool never writes.
+                        from agentarea_common.artifacts import ArtifactService
+
+                        extra_kwargs = {
+                            "storage": ArtifactService(),
+                            "workspace_id": str(request.workspace_id),
+                        }
+                    elif tool_name == "agentarea/web":
+                        # Web downloads must land on the SAME sandbox filesystem
+                        # bash runs in (via SandboxFileStore), not durable-only,
+                        # so a binary the agent fetches is visible to the shell
+                        # commands it runs next. Durable write-through keeps it
+                        # retrievable through the /files API. Mirrors agentarea/files.
+                        from agentarea_agents_sdk.tools.sandbox_file_store import SandboxFileStore
+                        from agentarea_common.artifacts import (
+                            DbArtifactEventRecorder,
+                            WorkspaceRepository,
+                        )
+
+                        extra_kwargs = {
+                            "storage": SandboxFileStore(
+                                mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+                                workspace_id=str(request.workspace_id),
+                                task_id=str(request.task_id) if request.task_id else "",
+                                durable=WorkspaceRepository(
+                                    recorder=DbArtifactEventRecorder(),
+                                    actor=_agent_artifact_actor(request, user_context),
+                                ),
+                            ),
+                            "workspace_id": str(request.workspace_id),
+                            "task_id": str(request.task_id) if request.task_id else "",
                         }
                     elif tool_name == "agentarea/triggers":
                         # The triggers tool defaults agent_id/workspace_id/user_id to
@@ -876,11 +901,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         except Exception:
                             wf_id = ""
                         from agentarea_common.artifacts import (
-                            ArtifactService,
                             DbArtifactEventRecorder,
+                            WorkspaceRepository,
                         )
 
-                        base_prefix = f"tasks/{request.task_id}" if request.task_id else "shared"
                         extra_kwargs = {
                             "mcp_manager_url": dependencies.settings.mcp.MCP_MANAGER_URL,
                             "ctx": ToolInvocationContext(
@@ -895,12 +919,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
                                     if v is not None
                                 },
                             ),
-                            "storage": ArtifactService(
+                            "workspace_repository": WorkspaceRepository(
                                 recorder=DbArtifactEventRecorder(),
                                 actor=_agent_artifact_actor(request, user_context),
                             ),
                             "workspace_id": str(request.workspace_id),
-                            "base_prefix": base_prefix,
+                            "task_id": str(request.task_id) if request.task_id else "",
                         }
 
                     # Create and register the code tool instance
@@ -1229,6 +1253,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     result=result_text,
                     execution_time=str(result.get("execution_time") or ""),
                     error=result.get("error"),
+                    exit_code=result.get("exit_code"),
+                    outcome=result.get("outcome"),
+                    artifact_paths=[str(p) for p in (result.get("artifact_paths") or [])],
                     service_cost=float(result.get("service_cost") or 0.0),
                     payment=result.get("payment")
                     if isinstance(result.get("payment"), dict)
@@ -1472,7 +1499,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         errors.append(f"DB storage failed for {event['event_type']}: {db_error!s}")
 
                     # 3. Handle LLM error events locally for immediate action
-                    if event["event_type"].startswith("LLM") and "Failed" in event["event_type"]:
+                    if canonical_type(event["event_type"]) == LLM_FAILED:
                         try:
                             await handle_llm_error_event(domain_event)
                         except Exception as handler_error:
@@ -1597,95 +1624,6 @@ def make_agent_activities(dependencies: ActivityDependencies):
             except Exception as e:
                 logger.error(f"Failed to update task status: {e}")
                 return UpdateTaskStatusResult(success=False, error=str(e))
-
-    @activity.defn
-    async def resolve_skill_file_activity(
-        request: SkillFileRequest,
-    ) -> SkillFileResult:
-        """Resolve a file from a skill package.
-
-        This activity retrieves a file from a skill's S3 storage,
-        returning either the content directly or a presigned URL
-        for larger files.
-        """
-        try:
-            from agentarea_agents.infrastructure.skill_storage_service import (
-                SkillStorageService,
-            )
-
-            user_context = create_system_context(request.workspace_id)
-
-            async with ActivityContext(container, user_context) as ctx:
-                # Get skill from database
-                skill_service = await ctx.get_skill_service()
-                skill = await skill_service.get(request.skill_id)
-
-                if not skill:
-                    return SkillFileResult(
-                        success=False,
-                        error=f"Skill {request.skill_id} not found",
-                    )
-
-                # Handle content-only skills
-                if not skill.s3_path:
-                    # For content-only skills, check if requesting the main file
-                    if request.file_path.lower() in ("skill.md", "readme.md"):
-                        content = skill.content or ""
-                        return SkillFileResult(
-                            success=True,
-                            content=content.encode("utf-8"),
-                            content_text=content,
-                            content_type="text/markdown",
-                            size=len(content),
-                        )
-                    return SkillFileResult(
-                        success=False,
-                        error=f"Skill {request.skill_id} has no file storage (content-only)",
-                    )
-
-                # Get file from S3
-                storage_service = SkillStorageService()
-
-                try:
-                    content = await storage_service.get_file_content(
-                        skill.s3_path,
-                        request.file_path,
-                    )
-
-                    # Determine content type
-                    content_type = storage_service._guess_content_type(request.file_path)
-
-                    # For text files, also provide text representation
-                    content_text = None
-                    if content_type.startswith("text/") or content_type in (
-                        "application/json",
-                        "application/x-yaml",
-                    ):
-                        try:
-                            content_text = content.decode("utf-8")
-                        except UnicodeDecodeError:
-                            pass  # Binary content
-
-                    return SkillFileResult(
-                        success=True,
-                        content=content,
-                        content_text=content_text,
-                        content_type=content_type,
-                        size=len(content),
-                    )
-
-                except FileNotFoundError:
-                    return SkillFileResult(
-                        success=False,
-                        error=f"File not found: {request.file_path}",
-                    )
-
-        except Exception as e:
-            logger.error(f"Failed to resolve skill file: {e}")
-            return SkillFileResult(
-                success=False,
-                error=str(e),
-            )
 
     @activity.defn
     @auto_heartbeater
@@ -1943,154 +1881,136 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     summary=f"Failed to recall history: {e}",
                 )
 
-    @activity.defn(name="execute_skill_script_activity")
-    async def execute_skill_script_activity(
-        request: ExecuteSkillScriptRequest,
-    ) -> ExecuteSkillScriptResult:
-        """Execute a skill script through the sandbox control/data plane.
+    @activity.defn(name="materialize_skill_files_activity")
+    async def materialize_skill_files_activity(
+        request: MaterializeSkillFilesRequest,
+    ) -> MaterializeSkillFilesResult:
+        """Copy a skill's bundle into the task's sandbox workspace.
 
-        The activity schedules a sandbox execution, then polls the durable
-        execution record while the data-plane runner owns actual process
-        execution.
+        The sandbox workspace persists for the life of the workflow, so the
+        bundle is uploaded once at activation and stays on disk for every later
+        shell call. A skill carrying only prose is still a bundle — its text is
+        written as SKILL.md, so there is one kind of skill, not two.
         """
-        import asyncio
-        import time
+        from agentarea_agents.infrastructure.skill_storage_service import (
+            SkillStorageService,
+        )
+        from agentarea_common.artifacts import (
+            DbArtifactEventRecorder,
+            WorkspaceRepository,
+        )
 
-        import httpx
-        from agentarea_common.config.mcp import MCPSettings
-
-        mcp_settings = MCPSettings()
-        url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/executions"
-
-        command_payload: dict[str, Any] = {
-            "script_content": request.script_content,
-            "script_name": request.script_name,
-            "args": request.args,
-            "env": request.env,
-            "artifact_paths": request.artifact_paths,
-            "timeout_seconds": request.timeout_seconds,
-        }
-        # Resolve task scope from Temporal context — the workflow stays
-        # oblivious to sandbox internals. Activity context is unavailable
-        # only in unit-test paths that call the activity directly; the
-        # sandbox tolerates a missing workflow_id (legacy stateless mode).
-        workflow_id: str | None = None
-        try:
-            workflow_id = activity.info().workflow_id
-            command_payload["workflow_id"] = workflow_id
-        except Exception as exc:
-            logger.debug("activity.info() unavailable, running without workflow_id: %s", exc)
-
-        payload: dict[str, Any] = {
-            "workflow_id": workflow_id,
-            "workspace_id": request.workspace_id,
-            "task_id": request.task_id,
-            "runtime": {"provider": "agentarea-k8s"},
-            "command": command_payload,
-        }
-        payload = {key: value for key, value in payload.items() if value}
+        from .skill_materialization import (
+            assemble_skill_bundle,
+            build_skill_workspace_files,
+            skill_workspace_dir,
+        )
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.post(url, json=payload)
-
-                if resp.status_code >= 400:
-                    logger.error(f"Sandbox execution failed: {resp.status_code} {resp.text[:300]}")
-                    return ExecuteSkillScriptResult(
-                        stderr=f"MCP Manager returned {resp.status_code}: {resp.text[:300]}",
-                        exit_code=1,
+            if not request.workspace_id:
+                raise ValueError("skill materialization requires a workspace_id")
+            user_context = create_system_context(request.workspace_id)
+            async with ActivityContext(container, user_context) as ctx:
+                skill_service = await ctx.get_skill_service()
+                skill = await skill_service.get(request.skill_id)
+                if not skill:
+                    return MaterializeSkillFilesResult(
+                        success=False, error=f"Skill {request.skill_id} not found"
                     )
 
-                data = resp.json()
-                if isinstance(data, dict) and data.get("id"):
-                    deadline = time.monotonic() + request.timeout_seconds + 60
-                    while data.get("status") not in {"completed", "failed", "cancelled"}:
-                        if time.monotonic() >= deadline:
-                            return ExecuteSkillScriptResult(
-                                stderr=(
-                                    "Timed out waiting for sandbox execution "
-                                    f"{data.get('id')} to complete"
+                # A skill is a folder. Files may be absent, prose may be absent,
+                # but the folder always gets a manifest — there is one kind of
+                # skill, not a "content-only" second kind.
+                bundled: list[tuple[str, bytes]] = []
+                if skill.s3_path:
+                    storage_service = SkillStorageService()
+                    for info in await storage_service.list_files(skill.s3_path):
+                        relative_path = getattr(info, "path", None) or getattr(info, "name", "")
+                        if not relative_path:
+                            continue
+                        bundled.append(
+                            (
+                                relative_path,
+                                await storage_service.get_file_content(
+                                    skill.s3_path, relative_path
                                 ),
-                                exit_code=1,
                             )
-                        await asyncio.sleep(2)
-                        status_resp = await client.get(
-                            f"{mcp_settings.MCP_MANAGER_URL}/sandbox/executions/{data['id']}"
                         )
-                        if status_resp.status_code >= 400:
-                            return ExecuteSkillScriptResult(
-                                stderr=(
-                                    f"MCP Manager status returned {status_resp.status_code}: "
-                                    f"{status_resp.text[:300]}"
-                                ),
-                                exit_code=1,
-                            )
-                        data = status_resp.json()
 
-                    if data.get("status") != "completed":
-                        return ExecuteSkillScriptResult(
-                            stderr=(
-                                f"Sandbox execution {data.get('status')}: "
-                                f"{data.get('error') or 'no error detail'}"
-                            ),
-                            exit_code=1,
-                        )
-                    data = data.get("result") or {}
+                files = assemble_skill_bundle(skill.content, bundled)
+                workspace_files = build_skill_workspace_files(
+                    request.skill_name, str(request.skill_id), files
+                )
+                if not workspace_files:
+                    return MaterializeSkillFilesResult(
+                        success=False,
+                        error=f"Skill '{request.skill_name}' bundle contained no usable paths",
+                    )
 
-                stdout = await _offload_large_activity_output(
-                    workspace_id=request.workspace_id,
-                    task_id=request.task_id,
-                    output_id=_activity_output_id("skill_stdout"),
-                    content=data.get("stdout", "") or "",
+                if not request.workspace_id or not request.task_id:
+                    return MaterializeSkillFilesResult(
+                        success=False,
+                        error="workspace_id and task_id are required for skill materialization",
+                    )
+                repository = WorkspaceRepository(
+                    recorder=DbArtifactEventRecorder(),
+                    actor=_agent_artifact_actor(request, user_context),
                 )
-                stderr = await _offload_large_activity_output(
-                    workspace_id=request.workspace_id,
-                    task_id=request.task_id,
-                    output_id=_activity_output_id("skill_stderr"),
-                    content=data.get("stderr", "") or "",
+                await repository.put_files(
+                    str(request.workspace_id),
+                    str(request.task_id),
+                    workspace_files,
+                    provenance={
+                        "source": "skill",
+                        "skill_id": str(request.skill_id),
+                        "skill_name": request.skill_name,
+                    },
+                    owner=request.workflow_id or None,
                 )
-                artifacts = await _store_sandbox_artifacts(
-                    workspace_id=request.workspace_id,
-                    task_id=request.task_id,
-                    artifacts=data.get("artifacts") or [],
-                )
-                return ExecuteSkillScriptResult(
-                    stdout=stdout,
-                    stderr=stderr,
-                    exit_code=data.get("exit_code", 0),
-                    execution_time_ms=data.get("execution_time_ms", 0),
-                    artifacts=artifacts,
+
+                directory = skill_workspace_dir(request.skill_name, str(request.skill_id))
+                return MaterializeSkillFilesResult(
+                    success=True,
+                    directory=directory,
+                    paths=list(workspace_files),
                 )
 
         except Exception as e:
-            logger.error(f"Sandbox execution error: {e}")
-            return ExecuteSkillScriptResult(
-                stderr=f"Failed to execute script: {e}",
-                exit_code=1,
+            logger.error(f"Skill materialization error: {e}", exc_info=True)
+            return MaterializeSkillFilesResult(
+                success=False, error=f"Failed to materialize skill files: {e}"
             )
 
-    @activity.defn(name="cleanup_sandbox_workflow_activity")
-    async def cleanup_sandbox_workflow_activity(workflow_id: str) -> None:
-        """Delete the warm-pool sandbox pod assigned to a completed workflow."""
+    @activity.defn(name="cleanup_sandbox_task_activity")
+    async def cleanup_sandbox_task_activity(task_id: str) -> None:
+        """Retire the warm-pool sandbox pod assigned to a completed task."""
         import httpx
         from agentarea_common.config.mcp import MCPSettings
 
-        if not workflow_id:
+        if not task_id:
             return
 
         mcp_settings = MCPSettings()
-        url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/workflow/{workflow_id}"
+        cleanup_secret = mcp_settings.SANDBOX_CLEANUP_AUTH_SECRET
+        if cleanup_secret is None or not cleanup_secret.get_secret_value():
+            logger.error("Sandbox task cleanup auth secret is not configured")
+            return
+
+        url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/task/{task_id}"
+        headers = {
+            "Authorization": f"Bearer {cleanup_secret.get_secret_value()}",
+        }
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.delete(url)
+                resp = await client.delete(url, headers=headers)
                 if resp.status_code >= 400:
                     logger.warning(
-                        "Sandbox workflow cleanup returned %s: %s",
+                        "Sandbox task cleanup returned %s: %s",
                         resp.status_code,
                         resp.text[:300],
                     )
         except Exception as e:
-            logger.warning("Sandbox workflow cleanup failed for %s: %s", workflow_id, e)
+            logger.warning("Sandbox task cleanup failed for %s: %s", task_id, e)
 
     # --- Dynamic Context Discovery Activities ---
 
@@ -2217,6 +2137,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
     # Return all activity functions
     return [
+        discover_runtime_manifest_activity,
+        validate_artifacts_activity,
         build_agent_config_activity,
         discover_available_tools_activity,
         discover_tool_providers_activity,
@@ -2226,13 +2148,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
         create_execution_plan_activity,
         evaluate_goal_progress_activity,
         publish_workflow_events_activity,
-        resolve_skill_file_activity,
         compact_messages_activity,
         resolve_agent_tools_activity,
         recall_history_activity,
         update_task_status_activity,
-        execute_skill_script_activity,
-        cleanup_sandbox_workflow_activity,
+        materialize_skill_files_activity,
+        cleanup_sandbox_task_activity,
         store_context_output_activity,
         read_context_output_activity,
         store_history_chunk_activity,

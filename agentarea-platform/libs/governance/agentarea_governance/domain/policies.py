@@ -115,13 +115,25 @@ class ApprovalPolicy(BaseModel):
     # Who may approve, as Keto-style subject refs: "user:<id>", "group:<id>",
     # or a userset "<type>:<id>#<relation>". Empty = any workspace member (soft
     # default — see issue #198 / ADR-005 for the zero-trust posture decision).
+    # ``approvers`` holds GLOBAL approvers (a requires_human_approval / tool:*
+    # rule); per-tool approvers live in ``approvers_by_tool`` keyed by tool name
+    # so distinct tools keep distinct signoff lists.
     approvers: list[str] = Field(default_factory=list)
+    approvers_by_tool: dict[str, list[str]] = Field(default_factory=dict)
 
     @field_validator("approvers")
     @classmethod
     def _validate_approvers(cls, value: list[str]) -> list[str]:
         for ref in value:
             parse_subject(ref)  # raises ValueError on a non subject-ref (e.g. raw id)
+        return value
+
+    @field_validator("approvers_by_tool")
+    @classmethod
+    def _validate_approvers_by_tool(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
+        for refs in value.values():
+            for ref in refs:
+                parse_subject(ref)
         return value
 
 
@@ -346,6 +358,9 @@ class PolicyResolver:
             or bool(lower.requires_human_approval),
             escalation_rules=_dedupe([*higher.escalation_rules, *lower.escalation_rules]),
             approvers=_dedupe([*higher.approvers, *lower.approvers]),
+            approvers_by_tool=_merge_approvers_by_tool(
+                higher.approvers_by_tool, lower.approvers_by_tool
+            ),
         )
 
     def _merge_content_safety(
@@ -381,6 +396,15 @@ def _min_int(left: int | None, right: int | None) -> int | None:
 
 def _dedupe(values: list[str]) -> list[str]:
     return list(dict.fromkeys(values))
+
+
+def _merge_approvers_by_tool(
+    higher: dict[str, list[str]], lower: dict[str, list[str]]
+) -> dict[str, list[str]]:
+    merged: dict[str, list[str]] = {tool: list(refs) for tool, refs in higher.items()}
+    for tool, refs in lower.items():
+        merged[tool] = _dedupe([*merged.get(tool, []), *refs])
+    return merged
 
 
 def _pattern_is_within(child: str, parent: str) -> bool:

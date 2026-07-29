@@ -5,8 +5,8 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import pytest
-from agentarea_api.tools import skills_toolset
-from agentarea_api.tools.skills_toolset import SkillsToolset
+from agentarea_agents.tools import skills_toolset
+from agentarea_agents.tools.skills_toolset import SkillsToolset
 
 
 @pytest.mark.asyncio

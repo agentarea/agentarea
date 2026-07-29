@@ -37,38 +37,3 @@ func (e *SharedEvent) GetDataString(key string) (string, bool) {
 	str, ok := val.(string)
 	return str, ok
 }
-
-// GetDataMap extracts a map value from the event data.
-func (e *SharedEvent) GetDataMap(key string) (map[string]interface{}, bool) {
-	val, ok := e.Data[key]
-	if !ok {
-		return nil, false
-	}
-	m, ok := val.(map[string]interface{})
-	return m, ok
-}
-
-// Event types for MCP
-const (
-	EventTypeMCPInstanceCreated = "com.agentarea.mcp.instance.created"
-	EventTypeMCPInstanceDeleted = "com.agentarea.mcp.instance.deleted"
-	EventTypeMCPInstanceStarted = "com.agentarea.mcp.instance.started"
-	EventTypeMCPInstanceStopped = "com.agentarea.mcp.instance.stopped"
-	EventTypeMCPInstanceFailed  = "com.agentarea.mcp.instance.failed"
-)
-
-// GetChannelForEventType returns the Redis channel name for an event type.
-// Pattern: agentarea.events.{domain}.{action}
-func GetChannelForEventType(eventType string) string {
-	// Convert reverse DNS to channel path
-	// com.agentarea.mcp.instance.created -> agentarea.events.mcp.instance.created
-	// For backward compatibility, also handle legacy format
-	switch eventType {
-	case EventTypeMCPInstanceCreated:
-		return "agentarea.events.mcp.instance.created"
-	case EventTypeMCPInstanceDeleted:
-		return "agentarea.events.mcp.instance.deleted"
-	default:
-		return "agentarea.events." + eventType
-	}
-}

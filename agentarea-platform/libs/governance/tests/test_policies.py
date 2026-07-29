@@ -117,14 +117,39 @@ def test_approval_cannot_be_disabled_and_rules_union():
     with pytest.raises(PolicyValidationError):
         PolicyResolver().resolve(
             [
-                PolicyDocument(
-                    approval=ApprovalPolicy(requires_human_approval=True)
-                ),
-                PolicyDocument(
-                    approval=ApprovalPolicy(requires_human_approval=False)
-                ),
+                PolicyDocument(approval=ApprovalPolicy(requires_human_approval=True)),
+                PolicyDocument(approval=ApprovalPolicy(requires_human_approval=False)),
             ]
         )
+
+
+def test_per_tool_approvers_union_across_scopes():
+    # A workspace and an agent scope both require approval for the same tool but
+    # name different approvers; the merge keeps both, keyed by the tool.
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(
+                approval=ApprovalPolicy(
+                    escalation_rules=["launch_task"],
+                    approvers_by_tool={"launch_task": ["user:alice"]},
+                )
+            ),
+            PolicyDocument(
+                approval=ApprovalPolicy(
+                    escalation_rules=["launch_task", "delete_file"],
+                    approvers_by_tool={
+                        "launch_task": ["user:bob"],
+                        "delete_file": ["user:carol"],
+                    },
+                )
+            ),
+        ]
+    )
+
+    assert effective.approval.approvers_by_tool == {
+        "launch_task": ["user:alice", "user:bob"],
+        "delete_file": ["user:carol"],
+    }
 
 
 def test_content_safety_can_only_get_stricter():
@@ -132,14 +157,10 @@ def test_content_safety_can_only_get_stricter():
         PolicyResolver().resolve(
             [
                 PolicyDocument(
-                    content_safety=ContentSafetyPolicy(
-                        prompt_injection_detection_enabled=True
-                    )
+                    content_safety=ContentSafetyPolicy(prompt_injection_detection_enabled=True)
                 ),
                 PolicyDocument(
-                    content_safety=ContentSafetyPolicy(
-                        prompt_injection_detection_enabled=False
-                    )
+                    content_safety=ContentSafetyPolicy(prompt_injection_detection_enabled=False)
                 ),
             ]
         )
@@ -155,11 +176,7 @@ def test_effective_policy_serializes_money_as_json_string():
 
 def test_to_execution_state_emits_floats_for_money():
     effective = PolicyResolver().resolve(
-        [
-            PolicyDocument(
-                budget=BudgetPolicy(run_budget_usd="10.00", service_budget_usd="5.00")
-            )
-        ]
+        [PolicyDocument(budget=BudgetPolicy(run_budget_usd="10.00", service_budget_usd="5.00"))]
     )
 
     state = effective.to_execution_state()

@@ -28,7 +28,7 @@ class TaskRepository(CurrentTaskRepository):
 
 
 class CustomAgentRepository(AgentRepository):
-    """Small compatibility helpers retained for legacy imports."""
+    """Small query helpers over AgentRepository."""
 
     async def find_agents_by_model(self, model_id: str, user_scoped: bool = False) -> list[Agent]:
         return await self.list_all(model_id=model_id)

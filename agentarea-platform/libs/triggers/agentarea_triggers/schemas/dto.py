@@ -6,8 +6,8 @@ import them without layering inversion. Field descriptions are written for
 LLM consumers (they end up in the MCP tool schema) but are equally suitable
 for REST clients reading the OpenAPI doc.
 
-The legacy ``agentarea_triggers.domain.models.TriggerCreate`` /
-``TriggerUpdate`` value objects remain as the internal service-input shape
+The ``agentarea_triggers.domain.models.TriggerCreate`` /
+``TriggerUpdate`` value objects are the internal service-input shape
 (they carry server-derived ``created_by`` / ``workspace_id``). Use
 ``TriggerCreate.to_domain(...)`` / ``TriggerUpdate.to_domain(...)`` to
 convert.
@@ -196,8 +196,8 @@ class TriggerCreate(BaseModel):
             event_types=self.event_types,
         )
         # Workspace id is server-assigned and may be ``None`` until auth resolves.
-        # Set post-construction so legacy callers can keep passing through ad-hoc
-        # values (test fixtures, system contexts) without re-validating.
+        # Set post-construction so callers can pass through ad-hoc values
+        # (test fixtures, system contexts) without re-validating.
         domain_obj.workspace_id = workspace_id
         return domain_obj
 
@@ -214,7 +214,7 @@ class TriggerUpdate(BaseModel):
         validation_alias=AliasChoices("enabled", "is_active"),
         description=(
             "Toggle the trigger active state. Maps to ``is_active`` server-side. "
-            "REST clients may pass either ``enabled`` (canonical) or ``is_active`` (legacy)."
+            "REST clients may pass either ``enabled`` (canonical) or ``is_active`` (alias)."
         ),
     )
     task_parameters: dict[str, Any] | None = None

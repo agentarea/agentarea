@@ -2,6 +2,7 @@
 Unit tests for agent task control endpoints (pause/resume) and event endpoints
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -397,6 +398,117 @@ class TestTemporalWorkflowServiceControl:
         mock_execution_service.resume_execution.assert_called_once_with(execution_id)
 
 
+class TestTemporalWorkflowOutcomeStatus:
+    """Temporal completion describes engine execution, not task success."""
+
+    def _orchestrator_with_result(self, result):
+        from agentarea_agents.infrastructure.temporal_orchestrator import (
+            TemporalWorkflowOrchestrator,
+        )
+
+        description = MagicMock()
+        description.status.name = "COMPLETED"
+        description.start_time = None
+        description.close_time = None
+        description.execution_time = None
+
+        handle = MagicMock()
+        handle.describe = AsyncMock(return_value=description)
+        handle.result = AsyncMock(return_value=result)
+
+        client = MagicMock()
+        client.get_workflow_handle.return_value = handle
+
+        orchestrator = TemporalWorkflowOrchestrator(
+            temporal_address="localhost:7233",
+            task_queue="test-queue",
+            max_concurrent_activities=1,
+            max_concurrent_workflows=1,
+        )
+        orchestrator._client = client
+        return orchestrator
+
+    @pytest.mark.asyncio
+    async def test_completed_execution_preserves_failed_task_outcome(self):
+        orchestrator = self._orchestrator_with_result(
+            SimpleNamespace(
+                success=False,
+                status="failed",
+                final_response=None,
+                conversation_history=[],
+                failure_reason="iteration_limit",
+                error_message="Maximum iterations reached (10)",
+            )
+        )
+
+        status = await orchestrator.get_workflow_status("task-1")
+
+        assert status["execution_status"] == "completed"
+        assert status["status"] == "failed"
+        assert status["success"] is False
+        assert status["failure_reason"] == "iteration_limit"
+        assert status["error"] == "Maximum iterations reached (10)"
+
+    @pytest.mark.asyncio
+    async def test_completed_execution_with_successful_output_is_completed(self):
+        orchestrator = self._orchestrator_with_result(
+            SimpleNamespace(
+                success=True,
+                status="completed",
+                final_response="Done",
+                conversation_history=[],
+                failure_reason=None,
+                error_message=None,
+            )
+        )
+
+        status = await orchestrator.get_workflow_status("task-1")
+
+        assert status["execution_status"] == "completed"
+        assert status["status"] == "completed"
+        assert status["success"] is True
+        assert status["result"]["response"] == "Done"
+
+    @pytest.mark.asyncio
+    async def test_success_without_final_output_is_failed(self):
+        orchestrator = self._orchestrator_with_result(
+            SimpleNamespace(
+                success=True,
+                status="completed",
+                final_response=None,
+                conversation_history=[],
+                failure_reason=None,
+                error_message=None,
+            )
+        )
+
+        status = await orchestrator.get_workflow_status("task-1")
+
+        assert status["status"] == "failed"
+        assert status["success"] is False
+        assert status["failure_reason"] == "missing_final_response"
+
+    @pytest.mark.asyncio
+    async def test_completed_execution_preserves_blocked_task_outcome(self):
+        orchestrator = self._orchestrator_with_result(
+            SimpleNamespace(
+                success=False,
+                status="blocked",
+                final_response=None,
+                conversation_history=[],
+                failure_reason="provider_quota_exceeded",
+                error_message="Provider quota exceeded",
+            )
+        )
+
+        status = await orchestrator.get_workflow_status("task-1")
+
+        assert status["execution_status"] == "completed"
+        assert status["status"] == "blocked"
+        assert status["success"] is False
+        assert status["failure_reason"] == "provider_quota_exceeded"
+
+
 class TestSendWorkflowCommandDelivery:
     """The orchestrator must distinguish "workflow not running" from real
     failures.
@@ -463,4 +575,36 @@ class TestSendWorkflowCommandDelivery:
                 "task-1", "change_model", {"model_id": "m"}
             )
 
+    @pytest.mark.asyncio
+    async def test_continuation_uses_request_response_update(self):
+        orch = self._orchestrator()
+        handle = MagicMock()
+        handle.execute_update = AsyncMock(
+            return_value={"accepted": True, "continuation_count": 2}
+        )
+        client = MagicMock()
+        client.get_workflow_handle.return_value = handle
+        orch._client = client
 
+        result = await orch.continue_workflow(
+            "task-1", {"additional_iterations": 5, "additional_budget_usd": "1.50"}
+        )
+
+        assert result == {"accepted": True, "continuation_count": 2}
+        handle.execute_update.assert_awaited_once_with(
+            "continue_execution",
+            {"additional_iterations": 5, "additional_budget_usd": "1.50"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_continuation_closed_workflow_is_rejected(self):
+        orch = self._orchestrator()
+        handle = MagicMock()
+        handle.execute_update = AsyncMock(side_effect=RuntimeError("workflow already completed"))
+        client = MagicMock()
+        client.get_workflow_handle.return_value = handle
+        orch._client = client
+
+        result = await orch.continue_workflow("task-1", {"additional_iterations": 5})
+
+        assert result == {"accepted": False, "reason": "workflow_not_running"}

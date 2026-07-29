@@ -3,69 +3,46 @@ model
 
 type User
 
+type Agent
+
 type Workspace
   relations
     define members: [User, Agent]
+    define admin: [User]
 
-type SkillCollection
+type role
   relations
-    define parents: [Workspace]
-    define viewers: [User, Agent, Workspace#members]
-    define editors: [User, Agent, Workspace#members]
-    define owners: [User, Agent]
-    define use: viewers or editors or owners
-    define configure: editors or owners
-    define manage: owners
+    define can_read: [User:*, Agent:*]
+    define can_write: [User:*, Agent:*]
+    define can_manage: [User:*, Agent:*]
 
-type Skill
+type role_assignment
   relations
-    define collections: [SkillCollection]
-    define viewers: [User, Agent]
-    define editors: [User, Agent]
-    define owners: [User, Agent]
-    define use: viewers or editors or owners or use from collections
-    define configure: editors or owners or configure from collections
-    define manage: owners or manage from collections
+    define assignee: [User, Agent]
+    define role: [role]
+    define can_read: assignee and can_read from role
+    define can_write: assignee and can_write from role
+    define can_manage: assignee and can_manage from role
 
-type MCPServer
-  relations
-    define connectors: [User, Agent, Workspace#members]
-    define operators: [User, Agent]
-    define connect: connectors or operators
-    define manage: operators
-
-type Agent
-  relations
-    define tasks: [Task]
-    define operators: [User, Agent, Workspace#members]
-    define owners: [User]
-    define operate: operators or owners
-    define own: owners
-    define run_task: tasks
-
-type Client
-  relations
-    define users: [User, Workspace#members]
-    define owners: [User]
-    define use: users or owners
-    define manage: owners
-
-type Session
-  relations
-    define tasks: [Task]
-
-type Task
-
-type Tool
+type project
   relations
     define workspace: [Workspace]
-    define callers: [User, Task, Session#tasks, Agent#tasks]
-    define can_call: callers and members from workspace
+    define parent: [project]
+    define role_assignment: [role_assignment]
+    define reader: [User, Agent]
+    define writer: [User, Agent]
+    define manager: [User, Agent]
+    define can_read: reader or can_read from role_assignment or can_read from parent or admin from workspace
+    define can_write: writer or can_write from role_assignment or can_write from parent or admin from workspace
+    define can_manage: manager or can_manage from role_assignment or can_manage from parent or admin from workspace
 
-type ToolResource
+type resource
   relations
-    define workspace: [Workspace]
-    define tool: [Tool]
-    define callers: [User, Task, Session#tasks, Agent#tasks]
-    define direct_call: callers and members from workspace
-    define can_call: direct_call or can_call from tool
+    define project: [project]
+    define role_assignment: [role_assignment]
+    define reader: [User, Agent]
+    define writer: [User, Agent]
+    define manager: [User, Agent]
+    define can_read: reader or can_read from role_assignment or can_read from project
+    define can_write: writer or can_write from role_assignment or can_write from project
+    define can_manage: manager or can_manage from role_assignment or can_manage from project

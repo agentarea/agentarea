@@ -89,6 +89,7 @@ The following table lists configurable parameters of the chart and their default
 | global.redis.connectionTimeout | string | `"5s"` |  |
 | global.storage.type | string | `"rustfs"` |  |
 | global.storage.endpoint | string | `""` |  |
+| global.storage.publicEndpoint | string | `""` |  |
 | global.storage.bucket | string | `"agentarea-documents"` |  |
 | global.storage.region | string | `"us-east-1"` |  |
 | global.storage.s3.accessKeyId | string | `""` |  |
@@ -98,6 +99,7 @@ The following table lists configurable parameters of the chart and their default
 | global.storage.gcs.credentials | string | `""` |  |
 | global.storage.rustfs.accessKey | string | `""` |  |
 | global.storage.rustfs.secretKey | string | `""` |  |
+| global.storage.cors.allowedOrigins | list | `[]` |  |
 | global.temporal.host | string | `""` |  |
 | global.temporal.port | int | `7233` |  |
 | global.temporal.namespace | string | `"default"` |  |
@@ -279,6 +281,9 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.image.tag | string | `"latest"` |  |
 | mcpManager.service.type | string | `"ClusterIP"` |  |
 | mcpManager.service.port | int | `80` |  |
+| mcpManager.serverless.enabled | bool | `false` |  |
+| mcpManager.serverless.idleTimeout | string | `"10m"` |  |
+| mcpManager.serverless.sweepInterval | string | `"60s"` |  |
 | mcpManager.instanceNetworkPolicy.enabled | bool | `true` |  |
 | mcpManager.instanceNetworkPolicy.dnsNamespace | string | `"kube-system"` |  |
 | mcpManager.instanceNetworkPolicy.blockedEgressCIDRs[0] | string | `"10.0.0.0/8"` |  |
@@ -306,9 +311,17 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.features.enabled[1] | string | `"state_reconciler"` |  |
 | mcpManager.features.variants | object | `{}` |  |
 | mcpManager.warmPool.enabled | bool | `false` |  |
-| mcpManager.warmPool.image.repository | string | `"agentarea/mcp-runner"` |  |
-| mcpManager.warmPool.image.tag | string | `"latest"` |  |
-| mcpManager.warmPool.image.pullPolicy | string | `"IfNotPresent"` |  |
+| mcpManager.warmPool.profiles[0].packageInstall | string | `"allowed"` |  |
+| mcpManager.warmPool.profiles[0].managedEnvironment | string | `"mutable"` |  |
+| mcpManager.warmPool.profiles[0].image.repository | string | `"agentarea/agentarea-mcp-runner"` |  |
+| mcpManager.warmPool.profiles[0].image.tag | string | `"latest"` |  |
+| mcpManager.warmPool.profiles[0].image.pullPolicy | string | `"IfNotPresent"` |  |
+| mcpManager.warmPool.profiles[1].packageInstall | string | `"locked"` |  |
+| mcpManager.warmPool.profiles[1].managedEnvironment | string | `"immutable"` |  |
+| mcpManager.warmPool.profiles[1].image.repository | string | `"agentarea/agentarea-mcp-runner-locked"` |  |
+| mcpManager.warmPool.profiles[1].image.tag | string | `"latest"` |  |
+| mcpManager.warmPool.profiles[1].image.pullPolicy | string | `"IfNotPresent"` |  |
+| mcpManager.warmPool.lockedNetworkPolicy.s3EgressCIDRs | list | `[]` |  |
 | mcpManager.warmPool.maxExecutionTimeoutSeconds | int | `1800` |  |
 | mcpManager.warmPool.size | int | `10` |  |
 | mcpManager.warmPool.logLevel | string | `"info"` |  |

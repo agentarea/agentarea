@@ -1,0 +1,39 @@
+---
+- name: Require an activation secret (fail hard — no default backdoor)
+  ansible.builtin.assert:
+    that:
+      - sandbox_activation_auth_secret | length > 0
+    fail_msg: >-
+      sandbox_activation_auth_secret is required (the HMAC secret shared with
+      mcp-manager). Provide it via vault or --extra-vars. Provisioning refuses
+      to run without it; a default secret would be a backdoor.
+  when: sandbox_executor_enabled | bool
+
+- name: Install Docker engine
+  ansible.builtin.import_tasks: docker.yml
+  tags: [docker]
+
+- name: Install and register gVisor (runsc)
+  ansible.builtin.import_tasks: gvisor.yml
+  when: sandbox_runtime == "runsc"
+  tags: [gvisor]
+
+- name: Apply host hardening (sysctl, egress firewall, auto-patch)
+  ansible.builtin.import_tasks: hardening.yml
+  tags: [hardening]
+
+- name: Make this host a single-node execution cluster
+  ansible.builtin.import_tasks: k3s.yml
+  when: sandbox_k3s_enabled | bool
+  tags: [k3s]
+
+# In Kubernetes mode the sandbox is a pod the control plane schedules, so the
+# standalone executor container has nothing to do. Running both would leave a
+# second, unreferenced execution path on the box — the kind of thing that rots
+# quietly and confuses the next person to debug this.
+- name: Deploy the sandbox executor
+  ansible.builtin.import_tasks: executor.yml
+  when:
+    - sandbox_executor_enabled | bool
+    - not (sandbox_k3s_enabled | bool)
+  tags: [executor]

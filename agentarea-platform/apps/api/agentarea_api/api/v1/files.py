@@ -3,36 +3,59 @@
 Lists and serves the files stored under the current workspace's S3 prefix.
 Files end up here from any source — agent tool runs, task artifacts, manual
 uploads from a project — so this is a read-only window into whatever the
-workspace already owns. Workspace isolation is enforced by ``ArtifactService``,
-which prepends ``workspaces/{workspace_id}/`` to every key from
-``UserContextDep``.
+workspace already owns. Task workspace paths are resolved through committed
+manifests; raw manifests and immutable-object keys are never exposed here.
 """
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import logging
+import re
+import unicodedata
 from pathlib import PurePosixPath
 from typing import Annotated
 from urllib.parse import quote
+from uuid import uuid4
 
 from agentarea_api.api.deps.database import ReadDatabaseSessionDep
 from agentarea_common.artifacts import (
     ArtifactActor,
     ArtifactEvent,
+    ArtifactIntegrityError,
     ArtifactService,
     DbArtifactEventRecorder,
+    WorkspaceRepository,
+    WorkspaceValidationError,
+    normalize_workspace_path,
 )
+from agentarea_common.artifacts.workspace import DEFAULT_MAX_FILE_BYTES
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config.app import get_app_settings
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Response, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
+
+# Server-proxied attachment uploads are buffered in memory to verify their size
+# and digest, so cap them at the same per-file ceiling the task workspace
+# enforces. The presigned path re-checks size/quota at attach time.
+MAX_ATTACHMENT_BYTES = DEFAULT_MAX_FILE_BYTES
+_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _attachment_content_disposition(filename: str) -> str:
+    fallback = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode()
+    fallback = re.sub(r"[^A-Za-z0-9._-]+", "_", fallback).strip("._-") or "file.bin"
+    encoded = quote(filename, safe="")
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
+
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -57,6 +80,29 @@ class WorkspaceFileDownloadResponse(BaseModel):
     path: str
 
 
+class StagedFileResponse(BaseModel):
+    ref: str
+    filename: str
+    size: int
+    sha256: str
+    content_type: str | None = None
+
+
+class PresignUploadRequest(BaseModel):
+    filename: str = Field(..., min_length=1)
+    content_type: str = Field(..., min_length=1)
+    sha256: str
+    size: int
+
+    model_config = {"extra": "forbid"}
+
+
+class PresignUploadResponse(BaseModel):
+    ref: str
+    upload_url: str
+    expires_in: int
+
+
 class ArtifactEventResponse(BaseModel):
     action: str
     actor_type: str
@@ -73,6 +119,30 @@ class ArtifactHistoryResponse(BaseModel):
 
 def _get_artifact_service() -> ArtifactService:
     return ArtifactService()
+
+
+def _get_workspace_repository() -> WorkspaceRepository:
+    return WorkspaceRepository()
+
+
+def _task_workspace_path(file_path: str) -> tuple[str, str] | None:
+    """Parse the public ``tasks/{id}/workspace/{path}`` logical namespace."""
+    clean = file_path.lstrip("/")
+    parts = PurePosixPath(clean).parts
+    if len(parts) < 4 or parts[0] != "tasks" or parts[2] != "workspace":
+        return None
+    if clean != "/".join(parts) or "\\" in clean:
+        raise WorkspaceValidationError("workspace path is not canonical")
+    relative_path = normalize_workspace_path("/".join(parts[3:]))
+    return parts[1], relative_path
+
+
+def _is_task_storage_path(file_path: str) -> bool:
+    clean = file_path.lstrip("/")
+    if clean.startswith("staging/"):
+        return True
+    parts = PurePosixPath(clean).parts
+    return bool(parts and parts[0] == "tasks")
 
 
 def _workspace_file_download_url(file_path: str) -> str:
@@ -98,6 +168,7 @@ async def list_workspace_files(
 ) -> WorkspaceFileListResponse:
     svc = _get_artifact_service()
     objects = await svc.list(user_context.workspace_id)
+    visible_objects = [obj for obj in objects if not _is_task_storage_path(obj.path)]
     files = [
         WorkspaceFileInfo(
             path=obj.path,
@@ -105,32 +176,110 @@ async def list_workspace_files(
             content_type=obj.content_type,
             last_modified=obj.last_modified,
         )
-        for obj in objects
+        for obj in visible_objects
     ]
+    workspace_repository = _get_workspace_repository()
+    task_ids = await workspace_repository.list_task_ids(user_context.workspace_id)
+    for task_id in task_ids:
+        for obj in await workspace_repository.list(user_context.workspace_id, task_id):
+            files.append(
+                WorkspaceFileInfo(
+                    path=f"tasks/{task_id}/workspace/{obj.path}",
+                    size=obj.size,
+                    content_type=obj.content_type,
+                )
+            )
     projects = await project_service.list()
     directories = [f"projects/{p.id}/" for p in projects]
     return WorkspaceFileListResponse(files=files, directories=directories)
 
 
-@router.post("", status_code=204)
-async def upload_workspace_file(
+@router.post("")
+async def upload_file(
     file: UploadFile,
     user_context: UserContextDep,
+    purpose: Annotated[str, Form()] = "workspace",
 ):
-    """Upload a file to the workspace's artifact root."""
+    """Upload a file, server-proxied.
+
+    ``purpose="workspace"`` (the default) lands the file at the workspace
+    artifact root. ``purpose="attachment"`` stages it under
+    ``staging/{id}/{filename}`` — hidden from the workspace listing — and
+    returns a ``ref`` the task-create endpoint resolves into the task workspace.
+    """
+    # Strip any directory components so an upload can't land in another prefix.
+    filename = PurePosixPath(file.filename or "unnamed").name or "unnamed"
+    content = await file.read()
     svc = ArtifactService(
         recorder=DbArtifactEventRecorder(),
         actor=ArtifactActor(user_id=user_context.user_id),
     )
-    # Strip any directory components so an upload can't land in another prefix.
-    filename = PurePosixPath(file.filename or "unnamed").name or "unnamed"
-    content = await file.read()
-    await svc.put(
+    if purpose == "workspace":
+        await svc.put(
+            user_context.workspace_id,
+            filename,
+            content,
+            content_type=file.content_type,
+        )
+        return Response(status_code=204)
+    if purpose == "attachment":
+        if len(content) > MAX_ATTACHMENT_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"attachment exceeds the {MAX_ATTACHMENT_BYTES}-byte per-file limit",
+            )
+        path = f"staging/{uuid4().hex}/{filename}"
+        await svc.put(
+            user_context.workspace_id,
+            path,
+            content,
+            content_type=file.content_type,
+        )
+        return StagedFileResponse(
+            ref=path,
+            filename=filename,
+            size=len(content),
+            sha256=hashlib.sha256(content).hexdigest(),
+            content_type=file.content_type,
+        )
+    raise HTTPException(status_code=422, detail=f"Unsupported upload purpose: {purpose!r}")
+
+
+@router.post("/upload-url", response_model=PresignUploadResponse)
+async def create_attachment_upload_url(
+    body: PresignUploadRequest,
+    user_context: UserContextDep,
+) -> PresignUploadResponse:
+    """Mint a presigned PUT for a task attachment uploaded directly to the store.
+
+    The client-declared sha256 is bound into the signature as ``ChecksumSHA256``,
+    so the object store rejects a body that does not hash to it — the upload is
+    content-verified without the API ever seeing the bytes. The returned ``ref``
+    is consumed by the task-create endpoint exactly like a server-proxied one.
+    """
+    if not _SHA256_HEX_RE.fullmatch(body.sha256):
+        raise HTTPException(
+            status_code=422, detail="sha256 must be a 64-character lowercase hex digest"
+        )
+    if body.size < 0:
+        raise HTTPException(status_code=422, detail="size must be a non-negative integer")
+    if body.size > MAX_ATTACHMENT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"attachment exceeds the {MAX_ATTACHMENT_BYTES}-byte per-file limit",
+        )
+    filename = PurePosixPath(body.filename or "unnamed").name or "unnamed"
+    path = f"staging/{uuid4().hex}/{filename}"
+    expires_in = 3600
+    sha256_b64 = base64.b64encode(bytes.fromhex(body.sha256)).decode("ascii")
+    upload_url = await _get_artifact_service().presigned_put_url(
         user_context.workspace_id,
-        filename,
-        content,
-        content_type=file.content_type,
+        path,
+        content_type=body.content_type,
+        sha256_b64=sha256_b64,
+        expires_in=expires_in,
     )
+    return PresignUploadResponse(ref=path, upload_url=upload_url, expires_in=expires_in)
 
 
 @router.get("/history", response_model=ArtifactHistoryResponse)
@@ -168,15 +317,28 @@ async def stream_workspace_file(
     user_context: UserContextDep,
 ):
     """Stream a workspace file through the AgentArea API."""
-    svc = _get_artifact_service()
     try:
-        data, content_type = await svc.get(user_context.workspace_id, file_path)
-    except FileNotFoundError:
+        parsed = _task_workspace_path(file_path)
+        if parsed is not None:
+            task_id, relative_path = parsed
+            body, content_type, size = await _get_workspace_repository().stream(
+                user_context.workspace_id, task_id, relative_path
+            )
+        else:
+            if _is_task_storage_path(file_path):
+                raise FileNotFoundError(file_path)
+            body, content_type, size = await _get_artifact_service().stream(
+                user_context.workspace_id, file_path
+            )
+    except (ArtifactIntegrityError, FileNotFoundError, WorkspaceValidationError):
         raise HTTPException(status_code=404, detail="File not found") from None
 
     filename = PurePosixPath(file_path).name or "file.bin"
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return StreamingResponse(iter([data]), media_type=content_type, headers=headers)
+    headers = {
+        "Content-Disposition": _attachment_content_disposition(filename),
+        "Content-Length": str(size),
+    }
+    return StreamingResponse(body, media_type=content_type, headers=headers)
 
 
 @router.get("/{file_path:path}", response_model=WorkspaceFileDownloadResponse)
@@ -184,8 +346,20 @@ async def download_workspace_file(
     file_path: str,
     user_context: UserContextDep,
 ) -> WorkspaceFileDownloadResponse:
-    svc = _get_artifact_service()
-    if not await svc.exists(user_context.workspace_id, file_path):
+    try:
+        parsed = _task_workspace_path(file_path)
+        if parsed is not None:
+            task_id, relative_path = parsed
+            exists = await _get_workspace_repository().exists(
+                user_context.workspace_id, task_id, relative_path
+            )
+        else:
+            exists = not _is_task_storage_path(file_path) and await _get_artifact_service().exists(
+                user_context.workspace_id, file_path
+            )
+    except WorkspaceValidationError:
+        exists = False
+    if not exists:
         raise HTTPException(status_code=404, detail="File not found")
     url = _workspace_file_download_url(file_path)
     return WorkspaceFileDownloadResponse(url=url, path=file_path)

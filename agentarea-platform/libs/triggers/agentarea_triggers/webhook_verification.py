@@ -250,14 +250,71 @@ class LinearSignatureVerifier(SignatureVerifier):
         return ["linear-signature"]
 
 
+class StripeSignatureVerifier(SignatureVerifier):
+    """Verify Stripe webhook signatures using HMAC-SHA256.
+
+    Stripe signs requests with:
+    - Stripe-Signature: t=<unix_timestamp>,v1=<hex_digest>[,v1=<hex_digest>...]
+
+    The signature is computed as:
+    HMAC-SHA256(signing_secret, "{timestamp}.{body}")
+    """
+
+    TIMESTAMP_MAX_AGE_SECONDS = 300  # Stripe's recommended tolerance
+
+    def verify(self, headers: dict[str, str], body: bytes | str, secret: str) -> bool:
+        try:
+            header = headers.get("stripe-signature", "")
+            if not header:
+                logger.warning("Missing Stripe signature header")
+                return False
+
+            timestamp = ""
+            candidates: list[str] = []
+            for element in header.split(","):
+                key, _, value = element.strip().partition("=")
+                if key == "t":
+                    timestamp = value
+                elif key == "v1":
+                    candidates.append(value)
+
+            if not timestamp or not candidates:
+                logger.warning("Malformed Stripe signature header")
+                return False
+
+            try:
+                ts = int(timestamp)
+                if abs(time.time() - ts) > self.TIMESTAMP_MAX_AGE_SECONDS:
+                    logger.warning("Stripe request timestamp too old")
+                    return False
+            except ValueError:
+                logger.warning("Invalid Stripe timestamp format")
+                return False
+
+            body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
+            expected = hmac.new(
+                secret.encode("utf-8"),
+                f"{timestamp}.".encode() + body_bytes,
+                hashlib.sha256,
+            ).hexdigest()
+
+            return any(hmac.compare_digest(expected, sig) for sig in candidates)
+        except Exception as e:
+            logger.error(f"Stripe signature verification error: {e}")
+            return False
+
+    def get_required_headers(self) -> list[str]:
+        return ["stripe-signature"]
+
+
 # Registry mapping WebhookType to its signature verifier
 VERIFIER_REGISTRY: dict[str, type[SignatureVerifier]] = {
     "slack": SlackSignatureVerifier,
     "github": GitHubSignatureVerifier,
     "discord": DiscordSignatureVerifier,
     "linear": LinearSignatureVerifier,
+    "stripe": StripeSignatureVerifier,
     # telegram uses bot token validation at a different level
-    # stripe has its own SDK for verification
     # generic uses configurable HMAC
 }
 
@@ -267,6 +324,7 @@ SIGNING_SECRET_KEYS: dict[str, str] = {
     "github": "webhook_secret",
     "discord": "public_key",
     "linear": "signing_secret",
+    "stripe": "signing_secret",
     "generic": "signing_secret",
 }
 

@@ -24,7 +24,6 @@ from agentarea_common.workspaces import (
     WorkspaceRepository,
     WorkspaceService,
     get_workspace_membership_graph,
-    grant_workspace_membership,
     list_workspace_ids_for_member,
 )
 from agentarea_governance.application import (
@@ -34,6 +33,8 @@ from agentarea_governance.application import (
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from ._access_control_grants import seed_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +48,15 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 def get_workspace_service(session: SessionDep, user: UserContextDep) -> WorkspaceService:
-    async def seed_default_policies(workspace: Workspace) -> None:
-        """Seed baseline governance policies when a workspace is first created.
+    async def on_workspace_created(workspace: Workspace) -> None:
+        """Provision a freshly created workspace so it is usable out of the box.
 
-        Scoped to the new workspace (not the caller's current one) so the rows
-        land in the right place. Never propagates failures — a workspace must
-        still be created even if policy seeding hiccups — but logs loudly.
+        Seeds the baseline governance policy row and the authorization graph
+        (creator as admin, default root project). Fires for both personal
+        (``ensure_personal``) and shared workspaces. Scoped to the new workspace
+        (not the caller's current one) so rows land in the right place. Never
+        propagates failures — a workspace must still be created even if seeding
+        hiccups — but logs loudly.
         """
         try:
             ctx = UserContext(user_id=user.user_id, workspace_id=workspace.id)
@@ -63,10 +67,17 @@ def get_workspace_service(session: SessionDep, user: UserContextDep) -> Workspac
         except Exception:
             logger.exception("failed to seed default policies for workspace %s", workspace.id)
             await session.rollback()
+        try:
+            await seed_workspace(
+                workspace_id=workspace.id,
+                creator_user_id=workspace.owner_user_id,
+            )
+        except Exception:
+            logger.exception("failed to seed authorization graph for workspace %s", workspace.id)
 
     return WorkspaceService(
         WorkspaceRepository(session),
-        on_created=seed_default_policies,
+        on_created=on_workspace_created,
     )
 
 
@@ -106,15 +117,17 @@ async def create_workspace(
 
     workspace = await service.create_shared(owner_user_id=user.user_id, name=name)
 
-    graph = get_workspace_membership_graph()
-    if graph is None:
-        raise HTTPException(status_code=503, detail="Workspace membership graph is disabled")
+    # The creation hook already seeds the graph fail-soft; re-run fail-loud here so
+    # a deliberate create surfaces a graph outage as 503 instead of a silently
+    # unusable workspace. seed_workspace is idempotent.
     try:
-        await grant_workspace_membership(graph, workspace_id=workspace.id, user_id=user.user_id)
+        await seed_workspace(workspace_id=workspace.id, creator_user_id=user.user_id)
+    except HTTPException:
+        raise
     except (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError) as exc:
-        logger.exception("Failed to grant owner membership for workspace %s", workspace.id)
+        logger.exception("Failed to seed authorization graph for workspace %s", workspace.id)
         raise HTTPException(
-            status_code=503, detail="Workspace membership graph unavailable"
+            status_code=503, detail="Workspace authorization graph unavailable"
         ) from exc
 
     return WorkspaceResponse(

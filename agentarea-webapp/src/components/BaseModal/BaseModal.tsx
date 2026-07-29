@@ -57,7 +57,7 @@ export default function BaseModal({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-w-[400px] overflow-hidden dark:bg-zinc-800">
+      <DialogContent className="max-w-[400px] overflow-hidden">
         <div className="relative w-max">
           <div
             data-featured-icon="true"

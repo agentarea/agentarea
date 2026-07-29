@@ -556,9 +556,9 @@ class MissingAPIKeyError(Exception):
 
 
 def sanitize_agent_name(name: str) -> str:
-    """Sanitize agent name to be a valid Python identifier for Google ADK.
+    """Sanitize agent name to be a valid Python identifier.
 
-    Google ADK requires agent names to be valid Python identifiers:
+    A valid Python identifier:
     - Must start with a letter (a-z, A-Z) or underscore (_)
     - Can only contain letters, digits (0-9), and underscores
 

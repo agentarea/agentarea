@@ -504,19 +504,6 @@ async def model_instance_repository(db_session, user_context):
     return ModelInstanceRepository(db_session, user_context)
 
 
-# Legacy repository fixtures - still needed for some tests
-# @pytest_asyncio.fixture
-# async def llm_model_repository(db_session):
-#     """Provide an LLMModelRepository instance."""
-#     return LLMModelRepository(db_session)
-
-
-# @pytest_asyncio.fixture
-# async def llm_model_instance_repository(db_session):
-#     """Provide an LLMModelInstanceRepository instance."""
-#     return LLMModelInstanceRepository(db_session)
-
-
 @pytest_asyncio.fixture
 async def mcp_server_repository(db_session, user_context):
     """Provide an MCPServerRepository instance."""

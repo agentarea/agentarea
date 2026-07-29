@@ -9,12 +9,14 @@ interface TriggersContentProps {
   viewMode: "grid" | "table";
   searchQuery: string;
   typeFilter: string;
+  groupBy: "channel" | "none";
 }
 
 export default async function TriggersContent({
   viewMode,
   searchQuery,
   typeFilter,
+  groupBy,
 }: TriggersContentProps) {
   const t = await getTranslations("TriggersPage");
 
@@ -72,6 +74,7 @@ export default async function TriggersContent({
       catalog={catalog}
       viewMode={viewMode}
       searchQuery={searchQuery}
+      groupBy={groupBy}
     />
   );
 }

@@ -20,6 +20,14 @@ class AppSettings(BaseAppSettings):
     # imports keep working; tighten per deployment if needed.
     MAX_REQUEST_BODY_BYTES: int = 50 * 1024 * 1024  # 50 MB
 
+    # Multipart task attachments are bounded independently so the API can
+    # reject the whole upload before workflow dispatch. The defaults permit a
+    # file larger than the retired 25 MiB inline bridge while leaving room for
+    # multipart framing under MAX_REQUEST_BODY_BYTES.
+    TASK_ATTACHMENT_MAX_FILES: int = 100
+    TASK_ATTACHMENT_MAX_FILE_BYTES: int = 40 * 1024 * 1024
+    TASK_ATTACHMENT_MAX_TOTAL_BYTES: int = 45 * 1024 * 1024
+
     # Shared secret for internal service-to-service calls (e.g. the Go event
     # service calling the public trigger-execute endpoint). When set, those
     # endpoints require a matching X-Internal-Token header. Unset = not enforced.

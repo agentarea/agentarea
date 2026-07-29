@@ -2,9 +2,11 @@ import { createElement } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
+  Activity,
   ArrowUpRight,
   Boxes,
   ChevronRight,
+  CircleDollarSign,
   Clock,
   ListChecks,
   Play,
@@ -14,7 +16,11 @@ import {
   Zap,
 } from "lucide-react";
 import { policyToRule } from "@/app/(main)/policies/components/policy-rules";
-import { computeDelta, DeltaBadge } from "@/components/charts/Sparkline";
+import {
+  computeDelta,
+  DeltaBadge,
+  Sparkline,
+} from "@/components/charts/Sparkline";
 import { ProviderIcon } from "@/components/ui/provider-icon";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import {
@@ -137,11 +143,11 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     .slice(-14, -7)
     .reduce((a, b) => a + b, 0);
   const sumFailedPrev = failedValues.slice(-14, -7).reduce((a, b) => a + b, 0);
-  const reliabilityPrev =
-    sumCompletedPrev + sumFailedPrev > 0
-      ? (sumCompletedPrev / (sumCompletedPrev + sumFailedPrev)) * 100
-      : reliability;
-  const reliabilityDelta = computeDelta([reliabilityPrev, reliability], 1);
+  const totalRunsPrev = sumCompletedPrev + sumFailedPrev;
+  const failureRate = totalRuns > 0 ? (sumFailed / totalRuns) * 100 : 0;
+  const failureRatePrev =
+    totalRunsPrev > 0 ? (sumFailedPrev / totalRunsPrev) * 100 : failureRate;
+  const failureDelta = computeDelta([failureRatePrev, failureRate], 1);
 
   const spend7d = spendValues.slice(-7).reduce((a, b) => a + b, 0);
   const spend7dPrev = spendValues.slice(-14, -7).reduce((a, b) => a + b, 0);
@@ -275,56 +281,42 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
 
       {/* ===== stat strip ===== */}
       <section className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          icon={<Shield />}
-          label="Reliability"
-          value={`${reliability.toFixed(0)}`}
-          unit="% success"
+        <RunOutcomeCard
+          completed={sumCompleted}
+          failed={sumFailed}
+          successRate={reliability}
           delta={{
-            pct: reliabilityDelta.pct,
-            direction: reliabilityDelta.direction,
-            goodDirection: "up",
+            pct: failureDelta.pct,
+            direction: failureDelta.direction,
+            goodDirection: "down",
           }}
-          sub={
-            totalRuns > 0
-              ? `${sumCompleted} of ${totalRuns} tasks · 7d`
-              : "No runs in the last 7 days"
-          }
         />
-        <StatCard
-          icon={<ListChecks />}
-          label="Throughput"
-          value={throughput7d.toFixed(1)}
-          unit="/ day"
+        <ThroughputCard
+          average={throughput7d}
+          completed={sumCompleted}
+          values={completedValues}
           delta={{
             pct: throughputDelta.pct,
             direction: throughputDelta.direction,
             goodDirection: "up",
           }}
-          sub="tasks completed · 7d avg"
         />
-        <StatCard
-          icon={<Clock />}
-          label="Spend · month"
-          value={fmtUsd(costMtd)}
+        <SpendMetricCard
+          costMtd={costMtd}
+          cap={cap}
+          capPct={capPct}
+          capTone={capTone}
+          values={spendValues}
           delta={{
             pct: spendDelta.pct,
             direction: spendDelta.direction,
             goodDirection: "down",
           }}
-          sub={cap ? `of ${fmtUsd(cap)} cap` : "no cap set"}
         />
-        <StatCard
-          icon={<ListChecks />}
-          label="Today"
-          value={`${doneToday}`}
-          unit={`done · ${failedToday} failed`}
-          tone={failedToday > 0 ? "text-red-600 dark:text-red-400" : undefined}
-          sub={
-            runningTasks.length > 0
-              ? `${runningTasks.length} running now`
-              : "nothing running"
-          }
+        <TodayActivityCard
+          done={doneToday}
+          failed={failedToday}
+          running={runningTasks.length}
         />
       </section>
 
@@ -580,51 +572,335 @@ type StatDelta = {
   direction: "up" | "down" | "flat";
   goodDirection: "up" | "down";
 };
-type StatCardProps = {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  unit?: string;
-  sub: string;
-  tone?: string;
-  delta?: StatDelta;
-};
-function StatCard({
+
+function MetricCardHeader({
   icon,
   label,
-  value,
-  unit,
-  sub,
-  tone,
   delta,
-}: StatCardProps) {
+  deltaTitle,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  delta?: StatDelta;
+  deltaTitle?: string;
+}) {
   const showDelta = delta && delta.pct != null && delta.direction !== "flat";
+
   return (
-    <div className="flex flex-col rounded-xl border border-border bg-card px-4 py-3.5">
-      <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:text-muted-foreground/60">
-          {icon}
-          {label}
-        </span>
-        {showDelta && (
+    <div className="flex items-center justify-between gap-2">
+      <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:text-muted-foreground/60">
+        {icon}
+        {label}
+      </span>
+      {showDelta && (
+        <span title={deltaTitle}>
           <DeltaBadge
             pct={delta.pct}
             direction={delta.direction}
             goodDirection={delta.goodDirection}
           />
-        )}
-      </div>
-      <div className={cn("mt-2.5 flex items-baseline gap-1.5", tone)}>
-        <span className="text-[24px] font-semibold leading-none tracking-tight tabular-nums">
-          {value}
         </span>
-        {unit && (
-          <span className="text-[12px] font-medium text-muted-foreground">
-            {unit}
-          </span>
+      )}
+    </div>
+  );
+}
+
+function SegmentedBar({
+  segments,
+  ariaLabel,
+  className,
+}: {
+  segments: { label: string; value: number; className: string }[];
+  ariaLabel: string;
+  className?: string;
+}) {
+  const total = segments.reduce((sum, segment) => sum + segment.value, 0);
+
+  return (
+    <div
+      role="img"
+      aria-label={ariaLabel}
+      className={cn(
+        "flex h-1.5 overflow-hidden rounded-full bg-muted",
+        className
+      )}
+    >
+      {segments.map((segment) => (
+        <span
+          key={segment.label}
+          className={cn("h-full", segment.className)}
+          style={{
+            width: total > 0 ? `${(segment.value / total) * 100}%` : "0%",
+          }}
+          title={`${segment.value} ${segment.label}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RunOutcomeCard({
+  completed,
+  failed,
+  successRate,
+  delta,
+}: {
+  completed: number;
+  failed: number;
+  successRate: number;
+  delta: StatDelta;
+}) {
+  const total = completed + failed;
+
+  return (
+    <div className="flex flex-col rounded-xl border border-border bg-card px-4 py-3.5">
+      <MetricCardHeader
+        icon={<Shield />}
+        label="Reliability · 7d"
+        delta={delta}
+        deltaTitle="Failure rate compared with the previous 7 days"
+      />
+
+      {total > 0 ? (
+        <>
+          <div className="mt-2.5 flex items-baseline justify-between gap-3">
+            <div className="flex min-w-0 items-baseline gap-1.5">
+              <span
+                className={cn(
+                  "text-[26px] font-semibold leading-none tracking-tight tabular-nums",
+                  failed > 0 && "text-red-600 dark:text-red-400"
+                )}
+              >
+                {failed}
+              </span>
+              <span className="truncate text-[12px] font-medium text-muted-foreground">
+                / {total} failed
+              </span>
+            </div>
+            <span className="shrink-0 text-[11.5px] font-medium text-foreground/80 tabular-nums">
+              {successRate.toFixed(0)}% success
+            </span>
+          </div>
+
+          <SegmentedBar
+            ariaLabel={`${completed} completed and ${failed} failed out of ${total} terminal runs in the last 7 days`}
+            className="mt-3"
+            segments={[
+              {
+                label: "completed",
+                value: completed,
+                className: "bg-emerald-500",
+              },
+              { label: "failed", value: failed, className: "bg-red-500" },
+            ]}
+          />
+
+          <div className="mt-2 flex items-center justify-between gap-2 text-[11.5px] text-muted-foreground">
+            <span>{completed} completed</span>
+            <span>{failed} failed</span>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mt-2.5 text-[24px] font-semibold leading-none tracking-tight text-muted-foreground">
+            —
+          </div>
+          <div className="mt-3 h-1.5 rounded-full bg-muted" />
+          <div className="mt-2 text-[11.5px] text-muted-foreground">
+            No terminal runs in the last 7 days
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ThroughputCard({
+  average,
+  completed,
+  values,
+  delta,
+}: {
+  average: number;
+  completed: number;
+  values: number[];
+  delta: StatDelta;
+}) {
+  const max = Math.max(...values, 1);
+
+  return (
+    <div className="flex flex-col rounded-xl border border-border bg-card px-4 py-3.5">
+      <MetricCardHeader
+        icon={<ListChecks />}
+        label="Throughput · 7d"
+        delta={delta}
+        deltaTitle="Average completed tasks per day compared with the previous 7 days"
+      />
+      <div className="mt-2.5 flex items-baseline gap-1.5">
+        <span className="text-[24px] font-semibold leading-none tracking-tight tabular-nums">
+          {average.toFixed(1)}
+        </span>
+        <span className="text-[12px] font-medium text-muted-foreground">
+          / day
+        </span>
+      </div>
+
+      <div
+        role="img"
+        aria-label={`Daily completed tasks over 14 days: ${values.join(", ") || "no data"}`}
+        className="mt-2.5 flex h-7 items-end gap-1"
+      >
+        {values.length > 0 ? (
+          values.map((value, index) => (
+            <span
+              key={index}
+              className={cn(
+                "min-w-0 flex-1 rounded-[2px]",
+                index >= Math.max(0, values.length - 7)
+                  ? "bg-primary/80"
+                  : "bg-primary/20"
+              )}
+              style={{
+                height: value === 0 ? 2 : Math.max(4, (value / max) * 28),
+              }}
+              title={`Day ${index + 1}: ${value} completed`}
+            />
+          ))
+        ) : (
+          <span className="h-0.5 w-full rounded-full bg-muted" />
         )}
       </div>
-      <div className="mt-2 text-[11.5px] text-muted-foreground">{sub}</div>
+
+      <div className="mt-2 text-[11.5px] text-muted-foreground">
+        {completed} completed in the last 7 days
+      </div>
+    </div>
+  );
+}
+
+function SpendMetricCard({
+  costMtd,
+  cap,
+  capPct,
+  capTone,
+  values,
+  delta,
+}: {
+  costMtd: number;
+  cap: number | null;
+  capPct: number | null;
+  capTone: string;
+  values: number[];
+  delta: StatDelta;
+}) {
+  return (
+    <div className="flex flex-col rounded-xl border border-border bg-card px-4 py-3.5">
+      <MetricCardHeader
+        icon={<CircleDollarSign />}
+        label="Spend · month"
+        delta={delta}
+        deltaTitle="Spend in the last 7 days compared with the previous 7 days"
+      />
+
+      <div className="mt-2.5 flex items-end justify-between gap-3">
+        <span className="min-w-0 truncate text-[24px] font-semibold leading-none tracking-tight tabular-nums">
+          {fmtUsd(costMtd)}
+        </span>
+        <Sparkline
+          values={values}
+          width={72}
+          height={25}
+          stroke="hsl(var(--primary))"
+          className="shrink-0 text-primary"
+        />
+      </div>
+
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+        {capPct != null && (
+          <div
+            className="h-full rounded-full transition-[width]"
+            style={{
+              width: `${capPct}%`,
+              background: `hsl(${capTone})`,
+            }}
+          />
+        )}
+      </div>
+
+      <div className="mt-2 flex items-center justify-between gap-2 text-[11.5px] text-muted-foreground">
+        <span>{cap ? `of ${fmtUsd(cap)} cap` : "No monthly cap"}</span>
+        {capPct != null && <span>{capPct.toFixed(0)}% used</span>}
+      </div>
+    </div>
+  );
+}
+
+function TodayActivityCard({
+  done,
+  running,
+  failed,
+}: {
+  done: number;
+  running: number;
+  failed: number;
+}) {
+  const total = done + running + failed;
+
+  return (
+    <div className="flex flex-col rounded-xl border border-border bg-card px-4 py-3.5">
+      <MetricCardHeader icon={<Activity />} label="Today" />
+
+      <div className="mt-2.5 flex items-baseline gap-1.5">
+        <span className="text-[24px] font-semibold leading-none tracking-tight tabular-nums">
+          {done}
+        </span>
+        <span className="text-[12px] font-medium text-muted-foreground">
+          completed
+        </span>
+      </div>
+
+      <SegmentedBar
+        ariaLabel={`${done} completed today, ${running} currently running, and ${failed} failed today`}
+        className="mt-3"
+        segments={[
+          { label: "done", value: done, className: "bg-emerald-500" },
+          { label: "running", value: running, className: "bg-sky-500" },
+          { label: "failed", value: failed, className: "bg-red-500" },
+        ]}
+      />
+
+      <div className="mt-2 grid grid-cols-3 gap-1 text-[10.5px] text-muted-foreground">
+        <span className="truncate">
+          <span
+            aria-hidden="true"
+            className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"
+          />
+          {done} done
+        </span>
+        <span className="truncate text-center">
+          <span
+            aria-hidden="true"
+            className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-sky-500"
+          />
+          {running} running
+        </span>
+        <span
+          className={cn(
+            "truncate text-right",
+            failed > 0 && "text-red-600 dark:text-red-400"
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500"
+          />
+          {failed} failed
+        </span>
+      </div>
+
+      {total === 0 && (
+        <span className="sr-only">No task activity recorded today</span>
+      )}
     </div>
   );
 }

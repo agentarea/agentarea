@@ -39,6 +39,7 @@ class MCPServerInstanceCreated(DomainEvent):
         super().__init__(
             instance_id=instance_id, server_spec_id=server_spec_id, name=name, json_spec=json_spec
         )
+        self.event_type = "com.agentarea.mcp.instance.created"
         self.instance_id = instance_id
         self.server_spec_id = server_spec_id
         self.name = name
@@ -57,6 +58,7 @@ class MCPServerInstanceUpdated(DomainEvent):
 class MCPServerInstanceDeleted(DomainEvent):
     def __init__(self, instance_id: UUID):
         super().__init__(instance_id=str(instance_id))
+        self.event_type = "com.agentarea.mcp.instance.deleted"
         self.instance_id = instance_id
 
 

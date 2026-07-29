@@ -1,6 +1,6 @@
 """Concrete ToolDisclosurePolicy implementations.
 
-ExplicitPolicy preserves the legacy "ship every schema every call" behavior.
+ExplicitPolicy ships every schema on every call.
 NamedLookupPolicy ships only a name+description catalog plus a `load_tools`
 meta-tool; the LLM picks names from the catalog and we resolve them on demand.
 """

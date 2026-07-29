@@ -8,40 +8,40 @@ export type ClientOptions = {
  */
 export type A2UiActionPayload = {
     /**
-     * Name
-     */
-    name: string;
-    /**
-     * Surface Id
-     */
-    surface_id: string;
-    /**
-     * Source Component Id
-     */
-    source_component_id?: string;
-    /**
      * Context
      */
     context?: {
         [key: string]: unknown;
     };
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Source Component Id
+     */
+    source_component_id?: string;
+    /**
+     * Surface Id
+     */
+    surface_id: string;
 };
 /**
  * APIKeyCreateRequest
  */
 export type ApiKeyCreateRequest = {
     /**
-     * Name
-     *
-     * Human-friendly label for this API key
-     */
-    name: string;
-    /**
      * Expires In Days
      *
      * Optional expiry in days (omit for non-expiring)
      */
     expires_in_days?: number | null;
+    /**
+     * Name
+     *
+     * Human-friendly label for this API key
+     */
+    name: string;
 };
 /**
  * APIKeyCreateResponse
@@ -50,52 +50,72 @@ export type ApiKeyCreateRequest = {
  */
 export type ApiKeyCreateResponse = {
     /**
-     * Id
+     * Access Count
      */
-    id: string;
+    access_count: number;
     /**
-     * Name
+     * Created At
      */
-    name: string;
-    /**
-     * Token Prefix
-     */
-    token_prefix: string;
-    /**
-     * Is Active
-     */
-    is_active: boolean;
+    created_at: string;
     /**
      * Expires At
      */
     expires_at: string | null;
     /**
-     * Access Count
+     * Id
      */
-    access_count: number;
+    id: string;
+    /**
+     * Is Active
+     */
+    is_active: boolean;
     /**
      * Last Accessed At
      */
     last_accessed_at: string | null;
     /**
-     * Created At
+     * Name
      */
-    created_at: string;
+    name: string;
     /**
      * Token
      *
      * Raw token value — copy it now, it won't be shown again
      */
     token: string;
+    /**
+     * Token Prefix
+     */
+    token_prefix: string;
 };
 /**
  * APIKeyResponse
  */
 export type ApiKeyResponse = {
     /**
+     * Access Count
+     */
+    access_count: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Expires At
+     */
+    expires_at: string | null;
+    /**
      * Id
      */
     id: string;
+    /**
+     * Is Active
+     */
+    is_active: boolean;
+    /**
+     * Last Accessed At
+     */
+    last_accessed_at: string | null;
     /**
      * Name
      */
@@ -104,26 +124,6 @@ export type ApiKeyResponse = {
      * Token Prefix
      */
     token_prefix: string;
-    /**
-     * Is Active
-     */
-    is_active: boolean;
-    /**
-     * Expires At
-     */
-    expires_at: string | null;
-    /**
-     * Access Count
-     */
-    access_count: number;
-    /**
-     * Last Accessed At
-     */
-    last_accessed_at: string | null;
-    /**
-     * Created At
-     */
-    created_at: string;
 };
 /**
  * AcceptInvitationBody
@@ -139,17 +139,17 @@ export type AcceptInvitationBody = {
  */
 export type AcceptInvitationResponse = {
     /**
-     * Workspace Id
+     * Invitation Id
      */
-    workspace_id: string;
+    invitation_id: string;
     /**
      * User Id
      */
     user_id: string;
     /**
-     * Invitation Id
+     * Workspace Id
      */
-    invitation_id: string;
+    workspace_id: string;
 };
 /**
  * AddSkillRequest
@@ -165,26 +165,18 @@ export type AddSkillRequest = {
  */
 export type AgentAuthentication = {
     /**
-     * Schemes
-     */
-    schemes: Array<string>;
-    /**
      * Credentials
      */
     credentials?: string | null;
+    /**
+     * Schemes
+     */
+    schemes: Array<string>;
 };
 /**
  * AgentCapabilities
  */
 export type AgentCapabilities = {
-    /**
-     * Streaming
-     */
-    streaming?: boolean;
-    /**
-     * Pushnotifications
-     */
-    pushNotifications?: boolean;
     /**
      * Extendedagentcard
      */
@@ -195,34 +187,21 @@ export type AgentCapabilities = {
     extensions?: Array<{
         [key: string]: unknown;
     }> | null;
+    /**
+     * Pushnotifications
+     */
+    pushNotifications?: boolean;
+    /**
+     * Streaming
+     */
+    streaming?: boolean;
 };
 /**
  * AgentCard
  */
 export type AgentCard = {
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Description
-     */
-    description?: string | null;
-    /**
-     * Supportedinterfaces
-     */
-    supportedInterfaces: Array<AgentInterface>;
-    /**
-     * Version
-     */
-    version?: string;
-    provider?: AgentProvider | null;
-    /**
-     * Documentationurl
-     */
-    documentationUrl?: string | null;
-    capabilities: AgentCapabilities;
     authentication?: AgentAuthentication | null;
+    capabilities: AgentCapabilities;
     /**
      * Defaultinputmodes
      */
@@ -232,9 +211,24 @@ export type AgentCard = {
      */
     defaultOutputModes?: Array<string>;
     /**
-     * Skills
+     * Description
      */
-    skills: Array<AgentSkill>;
+    description?: string | null;
+    /**
+     * Documentationurl
+     */
+    documentationUrl?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    provider?: AgentProvider | null;
+    /**
+     * Security
+     */
+    security?: Array<{
+        [key: string]: Array<string>;
+    }> | null;
     /**
      * Securityschemes
      */
@@ -242,11 +236,17 @@ export type AgentCard = {
         [key: string]: unknown;
     } | null;
     /**
-     * Security
+     * Skills
      */
-    security?: Array<{
-        [key: string]: Array<string>;
-    }> | null;
+    skills: Array<AgentSkill>;
+    /**
+     * Supportedinterfaces
+     */
+    supportedInterfaces: Array<AgentInterface>;
+    /**
+     * Version
+     */
+    version?: string;
 };
 /**
  * AgentCreate
@@ -259,17 +259,27 @@ export type AgentCard = {
  */
 export type AgentCreate = {
     /**
-     * Name
+     * A2Ui Enabled
      *
-     * Human-readable agent name (unique per workspace).
+     * Expose this agent over the A2UI protocol.
      */
-    name: string;
+    a2ui_enabled?: boolean | null;
+    /**
+     * Agent Type
+     *
+     * 'stateless' (each request independent) or 'stateful' (maintains conversation context across runs).
+     */
+    agent_type?: 'stateless' | 'stateful';
     /**
      * Description
      *
      * Short summary of what the agent does.
      */
     description?: string;
+    /**
+     * Event subscriptions that auto-trigger this agent.
+     */
+    events_config?: EventsConfig | null;
     /**
      * Instruction
      *
@@ -283,15 +293,11 @@ export type AgentCreate = {
      */
     model_id: string;
     /**
-     * Tools
+     * Name
      *
-     * Tools attached to the agent (code/mcp/agent/openapi).
+     * Human-readable agent name (unique per workspace).
      */
-    tools?: Array<CodeToolConfig | McpToolConfigInput | AgentToolConfig | OpenApiToolConfig> | null;
-    /**
-     * Event subscriptions that auto-trigger this agent.
-     */
-    events_config?: EventsConfig | null;
+    name: string;
     /**
      * Planning
      *
@@ -299,23 +305,17 @@ export type AgentCreate = {
      */
     planning?: boolean | null;
     /**
-     * A2Ui Enabled
-     *
-     * Expose this agent over the A2UI protocol.
-     */
-    a2ui_enabled?: boolean | null;
-    /**
      * Skill Ids
      *
      * UUIDs of skills to attach to the agent.
      */
     skill_ids?: Array<string> | null;
     /**
-     * Agent Type
+     * Tools
      *
-     * 'stateless' (each request independent) or 'stateful' (maintains conversation context across runs).
+     * Tools attached to the agent (code/mcp/agent/openapi).
      */
-    agent_type?: 'stateless' | 'stateful';
+    tools?: Array<CodeToolConfig | McpToolConfigInput | AgentToolConfig | OpenApiToolConfig> | null;
 };
 /**
  * AgentInterface
@@ -323,10 +323,6 @@ export type AgentCreate = {
  * A2A v1.0.0 AgentInterface — a (url, protocolBinding, protocolVersion) tuple.
  */
 export type AgentInterface = {
-    /**
-     * Url
-     */
-    url: string;
     /**
      * Protocolbinding
      */
@@ -339,31 +335,23 @@ export type AgentInterface = {
      * Tenant
      */
     tenant?: string | null;
+    /**
+     * Url
+     */
+    url: string;
 };
 /**
  * AgentOverviewResponse
  */
 export type AgentOverviewResponse = {
     /**
-     * Cost Today Usd
-     */
-    cost_today_usd: number;
-    /**
      * Cost Mtd Usd
      */
     cost_mtd_usd: number;
     /**
-     * Tasks Done Today
+     * Cost Today Usd
      */
-    tasks_done_today: number;
-    /**
-     * Tasks Failed Today
-     */
-    tasks_failed_today: number;
-    /**
-     * Last Activity At
-     */
-    last_activity_at: string | null;
+    cost_today_usd: number;
     /**
      * Daily Spend
      */
@@ -372,6 +360,18 @@ export type AgentOverviewResponse = {
      * Daily Tasks
      */
     daily_tasks: Array<DailyTaskCounts>;
+    /**
+     * Last Activity At
+     */
+    last_activity_at: string | null;
+    /**
+     * Tasks Done Today
+     */
+    tasks_done_today: number;
+    /**
+     * Tasks Failed Today
+     */
+    tasks_failed_today: number;
     /**
      * Upcoming
      */
@@ -395,48 +395,6 @@ export type AgentProvider = {
  */
 export type AgentResponse = {
     /**
-     * Id
-     */
-    id: string;
-    /**
-     * Slug
-     */
-    slug: string;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Description
-     */
-    description?: string | null;
-    /**
-     * Instruction
-     */
-    instruction?: string | null;
-    /**
-     * Model Id
-     */
-    model_id?: string | null;
-    /**
-     * Tools
-     */
-    tools?: Array<CodeToolConfig | McpToolConfigOutput | AgentToolConfig | OpenApiToolConfig> | null;
-    /**
-     * Events Config
-     */
-    events_config?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * Planning
-     */
-    planning?: boolean | null;
-    /**
      * A2Ui Enabled
      */
     a2ui_enabled?: boolean | null;
@@ -445,19 +403,61 @@ export type AgentResponse = {
      */
     agent_type?: string;
     /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Events Config
+     */
+    events_config?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Instruction
+     */
+    instruction?: string | null;
+    /**
+     * Is Catalog
+     */
+    is_catalog?: boolean;
+    /**
+     * Model Id
+     */
+    model_id?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Planning
+     */
+    planning?: boolean | null;
+    /**
+     * Registry Item Id
+     */
+    registry_item_id?: string | null;
+    /**
      * Skills
      */
     skills?: Array<{
         [key: string]: unknown;
     }> | null;
     /**
-     * Is Catalog
+     * Slug
      */
-    is_catalog?: boolean;
+    slug: string;
     /**
-     * Registry Item Id
+     * Status
      */
-    registry_item_id?: string | null;
+    status: string;
+    /**
+     * Tools
+     */
+    tools?: Array<CodeToolConfig | McpToolConfigOutput | AgentToolConfig | OpenApiToolConfig> | null;
     /**
      * Update Available
      */
@@ -472,9 +472,25 @@ export type AgentRow = {
      */
     agent_id: string;
     /**
+     * Cost Mtd Usd
+     */
+    cost_mtd_usd: number;
+    /**
+     * Cost Today Usd
+     */
+    cost_today_usd: number;
+    /**
+     * Last Activity At
+     */
+    last_activity_at: string | null;
+    /**
      * Name
      */
     name: string;
+    /**
+     * Recent Task Names
+     */
+    recent_task_names: Array<string>;
     /**
      * Tasks Done Today
      */
@@ -483,51 +499,31 @@ export type AgentRow = {
      * Tasks Failed Today
      */
     tasks_failed_today: number;
-    /**
-     * Recent Task Names
-     */
-    recent_task_names: Array<string>;
-    /**
-     * Last Activity At
-     */
-    last_activity_at: string | null;
-    /**
-     * Cost Today Usd
-     */
-    cost_today_usd: number;
-    /**
-     * Cost Mtd Usd
-     */
-    cost_mtd_usd: number;
 };
 /**
  * AgentSkill
  */
 export type AgentSkill = {
     /**
-     * Id
-     */
-    id: string;
-    /**
-     * Name
-     */
-    name: string;
-    /**
      * Description
      */
     description?: string | null;
-    /**
-     * Tags
-     */
-    tags?: Array<string> | null;
     /**
      * Examples
      */
     examples?: Array<string> | null;
     /**
+     * Id
+     */
+    id: string;
+    /**
      * Inputmodes
      */
     inputModes?: Array<string> | null;
+    /**
+     * Name
+     */
+    name: string;
     /**
      * Outputmodes
      */
@@ -538,6 +534,10 @@ export type AgentSkill = {
     securityRequirements?: Array<{
         [key: string]: Array<string>;
     }> | null;
+    /**
+     * Tags
+     */
+    tags?: Array<string> | null;
 };
 /**
  * AgentToolConfig
@@ -547,11 +547,11 @@ export type AgentToolConfig = {
      * Name
      */
     name: string;
+    settings?: AgentToolSettings | null;
     /**
      * Type
      */
     type?: 'agent';
-    settings?: AgentToolSettings | null;
 };
 /**
  * AgentToolSettings
@@ -564,17 +564,17 @@ export type AgentToolConfig = {
  */
 export type AgentToolSettings = {
     /**
-     * Requires User Confirmation
+     * A2A Url
      */
-    requires_user_confirmation?: boolean | null;
+    a2a_url?: string | null;
     /**
      * Description Override
      */
     description_override?: string | null;
     /**
-     * A2A Url
+     * Requires User Confirmation
      */
-    a2a_url?: string | null;
+    requires_user_confirmation?: boolean | null;
 };
 /**
  * AgentUpdate
@@ -583,9 +583,13 @@ export type AgentToolSettings = {
  */
 export type AgentUpdate = {
     /**
-     * Name
+     * A2Ui Enabled
      */
-    name?: string | null;
+    a2ui_enabled?: boolean | null;
+    /**
+     * Agent Type
+     */
+    agent_type?: 'stateless' | 'stateful' | null;
     /**
      * Capabilities
      */
@@ -594,6 +598,7 @@ export type AgentUpdate = {
      * Description
      */
     description?: string | null;
+    events_config?: EventsConfig | null;
     /**
      * Instruction
      */
@@ -603,26 +608,21 @@ export type AgentUpdate = {
      */
     model_id?: string | null;
     /**
-     * Tools
+     * Name
      */
-    tools?: Array<CodeToolConfig | McpToolConfigInput | AgentToolConfig | OpenApiToolConfig> | null;
-    events_config?: EventsConfig | null;
+    name?: string | null;
     /**
      * Planning
      */
     planning?: boolean | null;
     /**
-     * A2Ui Enabled
-     */
-    a2ui_enabled?: boolean | null;
-    /**
      * Skill Ids
      */
     skill_ids?: Array<string> | null;
     /**
-     * Agent Type
+     * Tools
      */
-    agent_type?: 'stateless' | 'stateful' | null;
+    tools?: Array<CodeToolConfig | McpToolConfigInput | AgentToolConfig | OpenApiToolConfig> | null;
 };
 /**
  * AnalyzeRequest
@@ -654,17 +654,23 @@ export type AnalyzeRequest = {
  */
 export type ApprovalPolicy = {
     /**
-     * Requires Human Approval
+     * Approvers
      */
-    requires_human_approval?: boolean | null;
+    approvers?: Array<string>;
+    /**
+     * Approvers By Tool
+     */
+    approvers_by_tool?: {
+        [key: string]: Array<string>;
+    };
     /**
      * Escalation Rules
      */
     escalation_rules?: Array<string>;
     /**
-     * Approvers
+     * Requires Human Approval
      */
-    approvers?: Array<string>;
+    requires_human_approval?: boolean | null;
 };
 /**
  * ArtifactEventResponse
@@ -679,34 +685,34 @@ export type ArtifactEventResponse = {
      */
     actor_type: string;
     /**
-     * Created By
-     */
-    created_by: string;
-    /**
      * Agent Id
      */
     agent_id?: string | null;
     /**
-     * Task Id
-     */
-    task_id?: string | null;
-    /**
      * Created At
      */
     created_at: string;
+    /**
+     * Created By
+     */
+    created_by: string;
+    /**
+     * Task Id
+     */
+    task_id?: string | null;
 };
 /**
  * ArtifactHistoryResponse
  */
 export type ArtifactHistoryResponse = {
     /**
-     * Path
-     */
-    path: string;
-    /**
      * Events
      */
     events: Array<ArtifactEventResponse>;
+    /**
+     * Path
+     */
+    path: string;
 };
 /**
  * AssociationBody
@@ -724,13 +730,9 @@ export type AssociationBody = {
  */
 export type AuditEventResponse = {
     /**
-     * Id
+     * Action
      */
-    id: string;
-    /**
-     * Created At
-     */
-    created_at: string;
+    action: string;
     /**
      * Actor Id
      */
@@ -740,9 +742,37 @@ export type AuditEventResponse = {
      */
     actor_type: string;
     /**
-     * Workspace Id
+     * Changes
      */
-    workspace_id: string;
+    changes: Array<{
+        [key: string]: unknown;
+    }> | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Event Metadata
+     */
+    event_metadata: {
+        [key: string]: unknown;
+    };
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Request Id
+     */
+    request_id: string | null;
+    /**
+     * Resource Id
+     */
+    resource_id: string | null;
+    /**
+     * Resource Type
+     */
+    resource_type: string;
     /**
      * Source Ip
      */
@@ -752,33 +782,9 @@ export type AuditEventResponse = {
      */
     user_agent: string | null;
     /**
-     * Request Id
+     * Workspace Id
      */
-    request_id: string | null;
-    /**
-     * Action
-     */
-    action: string;
-    /**
-     * Resource Type
-     */
-    resource_type: string;
-    /**
-     * Resource Id
-     */
-    resource_id: string | null;
-    /**
-     * Changes
-     */
-    changes: Array<{
-        [key: string]: unknown;
-    }> | null;
-    /**
-     * Event Metadata
-     */
-    event_metadata: {
-        [key: string]: unknown;
-    };
+    workspace_id: string;
 };
 /**
  * AuditLogListResponse
@@ -800,6 +806,10 @@ export type AuditLogListResponse = {
  */
 export type Blockers = {
     /**
+     * Failed 24H
+     */
+    failed_24h: Array<FailedTaskBlocker>;
+    /**
      * Hitl
      */
     hitl: Array<HitlBlocker>;
@@ -807,10 +817,6 @@ export type Blockers = {
      * Wallet Exhausted
      */
     wallet_exhausted: Array<WalletExhaustedBlocker>;
-    /**
-     * Failed 24H
-     */
-    failed_24h: Array<FailedTaskBlocker>;
 };
 /**
  * Body_import_workspace_config_file_v1_workspace_import_file_post
@@ -822,6 +828,19 @@ export type BodyImportWorkspaceConfigFileV1WorkspaceImportFilePost = {
      * YAML configuration file
      */
     file: Blob | File;
+};
+/**
+ * Body_upload_file_v1_files_post
+ */
+export type BodyUploadFileV1FilesPost = {
+    /**
+     * File
+     */
+    file: Blob | File;
+    /**
+     * Purpose
+     */
+    purpose?: string;
 };
 /**
  * Body_upload_project_file_v1_projects__project_id__files_post
@@ -840,15 +859,6 @@ export type BodyUploadSkillV1SkillsUploadPost = {
      * File
      *
      * ZIP file containing the skill package
-     */
-    file: Blob | File;
-};
-/**
- * Body_upload_workspace_file_v1_files_post
- */
-export type BodyUploadWorkspaceFileV1FilesPost = {
-    /**
-     * File
      */
     file: Blob | File;
 };
@@ -897,9 +907,30 @@ export type BudgetPolicyOutput = {
  */
 export type BundleInput = {
     /**
-     * Schema Version
+     * Agents
      */
-    schema_version?: string;
+    agents?: Array<BundleAgent>;
+    /**
+     * Automations
+     */
+    automations?: Array<BundleAutomation>;
+    /**
+     * Channels
+     */
+    channels?: Array<BundleChannel>;
+    /**
+     * Description
+     */
+    description?: string;
+    /**
+     * Display Name
+     */
+    display_name?: string | null;
+    /**
+     * Mcps
+     */
+    mcps?: Array<BundleMcp>;
+    metadata?: BundleMetadata;
     /**
      * Name
      *
@@ -907,42 +938,21 @@ export type BundleInput = {
      */
     name: string;
     /**
-     * Display Name
+     * Policies
      */
-    display_name?: string | null;
+    policies?: Array<BundlePolicy>;
     /**
-     * Description
+     * Schema Version
      */
-    description?: string;
-    metadata?: BundleMetadata;
+    schema_version?: string;
     /**
      * Setup
      */
     setup?: Array<SetupField>;
     /**
-     * Mcps
-     */
-    mcps?: Array<BundleMcp>;
-    /**
      * Skills
      */
     skills?: Array<BundleSkill>;
-    /**
-     * Agents
-     */
-    agents?: Array<BundleAgent>;
-    /**
-     * Channels
-     */
-    channels?: Array<BundleChannel>;
-    /**
-     * Automations
-     */
-    automations?: Array<BundleAutomation>;
-    /**
-     * Policies
-     */
-    policies?: Array<BundlePolicy>;
 };
 /**
  * Bundle
@@ -951,9 +961,30 @@ export type BundleInput = {
  */
 export type BundleOutput = {
     /**
-     * Schema Version
+     * Agents
      */
-    schema_version?: string;
+    agents?: Array<BundleAgent>;
+    /**
+     * Automations
+     */
+    automations?: Array<BundleAutomation>;
+    /**
+     * Channels
+     */
+    channels?: Array<BundleChannel>;
+    /**
+     * Description
+     */
+    description?: string;
+    /**
+     * Display Name
+     */
+    display_name?: string | null;
+    /**
+     * Mcps
+     */
+    mcps?: Array<BundleMcp>;
+    metadata?: BundleMetadata;
     /**
      * Name
      *
@@ -961,42 +992,21 @@ export type BundleOutput = {
      */
     name: string;
     /**
-     * Display Name
+     * Policies
      */
-    display_name?: string | null;
+    policies?: Array<BundlePolicy>;
     /**
-     * Description
+     * Schema Version
      */
-    description?: string;
-    metadata?: BundleMetadata;
+    schema_version?: string;
     /**
      * Setup
      */
     setup?: Array<SetupField>;
     /**
-     * Mcps
-     */
-    mcps?: Array<BundleMcp>;
-    /**
      * Skills
      */
     skills?: Array<BundleSkill>;
-    /**
-     * Agents
-     */
-    agents?: Array<BundleAgent>;
-    /**
-     * Channels
-     */
-    channels?: Array<BundleChannel>;
-    /**
-     * Automations
-     */
-    automations?: Array<BundleAutomation>;
-    /**
-     * Policies
-     */
-    policies?: Array<BundlePolicy>;
 };
 /**
  * BundleAgent
@@ -1005,27 +1015,27 @@ export type BundleOutput = {
  */
 export type BundleAgent = {
     /**
-     * Key
-     */
-    key: string;
-    /**
-     * Name
-     */
-    name: string;
-    /**
      * Instruction
      */
     instruction?: string;
     /**
-     * Model
+     * Key
      */
-    model?: string | null;
+    key: string;
     /**
      * Mcps
      *
      * BundleMcp keys to attach as tools.
      */
     mcps?: Array<string>;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Name
+     */
+    name: string;
     /**
      * Skills
      *
@@ -1044,13 +1054,11 @@ export type BundleAgent = {
  */
 export type BundleAutomation = {
     /**
-     * Key
+     * Agent
+     *
+     * BundleAgent key to invoke.
      */
-    key: string;
-    /**
-     * Type
-     */
-    type?: 'cron';
+    agent: string;
     /**
      * Cron
      *
@@ -1058,15 +1066,13 @@ export type BundleAutomation = {
      */
     cron: string;
     /**
-     * Timezone
+     * Enabled
      */
-    timezone?: string;
+    enabled?: boolean;
     /**
-     * Agent
-     *
-     * BundleAgent key to invoke.
+     * Key
      */
-    agent: string;
+    key: string;
     /**
      * Prompt
      *
@@ -1074,9 +1080,13 @@ export type BundleAutomation = {
      */
     prompt: string;
     /**
-     * Enabled
+     * Timezone
      */
-    enabled?: boolean;
+    timezone?: string;
+    /**
+     * Type
+     */
+    type?: 'cron';
 };
 /**
  * BundleChannel
@@ -1089,22 +1099,6 @@ export type BundleAutomation = {
  * exactly like an MCP's secret bindings, so the token is never inlined.
  */
 export type BundleChannel = {
-    /**
-     * Key
-     */
-    key: string;
-    /**
-     * Type
-     *
-     * Channel provider. Only Telegram in v0.1.0.
-     */
-    type?: 'telegram';
-    /**
-     * Name
-     *
-     * Display name for the created channel trigger.
-     */
-    name: string;
     /**
      * Agent
      *
@@ -1120,15 +1114,31 @@ export type BundleChannel = {
         [key: string]: string;
     };
     /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Name
+     *
+     * Display name for the created channel trigger.
+     */
+    name: string;
+    /**
      * Prompt
      *
      * Task query template used for each inbound message.
      */
     prompt?: string;
     /**
-     * Enabled
+     * Type
+     *
+     * Channel provider. Only Telegram in v0.1.0.
      */
-    enabled?: boolean;
+    type?: 'telegram';
 };
 /**
  * BundleMcp
@@ -1136,6 +1146,22 @@ export type BundleChannel = {
  * An MCP server to provision for the package.
  */
 export type BundleMcp = {
+    /**
+     * Bindings
+     *
+     * Maps an env var / header name the server needs to a ${setup.x} reference, e.g. {'GITHUB_TOKEN': '${setup.github_token}'}.
+     */
+    bindings?: {
+        [key: string]: string;
+    };
+    /**
+     * Json Spec
+     *
+     * Native MCP runtime spec. Must include 'type' (command|docker|url).
+     */
+    json_spec: {
+        [key: string]: unknown;
+    };
     /**
      * Key
      *
@@ -1148,22 +1174,6 @@ export type BundleMcp = {
      * Instance display name created in the workspace.
      */
     name: string;
-    /**
-     * Json Spec
-     *
-     * Native MCP runtime spec. Must include 'type' (command|docker|url).
-     */
-    json_spec: {
-        [key: string]: unknown;
-    };
-    /**
-     * Bindings
-     *
-     * Maps an env var / header name the server needs to a ${setup.x} reference, e.g. {'GITHUB_TOKEN': '${setup.github_token}'}.
-     */
-    bindings?: {
-        [key: string]: string;
-    };
 };
 /**
  * BundleMetadata
@@ -1172,31 +1182,27 @@ export type BundleMcp = {
  */
 export type BundleMetadata = {
     /**
-     * Developer
-     *
-     * Publisher name.
-     */
-    developer?: string | null;
-    /**
-     * Category
-     */
-    category?: string | null;
-    /**
      * Capabilities
      *
      * e.g. ["interactive", "write"].
      */
     capabilities?: Array<string>;
     /**
+     * Category
+     */
+    category?: string | null;
+    /**
+     * Developer
+     *
+     * Publisher name.
+     */
+    developer?: string | null;
+    /**
      * Icon
      *
      * Icon URL or asset reference.
      */
     icon?: string | null;
-    /**
-     * Website
-     */
-    website?: string | null;
     /**
      * Privacy Url
      */
@@ -1205,6 +1211,10 @@ export type BundleMetadata = {
      * Terms Url
      */
     terms_url?: string | null;
+    /**
+     * Website
+     */
+    website?: string | null;
 };
 /**
  * BundlePolicy
@@ -1218,9 +1228,41 @@ export type BundleMetadata = {
  */
 export type BundlePolicy = {
     /**
+     * Condition
+     *
+     * Optional CEL condition.
+     */
+    condition?: string | null;
+    /**
+     * Effect
+     */
+    effect: 'allow' | 'deny' | 'cap' | 'approval' | 'safety';
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
      * Key
      */
     key: string;
+    /**
+     * Message
+     *
+     * Human-readable reason.
+     */
+    message?: string | null;
+    /**
+     * Params
+     *
+     * Effect-specific params, e.g. {amount_usd, period} for cap.
+     */
+    params?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Priority
+     */
+    priority?: number;
     /**
      * Subject
      *
@@ -1233,38 +1275,6 @@ export type BundlePolicy = {
      * Selector, e.g. "tool:send_email", "spend", "content", "*".
      */
     target: string;
-    /**
-     * Effect
-     */
-    effect: 'allow' | 'deny' | 'cap' | 'approval' | 'safety';
-    /**
-     * Params
-     *
-     * Effect-specific params, e.g. {amount_usd, period} for cap.
-     */
-    params?: {
-        [key: string]: unknown;
-    };
-    /**
-     * Condition
-     *
-     * Optional CEL condition.
-     */
-    condition?: string | null;
-    /**
-     * Priority
-     */
-    priority?: number;
-    /**
-     * Enabled
-     */
-    enabled?: boolean;
-    /**
-     * Message
-     *
-     * Human-readable reason.
-     */
-    message?: string | null;
 };
 /**
  * BundleSkill
@@ -1272,6 +1282,12 @@ export type BundlePolicy = {
  * A skill to create for the package.
  */
 export type BundleSkill = {
+    /**
+     * Content
+     *
+     * SKILL.md markdown for source_type=content.
+     */
+    content?: string | null;
     /**
      * Key
      */
@@ -1284,12 +1300,6 @@ export type BundleSkill = {
      * Source Type
      */
     source_type?: 'content' | 'github';
-    /**
-     * Content
-     *
-     * SKILL.md markdown for source_type=content.
-     */
-    content?: string | null;
     /**
      * Source Url
      *
@@ -1334,10 +1344,6 @@ export type CheckResponse = {
  */
 export type ClientCreate = {
     /**
-     * Name
-     */
-    name: string;
-    /**
      * Description
      */
     description?: string | null;
@@ -1345,6 +1351,10 @@ export type ClientCreate = {
      * Kind
      */
     kind?: string;
+    /**
+     * Name
+     */
+    name: string;
     /**
      * Source Project Id
      */
@@ -1368,45 +1378,45 @@ export type ClientRef = {
  */
 export type ClientResponse = {
     /**
-     * Id
-     */
-    id: string;
-    /**
-     * Workspace Id
-     */
-    workspace_id: string;
-    /**
      * Created By
      */
     created_by: string;
-    /**
-     * Name
-     */
-    name: string;
     /**
      * Description
      */
     description: string | null;
     /**
+     * Id
+     */
+    id: string;
+    /**
      * Kind
      */
     kind: string;
     /**
-     * Source Project Id
+     * Mcp Endpoint Url
      */
-    source_project_id: string | null;
-    /**
-     * Skills
-     */
-    skills?: Array<ClientRef>;
+    mcp_endpoint_url?: string | null;
     /**
      * Mcp Instances
      */
     mcp_instances?: Array<ClientRef>;
     /**
-     * Mcp Endpoint Url
+     * Name
      */
-    mcp_endpoint_url?: string | null;
+    name: string;
+    /**
+     * Skills
+     */
+    skills?: Array<ClientRef>;
+    /**
+     * Source Project Id
+     */
+    source_project_id: string | null;
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
 };
 /**
  * ClientUpdate
@@ -1415,10 +1425,6 @@ export type ClientResponse = {
  */
 export type ClientUpdate = {
     /**
-     * Name
-     */
-    name?: string | null;
-    /**
      * Description
      */
     description?: string | null;
@@ -1426,6 +1432,10 @@ export type ClientUpdate = {
      * Kind
      */
     kind?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
     /**
      * Source Project Id
      */
@@ -1439,11 +1449,11 @@ export type CodeToolConfig = {
      * Name
      */
     name: string;
+    settings?: CodeToolSettings | null;
     /**
      * Type
      */
     type?: 'code';
-    settings?: CodeToolSettings | null;
 };
 /**
  * CodeToolSettings
@@ -1452,31 +1462,39 @@ export type CodeToolConfig = {
  */
 export type CodeToolSettings = {
     /**
-     * Requires User Confirmation
-     */
-    requires_user_confirmation?: boolean | null;
-    /**
      * Disabled Methods
      */
     disabled_methods?: Array<string> | null;
+    /**
+     * Package Install
+     */
+    package_install?: 'allowed' | 'locked' | null;
+    /**
+     * Requires User Confirmation
+     */
+    requires_user_confirmation?: boolean | null;
 };
 /**
  * CollectionCreateRequest
  */
 export type CollectionCreateRequest = {
     /**
-     * Name
-     */
-    name: string;
-    /**
      * Description
      */
     description?: string | null;
+    /**
+     * Name
+     */
+    name: string;
 };
 /**
  * CollectionDetailResponse
  */
 export type CollectionDetailResponse = {
+    /**
+     * Description
+     */
+    description: string | null;
     /**
      * Id
      */
@@ -1485,10 +1503,6 @@ export type CollectionDetailResponse = {
      * Name
      */
     name: string;
-    /**
-     * Description
-     */
-    description: string | null;
     /**
      * Skills
      */
@@ -1499,6 +1513,10 @@ export type CollectionDetailResponse = {
  */
 export type CollectionSummaryResponse = {
     /**
+     * Description
+     */
+    description: string | null;
+    /**
      * Id
      */
     id: string;
@@ -1506,10 +1524,6 @@ export type CollectionSummaryResponse = {
      * Name
      */
     name: string;
-    /**
-     * Description
-     */
-    description: string | null;
     /**
      * Skill Count
      */
@@ -1520,13 +1534,13 @@ export type CollectionSummaryResponse = {
  */
 export type CollectionUpdateRequest = {
     /**
-     * Name
-     */
-    name?: string | null;
-    /**
      * Description
      */
     description?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
 };
 /**
  * ContentSafetyPolicy
@@ -1535,13 +1549,26 @@ export type CollectionUpdateRequest = {
  */
 export type ContentSafetyPolicy = {
     /**
-     * Prompt Injection Detection Enabled
-     */
-    prompt_injection_detection_enabled?: boolean | null;
-    /**
      * Output Sanitizer Enabled
      */
     output_sanitizer_enabled?: boolean | null;
+    /**
+     * Prompt Injection Detection Enabled
+     */
+    prompt_injection_detection_enabled?: boolean | null;
+};
+/**
+ * ContinueTaskPayload
+ */
+export type ContinueTaskPayload = {
+    /**
+     * Additional Budget Usd
+     */
+    additional_budget_usd?: number | string | null;
+    /**
+     * Additional Iterations
+     */
+    additional_iterations?: number;
 };
 /**
  * CreateInvitationBody
@@ -1560,21 +1587,21 @@ export type CreateInvitationBody = {
  * CreateWalletRequest
  */
 export type CreateWalletRequest = {
-    /**
-     * Wallet Type
-     */
-    wallet_type: string;
-    x402_config?: X402ConfigSchema | null;
-    mpp_config?: MppConfigSchema | null;
     credentials?: WalletCredentialsSchema | null;
+    mpp_config?: MppConfigSchema | null;
+    /**
+     * Service Budget Period
+     */
+    service_budget_period?: string;
     /**
      * Service Budget Usd
      */
     service_budget_usd?: number;
     /**
-     * Service Budget Period
+     * Wallet Type
      */
-    service_budget_period?: string;
+    wallet_type: string;
+    x402_config?: X402ConfigSchema | null;
 };
 /**
  * CreateWorkspaceBody
@@ -1603,13 +1630,13 @@ export type DailySpendPoint = {
  */
 export type DailyTaskCounts = {
     /**
-     * Date
-     */
-    date: string;
-    /**
      * Completed
      */
     completed: number;
+    /**
+     * Date
+     */
+    date: string;
     /**
      * Failed
      */
@@ -1623,12 +1650,11 @@ export type DailyTaskCounts = {
  * DashboardResponse
  */
 export type DashboardResponse = {
-    spend: SpendCard;
-    blockers: Blockers;
     /**
      * Agents
      */
     agents: Array<AgentRow>;
+    blockers: Blockers;
     /**
      * Daily Spend
      */
@@ -1637,35 +1663,44 @@ export type DashboardResponse = {
      * Daily Tasks
      */
     daily_tasks: Array<DailyTaskCounts>;
+    spend: SpendCard;
 };
 /**
  * DiscoverPreviewModelResponse
  */
 export type DiscoverPreviewModelResponse = {
     /**
-     * Id
+     * Context Window
      */
-    id: string;
+    context_window: number;
     /**
-     * Model Name
+     * Description
      */
-    model_name: string;
+    description?: string | null;
     /**
      * Display Name
      */
     display_name: string;
     /**
-     * Context Window
+     * Id
      */
-    context_window: number;
+    id: string;
+    /**
+     * Input Cost Per Token
+     */
+    input_cost_per_token?: number;
+    /**
+     * Is New
+     */
+    is_new?: boolean;
     /**
      * Max Output Tokens
      */
     max_output_tokens?: number;
     /**
-     * Input Cost Per Token
+     * Model Name
      */
-    input_cost_per_token?: number;
+    model_name: string;
     /**
      * Output Cost Per Token
      */
@@ -1675,30 +1710,18 @@ export type DiscoverPreviewModelResponse = {
      */
     supports_function_calling?: boolean;
     /**
-     * Supports Vision
-     */
-    supports_vision?: boolean;
-    /**
      * Supports Reasoning
      */
     supports_reasoning?: boolean;
     /**
-     * Description
+     * Supports Vision
      */
-    description?: string | null;
-    /**
-     * Is New
-     */
-    is_new?: boolean;
+    supports_vision?: boolean;
 };
 /**
  * DiscoverPreviewRequest
  */
 export type DiscoverPreviewRequest = {
-    /**
-     * Provider Key
-     */
-    provider_key: string;
     /**
      * Api Key
      */
@@ -1707,6 +1730,10 @@ export type DiscoverPreviewRequest = {
      * Endpoint Url
      */
     endpoint_url?: string | null;
+    /**
+     * Provider Key
+     */
+    provider_key: string;
 };
 /**
  * DiscoverPreviewResponse
@@ -1717,38 +1744,46 @@ export type DiscoverPreviewResponse = {
      */
     discovered: number;
     /**
-     * New Models
-     */
-    new_models: number;
-    /**
      * Models
      */
     models: Array<DiscoverPreviewModelResponse>;
+    /**
+     * New Models
+     */
+    new_models: number;
 };
 /**
  * DiscoveredModelResponse
  */
 export type DiscoveredModelResponse = {
     /**
-     * Model Name
+     * Context Window
      */
-    model_name: string;
+    context_window: number;
+    /**
+     * Description
+     */
+    description?: string | null;
     /**
      * Display Name
      */
     display_name: string;
     /**
-     * Context Window
+     * Input Cost Per Token
      */
-    context_window: number;
+    input_cost_per_token?: number;
+    /**
+     * Is New
+     */
+    is_new?: boolean;
     /**
      * Max Output Tokens
      */
     max_output_tokens?: number;
     /**
-     * Input Cost Per Token
+     * Model Name
      */
-    input_cost_per_token?: number;
+    model_name: string;
     /**
      * Output Cost Per Token
      */
@@ -1758,21 +1793,13 @@ export type DiscoveredModelResponse = {
      */
     supports_function_calling?: boolean;
     /**
-     * Supports Vision
-     */
-    supports_vision?: boolean;
-    /**
      * Supports Reasoning
      */
     supports_reasoning?: boolean;
     /**
-     * Description
+     * Supports Vision
      */
-    description?: string | null;
-    /**
-     * Is New
-     */
-    is_new?: boolean;
+    supports_vision?: boolean;
 };
 /**
  * DiscoveryResponse
@@ -1783,13 +1810,13 @@ export type DiscoveryResponse = {
      */
     discovered: number;
     /**
-     * New Models
-     */
-    new_models: number;
-    /**
      * Models
      */
     models: Array<DiscoveredModelResponse>;
+    /**
+     * New Models
+     */
+    new_models: number;
 };
 /**
  * EffectivePolicy
@@ -1797,19 +1824,19 @@ export type DiscoveryResponse = {
  * Resolved immutable policy snapshot.
  */
 export type EffectivePolicy = {
-    budget?: BudgetPolicyOutput | null;
-    tokens?: TokenPolicy | null;
-    tools?: ToolsPolicy | null;
     approval?: ApprovalPolicy | null;
+    budget?: BudgetPolicyOutput | null;
     content_safety?: ContentSafetyPolicy | null;
-    /**
-     * Source Policy Ids
-     */
-    source_policy_ids?: Array<string>;
     /**
      * Resolver Version
      */
     resolver_version?: string;
+    /**
+     * Source Policy Ids
+     */
+    source_policy_ids?: Array<string>;
+    tokens?: TokenPolicy | null;
+    tools?: ToolsPolicy | null;
 };
 /**
  * EffectivePolicyPreviewRequest
@@ -1842,10 +1869,6 @@ export type EntityStatus = 'will_create' | 'already_exists' | 'unsupported';
  */
 export type EscalationResolution = {
     /**
-     * Escalation Id
-     */
-    escalation_id: string;
-    /**
      * Approved
      */
     approved: boolean;
@@ -1853,6 +1876,10 @@ export type EscalationResolution = {
      * Comment
      */
     comment?: string;
+    /**
+     * Escalation Id
+     */
+    escalation_id: string;
 };
 /**
  * EventConfig
@@ -1860,12 +1887,6 @@ export type EscalationResolution = {
  * One event subscription for an agent.
  */
 export type EventConfig = {
-    /**
-     * Event Type
-     *
-     * Event type the agent listens to.
-     */
-    event_type: string;
     /**
      * Config
      *
@@ -1880,6 +1901,12 @@ export type EventConfig = {
      * Whether this subscription is active.
      */
     enabled?: boolean;
+    /**
+     * Event Type
+     *
+     * Event type the agent listens to.
+     */
+    event_type: string;
 };
 /**
  * EventsConfig
@@ -1905,9 +1932,9 @@ export type ExecutionCorrelationResponse = {
         [key: string]: unknown;
     }>;
     /**
-     * Total
+     * Has Next
      */
-    total: number;
+    has_next: boolean;
     /**
      * Page
      */
@@ -1917,9 +1944,9 @@ export type ExecutionCorrelationResponse = {
      */
     page_size: number;
     /**
-     * Has Next
+     * Total
      */
-    has_next: boolean;
+    total: number;
 };
 /**
  * ExecutionHistoryResponse
@@ -1932,9 +1959,9 @@ export type ExecutionHistoryResponse = {
      */
     executions: Array<TriggerExecutionResponse>;
     /**
-     * Total
+     * Has Next
      */
-    total: number;
+    has_next: boolean;
     /**
      * Page
      */
@@ -1944,9 +1971,9 @@ export type ExecutionHistoryResponse = {
      */
     page_size: number;
     /**
-     * Has Next
+     * Total
      */
-    has_next: boolean;
+    total: number;
 };
 /**
  * ExecutionMetricsResponse
@@ -1955,49 +1982,49 @@ export type ExecutionHistoryResponse = {
  */
 export type ExecutionMetricsResponse = {
     /**
-     * Trigger Id
+     * Avg Execution Time Ms
      */
-    trigger_id: string;
-    /**
-     * Period Hours
-     */
-    period_hours: number;
-    /**
-     * Total Executions
-     */
-    total_executions: number;
-    /**
-     * Successful Executions
-     */
-    successful_executions: number;
+    avg_execution_time_ms: number;
     /**
      * Failed Executions
      */
     failed_executions: number;
     /**
-     * Timeout Executions
-     */
-    timeout_executions: number;
-    /**
-     * Success Rate
-     */
-    success_rate: number;
-    /**
      * Failure Rate
      */
     failure_rate: number;
     /**
-     * Avg Execution Time Ms
+     * Max Execution Time Ms
      */
-    avg_execution_time_ms: number;
+    max_execution_time_ms: number;
     /**
      * Min Execution Time Ms
      */
     min_execution_time_ms: number;
     /**
-     * Max Execution Time Ms
+     * Period Hours
      */
-    max_execution_time_ms: number;
+    period_hours: number;
+    /**
+     * Success Rate
+     */
+    success_rate: number;
+    /**
+     * Successful Executions
+     */
+    successful_executions: number;
+    /**
+     * Timeout Executions
+     */
+    timeout_executions: number;
+    /**
+     * Total Executions
+     */
+    total_executions: number;
+    /**
+     * Trigger Id
+     */
+    trigger_id: string;
 };
 /**
  * ExecutionTimelineResponse
@@ -2005,10 +2032,6 @@ export type ExecutionMetricsResponse = {
  * Response model for execution timeline.
  */
 export type ExecutionTimelineResponse = {
-    /**
-     * Trigger Id
-     */
-    trigger_id: string;
     /**
      * Period Hours
      */
@@ -2019,15 +2042,15 @@ export type ExecutionTimelineResponse = {
     timeline: Array<{
         [key: string]: unknown;
     }>;
+    /**
+     * Trigger Id
+     */
+    trigger_id: string;
 };
 /**
  * FailedTaskBlocker
  */
 export type FailedTaskBlocker = {
-    /**
-     * Task Id
-     */
-    task_id: string;
     /**
      * Agent Id
      */
@@ -2044,6 +2067,10 @@ export type FailedTaskBlocker = {
      * Occurred At
      */
     occurred_at: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
 };
 /**
  * FundWalletRequest
@@ -2059,13 +2086,13 @@ export type FundWalletRequest = {
  */
 export type GovernanceOverlay = {
     /**
-     * Interceptor Name
-     */
-    interceptor_name: string;
-    /**
      * Category
      */
     category: string;
+    /**
+     * Interceptor Name
+     */
+    interceptor_name: string;
     /**
      * Phases
      */
@@ -2075,6 +2102,14 @@ export type GovernanceOverlay = {
  * GraphNode
  */
 export type GraphNode = {
+    /**
+     * Color
+     */
+    color: string;
+    /**
+     * Count
+     */
+    count?: number | null;
     /**
      * Id
      */
@@ -2091,19 +2126,17 @@ export type GraphNode = {
      * Subtitle
      */
     subtitle: string;
-    /**
-     * Color
-     */
-    color: string;
-    /**
-     * Count
-     */
-    count?: number | null;
 };
 /**
  * GraphResponse
  */
 export type GraphResponse = {
+    /**
+     * Edges
+     */
+    edges: Array<{
+        [key: string]: unknown;
+    }>;
     /**
      * Enabled
      */
@@ -2112,18 +2145,16 @@ export type GraphResponse = {
      * Nodes
      */
     nodes: Array<GraphNode>;
-    /**
-     * Edges
-     */
-    edges: Array<{
-        [key: string]: unknown;
-    }>;
     stats: GraphStats;
 };
 /**
  * GraphStats
  */
 export type GraphStats = {
+    /**
+     * Direct Exception Count
+     */
+    direct_exception_count: number;
     /**
      * Governed Skill Count
      */
@@ -2132,10 +2163,6 @@ export type GraphStats = {
      * Rule Count
      */
     rule_count: number;
-    /**
-     * Direct Exception Count
-     */
-    direct_exception_count: number;
 };
 /**
  * HTTPValidationError
@@ -2192,10 +2219,6 @@ export type HeaderOutput = {
  */
 export type HitlBlocker = {
     /**
-     * Task Id
-     */
-    task_id: string;
-    /**
      * Agent Id
      */
     agent_id: string;
@@ -2204,13 +2227,17 @@ export type HitlBlocker = {
      */
     agent_name: string;
     /**
+     * Created At
+     */
+    created_at: string;
+    /**
      * Description
      */
     description: string;
     /**
-     * Created At
+     * Task Id
      */
-    created_at: string;
+    task_id: string;
 };
 /**
  * ImportPreview
@@ -2220,23 +2247,23 @@ export type HitlBlocker = {
 export type ImportPreview = {
     bundle: BundleOutput;
     /**
-     * Setup
-     */
-    setup?: Array<SetupField>;
-    /**
      * Entities
      */
     entities?: Array<PreviewEntity>;
-    /**
-     * Issues
-     */
-    issues?: Array<PreviewIssue>;
     /**
      * Installable
      *
      * True when there are no blocking issues (setup may still be required).
      */
     installable: boolean;
+    /**
+     * Issues
+     */
+    issues?: Array<PreviewIssue>;
+    /**
+     * Setup
+     */
+    setup?: Array<SetupField>;
 };
 /**
  * ImportRequest
@@ -2245,11 +2272,11 @@ export type ImportPreview = {
  */
 export type ImportRequest = {
     /**
-     * Yaml Content
+     * Override Existing
      *
-     * YAML configuration content
+     * Override existing resources with same name
      */
-    yaml_content: string;
+    override_existing?: boolean;
     /**
      * Skip Missing Dependencies
      *
@@ -2257,11 +2284,11 @@ export type ImportRequest = {
      */
     skip_missing_dependencies?: boolean;
     /**
-     * Override Existing
+     * Yaml Content
      *
-     * Override existing resources with same name
+     * YAML configuration content
      */
-    override_existing?: boolean;
+    yaml_content: string;
 };
 /**
  * ImportResult
@@ -2269,14 +2296,6 @@ export type ImportRequest = {
  * Result of an import operation.
  */
 export type ImportResult = {
-    /**
-     * Success
-     */
-    success: boolean;
-    /**
-     * Created Skills
-     */
-    created_skills?: number;
     /**
      * Created Agents
      */
@@ -2290,9 +2309,17 @@ export type ImportResult = {
      */
     created_provider_configs?: number;
     /**
+     * Created Skills
+     */
+    created_skills?: number;
+    /**
      * Errors
      */
     errors?: Array<string>;
+    /**
+     * Success
+     */
+    success: boolean;
     /**
      * Warnings
      */
@@ -2307,10 +2334,6 @@ export type InboxResponse = {
      */
     items: Array<TaskWithAgent>;
     /**
-     * Total
-     */
-    total: number;
-    /**
      * Page
      */
     page: number;
@@ -2318,6 +2341,10 @@ export type InboxResponse = {
      * Page Size
      */
     page_size: number;
+    /**
+     * Total
+     */
+    total: number;
 };
 /**
  * InputSecretValue
@@ -2326,13 +2353,13 @@ export type InboxResponse = {
  */
 export type InputSecretValue = {
     /**
-     * Value
-     */
-    value: string;
-    /**
      * Secret Name
      */
     secret_name?: string | null;
+    /**
+     * Value
+     */
+    value: string;
 };
 /**
  * InstallAction
@@ -2363,28 +2390,23 @@ export type InstallResult = {
      */
     bundle_name: string;
     /**
-     * Installed Bundle Id
-     */
-    installed_bundle_id?: string | null;
-    /**
      * Entities
      */
     entities?: Array<InstalledEntity>;
+    /**
+     * Installed Bundle Id
+     */
+    installed_bundle_id?: string | null;
 };
 /**
  * InstalledEntity
  */
 export type InstalledEntity = {
-    kind: EntityKind;
-    /**
-     * Key
-     */
-    key: string;
-    /**
-     * Name
-     */
-    name: string;
     action: InstallAction;
+    /**
+     * Detail
+     */
+    detail?: string | null;
     /**
      * Id
      *
@@ -2392,9 +2414,14 @@ export type InstalledEntity = {
      */
     id?: string | null;
     /**
-     * Detail
+     * Key
      */
-    detail?: string | null;
+    key: string;
+    kind: EntityKind;
+    /**
+     * Name
+     */
+    name: string;
 };
 /**
  * InvitationCreatedResponse
@@ -2403,30 +2430,6 @@ export type InstalledEntity = {
  */
 export type InvitationCreatedResponse = {
     /**
-     * Id
-     */
-    id: string;
-    /**
-     * Workspace Id
-     */
-    workspace_id: string;
-    /**
-     * Email
-     */
-    email: string | null;
-    /**
-     * Invited By
-     */
-    invited_by: string;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Expires At
-     */
-    expires_at: string;
-    /**
      * Accepted At
      */
     accepted_at: string | null;
@@ -2439,39 +2442,39 @@ export type InvitationCreatedResponse = {
      */
     created_at: string;
     /**
+     * Email
+     */
+    email: string | null;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Invited By
+     */
+    invited_by: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
      * Token
      */
     token: string;
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
 };
 /**
  * InvitationResponse
  */
 export type InvitationResponse = {
     /**
-     * Id
-     */
-    id: string;
-    /**
-     * Workspace Id
-     */
-    workspace_id: string;
-    /**
-     * Email
-     */
-    email: string | null;
-    /**
-     * Invited By
-     */
-    invited_by: string;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Expires At
-     */
-    expires_at: string;
-    /**
      * Accepted At
      */
     accepted_at: string | null;
@@ -2483,6 +2486,30 @@ export type InvitationResponse = {
      * Created At
      */
     created_at: string;
+    /**
+     * Email
+     */
+    email: string | null;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Invited By
+     */
+    invited_by: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
 };
 /**
  * IssueSeverity
@@ -2492,16 +2519,6 @@ export type IssueSeverity = 'block' | 'warn';
  * MCPAuthConfigCreateRequest
  */
 export type McpAuthConfigCreateRequest = {
-    /**
-     * Name
-     *
-     * Human-readable name for this auth config
-     */
-    name: string;
-    /**
-     * Description
-     */
-    description?: string | null;
     /**
      * Auth Type
      *
@@ -2524,23 +2541,21 @@ export type McpAuthConfigCreateRequest = {
     credentials?: {
         [key: string]: unknown;
     };
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Name
+     *
+     * Human-readable name for this auth config
+     */
+    name: string;
 };
 /**
  * MCPAuthConfigResponse
  */
 export type McpAuthConfigResponse = {
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Description
-     */
-    description: string | null;
     /**
      * Auth Type
      */
@@ -2556,6 +2571,18 @@ export type McpAuthConfigResponse = {
      */
     created_at: string;
     /**
+     * Description
+     */
+    description: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
      * Updated At
      */
     updated_at: string;
@@ -2564,14 +2591,6 @@ export type McpAuthConfigResponse = {
  * MCPAuthConfigUpdateRequest
  */
 export type McpAuthConfigUpdateRequest = {
-    /**
-     * Name
-     */
-    name?: string | null;
-    /**
-     * Description
-     */
-    description?: string | null;
     /**
      * Config
      */
@@ -2584,13 +2603,48 @@ export type McpAuthConfigUpdateRequest = {
     credentials?: {
         [key: string]: unknown;
     } | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+};
+/**
+ * MCPInstanceConsumer
+ *
+ * An agent that has this MCP instance attached, and which of its tools it enabled.
+ */
+export type McpInstanceConsumer = {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Agent Name
+     */
+    agent_name: string;
+    /**
+     * Agent Slug
+     */
+    agent_slug?: string | null;
+    /**
+     * Confirm Tools
+     */
+    confirm_tools?: Array<string>;
+    /**
+     * Enabled Tools
+     */
+    enabled_tools?: Array<string> | null;
 };
 /**
  * MCPServerConnectionCreateRequest
  */
 export type McpServerConnectionCreateRequest = {
-    server: McpServerCreate;
     instance: McpServerInstanceCreateWithoutSpec;
+    server: McpServerCreate;
 };
 /**
  * MCPServerCreate
@@ -2605,11 +2659,11 @@ export type McpServerConnectionCreateRequest = {
  */
 export type McpServerCreate = {
     /**
-     * Name
+     * Cmd
      *
-     * Human-readable MCP server name (unique per workspace).
+     * Custom command override for container CMD (e.g. switching between stdio and HTTP modes).
      */
-    name: string;
+    cmd?: Array<string> | null;
     /**
      * Description
      *
@@ -2623,30 +2677,6 @@ export type McpServerCreate = {
      */
     docker_image_url?: string | null;
     /**
-     * Remote Url
-     *
-     * Remote endpoint URL for HTTP-based MCP servers.
-     */
-    remote_url?: string | null;
-    /**
-     * Version
-     *
-     * Semantic version of the MCP server spec.
-     */
-    version?: string;
-    /**
-     * Tags
-     *
-     * Tags used for search and categorization.
-     */
-    tags?: Array<string>;
-    /**
-     * Is Public
-     *
-     * If true, the spec is visible across workspaces.
-     */
-    is_public?: boolean;
-    /**
      * Env Schema
      *
      * Environment-variable schema entries (KeyValueInput from the MCP registry). Each item has at least 'name' and 'description'; mark secrets with 'isSecret: true'.
@@ -2655,11 +2685,11 @@ export type McpServerCreate = {
         [key: string]: unknown;
     }> | null;
     /**
-     * Cmd
+     * Is Public
      *
-     * Custom command override for container CMD (e.g. switching between stdio and HTTP modes).
+     * If true, the spec is visible across workspaces.
      */
-    cmd?: Array<string> | null;
+    is_public?: boolean;
     /**
      * Json Spec
      *
@@ -2669,11 +2699,35 @@ export type McpServerCreate = {
         [key: string]: unknown;
     } | null;
     /**
+     * Name
+     *
+     * Human-readable MCP server name (unique per workspace).
+     */
+    name: string;
+    /**
      * Registry Url
      *
      * Source registry URL the spec was imported from.
      */
     registry_url?: string | null;
+    /**
+     * Remote Url
+     *
+     * Remote endpoint URL for HTTP-based MCP servers.
+     */
+    remote_url?: string | null;
+    /**
+     * Tags
+     *
+     * Tags used for search and categorization.
+     */
+    tags?: Array<string>;
+    /**
+     * Version
+     *
+     * Semantic version of the MCP server spec.
+     */
+    version?: string;
 };
 /**
  * MCPServerInstanceCreate
@@ -2690,23 +2744,17 @@ export type McpServerCreate = {
  */
 export type McpServerInstanceCreate = {
     /**
-     * Name
+     * Auth Config Id
      *
-     * Display name for this MCP server instance (unique per workspace).
+     * ID of an MCP auth config (OAuth/credentials) to attach.
      */
-    name: string;
+    auth_config_id?: string | null;
     /**
      * Description
      *
      * Optional human-readable description of the instance.
      */
     description?: string | null;
-    /**
-     * Server Spec Id
-     *
-     * ID of an existing MCP server spec to derive defaults from (env_schema, secret routing, etc.).
-     */
-    server_spec_id: string;
     /**
      * Json Spec
      *
@@ -2716,20 +2764,26 @@ export type McpServerInstanceCreate = {
         [key: string]: unknown;
     };
     /**
-     * Auth Config Id
+     * Name
      *
-     * ID of an MCP auth config (OAuth/credentials) to attach.
+     * Display name for this MCP server instance (unique per workspace).
      */
-    auth_config_id?: string | null;
+    name: string;
+    /**
+     * Server Spec Id
+     *
+     * ID of an existing MCP server spec to derive defaults from (env_schema, secret routing, etc.).
+     */
+    server_spec_id: string;
 };
 /**
  * MCPServerInstanceCreateWithoutSpec
  */
 export type McpServerInstanceCreateWithoutSpec = {
     /**
-     * Name
+     * Auth Config Id
      */
-    name: string;
+    auth_config_id?: string | null;
     /**
      * Description
      */
@@ -2741,54 +2795,14 @@ export type McpServerInstanceCreateWithoutSpec = {
         [key: string]: unknown;
     };
     /**
-     * Auth Config Id
+     * Name
      */
-    auth_config_id?: string | null;
+    name: string;
 };
 /**
  * MCPServerInstanceResponse
  */
 export type McpServerInstanceResponse = {
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Description
-     */
-    description: string | null;
-    /**
-     * Server Spec Id
-     */
-    server_spec_id: string;
-    /**
-     * Json Spec
-     */
-    json_spec: {
-        [key: string]: unknown;
-    };
-    /**
-     * Verification
-     */
-    verification: {
-        [key: string]: unknown;
-    };
-    /**
-     * Last Dispatch
-     */
-    last_dispatch?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * Tools
-     */
-    tools?: Array<{
-        [key: string]: unknown;
-    }> | null;
     /**
      * Auth Config Id
      */
@@ -2798,9 +2812,49 @@ export type McpServerInstanceResponse = {
      */
     created_at: string;
     /**
+     * Description
+     */
+    description: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Json Spec
+     */
+    json_spec: {
+        [key: string]: unknown;
+    };
+    /**
+     * Last Dispatch
+     */
+    last_dispatch?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Server Spec Id
+     */
+    server_spec_id: string;
+    /**
+     * Tools
+     */
+    tools?: Array<{
+        [key: string]: unknown;
+    }> | null;
+    /**
      * Updated At
      */
     updated_at: string;
+    /**
+     * Verification
+     */
+    verification: {
+        [key: string]: unknown;
+    };
 };
 /**
  * MCPServerInstanceUpdate
@@ -2808,10 +2862,6 @@ export type McpServerInstanceResponse = {
  * Patch payload for an MCP server instance. All fields optional — unset = unchanged.
  */
 export type McpServerInstanceUpdate = {
-    /**
-     * Name
-     */
-    name?: string | null;
     /**
      * Description
      */
@@ -2822,23 +2872,23 @@ export type McpServerInstanceUpdate = {
     json_spec?: {
         [key: string]: unknown;
     } | null;
+    /**
+     * Name
+     */
+    name?: string | null;
 };
 /**
  * MCPServerResponse
  */
 export type McpServerResponse = {
     /**
-     * Id
+     * Cmd
      */
-    id: string;
+    cmd: Array<string> | null;
     /**
-     * Slug
+     * Created At
      */
-    slug: string;
-    /**
-     * Name
-     */
-    name: string;
+    created_at: string;
     /**
      * Description
      */
@@ -2848,31 +2898,19 @@ export type McpServerResponse = {
      */
     docker_image_url?: string | null;
     /**
-     * Version
-     */
-    version: string;
-    /**
-     * Tags
-     */
-    tags: Array<string>;
-    /**
-     * Is Public
-     */
-    is_public: boolean;
-    /**
      * Env Schema
      */
     env_schema: Array<{
         [key: string]: unknown;
     }>;
     /**
-     * Cmd
+     * Id
      */
-    cmd: Array<string> | null;
+    id: string;
     /**
-     * Remote Url
+     * Is Public
      */
-    remote_url?: string | null;
+    is_public: boolean;
     /**
      * Json Spec
      */
@@ -2880,21 +2918,37 @@ export type McpServerResponse = {
         [key: string]: unknown;
     } | null;
     /**
+     * Name
+     */
+    name: string;
+    /**
      * Registry Url
      */
     registry_url?: string | null;
+    /**
+     * Remote Url
+     */
+    remote_url?: string | null;
+    /**
+     * Slug
+     */
+    slug: string;
     /**
      * Status
      */
     status: string;
     /**
-     * Created At
+     * Tags
      */
-    created_at: string;
+    tags: Array<string>;
     /**
      * Updated At
      */
     updated_at: string;
+    /**
+     * Version
+     */
+    version: string;
 };
 /**
  * MCPServerUpdate
@@ -2903,9 +2957,9 @@ export type McpServerResponse = {
  */
 export type McpServerUpdate = {
     /**
-     * Name
+     * Cmd
      */
-    name?: string | null;
+    cmd?: Array<string> | null;
     /**
      * Description
      */
@@ -2915,37 +2969,15 @@ export type McpServerUpdate = {
      */
     docker_image_url?: string | null;
     /**
-     * Remote Url
-     */
-    remote_url?: string | null;
-    /**
-     * Version
-     */
-    version?: string | null;
-    /**
-     * Tags
-     */
-    tags?: Array<string> | null;
-    /**
-     * Is Public
-     */
-    is_public?: boolean | null;
-    /**
-     * Status
-     *
-     * Lifecycle status of the spec (e.g. 'active', 'deprecated').
-     */
-    status?: string | null;
-    /**
      * Env Schema
      */
     env_schema?: Array<{
         [key: string]: unknown;
     }> | null;
     /**
-     * Cmd
+     * Is Public
      */
-    cmd?: Array<string> | null;
+    is_public?: boolean | null;
     /**
      * Json Spec
      */
@@ -2953,18 +2985,60 @@ export type McpServerUpdate = {
         [key: string]: unknown;
     } | null;
     /**
+     * Name
+     */
+    name?: string | null;
+    /**
      * Registry Url
      */
     registry_url?: string | null;
+    /**
+     * Remote Url
+     */
+    remote_url?: string | null;
+    /**
+     * Status
+     *
+     * Lifecycle status of the spec (e.g. 'active', 'deprecated').
+     */
+    status?: string | null;
+    /**
+     * Tags
+     */
+    tags?: Array<string> | null;
+    /**
+     * Version
+     */
+    version?: string | null;
 };
 /**
  * MPPConfigSchema
  */
 export type MppConfigSchema = {
     /**
+     * Chain Id
+     */
+    chain_id?: number | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Decimals
+     */
+    decimals?: number;
+    /**
      * Payment Method Types
      */
     payment_method_types?: Array<string>;
+    /**
+     * Recipient
+     */
+    recipient?: string | null;
+    /**
+     * Rpc Url
+     */
+    rpc_url?: string | null;
     /**
      * Session Budget Usd
      */
@@ -2973,26 +3047,6 @@ export type MppConfigSchema = {
      * Stripe Profile Id
      */
     stripe_profile_id?: string | null;
-    /**
-     * Chain Id
-     */
-    chain_id?: number | null;
-    /**
-     * Rpc Url
-     */
-    rpc_url?: string | null;
-    /**
-     * Currency
-     */
-    currency?: string | null;
-    /**
-     * Recipient
-     */
-    recipient?: string | null;
-    /**
-     * Decimals
-     */
-    decimals?: number;
 };
 /**
  * McpInstanceAssociationBody
@@ -3015,11 +3069,11 @@ export type McpToolConfigInput = {
      * Name
      */
     name: string;
+    settings?: McpToolSettings | null;
     /**
      * Type
      */
     type?: 'mcp';
-    settings?: McpToolSettings | null;
 };
 /**
  * McpToolConfig
@@ -3029,28 +3083,31 @@ export type McpToolConfigOutput = {
      * Name
      */
     name: string;
+    settings?: McpToolSettings | null;
     /**
      * Type
      */
     type?: 'mcp';
-    settings?: McpToolSettings | null;
 };
 /**
  * McpToolPermission
  *
- * A single MCP tool the agent may call, with its per-call approval gate.
+ * A single MCP tool the agent may call.
  *
  * Replaces the old ``list[Any]`` for ``allowed_tools`` (the former FIXME).
+ * ``requires_user_confirmation`` is transport only: the API translates it into
+ * an agent-scoped approval policy rule and does not persist it here, so it is
+ * ``None`` at rest and reconstituted from rules on read.
  */
 export type McpToolPermission = {
+    /**
+     * Requires User Confirmation
+     */
+    requires_user_confirmation?: boolean | null;
     /**
      * Tool Name
      */
     tool_name: string;
-    /**
-     * Requires User Confirmation
-     */
-    requires_user_confirmation?: boolean;
 };
 /**
  * McpToolSettings
@@ -3059,46 +3116,46 @@ export type McpToolPermission = {
  */
 export type McpToolSettings = {
     /**
-     * Requires User Confirmation
-     */
-    requires_user_confirmation?: boolean | null;
-    /**
      * Allowed Tools
      */
     allowed_tools?: Array<McpToolPermission> | null;
+    /**
+     * Requires User Confirmation
+     */
+    requires_user_confirmation?: boolean | null;
 };
 /**
  * MemberResponse
  */
 export type MemberResponse = {
     /**
-     * Id
+     * Display Name
      */
-    id: string;
-    /**
-     * Workspace Id
-     */
-    workspace_id: string;
-    /**
-     * User Id
-     */
-    user_id: string;
+    display_name?: string | null;
     /**
      * Email
      */
     email?: string | null;
     /**
-     * Display Name
+     * Id
      */
-    display_name?: string | null;
+    id: string;
+    /**
+     * Invitation Id
+     */
+    invitation_id: string | null;
     /**
      * Joined At
      */
     joined_at: string;
     /**
-     * Invitation Id
+     * User Id
      */
-    invitation_id: string | null;
+    user_id: string;
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
 };
 /**
  * ModelInstanceBulkCreateRequest
@@ -3114,26 +3171,30 @@ export type ModelInstanceBulkCreateRequest = {
  */
 export type ModelInstanceBulkCreateResponse = {
     /**
-     * Succeeded
-     */
-    succeeded: Array<ModelInstanceResponse>;
-    /**
      * Failed
      */
     failed: Array<ModelInstanceBulkFailure>;
     /**
-     * Succeeded Count
-     */
-    succeeded_count: number;
-    /**
      * Failed Count
      */
     failed_count: number;
+    /**
+     * Succeeded
+     */
+    succeeded: Array<ModelInstanceResponse>;
+    /**
+     * Succeeded Count
+     */
+    succeeded_count: number;
 };
 /**
  * ModelInstanceBulkFailure
  */
 export type ModelInstanceBulkFailure = {
+    /**
+     * Error
+     */
+    error: string;
     /**
      * Index
      */
@@ -3142,27 +3203,11 @@ export type ModelInstanceBulkFailure = {
      * Model Spec Id
      */
     model_spec_id: string;
-    /**
-     * Error
-     */
-    error: string;
 };
 /**
  * ModelInstanceCreate
  */
 export type ModelInstanceCreate = {
-    /**
-     * Provider Config Id
-     */
-    provider_config_id: string;
-    /**
-     * Model Spec Id
-     */
-    model_spec_id: string;
-    /**
-     * Name
-     */
-    name: string;
     /**
      * Description
      */
@@ -3171,19 +3216,6 @@ export type ModelInstanceCreate = {
      * Is Public
      */
     is_public?: boolean;
-};
-/**
- * ModelInstanceResponse
- */
-export type ModelInstanceResponse = {
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Provider Config Id
-     */
-    provider_config_id: string;
     /**
      * Model Spec Id
      */
@@ -3193,9 +3225,30 @@ export type ModelInstanceResponse = {
      */
     name: string;
     /**
+     * Provider Config Id
+     */
+    provider_config_id: string;
+};
+/**
+ * ModelInstanceResponse
+ */
+export type ModelInstanceResponse = {
+    /**
+     * Config Name
+     */
+    config_name?: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
      * Description
      */
     description: string | null;
+    /**
+     * Id
+     */
+    id: string;
     /**
      * Is Active
      */
@@ -3205,50 +3258,54 @@ export type ModelInstanceResponse = {
      */
     is_public: boolean;
     /**
-     * Created At
+     * Model Display Name
      */
-    created_at: string;
-    /**
-     * Updated At
-     */
-    updated_at: string;
-    /**
-     * Provider Name
-     */
-    provider_name?: string | null;
-    /**
-     * Provider Key
-     */
-    provider_key?: string | null;
-    /**
-     * Provider Icon Url
-     */
-    provider_icon_url?: string | null;
+    model_display_name?: string | null;
     /**
      * Model Name
      */
     model_name?: string | null;
     /**
-     * Model Display Name
+     * Model Spec Id
      */
-    model_display_name?: string | null;
+    model_spec_id: string;
     /**
-     * Config Name
+     * Name
      */
-    config_name?: string | null;
+    name: string;
+    /**
+     * Provider Config Id
+     */
+    provider_config_id: string;
+    /**
+     * Provider Icon Url
+     */
+    provider_icon_url?: string | null;
+    /**
+     * Provider Key
+     */
+    provider_key?: string | null;
+    /**
+     * Provider Name
+     */
+    provider_name?: string | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
 };
 /**
  * ModelInstanceTestRequest
  */
 export type ModelInstanceTestRequest = {
     /**
-     * Provider Config Id
-     */
-    provider_config_id: string;
-    /**
      * Model Spec Id
      */
     model_spec_id: string;
+    /**
+     * Provider Config Id
+     */
+    provider_config_id: string;
     /**
      * Test Message
      */
@@ -3259,33 +3316,33 @@ export type ModelInstanceTestRequest = {
  */
 export type ModelInstanceTestResponse = {
     /**
-     * Success
+     * Cost
      */
-    success: boolean;
-    /**
-     * Message
-     */
-    message: string;
-    /**
-     * Response Content
-     */
-    response_content?: string | null;
+    cost?: number | null;
     /**
      * Error Type
      */
     error_type?: string | null;
     /**
-     * Provider Type
+     * Message
      */
-    provider_type?: string | null;
+    message: string;
     /**
      * Model Name
      */
     model_name?: string | null;
     /**
-     * Cost
+     * Provider Type
      */
-    cost?: number | null;
+    provider_type?: string | null;
+    /**
+     * Response Content
+     */
+    response_content?: string | null;
+    /**
+     * Success
+     */
+    success: boolean;
     /**
      * Tokens Used
      */
@@ -3296,22 +3353,6 @@ export type ModelInstanceTestResponse = {
  */
 export type ModelSpecCreate = {
     /**
-     * Provider Spec Id
-     */
-    provider_spec_id: string;
-    /**
-     * Model Name
-     */
-    model_name: string;
-    /**
-     * Display Name
-     */
-    display_name: string;
-    /**
-     * Description
-     */
-    description?: string | null;
-    /**
      * Context Window
      */
     context_window?: number;
@@ -3320,22 +3361,30 @@ export type ModelSpecCreate = {
      */
     default_context_strategy?: string | null;
     /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
      * Is Active
      */
     is_active?: boolean;
+    /**
+     * Model Name
+     */
+    model_name: string;
+    /**
+     * Provider Spec Id
+     */
+    provider_spec_id: string;
 };
 /**
  * ModelSpecUpdate
  */
 export type ModelSpecUpdate = {
-    /**
-     * Display Name
-     */
-    display_name?: string | null;
-    /**
-     * Description
-     */
-    description?: string | null;
     /**
      * Context Window
      */
@@ -3344,6 +3393,14 @@ export type ModelSpecUpdate = {
      * Default Context Strategy
      */
     default_context_strategy?: string | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Display Name
+     */
+    display_name?: string | null;
     /**
      * Is Active
      */
@@ -3358,6 +3415,10 @@ export type NetworkEdge = {
      */
     id: string;
     /**
+     * Relation
+     */
+    relation: string;
+    /**
      * Source
      */
     source: string;
@@ -3365,10 +3426,6 @@ export type NetworkEdge = {
      * Target
      */
     target: string;
-    /**
-     * Relation
-     */
-    relation: string;
 };
 /**
  * NetworkNode
@@ -3379,32 +3436,32 @@ export type NetworkNode = {
      */
     id: string;
     /**
-     * Type
-     */
-    type: 'agent' | 'mcp_instance' | 'openapi_connection' | 'skill' | 'trigger';
-    /**
      * Label
      */
     label: string;
-    /**
-     * Status
-     */
-    status?: string | null;
     /**
      * Metadata
      */
     metadata?: {
         [key: string]: unknown;
     };
+    /**
+     * Status
+     */
+    status?: string | null;
+    /**
+     * Type
+     */
+    type: 'agent' | 'mcp_instance' | 'openapi_connection' | 'skill' | 'trigger';
 };
 /**
  * NetworkTopologyResponse
  */
 export type NetworkTopologyResponse = {
     /**
-     * Nodes
+     * Deployment Mode
      */
-    nodes: Array<NetworkNode>;
+    deployment_mode?: string;
     /**
      * Edges
      */
@@ -3414,24 +3471,30 @@ export type NetworkTopologyResponse = {
      */
     governance: Array<GovernanceOverlay>;
     /**
-     * Deployment Mode
+     * Nodes
      */
-    deployment_mode?: string;
+    nodes: Array<NetworkNode>;
 };
 /**
  * OAuthLinkCreateRequest
  */
 export type OAuthLinkCreateRequest = {
     /**
-     * Mcp Instance Id
-     */
-    mcp_instance_id: string;
-    /**
      * Access Control
      *
      * Access control level: workspace | public
      */
     access_control?: string;
+    /**
+     * Expires In Days
+     *
+     * Optional link expiry in days
+     */
+    expires_in_days?: number | null;
+    /**
+     * Mcp Instance Id
+     */
+    mcp_instance_id: string;
     /**
      * Provider Config
      *
@@ -3440,21 +3503,39 @@ export type OAuthLinkCreateRequest = {
     provider_config?: {
         [key: string]: unknown;
     };
-    /**
-     * Expires In Days
-     *
-     * Optional link expiry in days
-     */
-    expires_in_days?: number | null;
 };
 /**
  * OAuthLinkResponse
  */
 export type OAuthLinkResponse = {
     /**
+     * Access Control
+     */
+    access_control: string;
+    /**
+     * Access Count
+     */
+    access_count: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Expires At
+     */
+    expires_at: string | null;
+    /**
      * Id
      */
     id: string;
+    /**
+     * Is Active
+     */
+    is_active: boolean;
+    /**
+     * Last Accessed At
+     */
+    last_accessed_at: string | null;
     /**
      * Mcp Instance Id
      */
@@ -3463,30 +3544,6 @@ export type OAuthLinkResponse = {
      * Token
      */
     token: string;
-    /**
-     * Access Control
-     */
-    access_control: string;
-    /**
-     * Is Active
-     */
-    is_active: boolean;
-    /**
-     * Expires At
-     */
-    expires_at: string | null;
-    /**
-     * Access Count
-     */
-    access_count: number;
-    /**
-     * Last Accessed At
-     */
-    last_accessed_at: string | null;
-    /**
-     * Created At
-     */
-    created_at: string;
 };
 /**
  * OpenAPIConnectionCreate
@@ -3499,11 +3556,11 @@ export type OAuthLinkResponse = {
  */
 export type OpenApiConnectionCreate = {
     /**
-     * Name
+     * Auth Config Id
      *
-     * Display name for the connection (unique per workspace).
+     * Optional MCPAuthConfig UUID for OAuth2 token rotation. When set, tokens are minted/refreshed on the connection's behalf.
      */
-    name: string;
+    auth_config_id?: string | null;
     /**
      * Base Url
      *
@@ -3511,17 +3568,23 @@ export type OpenApiConnectionCreate = {
      */
     base_url: string;
     /**
+     * Custom Headers
+     *
+     * Custom HTTP headers attached to every request. Non-safe headers (e.g. Authorization) are stored encrypted in the secret manager.
+     */
+    custom_headers?: Array<HeaderInput> | null;
+    /**
      * Description
      *
      * Optional human-readable summary of what this API exposes.
      */
     description?: string | null;
     /**
-     * Spec Url
+     * Name
      *
-     * URL to an OpenAPI 3.x JSON or YAML spec. The spec is fetched and parsed eagerly at create time so the connection is ready for use.
+     * Display name for the connection (unique per workspace).
      */
-    spec_url?: string | null;
+    name: string;
     /**
      * Spec Content
      *
@@ -3531,22 +3594,42 @@ export type OpenApiConnectionCreate = {
         [key: string]: unknown;
     } | null;
     /**
-     * Auth Config Id
+     * Spec Url
      *
-     * Optional MCPAuthConfig UUID for OAuth2 token rotation. When set, tokens are minted/refreshed on the connection's behalf.
+     * URL to an OpenAPI 3.x JSON or YAML spec. The spec is fetched and parsed eagerly at create time so the connection is ready for use.
      */
-    auth_config_id?: string | null;
-    /**
-     * Custom Headers
-     *
-     * Custom HTTP headers attached to every request. Non-safe headers (e.g. Authorization) are stored encrypted in the secret manager.
-     */
-    custom_headers?: Array<HeaderInput> | null;
+    spec_url?: string | null;
 };
 /**
  * OpenAPIConnectionResponse
  */
 export type OpenApiConnectionResponse = {
+    /**
+     * Auth Config Id
+     */
+    auth_config_id?: string | null;
+    /**
+     * Available Tools
+     */
+    available_tools?: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Base Url
+     */
+    base_url: string;
+    /**
+     * Created At
+     */
+    created_at: unknown;
+    /**
+     * Custom Headers
+     */
+    custom_headers?: Array<HeaderOutput> | null;
+    /**
+     * Description
+     */
+    description?: string | null;
     /**
      * Id
      */
@@ -3556,39 +3639,13 @@ export type OpenApiConnectionResponse = {
      */
     name: string;
     /**
-     * Base Url
-     */
-    base_url: string;
-    /**
-     * Description
-     */
-    description?: string | null;
-    /**
      * Spec Url
      */
     spec_url?: string | null;
     /**
-     * Auth Config Id
-     */
-    auth_config_id?: string | null;
-    /**
-     * Custom Headers
-     */
-    custom_headers?: Array<HeaderOutput> | null;
-    /**
-     * Available Tools
-     */
-    available_tools?: Array<{
-        [key: string]: unknown;
-    }>;
-    /**
      * Status
      */
     status: string;
-    /**
-     * Created At
-     */
-    created_at: unknown;
     /**
      * Updated At
      */
@@ -3601,21 +3658,29 @@ export type OpenApiConnectionResponse = {
  */
 export type OpenApiConnectionUpdate = {
     /**
-     * Name
+     * Auth Config Id
+     *
+     * Optional MCPAuthConfig UUID for OAuth2 token rotation.
      */
-    name?: string | null;
-    /**
-     * Description
-     */
-    description?: string | null;
+    auth_config_id?: string | null;
     /**
      * Base Url
      */
     base_url?: string | null;
     /**
-     * Spec Url
+     * Custom Headers
+     *
+     * Replace the full custom-header set. Pass [] to clear all. Secret values are stored encrypted in the secret manager.
      */
-    spec_url?: string | null;
+    custom_headers?: Array<HeaderInput> | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
     /**
      * Spec Content
      */
@@ -3623,17 +3688,9 @@ export type OpenApiConnectionUpdate = {
         [key: string]: unknown;
     } | null;
     /**
-     * Auth Config Id
-     *
-     * Optional MCPAuthConfig UUID for OAuth2 token rotation.
+     * Spec Url
      */
-    auth_config_id?: string | null;
-    /**
-     * Custom Headers
-     *
-     * Replace the full custom-header set. Pass [] to clear all. Secret values are stored encrypted in the secret manager.
-     */
-    custom_headers?: Array<HeaderInput> | null;
+    spec_url?: string | null;
 };
 /**
  * OpenApiToolConfig
@@ -3643,11 +3700,11 @@ export type OpenApiToolConfig = {
      * Name
      */
     name: string;
+    settings?: OpenApiToolSettings | null;
     /**
      * Type
      */
     type?: 'openapi';
-    settings?: OpenApiToolSettings | null;
 };
 /**
  * OpenApiToolSettings
@@ -3661,14 +3718,6 @@ export type OpenApiToolConfig = {
  */
 export type OpenApiToolSettings = {
     /**
-     * Requires User Confirmation
-     */
-    requires_user_confirmation?: boolean | null;
-    /**
-     * Openapi Connection Id
-     */
-    openapi_connection_id?: string | null;
-    /**
      * Allowed Tools
      */
     allowed_tools?: Array<string> | null;
@@ -3676,6 +3725,14 @@ export type OpenApiToolSettings = {
      * Load Mode
      */
     load_mode?: 'explicit' | 'searchable' | null;
+    /**
+     * Openapi Connection Id
+     */
+    openapi_connection_id?: string | null;
+    /**
+     * Requires User Confirmation
+     */
+    requires_user_confirmation?: boolean | null;
 };
 /**
  * PaginatedPaymentsResponse
@@ -3686,10 +3743,6 @@ export type PaginatedPaymentsResponse = {
      */
     items: Array<PaymentRecordResponse>;
     /**
-     * Total
-     */
-    total: number;
-    /**
      * Page
      */
     page: number;
@@ -3697,19 +3750,23 @@ export type PaginatedPaymentsResponse = {
      * Page Size
      */
     page_size: number;
+    /**
+     * Total
+     */
+    total: number;
 };
 /**
  * PaginatedResponse[MCPServerResponse]
  */
 export type PaginatedResponseMcpServerResponse = {
     /**
+     * Has Next
+     */
+    has_next: boolean;
+    /**
      * Items
      */
     items: Array<McpServerResponse>;
-    /**
-     * Total
-     */
-    total: number;
     /**
      * Page
      */
@@ -3719,22 +3776,22 @@ export type PaginatedResponseMcpServerResponse = {
      */
     page_size: number;
     /**
-     * Has Next
+     * Total
      */
-    has_next: boolean;
+    total: number;
 };
 /**
  * PaginatedResponse[SkillResponse]
  */
 export type PaginatedResponseSkillResponse = {
     /**
+     * Has Next
+     */
+    has_next: boolean;
+    /**
      * Items
      */
     items: Array<SkillResponse>;
-    /**
-     * Total
-     */
-    total: number;
     /**
      * Page
      */
@@ -3744,58 +3801,42 @@ export type PaginatedResponseSkillResponse = {
      */
     page_size: number;
     /**
-     * Has Next
+     * Total
      */
-    has_next: boolean;
+    total: number;
 };
 /**
  * PaymentRecordResponse
  */
 export type PaymentRecordResponse = {
     /**
-     * Id
-     */
-    id: string;
-    /**
      * Agent Id
      */
     agent_id: string;
-    /**
-     * Execution Id
-     */
-    execution_id: string;
-    /**
-     * Protocol
-     */
-    protocol: string;
     /**
      * Amount Usd
      */
     amount_usd: number;
     /**
-     * Recipient
+     * Created At
      */
-    recipient: string;
-    /**
-     * Tx Hash
-     */
-    tx_hash?: string | null;
-    /**
-     * Tool Name
-     */
-    tool_name: string;
-    /**
-     * Tool Call Id
-     */
-    tool_call_id: string;
-    /**
-     * Status
-     */
-    status: string;
+    created_at?: string | null;
     /**
      * Error Message
      */
     error_message?: string | null;
+    /**
+     * Execution Id
+     */
+    execution_id: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Protocol
+     */
+    protocol: string;
     /**
      * Protocol Metadata
      */
@@ -3803,9 +3844,25 @@ export type PaymentRecordResponse = {
         [key: string]: unknown;
     } | null;
     /**
-     * Created At
+     * Recipient
      */
-    created_at?: string | null;
+    recipient: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Tool Call Id
+     */
+    tool_call_id: string;
+    /**
+     * Tool Name
+     */
+    tool_name: string;
+    /**
+     * Tx Hash
+     */
+    tx_hash?: string | null;
 };
 /**
  * PolicyDocument
@@ -3813,11 +3870,11 @@ export type PaymentRecordResponse = {
  * Source policy document stored per scope.
  */
 export type PolicyDocument = {
+    approval?: ApprovalPolicy | null;
     budget?: BudgetPolicyInput | null;
+    content_safety?: ContentSafetyPolicy | null;
     tokens?: TokenPolicy | null;
     tools?: ToolsPolicy | null;
-    approval?: ApprovalPolicy | null;
-    content_safety?: ContentSafetyPolicy | null;
 };
 /**
  * PolicyEffect
@@ -3831,16 +3888,15 @@ export type PolicyEffect = 'allow' | 'deny' | 'cap' | 'approval' | 'safety' | 'e
  * Request body for creating a policy rule.
  */
 export type PolicyRuleCreateRequest = {
-    subject_type: PolicySubjectType;
     /**
-     * Subject Id
+     * Condition
      */
-    subject_id: string;
-    /**
-     * Target
-     */
-    target: string;
+    condition?: string | null;
     effect: PolicyEffect;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
     /**
      * Params
      */
@@ -3848,17 +3904,18 @@ export type PolicyRuleCreateRequest = {
         [key: string]: unknown;
     };
     /**
-     * Condition
-     */
-    condition?: string | null;
-    /**
-     * Enabled
-     */
-    enabled?: boolean;
-    /**
      * Priority
      */
     priority?: number;
+    /**
+     * Subject Id
+     */
+    subject_id: string;
+    subject_type: PolicySubjectType;
+    /**
+     * Target
+     */
+    target: string;
 };
 /**
  * PolicyRuleResponse
@@ -3867,27 +3924,18 @@ export type PolicyRuleCreateRequest = {
  */
 export type PolicyRuleResponse = {
     /**
-     * Id
+     * Condition
      */
-    id: string;
+    condition?: string | null;
+    effect: PolicyEffect;
     /**
      * Enabled
      */
     enabled: boolean;
     /**
-     * Priority
+     * Id
      */
-    priority: number;
-    subject_type: PolicySubjectType;
-    /**
-     * Subject Id
-     */
-    subject_id: string;
-    /**
-     * Target
-     */
-    target: string;
-    effect: PolicyEffect;
+    id: string;
     /**
      * Params
      */
@@ -3895,9 +3943,18 @@ export type PolicyRuleResponse = {
         [key: string]: unknown;
     };
     /**
-     * Condition
+     * Priority
      */
-    condition?: string | null;
+    priority: number;
+    /**
+     * Subject Id
+     */
+    subject_id: string;
+    subject_type: PolicySubjectType;
+    /**
+     * Target
+     */
+    target: string;
 };
 /**
  * PolicyRuleUpdateRequest
@@ -3905,16 +3962,15 @@ export type PolicyRuleResponse = {
  * Request body for partially updating a policy rule.
  */
 export type PolicyRuleUpdateRequest = {
-    subject_type?: PolicySubjectType | null;
     /**
-     * Subject Id
+     * Condition
      */
-    subject_id?: string | null;
-    /**
-     * Target
-     */
-    target?: string | null;
+    condition?: string | null;
     effect?: PolicyEffect | null;
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
     /**
      * Params
      */
@@ -3922,17 +3978,18 @@ export type PolicyRuleUpdateRequest = {
         [key: string]: unknown;
     } | null;
     /**
-     * Condition
-     */
-    condition?: string | null;
-    /**
-     * Enabled
-     */
-    enabled?: boolean | null;
-    /**
      * Priority
      */
     priority?: number | null;
+    /**
+     * Subject Id
+     */
+    subject_id?: string | null;
+    subject_type?: PolicySubjectType | null;
+    /**
+     * Target
+     */
+    target?: string | null;
 };
 /**
  * PolicySubjectType
@@ -3941,25 +3998,63 @@ export type PolicyRuleUpdateRequest = {
  */
 export type PolicySubjectType = 'workspace' | 'agent' | 'user' | 'group';
 /**
+ * PresignUploadRequest
+ */
+export type PresignUploadRequest = {
+    /**
+     * Content Type
+     */
+    content_type: string;
+    /**
+     * Filename
+     */
+    filename: string;
+    /**
+     * Sha256
+     */
+    sha256: string;
+    /**
+     * Size
+     */
+    size: number;
+};
+/**
+ * PresignUploadResponse
+ */
+export type PresignUploadResponse = {
+    /**
+     * Expires In
+     */
+    expires_in: number;
+    /**
+     * Ref
+     */
+    ref: string;
+    /**
+     * Upload Url
+     */
+    upload_url: string;
+};
+/**
  * PreviewEntity
  *
  * One thing the package will (or won't) create.
  */
 export type PreviewEntity = {
-    kind: EntityKind;
+    /**
+     * Detail
+     */
+    detail?: string | null;
     /**
      * Key
      */
     key: string;
+    kind: EntityKind;
     /**
      * Name
      */
     name: string;
     status: EntityStatus;
-    /**
-     * Detail
-     */
-    detail?: string | null;
 };
 /**
  * PreviewIssue
@@ -3967,15 +4062,15 @@ export type PreviewEntity = {
  * A problem found while analyzing the package.
  */
 export type PreviewIssue = {
-    severity: IssueSeverity;
-    /**
-     * Message
-     */
-    message: string;
     /**
      * Entity Key
      */
     entity_key?: string | null;
+    /**
+     * Message
+     */
+    message: string;
+    severity: IssueSeverity;
 };
 /**
  * ProjectAgentRef
@@ -4001,12 +4096,6 @@ export type ProjectAgentRef = {
  */
 export type ProjectCreate = {
     /**
-     * Name
-     *
-     * Human-readable project name (unique per workspace).
-     */
-    name: string;
-    /**
      * Description
      *
      * Short summary of the project's purpose.
@@ -4019,6 +4108,12 @@ export type ProjectCreate = {
      */
     instructions?: string | null;
     /**
+     * Name
+     *
+     * Human-readable project name (unique per workspace).
+     */
+    name: string;
+    /**
      * Parent Project Id
      *
      * UUID of the parent project, if this is a sub-project.
@@ -4030,18 +4125,22 @@ export type ProjectCreate = {
  */
 export type ProjectFileDownloadResponse = {
     /**
-     * Url
-     */
-    url: string;
-    /**
      * Path
      */
     path: string;
+    /**
+     * Url
+     */
+    url: string;
 };
 /**
  * ProjectFileInfo
  */
 export type ProjectFileInfo = {
+    /**
+     * Last Modified
+     */
+    last_modified?: string | null;
     /**
      * Path
      */
@@ -4050,10 +4149,6 @@ export type ProjectFileInfo = {
      * Size
      */
     size: number;
-    /**
-     * Last Modified
-     */
-    last_modified?: string | null;
 };
 /**
  * ProjectFileListResponse
@@ -4082,29 +4177,33 @@ export type ProjectMcpInstanceRef = {
  */
 export type ProjectResponse = {
     /**
-     * Id
+     * Agents
      */
-    id: string;
-    /**
-     * Workspace Id
-     */
-    workspace_id: string;
+    agents?: Array<ProjectAgentRef>;
     /**
      * Created By
      */
     created_by: string;
     /**
-     * Name
-     */
-    name: string;
-    /**
      * Description
      */
     description: string | null;
     /**
+     * Id
+     */
+    id: string;
+    /**
      * Instructions
      */
     instructions: string | null;
+    /**
+     * Mcp Instances
+     */
+    mcp_instances?: Array<ProjectMcpInstanceRef>;
+    /**
+     * Name
+     */
+    name: string;
     /**
      * Parent Project Id
      */
@@ -4114,13 +4213,9 @@ export type ProjectResponse = {
      */
     skills?: Array<ProjectSkillRef>;
     /**
-     * Mcp Instances
+     * Workspace Id
      */
-    mcp_instances?: Array<ProjectMcpInstanceRef>;
-    /**
-     * Agents
-     */
-    agents?: Array<ProjectAgentRef>;
+    workspace_id: string;
 };
 /**
  * ProjectSkillRef
@@ -4142,12 +4237,6 @@ export type ProjectSkillRef = {
  */
 export type ProjectUpdate = {
     /**
-     * Name
-     *
-     * New project name.
-     */
-    name?: string | null;
-    /**
      * Description
      *
      * New project description.
@@ -4159,6 +4248,12 @@ export type ProjectUpdate = {
      * New project-level instructions.
      */
     instructions?: string | null;
+    /**
+     * Name
+     *
+     * New project name.
+     */
+    name?: string | null;
     /**
      * Parent Project Id
      *
@@ -4173,29 +4268,11 @@ export type ProjectUpdate = {
  */
 export type ProviderConfigCreate = {
     /**
-     * Provider Spec Id
-     *
-     * UUID of the provider specification (e.g. OpenAI, Anthropic) this configuration targets. Look up via list_specs.
-     */
-    provider_spec_id: string;
-    /**
-     * Name
-     *
-     * Human-readable label for this provider configuration.
-     */
-    name: string;
-    /**
      * Api Key
      *
      * Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic — the backend suppresses the Authorization header when this is empty.
      */
     api_key?: string | null;
-    /**
-     * Endpoint Url
-     *
-     * Optional custom endpoint URL (e.g. for self-hosted or proxied providers). Leave unset to use the provider's default.
-     */
-    endpoint_url?: string | null;
     /**
      * Description
      *
@@ -4203,40 +4280,50 @@ export type ProviderConfigCreate = {
      */
     description?: string | null;
     /**
+     * Endpoint Url
+     *
+     * Optional custom endpoint URL (e.g. for self-hosted or proxied providers). Leave unset to use the provider's default.
+     */
+    endpoint_url?: string | null;
+    /**
      * Is Public
      *
      * If True, the configuration is visible to all workspace members; otherwise it is scoped to the creator.
      */
     is_public?: boolean;
+    /**
+     * Name
+     *
+     * Human-readable label for this provider configuration.
+     */
+    name: string;
+    /**
+     * Provider Spec Id
+     *
+     * UUID of the provider specification (e.g. OpenAI, Anthropic) this configuration targets. Look up via list_specs.
+     */
+    provider_spec_id: string;
 };
 /**
  * ProviderConfigResponse
  */
 export type ProviderConfigResponse = {
     /**
-     * Id
+     * Created At
      */
-    id: string;
+    created_at: string;
     /**
-     * Provider Spec Id
+     * Created By
      */
-    provider_spec_id: string;
-    /**
-     * Name
-     */
-    name: string;
+    created_by: string;
     /**
      * Endpoint Url
      */
     endpoint_url: string | null;
     /**
-     * Workspace Id
+     * Id
      */
-    workspace_id: string;
-    /**
-     * Created By
-     */
-    created_by: string;
+    id: string;
     /**
      * Is Active
      */
@@ -4246,25 +4333,33 @@ export type ProviderConfigResponse = {
      */
     is_public: boolean;
     /**
-     * Created At
+     * Model Instance Ids
      */
-    created_at: string;
+    model_instance_ids?: Array<string>;
     /**
-     * Updated At
+     * Name
      */
-    updated_at: string;
+    name: string;
     /**
-     * Provider Spec Name
+     * Provider Spec Id
      */
-    provider_spec_name?: string | null;
+    provider_spec_id: string;
     /**
      * Provider Spec Key
      */
     provider_spec_key?: string | null;
     /**
-     * Model Instance Ids
+     * Provider Spec Name
      */
-    model_instance_ids?: Array<string>;
+    provider_spec_name?: string | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
 };
 /**
  * ProviderConfigUpdate
@@ -4273,29 +4368,23 @@ export type ProviderConfigResponse = {
  */
 export type ProviderConfigUpdate = {
     /**
-     * Name
-     *
-     * New human-readable label for the configuration.
-     */
-    name?: string | null;
-    /**
      * Api Key
      *
      * New API key. Replaces the previously stored secret. Send an empty string to clear the key for keyless custom endpoints.
      */
     api_key?: string | null;
     /**
-     * Endpoint Url
-     *
-     * New endpoint URL, or empty string to clear.
-     */
-    endpoint_url?: string | null;
-    /**
      * Description
      *
      * New description for the configuration.
      */
     description?: string | null;
+    /**
+     * Endpoint Url
+     *
+     * New endpoint URL, or empty string to clear.
+     */
+    endpoint_url?: string | null;
     /**
      * Is Active
      *
@@ -4308,31 +4397,25 @@ export type ProviderConfigUpdate = {
      * Toggle workspace-wide visibility.
      */
     is_public?: boolean | null;
+    /**
+     * Name
+     *
+     * New human-readable label for the configuration.
+     */
+    name?: string | null;
 };
 /**
  * ProviderSpecResponse
  */
 export type ProviderSpecResponse = {
     /**
-     * Id
+     * Created At
      */
-    id: string;
-    /**
-     * Provider Key
-     */
-    provider_key: string;
-    /**
-     * Name
-     */
-    name: string;
+    created_at: string;
     /**
      * Description
      */
     description: string | null;
-    /**
-     * Provider Type
-     */
-    provider_type: string;
     /**
      * Icon
      */
@@ -4342,13 +4425,25 @@ export type ProviderSpecResponse = {
      */
     icon_url: string | null;
     /**
+     * Id
+     */
+    id: string;
+    /**
      * Is Builtin
      */
     is_builtin: boolean;
     /**
-     * Created At
+     * Name
      */
-    created_at: string;
+    name: string;
+    /**
+     * Provider Key
+     */
+    provider_key: string;
+    /**
+     * Provider Type
+     */
+    provider_type: string;
     /**
      * Updated At
      */
@@ -4359,25 +4454,13 @@ export type ProviderSpecResponse = {
  */
 export type ProviderSpecWithModelsResponse = {
     /**
-     * Id
+     * Created At
      */
-    id: string;
-    /**
-     * Provider Key
-     */
-    provider_key: string;
-    /**
-     * Name
-     */
-    name: string;
+    created_at: string;
     /**
      * Description
      */
     description: string | null;
-    /**
-     * Provider Type
-     */
-    provider_type: string;
     /**
      * Icon
      */
@@ -4387,36 +4470,48 @@ export type ProviderSpecWithModelsResponse = {
      */
     icon_url: string | null;
     /**
+     * Id
+     */
+    id: string;
+    /**
      * Is Builtin
      */
     is_builtin: boolean;
     /**
-     * Created At
+     * Models
      */
-    created_at: string;
+    models: Array<AgentareaApiApiV1ProviderSpecsModelSpecResponse>;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Provider Key
+     */
+    provider_key: string;
+    /**
+     * Provider Type
+     */
+    provider_type: string;
     /**
      * Updated At
      */
     updated_at: string;
-    /**
-     * Models
-     */
-    models: Array<AgentareaApiApiV1ProviderSpecsModelSpecResponse>;
 };
 /**
  * RegistryCreate
  */
 export type RegistryCreate = {
     /**
+     * Description
+     */
+    description?: string | null;
+    /**
      * Name
      *
      * Human-readable registry name
      */
     name: string;
-    /**
-     * Description
-     */
-    description?: string | null;
     /**
      * Registry Type
      *
@@ -4447,29 +4542,37 @@ export type RegistryCreate = {
  */
 export type RegistryItemResponse = {
     /**
-     * Id
+     * Created At
      */
-    id: string;
-    /**
-     * Registry Id
-     */
-    registry_id: string;
-    /**
-     * External Id
-     */
-    external_id: string;
-    /**
-     * Name
-     */
-    name: string;
+    created_at: string;
     /**
      * Description
      */
     description: string | null;
     /**
-     * Version
+     * External Id
      */
-    version: string | null;
+    external_id: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Installed Entity Id
+     */
+    installed_entity_id: string | null;
+    /**
+     * Installed Version
+     */
+    installed_version: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Registry Id
+     */
+    registry_id: string;
     /**
      * Spec
      */
@@ -4481,42 +4584,54 @@ export type RegistryItemResponse = {
      */
     tags: Array<string>;
     /**
-     * Installed Entity Id
-     */
-    installed_entity_id: string | null;
-    /**
      * Update Available
      */
     update_available: boolean;
     /**
-     * Installed Version
-     */
-    installed_version: string | null;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
      * Updated At
      */
     updated_at: string;
+    /**
+     * Version
+     */
+    version: string | null;
 };
 /**
  * RegistryResponse
  */
 export type RegistryResponse = {
     /**
-     * Id
+     * Created At
      */
-    id: string;
-    /**
-     * Name
-     */
-    name: string;
+    created_at: string;
     /**
      * Description
      */
     description: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Is Active
+     */
+    is_active: boolean;
+    /**
+     * Item Count
+     */
+    item_count: number;
+    /**
+     * Last Sync Error
+     */
+    last_sync_error: string | null;
+    /**
+     * Last Synced At
+     */
+    last_synced_at: string | null;
+    /**
+     * Name
+     */
+    name: string;
     /**
      * Registry Type
      */
@@ -4534,26 +4649,6 @@ export type RegistryResponse = {
      */
     sync_mode: string;
     /**
-     * Is Active
-     */
-    is_active: boolean;
-    /**
-     * Last Synced At
-     */
-    last_synced_at: string | null;
-    /**
-     * Last Sync Error
-     */
-    last_sync_error: string | null;
-    /**
-     * Item Count
-     */
-    item_count: number;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
      * Updated At
      */
     updated_at: string;
@@ -4563,13 +4658,17 @@ export type RegistryResponse = {
  */
 export type RegistryUpdate = {
     /**
-     * Name
-     */
-    name?: string | null;
-    /**
      * Description
      */
     description?: string | null;
+    /**
+     * Is Active
+     */
+    is_active?: boolean | null;
+    /**
+     * Name
+     */
+    name?: string | null;
     /**
      * Source Url
      */
@@ -4578,15 +4677,19 @@ export type RegistryUpdate = {
      * Sync Mode
      */
     sync_mode?: string | null;
-    /**
-     * Is Active
-     */
-    is_active?: boolean | null;
 };
 /**
  * RelationshipItem
  */
 export type RelationshipItem = {
+    /**
+     * Direct
+     */
+    direct: boolean;
+    /**
+     * Fanout
+     */
+    fanout?: number | null;
     /**
      * Namespace
      */
@@ -4615,14 +4718,6 @@ export type RelationshipItem = {
      * Subject Name
      */
     subject_name: string;
-    /**
-     * Fanout
-     */
-    fanout?: number | null;
-    /**
-     * Direct
-     */
-    direct: boolean;
 };
 /**
  * RelationshipWriteRequest
@@ -4651,47 +4746,47 @@ export type RelationshipWriteRequest = {
  */
 export type RelationshipsResponse = {
     /**
-     * Relationships
-     */
-    relationships: Array<RelationshipItem>;
-    /**
      * Count
      */
     count: number;
+    /**
+     * Relationships
+     */
+    relationships: Array<RelationshipItem>;
 };
 /**
  * ResolveHop
  */
 export type ResolveHop = {
     /**
+     * Color
+     */
+    color: string;
+    /**
      * Id
      */
     id: string;
-    /**
-     * Name
-     */
-    name: string;
     /**
      * Kind
      */
     kind: string;
     /**
-     * Color
+     * Name
      */
-    color: string;
+    name: string;
 };
 /**
  * ResolvePath
  */
 export type ResolvePath = {
     /**
-     * Relation
-     */
-    relation: string;
-    /**
      * Hops
      */
     hops: Array<ResolveHop>;
+    /**
+     * Relation
+     */
+    relation: string;
     /**
      * Rels
      */
@@ -4702,17 +4797,17 @@ export type ResolvePath = {
  */
 export type ResolveRequest = {
     /**
-     * Subject Id
+     * Resource Id
      */
-    subject_id: string;
+    resource_id: string;
     /**
      * Resource Kind
      */
     resource_kind: 'skill' | 'collection' | 'mcp' | 'agent';
     /**
-     * Resource Id
+     * Subject Id
      */
-    resource_id: string;
+    subject_id: string;
 };
 /**
  * ResolveResponse
@@ -4727,13 +4822,13 @@ export type ResolveResponse = {
      */
     effective_relation: string | null;
     /**
-     * Verb
-     */
-    verb: string;
-    /**
      * Paths
      */
     paths: Array<ResolvePath>;
+    /**
+     * Verb
+     */
+    verb: string;
 };
 /**
  * SetupField
@@ -4744,6 +4839,16 @@ export type ResolveResponse = {
  * and mirrors the existing MCP ``env_schema`` (KeyValueInput) shape.
  */
 export type SetupField = {
+    /**
+     * Default
+     */
+    default?: unknown | null;
+    /**
+     * Help
+     *
+     * Help text shown beneath the field.
+     */
+    help?: string | null;
     /**
      * Key
      *
@@ -4756,27 +4861,12 @@ export type SetupField = {
      * Human-readable label rendered in the form.
      */
     label: string;
-    type?: SetupFieldType;
     /**
-     * Required
-     */
-    required?: boolean;
-    /**
-     * Help
+     * Max
      *
-     * Help text shown beneath the field.
+     * Upper bound for type='number'.
      */
-    help?: string | null;
-    /**
-     * Default
-     */
-    default?: unknown | null;
-    /**
-     * Options
-     *
-     * Choices for type='select'.
-     */
-    options?: Array<string> | null;
+    max?: number | null;
     /**
      * Min
      *
@@ -4784,11 +4874,16 @@ export type SetupField = {
      */
     min?: number | null;
     /**
-     * Max
+     * Options
      *
-     * Upper bound for type='number'.
+     * Choices for type='select'.
      */
-    max?: number | null;
+    options?: Array<string> | null;
+    /**
+     * Required
+     */
+    required?: boolean;
+    type?: SetupFieldType;
 };
 /**
  * SetupFieldType
@@ -4803,6 +4898,10 @@ export type SetupFieldType = 'secret' | 'string' | 'number' | 'boolean' | 'selec
  */
 export type SkillContentResponse = {
     /**
+     * Content
+     */
+    content: string;
+    /**
      * Id
      */
     id: string;
@@ -4810,10 +4909,6 @@ export type SkillContentResponse = {
      * Name
      */
     name: string;
-    /**
-     * Content
-     */
-    content: string;
 };
 /**
  * SkillCreateRequest
@@ -4828,6 +4923,12 @@ export type SkillCreateRequest = {
      */
     content?: string | null;
     /**
+     * Description
+     *
+     * Optional description override
+     */
+    description?: string | null;
+    /**
      * Github Url
      *
      * GitHub repository URL
@@ -4839,12 +4940,6 @@ export type SkillCreateRequest = {
      * Optional name override
      */
     name?: string | null;
-    /**
-     * Description
-     *
-     * Optional description override
-     */
-    description?: string | null;
 };
 /**
  * SkillFileResponse
@@ -4872,13 +4967,13 @@ export type SkillFileResponse = {
  */
 export type SkillFilesResponse = {
     /**
-     * Skill Id
-     */
-    skill_id: string;
-    /**
      * Files
      */
     files: Array<SkillFileResponse>;
+    /**
+     * Skill Id
+     */
+    skill_id: string;
 };
 /**
  * SkillMemberAddRequest
@@ -4893,11 +4988,11 @@ export type SkillMemberAddRequest = {
      */
     child_skill_id: string;
     /**
-     * Order
+     * Dependencies
      *
-     * Execution order hint
+     * IDs of sibling children that must run before this one
      */
-    order?: number;
+    dependencies?: Array<string>;
     /**
      * Is Required
      *
@@ -4905,11 +5000,11 @@ export type SkillMemberAddRequest = {
      */
     is_required?: boolean;
     /**
-     * Dependencies
+     * Order
      *
-     * IDs of sibling children that must run before this one
+     * Execution order hint
      */
-    dependencies?: Array<string>;
+    order?: number;
 };
 /**
  * SkillMemberResponse
@@ -4918,25 +5013,25 @@ export type SkillMemberAddRequest = {
  */
 export type SkillMemberResponse = {
     /**
-     * Parent Skill Id
-     */
-    parent_skill_id: string;
-    /**
      * Child Skill Id
      */
     child_skill_id: string;
     /**
-     * Order
+     * Dependencies
      */
-    order: number;
+    dependencies: Array<string>;
     /**
      * Is Required
      */
     is_required: boolean;
     /**
-     * Dependencies
+     * Order
      */
-    dependencies: Array<string>;
+    order: number;
+    /**
+     * Parent Skill Id
+     */
+    parent_skill_id: string;
 };
 /**
  * SkillRef
@@ -4958,21 +5053,37 @@ export type SkillRef = {
  */
 export type SkillResponse = {
     /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Description
+     */
+    description: string | null;
+    /**
      * Id
      */
     id: string;
+    /**
+     * Is Catalog
+     */
+    is_catalog?: boolean;
     /**
      * Name
      */
     name: string;
     /**
+     * Network Scope
+     */
+    network_scope: string;
+    /**
+     * Registry Item Id
+     */
+    registry_item_id?: string | null;
+    /**
      * Slug
      */
     slug: string;
-    /**
-     * Description
-     */
-    description: string | null;
     /**
      * Source Type
      */
@@ -4982,33 +5093,17 @@ export type SkillResponse = {
      */
     source_url: string | null;
     /**
-     * Network Scope
+     * Update Available
      */
-    network_scope: string;
-    /**
-     * Workspace Id
-     */
-    workspace_id: string;
-    /**
-     * Created At
-     */
-    created_at: string;
+    update_available?: boolean;
     /**
      * Updated At
      */
     updated_at: string;
     /**
-     * Is Catalog
+     * Workspace Id
      */
-    is_catalog?: boolean;
-    /**
-     * Registry Item Id
-     */
-    registry_item_id?: string | null;
-    /**
-     * Update Available
-     */
-    update_available?: boolean;
+    workspace_id: string;
 };
 /**
  * SkillUpdateRequest
@@ -5017,11 +5112,11 @@ export type SkillResponse = {
  */
 export type SkillUpdateRequest = {
     /**
-     * Name
+     * Content
      *
-     * New name
+     * New content (only for content-type skills)
      */
-    name?: string | null;
+    content?: string | null;
     /**
      * Description
      *
@@ -5029,11 +5124,11 @@ export type SkillUpdateRequest = {
      */
     description?: string | null;
     /**
-     * Content
+     * Name
      *
-     * New content (only for content-type skills)
+     * New name
      */
-    content?: string | null;
+    name?: string | null;
 };
 /**
  * SourceProjectBody
@@ -5049,59 +5144,55 @@ export type SourceProjectBody = {
  */
 export type SpecPreviewRequest = {
     /**
-     * Spec Url
-     */
-    spec_url?: string | null;
-    /**
      * Spec Content
      */
     spec_content?: {
         [key: string]: unknown;
     } | null;
+    /**
+     * Spec Url
+     */
+    spec_url?: string | null;
 };
 /**
  * SpecPreviewResponse
  */
 export type SpecPreviewResponse = {
     /**
-     * Title
+     * Base Url
      */
-    title?: string | null;
+    base_url?: string | null;
     /**
      * Description
      */
     description?: string | null;
     /**
-     * Base Url
+     * Title
      */
-    base_url?: string | null;
-    /**
-     * Version
-     */
-    version?: string | null;
+    title?: string | null;
     /**
      * Tools
      */
     tools?: Array<{
         [key: string]: string;
     }>;
+    /**
+     * Version
+     */
+    version?: string | null;
 };
 /**
  * SpendCard
  */
 export type SpendCard = {
     /**
-     * Today Usd
+     * Cap Usd
      */
-    today_usd: number;
+    cap_usd: number | null;
     /**
      * Mtd Usd
      */
     mtd_usd: number;
-    /**
-     * Cap Usd
-     */
-    cap_usd: number | null;
     /**
      * Pct Of Cap
      */
@@ -5114,6 +5205,10 @@ export type SpendCard = {
      * Projection Method
      */
     projection_method?: string;
+    /**
+     * Today Usd
+     */
+    today_usd: number;
 };
 /**
  * SubjectSetBody
@@ -5139,6 +5234,18 @@ export type SubjectSetBody = {
  */
 export type TaskArtifactItem = {
     /**
+     * Content Type
+     */
+    content_type: string | null;
+    /**
+     * Download Url
+     */
+    download_url: string;
+    /**
+     * Last Modified
+     */
+    last_modified: string | null;
+    /**
      * Path
      */
     path: string;
@@ -5146,35 +5253,19 @@ export type TaskArtifactItem = {
      * Size
      */
     size: number;
-    /**
-     * Content Type
-     */
-    content_type: string | null;
-    /**
-     * Last Modified
-     */
-    last_modified: string | null;
-    /**
-     * Download Url
-     */
-    download_url: string;
 };
 /**
  * TaskCommandPayload
  */
 export type TaskCommandPayload = {
     /**
+     * Budget Usd
+     */
+    budget_usd?: number | string | null;
+    /**
      * Command
      */
     command: string;
-    /**
-     * Model Instance Id
-     */
-    model_instance_id?: string | null;
-    /**
-     * Budget Usd
-     */
-    budget_usd?: number | null;
     /**
      * Message
      */
@@ -5183,11 +5274,19 @@ export type TaskCommandPayload = {
      * Message Id
      */
     message_id?: string | null;
+    /**
+     * Model Instance Id
+     */
+    model_instance_id?: string | null;
 };
 /**
  * TaskCreate
  */
 export type TaskCreate = {
+    /**
+     * Attachments
+     */
+    attachments?: Array<string> | null;
     /**
      * Description
      */
@@ -5199,13 +5298,13 @@ export type TaskCreate = {
         [key: string]: unknown;
     };
     /**
-     * Requires Human Approval
-     */
-    requires_human_approval?: boolean | null;
-    /**
      * Project Id
      */
     project_id?: string | null;
+    /**
+     * Requires Human Approval
+     */
+    requires_human_approval?: boolean | null;
     task_policy?: PolicyDocument | null;
 };
 /**
@@ -5215,29 +5314,21 @@ export type TaskCreate = {
  */
 export type TaskEvent = {
     /**
-     * Id
-     */
-    id: string;
-    /**
-     * Task Id
-     */
-    task_id: string;
-    /**
      * Agent Id
      */
     agent_id: string;
+    /**
+     * Event Type
+     */
+    event_type: string;
     /**
      * Execution Id
      */
     execution_id: string;
     /**
-     * Timestamp
+     * Id
      */
-    timestamp: string;
-    /**
-     * Event Type
-     */
-    event_type: string;
+    id: string;
     /**
      * Message
      */
@@ -5248,6 +5339,14 @@ export type TaskEvent = {
     metadata?: {
         [key: string]: unknown;
     };
+    /**
+     * Task Id
+     */
+    task_id: string;
+    /**
+     * Timestamp
+     */
+    timestamp: string;
 };
 /**
  * TaskEventResponse
@@ -5260,9 +5359,9 @@ export type TaskEventResponse = {
      */
     events: Array<TaskEvent>;
     /**
-     * Total
+     * Has Next
      */
-    total: number;
+    has_next: boolean;
     /**
      * Page
      */
@@ -5272,9 +5371,9 @@ export type TaskEventResponse = {
      */
     page_size: number;
     /**
-     * Has Next
+     * Total
      */
-    has_next: boolean;
+    total: number;
 };
 /**
  * TaskInputSubmission
@@ -5283,15 +5382,15 @@ export type TaskEventResponse = {
  */
 export type TaskInputSubmission = {
     /**
-     * Input Request Id
-     */
-    input_request_id: string;
-    /**
      * Answers
      */
     answers?: {
         [key: string]: unknown;
     };
+    /**
+     * Input Request Id
+     */
+    input_request_id: string;
     /**
      * Secrets
      */
@@ -5304,17 +5403,33 @@ export type TaskInputSubmission = {
  */
 export type TaskResponse = {
     /**
-     * Id
-     */
-    id: string;
-    /**
      * Agent Id
      */
     agent_id: string;
     /**
+     * Created At
+     */
+    created_at: string;
+    /**
      * Description
      */
     description: string;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Execution Id
+     */
+    execution_id?: string | null;
+    /**
+     * Failure Reason
+     */
+    failure_reason?: string | null;
+    /**
+     * Id
+     */
+    id: string;
     /**
      * Parameters
      */
@@ -5322,23 +5437,15 @@ export type TaskResponse = {
         [key: string]: unknown;
     };
     /**
-     * Status
-     */
-    status: string;
-    /**
      * Result
      */
     result?: {
         [key: string]: unknown;
     } | string | null;
     /**
-     * Created At
+     * Status
      */
-    created_at: string;
-    /**
-     * Execution Id
-     */
-    execution_id?: string | null;
+    status: string;
     /**
      * Total Cost
      */
@@ -5357,57 +5464,13 @@ export type TaskResponse = {
  */
 export type TaskSummary = {
     /**
-     * Task Id
-     */
-    task_id: string;
-    /**
      * Agent Id
      */
     agent_id: string;
     /**
-     * Workspace Id
+     * Cost Usd
      */
-    workspace_id: string;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Started At
-     */
-    started_at?: string | null;
-    /**
-     * Ended At
-     */
-    ended_at?: string | null;
-    /**
-     * Duration Ms
-     */
-    duration_ms?: number | null;
-    /**
-     * Iterations
-     */
-    iterations?: number;
-    /**
-     * Llm Calls
-     */
-    llm_calls?: number;
-    /**
-     * Llm Calls Failed
-     */
-    llm_calls_failed?: number;
-    /**
-     * Tools Called
-     */
-    tools_called?: number;
-    /**
-     * Tools Failed
-     */
-    tools_failed?: number;
-    /**
-     * Delegations Started
-     */
-    delegations_started?: number;
+    cost_usd?: number;
     /**
      * Delegations Completed
      */
@@ -5417,17 +5480,61 @@ export type TaskSummary = {
      */
     delegations_failed?: number;
     /**
-     * Cost Usd
+     * Delegations Started
      */
-    cost_usd?: number;
+    delegations_started?: number;
+    /**
+     * Duration Ms
+     */
+    duration_ms?: number | null;
+    /**
+     * Ended At
+     */
+    ended_at?: string | null;
     /**
      * Final Response
      */
     final_response?: string | null;
     /**
+     * Iterations
+     */
+    iterations?: number;
+    /**
      * Last Error
      */
     last_error?: string | null;
+    /**
+     * Llm Calls
+     */
+    llm_calls?: number;
+    /**
+     * Llm Calls Failed
+     */
+    llm_calls_failed?: number;
+    /**
+     * Started At
+     */
+    started_at?: string | null;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+    /**
+     * Tools Called
+     */
+    tools_called?: number;
+    /**
+     * Tools Failed
+     */
+    tools_failed?: number;
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
 };
 /**
  * TaskWithAgent
@@ -5435,10 +5542,6 @@ export type TaskSummary = {
  * Task response with agent information for global task listing.
  */
 export type TaskWithAgent = {
-    /**
-     * Id
-     */
-    id: string;
     /**
      * Agent Id
      */
@@ -5448,37 +5551,17 @@ export type TaskWithAgent = {
      */
     agent_name: string;
     /**
-     * Description
-     */
-    description: string;
-    /**
-     * Parameters
-     */
-    parameters: {
-        [key: string]: unknown;
-    };
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Result
-     */
-    result?: {
-        [key: string]: unknown;
-    } | string | null;
-    /**
      * Created At
      */
     created_at: string;
     /**
-     * Execution Id
+     * Description
      */
-    execution_id?: string | null;
+    description: string;
     /**
-     * Total Cost
+     * Error
      */
-    total_cost?: number | null;
+    error?: string | null;
     /**
      * Escalation Id
      */
@@ -5487,6 +5570,38 @@ export type TaskWithAgent = {
      * Escalation Tool Name
      */
     escalation_tool_name?: string | null;
+    /**
+     * Execution Id
+     */
+    execution_id?: string | null;
+    /**
+     * Failure Reason
+     */
+    failure_reason?: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Parameters
+     */
+    parameters: {
+        [key: string]: unknown;
+    };
+    /**
+     * Result
+     */
+    result?: {
+        [key: string]: unknown;
+    } | string | null;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Total Cost
+     */
+    total_cost?: number | null;
 };
 /**
  * TokenPolicy
@@ -5504,127 +5619,11 @@ export type TokenPolicy = {
     max_tokens_per_call?: number | null;
 };
 /**
- * ToolAccessCheckRequest
- */
-export type ToolAccessCheckRequest = {
-    /**
-     * User Id
-     *
-     * User UUID or User:<uuid> subject.
-     */
-    user_id: string;
-    /**
-     * Tool Name
-     */
-    tool_name: string;
-    /**
-     * Arguments
-     *
-     * Optional exact argument set. Omit to check the whole-tool grant.
-     */
-    arguments?: {
-        [key: string]: unknown;
-    } | null;
-};
-/**
- * ToolAccessCheckResponse
- */
-export type ToolAccessCheckResponse = {
-    /**
-     * Allowed
-     */
-    allowed: boolean;
-    grant: ToolAccessGrant;
-};
-/**
- * ToolAccessGrant
- */
-export type ToolAccessGrant = {
-    /**
-     * Scope
-     */
-    scope: 'tool' | 'arguments';
-    /**
-     * Workspace Id
-     */
-    workspace_id: string;
-    /**
-     * User Id
-     */
-    user_id: string;
-    /**
-     * Tool Name
-     */
-    tool_name: string;
-    /**
-     * Object Id
-     */
-    object_id: string;
-    /**
-     * Arguments Hash
-     */
-    arguments_hash?: string | null;
-};
-/**
- * ToolAccessGrantListResponse
- */
-export type ToolAccessGrantListResponse = {
-    /**
-     * Grants
-     */
-    grants: Array<ToolAccessGrant>;
-    /**
-     * Count
-     */
-    count: number;
-};
-/**
- * ToolAccessGrantRequest
- */
-export type ToolAccessGrantRequest = {
-    /**
-     * User Id
-     *
-     * User UUID or User:<uuid> subject.
-     */
-    user_id: string;
-    /**
-     * Tool Name
-     */
-    tool_name: string;
-    /**
-     * Arguments
-     *
-     * Optional exact argument set. Omit for a whole-tool grant.
-     */
-    arguments?: {
-        [key: string]: unknown;
-    } | null;
-};
-/**
- * ToolAccessGrantResponse
- */
-export type ToolAccessGrantResponse = {
-    /**
-     * Ok
-     */
-    ok: boolean;
-    grant: ToolAccessGrant;
-};
-/**
  * ToolResponse
  *
  * Unified tool response format.
  */
 export type ToolResponse = {
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Type
-     */
-    type: 'code' | 'mcp';
     /**
      * Description
      */
@@ -5643,6 +5642,14 @@ export type ToolResponse = {
      * Mcp Instance Name
      */
     mcp_instance_name?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Type
+     */
+    type: 'code' | 'mcp';
 };
 /**
  * ToolsPolicy
@@ -5671,37 +5678,25 @@ export type ToolsPolicy = {
  */
 export type TriggerCreate = {
     /**
-     * Name
-     *
-     * Human-readable trigger name.
-     */
-    name: string;
-    /**
-     * Description
-     *
-     * Short summary of what this trigger does.
-     */
-    description?: string;
-    /**
      * Agent Id
      *
      * UUID of the agent to invoke when the trigger fires.
      */
     agent_id: string;
     /**
-     * Trigger Type
+     * Allowed Methods
      *
-     * 'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven.
+     * HTTP methods accepted on the webhook endpoint.
      */
-    trigger_type: 'cron' | 'webhook' | 'polling';
+    allowed_methods?: Array<string>;
     /**
-     * Task Parameters
+     * Channel Credentials
      *
-     * Parameters merged into the task created when the trigger fires.
+     * Channel credentials (bot_token, SMTP password, etc). Stored encrypted in the secret store. Never returned in responses.
      */
-    task_parameters?: {
+    channel_credentials?: {
         [key: string]: unknown;
-    };
+    } | null;
     /**
      * Conditions
      *
@@ -5711,29 +5706,11 @@ export type TriggerCreate = {
         [key: string]: unknown;
     };
     /**
-     * Enabled
-     *
-     * Whether the trigger is active immediately on creation.
-     */
-    enabled?: boolean;
-    /**
-     * Failure Threshold
-     *
-     * Auto-disable after this many consecutive failed executions.
-     */
-    failure_threshold?: number;
-    /**
      * Cron Expression
      *
      * 5- or 6-field cron expression (required when trigger_type='cron').
      */
     cron_expression?: string | null;
-    /**
-     * Timezone
-     *
-     * IANA timezone for cron evaluation (e.g. 'UTC', 'America/New_York').
-     */
-    timezone?: string;
     /**
      * Data Extractor
      *
@@ -5749,23 +5726,55 @@ export type TriggerCreate = {
         [key: string]: unknown;
     } | null;
     /**
-     * Webhook Id
+     * Description
      *
-     * Public webhook path segment. Auto-generated if omitted for webhook triggers.
+     * Short summary of what this trigger does.
      */
-    webhook_id?: string | null;
+    description?: string;
     /**
-     * Allowed Methods
+     * Enabled
      *
-     * HTTP methods accepted on the webhook endpoint.
+     * Whether the trigger is active immediately on creation.
      */
-    allowed_methods?: Array<string>;
+    enabled?: boolean;
     /**
-     * Webhook Type
+     * Event Types
      *
-     * Channel type: 'generic', 'telegram', 'slack', 'discord', etc.
+     * Event types to filter on (empty list = accept all events).
      */
-    webhook_type?: string;
+    event_types?: Array<string>;
+    /**
+     * Failure Threshold
+     *
+     * Auto-disable after this many consecutive failed executions.
+     */
+    failure_threshold?: number;
+    /**
+     * Name
+     *
+     * Human-readable trigger name.
+     */
+    name: string;
+    /**
+     * Task Parameters
+     *
+     * Parameters merged into the task created when the trigger fires.
+     */
+    task_parameters?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Timezone
+     *
+     * IANA timezone for cron evaluation (e.g. 'UTC', 'America/New_York').
+     */
+    timezone?: string;
+    /**
+     * Trigger Type
+     *
+     * 'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven.
+     */
+    trigger_type: 'cron' | 'webhook' | 'polling';
     /**
      * Validation Rules
      *
@@ -5783,19 +5792,17 @@ export type TriggerCreate = {
         [key: string]: unknown;
     } | null;
     /**
-     * Event Types
+     * Webhook Id
      *
-     * Event types to filter on (empty list = accept all events).
+     * Public webhook path segment. Auto-generated if omitted for webhook triggers.
      */
-    event_types?: Array<string>;
+    webhook_id?: string | null;
     /**
-     * Channel Credentials
+     * Webhook Type
      *
-     * Channel credentials (bot_token, SMTP password, etc). Stored encrypted in the secret store. Never returned in responses.
+     * Channel type: 'generic', 'telegram', 'slack', 'discord', etc.
      */
-    channel_credentials?: {
-        [key: string]: unknown;
-    } | null;
+    webhook_type?: string;
 };
 /**
  * TriggerExecuteRequest
@@ -5804,17 +5811,17 @@ export type TriggerCreate = {
  */
 export type TriggerExecuteRequest = {
     /**
-     * Events
-     */
-    events?: Array<{
-        [key: string]: unknown;
-    }>;
-    /**
      * Channel Origin
      */
     channel_origin?: {
         [key: string]: unknown;
     };
+    /**
+     * Events
+     */
+    events?: Array<{
+        [key: string]: unknown;
+    }>;
 };
 /**
  * TriggerExecutionResponse
@@ -5823,17 +5830,25 @@ export type TriggerExecuteRequest = {
  */
 export type TriggerExecutionResponse = {
     /**
-     * Id
+     * Error Message
      */
-    id: string;
-    /**
-     * Trigger Id
-     */
-    trigger_id: string;
+    error_message?: string | null;
     /**
      * Executed At
      */
     executed_at: string;
+    /**
+     * Execution Time Ms
+     */
+    execution_time_ms: number;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Run Id
+     */
+    run_id?: string | null;
     /**
      * Status
      */
@@ -5843,27 +5858,19 @@ export type TriggerExecutionResponse = {
      */
     task_id?: string | null;
     /**
-     * Execution Time Ms
-     */
-    execution_time_ms: number;
-    /**
-     * Error Message
-     */
-    error_message?: string | null;
-    /**
      * Trigger Data
      */
     trigger_data: {
         [key: string]: unknown;
     };
     /**
+     * Trigger Id
+     */
+    trigger_id: string;
+    /**
      * Workflow Id
      */
     workflow_id?: string | null;
-    /**
-     * Run Id
-     */
-    run_id?: string | null;
 };
 /**
  * TriggerResponse
@@ -5872,35 +5879,13 @@ export type TriggerExecutionResponse = {
  */
 export type TriggerResponse = {
     /**
-     * Id
-     */
-    id: string;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Description
-     */
-    description: string;
-    /**
      * Agent Id
      */
     agent_id: string;
     /**
-     * Trigger Type
+     * Allowed Methods
      */
-    trigger_type: string;
-    /**
-     * Is Active
-     */
-    is_active: boolean;
-    /**
-     * Task Parameters
-     */
-    task_parameters: {
-        [key: string]: unknown;
-    };
+    allowed_methods?: Array<string> | null;
     /**
      * Conditions
      */
@@ -5908,53 +5893,79 @@ export type TriggerResponse = {
         [key: string]: unknown;
     };
     /**
+     * Consecutive Failures
+     */
+    consecutive_failures: number;
+    /**
      * Created At
      */
     created_at: string;
-    /**
-     * Updated At
-     */
-    updated_at: string;
     /**
      * Created By
      */
     created_by: string;
     /**
+     * Cron Expression
+     */
+    cron_expression?: string | null;
+    /**
+     * Data Extractor
+     */
+    data_extractor?: string | null;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Event Types
+     */
+    event_types?: Array<string>;
+    /**
      * Failure Threshold
      */
     failure_threshold: number;
     /**
-     * Consecutive Failures
+     * Has Channel Credentials
      */
-    consecutive_failures: number;
+    has_channel_credentials?: boolean;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Is Active
+     */
+    is_active: boolean;
     /**
      * Last Execution At
      */
     last_execution_at?: string | null;
     /**
-     * Cron Expression
+     * Name
      */
-    cron_expression?: string | null;
-    /**
-     * Timezone
-     */
-    timezone?: string | null;
+    name: string;
     /**
      * Next Run Time
      */
     next_run_time?: string | null;
     /**
-     * Webhook Id
+     * Task Parameters
      */
-    webhook_id?: string | null;
+    task_parameters: {
+        [key: string]: unknown;
+    };
     /**
-     * Allowed Methods
+     * Timezone
      */
-    allowed_methods?: Array<string> | null;
+    timezone?: string | null;
     /**
-     * Webhook Type
+     * Trigger Type
      */
-    webhook_type?: string | null;
+    trigger_type: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
     /**
      * Validation Rules
      */
@@ -5968,17 +5979,13 @@ export type TriggerResponse = {
         [key: string]: unknown;
     } | null;
     /**
-     * Event Types
+     * Webhook Id
      */
-    event_types?: Array<string>;
+    webhook_id?: string | null;
     /**
-     * Data Extractor
+     * Webhook Type
      */
-    data_extractor?: string | null;
-    /**
-     * Has Channel Credentials
-     */
-    has_channel_credentials?: boolean;
+    webhook_type?: string | null;
 };
 /**
  * TriggerStatusResponse
@@ -5987,9 +5994,9 @@ export type TriggerResponse = {
  */
 export type TriggerStatusResponse = {
     /**
-     * Trigger Id
+     * Consecutive Failures
      */
-    trigger_id: string;
+    consecutive_failures: number;
     /**
      * Is Active
      */
@@ -5999,19 +6006,19 @@ export type TriggerStatusResponse = {
      */
     last_execution_at?: string | null;
     /**
-     * Consecutive Failures
-     */
-    consecutive_failures: number;
-    /**
-     * Should Disable Due To Failures
-     */
-    should_disable_due_to_failures: boolean;
-    /**
      * Schedule Info
      */
     schedule_info?: {
         [key: string]: unknown;
     } | null;
+    /**
+     * Should Disable Due To Failures
+     */
+    should_disable_due_to_failures: boolean;
+    /**
+     * Trigger Id
+     */
+    trigger_id: string;
 };
 /**
  * TriggerUpdate
@@ -6020,23 +6027,15 @@ export type TriggerStatusResponse = {
  */
 export type TriggerUpdate = {
     /**
-     * Name
+     * Allowed Methods
      */
-    name?: string | null;
+    allowed_methods?: Array<string> | null;
     /**
-     * Description
-     */
-    description?: string | null;
-    /**
-     * Enabled
+     * Channel Credentials
      *
-     * Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (legacy).
+     * Channel credentials to update. Pass to rotate credentials.
      */
-    enabled?: boolean | null;
-    /**
-     * Task Parameters
-     */
-    task_parameters?: {
+    channel_credentials?: {
         [key: string]: unknown;
     } | null;
     /**
@@ -6046,25 +6045,37 @@ export type TriggerUpdate = {
         [key: string]: unknown;
     } | null;
     /**
-     * Failure Threshold
-     */
-    failure_threshold?: number | null;
-    /**
      * Cron Expression
      */
     cron_expression?: string | null;
     /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Enabled
+     *
+     * Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (alias).
+     */
+    enabled?: boolean | null;
+    /**
+     * Failure Threshold
+     */
+    failure_threshold?: number | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Task Parameters
+     */
+    task_parameters?: {
+        [key: string]: unknown;
+    } | null;
+    /**
      * Timezone
      */
     timezone?: string | null;
-    /**
-     * Allowed Methods
-     */
-    allowed_methods?: Array<string> | null;
-    /**
-     * Webhook Type
-     */
-    webhook_type?: string | null;
     /**
      * Validation Rules
      */
@@ -6078,18 +6089,18 @@ export type TriggerUpdate = {
         [key: string]: unknown;
     } | null;
     /**
-     * Channel Credentials
-     *
-     * Channel credentials to update. Pass to rotate credentials.
+     * Webhook Type
      */
-    channel_credentials?: {
-        [key: string]: unknown;
-    } | null;
+    webhook_type?: string | null;
 };
 /**
  * UpcomingItem
  */
 export type UpcomingItem = {
+    /**
+     * Cron Expression
+     */
+    cron_expression?: string | null;
     /**
      * Fires At
      */
@@ -6099,6 +6110,10 @@ export type UpcomingItem = {
      */
     kind: string;
     /**
+     * Task Id
+     */
+    task_id?: string | null;
+    /**
      * Title
      */
     title: string;
@@ -6106,66 +6121,48 @@ export type UpcomingItem = {
      * Trigger Id
      */
     trigger_id?: string | null;
-    /**
-     * Task Id
-     */
-    task_id?: string | null;
-    /**
-     * Cron Expression
-     */
-    cron_expression?: string | null;
 };
 /**
  * UpdateAllResponse
  */
 export type UpdateAllResponse = {
     /**
-     * Updated
-     */
-    updated: number;
-    /**
      * Errors
      */
     errors: number;
+    /**
+     * Updated
+     */
+    updated: number;
 };
 /**
  * UpdateWalletRequest
  */
 export type UpdateWalletRequest = {
-    /**
-     * Wallet Type
-     */
-    wallet_type?: string | null;
-    x402_config?: X402ConfigSchema | null;
-    mpp_config?: MppConfigSchema | null;
     credentials?: WalletCredentialsSchema | null;
-    /**
-     * Service Budget Usd
-     */
-    service_budget_usd?: number | null;
+    mpp_config?: MppConfigSchema | null;
     /**
      * Service Budget Period
      */
     service_budget_period?: string | null;
     /**
+     * Service Budget Usd
+     */
+    service_budget_usd?: number | null;
+    /**
      * Status
      */
     status?: string | null;
+    /**
+     * Wallet Type
+     */
+    wallet_type?: string | null;
+    x402_config?: X402ConfigSchema | null;
 };
 /**
  * ValidateRequest
  */
 export type ValidateRequest = {
-    /**
-     * Name
-     */
-    name?: string | null;
-    /**
-     * Type
-     *
-     * Instance type: url, docker, command
-     */
-    type: string;
     /**
      * Endpoint Url
      *
@@ -6178,11 +6175,31 @@ export type ValidateRequest = {
     headers?: {
         [key: string]: string;
     };
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Type
+     *
+     * Instance type: url, docker, command
+     */
+    type: string;
 };
 /**
  * ValidationError
  */
 export type ValidationError = {
+    /**
+     * Context
+     */
+    ctx?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Input
+     */
+    input?: unknown;
     /**
      * Location
      */
@@ -6195,50 +6212,40 @@ export type ValidationError = {
      * Error Type
      */
     type: string;
-    /**
-     * Input
-     */
-    input?: unknown;
-    /**
-     * Context
-     */
-    ctx?: {
-        [key: string]: unknown;
-    };
 };
 /**
  * WalletBalanceResponse
  */
 export type WalletBalanceResponse = {
     /**
-     * Service Budget Usd
+     * Remaining
      */
-    service_budget_usd: number;
+    remaining: number;
     /**
      * Service Budget Period
      */
     service_budget_period: string;
     /**
+     * Service Budget Usd
+     */
+    service_budget_usd: number;
+    /**
      * Total Spent Current Period
      */
     total_spent_current_period: number;
-    /**
-     * Remaining
-     */
-    remaining: number;
 };
 /**
  * WalletCredentialsSchema
  */
 export type WalletCredentialsSchema = {
     /**
-     * X402 Private Key
-     */
-    x402_private_key?: string | null;
-    /**
      * Mpp Tempo Key
      */
     mpp_tempo_key?: string | null;
+    /**
+     * X402 Private Key
+     */
+    x402_private_key?: string | null;
 };
 /**
  * WalletExhaustedBlocker
@@ -6266,13 +6273,43 @@ export type WalletExhaustedBlocker = {
  */
 export type WalletResponse = {
     /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Has Credentials
+     */
+    has_credentials?: boolean;
+    /**
      * Id
      */
     id: string;
     /**
-     * Agent Id
+     * Mpp Config
      */
-    agent_id: string;
+    mpp_config?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Service Budget Period
+     */
+    service_budget_period: string;
+    /**
+     * Service Budget Usd
+     */
+    service_budget_usd: number;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Updated At
+     */
+    updated_at?: string | null;
     /**
      * Wallet Type
      */
@@ -6283,62 +6320,24 @@ export type WalletResponse = {
     x402_config?: {
         [key: string]: unknown;
     } | null;
-    /**
-     * Mpp Config
-     */
-    mpp_config?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * Has Credentials
-     */
-    has_credentials?: boolean;
-    /**
-     * Service Budget Usd
-     */
-    service_budget_usd: number;
-    /**
-     * Service Budget Period
-     */
-    service_budget_period: string;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Updated At
-     */
-    updated_at?: string | null;
 };
 /**
  * WorkspaceFileDownloadResponse
  */
 export type WorkspaceFileDownloadResponse = {
     /**
-     * Url
-     */
-    url: string;
-    /**
      * Path
      */
     path: string;
+    /**
+     * Url
+     */
+    url: string;
 };
 /**
  * WorkspaceFileInfo
  */
 export type WorkspaceFileInfo = {
-    /**
-     * Path
-     */
-    path: string;
-    /**
-     * Size
-     */
-    size: number;
     /**
      * Content Type
      */
@@ -6347,19 +6346,27 @@ export type WorkspaceFileInfo = {
      * Last Modified
      */
     last_modified?: string | null;
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Size
+     */
+    size: number;
 };
 /**
  * WorkspaceFileListResponse
  */
 export type WorkspaceFileListResponse = {
     /**
-     * Files
-     */
-    files: Array<WorkspaceFileInfo>;
-    /**
      * Directories
      */
     directories?: Array<string>;
+    /**
+     * Files
+     */
+    files: Array<WorkspaceFileInfo>;
 };
 /**
  * WorkspaceResponse
@@ -6370,13 +6377,13 @@ export type WorkspaceResponse = {
      */
     id: string;
     /**
-     * Slug
-     */
-    slug: string;
-    /**
      * Name
      */
     name: string;
+    /**
+     * Slug
+     */
+    slug: string;
     /**
      * Type
      */
@@ -6405,13 +6412,13 @@ export type WorkspaceSettingsUpdate = {
  */
 export type X402ConfigSchema = {
     /**
-     * Network
-     */
-    network?: string;
-    /**
      * Facilitator Url
      */
     facilitator_url?: string;
+    /**
+     * Network
+     */
+    network?: string;
     /**
      * Scheme
      */
@@ -6426,151 +6433,151 @@ export type X402ConfigSchema = {
  */
 export type AgentareaApiApiV1AccessControlSyncResponse = {
     /**
-     * Written
-     */
-    written: number;
-    /**
      * Collections
      */
     collections: number;
+    /**
+     * Written
+     */
+    written: number;
 };
 /**
  * ModelSpecResponse
  */
 export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
     /**
-     * Id
-     */
-    id: string;
-    /**
-     * Provider Spec Id
-     */
-    provider_spec_id: string;
-    /**
-     * Model Name
-     */
-    model_name: string;
-    /**
-     * Display Name
-     */
-    display_name: string;
-    /**
-     * Description
-     */
-    description: string | null;
-    /**
      * Context Window
      */
     context_window: number;
-    /**
-     * Max Output Tokens
-     */
-    max_output_tokens?: number | null;
-    /**
-     * Input Cost Per Token
-     */
-    input_cost_per_token?: number | null;
-    /**
-     * Output Cost Per Token
-     */
-    output_cost_per_token?: number | null;
-    /**
-     * Supports Function Calling
-     */
-    supports_function_calling?: boolean | null;
-    /**
-     * Supports Vision
-     */
-    supports_vision?: boolean | null;
-    /**
-     * Supports Reasoning
-     */
-    supports_reasoning?: boolean | null;
-    /**
-     * Default Context Strategy
-     */
-    default_context_strategy: string | null;
-    /**
-     * Is Active
-     */
-    is_active: boolean;
     /**
      * Created At
      */
     created_at: string;
     /**
-     * Updated At
+     * Default Context Strategy
      */
-    updated_at: string;
+    default_context_strategy: string | null;
+    /**
+     * Description
+     */
+    description: string | null;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Input Cost Per Token
+     */
+    input_cost_per_token?: number | null;
+    /**
+     * Is Active
+     */
+    is_active: boolean;
+    /**
+     * Max Output Tokens
+     */
+    max_output_tokens?: number | null;
+    /**
+     * Model Name
+     */
+    model_name: string;
+    /**
+     * Output Cost Per Token
+     */
+    output_cost_per_token?: number | null;
+    /**
+     * Provider Key
+     */
+    provider_key?: string | null;
     /**
      * Provider Name
      */
     provider_name?: string | null;
     /**
-     * Provider Key
+     * Provider Spec Id
      */
-    provider_key?: string | null;
+    provider_spec_id: string;
+    /**
+     * Supports Function Calling
+     */
+    supports_function_calling?: boolean | null;
+    /**
+     * Supports Reasoning
+     */
+    supports_reasoning?: boolean | null;
+    /**
+     * Supports Vision
+     */
+    supports_vision?: boolean | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
 };
 /**
  * ModelSpecResponse
  */
 export type AgentareaApiApiV1ProviderSpecsModelSpecResponse = {
     /**
-     * Id
+     * Context Window
      */
-    id: string;
+    context_window: number;
     /**
-     * Provider Spec Id
+     * Created At
      */
-    provider_spec_id: string;
-    /**
-     * Model Name
-     */
-    model_name: string;
-    /**
-     * Display Name
-     */
-    display_name: string;
+    created_at: string;
     /**
      * Description
      */
     description: string | null;
     /**
-     * Context Window
+     * Display Name
      */
-    context_window: number;
+    display_name: string;
     /**
-     * Max Output Tokens
+     * Id
      */
-    max_output_tokens?: number | null;
+    id: string;
     /**
      * Input Cost Per Token
      */
     input_cost_per_token?: number | null;
     /**
+     * Is Active
+     */
+    is_active: boolean;
+    /**
+     * Max Output Tokens
+     */
+    max_output_tokens?: number | null;
+    /**
+     * Model Name
+     */
+    model_name: string;
+    /**
      * Output Cost Per Token
      */
     output_cost_per_token?: number | null;
+    /**
+     * Provider Spec Id
+     */
+    provider_spec_id: string;
     /**
      * Supports Function Calling
      */
     supports_function_calling?: boolean | null;
     /**
-     * Supports Vision
-     */
-    supports_vision?: boolean | null;
-    /**
      * Supports Reasoning
      */
     supports_reasoning?: boolean | null;
     /**
-     * Is Active
+     * Supports Vision
      */
-    is_active: boolean;
-    /**
-     * Created At
-     */
-    created_at: string;
+    supports_vision?: boolean | null;
     /**
      * Updated At
      */
@@ -6585,17 +6592,41 @@ export type AgentareaApiApiV1RegistriesSyncResponse = {
      */
     new_specs: number;
     /**
-     * Updates Flagged
+     * Total
      */
-    updates_flagged: number;
+    total: number;
     /**
      * Unchanged
      */
     unchanged: number;
     /**
-     * Total
+     * Updates Flagged
      */
-    total: number;
+    updates_flagged: number;
+};
+export type HydraJwksProxyWellKnownJwksJsonGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/.well-known/jwks.json';
+};
+export type HydraJwksProxyWellKnownJwksJsonGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type OauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/.well-known/oauth-authorization-server';
+};
+export type OauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
 };
 export type OauthProtectedResourceMetadataWellKnownOauthProtectedResourceGetData = {
     body?: never;
@@ -6609,13 +6640,13 @@ export type OauthProtectedResourceMetadataWellKnownOauthProtectedResourceGetResp
      */
     200: unknown;
 };
-export type OauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGetData = {
+export type HealthHealthGetData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/.well-known/oauth-authorization-server';
+    url: '/health';
 };
-export type OauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGetResponses = {
+export type HealthHealthGetResponses = {
     /**
      * Successful Response
      */
@@ -6645,6 +6676,54 @@ export type HydraDcrProxyOauth2RegisterPostResponses = {
      */
     200: unknown;
 };
+export type HydraOauth2ProxyOauth2PathDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Path
+         */
+        path: string;
+    };
+    query?: never;
+    url: '/oauth2/{path}';
+};
+export type HydraOauth2ProxyOauth2PathDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type HydraOauth2ProxyOauth2PathDeleteError = HydraOauth2ProxyOauth2PathDeleteErrors[keyof HydraOauth2ProxyOauth2PathDeleteErrors];
+export type HydraOauth2ProxyOauth2PathDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type HydraOauth2ProxyOauth2PathGetData = {
+    body?: never;
+    path: {
+        /**
+         * Path
+         */
+        path: string;
+    };
+    query?: never;
+    url: '/oauth2/{path}';
+};
+export type HydraOauth2ProxyOauth2PathGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type HydraOauth2ProxyOauth2PathGetError = HydraOauth2ProxyOauth2PathGetErrors[keyof HydraOauth2ProxyOauth2PathGetErrors];
+export type HydraOauth2ProxyOauth2PathGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
 export type HydraOauth2ProxyOauth2PathPatchData = {
     body?: never;
     path: {
@@ -6669,7 +6748,7 @@ export type HydraOauth2ProxyOauth2PathPatchResponses = {
      */
     200: unknown;
 };
-export type HydraOauth2ProxyOauth2PathPatch2Data = {
+export type HydraOauth2ProxyOauth2PathPostData = {
     body?: never;
     path: {
         /**
@@ -6680,20 +6759,20 @@ export type HydraOauth2ProxyOauth2PathPatch2Data = {
     query?: never;
     url: '/oauth2/{path}';
 };
-export type HydraOauth2ProxyOauth2PathPatch2Errors = {
+export type HydraOauth2ProxyOauth2PathPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type HydraOauth2ProxyOauth2PathPatch2Error = HydraOauth2ProxyOauth2PathPatch2Errors[keyof HydraOauth2ProxyOauth2PathPatch2Errors];
-export type HydraOauth2ProxyOauth2PathPatch2Responses = {
+export type HydraOauth2ProxyOauth2PathPostError = HydraOauth2ProxyOauth2PathPostErrors[keyof HydraOauth2ProxyOauth2PathPostErrors];
+export type HydraOauth2ProxyOauth2PathPostResponses = {
     /**
      * Successful Response
      */
     200: unknown;
 };
-export type HydraOauth2ProxyOauth2PathPatch3Data = {
+export type HydraOauth2ProxyOauth2PathPutData = {
     body?: never;
     path: {
         /**
@@ -6704,444 +6783,176 @@ export type HydraOauth2ProxyOauth2PathPatch3Data = {
     query?: never;
     url: '/oauth2/{path}';
 };
-export type HydraOauth2ProxyOauth2PathPatch3Errors = {
+export type HydraOauth2ProxyOauth2PathPutErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type HydraOauth2ProxyOauth2PathPatch3Error = HydraOauth2ProxyOauth2PathPatch3Errors[keyof HydraOauth2ProxyOauth2PathPatch3Errors];
-export type HydraOauth2ProxyOauth2PathPatch3Responses = {
+export type HydraOauth2ProxyOauth2PathPutError = HydraOauth2ProxyOauth2PathPutErrors[keyof HydraOauth2ProxyOauth2PathPutErrors];
+export type HydraOauth2ProxyOauth2PathPutResponses = {
     /**
      * Successful Response
      */
     200: unknown;
 };
-export type HydraOauth2ProxyOauth2PathPatch4Data = {
-    body?: never;
-    path: {
-        /**
-         * Path
-         */
-        path: string;
-    };
+export type CheckPermissionV1AccessControlCheckPostData = {
+    body: CheckRequest;
+    path?: never;
     query?: never;
-    url: '/oauth2/{path}';
+    url: '/v1/access-control/check';
 };
-export type HydraOauth2ProxyOauth2PathPatch4Errors = {
+export type CheckPermissionV1AccessControlCheckPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type HydraOauth2ProxyOauth2PathPatch4Error = HydraOauth2ProxyOauth2PathPatch4Errors[keyof HydraOauth2ProxyOauth2PathPatch4Errors];
-export type HydraOauth2ProxyOauth2PathPatch4Responses = {
+export type CheckPermissionV1AccessControlCheckPostError = CheckPermissionV1AccessControlCheckPostErrors[keyof CheckPermissionV1AccessControlCheckPostErrors];
+export type CheckPermissionV1AccessControlCheckPostResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: CheckResponse;
 };
-export type HydraOauth2ProxyOauth2PathPatch5Data = {
-    body?: never;
-    path: {
-        /**
-         * Path
-         */
-        path: string;
-    };
-    query?: never;
-    url: '/oauth2/{path}';
-};
-export type HydraOauth2ProxyOauth2PathPatch5Errors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HydraOauth2ProxyOauth2PathPatch5Error = HydraOauth2ProxyOauth2PathPatch5Errors[keyof HydraOauth2ProxyOauth2PathPatch5Errors];
-export type HydraOauth2ProxyOauth2PathPatch5Responses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type HydraJwksProxyWellKnownJwksJsonGetData = {
+export type CheckPermissionV1AccessControlCheckPostResponse = CheckPermissionV1AccessControlCheckPostResponses[keyof CheckPermissionV1AccessControlCheckPostResponses];
+export type GetGraphV1AccessControlGraphGetData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/.well-known/jwks.json';
+    url: '/v1/access-control/graph';
 };
-export type HydraJwksProxyWellKnownJwksJsonGetResponses = {
+export type GetGraphV1AccessControlGraphGetResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: GraphResponse;
 };
-export type WebhookHealthCheckWebhooksHealthGetData = {
-    body?: never;
+export type GetGraphV1AccessControlGraphGetResponse = GetGraphV1AccessControlGraphGetResponses[keyof GetGraphV1AccessControlGraphGetResponses];
+export type DeleteRelationshipV1AccessControlRelationshipsDeleteData = {
+    body: RelationshipWriteRequest;
     path?: never;
     query?: never;
-    url: '/webhooks/health';
+    url: '/v1/access-control/relationships';
 };
-export type WebhookHealthCheckWebhooksHealthGetResponses = {
-    /**
-     * Response Webhook Health Check Webhooks Health Get
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: unknown;
-    };
-};
-export type WebhookHealthCheckWebhooksHealthGetResponse = WebhookHealthCheckWebhooksHealthGetResponses[keyof WebhookHealthCheckWebhooksHealthGetResponses];
-export type HandleWebhookWebhooksWebhookIdPatchData = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdPatchErrors = {
+export type DeleteRelationshipV1AccessControlRelationshipsDeleteErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type HandleWebhookWebhooksWebhookIdPatchError = HandleWebhookWebhooksWebhookIdPatchErrors[keyof HandleWebhookWebhooksWebhookIdPatchErrors];
-export type HandleWebhookWebhooksWebhookIdPatchResponses = {
+export type DeleteRelationshipV1AccessControlRelationshipsDeleteError = DeleteRelationshipV1AccessControlRelationshipsDeleteErrors[keyof DeleteRelationshipV1AccessControlRelationshipsDeleteErrors];
+export type DeleteRelationshipV1AccessControlRelationshipsDeleteResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    204: void;
 };
-export type HandleWebhookWebhooksWebhookIdPatch2Data = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdPatch2Errors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HandleWebhookWebhooksWebhookIdPatch2Error = HandleWebhookWebhooksWebhookIdPatch2Errors[keyof HandleWebhookWebhooksWebhookIdPatch2Errors];
-export type HandleWebhookWebhooksWebhookIdPatch2Responses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type HandleWebhookWebhooksWebhookIdPatch3Data = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdPatch3Errors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HandleWebhookWebhooksWebhookIdPatch3Error = HandleWebhookWebhooksWebhookIdPatch3Errors[keyof HandleWebhookWebhooksWebhookIdPatch3Errors];
-export type HandleWebhookWebhooksWebhookIdPatch3Responses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type HandleWebhookWebhooksWebhookIdPatch4Data = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdPatch4Errors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HandleWebhookWebhooksWebhookIdPatch4Error = HandleWebhookWebhooksWebhookIdPatch4Errors[keyof HandleWebhookWebhooksWebhookIdPatch4Errors];
-export type HandleWebhookWebhooksWebhookIdPatch4Responses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type HandleWebhookWebhooksWebhookIdPatch5Data = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdPatch5Errors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HandleWebhookWebhooksWebhookIdPatch5Error = HandleWebhookWebhooksWebhookIdPatch5Errors[keyof HandleWebhookWebhooksWebhookIdPatch5Errors];
-export type HandleWebhookWebhooksWebhookIdPatch5Responses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type HandleWebhookWebhooksWebhookIdPatch6Data = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdPatch6Errors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HandleWebhookWebhooksWebhookIdPatch6Error = HandleWebhookWebhooksWebhookIdPatch6Errors[keyof HandleWebhookWebhooksWebhookIdPatch6Errors];
-export type HandleWebhookWebhooksWebhookIdPatch6Responses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type HandleWebhookWebhooksWebhookIdPatch7Data = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdPatch7Errors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HandleWebhookWebhooksWebhookIdPatch7Error = HandleWebhookWebhooksWebhookIdPatch7Errors[keyof HandleWebhookWebhooksWebhookIdPatch7Errors];
-export type HandleWebhookWebhooksWebhookIdPatch7Responses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type OauthCallbackV1McpOauthCallbackGetData = {
+export type DeleteRelationshipV1AccessControlRelationshipsDeleteResponse = DeleteRelationshipV1AccessControlRelationshipsDeleteResponses[keyof DeleteRelationshipV1AccessControlRelationshipsDeleteResponses];
+export type ListRelationshipsV1AccessControlRelationshipsGetData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Code
+         * Namespace
          */
-        code?: string;
-        /**
-         * State
-         */
-        state?: string;
-        /**
-         * Error
-         */
-        error?: string;
-        /**
-         * Error Description
-         */
-        error_description?: string;
+        namespace?: string | null;
     };
-    url: '/v1/mcp-oauth/callback';
+    url: '/v1/access-control/relationships';
 };
-export type OauthCallbackV1McpOauthCallbackGetErrors = {
+export type ListRelationshipsV1AccessControlRelationshipsGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type OauthCallbackV1McpOauthCallbackGetError = OauthCallbackV1McpOauthCallbackGetErrors[keyof OauthCallbackV1McpOauthCallbackGetErrors];
-export type OauthCallbackV1McpOauthCallbackGetResponses = {
+export type ListRelationshipsV1AccessControlRelationshipsGetError = ListRelationshipsV1AccessControlRelationshipsGetErrors[keyof ListRelationshipsV1AccessControlRelationshipsGetErrors];
+export type ListRelationshipsV1AccessControlRelationshipsGetResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: RelationshipsResponse;
 };
-export type ExecuteTriggerV1TriggersTriggerIdExecutePostData = {
-    body: TriggerExecuteRequest;
-    path: {
-        /**
-         * Trigger Id
-         */
-        trigger_id: string;
-    };
+export type ListRelationshipsV1AccessControlRelationshipsGetResponse = ListRelationshipsV1AccessControlRelationshipsGetResponses[keyof ListRelationshipsV1AccessControlRelationshipsGetResponses];
+export type CreateRelationshipV1AccessControlRelationshipsPostData = {
+    body: RelationshipWriteRequest;
+    path?: never;
     query?: never;
-    url: '/v1/triggers/{trigger_id}/execute';
+    url: '/v1/access-control/relationships';
 };
-export type ExecuteTriggerV1TriggersTriggerIdExecutePostErrors = {
+export type CreateRelationshipV1AccessControlRelationshipsPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type ExecuteTriggerV1TriggersTriggerIdExecutePostError = ExecuteTriggerV1TriggersTriggerIdExecutePostErrors[keyof ExecuteTriggerV1TriggersTriggerIdExecutePostErrors];
-export type ExecuteTriggerV1TriggersTriggerIdExecutePostResponses = {
+export type CreateRelationshipV1AccessControlRelationshipsPostError = CreateRelationshipV1AccessControlRelationshipsPostErrors[keyof CreateRelationshipV1AccessControlRelationshipsPostErrors];
+export type CreateRelationshipV1AccessControlRelationshipsPostResponses = {
     /**
-     * Response Execute Trigger V1 Triggers  Trigger Id  Execute Post
+     * Response Create Relationship V1 Access Control Relationships Post
      *
      * Successful Response
      */
-    200: {
+    201: {
         [key: string]: unknown;
     };
 };
-export type ExecuteTriggerV1TriggersTriggerIdExecutePostResponse = ExecuteTriggerV1TriggersTriggerIdExecutePostResponses[keyof ExecuteTriggerV1TriggersTriggerIdExecutePostResponses];
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetData = {
-    body?: never;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-    };
+export type CreateRelationshipV1AccessControlRelationshipsPostResponse = CreateRelationshipV1AccessControlRelationshipsPostResponses[keyof CreateRelationshipV1AccessControlRelationshipsPostResponses];
+export type ResolveAccessV1AccessControlResolvePostData = {
+    body: ResolveRequest;
+    path?: never;
     query?: never;
-    url: '/v1/agents/{agent_id}/.well-known/agent-card.json';
+    url: '/v1/access-control/resolve';
 };
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetErrors = {
+export type ResolveAccessV1AccessControlResolvePostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetError = GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetErrors[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetErrors];
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses = {
+export type ResolveAccessV1AccessControlResolvePostError = ResolveAccessV1AccessControlResolvePostErrors[keyof ResolveAccessV1AccessControlResolvePostErrors];
+export type ResolveAccessV1AccessControlResolvePostResponses = {
     /**
      * Successful Response
      */
-    200: AgentCard;
+    200: ResolveResponse;
 };
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponse = GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses];
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetData = {
+export type ResolveAccessV1AccessControlResolvePostResponse = ResolveAccessV1AccessControlResolvePostResponses[keyof ResolveAccessV1AccessControlResolvePostResponses];
+export type SyncGrantsV1AccessControlSyncPostData = {
     body?: never;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-    };
+    path?: never;
     query?: never;
-    url: '/v1/agents/{agent_id}/.well-known/agent.json';
+    url: '/v1/access-control/sync';
 };
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetError = GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetErrors];
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses = {
+export type SyncGrantsV1AccessControlSyncPostResponses = {
     /**
      * Successful Response
      */
-    200: AgentCard;
+    200: AgentareaApiApiV1AccessControlSyncResponse;
 };
-export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponse = GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentJsonGetResponses];
-export type GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetData = {
-    body?: never;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/.well-known/a2a-info.json';
-};
-export type GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetError = GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetErrors[keyof GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetErrors];
-export type GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponses = {
-    /**
-     * Response Get Agent A2A Info V1 Agents  Agent Id   Well Known A2A Info Json Get
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: unknown;
-    };
-};
-export type GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponse = GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponses[keyof GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponses];
-export type GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetData = {
-    body?: never;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/.well-known/';
-};
-export type GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetError = GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetErrors[keyof GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetErrors];
-export type GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponses = {
-    /**
-     * Response Get Agent Well Known Index V1 Agents  Agent Id   Well Known  Get
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: unknown;
-    };
-};
-export type GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponse = GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponses[keyof GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponses];
+export type SyncGrantsV1AccessControlSyncPostResponse = SyncGrantsV1AccessControlSyncPostResponses[keyof SyncGrantsV1AccessControlSyncPostResponses];
 export type ListAgentsV1AgentsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/agents';
+};
+export type ListAgentsV1AgentsGetResponses = {
+    /**
+     * Response List Agents V1 Agents Get
+     *
+     * Successful Response
+     */
+    200: Array<AgentResponse>;
+};
+export type ListAgentsV1AgentsGetResponse = ListAgentsV1AgentsGetResponses[keyof ListAgentsV1AgentsGetResponses];
+export type ListAgentsV1AgentsGet2Data = {
     body?: never;
     path?: never;
     query?: never;
     url: '/v1/agents/';
 };
-export type ListAgentsV1AgentsGetResponses = {
+export type ListAgentsV1AgentsGet2Responses = {
     /**
      * Response List Agents V1 Agents  Get
      *
@@ -7149,7 +6960,7 @@ export type ListAgentsV1AgentsGetResponses = {
      */
     200: Array<AgentResponse>;
 };
-export type ListAgentsV1AgentsGetResponse = ListAgentsV1AgentsGetResponses[keyof ListAgentsV1AgentsGetResponses];
+export type ListAgentsV1AgentsGet2Response = ListAgentsV1AgentsGet2Responses[keyof ListAgentsV1AgentsGet2Responses];
 export type CreateAgentV1AgentsPostData = {
     body: AgentCreate;
     path?: never;
@@ -7279,7 +7090,7 @@ export type UpdateAgentV1AgentsAgentIdPatchResponses = {
     200: AgentResponse;
 };
 export type UpdateAgentV1AgentsAgentIdPatchResponse = UpdateAgentV1AgentsAgentIdPatchResponses[keyof UpdateAgentV1AgentsAgentIdPatchResponses];
-export type InstallAgentV1AgentsAgentIdInstallPostData = {
+export type GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetData = {
     body?: never;
     path: {
         /**
@@ -7288,37 +7099,80 @@ export type InstallAgentV1AgentsAgentIdInstallPostData = {
         agent_id: string;
     };
     query?: never;
-    url: '/v1/agents/{agent_id}/install';
+    url: '/v1/agents/{agent_id}/.well-known/';
 };
-export type InstallAgentV1AgentsAgentIdInstallPostErrors = {
+export type GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type InstallAgentV1AgentsAgentIdInstallPostError = InstallAgentV1AgentsAgentIdInstallPostErrors[keyof InstallAgentV1AgentsAgentIdInstallPostErrors];
-export type InstallAgentV1AgentsAgentIdInstallPostResponses = {
+export type GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetError = GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetErrors[keyof GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetErrors];
+export type GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponses = {
     /**
-     * Successful Response
-     */
-    200: AgentResponse;
-};
-export type InstallAgentV1AgentsAgentIdInstallPostResponse = InstallAgentV1AgentsAgentIdInstallPostResponses[keyof InstallAgentV1AgentsAgentIdInstallPostResponses];
-export type ListAgentsV1AgentsGet2Data = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/agents';
-};
-export type ListAgentsV1AgentsGet2Responses = {
-    /**
-     * Response List Agents V1 Agents Get
+     * Response Get Agent Well Known Index V1 Agents  Agent Id   Well Known  Get
      *
      * Successful Response
      */
-    200: Array<AgentResponse>;
+    200: {
+        [key: string]: unknown;
+    };
 };
-export type ListAgentsV1AgentsGet2Response = ListAgentsV1AgentsGet2Responses[keyof ListAgentsV1AgentsGet2Responses];
+export type GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponse = GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponses[keyof GetAgentWellKnownIndexV1AgentsAgentIdWellKnownGetResponses];
+export type GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/.well-known/a2a-info.json';
+};
+export type GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetError = GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetErrors[keyof GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetErrors];
+export type GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponses = {
+    /**
+     * Response Get Agent A2A Info V1 Agents  Agent Id   Well Known A2A Info Json Get
+     *
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+export type GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponse = GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponses[keyof GetAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGetResponses];
+export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/.well-known/agent-card.json';
+};
+export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetError = GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetErrors[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetErrors];
+export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentCard;
+};
+export type GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponse = GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses[keyof GetAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGetResponses];
 export type HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostData = {
     body?: never;
     path: {
@@ -7368,7 +7222,7 @@ export type GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponses = {
     200: AgentCard;
 };
 export type GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponse = GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponses[keyof GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponses];
-export type DeleteWalletV1AgentsAgentIdWalletDeleteData = {
+export type InstallAgentV1AgentsAgentIdInstallPostData = {
     body?: never;
     path: {
         /**
@@ -7377,23 +7231,23 @@ export type DeleteWalletV1AgentsAgentIdWalletDeleteData = {
         agent_id: string;
     };
     query?: never;
-    url: '/v1/agents/{agent_id}/wallet';
+    url: '/v1/agents/{agent_id}/install';
 };
-export type DeleteWalletV1AgentsAgentIdWalletDeleteErrors = {
+export type InstallAgentV1AgentsAgentIdInstallPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type DeleteWalletV1AgentsAgentIdWalletDeleteError = DeleteWalletV1AgentsAgentIdWalletDeleteErrors[keyof DeleteWalletV1AgentsAgentIdWalletDeleteErrors];
-export type DeleteWalletV1AgentsAgentIdWalletDeleteResponses = {
+export type InstallAgentV1AgentsAgentIdInstallPostError = InstallAgentV1AgentsAgentIdInstallPostErrors[keyof InstallAgentV1AgentsAgentIdInstallPostErrors];
+export type InstallAgentV1AgentsAgentIdInstallPostResponses = {
     /**
      * Successful Response
      */
-    204: void;
+    200: AgentResponse;
 };
-export type DeleteWalletV1AgentsAgentIdWalletDeleteResponse = DeleteWalletV1AgentsAgentIdWalletDeleteResponses[keyof DeleteWalletV1AgentsAgentIdWalletDeleteResponses];
-export type GetWalletV1AgentsAgentIdWalletGetData = {
+export type InstallAgentV1AgentsAgentIdInstallPostResponse = InstallAgentV1AgentsAgentIdInstallPostResponses[keyof InstallAgentV1AgentsAgentIdInstallPostResponses];
+export type GetAgentOverviewV1AgentsAgentIdOverviewGetData = {
     body?: never;
     path: {
         /**
@@ -7402,180 +7256,22 @@ export type GetWalletV1AgentsAgentIdWalletGetData = {
         agent_id: string;
     };
     query?: never;
-    url: '/v1/agents/{agent_id}/wallet';
+    url: '/v1/agents/{agent_id}/overview';
 };
-export type GetWalletV1AgentsAgentIdWalletGetErrors = {
+export type GetAgentOverviewV1AgentsAgentIdOverviewGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type GetWalletV1AgentsAgentIdWalletGetError = GetWalletV1AgentsAgentIdWalletGetErrors[keyof GetWalletV1AgentsAgentIdWalletGetErrors];
-export type GetWalletV1AgentsAgentIdWalletGetResponses = {
+export type GetAgentOverviewV1AgentsAgentIdOverviewGetError = GetAgentOverviewV1AgentsAgentIdOverviewGetErrors[keyof GetAgentOverviewV1AgentsAgentIdOverviewGetErrors];
+export type GetAgentOverviewV1AgentsAgentIdOverviewGetResponses = {
     /**
      * Successful Response
      */
-    200: WalletResponse;
+    200: AgentOverviewResponse;
 };
-export type GetWalletV1AgentsAgentIdWalletGetResponse = GetWalletV1AgentsAgentIdWalletGetResponses[keyof GetWalletV1AgentsAgentIdWalletGetResponses];
-export type CreateWalletV1AgentsAgentIdWalletPostData = {
-    body: CreateWalletRequest;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/wallet';
-};
-export type CreateWalletV1AgentsAgentIdWalletPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateWalletV1AgentsAgentIdWalletPostError = CreateWalletV1AgentsAgentIdWalletPostErrors[keyof CreateWalletV1AgentsAgentIdWalletPostErrors];
-export type CreateWalletV1AgentsAgentIdWalletPostResponses = {
-    /**
-     * Successful Response
-     */
-    201: WalletResponse;
-};
-export type CreateWalletV1AgentsAgentIdWalletPostResponse = CreateWalletV1AgentsAgentIdWalletPostResponses[keyof CreateWalletV1AgentsAgentIdWalletPostResponses];
-export type UpdateWalletV1AgentsAgentIdWalletPutData = {
-    body: UpdateWalletRequest;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/wallet';
-};
-export type UpdateWalletV1AgentsAgentIdWalletPutErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UpdateWalletV1AgentsAgentIdWalletPutError = UpdateWalletV1AgentsAgentIdWalletPutErrors[keyof UpdateWalletV1AgentsAgentIdWalletPutErrors];
-export type UpdateWalletV1AgentsAgentIdWalletPutResponses = {
-    /**
-     * Successful Response
-     */
-    200: WalletResponse;
-};
-export type UpdateWalletV1AgentsAgentIdWalletPutResponse = UpdateWalletV1AgentsAgentIdWalletPutResponses[keyof UpdateWalletV1AgentsAgentIdWalletPutResponses];
-export type GetWalletBalanceV1AgentsAgentIdWalletBalanceGetData = {
-    body?: never;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/wallet/balance';
-};
-export type GetWalletBalanceV1AgentsAgentIdWalletBalanceGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetWalletBalanceV1AgentsAgentIdWalletBalanceGetError = GetWalletBalanceV1AgentsAgentIdWalletBalanceGetErrors[keyof GetWalletBalanceV1AgentsAgentIdWalletBalanceGetErrors];
-export type GetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: WalletBalanceResponse;
-};
-export type GetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponse = GetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponses[keyof GetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponses];
-export type GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetData = {
-    body?: never;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-    };
-    query?: {
-        /**
-         * Protocol
-         *
-         * Filter by protocol (x402, mpp)
-         */
-        protocol?: string | null;
-        /**
-         * Status
-         *
-         * Filter by status
-         */
-        status?: string | null;
-        /**
-         * From Date
-         *
-         * Filter from date
-         */
-        from_date?: string | null;
-        /**
-         * To Date
-         *
-         * Filter to date
-         */
-        to_date?: string | null;
-        /**
-         * Page
-         */
-        page?: number;
-        /**
-         * Page Size
-         */
-        page_size?: number;
-    };
-    url: '/v1/agents/{agent_id}/wallet/payments';
-};
-export type GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetError = GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetErrors[keyof GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetErrors];
-export type GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: PaginatedPaymentsResponse;
-};
-export type GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponse = GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponses[keyof GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponses];
-export type FundWalletV1AgentsAgentIdWalletFundPostData = {
-    body: FundWalletRequest;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/wallet/fund';
-};
-export type FundWalletV1AgentsAgentIdWalletFundPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type FundWalletV1AgentsAgentIdWalletFundPostError = FundWalletV1AgentsAgentIdWalletFundPostErrors[keyof FundWalletV1AgentsAgentIdWalletFundPostErrors];
-export type FundWalletV1AgentsAgentIdWalletFundPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: WalletResponse;
-};
-export type FundWalletV1AgentsAgentIdWalletFundPostResponse = FundWalletV1AgentsAgentIdWalletFundPostResponses[keyof FundWalletV1AgentsAgentIdWalletFundPostResponses];
+export type GetAgentOverviewV1AgentsAgentIdOverviewGetResponse = GetAgentOverviewV1AgentsAgentIdOverviewGetResponses[keyof GetAgentOverviewV1AgentsAgentIdOverviewGetResponses];
 export type ListAgentTasksV1AgentsAgentIdTasksGetData = {
     body?: never;
     path: {
@@ -7728,8 +7424,8 @@ export type GetAgentTaskV1AgentsAgentIdTasksTaskIdGetResponses = {
     200: TaskResponse;
 };
 export type GetAgentTaskV1AgentsAgentIdTasksTaskIdGetResponse = GetAgentTaskV1AgentsAgentIdTasksTaskIdGetResponses[keyof GetAgentTaskV1AgentsAgentIdTasksTaskIdGetResponses];
-export type GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetData = {
-    body?: never;
+export type SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostData = {
+    body: A2UiActionPayload;
     path: {
         /**
          * Agent Id
@@ -7741,16 +7437,16 @@ export type GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetData = {
         task_id: string;
     };
     query?: never;
-    url: '/v1/agents/{agent_id}/tasks/{task_id}/status';
+    url: '/v1/agents/{agent_id}/tasks/{task_id}/a2ui/action';
 };
-export type GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetErrors = {
+export type SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetError = GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetErrors[keyof GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetErrors];
-export type GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetResponses = {
+export type SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostError = SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostErrors[keyof SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostErrors];
+export type SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostResponses = {
     /**
      * Successful Response
      */
@@ -7824,147 +7520,6 @@ export type DownloadTaskArtifactV1AgentsAgentIdTasksTaskIdArtifactsFilesArtifact
      */
     200: unknown;
 };
-export type GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetData = {
-    body?: never;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/tasks/{task_id}/summary';
-};
-export type GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetError = GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetErrors[keyof GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetErrors];
-export type GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskSummary;
-};
-export type GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponse = GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponses[keyof GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponses];
-export type PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostData = {
-    body?: never;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/tasks/{task_id}/pause';
-};
-export type PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostError = PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors[keyof PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors];
-export type PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostData = {
-    body?: never;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/tasks/{task_id}/resume';
-};
-export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostError = ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors[keyof ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors];
-export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostData = {
-    body: A2UiActionPayload;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/tasks/{task_id}/a2ui/action';
-};
-export type SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostError = SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostErrors[keyof SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostErrors];
-export type SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostData = {
-    body: TaskInputSubmission;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/tasks/{task_id}/input';
-};
-export type SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostError = SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostErrors[keyof SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostErrors];
-export type SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
 export type SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostData = {
     body: TaskCommandPayload;
     path: {
@@ -7988,34 +7543,6 @@ export type SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostErrors = {
 };
 export type SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostError = SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostErrors[keyof SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostErrors];
 export type SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostData = {
-    body: EscalationResolution;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/tasks/{task_id}/resolve-escalation';
-};
-export type ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostError = ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors[keyof ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors];
-export type ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostResponses = {
     /**
      * Successful Response
      */
@@ -8081,7 +7608,14 @@ export type StreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetData = {
          */
         task_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Include Chunks
+         *
+         * Include incremental llm.call.chunk token events in the stream
+         */
+        include_chunks?: boolean;
+    };
     url: '/v1/agents/{agent_id}/tasks/{task_id}/events/stream';
 };
 export type StreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetErrors = {
@@ -8097,88 +7631,358 @@ export type StreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetResponses =
      */
     200: unknown;
 };
-export type GetAllTasksV1TasksGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Status
-         *
-         * Filter by task status
-         */
-        status?: string | null;
-        /**
-         * Limit
-         *
-         * Maximum number of tasks to return
-         */
-        limit?: number;
-        /**
-         * Offset
-         *
-         * Number of tasks to skip
-         */
-        offset?: number;
-    };
-    url: '/v1/tasks/';
-};
-export type GetAllTasksV1TasksGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetAllTasksV1TasksGetError = GetAllTasksV1TasksGetErrors[keyof GetAllTasksV1TasksGetErrors];
-export type GetAllTasksV1TasksGetResponses = {
-    /**
-     * Response Get All Tasks V1 Tasks  Get
-     *
-     * Successful Response
-     */
-    200: Array<TaskWithAgent>;
-};
-export type GetAllTasksV1TasksGetResponse = GetAllTasksV1TasksGetResponses[keyof GetAllTasksV1TasksGetResponses];
-export type GetTaskByIdV1TasksTaskIdGetData = {
-    body?: never;
+export type SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostData = {
+    body: TaskInputSubmission;
     path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
         /**
          * Task Id
          */
         task_id: string;
     };
     query?: never;
-    url: '/v1/tasks/{task_id}';
+    url: '/v1/agents/{agent_id}/tasks/{task_id}/input';
 };
-export type GetTaskByIdV1TasksTaskIdGetErrors = {
+export type SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type GetTaskByIdV1TasksTaskIdGetError = GetTaskByIdV1TasksTaskIdGetErrors[keyof GetTaskByIdV1TasksTaskIdGetErrors];
-export type GetTaskByIdV1TasksTaskIdGetResponses = {
+export type SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostError = SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostErrors[keyof SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostErrors];
+export type SubmitTaskInputV1AgentsAgentIdTasksTaskIdInputPostResponses = {
     /**
      * Successful Response
      */
-    200: TaskWithAgent;
+    200: unknown;
 };
-export type GetTaskByIdV1TasksTaskIdGetResponse = GetTaskByIdV1TasksTaskIdGetResponses[keyof GetTaskByIdV1TasksTaskIdGetResponses];
-export type ListMcpServersV1McpServersGetData = {
+export type PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostData = {
     body?: never;
-    path?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/tasks/{task_id}/pause';
+};
+export type PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostError = PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors[keyof PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostErrors];
+export type PauseAgentTaskV1AgentsAgentIdTasksTaskIdPausePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostData = {
+    body: EscalationResolution;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/tasks/{task_id}/resolve-escalation';
+};
+export type ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostError = ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors[keyof ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors];
+export type ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/tasks/{task_id}/resume';
+};
+export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostError = ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors[keyof ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors];
+export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/tasks/{task_id}/status';
+};
+export type GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetError = GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetErrors[keyof GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetErrors];
+export type GetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/tasks/{task_id}/summary';
+};
+export type GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetError = GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetErrors[keyof GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetErrors];
+export type GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: TaskSummary;
+};
+export type GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponse = GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponses[keyof GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponses];
+export type DeleteWalletV1AgentsAgentIdWalletDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/wallet';
+};
+export type DeleteWalletV1AgentsAgentIdWalletDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeleteWalletV1AgentsAgentIdWalletDeleteError = DeleteWalletV1AgentsAgentIdWalletDeleteErrors[keyof DeleteWalletV1AgentsAgentIdWalletDeleteErrors];
+export type DeleteWalletV1AgentsAgentIdWalletDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type DeleteWalletV1AgentsAgentIdWalletDeleteResponse = DeleteWalletV1AgentsAgentIdWalletDeleteResponses[keyof DeleteWalletV1AgentsAgentIdWalletDeleteResponses];
+export type GetWalletV1AgentsAgentIdWalletGetData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/wallet';
+};
+export type GetWalletV1AgentsAgentIdWalletGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetWalletV1AgentsAgentIdWalletGetError = GetWalletV1AgentsAgentIdWalletGetErrors[keyof GetWalletV1AgentsAgentIdWalletGetErrors];
+export type GetWalletV1AgentsAgentIdWalletGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: WalletResponse;
+};
+export type GetWalletV1AgentsAgentIdWalletGetResponse = GetWalletV1AgentsAgentIdWalletGetResponses[keyof GetWalletV1AgentsAgentIdWalletGetResponses];
+export type CreateWalletV1AgentsAgentIdWalletPostData = {
+    body: CreateWalletRequest;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/wallet';
+};
+export type CreateWalletV1AgentsAgentIdWalletPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateWalletV1AgentsAgentIdWalletPostError = CreateWalletV1AgentsAgentIdWalletPostErrors[keyof CreateWalletV1AgentsAgentIdWalletPostErrors];
+export type CreateWalletV1AgentsAgentIdWalletPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: WalletResponse;
+};
+export type CreateWalletV1AgentsAgentIdWalletPostResponse = CreateWalletV1AgentsAgentIdWalletPostResponses[keyof CreateWalletV1AgentsAgentIdWalletPostResponses];
+export type UpdateWalletV1AgentsAgentIdWalletPutData = {
+    body: UpdateWalletRequest;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/wallet';
+};
+export type UpdateWalletV1AgentsAgentIdWalletPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateWalletV1AgentsAgentIdWalletPutError = UpdateWalletV1AgentsAgentIdWalletPutErrors[keyof UpdateWalletV1AgentsAgentIdWalletPutErrors];
+export type UpdateWalletV1AgentsAgentIdWalletPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: WalletResponse;
+};
+export type UpdateWalletV1AgentsAgentIdWalletPutResponse = UpdateWalletV1AgentsAgentIdWalletPutResponses[keyof UpdateWalletV1AgentsAgentIdWalletPutResponses];
+export type GetWalletBalanceV1AgentsAgentIdWalletBalanceGetData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/wallet/balance';
+};
+export type GetWalletBalanceV1AgentsAgentIdWalletBalanceGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetWalletBalanceV1AgentsAgentIdWalletBalanceGetError = GetWalletBalanceV1AgentsAgentIdWalletBalanceGetErrors[keyof GetWalletBalanceV1AgentsAgentIdWalletBalanceGetErrors];
+export type GetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: WalletBalanceResponse;
+};
+export type GetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponse = GetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponses[keyof GetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponses];
+export type FundWalletV1AgentsAgentIdWalletFundPostData = {
+    body: FundWalletRequest;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/wallet/fund';
+};
+export type FundWalletV1AgentsAgentIdWalletFundPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type FundWalletV1AgentsAgentIdWalletFundPostError = FundWalletV1AgentsAgentIdWalletFundPostErrors[keyof FundWalletV1AgentsAgentIdWalletFundPostErrors];
+export type FundWalletV1AgentsAgentIdWalletFundPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: WalletResponse;
+};
+export type FundWalletV1AgentsAgentIdWalletFundPostResponse = FundWalletV1AgentsAgentIdWalletFundPostResponses[keyof FundWalletV1AgentsAgentIdWalletFundPostResponses];
+export type GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
     query?: {
         /**
+         * Protocol
+         *
+         * Filter by protocol (x402, mpp)
+         */
+        protocol?: string | null;
+        /**
          * Status
+         *
+         * Filter by status
          */
         status?: string | null;
         /**
-         * Is Public
+         * From Date
+         *
+         * Filter from date
          */
-        is_public?: boolean | null;
+        from_date?: string | null;
         /**
-         * Tag
+         * To Date
+         *
+         * Filter to date
          */
-        tag?: string | null;
+        to_date?: string | null;
         /**
          * Page
          */
@@ -8187,2322 +7991,177 @@ export type ListMcpServersV1McpServersGetData = {
          * Page Size
          */
         page_size?: number;
-        /**
-         * Search
-         */
-        search?: string | null;
     };
-    url: '/v1/mcp-servers/';
+    url: '/v1/agents/{agent_id}/wallet/payments';
 };
-export type ListMcpServersV1McpServersGetErrors = {
+export type GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type ListMcpServersV1McpServersGetError = ListMcpServersV1McpServersGetErrors[keyof ListMcpServersV1McpServersGetErrors];
-export type ListMcpServersV1McpServersGetResponses = {
+export type GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetError = GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetErrors[keyof GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetErrors];
+export type GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponses = {
     /**
      * Successful Response
      */
-    200: PaginatedResponseMcpServerResponse;
+    200: PaginatedPaymentsResponse;
 };
-export type ListMcpServersV1McpServersGetResponse = ListMcpServersV1McpServersGetResponses[keyof ListMcpServersV1McpServersGetResponses];
-export type CreateMcpServerV1McpServersPostData = {
-    body: McpServerCreate;
-    path?: never;
-    query?: never;
-    url: '/v1/mcp-servers/';
-};
-export type CreateMcpServerV1McpServersPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateMcpServerV1McpServersPostError = CreateMcpServerV1McpServersPostErrors[keyof CreateMcpServerV1McpServersPostErrors];
-export type CreateMcpServerV1McpServersPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: McpServerResponse;
-};
-export type CreateMcpServerV1McpServersPostResponse = CreateMcpServerV1McpServersPostResponses[keyof CreateMcpServerV1McpServersPostResponses];
-export type DeleteMcpServerV1McpServersServerIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Server Id
-         */
-        server_id: string;
-    };
-    query?: never;
-    url: '/v1/mcp-servers/{server_id}';
-};
-export type DeleteMcpServerV1McpServersServerIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type DeleteMcpServerV1McpServersServerIdDeleteError = DeleteMcpServerV1McpServersServerIdDeleteErrors[keyof DeleteMcpServerV1McpServersServerIdDeleteErrors];
-export type DeleteMcpServerV1McpServersServerIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type GetMcpServerV1McpServersServerIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Server Id
-         */
-        server_id: string;
-    };
-    query?: never;
-    url: '/v1/mcp-servers/{server_id}';
-};
-export type GetMcpServerV1McpServersServerIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetMcpServerV1McpServersServerIdGetError = GetMcpServerV1McpServersServerIdGetErrors[keyof GetMcpServerV1McpServersServerIdGetErrors];
-export type GetMcpServerV1McpServersServerIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: McpServerResponse;
-};
-export type GetMcpServerV1McpServersServerIdGetResponse = GetMcpServerV1McpServersServerIdGetResponses[keyof GetMcpServerV1McpServersServerIdGetResponses];
-export type UpdateMcpServerV1McpServersServerIdPatchData = {
-    body: McpServerUpdate;
-    path: {
-        /**
-         * Server Id
-         */
-        server_id: string;
-    };
-    query?: never;
-    url: '/v1/mcp-servers/{server_id}';
-};
-export type UpdateMcpServerV1McpServersServerIdPatchErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UpdateMcpServerV1McpServersServerIdPatchError = UpdateMcpServerV1McpServersServerIdPatchErrors[keyof UpdateMcpServerV1McpServersServerIdPatchErrors];
-export type UpdateMcpServerV1McpServersServerIdPatchResponses = {
-    /**
-     * Successful Response
-     */
-    200: McpServerResponse;
-};
-export type UpdateMcpServerV1McpServersServerIdPatchResponse = UpdateMcpServerV1McpServersServerIdPatchResponses[keyof UpdateMcpServerV1McpServersServerIdPatchResponses];
-export type DeployMcpServerV1McpServersServerIdDeployPostData = {
-    body?: never;
-    path: {
-        /**
-         * Server Id
-         */
-        server_id: string;
-    };
-    query?: never;
-    url: '/v1/mcp-servers/{server_id}/deploy';
-};
-export type DeployMcpServerV1McpServersServerIdDeployPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type DeployMcpServerV1McpServersServerIdDeployPostError = DeployMcpServerV1McpServersServerIdDeployPostErrors[keyof DeployMcpServerV1McpServersServerIdDeployPostErrors];
-export type DeployMcpServerV1McpServersServerIdDeployPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type ValidateInstanceSpecV1McpServerInstancesValidatePostData = {
-    body: ValidateRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/mcp-server-instances/validate';
-};
-export type ValidateInstanceSpecV1McpServerInstancesValidatePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ValidateInstanceSpecV1McpServerInstancesValidatePostError = ValidateInstanceSpecV1McpServerInstancesValidatePostErrors[keyof ValidateInstanceSpecV1McpServerInstancesValidatePostErrors];
-export type ValidateInstanceSpecV1McpServerInstancesValidatePostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type ListMcpServerInstancesV1McpServerInstancesGetData = {
+export type GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponse = GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponses[keyof GetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetResponses];
+export type ListApiKeysV1ApiKeysGetData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/v1/mcp-server-instances/';
+    url: '/v1/api-keys/';
 };
-export type ListMcpServerInstancesV1McpServerInstancesGetResponses = {
+export type ListApiKeysV1ApiKeysGetResponses = {
     /**
-     * Response List Mcp Server Instances V1 Mcp Server Instances  Get
+     * Response List Api Keys V1 Api Keys  Get
      *
      * Successful Response
      */
-    200: Array<McpServerInstanceResponse>;
+    200: Array<ApiKeyResponse>;
 };
-export type ListMcpServerInstancesV1McpServerInstancesGetResponse = ListMcpServerInstancesV1McpServerInstancesGetResponses[keyof ListMcpServerInstancesV1McpServerInstancesGetResponses];
-export type CreateMcpServerInstanceV1McpServerInstancesPostData = {
-    body: McpServerInstanceCreate;
+export type ListApiKeysV1ApiKeysGetResponse = ListApiKeysV1ApiKeysGetResponses[keyof ListApiKeysV1ApiKeysGetResponses];
+export type CreateApiKeyV1ApiKeysPostData = {
+    body: ApiKeyCreateRequest;
     path?: never;
     query?: never;
-    url: '/v1/mcp-server-instances/';
+    url: '/v1/api-keys/';
 };
-export type CreateMcpServerInstanceV1McpServerInstancesPostErrors = {
+export type CreateApiKeyV1ApiKeysPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type CreateMcpServerInstanceV1McpServerInstancesPostError = CreateMcpServerInstanceV1McpServerInstancesPostErrors[keyof CreateMcpServerInstanceV1McpServerInstancesPostErrors];
-export type CreateMcpServerInstanceV1McpServerInstancesPostResponses = {
+export type CreateApiKeyV1ApiKeysPostError = CreateApiKeyV1ApiKeysPostErrors[keyof CreateApiKeyV1ApiKeysPostErrors];
+export type CreateApiKeyV1ApiKeysPostResponses = {
     /**
      * Successful Response
      */
-    201: McpServerInstanceResponse;
+    201: ApiKeyCreateResponse;
 };
-export type CreateMcpServerInstanceV1McpServerInstancesPostResponse = CreateMcpServerInstanceV1McpServerInstancesPostResponses[keyof CreateMcpServerInstanceV1McpServerInstancesPostResponses];
-export type CreateMcpServerConnectionV1McpServerInstancesWithSpecPostData = {
-    body: McpServerConnectionCreateRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/mcp-server-instances/with-spec';
-};
-export type CreateMcpServerConnectionV1McpServerInstancesWithSpecPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateMcpServerConnectionV1McpServerInstancesWithSpecPostError = CreateMcpServerConnectionV1McpServerInstancesWithSpecPostErrors[keyof CreateMcpServerConnectionV1McpServerInstancesWithSpecPostErrors];
-export type CreateMcpServerConnectionV1McpServerInstancesWithSpecPostResponses = {
-    /**
-     * Successful Response
-     */
-    201: McpServerInstanceResponse;
-};
-export type CreateMcpServerConnectionV1McpServerInstancesWithSpecPostResponse = CreateMcpServerConnectionV1McpServerInstancesWithSpecPostResponses[keyof CreateMcpServerConnectionV1McpServerInstancesWithSpecPostResponses];
-export type ValidateConnectionV1McpServerInstancesValidateConnectionPostData = {
-    /**
-     * Data
-     */
-    body: {
-        [key: string]: unknown;
-    };
-    path?: never;
-    query?: never;
-    url: '/v1/mcp-server-instances/validate-connection';
-};
-export type ValidateConnectionV1McpServerInstancesValidateConnectionPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ValidateConnectionV1McpServerInstancesValidateConnectionPostError = ValidateConnectionV1McpServerInstancesValidateConnectionPostErrors[keyof ValidateConnectionV1McpServerInstancesValidateConnectionPostErrors];
-export type ValidateConnectionV1McpServerInstancesValidateConnectionPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostData = {
-    /**
-     * Data
-     */
-    body: {
-        [key: string]: unknown;
-    };
-    path?: never;
-    query?: never;
-    url: '/v1/mcp-server-instances/check';
-};
-export type CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostError = CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErrors[keyof CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErrors];
-export type CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetData = {
+export type CreateApiKeyV1ApiKeysPostResponse = CreateApiKeyV1ApiKeysPostResponses[keyof CreateApiKeyV1ApiKeysPostResponses];
+export type RevokeApiKeyV1ApiKeysTokenIdDeleteData = {
     body?: never;
     path: {
         /**
-         * Instance Id
+         * Token Id
          */
-        instance_id: string;
+        token_id: string;
     };
     query?: never;
-    url: '/v1/mcp-server-instances/{instance_id}/environment';
+    url: '/v1/api-keys/{token_id}';
 };
-export type GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetErrors = {
+export type RevokeApiKeyV1ApiKeysTokenIdDeleteErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetError = GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetErrors[keyof GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetErrors];
-export type GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetResponses = {
+export type RevokeApiKeyV1ApiKeysTokenIdDeleteError = RevokeApiKeyV1ApiKeysTokenIdDeleteErrors[keyof RevokeApiKeyV1ApiKeysTokenIdDeleteErrors];
+export type RevokeApiKeyV1ApiKeysTokenIdDeleteResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    204: void;
 };
-export type DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteData = {
+export type RevokeApiKeyV1ApiKeysTokenIdDeleteResponse = RevokeApiKeyV1ApiKeysTokenIdDeleteResponses[keyof RevokeApiKeyV1ApiKeysTokenIdDeleteResponses];
+export type GetApiKeyV1ApiKeysTokenIdGetData = {
     body?: never;
     path: {
         /**
-         * Instance Id
+         * Token Id
          */
-        instance_id: string;
+        token_id: string;
     };
     query?: never;
-    url: '/v1/mcp-server-instances/{instance_id}';
+    url: '/v1/api-keys/{token_id}';
 };
-export type DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteErrors = {
+export type GetApiKeyV1ApiKeysTokenIdGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteError = DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteErrors[keyof DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteErrors];
-export type DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteResponses = {
+export type GetApiKeyV1ApiKeysTokenIdGetError = GetApiKeyV1ApiKeysTokenIdGetErrors[keyof GetApiKeyV1ApiKeysTokenIdGetErrors];
+export type GetApiKeyV1ApiKeysTokenIdGetResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: ApiKeyResponse;
 };
-export type GetMcpServerInstanceV1McpServerInstancesInstanceIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Instance Id
-         */
-        instance_id: string;
-    };
-    query?: never;
-    url: '/v1/mcp-server-instances/{instance_id}';
-};
-export type GetMcpServerInstanceV1McpServerInstancesInstanceIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetMcpServerInstanceV1McpServerInstancesInstanceIdGetError = GetMcpServerInstanceV1McpServerInstancesInstanceIdGetErrors[keyof GetMcpServerInstanceV1McpServerInstancesInstanceIdGetErrors];
-export type GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: McpServerInstanceResponse;
-};
-export type GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponse = GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponses[keyof GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponses];
-export type UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchData = {
-    body: McpServerInstanceUpdate;
-    path: {
-        /**
-         * Instance Id
-         */
-        instance_id: string;
-    };
-    query?: never;
-    url: '/v1/mcp-server-instances/{instance_id}';
-};
-export type UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchError = UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchErrors[keyof UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchErrors];
-export type UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses = {
-    /**
-     * Successful Response
-     */
-    200: McpServerInstanceResponse;
-};
-export type UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponse = UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses[keyof UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses];
-export type VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostData = {
-    body?: never;
-    path: {
-        /**
-         * Instance Id
-         */
-        instance_id: string;
-    };
-    query?: never;
-    url: '/v1/mcp-server-instances/{instance_id}/verify';
-};
-export type VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostError = VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostErrors[keyof VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostErrors];
-export type VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostData = {
-    body?: never;
-    path: {
-        /**
-         * Instance Id
-         */
-        instance_id: string;
-    };
-    query?: never;
-    url: '/v1/mcp-server-instances/{instance_id}/discover-tools';
-};
-export type DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostError = DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostErrors[keyof DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostErrors];
-export type DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type GetContainersHealthV1McpServerInstancesHealthContainersGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/mcp-server-instances/health/containers';
-};
-export type GetContainersHealthV1McpServerInstancesHealthContainersGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostData = {
-    body?: never;
-    path: {
-        /**
-         * Instance Id
-         */
-        instance_id: string;
-    };
-    query?: never;
-    url: '/v1/mcp-server-instances/{instance_id}/probe';
-};
-export type ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostError = ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors[keyof ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors];
-export type ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData = {
-    body?: never;
-    path: {
-        /**
-         * Instance Id
-         */
-        instance_id: string;
-    };
-    query?: never;
-    url: '/v1/mcp-server-instances/{instance_id}/test-auth';
-};
-export type RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostError = RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors[keyof RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors];
-export type RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostData = {
-    /**
-     * Data
-     */
-    body: {
-        [key: string]: unknown;
-    };
-    path: {
-        /**
-         * Instance Id
-         */
-        instance_id: string;
-    };
-    query?: never;
-    url: '/v1/mcp-server-instances/{instance_id}/oauth-link';
-};
-export type CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostError = CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostErrors[keyof CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostErrors];
-export type CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetData = {
-    body?: never;
-    path: {
-        /**
-         * Instance Id
-         */
-        instance_id: string;
-    };
-    query?: never;
-    url: '/v1/mcp-server-instances/{instance_id}/oauth-links';
-};
-export type ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetError = ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors[keyof ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors];
-export type ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type ListProviderSpecsV1ProviderSpecsGetData = {
+export type GetApiKeyV1ApiKeysTokenIdGetResponse = GetApiKeyV1ApiKeysTokenIdGetResponses[keyof GetApiKeyV1ApiKeysTokenIdGetResponses];
+export type ListAuditLogsV1AuditLogsGetData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Is Builtin
-         */
-        is_builtin?: boolean | null;
-    };
-    url: '/v1/provider-specs/';
-};
-export type ListProviderSpecsV1ProviderSpecsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListProviderSpecsV1ProviderSpecsGetError = ListProviderSpecsV1ProviderSpecsGetErrors[keyof ListProviderSpecsV1ProviderSpecsGetErrors];
-export type ListProviderSpecsV1ProviderSpecsGetResponses = {
-    /**
-     * Response List Provider Specs V1 Provider Specs  Get
-     *
-     * Successful Response
-     */
-    200: Array<ProviderSpecResponse>;
-};
-export type ListProviderSpecsV1ProviderSpecsGetResponse = ListProviderSpecsV1ProviderSpecsGetResponses[keyof ListProviderSpecsV1ProviderSpecsGetResponses];
-export type ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Is Builtin
-         */
-        is_builtin?: boolean | null;
-    };
-    url: '/v1/provider-specs/with-models';
-};
-export type ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetError = ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetErrors[keyof ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetErrors];
-export type ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetResponses = {
-    /**
-     * Response List Provider Specs With Models V1 Provider Specs With Models Get
-     *
-     * Successful Response
-     */
-    200: Array<ProviderSpecWithModelsResponse>;
-};
-export type ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetResponse = ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetResponses[keyof ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetResponses];
-export type GetProviderSpecV1ProviderSpecsProviderSpecIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Provider Spec Id
-         */
-        provider_spec_id: string;
-    };
-    query?: never;
-    url: '/v1/provider-specs/{provider_spec_id}';
-};
-export type GetProviderSpecV1ProviderSpecsProviderSpecIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetProviderSpecV1ProviderSpecsProviderSpecIdGetError = GetProviderSpecV1ProviderSpecsProviderSpecIdGetErrors[keyof GetProviderSpecV1ProviderSpecsProviderSpecIdGetErrors];
-export type GetProviderSpecV1ProviderSpecsProviderSpecIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProviderSpecWithModelsResponse;
-};
-export type GetProviderSpecV1ProviderSpecsProviderSpecIdGetResponse = GetProviderSpecV1ProviderSpecsProviderSpecIdGetResponses[keyof GetProviderSpecV1ProviderSpecsProviderSpecIdGetResponses];
-export type GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetData = {
-    body?: never;
-    path: {
-        /**
-         * Provider Key
-         */
-        provider_key: string;
-    };
-    query?: never;
-    url: '/v1/provider-specs/by-key/{provider_key}';
-};
-export type GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetError = GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetErrors[keyof GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetErrors];
-export type GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProviderSpecWithModelsResponse;
-};
-export type GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetResponse = GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetResponses[keyof GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetResponses];
-export type ListProviderConfigsV1ProviderConfigsGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Provider Spec Id
-         */
-        provider_spec_id?: string | null;
-        /**
-         * Is Active
-         */
-        is_active?: boolean | null;
-    };
-    url: '/v1/provider-configs/';
-};
-export type ListProviderConfigsV1ProviderConfigsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListProviderConfigsV1ProviderConfigsGetError = ListProviderConfigsV1ProviderConfigsGetErrors[keyof ListProviderConfigsV1ProviderConfigsGetErrors];
-export type ListProviderConfigsV1ProviderConfigsGetResponses = {
-    /**
-     * Response List Provider Configs V1 Provider Configs  Get
-     *
-     * Successful Response
-     */
-    200: Array<ProviderConfigResponse>;
-};
-export type ListProviderConfigsV1ProviderConfigsGetResponse = ListProviderConfigsV1ProviderConfigsGetResponses[keyof ListProviderConfigsV1ProviderConfigsGetResponses];
-export type CreateProviderConfigV1ProviderConfigsPostData = {
-    body: ProviderConfigCreate;
-    path?: never;
-    query?: never;
-    url: '/v1/provider-configs/';
-};
-export type CreateProviderConfigV1ProviderConfigsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateProviderConfigV1ProviderConfigsPostError = CreateProviderConfigV1ProviderConfigsPostErrors[keyof CreateProviderConfigV1ProviderConfigsPostErrors];
-export type CreateProviderConfigV1ProviderConfigsPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProviderConfigResponse;
-};
-export type CreateProviderConfigV1ProviderConfigsPostResponse = CreateProviderConfigV1ProviderConfigsPostResponses[keyof CreateProviderConfigV1ProviderConfigsPostResponses];
-export type ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Provider Spec Id
-         */
-        provider_spec_id?: string | null;
-        /**
-         * Is Active
-         */
-        is_active?: boolean | null;
-    };
-    url: '/v1/provider-configs/with-instances';
-};
-export type ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetError = ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetErrors[keyof ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetErrors];
-export type ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetResponses = {
-    /**
-     * Response List Provider Configs With Instances V1 Provider Configs With Instances Get
-     *
-     * Successful Response
-     */
-    200: Array<ProviderConfigResponse>;
-};
-export type ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetResponse = ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetResponses[keyof ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetResponses];
-export type DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostData = {
-    body: DiscoverPreviewRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/provider-configs/discover-preview';
-};
-export type DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostError = DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostErrors[keyof DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostErrors];
-export type DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: DiscoverPreviewResponse;
-};
-export type DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponse = DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponses[keyof DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponses];
-export type DeleteProviderConfigV1ProviderConfigsConfigIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Config Id
-         */
-        config_id: string;
-    };
-    query?: never;
-    url: '/v1/provider-configs/{config_id}';
-};
-export type DeleteProviderConfigV1ProviderConfigsConfigIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type DeleteProviderConfigV1ProviderConfigsConfigIdDeleteError = DeleteProviderConfigV1ProviderConfigsConfigIdDeleteErrors[keyof DeleteProviderConfigV1ProviderConfigsConfigIdDeleteErrors];
-export type DeleteProviderConfigV1ProviderConfigsConfigIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type GetProviderConfigV1ProviderConfigsConfigIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Config Id
-         */
-        config_id: string;
-    };
-    query?: never;
-    url: '/v1/provider-configs/{config_id}';
-};
-export type GetProviderConfigV1ProviderConfigsConfigIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetProviderConfigV1ProviderConfigsConfigIdGetError = GetProviderConfigV1ProviderConfigsConfigIdGetErrors[keyof GetProviderConfigV1ProviderConfigsConfigIdGetErrors];
-export type GetProviderConfigV1ProviderConfigsConfigIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProviderConfigResponse;
-};
-export type GetProviderConfigV1ProviderConfigsConfigIdGetResponse = GetProviderConfigV1ProviderConfigsConfigIdGetResponses[keyof GetProviderConfigV1ProviderConfigsConfigIdGetResponses];
-export type PatchProviderConfigV1ProviderConfigsConfigIdPatchData = {
-    body: ProviderConfigUpdate;
-    path: {
-        /**
-         * Config Id
-         */
-        config_id: string;
-    };
-    query?: never;
-    url: '/v1/provider-configs/{config_id}';
-};
-export type PatchProviderConfigV1ProviderConfigsConfigIdPatchErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type PatchProviderConfigV1ProviderConfigsConfigIdPatchError = PatchProviderConfigV1ProviderConfigsConfigIdPatchErrors[keyof PatchProviderConfigV1ProviderConfigsConfigIdPatchErrors];
-export type PatchProviderConfigV1ProviderConfigsConfigIdPatchResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProviderConfigResponse;
-};
-export type PatchProviderConfigV1ProviderConfigsConfigIdPatchResponse = PatchProviderConfigV1ProviderConfigsConfigIdPatchResponses[keyof PatchProviderConfigV1ProviderConfigsConfigIdPatchResponses];
-export type UpdateProviderConfigV1ProviderConfigsConfigIdPutData = {
-    body: ProviderConfigUpdate;
-    path: {
-        /**
-         * Config Id
-         */
-        config_id: string;
-    };
-    query?: never;
-    url: '/v1/provider-configs/{config_id}';
-};
-export type UpdateProviderConfigV1ProviderConfigsConfigIdPutErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UpdateProviderConfigV1ProviderConfigsConfigIdPutError = UpdateProviderConfigV1ProviderConfigsConfigIdPutErrors[keyof UpdateProviderConfigV1ProviderConfigsConfigIdPutErrors];
-export type UpdateProviderConfigV1ProviderConfigsConfigIdPutResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProviderConfigResponse;
-};
-export type UpdateProviderConfigV1ProviderConfigsConfigIdPutResponse = UpdateProviderConfigV1ProviderConfigsConfigIdPutResponses[keyof UpdateProviderConfigV1ProviderConfigsConfigIdPutResponses];
-export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostData = {
-    body?: never;
-    path: {
-        /**
-         * Config Id
-         */
-        config_id: string;
-    };
-    query?: never;
-    url: '/v1/provider-configs/{config_id}/discover';
-};
-export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostError = DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostErrors[keyof DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostErrors];
-export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: DiscoveryResponse;
-};
-export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponse = DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses[keyof DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses];
-export type GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetData = {
-    body?: never;
-    path: {
-        /**
-         * Provider Key
-         */
-        provider_key: string;
-    };
-    query?: never;
-    url: '/v1/provider-configs/admin/{provider_key}/logo';
-};
-export type GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetError = GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetErrors[keyof GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetErrors];
-export type GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type ListModelSpecsV1ModelSpecsGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Provider Spec Id
-         */
-        provider_spec_id?: string | null;
-        /**
-         * Is Active
-         */
-        is_active?: boolean | null;
-    };
-    url: '/v1/model-specs/';
-};
-export type ListModelSpecsV1ModelSpecsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListModelSpecsV1ModelSpecsGetError = ListModelSpecsV1ModelSpecsGetErrors[keyof ListModelSpecsV1ModelSpecsGetErrors];
-export type ListModelSpecsV1ModelSpecsGetResponses = {
-    /**
-     * Response List Model Specs V1 Model Specs  Get
-     *
-     * Successful Response
-     */
-    200: Array<AgentareaApiApiV1ModelSpecsModelSpecResponse>;
-};
-export type ListModelSpecsV1ModelSpecsGetResponse = ListModelSpecsV1ModelSpecsGetResponses[keyof ListModelSpecsV1ModelSpecsGetResponses];
-export type CreateModelSpecV1ModelSpecsPostData = {
-    body: ModelSpecCreate;
-    path?: never;
-    query?: never;
-    url: '/v1/model-specs/';
-};
-export type CreateModelSpecV1ModelSpecsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateModelSpecV1ModelSpecsPostError = CreateModelSpecV1ModelSpecsPostErrors[keyof CreateModelSpecV1ModelSpecsPostErrors];
-export type CreateModelSpecV1ModelSpecsPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: AgentareaApiApiV1ModelSpecsModelSpecResponse;
-};
-export type CreateModelSpecV1ModelSpecsPostResponse = CreateModelSpecV1ModelSpecsPostResponses[keyof CreateModelSpecV1ModelSpecsPostResponses];
-export type ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Provider Spec Id
-         */
-        provider_spec_id: string;
-    };
-    query?: {
-        /**
-         * Is Active
-         */
-        is_active?: boolean | null;
-    };
-    url: '/v1/model-specs/by-provider/{provider_spec_id}';
-};
-export type ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetError = ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetErrors[keyof ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetErrors];
-export type ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetResponses = {
-    /**
-     * Response List Model Specs By Provider V1 Model Specs By Provider  Provider Spec Id  Get
-     *
-     * Successful Response
-     */
-    200: Array<AgentareaApiApiV1ModelSpecsModelSpecResponse>;
-};
-export type ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetResponse = ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetResponses[keyof ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetResponses];
-export type GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetData = {
-    body?: never;
-    path: {
-        /**
-         * Provider Spec Id
-         */
-        provider_spec_id: string;
-        /**
-         * Model Name
-         */
-        model_name: string;
-    };
-    query?: never;
-    url: '/v1/model-specs/by-provider/{provider_spec_id}/{model_name}';
-};
-export type GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetError = GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetErrors[keyof GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetErrors];
-export type GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: AgentareaApiApiV1ModelSpecsModelSpecResponse;
-};
-export type GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetResponse = GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetResponses[keyof GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetResponses];
-export type DeleteModelSpecV1ModelSpecsModelSpecIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Model Spec Id
-         */
-        model_spec_id: string;
-    };
-    query?: never;
-    url: '/v1/model-specs/{model_spec_id}';
-};
-export type DeleteModelSpecV1ModelSpecsModelSpecIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type DeleteModelSpecV1ModelSpecsModelSpecIdDeleteError = DeleteModelSpecV1ModelSpecsModelSpecIdDeleteErrors[keyof DeleteModelSpecV1ModelSpecsModelSpecIdDeleteErrors];
-export type DeleteModelSpecV1ModelSpecsModelSpecIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type GetModelSpecV1ModelSpecsModelSpecIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Model Spec Id
-         */
-        model_spec_id: string;
-    };
-    query?: never;
-    url: '/v1/model-specs/{model_spec_id}';
-};
-export type GetModelSpecV1ModelSpecsModelSpecIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetModelSpecV1ModelSpecsModelSpecIdGetError = GetModelSpecV1ModelSpecsModelSpecIdGetErrors[keyof GetModelSpecV1ModelSpecsModelSpecIdGetErrors];
-export type GetModelSpecV1ModelSpecsModelSpecIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: AgentareaApiApiV1ModelSpecsModelSpecResponse;
-};
-export type GetModelSpecV1ModelSpecsModelSpecIdGetResponse = GetModelSpecV1ModelSpecsModelSpecIdGetResponses[keyof GetModelSpecV1ModelSpecsModelSpecIdGetResponses];
-export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchData = {
-    body: ModelSpecUpdate;
-    path: {
-        /**
-         * Model Spec Id
-         */
-        model_spec_id: string;
-    };
-    query?: never;
-    url: '/v1/model-specs/{model_spec_id}';
-};
-export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchError = UpdateModelSpecV1ModelSpecsModelSpecIdPatchErrors[keyof UpdateModelSpecV1ModelSpecsModelSpecIdPatchErrors];
-export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses = {
-    /**
-     * Successful Response
-     */
-    200: AgentareaApiApiV1ModelSpecsModelSpecResponse;
-};
-export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponse = UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses[keyof UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses];
-export type UpsertModelSpecV1ModelSpecsUpsertPostData = {
-    body: ModelSpecCreate;
-    path?: never;
-    query?: never;
-    url: '/v1/model-specs/upsert';
-};
-export type UpsertModelSpecV1ModelSpecsUpsertPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UpsertModelSpecV1ModelSpecsUpsertPostError = UpsertModelSpecV1ModelSpecsUpsertPostErrors[keyof UpsertModelSpecV1ModelSpecsUpsertPostErrors];
-export type UpsertModelSpecV1ModelSpecsUpsertPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: AgentareaApiApiV1ModelSpecsModelSpecResponse;
-};
-export type UpsertModelSpecV1ModelSpecsUpsertPostResponse = UpsertModelSpecV1ModelSpecsUpsertPostResponses[keyof UpsertModelSpecV1ModelSpecsUpsertPostResponses];
-export type ListModelInstancesV1ModelInstancesGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Provider Config Id
-         */
-        provider_config_id?: string | null;
-        /**
-         * Model Spec Id
-         */
-        model_spec_id?: string | null;
-        /**
-         * Is Active
-         */
-        is_active?: boolean | null;
-    };
-    url: '/v1/model-instances/';
-};
-export type ListModelInstancesV1ModelInstancesGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListModelInstancesV1ModelInstancesGetError = ListModelInstancesV1ModelInstancesGetErrors[keyof ListModelInstancesV1ModelInstancesGetErrors];
-export type ListModelInstancesV1ModelInstancesGetResponses = {
-    /**
-     * Response List Model Instances V1 Model Instances  Get
-     *
-     * Successful Response
-     */
-    200: Array<ModelInstanceResponse>;
-};
-export type ListModelInstancesV1ModelInstancesGetResponse = ListModelInstancesV1ModelInstancesGetResponses[keyof ListModelInstancesV1ModelInstancesGetResponses];
-export type CreateModelInstanceV1ModelInstancesPostData = {
-    body: ModelInstanceCreate;
-    path?: never;
-    query?: never;
-    url: '/v1/model-instances/';
-};
-export type CreateModelInstanceV1ModelInstancesPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateModelInstanceV1ModelInstancesPostError = CreateModelInstanceV1ModelInstancesPostErrors[keyof CreateModelInstanceV1ModelInstancesPostErrors];
-export type CreateModelInstanceV1ModelInstancesPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ModelInstanceResponse;
-};
-export type CreateModelInstanceV1ModelInstancesPostResponse = CreateModelInstanceV1ModelInstancesPostResponses[keyof CreateModelInstanceV1ModelInstancesPostResponses];
-export type CreateModelInstancesBulkV1ModelInstancesBulkPostData = {
-    body: ModelInstanceBulkCreateRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/model-instances/bulk';
-};
-export type CreateModelInstancesBulkV1ModelInstancesBulkPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateModelInstancesBulkV1ModelInstancesBulkPostError = CreateModelInstancesBulkV1ModelInstancesBulkPostErrors[keyof CreateModelInstancesBulkV1ModelInstancesBulkPostErrors];
-export type CreateModelInstancesBulkV1ModelInstancesBulkPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ModelInstanceBulkCreateResponse;
-};
-export type CreateModelInstancesBulkV1ModelInstancesBulkPostResponse = CreateModelInstancesBulkV1ModelInstancesBulkPostResponses[keyof CreateModelInstancesBulkV1ModelInstancesBulkPostResponses];
-export type DeleteModelInstanceV1ModelInstancesInstanceIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Instance Id
-         */
-        instance_id: string;
-    };
-    query?: never;
-    url: '/v1/model-instances/{instance_id}';
-};
-export type DeleteModelInstanceV1ModelInstancesInstanceIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type DeleteModelInstanceV1ModelInstancesInstanceIdDeleteError = DeleteModelInstanceV1ModelInstancesInstanceIdDeleteErrors[keyof DeleteModelInstanceV1ModelInstancesInstanceIdDeleteErrors];
-export type DeleteModelInstanceV1ModelInstancesInstanceIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type GetModelInstanceV1ModelInstancesInstanceIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Instance Id
-         */
-        instance_id: string;
-    };
-    query?: never;
-    url: '/v1/model-instances/{instance_id}';
-};
-export type GetModelInstanceV1ModelInstancesInstanceIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetModelInstanceV1ModelInstancesInstanceIdGetError = GetModelInstanceV1ModelInstancesInstanceIdGetErrors[keyof GetModelInstanceV1ModelInstancesInstanceIdGetErrors];
-export type GetModelInstanceV1ModelInstancesInstanceIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: ModelInstanceResponse;
-};
-export type GetModelInstanceV1ModelInstancesInstanceIdGetResponse = GetModelInstanceV1ModelInstancesInstanceIdGetResponses[keyof GetModelInstanceV1ModelInstancesInstanceIdGetResponses];
-export type ValidateModelInstanceV1ModelInstancesTestPostData = {
-    body: ModelInstanceTestRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/model-instances/test';
-};
-export type ValidateModelInstanceV1ModelInstancesTestPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ValidateModelInstanceV1ModelInstancesTestPostError = ValidateModelInstanceV1ModelInstancesTestPostErrors[keyof ValidateModelInstanceV1ModelInstancesTestPostErrors];
-export type ValidateModelInstanceV1ModelInstancesTestPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ModelInstanceTestResponse;
-};
-export type ValidateModelInstanceV1ModelInstancesTestPostResponse = ValidateModelInstanceV1ModelInstancesTestPostResponses[keyof ValidateModelInstanceV1ModelInstancesTestPostResponses];
-export type GetCatalogV1TriggersCatalogGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/triggers/catalog';
-};
-export type GetCatalogV1TriggersCatalogGetResponses = {
-    /**
-     * Response Get Catalog V1 Triggers Catalog Get
-     *
-     * Successful Response
-     */
-    200: Array<{
-        [key: string]: unknown;
-    }>;
-};
-export type GetCatalogV1TriggersCatalogGetResponse = GetCatalogV1TriggersCatalogGetResponses[keyof GetCatalogV1TriggersCatalogGetResponses];
-export type GetChannelEventsV1TriggersChannelsEventsGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/triggers/channels/events';
-};
-export type GetChannelEventsV1TriggersChannelsEventsGetResponses = {
-    /**
-     * Response Get Channel Events V1 Triggers Channels Events Get
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: Array<string>;
-    };
-};
-export type GetChannelEventsV1TriggersChannelsEventsGetResponse = GetChannelEventsV1TriggersChannelsEventsGetResponses[keyof GetChannelEventsV1TriggersChannelsEventsGetResponses];
-export type ListTriggersV1TriggersGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Agent Id
+         * Action
          *
-         * Filter by agent ID
+         * Filter by action (e.g. agent.create)
          */
-        agent_id?: string | null;
+        action?: string | null;
         /**
-         * Trigger Type
+         * Actor Id
          *
-         * Filter by trigger type (cron, webhook)
+         * Filter by actor ID
          */
-        trigger_type?: string | null;
+        actor_id?: string | null;
         /**
-         * Active Only
+         * Resource Type
          *
-         * Only return active triggers
+         * Filter by resource type
          */
-        active_only?: boolean;
+        resource_type?: string | null;
+        /**
+         * Resource Id
+         *
+         * Filter by resource ID
+         */
+        resource_id?: string | null;
+        /**
+         * Since
+         *
+         * Events after this time (ISO 8601)
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * Events before this time (ISO 8601)
+         */
+        until?: string | null;
+        /**
+         * Cursor
+         *
+         * Cursor for pagination
+         */
+        cursor?: string | null;
         /**
          * Limit
          *
-         * Maximum number of triggers to return
+         * Max events to return
          */
         limit?: number;
     };
-    url: '/v1/triggers/';
+    url: '/v1/audit-logs/';
 };
-export type ListTriggersV1TriggersGetErrors = {
+export type ListAuditLogsV1AuditLogsGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type ListTriggersV1TriggersGetError = ListTriggersV1TriggersGetErrors[keyof ListTriggersV1TriggersGetErrors];
-export type ListTriggersV1TriggersGetResponses = {
-    /**
-     * Response List Triggers V1 Triggers  Get
-     *
-     * Successful Response
-     */
-    200: Array<TriggerResponse>;
-};
-export type ListTriggersV1TriggersGetResponse = ListTriggersV1TriggersGetResponses[keyof ListTriggersV1TriggersGetResponses];
-export type CreateTriggerV1TriggersPostData = {
-    body: TriggerCreate;
-    path?: never;
-    query?: never;
-    url: '/v1/triggers/';
-};
-export type CreateTriggerV1TriggersPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateTriggerV1TriggersPostError = CreateTriggerV1TriggersPostErrors[keyof CreateTriggerV1TriggersPostErrors];
-export type CreateTriggerV1TriggersPostResponses = {
+export type ListAuditLogsV1AuditLogsGetError = ListAuditLogsV1AuditLogsGetErrors[keyof ListAuditLogsV1AuditLogsGetErrors];
+export type ListAuditLogsV1AuditLogsGetResponses = {
     /**
      * Successful Response
      */
-    201: TriggerResponse;
+    200: AuditLogListResponse;
 };
-export type CreateTriggerV1TriggersPostResponse = CreateTriggerV1TriggersPostResponses[keyof CreateTriggerV1TriggersPostResponses];
-export type TriggersHealthCheckV1TriggersHealthGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/triggers/health';
-};
-export type TriggersHealthCheckV1TriggersHealthGetResponses = {
-    /**
-     * Response Triggers Health Check V1 Triggers Health Get
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: unknown;
-    };
-};
-export type TriggersHealthCheckV1TriggersHealthGetResponse = TriggersHealthCheckV1TriggersHealthGetResponses[keyof TriggersHealthCheckV1TriggersHealthGetResponses];
-export type DeleteTriggerV1TriggersTriggerIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Trigger Id
-         */
-        trigger_id: string;
-    };
-    query?: never;
-    url: '/v1/triggers/{trigger_id}';
-};
-export type DeleteTriggerV1TriggersTriggerIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type DeleteTriggerV1TriggersTriggerIdDeleteError = DeleteTriggerV1TriggersTriggerIdDeleteErrors[keyof DeleteTriggerV1TriggersTriggerIdDeleteErrors];
-export type DeleteTriggerV1TriggersTriggerIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-export type DeleteTriggerV1TriggersTriggerIdDeleteResponse = DeleteTriggerV1TriggersTriggerIdDeleteResponses[keyof DeleteTriggerV1TriggersTriggerIdDeleteResponses];
-export type GetTriggerV1TriggersTriggerIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Trigger Id
-         */
-        trigger_id: string;
-    };
-    query?: never;
-    url: '/v1/triggers/{trigger_id}';
-};
-export type GetTriggerV1TriggersTriggerIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetTriggerV1TriggersTriggerIdGetError = GetTriggerV1TriggersTriggerIdGetErrors[keyof GetTriggerV1TriggersTriggerIdGetErrors];
-export type GetTriggerV1TriggersTriggerIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: TriggerResponse;
-};
-export type GetTriggerV1TriggersTriggerIdGetResponse = GetTriggerV1TriggersTriggerIdGetResponses[keyof GetTriggerV1TriggersTriggerIdGetResponses];
-export type UpdateTriggerV1TriggersTriggerIdPutData = {
-    body: TriggerUpdate;
-    path: {
-        /**
-         * Trigger Id
-         */
-        trigger_id: string;
-    };
-    query?: never;
-    url: '/v1/triggers/{trigger_id}';
-};
-export type UpdateTriggerV1TriggersTriggerIdPutErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UpdateTriggerV1TriggersTriggerIdPutError = UpdateTriggerV1TriggersTriggerIdPutErrors[keyof UpdateTriggerV1TriggersTriggerIdPutErrors];
-export type UpdateTriggerV1TriggersTriggerIdPutResponses = {
-    /**
-     * Successful Response
-     */
-    200: TriggerResponse;
-};
-export type UpdateTriggerV1TriggersTriggerIdPutResponse = UpdateTriggerV1TriggersTriggerIdPutResponses[keyof UpdateTriggerV1TriggersTriggerIdPutResponses];
-export type EnableTriggerV1TriggersTriggerIdEnablePostData = {
-    body?: never;
-    path: {
-        /**
-         * Trigger Id
-         */
-        trigger_id: string;
-    };
-    query?: never;
-    url: '/v1/triggers/{trigger_id}/enable';
-};
-export type EnableTriggerV1TriggersTriggerIdEnablePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type EnableTriggerV1TriggersTriggerIdEnablePostError = EnableTriggerV1TriggersTriggerIdEnablePostErrors[keyof EnableTriggerV1TriggersTriggerIdEnablePostErrors];
-export type EnableTriggerV1TriggersTriggerIdEnablePostResponses = {
-    /**
-     * Response Enable Trigger V1 Triggers  Trigger Id  Enable Post
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: unknown;
-    };
-};
-export type EnableTriggerV1TriggersTriggerIdEnablePostResponse = EnableTriggerV1TriggersTriggerIdEnablePostResponses[keyof EnableTriggerV1TriggersTriggerIdEnablePostResponses];
-export type DisableTriggerV1TriggersTriggerIdDisablePostData = {
-    body?: never;
-    path: {
-        /**
-         * Trigger Id
-         */
-        trigger_id: string;
-    };
-    query?: never;
-    url: '/v1/triggers/{trigger_id}/disable';
-};
-export type DisableTriggerV1TriggersTriggerIdDisablePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type DisableTriggerV1TriggersTriggerIdDisablePostError = DisableTriggerV1TriggersTriggerIdDisablePostErrors[keyof DisableTriggerV1TriggersTriggerIdDisablePostErrors];
-export type DisableTriggerV1TriggersTriggerIdDisablePostResponses = {
-    /**
-     * Response Disable Trigger V1 Triggers  Trigger Id  Disable Post
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: unknown;
-    };
-};
-export type DisableTriggerV1TriggersTriggerIdDisablePostResponse = DisableTriggerV1TriggersTriggerIdDisablePostResponses[keyof DisableTriggerV1TriggersTriggerIdDisablePostResponses];
-export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetData = {
-    body?: never;
-    path: {
-        /**
-         * Trigger Id
-         */
-        trigger_id: string;
-    };
-    query?: {
-        /**
-         * Page
-         *
-         * Page number
-         */
-        page?: number;
-        /**
-         * Page Size
-         *
-         * Number of executions per page
-         */
-        page_size?: number;
-        /**
-         * Status
-         *
-         * Filter by execution status (success, failed, timeout)
-         */
-        status?: string | null;
-        /**
-         * Start Time
-         *
-         * Filter executions after this time
-         */
-        start_time?: string | null;
-        /**
-         * End Time
-         *
-         * Filter executions before this time
-         */
-        end_time?: string | null;
-    };
-    url: '/v1/triggers/{trigger_id}/executions';
-};
-export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetError = GetExecutionHistoryV1TriggersTriggerIdExecutionsGetErrors[keyof GetExecutionHistoryV1TriggersTriggerIdExecutionsGetErrors];
-export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: ExecutionHistoryResponse;
-};
-export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetResponse = GetExecutionHistoryV1TriggersTriggerIdExecutionsGetResponses[keyof GetExecutionHistoryV1TriggersTriggerIdExecutionsGetResponses];
-export type GetTriggerStatusV1TriggersTriggerIdStatusGetData = {
-    body?: never;
-    path: {
-        /**
-         * Trigger Id
-         */
-        trigger_id: string;
-    };
-    query?: never;
-    url: '/v1/triggers/{trigger_id}/status';
-};
-export type GetTriggerStatusV1TriggersTriggerIdStatusGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetTriggerStatusV1TriggersTriggerIdStatusGetError = GetTriggerStatusV1TriggersTriggerIdStatusGetErrors[keyof GetTriggerStatusV1TriggersTriggerIdStatusGetErrors];
-export type GetTriggerStatusV1TriggersTriggerIdStatusGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: TriggerStatusResponse;
-};
-export type GetTriggerStatusV1TriggersTriggerIdStatusGetResponse = GetTriggerStatusV1TriggersTriggerIdStatusGetResponses[keyof GetTriggerStatusV1TriggersTriggerIdStatusGetResponses];
-export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetData = {
-    body?: never;
-    path: {
-        /**
-         * Trigger Id
-         */
-        trigger_id: string;
-    };
-    query?: {
-        /**
-         * Hours
-         *
-         * Time period in hours (max 7 days)
-         */
-        hours?: number;
-    };
-    url: '/v1/triggers/{trigger_id}/metrics';
-};
-export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetError = GetExecutionMetricsV1TriggersTriggerIdMetricsGetErrors[keyof GetExecutionMetricsV1TriggersTriggerIdMetricsGetErrors];
-export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: ExecutionMetricsResponse;
-};
-export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponse = GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses[keyof GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses];
-export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetData = {
-    body?: never;
-    path: {
-        /**
-         * Trigger Id
-         */
-        trigger_id: string;
-    };
-    query?: {
-        /**
-         * Hours
-         *
-         * Time period in hours (max 7 days)
-         */
-        hours?: number;
-        /**
-         * Bucket Size Minutes
-         *
-         * Time bucket size in minutes
-         */
-        bucket_size_minutes?: number;
-    };
-    url: '/v1/triggers/{trigger_id}/timeline';
-};
-export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetError = GetExecutionTimelineV1TriggersTriggerIdTimelineGetErrors[keyof GetExecutionTimelineV1TriggersTriggerIdTimelineGetErrors];
-export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: ExecutionTimelineResponse;
-};
-export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponse = GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses[keyof GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses];
-export type GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetData = {
-    body?: never;
-    path: {
-        /**
-         * Trigger Id
-         */
-        trigger_id: string;
-    };
-    query?: {
-        /**
-         * Page
-         *
-         * Page number
-         */
-        page?: number;
-        /**
-         * Page Size
-         *
-         * Number of executions per page
-         */
-        page_size?: number;
-    };
-    url: '/v1/triggers/{trigger_id}/correlations';
-};
-export type GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetError = GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetErrors[keyof GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetErrors];
-export type GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: ExecutionCorrelationResponse;
-};
-export type GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponse = GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponses[keyof GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponses];
-export type ImportWorkspaceConfigV1WorkspaceImportPostData = {
-    body: ImportRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/workspace/import';
-};
-export type ImportWorkspaceConfigV1WorkspaceImportPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ImportWorkspaceConfigV1WorkspaceImportPostError = ImportWorkspaceConfigV1WorkspaceImportPostErrors[keyof ImportWorkspaceConfigV1WorkspaceImportPostErrors];
-export type ImportWorkspaceConfigV1WorkspaceImportPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ImportResult;
-};
-export type ImportWorkspaceConfigV1WorkspaceImportPostResponse = ImportWorkspaceConfigV1WorkspaceImportPostResponses[keyof ImportWorkspaceConfigV1WorkspaceImportPostResponses];
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostData = {
-    body: BodyImportWorkspaceConfigFileV1WorkspaceImportFilePost;
-    path?: never;
-    query?: {
-        /**
-         * Skip Missing Dependencies
-         *
-         * Skip resources with missing dependencies
-         */
-        skip_missing_dependencies?: boolean;
-        /**
-         * Override Existing
-         *
-         * Override existing resources with same name
-         */
-        override_existing?: boolean;
-    };
-    url: '/v1/workspace/import/file';
-};
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostError = ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors[keyof ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors];
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ImportResult;
-};
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponse = ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses[keyof ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses];
-export type ExportWorkspaceConfigV1WorkspaceExportGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/workspace/export';
-};
-export type ExportWorkspaceConfigV1WorkspaceExportGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-export type ExportWorkspaceConfigV1WorkspaceExportGetResponse = ExportWorkspaceConfigV1WorkspaceExportGetResponses[keyof ExportWorkspaceConfigV1WorkspaceExportGetResponses];
-export type ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace Id
-         */
-        workspace_id: string;
-    };
-    query?: never;
-    url: '/v1/workspaces/{workspace_id}/invitations';
-};
-export type ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetError = ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetErrors[keyof ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetErrors];
-export type ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponses = {
-    /**
-     * Response List Invitations V1 Workspaces  Workspace Id  Invitations Get
-     *
-     * Successful Response
-     */
-    200: Array<InvitationResponse>;
-};
-export type ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponse = ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponses[keyof ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponses];
-export type CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostData = {
-    body: CreateInvitationBody;
-    path: {
-        /**
-         * Workspace Id
-         */
-        workspace_id: string;
-    };
-    query?: never;
-    url: '/v1/workspaces/{workspace_id}/invitations';
-};
-export type CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostError = CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostErrors[keyof CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostErrors];
-export type CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponses = {
-    /**
-     * Successful Response
-     */
-    201: InvitationCreatedResponse;
-};
-export type CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponse = CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponses[keyof CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponses];
-export type RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace Id
-         */
-        workspace_id: string;
-        /**
-         * Invitation Id
-         */
-        invitation_id: string;
-    };
-    query?: never;
-    url: '/v1/workspaces/{workspace_id}/invitations/{invitation_id}';
-};
-export type RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteError = RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteErrors[keyof RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteErrors];
-export type RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-export type RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponse = RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponses[keyof RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponses];
-export type AcceptInvitationV1InvitationsAcceptPostData = {
-    body: AcceptInvitationBody;
-    path?: never;
-    query?: never;
-    url: '/v1/invitations/accept';
-};
-export type AcceptInvitationV1InvitationsAcceptPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type AcceptInvitationV1InvitationsAcceptPostError = AcceptInvitationV1InvitationsAcceptPostErrors[keyof AcceptInvitationV1InvitationsAcceptPostErrors];
-export type AcceptInvitationV1InvitationsAcceptPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: AcceptInvitationResponse;
-};
-export type AcceptInvitationV1InvitationsAcceptPostResponse = AcceptInvitationV1InvitationsAcceptPostResponses[keyof AcceptInvitationV1InvitationsAcceptPostResponses];
-export type ListMembersV1WorkspacesWorkspaceIdMembersGetData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace Id
-         */
-        workspace_id: string;
-    };
-    query?: never;
-    url: '/v1/workspaces/{workspace_id}/members';
-};
-export type ListMembersV1WorkspacesWorkspaceIdMembersGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListMembersV1WorkspacesWorkspaceIdMembersGetError = ListMembersV1WorkspacesWorkspaceIdMembersGetErrors[keyof ListMembersV1WorkspacesWorkspaceIdMembersGetErrors];
-export type ListMembersV1WorkspacesWorkspaceIdMembersGetResponses = {
-    /**
-     * Response List Members V1 Workspaces  Workspace Id  Members Get
-     *
-     * Successful Response
-     */
-    200: Array<MemberResponse>;
-};
-export type ListMembersV1WorkspacesWorkspaceIdMembersGetResponse = ListMembersV1WorkspacesWorkspaceIdMembersGetResponses[keyof ListMembersV1WorkspacesWorkspaceIdMembersGetResponses];
-export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace Id
-         */
-        workspace_id: string;
-        /**
-         * User Id
-         */
-        user_id: string;
-    };
-    query?: never;
-    url: '/v1/workspaces/{workspace_id}/members/{user_id}';
-};
-export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteError = RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors[keyof RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors];
-export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponse = RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses[keyof RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses];
-export type ListWorkspacesV1WorkspacesGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/workspaces';
-};
-export type ListWorkspacesV1WorkspacesGetResponses = {
-    /**
-     * Response List Workspaces V1 Workspaces Get
-     *
-     * Successful Response
-     */
-    200: Array<WorkspaceResponse>;
-};
-export type ListWorkspacesV1WorkspacesGetResponse = ListWorkspacesV1WorkspacesGetResponses[keyof ListWorkspacesV1WorkspacesGetResponses];
-export type CreateWorkspaceV1WorkspacesPostData = {
-    body: CreateWorkspaceBody;
-    path?: never;
-    query?: never;
-    url: '/v1/workspaces';
-};
-export type CreateWorkspaceV1WorkspacesPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateWorkspaceV1WorkspacesPostError = CreateWorkspaceV1WorkspacesPostErrors[keyof CreateWorkspaceV1WorkspacesPostErrors];
-export type CreateWorkspaceV1WorkspacesPostResponses = {
-    /**
-     * Successful Response
-     */
-    201: WorkspaceResponse;
-};
-export type CreateWorkspaceV1WorkspacesPostResponse = CreateWorkspaceV1WorkspacesPostResponses[keyof CreateWorkspaceV1WorkspacesPostResponses];
-export type ListSkillsV1SkillsGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Source Type
-         *
-         * Filter by source type
-         */
-        source_type?: string | null;
-        /**
-         * Network Scope
-         *
-         * Filter by network scope
-         */
-        network_scope?: string | null;
-        /**
-         * From Registry
-         *
-         * Filter registry-created skills
-         */
-        from_registry?: boolean | null;
-        /**
-         * Page
-         */
-        page?: number;
-        /**
-         * Page Size
-         */
-        page_size?: number;
-        /**
-         * Search
-         */
-        search?: string | null;
-    };
-    url: '/v1/skills';
-};
-export type ListSkillsV1SkillsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListSkillsV1SkillsGetError = ListSkillsV1SkillsGetErrors[keyof ListSkillsV1SkillsGetErrors];
-export type ListSkillsV1SkillsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: PaginatedResponseSkillResponse;
-};
-export type ListSkillsV1SkillsGetResponse = ListSkillsV1SkillsGetResponses[keyof ListSkillsV1SkillsGetResponses];
-export type CreateSkillV1SkillsPostData = {
-    body: SkillCreateRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/skills';
-};
-export type CreateSkillV1SkillsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateSkillV1SkillsPostError = CreateSkillV1SkillsPostErrors[keyof CreateSkillV1SkillsPostErrors];
-export type CreateSkillV1SkillsPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: SkillResponse;
-};
-export type CreateSkillV1SkillsPostResponse = CreateSkillV1SkillsPostResponses[keyof CreateSkillV1SkillsPostResponses];
-export type UploadSkillV1SkillsUploadPostData = {
-    body: BodyUploadSkillV1SkillsUploadPost;
-    path?: never;
-    query?: {
-        /**
-         * Name
-         */
-        name?: string | null;
-        /**
-         * Description
-         */
-        description?: string | null;
-    };
-    url: '/v1/skills/upload';
-};
-export type UploadSkillV1SkillsUploadPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UploadSkillV1SkillsUploadPostError = UploadSkillV1SkillsUploadPostErrors[keyof UploadSkillV1SkillsUploadPostErrors];
-export type UploadSkillV1SkillsUploadPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: SkillResponse;
-};
-export type UploadSkillV1SkillsUploadPostResponse = UploadSkillV1SkillsUploadPostResponses[keyof UploadSkillV1SkillsUploadPostResponses];
-export type DeleteSkillV1SkillsSkillIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-    };
-    query?: never;
-    url: '/v1/skills/{skill_id}';
-};
-export type DeleteSkillV1SkillsSkillIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type DeleteSkillV1SkillsSkillIdDeleteError = DeleteSkillV1SkillsSkillIdDeleteErrors[keyof DeleteSkillV1SkillsSkillIdDeleteErrors];
-export type DeleteSkillV1SkillsSkillIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type GetSkillV1SkillsSkillIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-    };
-    query?: never;
-    url: '/v1/skills/{skill_id}';
-};
-export type GetSkillV1SkillsSkillIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetSkillV1SkillsSkillIdGetError = GetSkillV1SkillsSkillIdGetErrors[keyof GetSkillV1SkillsSkillIdGetErrors];
-export type GetSkillV1SkillsSkillIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: SkillResponse;
-};
-export type GetSkillV1SkillsSkillIdGetResponse = GetSkillV1SkillsSkillIdGetResponses[keyof GetSkillV1SkillsSkillIdGetResponses];
-export type UpdateSkillV1SkillsSkillIdPutData = {
-    body: SkillUpdateRequest;
-    path: {
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-    };
-    query?: never;
-    url: '/v1/skills/{skill_id}';
-};
-export type UpdateSkillV1SkillsSkillIdPutErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UpdateSkillV1SkillsSkillIdPutError = UpdateSkillV1SkillsSkillIdPutErrors[keyof UpdateSkillV1SkillsSkillIdPutErrors];
-export type UpdateSkillV1SkillsSkillIdPutResponses = {
-    /**
-     * Successful Response
-     */
-    200: SkillResponse;
-};
-export type UpdateSkillV1SkillsSkillIdPutResponse = UpdateSkillV1SkillsSkillIdPutResponses[keyof UpdateSkillV1SkillsSkillIdPutResponses];
-export type InstallSkillV1SkillsSkillIdInstallPostData = {
-    body?: never;
-    path: {
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-    };
-    query?: never;
-    url: '/v1/skills/{skill_id}/install';
-};
-export type InstallSkillV1SkillsSkillIdInstallPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type InstallSkillV1SkillsSkillIdInstallPostError = InstallSkillV1SkillsSkillIdInstallPostErrors[keyof InstallSkillV1SkillsSkillIdInstallPostErrors];
-export type InstallSkillV1SkillsSkillIdInstallPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: SkillResponse;
-};
-export type InstallSkillV1SkillsSkillIdInstallPostResponse = InstallSkillV1SkillsSkillIdInstallPostResponses[keyof InstallSkillV1SkillsSkillIdInstallPostResponses];
-export type GetSkillContentV1SkillsSkillIdContentGetData = {
-    body?: never;
-    path: {
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-    };
-    query?: never;
-    url: '/v1/skills/{skill_id}/content';
-};
-export type GetSkillContentV1SkillsSkillIdContentGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetSkillContentV1SkillsSkillIdContentGetError = GetSkillContentV1SkillsSkillIdContentGetErrors[keyof GetSkillContentV1SkillsSkillIdContentGetErrors];
-export type GetSkillContentV1SkillsSkillIdContentGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: SkillContentResponse;
-};
-export type GetSkillContentV1SkillsSkillIdContentGetResponse = GetSkillContentV1SkillsSkillIdContentGetResponses[keyof GetSkillContentV1SkillsSkillIdContentGetResponses];
-export type ListSkillFilesV1SkillsSkillIdFilesGetData = {
-    body?: never;
-    path: {
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-    };
-    query?: {
-        /**
-         * Include Urls
-         */
-        include_urls?: boolean;
-    };
-    url: '/v1/skills/{skill_id}/files';
-};
-export type ListSkillFilesV1SkillsSkillIdFilesGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListSkillFilesV1SkillsSkillIdFilesGetError = ListSkillFilesV1SkillsSkillIdFilesGetErrors[keyof ListSkillFilesV1SkillsSkillIdFilesGetErrors];
-export type ListSkillFilesV1SkillsSkillIdFilesGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: SkillFilesResponse;
-};
-export type ListSkillFilesV1SkillsSkillIdFilesGetResponse = ListSkillFilesV1SkillsSkillIdFilesGetResponses[keyof ListSkillFilesV1SkillsSkillIdFilesGetResponses];
-export type GetSkillFileV1SkillsSkillIdFilesPathGetData = {
-    body?: never;
-    path: {
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-        /**
-         * Path
-         */
-        path: string;
-    };
-    query?: {
-        /**
-         * Redirect
-         */
-        redirect?: boolean;
-    };
-    url: '/v1/skills/{skill_id}/files/{path}';
-};
-export type GetSkillFileV1SkillsSkillIdFilesPathGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetSkillFileV1SkillsSkillIdFilesPathGetError = GetSkillFileV1SkillsSkillIdFilesPathGetErrors[keyof GetSkillFileV1SkillsSkillIdFilesPathGetErrors];
-export type GetSkillFileV1SkillsSkillIdFilesPathGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type ListSkillMembersV1SkillsSkillIdMembersGetData = {
-    body?: never;
-    path: {
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-    };
-    query?: never;
-    url: '/v1/skills/{skill_id}/members';
-};
-export type ListSkillMembersV1SkillsSkillIdMembersGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListSkillMembersV1SkillsSkillIdMembersGetError = ListSkillMembersV1SkillsSkillIdMembersGetErrors[keyof ListSkillMembersV1SkillsSkillIdMembersGetErrors];
-export type ListSkillMembersV1SkillsSkillIdMembersGetResponses = {
-    /**
-     * Response List Skill Members V1 Skills  Skill Id  Members Get
-     *
-     * Successful Response
-     */
-    200: Array<SkillMemberResponse>;
-};
-export type ListSkillMembersV1SkillsSkillIdMembersGetResponse = ListSkillMembersV1SkillsSkillIdMembersGetResponses[keyof ListSkillMembersV1SkillsSkillIdMembersGetResponses];
-export type AddSkillMemberV1SkillsSkillIdMembersPostData = {
-    body: SkillMemberAddRequest;
-    path: {
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-    };
-    query?: never;
-    url: '/v1/skills/{skill_id}/members';
-};
-export type AddSkillMemberV1SkillsSkillIdMembersPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type AddSkillMemberV1SkillsSkillIdMembersPostError = AddSkillMemberV1SkillsSkillIdMembersPostErrors[keyof AddSkillMemberV1SkillsSkillIdMembersPostErrors];
-export type AddSkillMemberV1SkillsSkillIdMembersPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: SkillMemberResponse;
-};
-export type AddSkillMemberV1SkillsSkillIdMembersPostResponse = AddSkillMemberV1SkillsSkillIdMembersPostResponses[keyof AddSkillMemberV1SkillsSkillIdMembersPostResponses];
-export type RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-        /**
-         * Child Skill Id
-         */
-        child_skill_id: string;
-    };
-    query?: never;
-    url: '/v1/skills/{skill_id}/members/{child_skill_id}';
-};
-export type RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteError = RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteErrors[keyof RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteErrors];
-export type RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type FlattenSkillMembersV1SkillsSkillIdFlattenGetData = {
-    body?: never;
-    path: {
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-    };
-    query?: never;
-    url: '/v1/skills/{skill_id}/flatten';
-};
-export type FlattenSkillMembersV1SkillsSkillIdFlattenGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type FlattenSkillMembersV1SkillsSkillIdFlattenGetError = FlattenSkillMembersV1SkillsSkillIdFlattenGetErrors[keyof FlattenSkillMembersV1SkillsSkillIdFlattenGetErrors];
-export type FlattenSkillMembersV1SkillsSkillIdFlattenGetResponses = {
-    /**
-     * Response Flatten Skill Members V1 Skills  Skill Id  Flatten Get
-     *
-     * Successful Response
-     */
-    200: Array<string>;
-};
-export type FlattenSkillMembersV1SkillsSkillIdFlattenGetResponse = FlattenSkillMembersV1SkillsSkillIdFlattenGetResponses[keyof FlattenSkillMembersV1SkillsSkillIdFlattenGetResponses];
+export type ListAuditLogsV1AuditLogsGetResponse = ListAuditLogsV1AuditLogsGetResponses[keyof ListAuditLogsV1AuditLogsGetResponses];
 export type AnalyzeBundleV1BundlesAnalyzePostData = {
     body: AnalyzeRequest;
     path?: never;
@@ -10543,378 +8202,497 @@ export type InstallBundleV1BundlesInstallPostResponses = {
     200: InstallResult;
 };
 export type InstallBundleV1BundlesInstallPostResponse = InstallBundleV1BundlesInstallPostResponses[keyof InstallBundleV1BundlesInstallPostResponses];
-export type ListCollectionsV1SkillCollectionsGetData = {
+export type ListClientsV1ClientsGetData = {
     body?: never;
     path?: never;
-    query?: never;
-    url: '/v1/skill-collections/';
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/v1/clients/';
 };
-export type ListCollectionsV1SkillCollectionsGetResponses = {
+export type ListClientsV1ClientsGetErrors = {
     /**
-     * Response List Collections V1 Skill Collections  Get
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListClientsV1ClientsGetError = ListClientsV1ClientsGetErrors[keyof ListClientsV1ClientsGetErrors];
+export type ListClientsV1ClientsGetResponses = {
+    /**
+     * Response List Clients V1 Clients  Get
      *
      * Successful Response
      */
-    200: Array<CollectionSummaryResponse>;
+    200: Array<ClientResponse>;
 };
-export type ListCollectionsV1SkillCollectionsGetResponse = ListCollectionsV1SkillCollectionsGetResponses[keyof ListCollectionsV1SkillCollectionsGetResponses];
-export type CreateCollectionV1SkillCollectionsPostData = {
-    body: CollectionCreateRequest;
+export type ListClientsV1ClientsGetResponse = ListClientsV1ClientsGetResponses[keyof ListClientsV1ClientsGetResponses];
+export type CreateClientV1ClientsPostData = {
+    body: ClientCreate;
     path?: never;
     query?: never;
-    url: '/v1/skill-collections/';
+    url: '/v1/clients/';
 };
-export type CreateCollectionV1SkillCollectionsPostErrors = {
+export type CreateClientV1ClientsPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type CreateCollectionV1SkillCollectionsPostError = CreateCollectionV1SkillCollectionsPostErrors[keyof CreateCollectionV1SkillCollectionsPostErrors];
-export type CreateCollectionV1SkillCollectionsPostResponses = {
+export type CreateClientV1ClientsPostError = CreateClientV1ClientsPostErrors[keyof CreateClientV1ClientsPostErrors];
+export type CreateClientV1ClientsPostResponses = {
     /**
      * Successful Response
      */
-    201: CollectionSummaryResponse;
+    201: ClientResponse;
 };
-export type CreateCollectionV1SkillCollectionsPostResponse = CreateCollectionV1SkillCollectionsPostResponses[keyof CreateCollectionV1SkillCollectionsPostResponses];
-export type DeleteCollectionV1SkillCollectionsCollectionIdDeleteData = {
+export type CreateClientV1ClientsPostResponse = CreateClientV1ClientsPostResponses[keyof CreateClientV1ClientsPostResponses];
+export type DeleteClientV1ClientsClientIdDeleteData = {
     body?: never;
     path: {
         /**
-         * Collection Id
+         * Client Id
          */
-        collection_id: string;
+        client_id: string;
     };
     query?: never;
-    url: '/v1/skill-collections/{collection_id}';
+    url: '/v1/clients/{client_id}';
 };
-export type DeleteCollectionV1SkillCollectionsCollectionIdDeleteErrors = {
+export type DeleteClientV1ClientsClientIdDeleteErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type DeleteCollectionV1SkillCollectionsCollectionIdDeleteError = DeleteCollectionV1SkillCollectionsCollectionIdDeleteErrors[keyof DeleteCollectionV1SkillCollectionsCollectionIdDeleteErrors];
-export type DeleteCollectionV1SkillCollectionsCollectionIdDeleteResponses = {
+export type DeleteClientV1ClientsClientIdDeleteError = DeleteClientV1ClientsClientIdDeleteErrors[keyof DeleteClientV1ClientsClientIdDeleteErrors];
+export type DeleteClientV1ClientsClientIdDeleteResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
-export type DeleteCollectionV1SkillCollectionsCollectionIdDeleteResponse = DeleteCollectionV1SkillCollectionsCollectionIdDeleteResponses[keyof DeleteCollectionV1SkillCollectionsCollectionIdDeleteResponses];
-export type GetCollectionV1SkillCollectionsCollectionIdGetData = {
+export type DeleteClientV1ClientsClientIdDeleteResponse = DeleteClientV1ClientsClientIdDeleteResponses[keyof DeleteClientV1ClientsClientIdDeleteResponses];
+export type GetClientV1ClientsClientIdGetData = {
     body?: never;
     path: {
         /**
-         * Collection Id
+         * Client Id
          */
-        collection_id: string;
+        client_id: string;
     };
     query?: never;
-    url: '/v1/skill-collections/{collection_id}';
+    url: '/v1/clients/{client_id}';
 };
-export type GetCollectionV1SkillCollectionsCollectionIdGetErrors = {
+export type GetClientV1ClientsClientIdGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type GetCollectionV1SkillCollectionsCollectionIdGetError = GetCollectionV1SkillCollectionsCollectionIdGetErrors[keyof GetCollectionV1SkillCollectionsCollectionIdGetErrors];
-export type GetCollectionV1SkillCollectionsCollectionIdGetResponses = {
+export type GetClientV1ClientsClientIdGetError = GetClientV1ClientsClientIdGetErrors[keyof GetClientV1ClientsClientIdGetErrors];
+export type GetClientV1ClientsClientIdGetResponses = {
     /**
      * Successful Response
      */
-    200: CollectionDetailResponse;
+    200: ClientResponse;
 };
-export type GetCollectionV1SkillCollectionsCollectionIdGetResponse = GetCollectionV1SkillCollectionsCollectionIdGetResponses[keyof GetCollectionV1SkillCollectionsCollectionIdGetResponses];
-export type UpdateCollectionV1SkillCollectionsCollectionIdPutData = {
-    body: CollectionUpdateRequest;
+export type GetClientV1ClientsClientIdGetResponse = GetClientV1ClientsClientIdGetResponses[keyof GetClientV1ClientsClientIdGetResponses];
+export type UpdateClientV1ClientsClientIdPatchData = {
+    body: ClientUpdate;
     path: {
         /**
-         * Collection Id
+         * Client Id
          */
-        collection_id: string;
+        client_id: string;
     };
     query?: never;
-    url: '/v1/skill-collections/{collection_id}';
+    url: '/v1/clients/{client_id}';
 };
-export type UpdateCollectionV1SkillCollectionsCollectionIdPutErrors = {
+export type UpdateClientV1ClientsClientIdPatchErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type UpdateCollectionV1SkillCollectionsCollectionIdPutError = UpdateCollectionV1SkillCollectionsCollectionIdPutErrors[keyof UpdateCollectionV1SkillCollectionsCollectionIdPutErrors];
-export type UpdateCollectionV1SkillCollectionsCollectionIdPutResponses = {
+export type UpdateClientV1ClientsClientIdPatchError = UpdateClientV1ClientsClientIdPatchErrors[keyof UpdateClientV1ClientsClientIdPatchErrors];
+export type UpdateClientV1ClientsClientIdPatchResponses = {
     /**
      * Successful Response
      */
-    200: CollectionSummaryResponse;
+    200: ClientResponse;
 };
-export type UpdateCollectionV1SkillCollectionsCollectionIdPutResponse = UpdateCollectionV1SkillCollectionsCollectionIdPutResponses[keyof UpdateCollectionV1SkillCollectionsCollectionIdPutResponses];
-export type AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostData = {
-    body: AddSkillRequest;
+export type UpdateClientV1ClientsClientIdPatchResponse = UpdateClientV1ClientsClientIdPatchResponses[keyof UpdateClientV1ClientsClientIdPatchResponses];
+export type AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostData = {
+    body: McpInstanceAssociationBody;
     path: {
         /**
-         * Collection Id
+         * Client Id
          */
-        collection_id: string;
+        client_id: string;
     };
     query?: never;
-    url: '/v1/skill-collections/{collection_id}/skills';
+    url: '/v1/clients/{client_id}/mcp-instances';
 };
-export type AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostErrors = {
+export type AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostError = AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostErrors[keyof AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostErrors];
-export type AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostResponses = {
+export type AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostError = AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostErrors[keyof AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostErrors];
+export type AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
-export type AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostResponse = AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostResponses[keyof AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostResponses];
-export type RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteData = {
+export type AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponse = AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponses[keyof AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponses];
+export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteData = {
     body?: never;
     path: {
         /**
-         * Collection Id
+         * Client Id
          */
-        collection_id: string;
+        client_id: string;
+        /**
+         * Mcp Instance Id
+         */
+        mcp_instance_id: string;
+    };
+    query?: never;
+    url: '/v1/clients/{client_id}/mcp-instances/{mcp_instance_id}';
+};
+export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteError = RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteErrors[keyof RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteErrors];
+export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse = RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses[keyof RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses];
+export type PullFromProjectV1ClientsClientIdPullFromProjectPostData = {
+    body: SourceProjectBody;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/v1/clients/{client_id}/pull-from-project';
+};
+export type PullFromProjectV1ClientsClientIdPullFromProjectPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type PullFromProjectV1ClientsClientIdPullFromProjectPostError = PullFromProjectV1ClientsClientIdPullFromProjectPostErrors[keyof PullFromProjectV1ClientsClientIdPullFromProjectPostErrors];
+export type PullFromProjectV1ClientsClientIdPullFromProjectPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ClientResponse;
+};
+export type PullFromProjectV1ClientsClientIdPullFromProjectPostResponse = PullFromProjectV1ClientsClientIdPullFromProjectPostResponses[keyof PullFromProjectV1ClientsClientIdPullFromProjectPostResponses];
+export type AddSkillToClientV1ClientsClientIdSkillsPostData = {
+    body: AssociationBody;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/v1/clients/{client_id}/skills';
+};
+export type AddSkillToClientV1ClientsClientIdSkillsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type AddSkillToClientV1ClientsClientIdSkillsPostError = AddSkillToClientV1ClientsClientIdSkillsPostErrors[keyof AddSkillToClientV1ClientsClientIdSkillsPostErrors];
+export type AddSkillToClientV1ClientsClientIdSkillsPostResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type AddSkillToClientV1ClientsClientIdSkillsPostResponse = AddSkillToClientV1ClientsClientIdSkillsPostResponses[keyof AddSkillToClientV1ClientsClientIdSkillsPostResponses];
+export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
         /**
          * Skill Id
          */
         skill_id: string;
     };
     query?: never;
-    url: '/v1/skill-collections/{collection_id}/skills/{skill_id}';
+    url: '/v1/clients/{client_id}/skills/{skill_id}';
 };
-export type RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteErrors = {
+export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteError = RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteErrors[keyof RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteErrors];
-export type RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteResponses = {
+export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteError = RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteErrors[keyof RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteErrors];
+export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
-export type RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteResponse = RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteResponses[keyof RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteResponses];
-export type GetGraphV1AccessControlGraphGetData = {
+export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponse = RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses[keyof RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses];
+export type ListWorkspaceFilesV1FilesGetData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/v1/access-control/graph';
+    url: '/v1/files';
 };
-export type GetGraphV1AccessControlGraphGetResponses = {
+export type ListWorkspaceFilesV1FilesGetResponses = {
     /**
      * Successful Response
      */
-    200: GraphResponse;
+    200: WorkspaceFileListResponse;
 };
-export type GetGraphV1AccessControlGraphGetResponse = GetGraphV1AccessControlGraphGetResponses[keyof GetGraphV1AccessControlGraphGetResponses];
-export type DeleteRelationshipV1AccessControlRelationshipsDeleteData = {
-    body: RelationshipWriteRequest;
+export type ListWorkspaceFilesV1FilesGetResponse = ListWorkspaceFilesV1FilesGetResponses[keyof ListWorkspaceFilesV1FilesGetResponses];
+export type UploadFileV1FilesPostData = {
+    body: BodyUploadFileV1FilesPost;
     path?: never;
     query?: never;
-    url: '/v1/access-control/relationships';
+    url: '/v1/files';
 };
-export type DeleteRelationshipV1AccessControlRelationshipsDeleteErrors = {
+export type UploadFileV1FilesPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type DeleteRelationshipV1AccessControlRelationshipsDeleteError = DeleteRelationshipV1AccessControlRelationshipsDeleteErrors[keyof DeleteRelationshipV1AccessControlRelationshipsDeleteErrors];
-export type DeleteRelationshipV1AccessControlRelationshipsDeleteResponses = {
+export type UploadFileV1FilesPostError = UploadFileV1FilesPostErrors[keyof UploadFileV1FilesPostErrors];
+export type UploadFileV1FilesPostResponses = {
     /**
      * Successful Response
      */
-    204: void;
+    200: unknown;
 };
-export type DeleteRelationshipV1AccessControlRelationshipsDeleteResponse = DeleteRelationshipV1AccessControlRelationshipsDeleteResponses[keyof DeleteRelationshipV1AccessControlRelationshipsDeleteResponses];
-export type ListRelationshipsV1AccessControlRelationshipsGetData = {
+export type StreamWorkspaceFileV1FilesDownloadFilePathGetData = {
+    body?: never;
+    path: {
+        /**
+         * File Path
+         */
+        file_path: string;
+    };
+    query?: never;
+    url: '/v1/files/download/{file_path}';
+};
+export type StreamWorkspaceFileV1FilesDownloadFilePathGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type StreamWorkspaceFileV1FilesDownloadFilePathGetError = StreamWorkspaceFileV1FilesDownloadFilePathGetErrors[keyof StreamWorkspaceFileV1FilesDownloadFilePathGetErrors];
+export type StreamWorkspaceFileV1FilesDownloadFilePathGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type WorkspaceFileHistoryV1FilesHistoryGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Path
+         */
+        path: string;
+    };
+    url: '/v1/files/history';
+};
+export type WorkspaceFileHistoryV1FilesHistoryGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type WorkspaceFileHistoryV1FilesHistoryGetError = WorkspaceFileHistoryV1FilesHistoryGetErrors[keyof WorkspaceFileHistoryV1FilesHistoryGetErrors];
+export type WorkspaceFileHistoryV1FilesHistoryGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ArtifactHistoryResponse;
+};
+export type WorkspaceFileHistoryV1FilesHistoryGetResponse = WorkspaceFileHistoryV1FilesHistoryGetResponses[keyof WorkspaceFileHistoryV1FilesHistoryGetResponses];
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostData = {
+    body: PresignUploadRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/files/upload-url';
+};
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostError = CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors[keyof CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors];
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: PresignUploadResponse;
+};
+export type CreateAttachmentUploadUrlV1FilesUploadUrlPostResponse = CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses[keyof CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses];
+export type DownloadWorkspaceFileV1FilesFilePathGetData = {
+    body?: never;
+    path: {
+        /**
+         * File Path
+         */
+        file_path: string;
+    };
+    query?: never;
+    url: '/v1/files/{file_path}';
+};
+export type DownloadWorkspaceFileV1FilesFilePathGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DownloadWorkspaceFileV1FilesFilePathGetError = DownloadWorkspaceFileV1FilesFilePathGetErrors[keyof DownloadWorkspaceFileV1FilesFilePathGetErrors];
+export type DownloadWorkspaceFileV1FilesFilePathGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: WorkspaceFileDownloadResponse;
+};
+export type DownloadWorkspaceFileV1FilesFilePathGetResponse = DownloadWorkspaceFileV1FilesFilePathGetResponses[keyof DownloadWorkspaceFileV1FilesFilePathGetResponses];
+export type PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostData = {
+    body: EffectivePolicyPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/governance/effective-policy/preview';
+};
+export type PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostError = PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors[keyof PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors];
+export type PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: EffectivePolicyResponse;
+};
+export type PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponse = PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses[keyof PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses];
+export type GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/v1/governance/task-policy-snapshots/{task_id}';
+};
+export type GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetError = GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetErrors[keyof GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetErrors];
+export type GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: EffectivePolicyResponse;
+};
+export type GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetResponse = GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetResponses[keyof GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetResponses];
+export type GetInboxItemsV1InboxGetData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Namespace
+         * Status
+         *
+         * Filter to a specific inbox status
          */
-        namespace?: string | null;
+        status?: string | null;
+        /**
+         * Agent Id
+         *
+         * Filter by agent ID
+         */
+        agent_id?: string | null;
+        /**
+         * Page
+         */
+        page?: number;
+        /**
+         * Page Size
+         */
+        page_size?: number;
     };
-    url: '/v1/access-control/relationships';
+    url: '/v1/inbox/';
 };
-export type ListRelationshipsV1AccessControlRelationshipsGetErrors = {
+export type GetInboxItemsV1InboxGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type ListRelationshipsV1AccessControlRelationshipsGetError = ListRelationshipsV1AccessControlRelationshipsGetErrors[keyof ListRelationshipsV1AccessControlRelationshipsGetErrors];
-export type ListRelationshipsV1AccessControlRelationshipsGetResponses = {
+export type GetInboxItemsV1InboxGetError = GetInboxItemsV1InboxGetErrors[keyof GetInboxItemsV1InboxGetErrors];
+export type GetInboxItemsV1InboxGetResponses = {
     /**
      * Successful Response
      */
-    200: RelationshipsResponse;
+    200: InboxResponse;
 };
-export type ListRelationshipsV1AccessControlRelationshipsGetResponse = ListRelationshipsV1AccessControlRelationshipsGetResponses[keyof ListRelationshipsV1AccessControlRelationshipsGetResponses];
-export type CreateRelationshipV1AccessControlRelationshipsPostData = {
-    body: RelationshipWriteRequest;
+export type GetInboxItemsV1InboxGetResponse = GetInboxItemsV1InboxGetResponses[keyof GetInboxItemsV1InboxGetResponses];
+export type AcceptInvitationV1InvitationsAcceptPostData = {
+    body: AcceptInvitationBody;
     path?: never;
     query?: never;
-    url: '/v1/access-control/relationships';
+    url: '/v1/invitations/accept';
 };
-export type CreateRelationshipV1AccessControlRelationshipsPostErrors = {
+export type AcceptInvitationV1InvitationsAcceptPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type CreateRelationshipV1AccessControlRelationshipsPostError = CreateRelationshipV1AccessControlRelationshipsPostErrors[keyof CreateRelationshipV1AccessControlRelationshipsPostErrors];
-export type CreateRelationshipV1AccessControlRelationshipsPostResponses = {
-    /**
-     * Response Create Relationship V1 Access Control Relationships Post
-     *
-     * Successful Response
-     */
-    201: {
-        [key: string]: unknown;
-    };
-};
-export type CreateRelationshipV1AccessControlRelationshipsPostResponse = CreateRelationshipV1AccessControlRelationshipsPostResponses[keyof CreateRelationshipV1AccessControlRelationshipsPostResponses];
-export type CheckPermissionV1AccessControlCheckPostData = {
-    body: CheckRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/access-control/check';
-};
-export type CheckPermissionV1AccessControlCheckPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CheckPermissionV1AccessControlCheckPostError = CheckPermissionV1AccessControlCheckPostErrors[keyof CheckPermissionV1AccessControlCheckPostErrors];
-export type CheckPermissionV1AccessControlCheckPostResponses = {
+export type AcceptInvitationV1InvitationsAcceptPostError = AcceptInvitationV1InvitationsAcceptPostErrors[keyof AcceptInvitationV1InvitationsAcceptPostErrors];
+export type AcceptInvitationV1InvitationsAcceptPostResponses = {
     /**
      * Successful Response
      */
-    200: CheckResponse;
+    200: AcceptInvitationResponse;
 };
-export type CheckPermissionV1AccessControlCheckPostResponse = CheckPermissionV1AccessControlCheckPostResponses[keyof CheckPermissionV1AccessControlCheckPostResponses];
-export type ResolveAccessV1AccessControlResolvePostData = {
-    body: ResolveRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/access-control/resolve';
-};
-export type ResolveAccessV1AccessControlResolvePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ResolveAccessV1AccessControlResolvePostError = ResolveAccessV1AccessControlResolvePostErrors[keyof ResolveAccessV1AccessControlResolvePostErrors];
-export type ResolveAccessV1AccessControlResolvePostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ResolveResponse;
-};
-export type ResolveAccessV1AccessControlResolvePostResponse = ResolveAccessV1AccessControlResolvePostResponses[keyof ResolveAccessV1AccessControlResolvePostResponses];
-export type SyncGrantsV1AccessControlSyncPostData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/access-control/sync';
-};
-export type SyncGrantsV1AccessControlSyncPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: AgentareaApiApiV1AccessControlSyncResponse;
-};
-export type SyncGrantsV1AccessControlSyncPostResponse = SyncGrantsV1AccessControlSyncPostResponses[keyof SyncGrantsV1AccessControlSyncPostResponses];
-export type RevokeToolAccessV1ToolAccessGrantsDeleteData = {
-    body: ToolAccessGrantRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/tool-access/grants';
-};
-export type RevokeToolAccessV1ToolAccessGrantsDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type RevokeToolAccessV1ToolAccessGrantsDeleteError = RevokeToolAccessV1ToolAccessGrantsDeleteErrors[keyof RevokeToolAccessV1ToolAccessGrantsDeleteErrors];
-export type RevokeToolAccessV1ToolAccessGrantsDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-export type RevokeToolAccessV1ToolAccessGrantsDeleteResponse = RevokeToolAccessV1ToolAccessGrantsDeleteResponses[keyof RevokeToolAccessV1ToolAccessGrantsDeleteResponses];
-export type ListToolAccessGrantsV1ToolAccessGrantsGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/tool-access/grants';
-};
-export type ListToolAccessGrantsV1ToolAccessGrantsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: ToolAccessGrantListResponse;
-};
-export type ListToolAccessGrantsV1ToolAccessGrantsGetResponse = ListToolAccessGrantsV1ToolAccessGrantsGetResponses[keyof ListToolAccessGrantsV1ToolAccessGrantsGetResponses];
-export type GrantToolAccessV1ToolAccessGrantsPostData = {
-    body: ToolAccessGrantRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/tool-access/grants';
-};
-export type GrantToolAccessV1ToolAccessGrantsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GrantToolAccessV1ToolAccessGrantsPostError = GrantToolAccessV1ToolAccessGrantsPostErrors[keyof GrantToolAccessV1ToolAccessGrantsPostErrors];
-export type GrantToolAccessV1ToolAccessGrantsPostResponses = {
-    /**
-     * Successful Response
-     */
-    201: ToolAccessGrantResponse;
-};
-export type GrantToolAccessV1ToolAccessGrantsPostResponse = GrantToolAccessV1ToolAccessGrantsPostResponses[keyof GrantToolAccessV1ToolAccessGrantsPostResponses];
-export type CheckToolAccessV1ToolAccessChecksPostData = {
-    body: ToolAccessCheckRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/tool-access/checks';
-};
-export type CheckToolAccessV1ToolAccessChecksPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CheckToolAccessV1ToolAccessChecksPostError = CheckToolAccessV1ToolAccessChecksPostErrors[keyof CheckToolAccessV1ToolAccessChecksPostErrors];
-export type CheckToolAccessV1ToolAccessChecksPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ToolAccessCheckResponse;
-};
-export type CheckToolAccessV1ToolAccessChecksPostResponse = CheckToolAccessV1ToolAccessChecksPostResponses[keyof CheckToolAccessV1ToolAccessChecksPostResponses];
+export type AcceptInvitationV1InvitationsAcceptPostResponse = AcceptInvitationV1InvitationsAcceptPostResponses[keyof AcceptInvitationV1InvitationsAcceptPostResponses];
 export type ListMcpAuthConfigsV1McpAuthConfigsGetData = {
     body?: never;
     path?: never;
@@ -11154,91 +8932,661 @@ export type OauthAuthorizeV1McpOauthAuthorizeGetResponses = {
      */
     200: unknown;
 };
-export type ListApiKeysV1ApiKeysGetData = {
+export type OauthCallbackV1McpOauthCallbackGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Code
+         */
+        code?: string;
+        /**
+         * State
+         */
+        state?: string;
+        /**
+         * Error
+         */
+        error?: string;
+        /**
+         * Error Description
+         */
+        error_description?: string;
+    };
+    url: '/v1/mcp-oauth/callback';
+};
+export type OauthCallbackV1McpOauthCallbackGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthCallbackV1McpOauthCallbackGetError = OauthCallbackV1McpOauthCallbackGetErrors[keyof OauthCallbackV1McpOauthCallbackGetErrors];
+export type OauthCallbackV1McpOauthCallbackGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type ListMcpServerInstancesV1McpServerInstancesGetData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/v1/api-keys/';
+    url: '/v1/mcp-server-instances/';
 };
-export type ListApiKeysV1ApiKeysGetResponses = {
+export type ListMcpServerInstancesV1McpServerInstancesGetResponses = {
     /**
-     * Response List Api Keys V1 Api Keys  Get
+     * Response List Mcp Server Instances V1 Mcp Server Instances  Get
      *
      * Successful Response
      */
-    200: Array<ApiKeyResponse>;
+    200: Array<McpServerInstanceResponse>;
 };
-export type ListApiKeysV1ApiKeysGetResponse = ListApiKeysV1ApiKeysGetResponses[keyof ListApiKeysV1ApiKeysGetResponses];
-export type CreateApiKeyV1ApiKeysPostData = {
-    body: ApiKeyCreateRequest;
+export type ListMcpServerInstancesV1McpServerInstancesGetResponse = ListMcpServerInstancesV1McpServerInstancesGetResponses[keyof ListMcpServerInstancesV1McpServerInstancesGetResponses];
+export type CreateMcpServerInstanceV1McpServerInstancesPostData = {
+    body: McpServerInstanceCreate;
     path?: never;
     query?: never;
-    url: '/v1/api-keys/';
+    url: '/v1/mcp-server-instances/';
 };
-export type CreateApiKeyV1ApiKeysPostErrors = {
+export type CreateMcpServerInstanceV1McpServerInstancesPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type CreateApiKeyV1ApiKeysPostError = CreateApiKeyV1ApiKeysPostErrors[keyof CreateApiKeyV1ApiKeysPostErrors];
-export type CreateApiKeyV1ApiKeysPostResponses = {
+export type CreateMcpServerInstanceV1McpServerInstancesPostError = CreateMcpServerInstanceV1McpServerInstancesPostErrors[keyof CreateMcpServerInstanceV1McpServerInstancesPostErrors];
+export type CreateMcpServerInstanceV1McpServerInstancesPostResponses = {
     /**
      * Successful Response
      */
-    201: ApiKeyCreateResponse;
+    201: McpServerInstanceResponse;
 };
-export type CreateApiKeyV1ApiKeysPostResponse = CreateApiKeyV1ApiKeysPostResponses[keyof CreateApiKeyV1ApiKeysPostResponses];
-export type RevokeApiKeyV1ApiKeysTokenIdDeleteData = {
+export type CreateMcpServerInstanceV1McpServerInstancesPostResponse = CreateMcpServerInstanceV1McpServerInstancesPostResponses[keyof CreateMcpServerInstanceV1McpServerInstancesPostResponses];
+export type CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostData = {
+    /**
+     * Data
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/mcp-server-instances/check';
+};
+export type CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostError = CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErrors[keyof CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostErrors];
+export type CheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type GetContainersHealthV1McpServerInstancesHealthContainersGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/mcp-server-instances/health/containers';
+};
+export type GetContainersHealthV1McpServerInstancesHealthContainersGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type ValidateInstanceSpecV1McpServerInstancesValidatePostData = {
+    body: ValidateRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/mcp-server-instances/validate';
+};
+export type ValidateInstanceSpecV1McpServerInstancesValidatePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ValidateInstanceSpecV1McpServerInstancesValidatePostError = ValidateInstanceSpecV1McpServerInstancesValidatePostErrors[keyof ValidateInstanceSpecV1McpServerInstancesValidatePostErrors];
+export type ValidateInstanceSpecV1McpServerInstancesValidatePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type ValidateConnectionV1McpServerInstancesValidateConnectionPostData = {
+    /**
+     * Data
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/mcp-server-instances/validate-connection';
+};
+export type ValidateConnectionV1McpServerInstancesValidateConnectionPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ValidateConnectionV1McpServerInstancesValidateConnectionPostError = ValidateConnectionV1McpServerInstancesValidateConnectionPostErrors[keyof ValidateConnectionV1McpServerInstancesValidateConnectionPostErrors];
+export type ValidateConnectionV1McpServerInstancesValidateConnectionPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type CreateMcpServerConnectionV1McpServerInstancesWithSpecPostData = {
+    body: McpServerConnectionCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/mcp-server-instances/with-spec';
+};
+export type CreateMcpServerConnectionV1McpServerInstancesWithSpecPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateMcpServerConnectionV1McpServerInstancesWithSpecPostError = CreateMcpServerConnectionV1McpServerInstancesWithSpecPostErrors[keyof CreateMcpServerConnectionV1McpServerInstancesWithSpecPostErrors];
+export type CreateMcpServerConnectionV1McpServerInstancesWithSpecPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: McpServerInstanceResponse;
+};
+export type CreateMcpServerConnectionV1McpServerInstancesWithSpecPostResponse = CreateMcpServerConnectionV1McpServerInstancesWithSpecPostResponses[keyof CreateMcpServerConnectionV1McpServerInstancesWithSpecPostResponses];
+export type DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteData = {
     body?: never;
     path: {
         /**
-         * Token Id
+         * Instance Id
          */
-        token_id: string;
+        instance_id: string;
     };
     query?: never;
-    url: '/v1/api-keys/{token_id}';
+    url: '/v1/mcp-server-instances/{instance_id}';
 };
-export type RevokeApiKeyV1ApiKeysTokenIdDeleteErrors = {
+export type DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type RevokeApiKeyV1ApiKeysTokenIdDeleteError = RevokeApiKeyV1ApiKeysTokenIdDeleteErrors[keyof RevokeApiKeyV1ApiKeysTokenIdDeleteErrors];
-export type RevokeApiKeyV1ApiKeysTokenIdDeleteResponses = {
+export type DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteError = DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteErrors[keyof DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteErrors];
+export type DeleteMcpServerInstanceV1McpServerInstancesInstanceIdDeleteResponses = {
     /**
      * Successful Response
      */
-    204: void;
+    200: unknown;
 };
-export type RevokeApiKeyV1ApiKeysTokenIdDeleteResponse = RevokeApiKeyV1ApiKeysTokenIdDeleteResponses[keyof RevokeApiKeyV1ApiKeysTokenIdDeleteResponses];
-export type GetApiKeyV1ApiKeysTokenIdGetData = {
+export type GetMcpServerInstanceV1McpServerInstancesInstanceIdGetData = {
     body?: never;
     path: {
         /**
-         * Token Id
+         * Instance Id
          */
-        token_id: string;
+        instance_id: string;
     };
     query?: never;
-    url: '/v1/api-keys/{token_id}';
+    url: '/v1/mcp-server-instances/{instance_id}';
 };
-export type GetApiKeyV1ApiKeysTokenIdGetErrors = {
+export type GetMcpServerInstanceV1McpServerInstancesInstanceIdGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type GetApiKeyV1ApiKeysTokenIdGetError = GetApiKeyV1ApiKeysTokenIdGetErrors[keyof GetApiKeyV1ApiKeysTokenIdGetErrors];
-export type GetApiKeyV1ApiKeysTokenIdGetResponses = {
+export type GetMcpServerInstanceV1McpServerInstancesInstanceIdGetError = GetMcpServerInstanceV1McpServerInstancesInstanceIdGetErrors[keyof GetMcpServerInstanceV1McpServerInstancesInstanceIdGetErrors];
+export type GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponses = {
     /**
      * Successful Response
      */
-    200: ApiKeyResponse;
+    200: McpServerInstanceResponse;
 };
-export type GetApiKeyV1ApiKeysTokenIdGetResponse = GetApiKeyV1ApiKeysTokenIdGetResponses[keyof GetApiKeyV1ApiKeysTokenIdGetResponses];
+export type GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponse = GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponses[keyof GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponses];
+export type UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchData = {
+    body: McpServerInstanceUpdate;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-server-instances/{instance_id}';
+};
+export type UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchError = UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchErrors[keyof UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchErrors];
+export type UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpServerInstanceResponse;
+};
+export type UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponse = UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses[keyof UpdateMcpServerInstanceV1McpServerInstancesInstanceIdPatchResponses];
+export type ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetData = {
+    body?: never;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-server-instances/{instance_id}/consumers';
+};
+export type ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetError = ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetErrors[keyof ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetErrors];
+export type ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetResponses = {
+    /**
+     * Response List Mcp Server Instance Consumers V1 Mcp Server Instances  Instance Id  Consumers Get
+     *
+     * Successful Response
+     */
+    200: Array<McpInstanceConsumer>;
+};
+export type ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetResponse = ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetResponses[keyof ListMcpServerInstanceConsumersV1McpServerInstancesInstanceIdConsumersGetResponses];
+export type DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostData = {
+    body?: never;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-server-instances/{instance_id}/discover-tools';
+};
+export type DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostError = DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostErrors[keyof DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostErrors];
+export type DiscoverMcpServerInstanceToolsV1McpServerInstancesInstanceIdDiscoverToolsPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetData = {
+    body?: never;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-server-instances/{instance_id}/environment';
+};
+export type GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetError = GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetErrors[keyof GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetErrors];
+export type GetInstanceEnvironmentV1McpServerInstancesInstanceIdEnvironmentGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostData = {
+    /**
+     * Data
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-server-instances/{instance_id}/oauth-link';
+};
+export type CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostError = CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostErrors[keyof CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostErrors];
+export type CreateOauthLinkV1McpServerInstancesInstanceIdOauthLinkPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetData = {
+    body?: never;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-server-instances/{instance_id}/oauth-links';
+};
+export type ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetError = ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors[keyof ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors];
+export type ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostData = {
+    body?: never;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-server-instances/{instance_id}/probe';
+};
+export type ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostError = ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors[keyof ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostErrors];
+export type ProbeInstanceAuthV1McpServerInstancesInstanceIdProbePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData = {
+    body?: never;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-server-instances/{instance_id}/test-auth';
+};
+export type RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostError = RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors[keyof RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors];
+export type RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostData = {
+    body?: never;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-server-instances/{instance_id}/verify';
+};
+export type VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostError = VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostErrors[keyof VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostErrors];
+export type VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type ListMcpServersV1McpServersGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Status
+         */
+        status?: string | null;
+        /**
+         * Is Public
+         */
+        is_public?: boolean | null;
+        /**
+         * Tag
+         */
+        tag?: string | null;
+        /**
+         * Page
+         */
+        page?: number;
+        /**
+         * Page Size
+         */
+        page_size?: number;
+        /**
+         * Search
+         */
+        search?: string | null;
+    };
+    url: '/v1/mcp-servers/';
+};
+export type ListMcpServersV1McpServersGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListMcpServersV1McpServersGetError = ListMcpServersV1McpServersGetErrors[keyof ListMcpServersV1McpServersGetErrors];
+export type ListMcpServersV1McpServersGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PaginatedResponseMcpServerResponse;
+};
+export type ListMcpServersV1McpServersGetResponse = ListMcpServersV1McpServersGetResponses[keyof ListMcpServersV1McpServersGetResponses];
+export type CreateMcpServerV1McpServersPostData = {
+    body: McpServerCreate;
+    path?: never;
+    query?: never;
+    url: '/v1/mcp-servers/';
+};
+export type CreateMcpServerV1McpServersPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateMcpServerV1McpServersPostError = CreateMcpServerV1McpServersPostErrors[keyof CreateMcpServerV1McpServersPostErrors];
+export type CreateMcpServerV1McpServersPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpServerResponse;
+};
+export type CreateMcpServerV1McpServersPostResponse = CreateMcpServerV1McpServersPostResponses[keyof CreateMcpServerV1McpServersPostResponses];
+export type DeleteMcpServerV1McpServersServerIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Server Id
+         */
+        server_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-servers/{server_id}';
+};
+export type DeleteMcpServerV1McpServersServerIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeleteMcpServerV1McpServersServerIdDeleteError = DeleteMcpServerV1McpServersServerIdDeleteErrors[keyof DeleteMcpServerV1McpServersServerIdDeleteErrors];
+export type DeleteMcpServerV1McpServersServerIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type GetMcpServerV1McpServersServerIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Server Id
+         */
+        server_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-servers/{server_id}';
+};
+export type GetMcpServerV1McpServersServerIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetMcpServerV1McpServersServerIdGetError = GetMcpServerV1McpServersServerIdGetErrors[keyof GetMcpServerV1McpServersServerIdGetErrors];
+export type GetMcpServerV1McpServersServerIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpServerResponse;
+};
+export type GetMcpServerV1McpServersServerIdGetResponse = GetMcpServerV1McpServersServerIdGetResponses[keyof GetMcpServerV1McpServersServerIdGetResponses];
+export type UpdateMcpServerV1McpServersServerIdPatchData = {
+    body: McpServerUpdate;
+    path: {
+        /**
+         * Server Id
+         */
+        server_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-servers/{server_id}';
+};
+export type UpdateMcpServerV1McpServersServerIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateMcpServerV1McpServersServerIdPatchError = UpdateMcpServerV1McpServersServerIdPatchErrors[keyof UpdateMcpServerV1McpServersServerIdPatchErrors];
+export type UpdateMcpServerV1McpServersServerIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpServerResponse;
+};
+export type UpdateMcpServerV1McpServersServerIdPatchResponse = UpdateMcpServerV1McpServersServerIdPatchResponses[keyof UpdateMcpServerV1McpServersServerIdPatchResponses];
+export type DeployMcpServerV1McpServersServerIdDeployPostData = {
+    body?: never;
+    path: {
+        /**
+         * Server Id
+         */
+        server_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp-servers/{server_id}/deploy';
+};
+export type DeployMcpServerV1McpServersServerIdDeployPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeployMcpServerV1McpServersServerIdDeployPostError = DeployMcpServerV1McpServersServerIdDeployPostErrors[keyof DeployMcpServerV1McpServersServerIdDeployPostErrors];
+export type DeployMcpServerV1McpServersServerIdDeployPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type ProxyInstanceV1McpInstanceIdMcpDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp/{instance_id}/mcp';
+};
+export type ProxyInstanceV1McpInstanceIdMcpDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ProxyInstanceV1McpInstanceIdMcpDeleteError = ProxyInstanceV1McpInstanceIdMcpDeleteErrors[keyof ProxyInstanceV1McpInstanceIdMcpDeleteErrors];
+export type ProxyInstanceV1McpInstanceIdMcpDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type ProxyInstanceV1McpInstanceIdMcpGetData = {
+    body?: never;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/mcp/{instance_id}/mcp';
+};
+export type ProxyInstanceV1McpInstanceIdMcpGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ProxyInstanceV1McpInstanceIdMcpGetError = ProxyInstanceV1McpInstanceIdMcpGetErrors[keyof ProxyInstanceV1McpInstanceIdMcpGetErrors];
+export type ProxyInstanceV1McpInstanceIdMcpGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
 export type ProxyInstanceV1McpInstanceIdMcpPostData = {
     body?: never;
     path: {
@@ -11263,7 +9611,102 @@ export type ProxyInstanceV1McpInstanceIdMcpPostResponses = {
      */
     200: unknown;
 };
-export type ProxyInstanceV1McpInstanceIdMcpPost2Data = {
+export type ListModelInstancesV1ModelInstancesGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Provider Config Id
+         */
+        provider_config_id?: string | null;
+        /**
+         * Model Spec Id
+         */
+        model_spec_id?: string | null;
+        /**
+         * Is Active
+         */
+        is_active?: boolean | null;
+    };
+    url: '/v1/model-instances/';
+};
+export type ListModelInstancesV1ModelInstancesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListModelInstancesV1ModelInstancesGetError = ListModelInstancesV1ModelInstancesGetErrors[keyof ListModelInstancesV1ModelInstancesGetErrors];
+export type ListModelInstancesV1ModelInstancesGetResponses = {
+    /**
+     * Response List Model Instances V1 Model Instances  Get
+     *
+     * Successful Response
+     */
+    200: Array<ModelInstanceResponse>;
+};
+export type ListModelInstancesV1ModelInstancesGetResponse = ListModelInstancesV1ModelInstancesGetResponses[keyof ListModelInstancesV1ModelInstancesGetResponses];
+export type CreateModelInstanceV1ModelInstancesPostData = {
+    body: ModelInstanceCreate;
+    path?: never;
+    query?: never;
+    url: '/v1/model-instances/';
+};
+export type CreateModelInstanceV1ModelInstancesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateModelInstanceV1ModelInstancesPostError = CreateModelInstanceV1ModelInstancesPostErrors[keyof CreateModelInstanceV1ModelInstancesPostErrors];
+export type CreateModelInstanceV1ModelInstancesPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ModelInstanceResponse;
+};
+export type CreateModelInstanceV1ModelInstancesPostResponse = CreateModelInstanceV1ModelInstancesPostResponses[keyof CreateModelInstanceV1ModelInstancesPostResponses];
+export type CreateModelInstancesBulkV1ModelInstancesBulkPostData = {
+    body: ModelInstanceBulkCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/model-instances/bulk';
+};
+export type CreateModelInstancesBulkV1ModelInstancesBulkPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateModelInstancesBulkV1ModelInstancesBulkPostError = CreateModelInstancesBulkV1ModelInstancesBulkPostErrors[keyof CreateModelInstancesBulkV1ModelInstancesBulkPostErrors];
+export type CreateModelInstancesBulkV1ModelInstancesBulkPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ModelInstanceBulkCreateResponse;
+};
+export type CreateModelInstancesBulkV1ModelInstancesBulkPostResponse = CreateModelInstancesBulkV1ModelInstancesBulkPostResponses[keyof CreateModelInstancesBulkV1ModelInstancesBulkPostResponses];
+export type ValidateModelInstanceV1ModelInstancesTestPostData = {
+    body: ModelInstanceTestRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/model-instances/test';
+};
+export type ValidateModelInstanceV1ModelInstancesTestPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ValidateModelInstanceV1ModelInstancesTestPostError = ValidateModelInstanceV1ModelInstancesTestPostErrors[keyof ValidateModelInstanceV1ModelInstancesTestPostErrors];
+export type ValidateModelInstanceV1ModelInstancesTestPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ModelInstanceTestResponse;
+};
+export type ValidateModelInstanceV1ModelInstancesTestPostResponse = ValidateModelInstanceV1ModelInstancesTestPostResponses[keyof ValidateModelInstanceV1ModelInstancesTestPostResponses];
+export type DeleteModelInstanceV1ModelInstancesInstanceIdDeleteData = {
     body?: never;
     path: {
         /**
@@ -11272,22 +9715,22 @@ export type ProxyInstanceV1McpInstanceIdMcpPost2Data = {
         instance_id: string;
     };
     query?: never;
-    url: '/v1/mcp/{instance_id}/mcp';
+    url: '/v1/model-instances/{instance_id}';
 };
-export type ProxyInstanceV1McpInstanceIdMcpPost2Errors = {
+export type DeleteModelInstanceV1ModelInstancesInstanceIdDeleteErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type ProxyInstanceV1McpInstanceIdMcpPost2Error = ProxyInstanceV1McpInstanceIdMcpPost2Errors[keyof ProxyInstanceV1McpInstanceIdMcpPost2Errors];
-export type ProxyInstanceV1McpInstanceIdMcpPost2Responses = {
+export type DeleteModelInstanceV1ModelInstancesInstanceIdDeleteError = DeleteModelInstanceV1ModelInstancesInstanceIdDeleteErrors[keyof DeleteModelInstanceV1ModelInstancesInstanceIdDeleteErrors];
+export type DeleteModelInstanceV1ModelInstancesInstanceIdDeleteResponses = {
     /**
      * Successful Response
      */
     200: unknown;
 };
-export type ProxyInstanceV1McpInstanceIdMcpPost3Data = {
+export type GetModelInstanceV1ModelInstancesInstanceIdGetData = {
     body?: never;
     path: {
         /**
@@ -11296,346 +9739,241 @@ export type ProxyInstanceV1McpInstanceIdMcpPost3Data = {
         instance_id: string;
     };
     query?: never;
-    url: '/v1/mcp/{instance_id}/mcp';
+    url: '/v1/model-instances/{instance_id}';
 };
-export type ProxyInstanceV1McpInstanceIdMcpPost3Errors = {
+export type GetModelInstanceV1ModelInstancesInstanceIdGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type ProxyInstanceV1McpInstanceIdMcpPost3Error = ProxyInstanceV1McpInstanceIdMcpPost3Errors[keyof ProxyInstanceV1McpInstanceIdMcpPost3Errors];
-export type ProxyInstanceV1McpInstanceIdMcpPost3Responses = {
+export type GetModelInstanceV1ModelInstancesInstanceIdGetError = GetModelInstanceV1ModelInstancesInstanceIdGetErrors[keyof GetModelInstanceV1ModelInstancesInstanceIdGetErrors];
+export type GetModelInstanceV1ModelInstancesInstanceIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ModelInstanceResponse;
+};
+export type GetModelInstanceV1ModelInstancesInstanceIdGetResponse = GetModelInstanceV1ModelInstancesInstanceIdGetResponses[keyof GetModelInstanceV1ModelInstancesInstanceIdGetResponses];
+export type ListModelSpecsV1ModelSpecsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Provider Spec Id
+         */
+        provider_spec_id?: string | null;
+        /**
+         * Is Active
+         */
+        is_active?: boolean | null;
+    };
+    url: '/v1/model-specs/';
+};
+export type ListModelSpecsV1ModelSpecsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListModelSpecsV1ModelSpecsGetError = ListModelSpecsV1ModelSpecsGetErrors[keyof ListModelSpecsV1ModelSpecsGetErrors];
+export type ListModelSpecsV1ModelSpecsGetResponses = {
+    /**
+     * Response List Model Specs V1 Model Specs  Get
+     *
+     * Successful Response
+     */
+    200: Array<AgentareaApiApiV1ModelSpecsModelSpecResponse>;
+};
+export type ListModelSpecsV1ModelSpecsGetResponse = ListModelSpecsV1ModelSpecsGetResponses[keyof ListModelSpecsV1ModelSpecsGetResponses];
+export type CreateModelSpecV1ModelSpecsPostData = {
+    body: ModelSpecCreate;
+    path?: never;
+    query?: never;
+    url: '/v1/model-specs/';
+};
+export type CreateModelSpecV1ModelSpecsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateModelSpecV1ModelSpecsPostError = CreateModelSpecV1ModelSpecsPostErrors[keyof CreateModelSpecV1ModelSpecsPostErrors];
+export type CreateModelSpecV1ModelSpecsPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentareaApiApiV1ModelSpecsModelSpecResponse;
+};
+export type CreateModelSpecV1ModelSpecsPostResponse = CreateModelSpecV1ModelSpecsPostResponses[keyof CreateModelSpecV1ModelSpecsPostResponses];
+export type ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Provider Spec Id
+         */
+        provider_spec_id: string;
+    };
+    query?: {
+        /**
+         * Is Active
+         */
+        is_active?: boolean | null;
+    };
+    url: '/v1/model-specs/by-provider/{provider_spec_id}';
+};
+export type ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetError = ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetErrors[keyof ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetErrors];
+export type ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetResponses = {
+    /**
+     * Response List Model Specs By Provider V1 Model Specs By Provider  Provider Spec Id  Get
+     *
+     * Successful Response
+     */
+    200: Array<AgentareaApiApiV1ModelSpecsModelSpecResponse>;
+};
+export type ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetResponse = ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetResponses[keyof ListModelSpecsByProviderV1ModelSpecsByProviderProviderSpecIdGetResponses];
+export type GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetData = {
+    body?: never;
+    path: {
+        /**
+         * Provider Spec Id
+         */
+        provider_spec_id: string;
+        /**
+         * Model Name
+         */
+        model_name: string;
+    };
+    query?: never;
+    url: '/v1/model-specs/by-provider/{provider_spec_id}/{model_name}';
+};
+export type GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetError = GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetErrors[keyof GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetErrors];
+export type GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentareaApiApiV1ModelSpecsModelSpecResponse;
+};
+export type GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetResponse = GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetResponses[keyof GetModelSpecByProviderAndNameV1ModelSpecsByProviderProviderSpecIdModelNameGetResponses];
+export type UpsertModelSpecV1ModelSpecsUpsertPostData = {
+    body: ModelSpecCreate;
+    path?: never;
+    query?: never;
+    url: '/v1/model-specs/upsert';
+};
+export type UpsertModelSpecV1ModelSpecsUpsertPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpsertModelSpecV1ModelSpecsUpsertPostError = UpsertModelSpecV1ModelSpecsUpsertPostErrors[keyof UpsertModelSpecV1ModelSpecsUpsertPostErrors];
+export type UpsertModelSpecV1ModelSpecsUpsertPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentareaApiApiV1ModelSpecsModelSpecResponse;
+};
+export type UpsertModelSpecV1ModelSpecsUpsertPostResponse = UpsertModelSpecV1ModelSpecsUpsertPostResponses[keyof UpsertModelSpecV1ModelSpecsUpsertPostResponses];
+export type DeleteModelSpecV1ModelSpecsModelSpecIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Model Spec Id
+         */
+        model_spec_id: string;
+    };
+    query?: never;
+    url: '/v1/model-specs/{model_spec_id}';
+};
+export type DeleteModelSpecV1ModelSpecsModelSpecIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeleteModelSpecV1ModelSpecsModelSpecIdDeleteError = DeleteModelSpecV1ModelSpecsModelSpecIdDeleteErrors[keyof DeleteModelSpecV1ModelSpecsModelSpecIdDeleteErrors];
+export type DeleteModelSpecV1ModelSpecsModelSpecIdDeleteResponses = {
     /**
      * Successful Response
      */
     200: unknown;
 };
-export type ListRegistriesV1RegistriesGetData = {
+export type GetModelSpecV1ModelSpecsModelSpecIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Model Spec Id
+         */
+        model_spec_id: string;
+    };
+    query?: never;
+    url: '/v1/model-specs/{model_spec_id}';
+};
+export type GetModelSpecV1ModelSpecsModelSpecIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetModelSpecV1ModelSpecsModelSpecIdGetError = GetModelSpecV1ModelSpecsModelSpecIdGetErrors[keyof GetModelSpecV1ModelSpecsModelSpecIdGetErrors];
+export type GetModelSpecV1ModelSpecsModelSpecIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentareaApiApiV1ModelSpecsModelSpecResponse;
+};
+export type GetModelSpecV1ModelSpecsModelSpecIdGetResponse = GetModelSpecV1ModelSpecsModelSpecIdGetResponses[keyof GetModelSpecV1ModelSpecsModelSpecIdGetResponses];
+export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchData = {
+    body: ModelSpecUpdate;
+    path: {
+        /**
+         * Model Spec Id
+         */
+        model_spec_id: string;
+    };
+    query?: never;
+    url: '/v1/model-specs/{model_spec_id}';
+};
+export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchError = UpdateModelSpecV1ModelSpecsModelSpecIdPatchErrors[keyof UpdateModelSpecV1ModelSpecsModelSpecIdPatchErrors];
+export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentareaApiApiV1ModelSpecsModelSpecResponse;
+};
+export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponse = UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses[keyof UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses];
+export type GetNetworkTopologyV1NetworkTopologyGetData = {
     body?: never;
     path?: never;
-    query?: {
-        /**
-         * Active Only
-         */
-        active_only?: boolean;
-        /**
-         * Registry Type
-         */
-        registry_type?: string | null;
-    };
-    url: '/v1/registries/';
-};
-export type ListRegistriesV1RegistriesGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListRegistriesV1RegistriesGetError = ListRegistriesV1RegistriesGetErrors[keyof ListRegistriesV1RegistriesGetErrors];
-export type ListRegistriesV1RegistriesGetResponses = {
-    /**
-     * Response List Registries V1 Registries  Get
-     *
-     * Successful Response
-     */
-    200: Array<RegistryResponse>;
-};
-export type ListRegistriesV1RegistriesGetResponse = ListRegistriesV1RegistriesGetResponses[keyof ListRegistriesV1RegistriesGetResponses];
-export type CreateRegistryV1RegistriesPostData = {
-    body: RegistryCreate;
-    path?: never;
     query?: never;
-    url: '/v1/registries/';
+    url: '/v1/network/topology';
 };
-export type CreateRegistryV1RegistriesPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type CreateRegistryV1RegistriesPostError = CreateRegistryV1RegistriesPostErrors[keyof CreateRegistryV1RegistriesPostErrors];
-export type CreateRegistryV1RegistriesPostResponses = {
+export type GetNetworkTopologyV1NetworkTopologyGetResponses = {
     /**
      * Successful Response
      */
-    200: RegistryResponse;
+    200: NetworkTopologyResponse;
 };
-export type CreateRegistryV1RegistriesPostResponse = CreateRegistryV1RegistriesPostResponses[keyof CreateRegistryV1RegistriesPostResponses];
-export type SearchCatalogV1RegistriesCatalogSearchGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Q
-         *
-         * Search query
-         */
-        q?: string | null;
-        /**
-         * Tag
-         */
-        tag?: string | null;
-        /**
-         * Update Available
-         */
-        update_available?: boolean | null;
-        /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * Offset
-         */
-        offset?: number;
-    };
-    url: '/v1/registries/catalog/search';
-};
-export type SearchCatalogV1RegistriesCatalogSearchGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type SearchCatalogV1RegistriesCatalogSearchGetError = SearchCatalogV1RegistriesCatalogSearchGetErrors[keyof SearchCatalogV1RegistriesCatalogSearchGetErrors];
-export type SearchCatalogV1RegistriesCatalogSearchGetResponses = {
-    /**
-     * Response Search Catalog V1 Registries Catalog Search Get
-     *
-     * Successful Response
-     */
-    200: Array<RegistryItemResponse>;
-};
-export type SearchCatalogV1RegistriesCatalogSearchGetResponse = SearchCatalogV1RegistriesCatalogSearchGetResponses[keyof SearchCatalogV1RegistriesCatalogSearchGetResponses];
-export type DeleteRegistryV1RegistriesRegistryIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Registry Id
-         */
-        registry_id: string;
-    };
-    query?: never;
-    url: '/v1/registries/{registry_id}';
-};
-export type DeleteRegistryV1RegistriesRegistryIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type DeleteRegistryV1RegistriesRegistryIdDeleteError = DeleteRegistryV1RegistriesRegistryIdDeleteErrors[keyof DeleteRegistryV1RegistriesRegistryIdDeleteErrors];
-export type DeleteRegistryV1RegistriesRegistryIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type GetRegistryV1RegistriesRegistryIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Registry Id
-         */
-        registry_id: string;
-    };
-    query?: never;
-    url: '/v1/registries/{registry_id}';
-};
-export type GetRegistryV1RegistriesRegistryIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetRegistryV1RegistriesRegistryIdGetError = GetRegistryV1RegistriesRegistryIdGetErrors[keyof GetRegistryV1RegistriesRegistryIdGetErrors];
-export type GetRegistryV1RegistriesRegistryIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: RegistryResponse;
-};
-export type GetRegistryV1RegistriesRegistryIdGetResponse = GetRegistryV1RegistriesRegistryIdGetResponses[keyof GetRegistryV1RegistriesRegistryIdGetResponses];
-export type UpdateRegistryV1RegistriesRegistryIdPatchData = {
-    body: RegistryUpdate;
-    path: {
-        /**
-         * Registry Id
-         */
-        registry_id: string;
-    };
-    query?: never;
-    url: '/v1/registries/{registry_id}';
-};
-export type UpdateRegistryV1RegistriesRegistryIdPatchErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UpdateRegistryV1RegistriesRegistryIdPatchError = UpdateRegistryV1RegistriesRegistryIdPatchErrors[keyof UpdateRegistryV1RegistriesRegistryIdPatchErrors];
-export type UpdateRegistryV1RegistriesRegistryIdPatchResponses = {
-    /**
-     * Successful Response
-     */
-    200: RegistryResponse;
-};
-export type UpdateRegistryV1RegistriesRegistryIdPatchResponse = UpdateRegistryV1RegistriesRegistryIdPatchResponses[keyof UpdateRegistryV1RegistriesRegistryIdPatchResponses];
-export type SyncRegistryV1RegistriesRegistryIdSyncPostData = {
-    body?: never;
-    path: {
-        /**
-         * Registry Id
-         */
-        registry_id: string;
-    };
-    query?: never;
-    url: '/v1/registries/{registry_id}/sync';
-};
-export type SyncRegistryV1RegistriesRegistryIdSyncPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type SyncRegistryV1RegistriesRegistryIdSyncPostError = SyncRegistryV1RegistriesRegistryIdSyncPostErrors[keyof SyncRegistryV1RegistriesRegistryIdSyncPostErrors];
-export type SyncRegistryV1RegistriesRegistryIdSyncPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: AgentareaApiApiV1RegistriesSyncResponse;
-};
-export type SyncRegistryV1RegistriesRegistryIdSyncPostResponse = SyncRegistryV1RegistriesRegistryIdSyncPostResponses[keyof SyncRegistryV1RegistriesRegistryIdSyncPostResponses];
-export type ListRegistryItemsV1RegistriesRegistryIdItemsGetData = {
-    body?: never;
-    path: {
-        /**
-         * Registry Id
-         */
-        registry_id: string;
-    };
-    query?: {
-        /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * Offset
-         */
-        offset?: number;
-    };
-    url: '/v1/registries/{registry_id}/items';
-};
-export type ListRegistryItemsV1RegistriesRegistryIdItemsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListRegistryItemsV1RegistriesRegistryIdItemsGetError = ListRegistryItemsV1RegistriesRegistryIdItemsGetErrors[keyof ListRegistryItemsV1RegistriesRegistryIdItemsGetErrors];
-export type ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses = {
-    /**
-     * Response List Registry Items V1 Registries  Registry Id  Items Get
-     *
-     * Successful Response
-     */
-    200: Array<RegistryItemResponse>;
-};
-export type ListRegistryItemsV1RegistriesRegistryIdItemsGetResponse = ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses[keyof ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses];
-export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Item Id
-         */
-        item_id: string;
-    };
-    query?: never;
-    url: '/v1/registries/catalog/items/{item_id}';
-};
-export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetError = GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors[keyof GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors];
-export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: RegistryItemResponse;
-};
-export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse = GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses[keyof GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses];
-export type UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostData = {
-    body?: never;
-    path: {
-        /**
-         * Item Id
-         */
-        item_id: string;
-    };
-    query?: never;
-    url: '/v1/registries/catalog/items/{item_id}/update';
-};
-export type UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostError = UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostErrors[keyof UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostErrors];
-export type UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostData = {
-    body?: never;
-    path: {
-        /**
-         * Registry Id
-         */
-        registry_id: string;
-    };
-    query?: never;
-    url: '/v1/registries/{registry_id}/update-all';
-};
-export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostError = UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors[keyof UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors];
-export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: UpdateAllResponse;
-};
-export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponse = UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses[keyof UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses];
-export type PreviewSpecV1OpenapiConnectionsPreviewSpecPostData = {
-    body: SpecPreviewRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/openapi-connections/preview-spec';
-};
-export type PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type PreviewSpecV1OpenapiConnectionsPreviewSpecPostError = PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors[keyof PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors];
-export type PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: SpecPreviewResponse;
-};
-export type PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponse = PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses[keyof PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses];
+export type GetNetworkTopologyV1NetworkTopologyGetResponse = GetNetworkTopologyV1NetworkTopologyGetResponses[keyof GetNetworkTopologyV1NetworkTopologyGetResponses];
 export type ListConnectionsV1OpenapiConnectionsGetData = {
     body?: never;
     path?: never;
@@ -11695,6 +10033,26 @@ export type CreateConnectionV1OpenapiConnectionsPostResponses = {
     201: OpenApiConnectionResponse;
 };
 export type CreateConnectionV1OpenapiConnectionsPostResponse = CreateConnectionV1OpenapiConnectionsPostResponses[keyof CreateConnectionV1OpenapiConnectionsPostResponses];
+export type PreviewSpecV1OpenapiConnectionsPreviewSpecPostData = {
+    body: SpecPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/openapi-connections/preview-spec';
+};
+export type PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type PreviewSpecV1OpenapiConnectionsPreviewSpecPostError = PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors[keyof PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors];
+export type PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: SpecPreviewResponse;
+};
+export type PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponse = PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses[keyof PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses];
 export type DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteData = {
     body?: never;
     path: {
@@ -11794,19 +10152,144 @@ export type DiscoverToolsV1OpenapiConnectionsConnectionIdDiscoverToolsPostRespon
      */
     200: unknown;
 };
-export type GetNetworkTopologyV1NetworkTopologyGetData = {
+export type ListPolicyRulesV1PoliciesGetData = {
     body?: never;
     path?: never;
-    query?: never;
-    url: '/v1/network/topology';
+    query?: {
+        /**
+         * Subject Type
+         */
+        subject_type?: PolicySubjectType | null;
+        /**
+         * Subject Id
+         */
+        subject_id?: string | null;
+        /**
+         * Effect
+         */
+        effect?: PolicyEffect | null;
+        /**
+         * Target
+         */
+        target?: string | null;
+        /**
+         * Enabled
+         */
+        enabled?: boolean | null;
+    };
+    url: '/v1/policies';
 };
-export type GetNetworkTopologyV1NetworkTopologyGetResponses = {
+export type ListPolicyRulesV1PoliciesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListPolicyRulesV1PoliciesGetError = ListPolicyRulesV1PoliciesGetErrors[keyof ListPolicyRulesV1PoliciesGetErrors];
+export type ListPolicyRulesV1PoliciesGetResponses = {
+    /**
+     * Response List Policy Rules V1 Policies Get
+     *
+     * Successful Response
+     */
+    200: Array<PolicyRuleResponse>;
+};
+export type ListPolicyRulesV1PoliciesGetResponse = ListPolicyRulesV1PoliciesGetResponses[keyof ListPolicyRulesV1PoliciesGetResponses];
+export type CreatePolicyRuleV1PoliciesPostData = {
+    body: PolicyRuleCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/policies';
+};
+export type CreatePolicyRuleV1PoliciesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreatePolicyRuleV1PoliciesPostError = CreatePolicyRuleV1PoliciesPostErrors[keyof CreatePolicyRuleV1PoliciesPostErrors];
+export type CreatePolicyRuleV1PoliciesPostResponses = {
     /**
      * Successful Response
      */
-    200: NetworkTopologyResponse;
+    201: PolicyRuleResponse;
 };
-export type GetNetworkTopologyV1NetworkTopologyGetResponse = GetNetworkTopologyV1NetworkTopologyGetResponses[keyof GetNetworkTopologyV1NetworkTopologyGetResponses];
+export type CreatePolicyRuleV1PoliciesPostResponse = CreatePolicyRuleV1PoliciesPostResponses[keyof CreatePolicyRuleV1PoliciesPostResponses];
+export type DeletePolicyRuleV1PoliciesRuleIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Rule Id
+         */
+        rule_id: string;
+    };
+    query?: never;
+    url: '/v1/policies/{rule_id}';
+};
+export type DeletePolicyRuleV1PoliciesRuleIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeletePolicyRuleV1PoliciesRuleIdDeleteError = DeletePolicyRuleV1PoliciesRuleIdDeleteErrors[keyof DeletePolicyRuleV1PoliciesRuleIdDeleteErrors];
+export type DeletePolicyRuleV1PoliciesRuleIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type DeletePolicyRuleV1PoliciesRuleIdDeleteResponse = DeletePolicyRuleV1PoliciesRuleIdDeleteResponses[keyof DeletePolicyRuleV1PoliciesRuleIdDeleteResponses];
+export type GetPolicyRuleV1PoliciesRuleIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Rule Id
+         */
+        rule_id: string;
+    };
+    query?: never;
+    url: '/v1/policies/{rule_id}';
+};
+export type GetPolicyRuleV1PoliciesRuleIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetPolicyRuleV1PoliciesRuleIdGetError = GetPolicyRuleV1PoliciesRuleIdGetErrors[keyof GetPolicyRuleV1PoliciesRuleIdGetErrors];
+export type GetPolicyRuleV1PoliciesRuleIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PolicyRuleResponse;
+};
+export type GetPolicyRuleV1PoliciesRuleIdGetResponse = GetPolicyRuleV1PoliciesRuleIdGetResponses[keyof GetPolicyRuleV1PoliciesRuleIdGetResponses];
+export type UpdatePolicyRuleV1PoliciesRuleIdPatchData = {
+    body: PolicyRuleUpdateRequest;
+    path: {
+        /**
+         * Rule Id
+         */
+        rule_id: string;
+    };
+    query?: never;
+    url: '/v1/policies/{rule_id}';
+};
+export type UpdatePolicyRuleV1PoliciesRuleIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdatePolicyRuleV1PoliciesRuleIdPatchError = UpdatePolicyRuleV1PoliciesRuleIdPatchErrors[keyof UpdatePolicyRuleV1PoliciesRuleIdPatchErrors];
+export type UpdatePolicyRuleV1PoliciesRuleIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: PolicyRuleResponse;
+};
+export type UpdatePolicyRuleV1PoliciesRuleIdPatchResponse = UpdatePolicyRuleV1PoliciesRuleIdPatchResponses[keyof UpdatePolicyRuleV1PoliciesRuleIdPatchResponses];
 export type ListProjectsV1ProjectsGetData = {
     body?: never;
     path?: never;
@@ -11933,114 +10416,6 @@ export type UpdateProjectV1ProjectsProjectIdPatchResponses = {
     200: ProjectResponse;
 };
 export type UpdateProjectV1ProjectsProjectIdPatchResponse = UpdateProjectV1ProjectsProjectIdPatchResponses[keyof UpdateProjectV1ProjectsProjectIdPatchResponses];
-export type AddSkillToProjectV1ProjectsProjectIdSkillsPostData = {
-    body: AssociationBody;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/v1/projects/{project_id}/skills';
-};
-export type AddSkillToProjectV1ProjectsProjectIdSkillsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type AddSkillToProjectV1ProjectsProjectIdSkillsPostError = AddSkillToProjectV1ProjectsProjectIdSkillsPostErrors[keyof AddSkillToProjectV1ProjectsProjectIdSkillsPostErrors];
-export type AddSkillToProjectV1ProjectsProjectIdSkillsPostResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-export type AddSkillToProjectV1ProjectsProjectIdSkillsPostResponse = AddSkillToProjectV1ProjectsProjectIdSkillsPostResponses[keyof AddSkillToProjectV1ProjectsProjectIdSkillsPostResponses];
-export type RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-    };
-    query?: never;
-    url: '/v1/projects/{project_id}/skills/{skill_id}';
-};
-export type RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteError = RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteErrors[keyof RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteErrors];
-export type RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-export type RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteResponse = RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteResponses[keyof RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteResponses];
-export type AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostData = {
-    body: AssociationBody;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/v1/projects/{project_id}/mcp-instances';
-};
-export type AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostError = AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostErrors[keyof AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostErrors];
-export type AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-export type AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponse = AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponses[keyof AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponses];
-export type RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-        /**
-         * Mcp Instance Id
-         */
-        mcp_instance_id: string;
-    };
-    query?: never;
-    url: '/v1/projects/{project_id}/mcp-instances/{mcp_instance_id}';
-};
-export type RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteError = RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteErrors[keyof RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteErrors];
-export type RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-export type RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteResponse = RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteResponses[keyof RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteResponses];
 export type AddAgentToProjectV1ProjectsProjectIdAgentsPostData = {
     body: AssociationBody;
     path: {
@@ -12231,9 +10606,695 @@ export type DownloadProjectFileV1ProjectsProjectIdFilesFilePathGetResponses = {
     200: ProjectFileDownloadResponse;
 };
 export type DownloadProjectFileV1ProjectsProjectIdFilesFilePathGetResponse = DownloadProjectFileV1ProjectsProjectIdFilesFilePathGetResponses[keyof DownloadProjectFileV1ProjectsProjectIdFilesFilePathGetResponses];
-export type ListClientsV1ClientsGetData = {
+export type AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostData = {
+    body: AssociationBody;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/v1/projects/{project_id}/mcp-instances';
+};
+export type AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostError = AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostErrors[keyof AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostErrors];
+export type AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponse = AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponses[keyof AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponses];
+export type RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+        /**
+         * Mcp Instance Id
+         */
+        mcp_instance_id: string;
+    };
+    query?: never;
+    url: '/v1/projects/{project_id}/mcp-instances/{mcp_instance_id}';
+};
+export type RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteError = RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteErrors[keyof RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteErrors];
+export type RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteResponse = RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteResponses[keyof RemoveMcpInstanceFromProjectV1ProjectsProjectIdMcpInstancesMcpInstanceIdDeleteResponses];
+export type AddSkillToProjectV1ProjectsProjectIdSkillsPostData = {
+    body: AssociationBody;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/v1/projects/{project_id}/skills';
+};
+export type AddSkillToProjectV1ProjectsProjectIdSkillsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type AddSkillToProjectV1ProjectsProjectIdSkillsPostError = AddSkillToProjectV1ProjectsProjectIdSkillsPostErrors[keyof AddSkillToProjectV1ProjectsProjectIdSkillsPostErrors];
+export type AddSkillToProjectV1ProjectsProjectIdSkillsPostResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type AddSkillToProjectV1ProjectsProjectIdSkillsPostResponse = AddSkillToProjectV1ProjectsProjectIdSkillsPostResponses[keyof AddSkillToProjectV1ProjectsProjectIdSkillsPostResponses];
+export type RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+    };
+    query?: never;
+    url: '/v1/projects/{project_id}/skills/{skill_id}';
+};
+export type RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteError = RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteErrors[keyof RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteErrors];
+export type RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteResponse = RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteResponses[keyof RemoveSkillFromProjectV1ProjectsProjectIdSkillsSkillIdDeleteResponses];
+export type ListProviderConfigsV1ProviderConfigsGetData = {
     body?: never;
     path?: never;
+    query?: {
+        /**
+         * Provider Spec Id
+         */
+        provider_spec_id?: string | null;
+        /**
+         * Is Active
+         */
+        is_active?: boolean | null;
+    };
+    url: '/v1/provider-configs/';
+};
+export type ListProviderConfigsV1ProviderConfigsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListProviderConfigsV1ProviderConfigsGetError = ListProviderConfigsV1ProviderConfigsGetErrors[keyof ListProviderConfigsV1ProviderConfigsGetErrors];
+export type ListProviderConfigsV1ProviderConfigsGetResponses = {
+    /**
+     * Response List Provider Configs V1 Provider Configs  Get
+     *
+     * Successful Response
+     */
+    200: Array<ProviderConfigResponse>;
+};
+export type ListProviderConfigsV1ProviderConfigsGetResponse = ListProviderConfigsV1ProviderConfigsGetResponses[keyof ListProviderConfigsV1ProviderConfigsGetResponses];
+export type CreateProviderConfigV1ProviderConfigsPostData = {
+    body: ProviderConfigCreate;
+    path?: never;
+    query?: never;
+    url: '/v1/provider-configs/';
+};
+export type CreateProviderConfigV1ProviderConfigsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateProviderConfigV1ProviderConfigsPostError = CreateProviderConfigV1ProviderConfigsPostErrors[keyof CreateProviderConfigV1ProviderConfigsPostErrors];
+export type CreateProviderConfigV1ProviderConfigsPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProviderConfigResponse;
+};
+export type CreateProviderConfigV1ProviderConfigsPostResponse = CreateProviderConfigV1ProviderConfigsPostResponses[keyof CreateProviderConfigV1ProviderConfigsPostResponses];
+export type GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetData = {
+    body?: never;
+    path: {
+        /**
+         * Provider Key
+         */
+        provider_key: string;
+    };
+    query?: never;
+    url: '/v1/provider-configs/admin/{provider_key}/logo';
+};
+export type GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetError = GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetErrors[keyof GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetErrors];
+export type GetProviderLogoV1ProviderConfigsAdminProviderKeyLogoGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostData = {
+    body: DiscoverPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/provider-configs/discover-preview';
+};
+export type DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostError = DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostErrors[keyof DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostErrors];
+export type DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: DiscoverPreviewResponse;
+};
+export type DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponse = DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponses[keyof DiscoverModelsPreviewV1ProviderConfigsDiscoverPreviewPostResponses];
+export type ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Provider Spec Id
+         */
+        provider_spec_id?: string | null;
+        /**
+         * Is Active
+         */
+        is_active?: boolean | null;
+    };
+    url: '/v1/provider-configs/with-instances';
+};
+export type ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetError = ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetErrors[keyof ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetErrors];
+export type ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetResponses = {
+    /**
+     * Response List Provider Configs With Instances V1 Provider Configs With Instances Get
+     *
+     * Successful Response
+     */
+    200: Array<ProviderConfigResponse>;
+};
+export type ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetResponse = ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetResponses[keyof ListProviderConfigsWithInstancesV1ProviderConfigsWithInstancesGetResponses];
+export type DeleteProviderConfigV1ProviderConfigsConfigIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Config Id
+         */
+        config_id: string;
+    };
+    query?: never;
+    url: '/v1/provider-configs/{config_id}';
+};
+export type DeleteProviderConfigV1ProviderConfigsConfigIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeleteProviderConfigV1ProviderConfigsConfigIdDeleteError = DeleteProviderConfigV1ProviderConfigsConfigIdDeleteErrors[keyof DeleteProviderConfigV1ProviderConfigsConfigIdDeleteErrors];
+export type DeleteProviderConfigV1ProviderConfigsConfigIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type GetProviderConfigV1ProviderConfigsConfigIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Config Id
+         */
+        config_id: string;
+    };
+    query?: never;
+    url: '/v1/provider-configs/{config_id}';
+};
+export type GetProviderConfigV1ProviderConfigsConfigIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetProviderConfigV1ProviderConfigsConfigIdGetError = GetProviderConfigV1ProviderConfigsConfigIdGetErrors[keyof GetProviderConfigV1ProviderConfigsConfigIdGetErrors];
+export type GetProviderConfigV1ProviderConfigsConfigIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProviderConfigResponse;
+};
+export type GetProviderConfigV1ProviderConfigsConfigIdGetResponse = GetProviderConfigV1ProviderConfigsConfigIdGetResponses[keyof GetProviderConfigV1ProviderConfigsConfigIdGetResponses];
+export type PatchProviderConfigV1ProviderConfigsConfigIdPatchData = {
+    body: ProviderConfigUpdate;
+    path: {
+        /**
+         * Config Id
+         */
+        config_id: string;
+    };
+    query?: never;
+    url: '/v1/provider-configs/{config_id}';
+};
+export type PatchProviderConfigV1ProviderConfigsConfigIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type PatchProviderConfigV1ProviderConfigsConfigIdPatchError = PatchProviderConfigV1ProviderConfigsConfigIdPatchErrors[keyof PatchProviderConfigV1ProviderConfigsConfigIdPatchErrors];
+export type PatchProviderConfigV1ProviderConfigsConfigIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProviderConfigResponse;
+};
+export type PatchProviderConfigV1ProviderConfigsConfigIdPatchResponse = PatchProviderConfigV1ProviderConfigsConfigIdPatchResponses[keyof PatchProviderConfigV1ProviderConfigsConfigIdPatchResponses];
+export type UpdateProviderConfigV1ProviderConfigsConfigIdPutData = {
+    body: ProviderConfigUpdate;
+    path: {
+        /**
+         * Config Id
+         */
+        config_id: string;
+    };
+    query?: never;
+    url: '/v1/provider-configs/{config_id}';
+};
+export type UpdateProviderConfigV1ProviderConfigsConfigIdPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateProviderConfigV1ProviderConfigsConfigIdPutError = UpdateProviderConfigV1ProviderConfigsConfigIdPutErrors[keyof UpdateProviderConfigV1ProviderConfigsConfigIdPutErrors];
+export type UpdateProviderConfigV1ProviderConfigsConfigIdPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProviderConfigResponse;
+};
+export type UpdateProviderConfigV1ProviderConfigsConfigIdPutResponse = UpdateProviderConfigV1ProviderConfigsConfigIdPutResponses[keyof UpdateProviderConfigV1ProviderConfigsConfigIdPutResponses];
+export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostData = {
+    body?: never;
+    path: {
+        /**
+         * Config Id
+         */
+        config_id: string;
+    };
+    query?: never;
+    url: '/v1/provider-configs/{config_id}/discover';
+};
+export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostError = DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostErrors[keyof DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostErrors];
+export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: DiscoveryResponse;
+};
+export type DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponse = DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses[keyof DiscoverModelsV1ProviderConfigsConfigIdDiscoverPostResponses];
+export type ListProviderSpecsV1ProviderSpecsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Is Builtin
+         */
+        is_builtin?: boolean | null;
+    };
+    url: '/v1/provider-specs/';
+};
+export type ListProviderSpecsV1ProviderSpecsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListProviderSpecsV1ProviderSpecsGetError = ListProviderSpecsV1ProviderSpecsGetErrors[keyof ListProviderSpecsV1ProviderSpecsGetErrors];
+export type ListProviderSpecsV1ProviderSpecsGetResponses = {
+    /**
+     * Response List Provider Specs V1 Provider Specs  Get
+     *
+     * Successful Response
+     */
+    200: Array<ProviderSpecResponse>;
+};
+export type ListProviderSpecsV1ProviderSpecsGetResponse = ListProviderSpecsV1ProviderSpecsGetResponses[keyof ListProviderSpecsV1ProviderSpecsGetResponses];
+export type GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetData = {
+    body?: never;
+    path: {
+        /**
+         * Provider Key
+         */
+        provider_key: string;
+    };
+    query?: never;
+    url: '/v1/provider-specs/by-key/{provider_key}';
+};
+export type GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetError = GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetErrors[keyof GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetErrors];
+export type GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProviderSpecWithModelsResponse;
+};
+export type GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetResponse = GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetResponses[keyof GetProviderSpecByKeyV1ProviderSpecsByKeyProviderKeyGetResponses];
+export type ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Is Builtin
+         */
+        is_builtin?: boolean | null;
+    };
+    url: '/v1/provider-specs/with-models';
+};
+export type ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetError = ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetErrors[keyof ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetErrors];
+export type ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetResponses = {
+    /**
+     * Response List Provider Specs With Models V1 Provider Specs With Models Get
+     *
+     * Successful Response
+     */
+    200: Array<ProviderSpecWithModelsResponse>;
+};
+export type ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetResponse = ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetResponses[keyof ListProviderSpecsWithModelsV1ProviderSpecsWithModelsGetResponses];
+export type GetProviderSpecV1ProviderSpecsProviderSpecIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Provider Spec Id
+         */
+        provider_spec_id: string;
+    };
+    query?: never;
+    url: '/v1/provider-specs/{provider_spec_id}';
+};
+export type GetProviderSpecV1ProviderSpecsProviderSpecIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetProviderSpecV1ProviderSpecsProviderSpecIdGetError = GetProviderSpecV1ProviderSpecsProviderSpecIdGetErrors[keyof GetProviderSpecV1ProviderSpecsProviderSpecIdGetErrors];
+export type GetProviderSpecV1ProviderSpecsProviderSpecIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProviderSpecWithModelsResponse;
+};
+export type GetProviderSpecV1ProviderSpecsProviderSpecIdGetResponse = GetProviderSpecV1ProviderSpecsProviderSpecIdGetResponses[keyof GetProviderSpecV1ProviderSpecsProviderSpecIdGetResponses];
+export type ListRegistriesV1RegistriesGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Active Only
+         */
+        active_only?: boolean;
+        /**
+         * Registry Type
+         */
+        registry_type?: string | null;
+    };
+    url: '/v1/registries/';
+};
+export type ListRegistriesV1RegistriesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListRegistriesV1RegistriesGetError = ListRegistriesV1RegistriesGetErrors[keyof ListRegistriesV1RegistriesGetErrors];
+export type ListRegistriesV1RegistriesGetResponses = {
+    /**
+     * Response List Registries V1 Registries  Get
+     *
+     * Successful Response
+     */
+    200: Array<RegistryResponse>;
+};
+export type ListRegistriesV1RegistriesGetResponse = ListRegistriesV1RegistriesGetResponses[keyof ListRegistriesV1RegistriesGetResponses];
+export type CreateRegistryV1RegistriesPostData = {
+    body: RegistryCreate;
+    path?: never;
+    query?: never;
+    url: '/v1/registries/';
+};
+export type CreateRegistryV1RegistriesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateRegistryV1RegistriesPostError = CreateRegistryV1RegistriesPostErrors[keyof CreateRegistryV1RegistriesPostErrors];
+export type CreateRegistryV1RegistriesPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: RegistryResponse;
+};
+export type CreateRegistryV1RegistriesPostResponse = CreateRegistryV1RegistriesPostResponses[keyof CreateRegistryV1RegistriesPostResponses];
+export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Item Id
+         */
+        item_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/catalog/items/{item_id}';
+};
+export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetError = GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors[keyof GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors];
+export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: RegistryItemResponse;
+};
+export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse = GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses[keyof GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses];
+export type UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostData = {
+    body?: never;
+    path: {
+        /**
+         * Item Id
+         */
+        item_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/catalog/items/{item_id}/update';
+};
+export type UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostError = UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostErrors[keyof UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostErrors];
+export type UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type SearchCatalogV1RegistriesCatalogSearchGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Q
+         *
+         * Search query
+         */
+        q?: string | null;
+        /**
+         * Tag
+         */
+        tag?: string | null;
+        /**
+         * Update Available
+         */
+        update_available?: boolean | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/v1/registries/catalog/search';
+};
+export type SearchCatalogV1RegistriesCatalogSearchGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type SearchCatalogV1RegistriesCatalogSearchGetError = SearchCatalogV1RegistriesCatalogSearchGetErrors[keyof SearchCatalogV1RegistriesCatalogSearchGetErrors];
+export type SearchCatalogV1RegistriesCatalogSearchGetResponses = {
+    /**
+     * Response Search Catalog V1 Registries Catalog Search Get
+     *
+     * Successful Response
+     */
+    200: Array<RegistryItemResponse>;
+};
+export type SearchCatalogV1RegistriesCatalogSearchGetResponse = SearchCatalogV1RegistriesCatalogSearchGetResponses[keyof SearchCatalogV1RegistriesCatalogSearchGetResponses];
+export type DeleteRegistryV1RegistriesRegistryIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Registry Id
+         */
+        registry_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/{registry_id}';
+};
+export type DeleteRegistryV1RegistriesRegistryIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeleteRegistryV1RegistriesRegistryIdDeleteError = DeleteRegistryV1RegistriesRegistryIdDeleteErrors[keyof DeleteRegistryV1RegistriesRegistryIdDeleteErrors];
+export type DeleteRegistryV1RegistriesRegistryIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type GetRegistryV1RegistriesRegistryIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Registry Id
+         */
+        registry_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/{registry_id}';
+};
+export type GetRegistryV1RegistriesRegistryIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetRegistryV1RegistriesRegistryIdGetError = GetRegistryV1RegistriesRegistryIdGetErrors[keyof GetRegistryV1RegistriesRegistryIdGetErrors];
+export type GetRegistryV1RegistriesRegistryIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: RegistryResponse;
+};
+export type GetRegistryV1RegistriesRegistryIdGetResponse = GetRegistryV1RegistriesRegistryIdGetResponses[keyof GetRegistryV1RegistriesRegistryIdGetResponses];
+export type UpdateRegistryV1RegistriesRegistryIdPatchData = {
+    body: RegistryUpdate;
+    path: {
+        /**
+         * Registry Id
+         */
+        registry_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/{registry_id}';
+};
+export type UpdateRegistryV1RegistriesRegistryIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateRegistryV1RegistriesRegistryIdPatchError = UpdateRegistryV1RegistriesRegistryIdPatchErrors[keyof UpdateRegistryV1RegistriesRegistryIdPatchErrors];
+export type UpdateRegistryV1RegistriesRegistryIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: RegistryResponse;
+};
+export type UpdateRegistryV1RegistriesRegistryIdPatchResponse = UpdateRegistryV1RegistriesRegistryIdPatchResponses[keyof UpdateRegistryV1RegistriesRegistryIdPatchResponses];
+export type ListRegistryItemsV1RegistriesRegistryIdItemsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Registry Id
+         */
+        registry_id: string;
+    };
     query?: {
         /**
          * Limit
@@ -12244,321 +11305,1191 @@ export type ListClientsV1ClientsGetData = {
          */
         offset?: number;
     };
-    url: '/v1/clients/';
+    url: '/v1/registries/{registry_id}/items';
 };
-export type ListClientsV1ClientsGetErrors = {
+export type ListRegistryItemsV1RegistriesRegistryIdItemsGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type ListClientsV1ClientsGetError = ListClientsV1ClientsGetErrors[keyof ListClientsV1ClientsGetErrors];
-export type ListClientsV1ClientsGetResponses = {
+export type ListRegistryItemsV1RegistriesRegistryIdItemsGetError = ListRegistryItemsV1RegistriesRegistryIdItemsGetErrors[keyof ListRegistryItemsV1RegistriesRegistryIdItemsGetErrors];
+export type ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses = {
     /**
-     * Response List Clients V1 Clients  Get
+     * Response List Registry Items V1 Registries  Registry Id  Items Get
      *
      * Successful Response
      */
-    200: Array<ClientResponse>;
+    200: Array<RegistryItemResponse>;
 };
-export type ListClientsV1ClientsGetResponse = ListClientsV1ClientsGetResponses[keyof ListClientsV1ClientsGetResponses];
-export type CreateClientV1ClientsPostData = {
-    body: ClientCreate;
+export type ListRegistryItemsV1RegistriesRegistryIdItemsGetResponse = ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses[keyof ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses];
+export type SyncRegistryV1RegistriesRegistryIdSyncPostData = {
+    body?: never;
+    path: {
+        /**
+         * Registry Id
+         */
+        registry_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/{registry_id}/sync';
+};
+export type SyncRegistryV1RegistriesRegistryIdSyncPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type SyncRegistryV1RegistriesRegistryIdSyncPostError = SyncRegistryV1RegistriesRegistryIdSyncPostErrors[keyof SyncRegistryV1RegistriesRegistryIdSyncPostErrors];
+export type SyncRegistryV1RegistriesRegistryIdSyncPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentareaApiApiV1RegistriesSyncResponse;
+};
+export type SyncRegistryV1RegistriesRegistryIdSyncPostResponse = SyncRegistryV1RegistriesRegistryIdSyncPostResponses[keyof SyncRegistryV1RegistriesRegistryIdSyncPostResponses];
+export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostData = {
+    body?: never;
+    path: {
+        /**
+         * Registry Id
+         */
+        registry_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/{registry_id}/update-all';
+};
+export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostError = UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors[keyof UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors];
+export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: UpdateAllResponse;
+};
+export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponse = UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses[keyof UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses];
+export type ListCollectionsV1SkillCollectionsGetData = {
+    body?: never;
     path?: never;
     query?: never;
-    url: '/v1/clients/';
+    url: '/v1/skill-collections/';
 };
-export type CreateClientV1ClientsPostErrors = {
+export type ListCollectionsV1SkillCollectionsGetResponses = {
+    /**
+     * Response List Collections V1 Skill Collections  Get
+     *
+     * Successful Response
+     */
+    200: Array<CollectionSummaryResponse>;
+};
+export type ListCollectionsV1SkillCollectionsGetResponse = ListCollectionsV1SkillCollectionsGetResponses[keyof ListCollectionsV1SkillCollectionsGetResponses];
+export type CreateCollectionV1SkillCollectionsPostData = {
+    body: CollectionCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/skill-collections/';
+};
+export type CreateCollectionV1SkillCollectionsPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type CreateClientV1ClientsPostError = CreateClientV1ClientsPostErrors[keyof CreateClientV1ClientsPostErrors];
-export type CreateClientV1ClientsPostResponses = {
+export type CreateCollectionV1SkillCollectionsPostError = CreateCollectionV1SkillCollectionsPostErrors[keyof CreateCollectionV1SkillCollectionsPostErrors];
+export type CreateCollectionV1SkillCollectionsPostResponses = {
     /**
      * Successful Response
      */
-    201: ClientResponse;
+    201: CollectionSummaryResponse;
 };
-export type CreateClientV1ClientsPostResponse = CreateClientV1ClientsPostResponses[keyof CreateClientV1ClientsPostResponses];
-export type DeleteClientV1ClientsClientIdDeleteData = {
+export type CreateCollectionV1SkillCollectionsPostResponse = CreateCollectionV1SkillCollectionsPostResponses[keyof CreateCollectionV1SkillCollectionsPostResponses];
+export type DeleteCollectionV1SkillCollectionsCollectionIdDeleteData = {
     body?: never;
     path: {
         /**
-         * Client Id
+         * Collection Id
          */
-        client_id: string;
+        collection_id: string;
     };
     query?: never;
-    url: '/v1/clients/{client_id}';
+    url: '/v1/skill-collections/{collection_id}';
 };
-export type DeleteClientV1ClientsClientIdDeleteErrors = {
+export type DeleteCollectionV1SkillCollectionsCollectionIdDeleteErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type DeleteClientV1ClientsClientIdDeleteError = DeleteClientV1ClientsClientIdDeleteErrors[keyof DeleteClientV1ClientsClientIdDeleteErrors];
-export type DeleteClientV1ClientsClientIdDeleteResponses = {
+export type DeleteCollectionV1SkillCollectionsCollectionIdDeleteError = DeleteCollectionV1SkillCollectionsCollectionIdDeleteErrors[keyof DeleteCollectionV1SkillCollectionsCollectionIdDeleteErrors];
+export type DeleteCollectionV1SkillCollectionsCollectionIdDeleteResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
-export type DeleteClientV1ClientsClientIdDeleteResponse = DeleteClientV1ClientsClientIdDeleteResponses[keyof DeleteClientV1ClientsClientIdDeleteResponses];
-export type GetClientV1ClientsClientIdGetData = {
+export type DeleteCollectionV1SkillCollectionsCollectionIdDeleteResponse = DeleteCollectionV1SkillCollectionsCollectionIdDeleteResponses[keyof DeleteCollectionV1SkillCollectionsCollectionIdDeleteResponses];
+export type GetCollectionV1SkillCollectionsCollectionIdGetData = {
     body?: never;
     path: {
         /**
-         * Client Id
+         * Collection Id
          */
-        client_id: string;
+        collection_id: string;
     };
     query?: never;
-    url: '/v1/clients/{client_id}';
+    url: '/v1/skill-collections/{collection_id}';
 };
-export type GetClientV1ClientsClientIdGetErrors = {
+export type GetCollectionV1SkillCollectionsCollectionIdGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type GetClientV1ClientsClientIdGetError = GetClientV1ClientsClientIdGetErrors[keyof GetClientV1ClientsClientIdGetErrors];
-export type GetClientV1ClientsClientIdGetResponses = {
+export type GetCollectionV1SkillCollectionsCollectionIdGetError = GetCollectionV1SkillCollectionsCollectionIdGetErrors[keyof GetCollectionV1SkillCollectionsCollectionIdGetErrors];
+export type GetCollectionV1SkillCollectionsCollectionIdGetResponses = {
     /**
      * Successful Response
      */
-    200: ClientResponse;
+    200: CollectionDetailResponse;
 };
-export type GetClientV1ClientsClientIdGetResponse = GetClientV1ClientsClientIdGetResponses[keyof GetClientV1ClientsClientIdGetResponses];
-export type UpdateClientV1ClientsClientIdPatchData = {
-    body: ClientUpdate;
+export type GetCollectionV1SkillCollectionsCollectionIdGetResponse = GetCollectionV1SkillCollectionsCollectionIdGetResponses[keyof GetCollectionV1SkillCollectionsCollectionIdGetResponses];
+export type UpdateCollectionV1SkillCollectionsCollectionIdPutData = {
+    body: CollectionUpdateRequest;
     path: {
         /**
-         * Client Id
+         * Collection Id
          */
-        client_id: string;
+        collection_id: string;
     };
     query?: never;
-    url: '/v1/clients/{client_id}';
+    url: '/v1/skill-collections/{collection_id}';
 };
-export type UpdateClientV1ClientsClientIdPatchErrors = {
+export type UpdateCollectionV1SkillCollectionsCollectionIdPutErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type UpdateClientV1ClientsClientIdPatchError = UpdateClientV1ClientsClientIdPatchErrors[keyof UpdateClientV1ClientsClientIdPatchErrors];
-export type UpdateClientV1ClientsClientIdPatchResponses = {
+export type UpdateCollectionV1SkillCollectionsCollectionIdPutError = UpdateCollectionV1SkillCollectionsCollectionIdPutErrors[keyof UpdateCollectionV1SkillCollectionsCollectionIdPutErrors];
+export type UpdateCollectionV1SkillCollectionsCollectionIdPutResponses = {
     /**
      * Successful Response
      */
-    200: ClientResponse;
+    200: CollectionSummaryResponse;
 };
-export type UpdateClientV1ClientsClientIdPatchResponse = UpdateClientV1ClientsClientIdPatchResponses[keyof UpdateClientV1ClientsClientIdPatchResponses];
-export type AddSkillToClientV1ClientsClientIdSkillsPostData = {
-    body: AssociationBody;
+export type UpdateCollectionV1SkillCollectionsCollectionIdPutResponse = UpdateCollectionV1SkillCollectionsCollectionIdPutResponses[keyof UpdateCollectionV1SkillCollectionsCollectionIdPutResponses];
+export type AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostData = {
+    body: AddSkillRequest;
     path: {
         /**
-         * Client Id
+         * Collection Id
          */
-        client_id: string;
+        collection_id: string;
     };
     query?: never;
-    url: '/v1/clients/{client_id}/skills';
+    url: '/v1/skill-collections/{collection_id}/skills';
 };
-export type AddSkillToClientV1ClientsClientIdSkillsPostErrors = {
+export type AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type AddSkillToClientV1ClientsClientIdSkillsPostError = AddSkillToClientV1ClientsClientIdSkillsPostErrors[keyof AddSkillToClientV1ClientsClientIdSkillsPostErrors];
-export type AddSkillToClientV1ClientsClientIdSkillsPostResponses = {
+export type AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostError = AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostErrors[keyof AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostErrors];
+export type AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
-export type AddSkillToClientV1ClientsClientIdSkillsPostResponse = AddSkillToClientV1ClientsClientIdSkillsPostResponses[keyof AddSkillToClientV1ClientsClientIdSkillsPostResponses];
-export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteData = {
+export type AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostResponse = AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostResponses[keyof AddSkillToCollectionV1SkillCollectionsCollectionIdSkillsPostResponses];
+export type RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteData = {
     body?: never;
     path: {
         /**
-         * Client Id
+         * Collection Id
          */
-        client_id: string;
+        collection_id: string;
         /**
          * Skill Id
          */
         skill_id: string;
     };
     query?: never;
-    url: '/v1/clients/{client_id}/skills/{skill_id}';
+    url: '/v1/skill-collections/{collection_id}/skills/{skill_id}';
 };
-export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteErrors = {
+export type RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteError = RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteErrors[keyof RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteErrors];
-export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses = {
+export type RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteError = RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteErrors[keyof RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteErrors];
+export type RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
-export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponse = RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses[keyof RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses];
-export type AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostData = {
-    body: McpInstanceAssociationBody;
-    path: {
-        /**
-         * Client Id
-         */
-        client_id: string;
-    };
-    query?: never;
-    url: '/v1/clients/{client_id}/mcp-instances';
-};
-export type AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostError = AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostErrors[keyof AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostErrors];
-export type AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-export type AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponse = AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponses[keyof AddMcpInstanceToClientV1ClientsClientIdMcpInstancesPostResponses];
-export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Client Id
-         */
-        client_id: string;
-        /**
-         * Mcp Instance Id
-         */
-        mcp_instance_id: string;
-    };
-    query?: never;
-    url: '/v1/clients/{client_id}/mcp-instances/{mcp_instance_id}';
-};
-export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteError = RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteErrors[keyof RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteErrors];
-export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse = RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses[keyof RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses];
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostData = {
-    body: SourceProjectBody;
-    path: {
-        /**
-         * Client Id
-         */
-        client_id: string;
-    };
-    query?: never;
-    url: '/v1/clients/{client_id}/pull-from-project';
-};
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostError = PullFromProjectV1ClientsClientIdPullFromProjectPostErrors[keyof PullFromProjectV1ClientsClientIdPullFromProjectPostErrors];
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ClientResponse;
-};
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostResponse = PullFromProjectV1ClientsClientIdPullFromProjectPostResponses[keyof PullFromProjectV1ClientsClientIdPullFromProjectPostResponses];
-export type ListAuditLogsV1AuditLogsGetData = {
+export type RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteResponse = RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteResponses[keyof RemoveSkillFromCollectionV1SkillCollectionsCollectionIdSkillsSkillIdDeleteResponses];
+export type ListSkillsV1SkillsGetData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Action
+         * Source Type
          *
-         * Filter by action (e.g. agent.create)
+         * Filter by source type
          */
-        action?: string | null;
+        source_type?: string | null;
         /**
-         * Actor Id
+         * Network Scope
          *
-         * Filter by actor ID
+         * Filter by network scope
          */
-        actor_id?: string | null;
+        network_scope?: string | null;
         /**
-         * Resource Type
+         * From Registry
          *
-         * Filter by resource type
+         * Filter registry-created skills
          */
-        resource_type?: string | null;
+        from_registry?: boolean | null;
         /**
-         * Resource Id
-         *
-         * Filter by resource ID
+         * Page
          */
-        resource_id?: string | null;
+        page?: number;
         /**
-         * Since
-         *
-         * Events after this time (ISO 8601)
+         * Page Size
          */
-        since?: string | null;
+        page_size?: number;
         /**
-         * Until
-         *
-         * Events before this time (ISO 8601)
+         * Search
          */
-        until?: string | null;
-        /**
-         * Cursor
-         *
-         * Cursor for pagination
-         */
-        cursor?: string | null;
-        /**
-         * Limit
-         *
-         * Max events to return
-         */
-        limit?: number;
+        search?: string | null;
     };
-    url: '/v1/audit-logs/';
+    url: '/v1/skills';
 };
-export type ListAuditLogsV1AuditLogsGetErrors = {
+export type ListSkillsV1SkillsGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type ListAuditLogsV1AuditLogsGetError = ListAuditLogsV1AuditLogsGetErrors[keyof ListAuditLogsV1AuditLogsGetErrors];
-export type ListAuditLogsV1AuditLogsGetResponses = {
+export type ListSkillsV1SkillsGetError = ListSkillsV1SkillsGetErrors[keyof ListSkillsV1SkillsGetErrors];
+export type ListSkillsV1SkillsGetResponses = {
     /**
      * Successful Response
      */
-    200: AuditLogListResponse;
+    200: PaginatedResponseSkillResponse;
 };
-export type ListAuditLogsV1AuditLogsGetResponse = ListAuditLogsV1AuditLogsGetResponses[keyof ListAuditLogsV1AuditLogsGetResponses];
+export type ListSkillsV1SkillsGetResponse = ListSkillsV1SkillsGetResponses[keyof ListSkillsV1SkillsGetResponses];
+export type CreateSkillV1SkillsPostData = {
+    body: SkillCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/skills';
+};
+export type CreateSkillV1SkillsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateSkillV1SkillsPostError = CreateSkillV1SkillsPostErrors[keyof CreateSkillV1SkillsPostErrors];
+export type CreateSkillV1SkillsPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: SkillResponse;
+};
+export type CreateSkillV1SkillsPostResponse = CreateSkillV1SkillsPostResponses[keyof CreateSkillV1SkillsPostResponses];
+export type UploadSkillV1SkillsUploadPostData = {
+    body: BodyUploadSkillV1SkillsUploadPost;
+    path?: never;
+    query?: {
+        /**
+         * Name
+         */
+        name?: string | null;
+        /**
+         * Description
+         */
+        description?: string | null;
+    };
+    url: '/v1/skills/upload';
+};
+export type UploadSkillV1SkillsUploadPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UploadSkillV1SkillsUploadPostError = UploadSkillV1SkillsUploadPostErrors[keyof UploadSkillV1SkillsUploadPostErrors];
+export type UploadSkillV1SkillsUploadPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: SkillResponse;
+};
+export type UploadSkillV1SkillsUploadPostResponse = UploadSkillV1SkillsUploadPostResponses[keyof UploadSkillV1SkillsUploadPostResponses];
+export type DeleteSkillV1SkillsSkillIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+    };
+    query?: never;
+    url: '/v1/skills/{skill_id}';
+};
+export type DeleteSkillV1SkillsSkillIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeleteSkillV1SkillsSkillIdDeleteError = DeleteSkillV1SkillsSkillIdDeleteErrors[keyof DeleteSkillV1SkillsSkillIdDeleteErrors];
+export type DeleteSkillV1SkillsSkillIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type GetSkillV1SkillsSkillIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+    };
+    query?: never;
+    url: '/v1/skills/{skill_id}';
+};
+export type GetSkillV1SkillsSkillIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetSkillV1SkillsSkillIdGetError = GetSkillV1SkillsSkillIdGetErrors[keyof GetSkillV1SkillsSkillIdGetErrors];
+export type GetSkillV1SkillsSkillIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: SkillResponse;
+};
+export type GetSkillV1SkillsSkillIdGetResponse = GetSkillV1SkillsSkillIdGetResponses[keyof GetSkillV1SkillsSkillIdGetResponses];
+export type UpdateSkillV1SkillsSkillIdPutData = {
+    body: SkillUpdateRequest;
+    path: {
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+    };
+    query?: never;
+    url: '/v1/skills/{skill_id}';
+};
+export type UpdateSkillV1SkillsSkillIdPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateSkillV1SkillsSkillIdPutError = UpdateSkillV1SkillsSkillIdPutErrors[keyof UpdateSkillV1SkillsSkillIdPutErrors];
+export type UpdateSkillV1SkillsSkillIdPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: SkillResponse;
+};
+export type UpdateSkillV1SkillsSkillIdPutResponse = UpdateSkillV1SkillsSkillIdPutResponses[keyof UpdateSkillV1SkillsSkillIdPutResponses];
+export type GetSkillContentV1SkillsSkillIdContentGetData = {
+    body?: never;
+    path: {
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+    };
+    query?: never;
+    url: '/v1/skills/{skill_id}/content';
+};
+export type GetSkillContentV1SkillsSkillIdContentGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetSkillContentV1SkillsSkillIdContentGetError = GetSkillContentV1SkillsSkillIdContentGetErrors[keyof GetSkillContentV1SkillsSkillIdContentGetErrors];
+export type GetSkillContentV1SkillsSkillIdContentGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: SkillContentResponse;
+};
+export type GetSkillContentV1SkillsSkillIdContentGetResponse = GetSkillContentV1SkillsSkillIdContentGetResponses[keyof GetSkillContentV1SkillsSkillIdContentGetResponses];
+export type ListSkillFilesV1SkillsSkillIdFilesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+    };
+    query?: {
+        /**
+         * Include Urls
+         */
+        include_urls?: boolean;
+    };
+    url: '/v1/skills/{skill_id}/files';
+};
+export type ListSkillFilesV1SkillsSkillIdFilesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListSkillFilesV1SkillsSkillIdFilesGetError = ListSkillFilesV1SkillsSkillIdFilesGetErrors[keyof ListSkillFilesV1SkillsSkillIdFilesGetErrors];
+export type ListSkillFilesV1SkillsSkillIdFilesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: SkillFilesResponse;
+};
+export type ListSkillFilesV1SkillsSkillIdFilesGetResponse = ListSkillFilesV1SkillsSkillIdFilesGetResponses[keyof ListSkillFilesV1SkillsSkillIdFilesGetResponses];
+export type GetSkillFileV1SkillsSkillIdFilesPathGetData = {
+    body?: never;
+    path: {
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+        /**
+         * Path
+         */
+        path: string;
+    };
+    query?: {
+        /**
+         * Redirect
+         */
+        redirect?: boolean;
+    };
+    url: '/v1/skills/{skill_id}/files/{path}';
+};
+export type GetSkillFileV1SkillsSkillIdFilesPathGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetSkillFileV1SkillsSkillIdFilesPathGetError = GetSkillFileV1SkillsSkillIdFilesPathGetErrors[keyof GetSkillFileV1SkillsSkillIdFilesPathGetErrors];
+export type GetSkillFileV1SkillsSkillIdFilesPathGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type FlattenSkillMembersV1SkillsSkillIdFlattenGetData = {
+    body?: never;
+    path: {
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+    };
+    query?: never;
+    url: '/v1/skills/{skill_id}/flatten';
+};
+export type FlattenSkillMembersV1SkillsSkillIdFlattenGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type FlattenSkillMembersV1SkillsSkillIdFlattenGetError = FlattenSkillMembersV1SkillsSkillIdFlattenGetErrors[keyof FlattenSkillMembersV1SkillsSkillIdFlattenGetErrors];
+export type FlattenSkillMembersV1SkillsSkillIdFlattenGetResponses = {
+    /**
+     * Response Flatten Skill Members V1 Skills  Skill Id  Flatten Get
+     *
+     * Successful Response
+     */
+    200: Array<string>;
+};
+export type FlattenSkillMembersV1SkillsSkillIdFlattenGetResponse = FlattenSkillMembersV1SkillsSkillIdFlattenGetResponses[keyof FlattenSkillMembersV1SkillsSkillIdFlattenGetResponses];
+export type InstallSkillV1SkillsSkillIdInstallPostData = {
+    body?: never;
+    path: {
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+    };
+    query?: never;
+    url: '/v1/skills/{skill_id}/install';
+};
+export type InstallSkillV1SkillsSkillIdInstallPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type InstallSkillV1SkillsSkillIdInstallPostError = InstallSkillV1SkillsSkillIdInstallPostErrors[keyof InstallSkillV1SkillsSkillIdInstallPostErrors];
+export type InstallSkillV1SkillsSkillIdInstallPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: SkillResponse;
+};
+export type InstallSkillV1SkillsSkillIdInstallPostResponse = InstallSkillV1SkillsSkillIdInstallPostResponses[keyof InstallSkillV1SkillsSkillIdInstallPostResponses];
+export type ListSkillMembersV1SkillsSkillIdMembersGetData = {
+    body?: never;
+    path: {
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+    };
+    query?: never;
+    url: '/v1/skills/{skill_id}/members';
+};
+export type ListSkillMembersV1SkillsSkillIdMembersGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListSkillMembersV1SkillsSkillIdMembersGetError = ListSkillMembersV1SkillsSkillIdMembersGetErrors[keyof ListSkillMembersV1SkillsSkillIdMembersGetErrors];
+export type ListSkillMembersV1SkillsSkillIdMembersGetResponses = {
+    /**
+     * Response List Skill Members V1 Skills  Skill Id  Members Get
+     *
+     * Successful Response
+     */
+    200: Array<SkillMemberResponse>;
+};
+export type ListSkillMembersV1SkillsSkillIdMembersGetResponse = ListSkillMembersV1SkillsSkillIdMembersGetResponses[keyof ListSkillMembersV1SkillsSkillIdMembersGetResponses];
+export type AddSkillMemberV1SkillsSkillIdMembersPostData = {
+    body: SkillMemberAddRequest;
+    path: {
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+    };
+    query?: never;
+    url: '/v1/skills/{skill_id}/members';
+};
+export type AddSkillMemberV1SkillsSkillIdMembersPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type AddSkillMemberV1SkillsSkillIdMembersPostError = AddSkillMemberV1SkillsSkillIdMembersPostErrors[keyof AddSkillMemberV1SkillsSkillIdMembersPostErrors];
+export type AddSkillMemberV1SkillsSkillIdMembersPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: SkillMemberResponse;
+};
+export type AddSkillMemberV1SkillsSkillIdMembersPostResponse = AddSkillMemberV1SkillsSkillIdMembersPostResponses[keyof AddSkillMemberV1SkillsSkillIdMembersPostResponses];
+export type RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+        /**
+         * Child Skill Id
+         */
+        child_skill_id: string;
+    };
+    query?: never;
+    url: '/v1/skills/{skill_id}/members/{child_skill_id}';
+};
+export type RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteError = RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteErrors[keyof RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteErrors];
+export type RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type GetAllTasksV1TasksGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Status
+         *
+         * Filter by task status
+         */
+        status?: string | null;
+        /**
+         * Limit
+         *
+         * Maximum number of tasks to return
+         */
+        limit?: number;
+        /**
+         * Offset
+         *
+         * Number of tasks to skip
+         */
+        offset?: number;
+    };
+    url: '/v1/tasks/';
+};
+export type GetAllTasksV1TasksGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetAllTasksV1TasksGetError = GetAllTasksV1TasksGetErrors[keyof GetAllTasksV1TasksGetErrors];
+export type GetAllTasksV1TasksGetResponses = {
+    /**
+     * Response Get All Tasks V1 Tasks  Get
+     *
+     * Successful Response
+     */
+    200: Array<TaskWithAgent>;
+};
+export type GetAllTasksV1TasksGetResponse = GetAllTasksV1TasksGetResponses[keyof GetAllTasksV1TasksGetResponses];
+export type GetTaskByIdV1TasksTaskIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/v1/tasks/{task_id}';
+};
+export type GetTaskByIdV1TasksTaskIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetTaskByIdV1TasksTaskIdGetError = GetTaskByIdV1TasksTaskIdGetErrors[keyof GetTaskByIdV1TasksTaskIdGetErrors];
+export type GetTaskByIdV1TasksTaskIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: TaskWithAgent;
+};
+export type GetTaskByIdV1TasksTaskIdGetResponse = GetTaskByIdV1TasksTaskIdGetResponses[keyof GetTaskByIdV1TasksTaskIdGetResponses];
+export type ContinueTaskExecutionV1TasksTaskIdContinuePostData = {
+    body: ContinueTaskPayload;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/v1/tasks/{task_id}/continue';
+};
+export type ContinueTaskExecutionV1TasksTaskIdContinuePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ContinueTaskExecutionV1TasksTaskIdContinuePostError = ContinueTaskExecutionV1TasksTaskIdContinuePostErrors[keyof ContinueTaskExecutionV1TasksTaskIdContinuePostErrors];
+export type ContinueTaskExecutionV1TasksTaskIdContinuePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type ListTriggersV1TriggersGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Agent Id
+         *
+         * Filter by agent ID
+         */
+        agent_id?: string | null;
+        /**
+         * Trigger Type
+         *
+         * Filter by trigger type (cron, webhook)
+         */
+        trigger_type?: string | null;
+        /**
+         * Active Only
+         *
+         * Only return active triggers
+         */
+        active_only?: boolean;
+        /**
+         * Limit
+         *
+         * Maximum number of triggers to return
+         */
+        limit?: number;
+    };
+    url: '/v1/triggers/';
+};
+export type ListTriggersV1TriggersGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListTriggersV1TriggersGetError = ListTriggersV1TriggersGetErrors[keyof ListTriggersV1TriggersGetErrors];
+export type ListTriggersV1TriggersGetResponses = {
+    /**
+     * Response List Triggers V1 Triggers  Get
+     *
+     * Successful Response
+     */
+    200: Array<TriggerResponse>;
+};
+export type ListTriggersV1TriggersGetResponse = ListTriggersV1TriggersGetResponses[keyof ListTriggersV1TriggersGetResponses];
+export type CreateTriggerV1TriggersPostData = {
+    body: TriggerCreate;
+    path?: never;
+    query?: never;
+    url: '/v1/triggers/';
+};
+export type CreateTriggerV1TriggersPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateTriggerV1TriggersPostError = CreateTriggerV1TriggersPostErrors[keyof CreateTriggerV1TriggersPostErrors];
+export type CreateTriggerV1TriggersPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: TriggerResponse;
+};
+export type CreateTriggerV1TriggersPostResponse = CreateTriggerV1TriggersPostResponses[keyof CreateTriggerV1TriggersPostResponses];
+export type GetCatalogV1TriggersCatalogGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/triggers/catalog';
+};
+export type GetCatalogV1TriggersCatalogGetResponses = {
+    /**
+     * Response Get Catalog V1 Triggers Catalog Get
+     *
+     * Successful Response
+     */
+    200: Array<{
+        [key: string]: unknown;
+    }>;
+};
+export type GetCatalogV1TriggersCatalogGetResponse = GetCatalogV1TriggersCatalogGetResponses[keyof GetCatalogV1TriggersCatalogGetResponses];
+export type GetChannelEventsV1TriggersChannelsEventsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/triggers/channels/events';
+};
+export type GetChannelEventsV1TriggersChannelsEventsGetResponses = {
+    /**
+     * Response Get Channel Events V1 Triggers Channels Events Get
+     *
+     * Successful Response
+     */
+    200: {
+        [key: string]: Array<string>;
+    };
+};
+export type GetChannelEventsV1TriggersChannelsEventsGetResponse = GetChannelEventsV1TriggersChannelsEventsGetResponses[keyof GetChannelEventsV1TriggersChannelsEventsGetResponses];
+export type TriggersHealthCheckV1TriggersHealthGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/triggers/health';
+};
+export type TriggersHealthCheckV1TriggersHealthGetResponses = {
+    /**
+     * Response Triggers Health Check V1 Triggers Health Get
+     *
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+export type TriggersHealthCheckV1TriggersHealthGetResponse = TriggersHealthCheckV1TriggersHealthGetResponses[keyof TriggersHealthCheckV1TriggersHealthGetResponses];
+export type DeleteTriggerV1TriggersTriggerIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: never;
+    url: '/v1/triggers/{trigger_id}';
+};
+export type DeleteTriggerV1TriggersTriggerIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeleteTriggerV1TriggersTriggerIdDeleteError = DeleteTriggerV1TriggersTriggerIdDeleteErrors[keyof DeleteTriggerV1TriggersTriggerIdDeleteErrors];
+export type DeleteTriggerV1TriggersTriggerIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type DeleteTriggerV1TriggersTriggerIdDeleteResponse = DeleteTriggerV1TriggersTriggerIdDeleteResponses[keyof DeleteTriggerV1TriggersTriggerIdDeleteResponses];
+export type GetTriggerV1TriggersTriggerIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: never;
+    url: '/v1/triggers/{trigger_id}';
+};
+export type GetTriggerV1TriggersTriggerIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetTriggerV1TriggersTriggerIdGetError = GetTriggerV1TriggersTriggerIdGetErrors[keyof GetTriggerV1TriggersTriggerIdGetErrors];
+export type GetTriggerV1TriggersTriggerIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: TriggerResponse;
+};
+export type GetTriggerV1TriggersTriggerIdGetResponse = GetTriggerV1TriggersTriggerIdGetResponses[keyof GetTriggerV1TriggersTriggerIdGetResponses];
+export type UpdateTriggerV1TriggersTriggerIdPutData = {
+    body: TriggerUpdate;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: never;
+    url: '/v1/triggers/{trigger_id}';
+};
+export type UpdateTriggerV1TriggersTriggerIdPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateTriggerV1TriggersTriggerIdPutError = UpdateTriggerV1TriggersTriggerIdPutErrors[keyof UpdateTriggerV1TriggersTriggerIdPutErrors];
+export type UpdateTriggerV1TriggersTriggerIdPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: TriggerResponse;
+};
+export type UpdateTriggerV1TriggersTriggerIdPutResponse = UpdateTriggerV1TriggersTriggerIdPutResponses[keyof UpdateTriggerV1TriggersTriggerIdPutResponses];
+export type GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: {
+        /**
+         * Page
+         *
+         * Page number
+         */
+        page?: number;
+        /**
+         * Page Size
+         *
+         * Number of executions per page
+         */
+        page_size?: number;
+    };
+    url: '/v1/triggers/{trigger_id}/correlations';
+};
+export type GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetError = GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetErrors[keyof GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetErrors];
+export type GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ExecutionCorrelationResponse;
+};
+export type GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponse = GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponses[keyof GetExecutionCorrelationsV1TriggersTriggerIdCorrelationsGetResponses];
+export type DisableTriggerV1TriggersTriggerIdDisablePostData = {
+    body?: never;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: never;
+    url: '/v1/triggers/{trigger_id}/disable';
+};
+export type DisableTriggerV1TriggersTriggerIdDisablePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DisableTriggerV1TriggersTriggerIdDisablePostError = DisableTriggerV1TriggersTriggerIdDisablePostErrors[keyof DisableTriggerV1TriggersTriggerIdDisablePostErrors];
+export type DisableTriggerV1TriggersTriggerIdDisablePostResponses = {
+    /**
+     * Response Disable Trigger V1 Triggers  Trigger Id  Disable Post
+     *
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+export type DisableTriggerV1TriggersTriggerIdDisablePostResponse = DisableTriggerV1TriggersTriggerIdDisablePostResponses[keyof DisableTriggerV1TriggersTriggerIdDisablePostResponses];
+export type EnableTriggerV1TriggersTriggerIdEnablePostData = {
+    body?: never;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: never;
+    url: '/v1/triggers/{trigger_id}/enable';
+};
+export type EnableTriggerV1TriggersTriggerIdEnablePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type EnableTriggerV1TriggersTriggerIdEnablePostError = EnableTriggerV1TriggersTriggerIdEnablePostErrors[keyof EnableTriggerV1TriggersTriggerIdEnablePostErrors];
+export type EnableTriggerV1TriggersTriggerIdEnablePostResponses = {
+    /**
+     * Response Enable Trigger V1 Triggers  Trigger Id  Enable Post
+     *
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+export type EnableTriggerV1TriggersTriggerIdEnablePostResponse = EnableTriggerV1TriggersTriggerIdEnablePostResponses[keyof EnableTriggerV1TriggersTriggerIdEnablePostResponses];
+export type ExecuteTriggerV1TriggersTriggerIdExecutePostData = {
+    body: TriggerExecuteRequest;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: never;
+    url: '/v1/triggers/{trigger_id}/execute';
+};
+export type ExecuteTriggerV1TriggersTriggerIdExecutePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ExecuteTriggerV1TriggersTriggerIdExecutePostError = ExecuteTriggerV1TriggersTriggerIdExecutePostErrors[keyof ExecuteTriggerV1TriggersTriggerIdExecutePostErrors];
+export type ExecuteTriggerV1TriggersTriggerIdExecutePostResponses = {
+    /**
+     * Response Execute Trigger V1 Triggers  Trigger Id  Execute Post
+     *
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+export type ExecuteTriggerV1TriggersTriggerIdExecutePostResponse = ExecuteTriggerV1TriggersTriggerIdExecutePostResponses[keyof ExecuteTriggerV1TriggersTriggerIdExecutePostResponses];
+export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: {
+        /**
+         * Page
+         *
+         * Page number
+         */
+        page?: number;
+        /**
+         * Page Size
+         *
+         * Number of executions per page
+         */
+        page_size?: number;
+        /**
+         * Status
+         *
+         * Filter by execution status (success, failed, timeout)
+         */
+        status?: string | null;
+        /**
+         * Start Time
+         *
+         * Filter executions after this time
+         */
+        start_time?: string | null;
+        /**
+         * End Time
+         *
+         * Filter executions before this time
+         */
+        end_time?: string | null;
+    };
+    url: '/v1/triggers/{trigger_id}/executions';
+};
+export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetError = GetExecutionHistoryV1TriggersTriggerIdExecutionsGetErrors[keyof GetExecutionHistoryV1TriggersTriggerIdExecutionsGetErrors];
+export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ExecutionHistoryResponse;
+};
+export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetResponse = GetExecutionHistoryV1TriggersTriggerIdExecutionsGetResponses[keyof GetExecutionHistoryV1TriggersTriggerIdExecutionsGetResponses];
+export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: {
+        /**
+         * Hours
+         *
+         * Time period in hours (max 7 days)
+         */
+        hours?: number;
+    };
+    url: '/v1/triggers/{trigger_id}/metrics';
+};
+export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetError = GetExecutionMetricsV1TriggersTriggerIdMetricsGetErrors[keyof GetExecutionMetricsV1TriggersTriggerIdMetricsGetErrors];
+export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ExecutionMetricsResponse;
+};
+export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponse = GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses[keyof GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses];
+export type GetTriggerStatusV1TriggersTriggerIdStatusGetData = {
+    body?: never;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: never;
+    url: '/v1/triggers/{trigger_id}/status';
+};
+export type GetTriggerStatusV1TriggersTriggerIdStatusGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetTriggerStatusV1TriggersTriggerIdStatusGetError = GetTriggerStatusV1TriggersTriggerIdStatusGetErrors[keyof GetTriggerStatusV1TriggersTriggerIdStatusGetErrors];
+export type GetTriggerStatusV1TriggersTriggerIdStatusGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: TriggerStatusResponse;
+};
+export type GetTriggerStatusV1TriggersTriggerIdStatusGetResponse = GetTriggerStatusV1TriggersTriggerIdStatusGetResponses[keyof GetTriggerStatusV1TriggersTriggerIdStatusGetResponses];
+export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetData = {
+    body?: never;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: {
+        /**
+         * Hours
+         *
+         * Time period in hours (max 7 days)
+         */
+        hours?: number;
+        /**
+         * Bucket Size Minutes
+         *
+         * Time bucket size in minutes
+         */
+        bucket_size_minutes?: number;
+    };
+    url: '/v1/triggers/{trigger_id}/timeline';
+};
+export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetError = GetExecutionTimelineV1TriggersTriggerIdTimelineGetErrors[keyof GetExecutionTimelineV1TriggersTriggerIdTimelineGetErrors];
+export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ExecutionTimelineResponse;
+};
+export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponse = GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses[keyof GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses];
 export type GetDashboardV1WorkspaceDashboardGetData = {
     body?: never;
     path?: never;
@@ -12572,6 +12503,72 @@ export type GetDashboardV1WorkspaceDashboardGetResponses = {
     200: DashboardResponse;
 };
 export type GetDashboardV1WorkspaceDashboardGetResponse = GetDashboardV1WorkspaceDashboardGetResponses[keyof GetDashboardV1WorkspaceDashboardGetResponses];
+export type ExportWorkspaceConfigV1WorkspaceExportGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/workspace/export';
+};
+export type ExportWorkspaceConfigV1WorkspaceExportGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: string;
+};
+export type ExportWorkspaceConfigV1WorkspaceExportGetResponse = ExportWorkspaceConfigV1WorkspaceExportGetResponses[keyof ExportWorkspaceConfigV1WorkspaceExportGetResponses];
+export type ImportWorkspaceConfigV1WorkspaceImportPostData = {
+    body: ImportRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/workspace/import';
+};
+export type ImportWorkspaceConfigV1WorkspaceImportPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ImportWorkspaceConfigV1WorkspaceImportPostError = ImportWorkspaceConfigV1WorkspaceImportPostErrors[keyof ImportWorkspaceConfigV1WorkspaceImportPostErrors];
+export type ImportWorkspaceConfigV1WorkspaceImportPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImportResult;
+};
+export type ImportWorkspaceConfigV1WorkspaceImportPostResponse = ImportWorkspaceConfigV1WorkspaceImportPostResponses[keyof ImportWorkspaceConfigV1WorkspaceImportPostResponses];
+export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostData = {
+    body: BodyImportWorkspaceConfigFileV1WorkspaceImportFilePost;
+    path?: never;
+    query?: {
+        /**
+         * Skip Missing Dependencies
+         *
+         * Skip resources with missing dependencies
+         */
+        skip_missing_dependencies?: boolean;
+        /**
+         * Override Existing
+         *
+         * Override existing resources with same name
+         */
+        override_existing?: boolean;
+    };
+    url: '/v1/workspace/import/file';
+};
+export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostError = ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors[keyof ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors];
+export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImportResult;
+};
+export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponse = ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses[keyof ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses];
 export type GetWorkspaceSettingsV1WorkspaceSettingsGetData = {
     body?: never;
     path?: never;
@@ -12605,381 +12602,358 @@ export type UpdateWorkspaceSettingsV1WorkspaceSettingsPutResponses = {
     200: WorkspaceSettingsResponse;
 };
 export type UpdateWorkspaceSettingsV1WorkspaceSettingsPutResponse = UpdateWorkspaceSettingsV1WorkspaceSettingsPutResponses[keyof UpdateWorkspaceSettingsV1WorkspaceSettingsPutResponses];
-export type GetAgentOverviewV1AgentsAgentIdOverviewGetData = {
-    body?: never;
-    path: {
-        /**
-         * Agent Id
-         */
-        agent_id: string;
-    };
-    query?: never;
-    url: '/v1/agents/{agent_id}/overview';
-};
-export type GetAgentOverviewV1AgentsAgentIdOverviewGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetAgentOverviewV1AgentsAgentIdOverviewGetError = GetAgentOverviewV1AgentsAgentIdOverviewGetErrors[keyof GetAgentOverviewV1AgentsAgentIdOverviewGetErrors];
-export type GetAgentOverviewV1AgentsAgentIdOverviewGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: AgentOverviewResponse;
-};
-export type GetAgentOverviewV1AgentsAgentIdOverviewGetResponse = GetAgentOverviewV1AgentsAgentIdOverviewGetResponses[keyof GetAgentOverviewV1AgentsAgentIdOverviewGetResponses];
-export type PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostData = {
-    body: EffectivePolicyPreviewRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/governance/effective-policy/preview';
-};
-export type PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostError = PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors[keyof PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors];
-export type PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: EffectivePolicyResponse;
-};
-export type PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponse = PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses[keyof PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses];
-export type GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/v1/governance/task-policy-snapshots/{task_id}';
-};
-export type GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetError = GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetErrors[keyof GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetErrors];
-export type GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: EffectivePolicyResponse;
-};
-export type GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetResponse = GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetResponses[keyof GetTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGetResponses];
-export type ListPolicyRulesV1PoliciesGetData = {
+export type ListWorkspacesV1WorkspacesGetData = {
     body?: never;
     path?: never;
-    query?: {
-        /**
-         * Subject Type
-         */
-        subject_type?: PolicySubjectType | null;
-        /**
-         * Subject Id
-         */
-        subject_id?: string | null;
-        /**
-         * Effect
-         */
-        effect?: PolicyEffect | null;
-        /**
-         * Target
-         */
-        target?: string | null;
-        /**
-         * Enabled
-         */
-        enabled?: boolean | null;
-    };
-    url: '/v1/policies';
+    query?: never;
+    url: '/v1/workspaces';
 };
-export type ListPolicyRulesV1PoliciesGetErrors = {
+export type ListWorkspacesV1WorkspacesGetResponses = {
     /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ListPolicyRulesV1PoliciesGetError = ListPolicyRulesV1PoliciesGetErrors[keyof ListPolicyRulesV1PoliciesGetErrors];
-export type ListPolicyRulesV1PoliciesGetResponses = {
-    /**
-     * Response List Policy Rules V1 Policies Get
+     * Response List Workspaces V1 Workspaces Get
      *
      * Successful Response
      */
-    200: Array<PolicyRuleResponse>;
+    200: Array<WorkspaceResponse>;
 };
-export type ListPolicyRulesV1PoliciesGetResponse = ListPolicyRulesV1PoliciesGetResponses[keyof ListPolicyRulesV1PoliciesGetResponses];
-export type CreatePolicyRuleV1PoliciesPostData = {
-    body: PolicyRuleCreateRequest;
+export type ListWorkspacesV1WorkspacesGetResponse = ListWorkspacesV1WorkspacesGetResponses[keyof ListWorkspacesV1WorkspacesGetResponses];
+export type CreateWorkspaceV1WorkspacesPostData = {
+    body: CreateWorkspaceBody;
     path?: never;
     query?: never;
-    url: '/v1/policies';
+    url: '/v1/workspaces';
 };
-export type CreatePolicyRuleV1PoliciesPostErrors = {
+export type CreateWorkspaceV1WorkspacesPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type CreatePolicyRuleV1PoliciesPostError = CreatePolicyRuleV1PoliciesPostErrors[keyof CreatePolicyRuleV1PoliciesPostErrors];
-export type CreatePolicyRuleV1PoliciesPostResponses = {
+export type CreateWorkspaceV1WorkspacesPostError = CreateWorkspaceV1WorkspacesPostErrors[keyof CreateWorkspaceV1WorkspacesPostErrors];
+export type CreateWorkspaceV1WorkspacesPostResponses = {
     /**
      * Successful Response
      */
-    201: PolicyRuleResponse;
+    201: WorkspaceResponse;
 };
-export type CreatePolicyRuleV1PoliciesPostResponse = CreatePolicyRuleV1PoliciesPostResponses[keyof CreatePolicyRuleV1PoliciesPostResponses];
-export type DeletePolicyRuleV1PoliciesRuleIdDeleteData = {
+export type CreateWorkspaceV1WorkspacesPostResponse = CreateWorkspaceV1WorkspacesPostResponses[keyof CreateWorkspaceV1WorkspacesPostResponses];
+export type ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetData = {
     body?: never;
     path: {
         /**
-         * Rule Id
+         * Workspace Id
          */
-        rule_id: string;
+        workspace_id: string;
     };
     query?: never;
-    url: '/v1/policies/{rule_id}';
+    url: '/v1/workspaces/{workspace_id}/invitations';
 };
-export type DeletePolicyRuleV1PoliciesRuleIdDeleteErrors = {
+export type ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type DeletePolicyRuleV1PoliciesRuleIdDeleteError = DeletePolicyRuleV1PoliciesRuleIdDeleteErrors[keyof DeletePolicyRuleV1PoliciesRuleIdDeleteErrors];
-export type DeletePolicyRuleV1PoliciesRuleIdDeleteResponses = {
+export type ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetError = ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetErrors[keyof ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetErrors];
+export type ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponses = {
+    /**
+     * Response List Invitations V1 Workspaces  Workspace Id  Invitations Get
+     *
+     * Successful Response
+     */
+    200: Array<InvitationResponse>;
+};
+export type ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponse = ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponses[keyof ListInvitationsV1WorkspacesWorkspaceIdInvitationsGetResponses];
+export type CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostData = {
+    body: CreateInvitationBody;
+    path: {
+        /**
+         * Workspace Id
+         */
+        workspace_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace_id}/invitations';
+};
+export type CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostError = CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostErrors[keyof CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostErrors];
+export type CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: InvitationCreatedResponse;
+};
+export type CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponse = CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponses[keyof CreateInvitationV1WorkspacesWorkspaceIdInvitationsPostResponses];
+export type RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace Id
+         */
+        workspace_id: string;
+        /**
+         * Invitation Id
+         */
+        invitation_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace_id}/invitations/{invitation_id}';
+};
+export type RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteError = RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteErrors[keyof RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteErrors];
+export type RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
-export type DeletePolicyRuleV1PoliciesRuleIdDeleteResponse = DeletePolicyRuleV1PoliciesRuleIdDeleteResponses[keyof DeletePolicyRuleV1PoliciesRuleIdDeleteResponses];
-export type GetPolicyRuleV1PoliciesRuleIdGetData = {
+export type RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponse = RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponses[keyof RevokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDeleteResponses];
+export type ListMembersV1WorkspacesWorkspaceIdMembersGetData = {
     body?: never;
     path: {
         /**
-         * Rule Id
+         * Workspace Id
          */
-        rule_id: string;
+        workspace_id: string;
     };
     query?: never;
-    url: '/v1/policies/{rule_id}';
+    url: '/v1/workspaces/{workspace_id}/members';
 };
-export type GetPolicyRuleV1PoliciesRuleIdGetErrors = {
+export type ListMembersV1WorkspacesWorkspaceIdMembersGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type GetPolicyRuleV1PoliciesRuleIdGetError = GetPolicyRuleV1PoliciesRuleIdGetErrors[keyof GetPolicyRuleV1PoliciesRuleIdGetErrors];
-export type GetPolicyRuleV1PoliciesRuleIdGetResponses = {
+export type ListMembersV1WorkspacesWorkspaceIdMembersGetError = ListMembersV1WorkspacesWorkspaceIdMembersGetErrors[keyof ListMembersV1WorkspacesWorkspaceIdMembersGetErrors];
+export type ListMembersV1WorkspacesWorkspaceIdMembersGetResponses = {
     /**
+     * Response List Members V1 Workspaces  Workspace Id  Members Get
+     *
      * Successful Response
      */
-    200: PolicyRuleResponse;
+    200: Array<MemberResponse>;
 };
-export type GetPolicyRuleV1PoliciesRuleIdGetResponse = GetPolicyRuleV1PoliciesRuleIdGetResponses[keyof GetPolicyRuleV1PoliciesRuleIdGetResponses];
-export type UpdatePolicyRuleV1PoliciesRuleIdPatchData = {
-    body: PolicyRuleUpdateRequest;
+export type ListMembersV1WorkspacesWorkspaceIdMembersGetResponse = ListMembersV1WorkspacesWorkspaceIdMembersGetResponses[keyof ListMembersV1WorkspacesWorkspaceIdMembersGetResponses];
+export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteData = {
+    body?: never;
     path: {
         /**
-         * Rule Id
+         * Workspace Id
          */
-        rule_id: string;
+        workspace_id: string;
+        /**
+         * User Id
+         */
+        user_id: string;
     };
     query?: never;
-    url: '/v1/policies/{rule_id}';
+    url: '/v1/workspaces/{workspace_id}/members/{user_id}';
 };
-export type UpdatePolicyRuleV1PoliciesRuleIdPatchErrors = {
+export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type UpdatePolicyRuleV1PoliciesRuleIdPatchError = UpdatePolicyRuleV1PoliciesRuleIdPatchErrors[keyof UpdatePolicyRuleV1PoliciesRuleIdPatchErrors];
-export type UpdatePolicyRuleV1PoliciesRuleIdPatchResponses = {
-    /**
-     * Successful Response
-     */
-    200: PolicyRuleResponse;
-};
-export type UpdatePolicyRuleV1PoliciesRuleIdPatchResponse = UpdatePolicyRuleV1PoliciesRuleIdPatchResponses[keyof UpdatePolicyRuleV1PoliciesRuleIdPatchResponses];
-export type GetInboxItemsV1InboxGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Status
-         *
-         * Filter to a specific inbox status
-         */
-        status?: string | null;
-        /**
-         * Agent Id
-         *
-         * Filter by agent ID
-         */
-        agent_id?: string | null;
-        /**
-         * Page
-         */
-        page?: number;
-        /**
-         * Page Size
-         */
-        page_size?: number;
-    };
-    url: '/v1/inbox/';
-};
-export type GetInboxItemsV1InboxGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetInboxItemsV1InboxGetError = GetInboxItemsV1InboxGetErrors[keyof GetInboxItemsV1InboxGetErrors];
-export type GetInboxItemsV1InboxGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: InboxResponse;
-};
-export type GetInboxItemsV1InboxGetResponse = GetInboxItemsV1InboxGetResponses[keyof GetInboxItemsV1InboxGetResponses];
-export type ListWorkspaceFilesV1FilesGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/files';
-};
-export type ListWorkspaceFilesV1FilesGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: WorkspaceFileListResponse;
-};
-export type ListWorkspaceFilesV1FilesGetResponse = ListWorkspaceFilesV1FilesGetResponses[keyof ListWorkspaceFilesV1FilesGetResponses];
-export type UploadWorkspaceFileV1FilesPostData = {
-    body: BodyUploadWorkspaceFileV1FilesPost;
-    path?: never;
-    query?: never;
-    url: '/v1/files';
-};
-export type UploadWorkspaceFileV1FilesPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type UploadWorkspaceFileV1FilesPostError = UploadWorkspaceFileV1FilesPostErrors[keyof UploadWorkspaceFileV1FilesPostErrors];
-export type UploadWorkspaceFileV1FilesPostResponses = {
+export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteError = RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors[keyof RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteErrors];
+export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
-export type UploadWorkspaceFileV1FilesPostResponse = UploadWorkspaceFileV1FilesPostResponses[keyof UploadWorkspaceFileV1FilesPostResponses];
-export type WorkspaceFileHistoryV1FilesHistoryGetData = {
+export type RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponse = RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses[keyof RemoveMemberV1WorkspacesWorkspaceIdMembersUserIdDeleteResponses];
+export type WebhookHealthCheckWebhooksHealthGetData = {
     body?: never;
     path?: never;
-    query: {
-        /**
-         * Path
-         */
-        path: string;
-    };
-    url: '/v1/files/history';
+    query?: never;
+    url: '/webhooks/health';
 };
-export type WorkspaceFileHistoryV1FilesHistoryGetErrors = {
+export type WebhookHealthCheckWebhooksHealthGetResponses = {
     /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type WorkspaceFileHistoryV1FilesHistoryGetError = WorkspaceFileHistoryV1FilesHistoryGetErrors[keyof WorkspaceFileHistoryV1FilesHistoryGetErrors];
-export type WorkspaceFileHistoryV1FilesHistoryGetResponses = {
-    /**
+     * Response Webhook Health Check Webhooks Health Get
+     *
      * Successful Response
      */
-    200: ArtifactHistoryResponse;
+    200: {
+        [key: string]: unknown;
+    };
 };
-export type WorkspaceFileHistoryV1FilesHistoryGetResponse = WorkspaceFileHistoryV1FilesHistoryGetResponses[keyof WorkspaceFileHistoryV1FilesHistoryGetResponses];
-export type StreamWorkspaceFileV1FilesDownloadFilePathGetData = {
+export type WebhookHealthCheckWebhooksHealthGetResponse = WebhookHealthCheckWebhooksHealthGetResponses[keyof WebhookHealthCheckWebhooksHealthGetResponses];
+export type HandleWebhookWebhooksWebhookIdDeleteData = {
     body?: never;
     path: {
         /**
-         * File Path
+         * Webhook Id
          */
-        file_path: string;
+        webhook_id: string;
     };
     query?: never;
-    url: '/v1/files/download/{file_path}';
+    url: '/webhooks/{webhook_id}';
 };
-export type StreamWorkspaceFileV1FilesDownloadFilePathGetErrors = {
+export type HandleWebhookWebhooksWebhookIdDeleteErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type StreamWorkspaceFileV1FilesDownloadFilePathGetError = StreamWorkspaceFileV1FilesDownloadFilePathGetErrors[keyof StreamWorkspaceFileV1FilesDownloadFilePathGetErrors];
-export type StreamWorkspaceFileV1FilesDownloadFilePathGetResponses = {
+export type HandleWebhookWebhooksWebhookIdDeleteError = HandleWebhookWebhooksWebhookIdDeleteErrors[keyof HandleWebhookWebhooksWebhookIdDeleteErrors];
+export type HandleWebhookWebhooksWebhookIdDeleteResponses = {
     /**
      * Successful Response
      */
     200: unknown;
 };
-export type DownloadWorkspaceFileV1FilesFilePathGetData = {
+export type HandleWebhookWebhooksWebhookIdGetData = {
     body?: never;
     path: {
         /**
-         * File Path
+         * Webhook Id
          */
-        file_path: string;
+        webhook_id: string;
     };
     query?: never;
-    url: '/v1/files/{file_path}';
+    url: '/webhooks/{webhook_id}';
 };
-export type DownloadWorkspaceFileV1FilesFilePathGetErrors = {
+export type HandleWebhookWebhooksWebhookIdGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type DownloadWorkspaceFileV1FilesFilePathGetError = DownloadWorkspaceFileV1FilesFilePathGetErrors[keyof DownloadWorkspaceFileV1FilesFilePathGetErrors];
-export type DownloadWorkspaceFileV1FilesFilePathGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: WorkspaceFileDownloadResponse;
-};
-export type DownloadWorkspaceFileV1FilesFilePathGetResponse = DownloadWorkspaceFileV1FilesFilePathGetResponses[keyof DownloadWorkspaceFileV1FilesFilePathGetResponses];
-export type HealthCheckHealthGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/health';
-};
-export type HealthCheckHealthGetResponses = {
+export type HandleWebhookWebhooksWebhookIdGetError = HandleWebhookWebhooksWebhookIdGetErrors[keyof HandleWebhookWebhooksWebhookIdGetErrors];
+export type HandleWebhookWebhooksWebhookIdGetResponses = {
     /**
      * Successful Response
      */
     200: unknown;
 };
-export type RootGetData = {
+export type HandleWebhookWebhooksWebhookIdHeadData = {
     body?: never;
-    path?: never;
+    path: {
+        /**
+         * Webhook Id
+         */
+        webhook_id: string;
+    };
     query?: never;
-    url: '/';
+    url: '/webhooks/{webhook_id}';
 };
-export type RootGetResponses = {
+export type HandleWebhookWebhooksWebhookIdHeadErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type HandleWebhookWebhooksWebhookIdHeadError = HandleWebhookWebhooksWebhookIdHeadErrors[keyof HandleWebhookWebhooksWebhookIdHeadErrors];
+export type HandleWebhookWebhooksWebhookIdHeadResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type HandleWebhookWebhooksWebhookIdOptionsData = {
+    body?: never;
+    path: {
+        /**
+         * Webhook Id
+         */
+        webhook_id: string;
+    };
+    query?: never;
+    url: '/webhooks/{webhook_id}';
+};
+export type HandleWebhookWebhooksWebhookIdOptionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type HandleWebhookWebhooksWebhookIdOptionsError = HandleWebhookWebhooksWebhookIdOptionsErrors[keyof HandleWebhookWebhooksWebhookIdOptionsErrors];
+export type HandleWebhookWebhooksWebhookIdOptionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type HandleWebhookWebhooksWebhookIdPatchData = {
+    body?: never;
+    path: {
+        /**
+         * Webhook Id
+         */
+        webhook_id: string;
+    };
+    query?: never;
+    url: '/webhooks/{webhook_id}';
+};
+export type HandleWebhookWebhooksWebhookIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type HandleWebhookWebhooksWebhookIdPatchError = HandleWebhookWebhooksWebhookIdPatchErrors[keyof HandleWebhookWebhooksWebhookIdPatchErrors];
+export type HandleWebhookWebhooksWebhookIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type HandleWebhookWebhooksWebhookIdPostData = {
+    body?: never;
+    path: {
+        /**
+         * Webhook Id
+         */
+        webhook_id: string;
+    };
+    query?: never;
+    url: '/webhooks/{webhook_id}';
+};
+export type HandleWebhookWebhooksWebhookIdPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type HandleWebhookWebhooksWebhookIdPostError = HandleWebhookWebhooksWebhookIdPostErrors[keyof HandleWebhookWebhooksWebhookIdPostErrors];
+export type HandleWebhookWebhooksWebhookIdPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type HandleWebhookWebhooksWebhookIdPutData = {
+    body?: never;
+    path: {
+        /**
+         * Webhook Id
+         */
+        webhook_id: string;
+    };
+    query?: never;
+    url: '/webhooks/{webhook_id}';
+};
+export type HandleWebhookWebhooksWebhookIdPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type HandleWebhookWebhooksWebhookIdPutError = HandleWebhookWebhooksWebhookIdPutErrors[keyof HandleWebhookWebhooksWebhookIdPutErrors];
+export type HandleWebhookWebhooksWebhookIdPutResponses = {
     /**
      * Successful Response
      */

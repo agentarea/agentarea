@@ -9,15 +9,6 @@ from agentarea_common.events.event_models import (
     A2UIUpdateDataModelEvent,
     EventType,
 )
-from agentarea_execution.workflows.events import (
-    A2UICreateSurfaceEvent as WfCreateSurface,
-    A2UIDeleteSurfaceEvent as WfDeleteSurface,
-    A2UIUpdateComponentsEvent as WfUpdateComponents,
-    A2UIUpdateDataModelEvent as WfUpdateDataModel,
-    EVENT_CLASS_MAPPING,
-    create_event_from_dict,
-    event_to_dict,
-)
 
 BASIC_CATALOG = "https://a2ui.org/specification/v0_9/basic_catalog.json"
 
@@ -32,9 +23,6 @@ SAMPLE_COMPONENTS = [
     },
     {"id": "btn_label", "component": "Text", "text": "Click me"},
 ]
-
-
-# ── Domain event models (event_models.py) ────────────────────────────────────
 
 
 class TestA2UICreateSurfaceEvent:
@@ -182,73 +170,3 @@ class TestA2UIDeleteSurfaceEvent:
         )
         envelope = ev.to_envelope()
         assert envelope.event_type == "workflow.A2UIDeleteSurface"
-
-
-# ── Workflow event models (workflows/events.py) ──────────────────────────────
-
-
-class TestWorkflowA2UIEvents:
-    """Test the workflow-level A2UI event dataclasses and their mappings."""
-
-    def test_class_mapping_has_all_a2ui_events(self):
-        assert "A2UICreateSurface" in EVENT_CLASS_MAPPING
-        assert "A2UIUpdateComponents" in EVENT_CLASS_MAPPING
-        assert "A2UIUpdateDataModel" in EVENT_CLASS_MAPPING
-        assert "A2UIDeleteSurface" in EVENT_CLASS_MAPPING
-
-    def test_create_surface_defaults(self):
-        ev = WfCreateSurface(surface_id="s1")
-        assert ev.surface_id == "s1"
-        assert ev.catalog_id == BASIC_CATALOG
-        assert ev.send_data_model is False
-
-    def test_update_components_roundtrip(self):
-        ev = WfUpdateComponents(surface_id="s1", components=SAMPLE_COMPONENTS)
-        d = event_to_dict(ev)
-        assert d["event_type"] == "A2UIUpdateComponents"
-        assert len(d["data"]["components"]) == 4
-
-    def test_update_data_model_roundtrip(self):
-        ev = WfUpdateDataModel(surface_id="s1", path="/user/name", value="Jane")
-        d = event_to_dict(ev)
-        assert d["event_type"] == "A2UIUpdateDataModel"
-        assert d["data"]["path"] == "/user/name"
-        assert d["data"]["value"] == "Jane"
-
-    def test_delete_surface_roundtrip(self):
-        ev = WfDeleteSurface(surface_id="s1")
-        d = event_to_dict(ev)
-        assert d["event_type"] == "A2UIDeleteSurface"
-        assert d["data"]["surface_id"] == "s1"
-
-    def test_create_event_from_dict_create_surface(self):
-        ev = create_event_from_dict(
-            "A2UICreateSurface",
-            {"surface_id": "s1", "catalog_id": BASIC_CATALOG},
-        )
-        assert isinstance(ev, WfCreateSurface)
-        assert ev.surface_id == "s1"
-
-    def test_create_event_from_dict_update_components(self):
-        ev = create_event_from_dict(
-            "A2UIUpdateComponents",
-            {"surface_id": "s1", "components": SAMPLE_COMPONENTS},
-        )
-        assert isinstance(ev, WfUpdateComponents)
-        assert len(ev.components) == 4
-
-    def test_create_event_from_dict_update_data_model(self):
-        ev = create_event_from_dict(
-            "A2UIUpdateDataModel",
-            {"surface_id": "s1", "path": "/x", "value": 42},
-        )
-        assert isinstance(ev, WfUpdateDataModel)
-        assert ev.value == 42
-
-    def test_create_event_from_dict_delete_surface(self):
-        ev = create_event_from_dict(
-            "A2UIDeleteSurface",
-            {"surface_id": "s1"},
-        )
-        assert isinstance(ev, WfDeleteSurface)
-        assert ev.surface_id == "s1"

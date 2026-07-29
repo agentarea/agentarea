@@ -1,69 +1,110 @@
-# Build stage
+# Unified sandbox runtime image.
+# Serves both roles:
+#   - prod: warm-pool runner pods (published as agentarea/mcp-runner)
+#   - dev:  the compose sandbox-executor container
+# Debian base (not Alpine): agent workloads need manylinux wheels
+# (pandas, lxml, pillow) that do not install on musl.
 FROM golang:1.25-alpine AS builder
 
-WORKDIR /app
+RUN apk add --no-cache git ca-certificates
 
-# Copy go.mod and go.sum first for better caching
+WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
-
-# Copy the entire project
 COPY . .
 
-# Build the activation service
-RUN go build -o activation-service ./cmd/activation-service/...
+ARG TARGETARCH
+ARG TARGETOS
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build \
+    -a -installsuffix cgo -o bin/activation-service ./cmd/activation-service
 
-# Runtime stage
-FROM alpine:3.19
+FROM python:3.12-slim-bookworm
 
-# Install base runtime dependencies used by agent code tools and skill scripts.
-# Include lightweight office-generation libraries so document tasks do not
-# spend reasoning iterations bootstrapping Python packages inside the sandbox.
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     ca-certificates \
     curl \
+    dumb-init \
     file \
     findutils \
     git \
     gzip \
     iptables \
     jq \
-    nodejs \
-    npm \
-    py3-pip \
-    py3-virtualenv \
-    python3 \
     skopeo \
     tar \
     unzip \
     zip \
-    && ln -sf /usr/bin/python3 /usr/bin/python
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --break-system-packages \
-    openpyxl \
-    python-docx \
-    python-pptx
+# Venv-first: /opt/runtime/venv owns `python` and `pip` on PATH, so agent
+# `pip install` works without --break-system-packages (no PEP 668 marker).
+ENV PATH=/opt/runtime/venv/bin:$PATH
+ENV SANDBOX_COMMAND_UID=10001 SANDBOX_COMMAND_GID=10001
+COPY runtime/requirements.txt /opt/runtime/requirements.txt
+RUN python -m venv /opt/runtime/venv \
+    && pip install --no-cache-dir -r /opt/runtime/requirements.txt
 
-# Create directories
-RUN mkdir -p \
-    /app/mcp-overlay \
-    /var/cache/mcp-images
+# The version stamped into the runtime manifest, from the VERSION file via the
+# build workflow's APP_VERSION — one version source rather than a second one to
+# forget.
+#
+# Deliberately declared with NO default. A default is what caused the bug this
+# replaced: the old `ARG RUNTIME_VERSION=dev` was passed by nobody, so "dev" was
+# not a fallback for local builds, it was the only value any published image
+# ever carried — and the manifest silently lied about which build was running.
+# With no default, a build site that forgets to pass a version fails at
+# generate_manifest.py ("RUNTIME_VERSION must be set at build time") instead of
+# shipping a plausible-looking wrong answer. Every build site now states its
+# own version, including compose.
+ARG APP_VERSION
+ARG MANAGED_ENVIRONMENT=mutable
+COPY runtime/generate_manifest.py /opt/runtime/generate_manifest.py
+COPY runtime/test_locked_profile.sh /opt/runtime/test_locked_profile.sh
+RUN mkdir -p /etc/agentarea \
+    && case "${MANAGED_ENVIRONMENT}" in \
+         mutable) chown -R 10001:10001 /opt/runtime/venv ;; \
+         immutable) \
+           rm -f /opt/runtime/venv/bin/pip /opt/runtime/venv/bin/pip3 /opt/runtime/venv/bin/pip3.12 \
+             /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12 \
+             /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+             /usr/bin/npm /usr/bin/npx /usr/bin/corepack /usr/bin/yarn /usr/bin/pnpm; \
+           find /opt/runtime/venv/lib/python3.12/site-packages -maxdepth 1 \
+             \( -name 'pip' -o -name 'pip-*.dist-info' \) -exec rm -rf '{}' +; \
+           find /usr/local/lib/python3.12/site-packages -maxdepth 1 \
+             \( -name 'pip' -o -name 'pip-*.dist-info' \) -exec rm -rf '{}' +; \
+           rm -rf /usr/local/lib/python3.12/ensurepip /usr/local/lib/python3.12/venv \
+             /usr/lib/node_modules/npm /usr/lib/node_modules/corepack; \
+           chown -R root:root /opt/runtime/venv; \
+           chmod -R a-w /opt/runtime/venv \
+           ;; \
+         *) echo "MANAGED_ENVIRONMENT must be mutable or immutable" >&2; exit 1 ;; \
+       esac \
+    && RUNTIME_VERSION=${APP_VERSION} MANAGED_ENVIRONMENT=${MANAGED_ENVIRONMENT} \
+       python /opt/runtime/generate_manifest.py \
+       > /etc/agentarea/runtime.json \
+    && cat /etc/agentarea/runtime.json \
+    && if [ "${MANAGED_ENVIRONMENT}" = immutable ]; then \
+         sh /opt/runtime/test_locked_profile.sh; \
+       fi \
+    && find /opt/runtime -type d -name __pycache__ -prune -exec rm -rf '{}' +
 
-# Copy activation service from builder
-COPY --from=builder /app/activation-service /usr/local/bin/activation-service
+# The activation service may retain its container privileges for image-overlay
+# work, but every task command is dropped to this dedicated uid by the service.
+RUN useradd --uid 10001 --create-home sandbox \
+    && mkdir -p /workspace /app/mcp-overlay /var/cache/mcp-images \
+    && chmod 777 /workspace \
+    && chown -R sandbox:sandbox /workspace /app/mcp-overlay /var/cache/mcp-images
 
-# Make it executable
-RUN chmod +x /usr/local/bin/activation-service
+COPY --from=builder /app/bin/activation-service /usr/local/bin/activation-service
 
-# Ports
-# 8080 - Activation API
-# 3000 - MCP protocol (configurable)
+# 8080 - Activation API, 3000 - MCP protocol (configurable)
 EXPOSE 8080 3000
 
-# Run as root (needed for mount operations)
-# In production, use more restrictive security context
-USER root
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -fsS http://localhost:8080/health || exit 1
 
-# Start activation service
-ENTRYPOINT ["/usr/local/bin/activation-service"]
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["/usr/local/bin/activation-service"]

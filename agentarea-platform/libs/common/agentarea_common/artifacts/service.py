@@ -9,8 +9,13 @@ without passing a different ``workspace_id``.
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import logging
 import mimetypes
+import re
+import tempfile
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,6 +37,35 @@ from agentarea_common.config.aws import (
 logger = logging.getLogger(__name__)
 
 _WORKSPACE_PREFIX = "workspaces"
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def sha256_hex_from_head(head: Mapping[str, Any]) -> str | None:
+    """Resolve an object's lowercase-hex sha256 from a HEAD response.
+
+    Prefers the ``sha256`` user-metadata that :meth:`ArtifactService.put` writes;
+    otherwise derives it from the S3-native ``ChecksumSHA256`` (base64 of the raw
+    32-byte digest), which is all a presigned direct upload can guarantee. Returns
+    ``None`` when neither is present so the caller can fail loudly rather than
+    guess a digest. The HEAD must have been issued with ``ChecksumMode=ENABLED``
+    for ``ChecksumSHA256`` to be populated.
+    """
+    meta_sha = str((head.get("Metadata") or {}).get("sha256") or "")
+    if _SHA256_RE.fullmatch(meta_sha):
+        return meta_sha
+    checksum_b64 = head.get("ChecksumSHA256")
+    if checksum_b64:
+        try:
+            digest = base64.b64decode(str(checksum_b64), validate=True)
+        except (ValueError, TypeError):
+            return None
+        if len(digest) == 32:
+            return digest.hex()
+    return None
+
+
+class ArtifactIntegrityError(RuntimeError):
+    """The stored artifact cannot be verified against its immutable digest."""
 
 
 @dataclass(frozen=True)
@@ -124,6 +158,7 @@ class ArtifactService:
     ) -> ArtifactObject:
         key = self._key(workspace_id, path)
         ct = content_type or self._guess_content_type(path)
+        digest = hashlib.sha256(data).hexdigest()
 
         # Distinguish a first write (created) from an overwrite (modified) for
         # provenance; only pay the extra head_object when we'll record it.
@@ -139,6 +174,8 @@ class ArtifactService:
                 Key=key,
                 Body=data,
                 ContentType=ct,
+                Metadata={"sha256": digest},
+                ChecksumSHA256=base64.b64encode(bytes.fromhex(digest)).decode("ascii"),
             )
 
         await asyncio.to_thread(_call)
@@ -159,6 +196,72 @@ class ArtifactService:
             return resp["Body"].read(), resp.get("ContentType")
 
         return await asyncio.to_thread(_call)
+
+    async def stream(
+        self,
+        workspace_id: str,
+        path: str,
+        *,
+        chunk_size: int = 1024 * 1024,
+    ) -> tuple[AsyncIterator[bytes], str | None, int]:
+        """Verify into a bounded spool before yielding any artifact bytes."""
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be positive")
+        key = self._key(workspace_id, path)
+
+        def open_object() -> Any:
+            try:
+                return self._client.get_object(Bucket=self._bucket, Key=key)
+            except ClientError as exc:
+                code = exc.response.get("Error", {}).get("Code")
+                if code in {"NoSuchKey", "404", "NotFound"}:
+                    raise FileNotFoundError(path) from exc
+                raise
+
+        response = await asyncio.to_thread(open_object)
+        body = response["Body"]
+        size = int(response.get("ContentLength") or 0)
+        digest = str((response.get("Metadata") or {}).get("sha256") or "")
+        if not _SHA256_RE.fullmatch(digest):
+            close = getattr(body, "close", None)
+            if callable(close):
+                await asyncio.to_thread(close)
+            raise ArtifactIntegrityError(f"artifact integrity digest is missing for {path!r}")
+
+        spool = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")
+        hasher = hashlib.sha256()
+        copied = 0
+        try:
+            while True:
+                remaining_with_sentinel = max(1, size - copied + 1)
+                read_size = min(chunk_size, remaining_with_sentinel)
+                chunk = await asyncio.to_thread(body.read, read_size)
+                if not chunk:
+                    break
+                copied += len(chunk)
+                if copied > size:
+                    raise ArtifactIntegrityError(f"artifact verification failed for {path!r}")
+                hasher.update(chunk)
+                await asyncio.to_thread(spool.write, chunk)
+            if copied != size or hasher.hexdigest() != digest:
+                raise ArtifactIntegrityError(f"artifact verification failed for {path!r}")
+            await asyncio.to_thread(spool.seek, 0)
+        except Exception:
+            spool.close()
+            raise
+        finally:
+            close = getattr(body, "close", None)
+            if callable(close):
+                await asyncio.to_thread(close)
+
+        async def verified_chunks() -> AsyncIterator[bytes]:
+            try:
+                while chunk := await asyncio.to_thread(spool.read, chunk_size):
+                    yield chunk
+            finally:
+                spool.close()
+
+        return verified_chunks(), response.get("ContentType"), size
 
     async def exists(self, workspace_id: str, path: str) -> bool:
         key = self._key(workspace_id, path)
@@ -232,5 +335,60 @@ class ArtifactService:
                 Params={"Bucket": self._bucket, "Key": key},
                 ExpiresIn=expires_in,
             )
+
+        return await asyncio.to_thread(_call)
+
+    async def presigned_put_url(
+        self,
+        workspace_id: str,
+        path: str,
+        *,
+        content_type: str | None = None,
+        sha256_b64: str | None = None,
+        expires_in: int = 3600,
+    ) -> str:
+        """Sign a direct-upload URL against the externally reachable endpoint.
+
+        When ``sha256_b64`` is supplied the digest is bound into the signature
+        as ``ChecksumSHA256``; the object store then rejects a body whose
+        content does not hash to it, so the upload is content-verified without
+        trusting the client.
+        """
+        key = self._key(workspace_id, path)
+
+        def _call() -> str:
+            params: dict[str, Any] = {"Bucket": self._bucket, "Key": key}
+            if content_type is not None:
+                params["ContentType"] = content_type
+            if sha256_b64 is not None:
+                params["ChecksumSHA256"] = sha256_b64
+            return self._public_client.generate_presigned_url(
+                "put_object",
+                Params=params,
+                ExpiresIn=expires_in,
+            )
+
+        return await asyncio.to_thread(_call)
+
+    async def head(self, workspace_id: str, path: str) -> dict[str, Any] | None:
+        """Return ``{size, content_type, metadata}`` or ``None`` when absent."""
+        key = self._key(workspace_id, path)
+
+        def _call() -> dict[str, Any] | None:
+            try:
+                resp = self._client.head_object(
+                    Bucket=self._bucket, Key=key, ChecksumMode="ENABLED"
+                )
+            except ClientError as e:
+                code = e.response.get("Error", {}).get("Code")
+                if code in {"NoSuchKey", "404", "NotFound"}:
+                    return None
+                raise
+            return {
+                "size": int(resp.get("ContentLength") or 0),
+                "content_type": resp.get("ContentType"),
+                "metadata": dict(resp.get("Metadata") or {}),
+                "sha256": sha256_hex_from_head(resp),
+            }
 
         return await asyncio.to_thread(_call)

@@ -69,74 +69,7 @@ export interface TaskError {
 	timestamp: Date;
 }
 
-export interface TaskSubmissionRequest {
-	agentId: string;
-	title: string;
-	description?: string;
-	parameters?: Record<string, unknown>;
-}
-
-export interface TaskResponse {
-	taskId: string;
-	agentId: string;
-	streamUrl: string;
-	estimatedDuration?: number;
-}
-
-// SSE Event Types
-export type TaskEventType =
-	| 'output'
-	| 'status'
-	| 'progress'
-	| 'error'
-	| 'complete';
-
-export interface TaskOutputEvent {
-	eventType: TaskEventType;
-	taskId: string;
-	timestamp: Date;
-	data: TaskOutputData;
-}
-
-export type TaskOutputData =
-	| OutputChunk
-	| StatusUpdate
-	| ProgressUpdate
-	| ErrorEvent
-	| CompletionEvent;
-
-export interface OutputChunk {
-	type: 'output';
-	content: string;
-	stream: 'stdout' | 'stderr';
-}
-
-export interface StatusUpdate {
-	type: 'status';
-	status: TaskStatus;
-	message: string;
-}
-
-export interface ProgressUpdate {
-	type: 'progress';
-	current: number;
-	total: number;
-	percentage: number;
-}
-
-export interface ErrorEvent {
-	type: 'error';
-	code: string;
-	message: string;
-	details?: unknown;
-}
-
-export interface CompletionEvent {
-	type: 'complete';
-	status: 'success' | 'failure';
-	message: string;
-	resultSummary?: unknown;
-}
+// Task events live in services/sse.ts, typed by the canonical event contract.
 
 // Configuration Types
 export interface CLIConfig {

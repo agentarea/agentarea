@@ -57,9 +57,7 @@ class TestCompiler:
         assert Decimal(str(doc.budget.monthly_spend_cap_usd)) == Decimal("10.00")
 
     def test_run_spend_cap(self):
-        doc = rules_to_document(
-            [_rule("spend", PolicyEffect.CAP, amount_usd="2.50", period="run")]
-        )
+        doc = rules_to_document([_rule("spend", PolicyEffect.CAP, amount_usd="2.50", period="run")])
         assert Decimal(str(doc.budget.run_budget_usd)) == Decimal("2.50")
 
     def test_service_cap(self):
@@ -101,11 +99,40 @@ class TestCompiler:
         doc = rules_to_document([_rule("tool:*", PolicyEffect.APPROVAL)])
         assert doc.approval.requires_human_approval is True
 
-    def test_approval_approvers_merged(self):
+    def test_tool_scoped_approvers_go_to_approvers_by_tool(self):
+        # A tool-scoped approval rule keeps its approvers attached to that tool,
+        # not flattened into the global list — so "tool A signed by alice" and
+        # "tool B signed by bob" stay distinct.
         doc = rules_to_document(
-            [_rule("tool:send_email", PolicyEffect.APPROVAL, approvers=["user:alice"])]
+            [_rule("tool:launch_task", PolicyEffect.APPROVAL, approvers=["user:alice"])]
         )
-        assert doc.approval.approvers == ["user:alice"]
+        assert doc.approval.approvers_by_tool == {"launch_task": ["user:alice"]}
+        assert "launch_task" in doc.approval.escalation_rules
+        assert doc.approval.approvers == []
+
+    def test_two_tools_keep_separate_approver_lists(self):
+        doc = rules_to_document(
+            [
+                _rule("tool:launch_task", PolicyEffect.APPROVAL, approvers=["user:alice"]),
+                _rule("tool:delete_file", PolicyEffect.APPROVAL, approvers=["user:bob"]),
+            ]
+        )
+        assert doc.approval.approvers_by_tool == {
+            "launch_task": ["user:alice"],
+            "delete_file": ["user:bob"],
+        }
+        assert doc.approval.approvers == []
+
+    def test_global_approval_approvers_populate_the_flat_list(self):
+        doc = rules_to_document([_rule("*", PolicyEffect.APPROVAL, approvers=["user:root"])])
+        assert doc.approval.requires_human_approval is True
+        assert doc.approval.approvers == ["user:root"]
+        assert doc.approval.approvers_by_tool == {}
+
+    def test_wildcard_tool_approvers_populate_the_flat_list(self):
+        doc = rules_to_document([_rule("tool:*", PolicyEffect.APPROVAL, approvers=["user:root"])])
+        assert doc.approval.approvers == ["user:root"]
+        assert doc.approval.approvers_by_tool == {}
 
     def test_content_safety(self):
         doc = rules_to_document(
@@ -157,7 +184,9 @@ class TestEgressRules:
 
     def test_allowlist_extraction_by_target(self):
         rules = [
-            _rule("mcp:github", PolicyEffect.EGRESS, allowed_hosts=["*.github.com", "api.github.com"]),
+            _rule(
+                "mcp:github", PolicyEffect.EGRESS, allowed_hosts=["*.github.com", "api.github.com"]
+            ),
             _rule("mcp:slack", PolicyEffect.EGRESS, allowed_hosts=["slack.com"]),
             _rule("tool:send_email", PolicyEffect.ALLOW),  # non-egress ignored
         ]
@@ -169,7 +198,9 @@ class TestEgressRules:
     def test_allowlist_dedupes_and_merges_same_target(self):
         rules = [
             _rule("mcp:github", PolicyEffect.EGRESS, allowed_hosts=["*.github.com"]),
-            _rule("mcp:github", PolicyEffect.EGRESS, allowed_hosts=["*.github.com", "raw.github.com"]),
+            _rule(
+                "mcp:github", PolicyEffect.EGRESS, allowed_hosts=["*.github.com", "raw.github.com"]
+            ),
         ]
         assert egress_allowlist_from_rules(rules) == {
             "mcp:github": ["*.github.com", "raw.github.com"]
@@ -187,6 +218,9 @@ class TestEgressRules:
         ) == {"mcp:github": []}
 
     def test_malformed_allowed_hosts_skipped(self):
-        assert egress_allowlist_from_rules(
-            [_rule("mcp:github", PolicyEffect.EGRESS, allowed_hosts="not-a-list")]
-        ) == {}
+        assert (
+            egress_allowlist_from_rules(
+                [_rule("mcp:github", PolicyEffect.EGRESS, allowed_hosts="not-a-list")]
+            )
+            == {}
+        )

@@ -8,10 +8,12 @@ PORT: "8000"
 LOG_LEVEL: "info"
 MCP_MANAGER_URL: "http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}"
 MCP_CLIENT_TIMEOUT: "30"
+MCP_LAZY_PROVISIONING_ENABLED: "{{ .Values.mcpManager.serverless.enabled }}"
 API_HOST: "{{ .Values.global.api.host }}"
 API_PORT: "{{ .Values.global.api.port }}"
 API_BASE_URL: "{{ include "agentarea.backend.apiUrl" . }}"
 API_AUTH_ENABLED: "{{ .Values.global.api.auth.enabled }}"
+PUBLIC_S3_ENDPOINT: "{{ .Values.global.storage.publicEndpoint }}"
 METRICS_ENABLED: "{{ .Values.global.monitoring.prometheus.enabled }}"
 METRICS_PORT: "{{ .Values.global.monitoring.prometheus.port }}"
 HEALTH_CHECK_ENABLED: "{{ .Values.global.monitoring.health.enabled }}"
@@ -41,6 +43,11 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-backend
       key: MCP_CLIENT_TIMEOUT
+- name: MCP_LAZY_PROVISIONING_ENABLED
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-backend
+      key: MCP_LAZY_PROVISIONING_ENABLED
 - name: API_HOST
   valueFrom:
     configMapKeyRef:
@@ -61,6 +68,11 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-backend
       key: API_AUTH_ENABLED
+- name: PUBLIC_S3_ENDPOINT
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-backend
+      key: PUBLIC_S3_ENDPOINT
 - name: METRICS_ENABLED
   valueFrom:
     configMapKeyRef:

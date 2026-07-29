@@ -77,23 +77,44 @@ def echo_tool_cls():
 
 @pytest.fixture
 def test_model():
-    """Default model configuration for tests."""
-    return "ollama_chat/qwen2.5"
+    """Model under test as a litellm ``provider/model`` string.
+
+    Defaults to a local Ollama model; override with ``LLM_MODEL`` to point the
+    real-LLM tests at any provider (e.g. ``openai/gpt-4o``).
+    """
+    import os
+
+    return os.getenv("LLM_MODEL", "ollama_chat/qwen2.5")
 
 
 @pytest.fixture
-def skip_if_no_llm():
-    """Skip test if LLM is not available."""
+def skip_if_no_llm(test_model):
+    """Skip the real-LLM tests unless the configured model is actually served.
+
+    Only Ollama models are probed (via ``OLLAMA_API_BASE``, the same endpoint
+    litellm calls); a non-Ollama ``LLM_MODEL`` is assumed to be configured by
+    the caller and runs as-is.
+    """
 
     def _skip_if_no_llm():
-        try:
-            from agentarea_agents_sdk.models.llm_model import LLMModel
+        import os
 
-            LLMModel(provider_type="ollama_chat", model_name="qwen2.5", endpoint_url=None)
-            # Try a simple request to check if model is available
-            return False  # Don't skip
+        import httpx
+
+        provider, _, model = test_model.partition("/")
+        if not provider.startswith("ollama"):
+            return
+
+        base = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
+        want = model if ":" in model else f"{model}:latest"
+        try:
+            resp = httpx.get(f"{base}/api/tags", timeout=1.0)
+            resp.raise_for_status()
+            served = {m["name"] for m in resp.json().get("models", [])}
         except Exception:
-            pytest.skip("LLM model not available")
+            pytest.skip(f"Ollama not reachable at {base} (set OLLAMA_API_BASE)")
+        if want not in served:
+            pytest.skip(f"model {want!r} not pulled at {base} (have: {sorted(served)})")
 
     return _skip_if_no_llm
 

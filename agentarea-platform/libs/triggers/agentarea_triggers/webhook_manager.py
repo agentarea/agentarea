@@ -630,8 +630,6 @@ class DefaultWebhookManager(WebhookManager):
             strategy = parser_config.get("strategy")
 
             if strategy == "code":
-                # Fallback to specific methods
-                # We map known types to their legacy method names
                 method_map = {
                     "telegram": "_parse_telegram_webhook",
                     "slack": "_parse_slack_webhook",
@@ -863,7 +861,7 @@ class DefaultWebhookManager(WebhookManager):
                         "team_id": slack_data.get("team_id"),
                     }
                 )
-            # Legacy format fallback
+            # Outer-payload fallback
             else:
                 parsed_data.update(
                     {

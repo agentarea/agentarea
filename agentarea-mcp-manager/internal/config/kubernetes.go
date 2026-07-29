@@ -16,6 +16,16 @@ type KubernetesConfig struct {
 	// Runtime configuration
 	RuntimeClass string `json:"runtime_class"`
 
+	// Kubeconfig names the cluster this manager creates workloads in, when that
+	// is not the cluster the manager itself runs in. Setting it is how a control
+	// plane targets a separate execution cluster — the arrangement that keeps
+	// untrusted MCP servers and agent sandboxes off the control plane's nodes.
+	//
+	// When set it WINS over in-cluster credentials and a failure to load it is
+	// fatal. Leaving it empty means "use whatever cluster I am in", which is
+	// discovery, not a fallback: nothing was declared to fall back from.
+	Kubeconfig string `json:"kubeconfig"`
+
 	// Service account to use for MCP server pods created by the Kubernetes backend.
 	PodServiceAccountName string `json:"pod_service_account_name"`
 

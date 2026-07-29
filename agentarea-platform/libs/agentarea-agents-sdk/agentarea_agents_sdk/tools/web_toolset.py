@@ -1,7 +1,7 @@
 """Web fetch toolset.
 
-Tools that pull bytes from the public internet route them through the same
-``StorageClient`` the file tool uses. The LLM never sees raw bytes — for
+Tools that pull bytes from the public internet route binary responses through
+the same canonical task-workspace repository the file and shell tools use. The LLM never sees raw bytes — for
 binary responses (images, PDFs, archives) the tool persists the payload
 under the task's artifact scope and returns a JSON description with the
 artifact path. Text responses are returned inline (truncated for context).
@@ -22,7 +22,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 from .decorator_tool import Toolset, tool_method
-from .file_toolset import StorageClient
+from .file_toolset import StorageClient, WorkspaceRepositoryClient
 from .tool_definition import toolset
 
 _TEXT_CONTENT_TYPES: tuple[str, ...] = (
@@ -143,32 +143,44 @@ def _filename_from_url(url: str, content_type: str | None) -> str:
 class WebToolset(Toolset):
     """Fetch URLs and route binary responses to artifact storage.
 
-    Workspace scoping mirrors ``FileToolset``: every binary write goes to
-    ``{base_prefix}/downloads/{filename}`` under the configured workspace.
-    The toolset is usable without a storage client (text-only mode), but
-    binary responses become an error in that mode rather than blowing up.
+    Workspace scoping mirrors ``FileToolset``: every production binary write
+    becomes ``downloads/{filename}`` in the task manifest. ``StorageClient``
+    remains available for standalone SDK use; text-only mode needs neither.
     """
 
     def __init__(
         self,
         storage: StorageClient | None = None,
+        workspace_repository: WorkspaceRepositoryClient | None = None,
         workspace_id: str | None = None,
+        task_id: str | None = None,
+        lease_owner: str | None = None,
         base_prefix: str = "",
         fetch_webpage: bool = True,
         extract_text: bool = True,
     ) -> None:
         super().__init__()
         self.storage = storage
+        self.workspace_repository = workspace_repository
         self.workspace_id = workspace_id or "_standalone"
+        self.task_id = task_id or ""
+        self.lease_owner = lease_owner or ""
         self.base_prefix = base_prefix.strip("/")
         self._fetch_enabled = fetch_webpage
         self._extract_enabled = extract_text
 
     def _artifact_path(self, file_name: str) -> str:
         clean = file_name.lstrip("/").replace("..", "_")
+        if self.workspace_repository is not None:
+            return f"downloads/{clean}"
         if self.base_prefix:
             return f"{self.base_prefix}/downloads/{clean}"
         return f"downloads/{clean}"
+
+    def _public_artifact_path(self, relative_path: str) -> str:
+        if self.workspace_repository is not None:
+            return f"tasks/{self.task_id}/workspace/{relative_path}"
+        return relative_path
 
     @tool_method
     async def fetch_webpage(
@@ -233,7 +245,7 @@ class WebToolset(Toolset):
             return json.dumps(payload)
 
         # Binary: must persist to an artifact.
-        if self.storage is None:
+        if self.storage is None and self.workspace_repository is None:
             return (
                 "Error: response is binary "
                 f"({content_type or 'unknown'}) but no artifact storage "
@@ -243,7 +255,20 @@ class WebToolset(Toolset):
         file_name = _filename_from_url(url, content_type)
         artifact_path = self._artifact_path(file_name)
         try:
-            await self.storage.put(self.workspace_id, artifact_path, body, content_type)
+            if self.workspace_repository is not None:
+                if not self.task_id:
+                    return "Error: task_id is required for canonical workspace writes"
+                await self.workspace_repository.put(
+                    self.workspace_id,
+                    self.task_id,
+                    artifact_path,
+                    body,
+                    content_type,
+                    owner=self.lease_owner or None,
+                )
+            else:
+                assert self.storage is not None
+                await self.storage.put(self.workspace_id, artifact_path, body, content_type)
         except Exception as e:
             return f"Error writing artifact {artifact_path}: {e}"
 
@@ -253,7 +278,7 @@ class WebToolset(Toolset):
                 "status": resp.status_code,
                 "content_type": content_type,
                 "kind": "binary",
-                "artifact_path": artifact_path,
+                "artifact_path": self._public_artifact_path(artifact_path),
                 "size": len(body),
             }
         )

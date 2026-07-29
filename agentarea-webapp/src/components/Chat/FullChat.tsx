@@ -1,15 +1,25 @@
 "use client";
 
-import type { PolicyDocument } from "@/api/client/types.gen";
 import React from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import type { PolicyDocument } from "@/api/client/types.gen";
+import type { HumanInputSecretValue } from "@/components/Chat/types";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useMentions } from "@/hooks/useMentions";
+import { useTaskActions } from "@/hooks/useTaskActions";
+import { canonicalType } from "@/lib/events/contract";
+import { normalizeSSEEvent } from "@/lib/events/normalize";
+import { PartRenderer } from "@/lib/events/parts/PartRenderer";
+import {
+  applyEvent,
+  initialState,
+  type EventState,
+} from "@/lib/events/reducer";
 import {
   pauseAgentTaskAction as pauseAgentTask,
   resumeAgentTaskAction as resumeAgentTask,
 } from "@/lib/server-actions";
-import { useTaskActions } from "@/hooks/useTaskActions";
 import { cn } from "@/lib/utils";
 import {
   extractPlainText,
@@ -21,19 +31,28 @@ import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
 import { ChatInputArea } from "./componets/ChatInputArea";
 import { ScrollToBottomButton } from "./componets/ScrollToBottomButton";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
-import { createSSEEventHandler } from "./handlers/eventHandlers";
 import { parseSSEStream } from "./handlers/sseParser";
 import { useA2UIActions } from "./hooks/useA2UIActions";
-import {
-  useChatMessages,
-  type ChatMessage,
-  type UserChatMessage,
-} from "./hooks/useChatMessages";
 import { useFileUpload } from "./hooks/useFileUpload";
 // Import hooks
 import { useScrollManagement } from "./hooks/useScrollManagement";
 import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
-import { MessageRenderer } from "./MessageComponents";
+
+// A user message the person typed. Not a task event — interleaved by arrival.
+interface UserChatMessage {
+  id: string;
+  content: string;
+  role: "user";
+  timestamp: string;
+  files?: File[];
+}
+
+// Anchor a user message after the last part present when it was sent, so it
+// keeps its slot as later agent parts supersede in place (stable partId).
+interface UserEntry {
+  message: UserChatMessage;
+  afterPartId: string | null;
+}
 
 export interface Agent {
   id: string;
@@ -146,6 +165,68 @@ function toStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
+function bufferToHex(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function bufferToBase64(buffer: ArrayBuffer): string {
+  let binary = "";
+  for (const b of new Uint8Array(buffer)) {
+    binary += String.fromCharCode(b);
+  }
+  return btoa(binary);
+}
+
+// Upload one attachment via the presigned two-step: mint a presigned PUT
+// bound to the file's sha256, then PUT the bytes directly to the object
+// store. Returns the ref the task-create body references.
+async function uploadAttachment(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  const sha256Hex = bufferToHex(digest);
+  const sha256Base64 = bufferToBase64(digest);
+  const contentType = file.type || "application/octet-stream";
+
+  const presignResponse = await fetch("/api/files/upload-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filename: file.name,
+      content_type: contentType,
+      sha256: sha256Hex,
+      size: file.size,
+    }),
+  });
+  if (!presignResponse.ok) {
+    const errorBody = await presignResponse.text();
+    throw new Error(
+      errorBody || `Upload presign failed with status ${presignResponse.status}`
+    );
+  }
+  const { ref, upload_url } = (await presignResponse.json()) as {
+    ref: string;
+    upload_url: string;
+  };
+
+  const putResponse = await fetch(upload_url, {
+    method: "PUT",
+    headers: {
+      "x-amz-checksum-sha256": sha256Base64,
+      "Content-Type": contentType,
+    },
+    body: file,
+  });
+  if (!putResponse.ok) {
+    const errorBody = await putResponse.text();
+    throw new Error(
+      errorBody || `File upload failed with status ${putResponse.status}`
+    );
+  }
+
+  return ref;
+}
+
 interface FullChatProps {
   agent: Agent;
   availableAgents?: Agent[];
@@ -154,7 +235,6 @@ interface FullChatProps {
   availableTaskPolicies?: TaskPolicyOption[];
   startCentered?: boolean;
   taskId?: string;
-  initialMessages?: ChatMessage[];
   onTaskCreated?: (taskId: string) => void;
   onTaskStarted?: (taskId: string) => void;
   onTaskFinished?: (taskId: string) => void;
@@ -172,7 +252,6 @@ export default function FullChat({
   placeholder,
   welcomeComponent,
   taskId,
-  initialMessages = [],
   onTaskCreated,
   onTaskStarted,
   onTaskFinished,
@@ -183,26 +262,46 @@ export default function FullChat({
 }: FullChatProps) {
   const t = useTranslations("Chat");
 
-  // Hooks for state management
-  const { messages, setMessages, hasUserMessages, addUserMessage } =
-    useChatMessages({
-      agentName: agent.name,
-      agentId: agent.id,
-      initialMessages,
-    });
+  // Unified event core: SSE events fold through the reducer into ordered parts
+  // (supersede-by-id). User messages the person typed aren't task events, so
+  // they're tracked separately and interleaved by arrival order.
+  const [eventState, setEventState] = React.useState<EventState>(initialState);
+  const [userEntries, setUserEntries] = React.useState<UserEntry[]>([]);
+  const eventStateRef = React.useRef<EventState>(eventState);
+  eventStateRef.current = eventState;
+
+  const parts = eventState.parts;
+  const hasUserMessages = userEntries.length > 0;
+
+  const pushEvent = React.useCallback(
+    (eventType: string, data: Record<string, unknown>) => {
+      const next = applyEvent(eventStateRef.current, { eventType, data });
+      eventStateRef.current = next;
+      setEventState(next);
+    },
+    []
+  );
+
+  const addUserMessage = React.useCallback((message: UserChatMessage) => {
+    const order = eventStateRef.current.order;
+    const afterPartId = order.length ? order[order.length - 1] : null;
+    setUserEntries((prev) => [...prev, { message, afterPartId }]);
+  }, []);
 
   // Ref so the agent-change effect can call the latest clearFiles without
   // listing an unstable function reference as a dep (useFileUpload doesn't
   // memoize it).
   const clearFilesRef = React.useRef<() => void>(() => {});
 
-  // Clear messages when agent changes
+  // Clear conversation when agent changes
   React.useEffect(() => {
-    setMessages([]);
+    eventStateRef.current = initialState();
+    setEventState(eventStateRef.current);
+    setUserEntries([]);
     setInput("");
     setInputDisplay("");
     clearFilesRef.current();
-  }, [agent.id, setMessages]);
+  }, [agent.id]);
 
   const { currentTaskId, setCurrentTaskId, callbacks } = useTaskLifecycle(
     agent.id,
@@ -227,7 +326,7 @@ export default function FullChat({
     scrollToBottom,
     checkIfAtBottom,
   } = useScrollManagement({
-    messagesCount: messages.length,
+    messagesCount: parts.length + userEntries.length,
   });
 
   const {
@@ -349,20 +448,86 @@ export default function FullChat({
     handleMentionInputChange(e);
   };
 
-  // SSE message handler
-  const handleSSEMessage = React.useMemo(
-    () =>
-      createSSEEventHandler({
-        currentTaskId,
-        setMessages,
-        setIsLoading,
-        setTaskLifecycleStatus,
-        setCurrentTaskId,
-        onTaskCreated: callbacks.onTaskCreated.current,
-        onTaskStarted: callbacks.onTaskStarted.current,
-        onTaskFinished: callbacks.onTaskFinished.current,
-      }),
-    [currentTaskId, setMessages, setCurrentTaskId, callbacks]
+  // Structured input / A2UI form submit routes through the shared action layer.
+  const handleFormSubmit = React.useCallback(
+    async (
+      inputRequestId: string,
+      answers: Record<string, unknown>,
+      secrets: Record<string, HumanInputSecretValue>
+    ) => {
+      const { error } = await actions.submitInput(
+        inputRequestId,
+        answers,
+        secrets
+      );
+      if (error) toast.error("Failed to submit response");
+    },
+    [actions]
+  );
+
+  // SSE handler: adopt the task id on creation (lifecycle callbacks + URL
+  // rewrite), track lifecycle status, then fold every event into the reducer.
+  const currentTaskIdRef = React.useRef<string | null>(currentTaskId);
+  currentTaskIdRef.current = currentTaskId;
+
+  const handleSSEMessage = React.useCallback(
+    (event: { type: string; data: Record<string, unknown> }) => {
+      const rawType =
+        (typeof event.data?.event_type === "string" && event.data.event_type) ||
+        (typeof event.data?.original_event_type === "string" &&
+          event.data.original_event_type) ||
+        event.type;
+
+      // Adopt the created task id once, before folding events.
+      if (rawType === "task_created") {
+        const newTaskId =
+          typeof event.data?.task_id === "string" ? event.data.task_id : null;
+        if (newTaskId && !currentTaskIdRef.current) {
+          currentTaskIdRef.current = newTaskId;
+          setCurrentTaskId(newTaskId);
+          callbacks.onTaskCreated.current?.(newTaskId);
+          callbacks.onTaskStarted.current?.(newTaskId);
+        }
+        return;
+      }
+
+      const canonical = canonicalType(rawType);
+      if (canonical === "task.completed") {
+        setTaskLifecycleStatus("completed");
+        setIsLoading(false);
+        const finishedId = currentTaskIdRef.current;
+        if (finishedId) callbacks.onTaskFinished.current?.(finishedId);
+      } else if (canonical === "task.failed") {
+        const errorText = String(
+          event.data?.error || event.data?.message || ""
+        ).toLowerCase();
+        const blocked =
+          errorText.includes("insufficient balance") ||
+          errorText.includes("no resource package") ||
+          errorText.includes("quota exceeded");
+        setTaskLifecycleStatus(blocked ? "blocked" : "failed");
+        setIsLoading(false);
+        const finishedId = currentTaskIdRef.current;
+        if (finishedId) callbacks.onTaskFinished.current?.(finishedId);
+      } else if (canonical === "task.cancelled") {
+        setTaskLifecycleStatus("cancelled");
+        setIsLoading(false);
+      } else if (canonical === "task.awaiting_continuation") {
+        setTaskLifecycleStatus("waiting_for_continuation");
+        setIsLoading(false);
+      } else if (canonical === "task.continued") {
+        setTaskLifecycleStatus("running");
+        setIsLoading(true);
+      } else if (rawType === "execution_paused") {
+        setTaskLifecycleStatus("paused");
+      } else if (rawType === "execution_resumed") {
+        setTaskLifecycleStatus("running");
+      }
+
+      const normalized = normalizeSSEEvent(event.type, event.data);
+      if (normalized) pushEvent(normalized.eventType, normalized.data);
+    },
+    [callbacks, setCurrentTaskId, pushEvent]
   );
 
   // Send message handler
@@ -376,6 +541,7 @@ export default function FullChat({
       (policy) => policy.id === selectedTaskPolicyId
     );
     const taskPolicy = buildTaskPolicyDocument(selectedTaskPolicy?.policy);
+    const filesToUpload = [...selectedFiles];
 
     const userMessage: UserChatMessage = {
       id: Date.now().toString(),
@@ -396,31 +562,46 @@ export default function FullChat({
     }
 
     try {
+      // Upload each attachment directly to the object store via a presigned
+      // PUT, then reference the returned refs in the JSON task-create body
+      // (task creation is JSON, not multipart).
+      const attachments: string[] = [];
+      for (const file of filesToUpload) {
+        attachments.push(await uploadAttachment(file));
+      }
+
+      const taskData = {
+        description:
+          plainContent || "Use the attached files to complete the task.",
+        project_id: selectedProjectId,
+        task_policy: taskPolicy,
+        parameters: {
+          context: {
+            project_id: selectedProjectId,
+            task_policy_rule_id: selectedTaskPolicy?.id,
+            task_policy_rule_name: selectedTaskPolicy?.name,
+          },
+          task_type: "chat",
+          session_id: `chat-${Date.now()}`,
+        },
+        enable_agent_communication: true,
+        ...(attachments.length > 0 ? { attachments } : {}),
+      };
+
       const response = await fetch(`/api/agents/${agent.id}/tasks/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
         },
-        body: JSON.stringify({
-          description: plainContent,
-          project_id: selectedProjectId,
-          task_policy: taskPolicy,
-          parameters: {
-            context: {
-              project_id: selectedProjectId,
-              task_policy_rule_id: selectedTaskPolicy?.id,
-              task_policy_rule_name: selectedTaskPolicy?.name,
-            },
-            task_type: "chat",
-            session_id: `chat-${Date.now()}`,
-          },
-          enable_agent_communication: true,
-        }),
+        body: JSON.stringify(taskData),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorBody = await response.text();
+        throw new Error(
+          errorBody || `Task creation failed with status ${response.status}`
+        );
       }
 
       if (!response.body) {
@@ -434,14 +615,9 @@ export default function FullChat({
         buffered: true,
       });
     } catch (error) {
-      const errorMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        content: `Sorry, I couldn't process your message. Error: ${error}`,
-        role: "assistant",
-        timestamp: new Date().toISOString(),
-        agent_id: agent.id,
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      toast.error("Failed to send message", {
+        description: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setIsLoading(false);
     }
@@ -504,6 +680,44 @@ export default function FullChat({
     }
   };
 
+  // Interleave user messages with agent parts. Each user message is anchored
+  // after the part that was last present when it was sent (null = before all
+  // parts), so it holds its slot while later parts supersede in place.
+  const renderItems = React.useMemo(() => {
+    const items: Array<
+      | { kind: "user"; message: UserChatMessage }
+      | { kind: "part"; partId: string }
+    > = [];
+    const usersByAnchor = new Map<string | null, UserChatMessage[]>();
+    for (const entry of userEntries) {
+      const list = usersByAnchor.get(entry.afterPartId) ?? [];
+      list.push(entry.message);
+      usersByAnchor.set(entry.afterPartId, list);
+    }
+    for (const message of usersByAnchor.get(null) ?? []) {
+      items.push({ kind: "user", message });
+    }
+    for (const part of parts) {
+      items.push({ kind: "part", partId: part.partId });
+      for (const message of usersByAnchor.get(part.partId) ?? []) {
+        items.push({ kind: "user", message });
+      }
+    }
+    return items;
+  }, [userEntries, parts]);
+
+  const partsById = React.useMemo(() => {
+    const map = new Map(parts.map((p) => [p.partId, p]));
+    return map;
+  }, [parts]);
+
+  const terminalTone =
+    eventState.status === "failed"
+      ? "danger"
+      : eventState.status === "cancelled"
+        ? "warning"
+        : "success";
+
   // Keydown handler
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (handleMentionKeyDown(e)) {
@@ -565,31 +779,34 @@ export default function FullChat({
             hasUserMessages ? "flex-1" : "min-h-0"
           }`}
         >
-          {messages.map((message, index) => {
-            if ("type" in message) {
-              return (
-                <MessageRenderer
-                  key={`${message.data.id}-${message.data.event_type}-${index}`}
-                  message={message}
-                  agent_name={agent.name}
-                  onA2UIAction={dispatchA2UIAction}
-                  onResolveEscalation={actions.resolveEscalation}
-                  onSubmitInput={actions.submitInput}
-                />
-              );
-            } else if (message.role === "user") {
+          {renderItems.map((item) => {
+            if (item.kind === "user") {
               return (
                 <UserMessageComponent
-                  key={message.id}
-                  id={message.id}
-                  content={message.content}
-                  timestamp={message.timestamp}
-                  files={message.files}
+                  key={item.message.id}
+                  id={item.message.id}
+                  content={item.message.content}
+                  timestamp={item.message.timestamp}
+                  files={item.message.files}
                 />
               );
             }
-            return null;
+            const part = partsById.get(item.partId);
+            if (!part) return null;
+            return (
+              <PartRenderer
+                key={part.partId}
+                part={part}
+                onFormSubmit={handleFormSubmit}
+                onA2UIAction={dispatchA2UIAction}
+              />
+            );
           })}
+          {eventState.terminalMessage && (
+            <StatusIndicator tone={terminalTone}>
+              {eventState.terminalMessage}
+            </StatusIndicator>
+          )}
           <div ref={messagesEndRef} className="aa-messages-end" />
         </div>
 

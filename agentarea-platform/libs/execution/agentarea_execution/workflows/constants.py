@@ -14,6 +14,7 @@ ACTIVITY_TIMEOUT: Final[timedelta] = timedelta(minutes=5)
 LLM_CALL_TIMEOUT: Final[timedelta] = timedelta(minutes=10)
 TOOL_EXECUTION_TIMEOUT: Final[timedelta] = timedelta(minutes=35)
 EVENT_PUBLISH_TIMEOUT: Final[timedelta] = timedelta(seconds=5)
+CONTINUATION_TIMEOUT: Final[timedelta] = timedelta(hours=24)
 
 # Heartbeat configuration
 HEARTBEAT_TIMEOUT: Final[timedelta] = timedelta(seconds=30)
@@ -24,7 +25,10 @@ DELEGATION_TIMEOUT: Final[timedelta] = timedelta(minutes=10)  # Max time for chi
 # Retry policies
 DEFAULT_RETRY_ATTEMPTS: Final[int] = 3
 EVENT_PUBLISH_RETRY_ATTEMPTS: Final[int] = 1
-LLM_RETRY_ATTEMPTS: Final[int] = 1
+# LLM calls retry transient failures (rate limit, network, 5xx) with backoff.
+# Genuinely permanent failures (auth, quota/billing, bad model) still fail fast
+# via the ApplicationError non_retryable flag (_is_non_retryable_error).
+LLM_RETRY_ATTEMPTS: Final[int] = 3
 
 
 # Context window management
@@ -45,25 +49,41 @@ HISTORY_SEARCH_MAX_RESULTS: Final[int] = 20
 
 # Event types
 class EventTypes:
-    """Workflow event type constants."""
+    """Workflow event type constants.
 
-    WORKFLOW_STARTED: Final[str] = "WorkflowStarted"
-    WORKFLOW_COMPLETED: Final[str] = "WorkflowCompleted"
-    WORKFLOW_FAILED: Final[str] = "WorkflowFailed"
-    WORKFLOW_CANCELLED: Final[str] = "WorkflowCancelled"
+    Semantic part-taxonomy events hold the canonical dotted names directly (the
+    wire vocabulary — see agentarea_common.events.contract). Timeline/system
+    events that are NOT part of that taxonomy keep their bare names.
+    """
 
+    # Task lifecycle (canonical dotted).
+    WORKFLOW_STARTED: Final[str] = "task.started"
+    WORKFLOW_COMPLETED: Final[str] = "task.completed"
+    WORKFLOW_FAILED: Final[str] = "task.failed"
+    WORKFLOW_CANCELLED: Final[str] = "task.cancelled"
+    WORKFLOW_AWAITING_CONTINUATION: Final[str] = "task.awaiting_continuation"
+    WORKFLOW_CONTINUED: Final[str] = "task.continued"
+    VALIDATION_STARTED: Final[str] = "artifact.validation.started"
+    VALIDATION_COMPLETED: Final[str] = "artifact.validation.completed"
+
+    # Timeline/system — not in the part taxonomy, kept bare.
     ITERATION_STARTED: Final[str] = "IterationStarted"
     ITERATION_COMPLETED: Final[str] = "IterationCompleted"
 
-    LLM_CALL_STARTED: Final[str] = "LLMCallStarted"
-    LLM_CALL_CHUNK: Final[str] = "LLMCallChunk"
-    LLM_CALL_COMPLETED: Final[str] = "LLMCallCompleted"
-    LLM_CALL_FAILED: Final[str] = "LLMCallFailed"
+    # LLM part (canonical dotted).
+    LLM_CALL_STARTED: Final[str] = "llm.call.started"
+    LLM_CALL_CHUNK: Final[str] = "llm.call.chunk"
+    LLM_CALL_COMPLETED: Final[str] = "llm.call.completed"
+    LLM_CALL_FAILED: Final[str] = "llm.call.failed"
 
-    TOOL_CALL_STARTED: Final[str] = "ToolCallStarted"
-    TOOL_CALL_COMPLETED: Final[str] = "ToolCallCompleted"
-    TOOL_CALL_FAILED: Final[str] = "ToolCallFailed"
+    # Tool part (canonical dotted). Failed is a tool.result whose data carries
+    # ``error`` (no ``success``); the constant names stay distinct so callers can
+    # branch pre-emit, even though both collapse to the same wire type.
+    TOOL_CALL_STARTED: Final[str] = "tool.call"
+    TOOL_CALL_COMPLETED: Final[str] = "tool.result"
+    TOOL_CALL_FAILED: Final[str] = "tool.result"
 
+    # Timeline/system — not in the part taxonomy, kept bare.
     BUDGET_WARNING: Final[str] = "BudgetWarning"
     BUDGET_EXCEEDED: Final[str] = "BudgetExceeded"
 
@@ -80,15 +100,19 @@ class EventTypes:
     AGENT_DELEGATION_COMPLETED: Final[str] = "AgentDelegationCompleted"
     AGENT_DELEGATION_FAILED: Final[str] = "AgentDelegationFailed"
 
-    HUMAN_APPROVAL_REQUESTED: Final[str] = "HumanApprovalRequested"
-    HUMAN_APPROVAL_RECEIVED: Final[str] = "HumanApprovalReceived"
-    HUMAN_APPROVAL_DENIED: Final[str] = "HumanApprovalDenied"
-    HUMAN_INPUT_REQUESTED: Final[str] = "HumanInputRequested"
-    HUMAN_INPUT_RECEIVED: Final[str] = "HumanInputReceived"
+    # Human-in-the-loop parts (canonical dotted). Approval received/denied both
+    # map to ``approval.response`` (the decision lives in the data payload).
+    HUMAN_APPROVAL_REQUESTED: Final[str] = "approval.request"
+    HUMAN_APPROVAL_RECEIVED: Final[str] = "approval.response"
+    HUMAN_APPROVAL_DENIED: Final[str] = "approval.response"
+    HUMAN_INPUT_REQUESTED: Final[str] = "input.request"
+    HUMAN_INPUT_RECEIVED: Final[str] = "input.response"
 
+    # Timeline/system — not in the part taxonomy, kept bare.
     MODEL_CHANGED: Final[str] = "ModelChanged"
     MODEL_RESOLUTION_FALLBACK: Final[str] = "ModelResolutionFallback"
     MODEL_UNAVAILABLE: Final[str] = "ModelUnavailable"
+    RUNTIME_DISCOVERED: Final[str] = "RuntimeDiscovered"
     WORKFLOW_COMMAND_RECEIVED: Final[str] = "WorkflowCommandReceived"
 
 
@@ -97,10 +121,9 @@ class Activities:
     """Activity function references to avoid hardcoded strings."""
 
     BUILD_AGENT_CONFIG: Final[str] = "build_agent_config_activity"
+    DISCOVER_RUNTIME_MANIFEST: Final[str] = "discover_runtime_manifest_activity"
+    VALIDATE_ARTIFACTS: Final[str] = "validate_artifacts_activity"
     DISCOVER_AVAILABLE_TOOLS: Final[str] = "discover_available_tools_activity"
-    EXECUTE_ADK_AGENT_WITH_TEMPORAL_BACKBONE: Final[str] = (
-        "execute_adk_agent_with_temporal_backbone"
-    )
     CALL_LLM: Final[str] = "call_llm_activity"
     EXECUTE_MCP_TOOL: Final[str] = "execute_mcp_tool_activity"
     CREATE_EXECUTION_PLAN: Final[str] = "create_execution_plan_activity"
@@ -110,9 +133,8 @@ class Activities:
     RESOLVE_AGENT_TOOLS: Final[str] = "resolve_agent_tools_activity"
     RECALL_HISTORY: Final[str] = "recall_history_activity"
     UPDATE_TASK_STATUS: Final[str] = "update_task_status_activity"
-    RESOLVE_SKILL_FILE: Final[str] = "resolve_skill_file_activity"
-    EXECUTE_SKILL_SCRIPT: Final[str] = "execute_skill_script_activity"
-    CLEANUP_SANDBOX_WORKFLOW: Final[str] = "cleanup_sandbox_workflow_activity"
+    MATERIALIZE_SKILL_FILES: Final[str] = "materialize_skill_files_activity"
+    CLEANUP_SANDBOX_TASK: Final[str] = "cleanup_sandbox_task_activity"
     # Dynamic context discovery
     DISCOVER_TOOL_PROVIDERS: Final[str] = "discover_tool_providers_activity"
     STORE_CONTEXT_OUTPUT: Final[str] = "store_context_output"
@@ -134,6 +156,7 @@ class ExecutionStatus:
     EXECUTING: Final[str] = "executing"
     WAITING_FOR_APPROVAL: Final[str] = "waiting_for_approval"
     WAITING_FOR_INPUT: Final[str] = "waiting_for_input"
+    WAITING_FOR_CONTINUATION: Final[str] = "waiting_for_continuation"
     BLOCKED: Final[str] = "blocked"
     TOOL_EXECUTION: Final[str] = "tool_execution"
     EVALUATING: Final[str] = "evaluating"
