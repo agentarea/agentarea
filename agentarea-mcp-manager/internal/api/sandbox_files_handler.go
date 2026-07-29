@@ -7,17 +7,27 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
 
 // sandboxFilesProvider is the subset of a backend that can operate on a task's
-// sandbox file workspace. Only the dev docker backend implements it today; the
-// prod warm-pool backend returns 503 until per-task sticky file routing lands.
+// sandbox file workspace. Both shipped backends implement it: docker against
+// SANDBOX_EXECUTOR_URL, Kubernetes against the task's already-assigned pod.
 type sandboxFilesProvider interface {
 	SandboxFilePut(ctx context.Context, req warmpool.FilePutRequest) (*warmpool.FilePutResponse, error)
 	SandboxFileGet(ctx context.Context, workspaceID, taskID, path string) (*warmpool.FileGetResponse, error)
 	SandboxFileList(ctx context.Context, workspaceID, taskID, prefix string) (*warmpool.FileListResponse, error)
 }
+
+// The 503 below is reached by type assertion, so a backend that quietly stops
+// satisfying this interface degrades at runtime instead of failing to build.
+// These make that a compile error — the file tool and bash must see the same
+// filesystem on every substrate, not just the one someone tested.
+var (
+	_ sandboxFilesProvider = (*backends.DockerBackend)(nil)
+	_ sandboxFilesProvider = (*backends.KubernetesBackend)(nil)
+)
 
 // sandboxFiles proxies the sandbox file API to the executor data plane. The file
 // tool writes here so its files land on the same filesystem bash executes in,
