@@ -140,7 +140,7 @@ func Load() *Config {
 		},
 		CoreAPIURL:  getEnv("CORE_API_URL", "http://localhost:8000"),
 		Kubernetes:  loadKubernetesConfig(),
-		Environment: getEnv("BACKEND_ENVIRONMENT", ""),
+		Environment: backendEnvironment(),
 		Features:    loadFeaturesConfig(),
 	}
 }
