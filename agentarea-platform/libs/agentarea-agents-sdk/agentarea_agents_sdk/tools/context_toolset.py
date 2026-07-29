@@ -45,8 +45,11 @@ class ContextToolset(Toolset):
         self.workspace_id: str = workspace_id or "_standalone"
 
     @tool_method
-    async def list_context(self, prefix: str = "") -> str:
-        """List files available in the organization context store.
+    async def list_org_files(self, prefix: str = "") -> str:
+        """List files in the organization library (shared, read-only).
+
+        These are the organization's durable shared files, distinct from your
+        own task files (``file_*`` tools).
 
         Args:
             prefix: Optional path prefix to filter by.
@@ -57,7 +60,7 @@ class ContextToolset(Toolset):
         try:
             objects = await self.storage.list(self.workspace_id, prefix=prefix)
         except Exception as e:
-            return f"Error listing context: {e}"
+            return f"Error listing organization files: {e}"
         paths = sorted(
             str(getattr(obj, "path", "")) for obj in objects if getattr(obj, "path", None)
         )
@@ -66,11 +69,11 @@ class ContextToolset(Toolset):
         return "\n".join(paths)
 
     @tool_method
-    async def read_context(self, path: str) -> str:
-        """Read a text file from the organization context store.
+    async def read_org_file(self, path: str) -> str:
+        """Read a text file from the organization library (shared, read-only).
 
         Args:
-            path: Path of the file within the context store.
+            path: Path of the file within the organization library.
 
         Returns:
             The file's text content, or an error message.
@@ -82,7 +85,7 @@ class ContextToolset(Toolset):
         try:
             data, _ = await self.storage.get(self.workspace_id, resolved)
         except FileNotFoundError:
-            return f"Error: context file {path} does not exist"
+            return f"Error: organization file {path} does not exist"
         except Exception as e:
-            return f"Error reading context: {e}"
+            return f"Error reading organization file: {e}"
         return data.decode("utf-8")

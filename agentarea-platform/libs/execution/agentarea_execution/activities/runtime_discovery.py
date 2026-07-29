@@ -38,6 +38,7 @@ def render_runtime_prompt(
     result: RuntimeDiscoveryResult,
     *,
     package_install: str = "allowed",
+    has_org_context: bool = False,
 ) -> str:
     manifest = result.manifest
     if manifest is None:
@@ -75,6 +76,14 @@ def render_runtime_prompt(
     else:
         browser_policy = "Browser automation: Playwright is available."
 
+    org_context_line = (
+        "- Organization library: read the organization's shared files with the "
+        "`list_org_files` and `read_org_file` tools (read-only). It is never changed by "
+        "anything you do in the sandbox.\n"
+        if has_org_context
+        else ""
+    )
+
     return (
         "\n\n# Runtime environment\n\n"
         f"- Image: {manifest.image_version}\n"
@@ -87,9 +96,8 @@ def render_runtime_prompt(
         f"- {compatibility_policy}\n"
         "- Arbitrary code can still be downloaded and run inside the writable task workspace; "
         "the managed-environment profile is not an egress or workspace-code restriction."
-        "\n\n# Workspace and context\n\n"
-        "- Organization context store: read shared organization files with the context tool "
-        "(read-only). It is never changed by anything you do in the sandbox.\n"
+        "\n\n# Files and workspace\n\n"
+        f"{org_context_line}"
         "- Your working directory IS your task workspace. Files you create there — with the "
         "file tool or by running a program in the shell — are captured durably and stay "
         "visible to the user for this task. Use plain relative paths (e.g. `report.xlsx`); a "
