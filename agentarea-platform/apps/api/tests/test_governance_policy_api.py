@@ -9,6 +9,7 @@ from agentarea_api.api.deps.services import get_temporal_workflow_service
 from agentarea_api.api.v1 import governance, policies
 from agentarea_api.api.v1.policies import (
     PolicyRuleCreateRequest,
+    PolicyRuleUpdateRequest,
     create_policy_rule,
     delete_policy_rule,
     get_policy_rule,
@@ -140,6 +141,84 @@ async def test_create_get_list_update_delete(session_factory):
         with pytest.raises(HTTPException) as exc:
             await get_policy_rule(created.id, context, session)
         assert exc.value.status_code == 404
+
+
+# ---- fail-closed write boundary: unenforceable rules must be rejected ----
+
+
+async def test_create_rejects_group_subject(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        request = PolicyRuleCreateRequest(
+            subject_type=PolicySubjectType.GROUP,
+            subject_id="group:eng",
+            target="tool:send_email",
+            effect=PolicyEffect.DENY,
+        )
+        with pytest.raises(HTTPException) as exc:
+            await create_policy_rule(request, context, session)
+        assert exc.value.status_code == 422
+        assert "group" in exc.value.detail.lower()
+
+
+async def test_create_rejects_condition(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        request = PolicyRuleCreateRequest(
+            subject_type=PolicySubjectType.WORKSPACE,
+            subject_id="workspace-a",
+            target="tool:send_email",
+            effect=PolicyEffect.DENY,
+            condition="resource.env == 'prod'",
+        )
+        with pytest.raises(HTTPException) as exc:
+            await create_policy_rule(request, context, session)
+        assert exc.value.status_code == 422
+        assert "condition" in exc.value.detail.lower()
+
+
+async def test_create_rejects_invalid_target(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        request = PolicyRuleCreateRequest(
+            subject_type=PolicySubjectType.WORKSPACE,
+            subject_id="workspace-a",
+            target="tool_send_email",  # missing ':' -> unknown selector kind
+            effect=PolicyEffect.DENY,
+        )
+        with pytest.raises(HTTPException) as exc:
+            await create_policy_rule(request, context, session)
+        assert exc.value.status_code == 422
+
+
+async def test_create_rejects_cap_without_amount(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        request = PolicyRuleCreateRequest(
+            subject_type=PolicySubjectType.WORKSPACE,
+            subject_id="workspace-a",
+            target="spend",
+            effect=PolicyEffect.CAP,
+            params={"period": "month"},  # no amount_usd -> silently dropped by compiler
+        )
+        with pytest.raises(HTTPException) as exc:
+            await create_policy_rule(request, context, session)
+        assert exc.value.status_code == 422
+        assert "amount_usd" in exc.value.detail
+
+
+async def test_update_rejects_condition(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        created = await create_policy_rule(_cap_request("25.00"), context, session)
+        with pytest.raises(HTTPException) as exc:
+            await update_policy_rule(
+                created.id,
+                PolicyRuleUpdateRequest(condition="x == 1"),
+                context,
+                session,
+            )
+        assert exc.value.status_code == 422
 
 
 async def test_list_is_workspace_scoped(session_factory):
