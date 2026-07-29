@@ -94,3 +94,22 @@ sandbox_egress_deny:
 
 # CPU architecture for the Docker/gVisor apt repos (follows the host).
 apt_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+# Kubernetes mode. Off by default: enabling it changes what this host is — a
+# single-node cluster the control plane schedules onto, rather than a lone
+# executor container it calls over HTTP. Both untrusted workload types (agent
+# bash and MCP servers) then run here as pods under gVisor, on one mechanism.
+sandbox_k3s_enabled: false
+# Nothing this cluster hosts is reached through an ingress controller or a
+# LoadBalancer — the control plane talks to the API server, and workloads are
+# reached by the proxy. Disabling them keeps the box small and its surface small.
+sandbox_k3s_exec_args: "server --disable traefik --disable servicelb"
+# Address the control plane uses to reach the API server. Defaults to the host
+# ansible connected on, which is right for a single box on a public address;
+# override when the control plane reaches it over a private network.
+sandbox_k3s_advertise_host: "{{ ansible_host | default(inventory_hostname) }}"
+sandbox_k3s_runtime_class: "gvisor"
+sandbox_k3s_node_label: "runtime=gvisor"
+# Where the generated kubeconfig lands on the machine running ansible. Feed it
+# to the control plane as KUBERNETES_KUBECONFIG.
+sandbox_k3s_kubeconfig_local_path: "./execution-cluster.kubeconfig"

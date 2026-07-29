@@ -587,9 +587,21 @@ mcpManager:
     name: "envoy-gateway"              # Name of the Gateway resource
     namespace: "envoy-gateway-system"  # Namespace where Gateway is deployed
   
-  # Runtime configuration for VM isolation (optional)
-  # Set to "kata-qemu" for Kata Containers (requires Kata runtime)
-  # Leave empty "" for standard container runtime
+  # Container runtime class for every workload that executes code we did not
+  # write: MCP server instances AND agent sandbox pods. One setting governs
+  # both, so the sandbox can never end up less confined than an MCP server.
+  #
+  #   "gvisor"    — gVisor/runsc. Needs no KVM or nested virtualization, so it
+  #                 works on ordinary cloud VMs. Requires runsc + the containerd
+  #                 shim installed on the nodes and a matching RuntimeClass.
+  #   "kata-qemu" — Kata Containers. A real kernel per pod, but requires KVM,
+  #                 which managed clusters on virtualized nodes rarely expose.
+  #   ""          — the node's default runtime (runc). NO kernel isolation:
+  #                 untrusted code shares the host kernel. Acceptable for local
+  #                 development only.
+  #
+  # The name must match a RuntimeClass that exists in the cluster; Kubernetes
+  # refuses to schedule the pod otherwise, which is the correct failure.
   runtimeClass: ""
 
   # Untrusted MCP runtime and sandbox task pods use this zero-RBAC
