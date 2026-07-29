@@ -44,6 +44,57 @@ on mcp-manager (the docker backend calls `/execute` there over the signed
 transport). The host is region-labelled via `sandbox_region`; once control-plane
 placement targets are declared, that label is how a task routes here.
 
+## Kubernetes mode — one substrate for sandboxes *and* MCP servers
+
+The mode above runs one executor container that the control plane calls over
+HTTP. It isolates agent `bash()`, but MCP servers — including images a user
+supplies — still run wherever the control plane can reach a Docker daemon,
+usually beside the control plane itself, on its kernel.
+
+Setting `sandbox_k3s_enabled: true` makes this host a single-node Kubernetes
+cluster instead. Both untrusted workload types then run here as pods under
+gVisor, through one mechanism:
+
+```bash
+ansible-playbook -i inventory.ini site.yml \
+  -e sandbox_k3s_enabled=true \
+  -e sandbox_activation_auth_secret="$SANDBOX_ACTIVATION_AUTH_SECRET"
+```
+
+This works because the control plane already speaks Kubernetes — it creates
+Deployments, honours `runtimeClassName`, and already implements warm pools,
+task→pod pinning and idle reaping against the Kubernetes backend. Nothing is
+ported; the substrate simply starts answering the API it already talks.
+
+k3s is used rather than a managed cluster for one reason: registering a custom
+container runtime means editing containerd's configuration, which k3s supports
+through a documented template. Managed providers generally revert it —
+DigitalOcean states that changes to worker nodes "are overwritten by the
+reconciler and do not persist."
+
+The play writes a kubeconfig to `sandbox_k3s_kubeconfig_local_path`
+(`./execution-cluster.kubeconfig` by default) with the API server address
+rewritten from k3s's `127.0.0.1` to something the control plane can reach. Give
+it to mcp-manager:
+
+```
+BACKEND_TYPE=kubernetes
+KUBERNETES_KUBECONFIG=/etc/agentarea/execution.kubeconfig
+KUBERNETES_RUNTIME_CLASS=gvisor
+```
+
+`KUBERNETES_KUBECONFIG` takes precedence over in-cluster credentials, so a
+control plane running inside its own cluster still schedules onto this one. If
+the file cannot be loaded, the manager refuses to start rather than quietly
+using the cluster it happens to live in.
+
+The play refuses to finish unless a pod actually ran under gVisor: it schedules
+one with `runtimeClassName: gvisor` and greps `dmesg` for the gVisor kernel
+banner. A provisioning run that skipped that check would prove nothing.
+
+In this mode the standalone executor container is not deployed — the sandbox is
+a pod now, and leaving a second execution path on the box would only rot.
+
 ## Verify on the host
 
 ```bash
