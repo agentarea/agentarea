@@ -38,6 +38,7 @@ import {
 } from "@/lib/server-actions";
 import { ToolsTable } from "../components/ToolsTable";
 import { ConsumersSection } from "./ConsumersSection";
+import { InstanceActivitySection } from "./InstanceActivitySection";
 import { MCPInstance, MCPServer } from "../types";
 import { getEffectiveMCPVerificationStatus } from "../utils";
 import { verifyInstance } from "./actions";
@@ -840,6 +841,8 @@ export default function MCPInstanceDetail({
             )}
 
             <ConsumersSection instanceId={instance.id} />
+
+            <InstanceActivitySection instanceId={instance.id} />
 
             {Object.keys(envVars).length > 0 && (
               <div className="space-y-3">
