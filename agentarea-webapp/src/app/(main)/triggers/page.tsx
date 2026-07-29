@@ -7,7 +7,6 @@ import TriggersDisplayMenu from "./components/TriggersDisplayMenu";
 import TriggersHeaderTabs from "./components/TriggersHeaderTabs";
 import TriggersSkeleton from "./components/TriggersSkeleton";
 import TriggersToolbar from "./components/TriggersToolbar";
-import TriggersTypeFilterSection from "./components/TriggersTypeFilterSection";
 import CreateTriggerButton from "./components/CreateTriggerButton";
 
 export const metadata = {
@@ -34,15 +33,15 @@ export default async function TriggersPage({
       ? resolvedSearchParams.search
       : "";
 
-  const typeFilter =
-    typeof resolvedSearchParams.type === "string"
-      ? resolvedSearchParams.type
-      : "all";
-
   const groupBy =
     resolvedSearchParams.group === "none"
       ? ("none" as const)
       : ("channel" as const);
+
+  const orderBy =
+    resolvedSearchParams.order === "created"
+      ? ("created" as const)
+      : ("name" as const);
 
   return (
     <ContentBlock
@@ -54,15 +53,12 @@ export default async function TriggersPage({
     >
       <div className="flex h-full w-full flex-col">
         <TriggersToolbar
-          searchPlaceholder={t("searchPlaceholder")}
-          filterSlot={
-            <Suspense fallback={<div className="h-7 w-48" />}>
-              <TriggersTypeFilterSection currentType={typeFilter} />
-            </Suspense>
-          }
           tabsSlot={
             <div className="flex items-center gap-2">
-              <TriggersDisplayMenu currentGroup={groupBy} />
+              <TriggersDisplayMenu
+                currentGroup={groupBy}
+                currentOrder={orderBy}
+              />
               <TriggersHeaderTabs currentTab={viewMode} />
             </div>
           }
@@ -70,14 +66,14 @@ export default async function TriggersPage({
 
         <div className="min-h-0 flex-1 overflow-auto">
           <Suspense
-            key={`${viewMode}-${searchQuery}-${typeFilter}-${groupBy}`}
+            key={`${viewMode}-${searchQuery}-${groupBy}-${orderBy}`}
             fallback={<TriggersSkeleton viewMode={viewMode} />}
           >
             <TriggersContent
               viewMode={viewMode}
               searchQuery={searchQuery}
-              typeFilter={typeFilter}
               groupBy={groupBy}
+              orderBy={orderBy}
             />
           </Suspense>
         </div>

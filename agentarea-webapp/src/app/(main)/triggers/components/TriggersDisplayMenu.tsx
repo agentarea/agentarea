@@ -1,24 +1,26 @@
 "use client";
 
-import { Layers, Rows3 } from "lucide-react";
+import { ArrowDownAZ, Clock, Layers, Rows3 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DisplayMenu from "@/components/DisplayMenu/DisplayMenu";
 
 export default function TriggersDisplayMenu({
   currentGroup,
+  currentOrder,
 }: {
   currentGroup: "channel" | "none";
+  currentOrder: "name" | "created";
 }) {
   const t = useTranslations("TriggersPage");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const onGroupChange = (value: "channel" | "none") => {
+  const updateParam = (key: string, value: string, defaultValue?: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (value === "channel") params.delete("group");
-    else params.set("group", value);
+    if (defaultValue != null && value === defaultValue) params.delete(key);
+    else params.set(key, value);
     const query = params.toString();
     router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
@@ -36,14 +38,34 @@ export default function TriggersDisplayMenu({
               icon: <Layers className="h-3.5 w-3.5" />,
               label: t("group.byChannel"),
               selected: currentGroup === "channel",
-              onSelect: () => onGroupChange("channel"),
+              onSelect: () => updateParam("group", "channel", "channel"),
             },
             {
               key: "none",
               icon: <Rows3 className="h-3.5 w-3.5" />,
               label: t("group.none"),
               selected: currentGroup === "none",
-              onSelect: () => onGroupChange("none"),
+              onSelect: () => updateParam("group", "none", "channel"),
+            },
+          ],
+        },
+        {
+          key: "ordering",
+          label: t("display.ordering"),
+          items: [
+            {
+              key: "name",
+              icon: <ArrowDownAZ className="h-3.5 w-3.5" />,
+              label: t("display.name"),
+              selected: currentOrder === "name",
+              onSelect: () => updateParam("order", "name", "name"),
+            },
+            {
+              key: "created",
+              icon: <Clock className="h-3.5 w-3.5" />,
+              label: t("display.created"),
+              selected: currentOrder === "created",
+              onSelect: () => updateParam("order", "created", "name"),
             },
           ],
         },

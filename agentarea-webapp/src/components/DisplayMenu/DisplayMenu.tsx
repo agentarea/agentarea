@@ -13,6 +13,7 @@ import {
   MenuSeparator,
 } from "@/components/ui/menu-row";
 import { ToolbarButton } from "@/components/ui/toolbar-button";
+import { cn } from "@/lib/utils";
 
 export interface DisplayMenuItem {
   key: string;
@@ -49,7 +50,7 @@ export default function DisplayMenu({
       <PopoverTrigger asChild>
         <ToolbarButton
           icon={SlidersHorizontal}
-          labelClassName={labelClassName}
+          labelClassName={cn("hidden min-[420px]:inline", labelClassName)}
         >
           {label}
         </ToolbarButton>

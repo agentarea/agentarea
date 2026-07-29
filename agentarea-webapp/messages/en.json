@@ -1307,7 +1307,10 @@
     },
     "display": {
       "display": "Display",
-      "grouping": "Grouping"
+      "grouping": "Grouping",
+      "ordering": "Ordering",
+      "name": "Name",
+      "created": "Created"
     },
     "noTriggers": "No triggers yet",
     "noTriggersDescription": "Create a trigger to automate your agent workflows.",
