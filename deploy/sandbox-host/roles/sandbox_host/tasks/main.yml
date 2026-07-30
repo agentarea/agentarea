@@ -9,6 +9,19 @@
       to run without it; a default secret would be a backdoor.
   when: sandbox_executor_enabled | bool
 
+- name: Require OpenSandbox production security inputs
+  ansible.builtin.assert:
+    that:
+      - opensandbox_api_key | length >= 32
+      - opensandbox_public_hostname | length > 0
+      - opensandbox_control_plane_cidrs | length > 0
+      - sandbox_runtime == "runsc"
+    fail_msg: >-
+      OpenSandbox requires a 32+ character API key, a TLS hostname, at least
+      one control-plane source CIDR, and the runsc runtime. Provisioning
+      refuses to start a weaker or publicly unauthenticated data plane.
+  when: opensandbox_enabled | bool
+
 - name: Install Docker engine
   ansible.builtin.import_tasks: docker.yml
   tags: [docker]
@@ -37,3 +50,8 @@
     - sandbox_executor_enabled | bool
     - not (sandbox_k3s_enabled | bool)
   tags: [executor]
+
+- name: Deploy OpenSandbox
+  ansible.builtin.import_tasks: opensandbox.yml
+  when: opensandbox_enabled | bool
+  tags: [opensandbox]

@@ -210,6 +210,7 @@ async def test_bash_propagates_workflow_id_from_ctx():
     assert payload["task_id"] == "task-abc"
     assert payload["workspace_id"] == "workspace-1"
     assert payload["runtime"]["package_install"] == "allowed"
+    assert "provider" not in payload["runtime"]
     assert payload["command"]["workflow_id"] == "workflow-abc"
     assert payload["command"]["timeout_seconds"] == 120
     assert "workspace_manifest_ref" not in payload
@@ -716,6 +717,7 @@ async def test_bash_copies_durable_inputs_into_sandbox():
     write = fake.file_writes[0]
     assert write["workspace_id"] == "workspace-1"
     assert write["task_id"] == "task-abc"
+    assert write["package_install"] == "allowed"
     assert write["path"] == "inputs/attachments/data.csv"
     assert base64.b64decode(write["content_base64"]) == b"a,b\n1,2\n"
     # the execution still carries the command; no S3 input_refs on the wire

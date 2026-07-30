@@ -1,5 +1,6 @@
 import {
   Bot,
+  Boxes,
   FolderTree,
   Plug,
   Server,
@@ -23,6 +24,7 @@ export const ENTITY_ICONS = {
   client: Plug,
   tool: Wrench,
   trigger: Zap,
+  sandbox: Boxes,
 } satisfies Record<string, LucideIcon>;
 
 export type EntityKind = keyof typeof ENTITY_ICONS;

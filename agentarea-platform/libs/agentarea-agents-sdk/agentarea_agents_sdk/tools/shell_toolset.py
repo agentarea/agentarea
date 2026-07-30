@@ -97,7 +97,7 @@ class ShellToolset(Toolset):
             command_payload["workflow_id"] = self._ctx.workflow_id
         try:
             await self._stage_inputs()
-            await self._materialize_inputs()
+            await self._materialize_inputs(package_install)
         except Exception as exc:
             logger.exception("failed to stage task workspace inputs")
             return _tool_error(f"failed to prepare workspace: {exc}")
@@ -108,7 +108,6 @@ class ShellToolset(Toolset):
             "workspace_id": self._workspace_id,
             "task_id": self._task_id,
             "runtime": {
-                "provider": "agentarea-k8s",
                 "package_install": package_install,
             },
             "command": command_payload,
@@ -186,7 +185,7 @@ class ShellToolset(Toolset):
             provenance={"source": "project", "project_id": project_id},
         )
 
-    async def _materialize_inputs(self) -> None:
+    async def _materialize_inputs(self, package_install: str) -> None:
         """Copy the task's durable inputs into the sandbox's live workspace.
 
         The mirror of copy-out: the agent works in one directory, so durable
@@ -213,7 +212,7 @@ class ShellToolset(Toolset):
                 self._task_id,
                 relative_path,
             )
-            await self._write_sandbox_file(relative_path, content)
+            await self._write_sandbox_file(relative_path, content, package_install)
         self._inputs_materialized = True
 
     async def _resolve_output_refs(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -399,7 +398,12 @@ class ShellToolset(Toolset):
             content_type,
         )
 
-    async def _write_sandbox_file(self, relative_path: str, content: bytes) -> None:
+    async def _write_sandbox_file(
+        self,
+        relative_path: str,
+        content: bytes,
+        package_install: str,
+    ) -> None:
         """Write a file into the sandbox's live workspace via the control plane.
 
         The write mirror of ``_read_sandbox_file``: the control plane signs the
@@ -412,6 +416,7 @@ class ShellToolset(Toolset):
         payload = {
             "workspace_id": self._workspace_id,
             "task_id": self._task_id,
+            "package_install": package_install,
             "path": relative_path,
             "content_base64": base64.b64encode(content).decode("ascii"),
         }

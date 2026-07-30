@@ -2000,6 +2000,37 @@ export const zResolveResponse = z.object({
 });
 
 /**
+ * SandboxResources
+ */
+export const zSandboxResources = z.object({
+  cpu: z.string(),
+  memory: z.string(),
+});
+
+/**
+ * SandboxSummary
+ */
+export const zSandboxSummary = z.object({
+  created_at: z.string().datetime(),
+  expires_at: z.string().datetime().nullable(),
+  id: z.string(),
+  isolation: z.string(),
+  package_install: z.string(),
+  provider: z.string(),
+  resources: zSandboxResources,
+  state: z.string(),
+  task_id: z.string(),
+});
+
+/**
+ * SandboxListResponse
+ */
+export const zSandboxListResponse = z.object({
+  items: z.array(zSandboxSummary),
+  total: z.number().int(),
+});
+
+/**
  * SetupFieldType
  *
  * Input widget / storage hint for a setup field.
@@ -4679,6 +4710,11 @@ export const zUpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostPath = z.object({
  */
 export const zUpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponse =
   zUpdateAllResponse;
+
+/**
+ * Successful Response
+ */
+export const zListSandboxesV1SandboxesGetResponse = zSandboxListResponse;
 
 /**
  * Response List Collections V1 Skill Collections  Get

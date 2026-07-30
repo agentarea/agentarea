@@ -14,6 +14,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
+	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 )
 
 // Handler holds the HTTP handlers and dependencies
@@ -21,18 +22,24 @@ type Handler struct {
 	backend          backends.Backend
 	containerManager *container.Manager // Keep for backward compatibility
 	sandboxControl   *sandboxcontrol.Service
+	sandboxRuntime   sandboxruntime.Runtime
 	logger           *slog.Logger
 	startTime        time.Time
 	version          string
 }
 
 // NewHandler creates a new API handler
-func NewHandler(backend backends.Backend, containerManager *container.Manager, logger *slog.Logger, version string) *Handler {
+func NewHandler(backend backends.Backend, containerManager *container.Manager, logger *slog.Logger, version string, runtimes ...sandboxruntime.Runtime) *Handler {
 	sandboxControl := newSandboxControlService(logger)
+	var sandboxRuntime sandboxruntime.Runtime
+	if len(runtimes) > 0 {
+		sandboxRuntime = runtimes[0]
+	}
 	return &Handler{
 		backend:          backend,
 		containerManager: containerManager,
 		sandboxControl:   sandboxControl,
+		sandboxRuntime:   sandboxRuntime,
 		logger:           logger,
 		startTime:        time.Now(),
 		version:          version,
@@ -67,6 +74,7 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	router.GET("/monitoring/health-summary", h.getHealthSummary)
 
 	// Sandbox execution (uses the sandbox control plane / warm-pool data plane)
+	router.GET("/sandbox/sessions", h.listSandboxes)
 	router.POST("/sandbox/executions", h.createSandboxExecution)
 	router.GET("/sandbox/executions/:id", h.getSandboxExecution)
 	router.POST("/sandbox/executions/:id/events", h.applySandboxExecutionEvent)
@@ -103,7 +111,13 @@ func (h *Handler) runtimeManifest(c *gin.Context) {
 		})
 		return
 	}
-	provider, ok := h.backend.(runtimeManifestProvider)
+	var provider runtimeManifestProvider
+	if h.sandboxRuntime != nil {
+		provider = h.sandboxRuntime
+	} else {
+		provider, _ = h.backend.(runtimeManifestProvider)
+	}
+	ok := provider != nil
 	if !ok {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error":   "runtime_manifest_unavailable",

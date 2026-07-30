@@ -14,6 +14,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
 	"github.com/agentarea/mcp-manager/internal/sandboxplacement"
 	"github.com/agentarea/mcp-manager/internal/sandboxrunner"
+	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 )
 
 func main() {
@@ -34,23 +35,30 @@ func main() {
 	}
 	defer store.Close()
 
-	backend, err := backends.NewKubernetesBackend(cfg, logger)
-	if err != nil {
-		logger.Error("failed to initialize kubernetes backend", slog.String("error", err.Error()))
-		os.Exit(1)
+	var legacyRuntime sandboxruntime.Runtime
+	var backend *backends.KubernetesBackend
+	configuredProvider := strings.ToLower(strings.TrimSpace(os.Getenv("SANDBOX_PROVIDER")))
+	if configuredProvider == "" || configuredProvider == "kubernetes" || configuredProvider == "agentarea" {
+		backend, err = backends.NewKubernetesBackend(cfg, logger)
+		if err != nil {
+			logger.Error("failed to initialize kubernetes backend", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		if err := backend.Initialize(ctx); err != nil {
+			logger.Error("failed to initialize kubernetes backend resources", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		defer func() { _ = backend.Shutdown(context.Background()) }()
+		legacyRuntime = backend
 	}
-	if err := backend.Initialize(ctx); err != nil {
-		logger.Error("failed to initialize kubernetes backend resources", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	defer func() { _ = backend.Shutdown(context.Background()) }()
 
-	providerName := os.Getenv("SANDBOX_PROVIDER_NAME")
-	if providerName == "" {
-		providerName = "kubernetes"
+	runtime, providerName, err := sandboxruntime.NewFromEnv(ctx, legacyRuntime, store.RedisClient(), "kubernetes")
+	if err != nil {
+		logger.Error("failed to configure sandbox runtime", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	placer, err := sandboxplacement.NewRegistry(sandboxplacement.Target{
-		Executor: backend,
+		Executor: runtime,
 		Capabilities: sandboxplacement.Capabilities{
 			Name:   providerName,
 			Region: os.Getenv("SANDBOX_REGION"),
