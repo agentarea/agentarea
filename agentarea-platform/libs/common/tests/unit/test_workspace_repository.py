@@ -31,8 +31,8 @@ class _Paginator:
     def paginate(
         self,
         *,
-        Bucket: str,
-        Prefix: str,
+        Bucket: str,  # noqa: N803
+        Prefix: str,  # noqa: N803
         Delimiter: str | None = None,  # noqa: N803
     ):
         matches = [
@@ -192,6 +192,25 @@ async def test_nested_write_read_and_manifest_are_refs_only(repository):
         "s3://artifacts/workspaces/ws-1/tasks/task-1/objects/"
     )
     assert "xlsx-canary" not in json.dumps(manifest)
+
+
+@pytest.mark.asyncio
+async def test_list_prefix_matches_only_the_requested_path_subtree(repository):
+    repo, _ = repository
+    await repo.put_files(
+        "ws-1",
+        "task-1",
+        {
+            "inputs": b"exact",
+            "inputs/data.csv": b"nested",
+            "inputs-old/private.txt": b"sibling",
+        },
+    )
+
+    assert [item.path for item in await repo.list("ws-1", "task-1", prefix="inputs")] == [
+        "inputs",
+        "inputs/data.csv",
+    ]
 
 
 @pytest.mark.asyncio

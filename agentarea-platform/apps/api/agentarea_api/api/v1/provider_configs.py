@@ -233,9 +233,9 @@ class DiscoverPreviewModelResponse(BaseModel):
     model_name: str
     display_name: str
     context_window: int
-    max_output_tokens: int = 4096
-    input_cost_per_token: float = 0.0
-    output_cost_per_token: float = 0.0
+    max_output_tokens: int | None = None
+    input_cost_per_token: float | None = None
+    output_cost_per_token: float | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -247,6 +247,30 @@ class DiscoverPreviewResponse(BaseModel):
     discovered: int
     new_models: int
     models: list[DiscoverPreviewModelResponse]
+
+
+def _require_discovered_runtime_metadata(model) -> None:
+    """Reject catalog entries that cannot satisfy the execution contract."""
+    missing = []
+    if (
+        isinstance(model.context_window, bool)
+        or not isinstance(model.context_window, int)
+        or model.context_window <= 0
+    ):
+        missing.append("context_window")
+    if model.input_cost_per_token is None:
+        missing.append("input_cost_per_token")
+    if model.output_cost_per_token is None:
+        missing.append("output_cost_per_token")
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Discovered model '{model.model_name}' is missing required runtime metadata: "
+                + ", ".join(missing)
+                + ". Configure the model spec explicitly before execution."
+            ),
+        )
 
 
 @router.post("/discover-preview", response_model=DiscoverPreviewResponse)
@@ -282,6 +306,7 @@ async def discover_models_preview(
     results = []
     new_count = 0
     for model in discovered:
+        _require_discovered_runtime_metadata(model)
         existing = await model_spec_repo.get_by_provider_and_model(
             UUID(str(provider_spec_id)), model.model_name
         )
@@ -400,9 +425,9 @@ class DiscoveredModelResponse(BaseModel):
     model_name: str
     display_name: str
     context_window: int
-    max_output_tokens: int = 4096
-    input_cost_per_token: float = 0.0
-    output_cost_per_token: float = 0.0
+    max_output_tokens: int | None = None
+    input_cost_per_token: float | None = None
+    output_cost_per_token: float | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -453,6 +478,7 @@ async def discover_models(
     results = []
     new_count = 0
     for model in discovered:
+        _require_discovered_runtime_metadata(model)
         # Check if model already exists
         existing = await model_spec_repo.get_by_provider_and_model(
             UUID(str(provider_spec_id)), model.model_name

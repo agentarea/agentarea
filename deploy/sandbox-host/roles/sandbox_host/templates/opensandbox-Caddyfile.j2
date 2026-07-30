@@ -1,0 +1,11 @@
+http://{{ opensandbox_public_hostname }} {
+  redir https://{{ opensandbox_public_hostname }}{uri} permanent
+}
+
+{{ opensandbox_public_hostname }} {
+  reverse_proxy 127.0.0.1:{{ opensandbox_server_port }}
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+  }
+}

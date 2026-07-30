@@ -1,0 +1,13 @@
+[Unit]
+Description=AgentArea OpenSandbox inbound firewall
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/local/sbin/opensandbox-input-firewall.sh
+
+[Install]
+WantedBy=multi-user.target

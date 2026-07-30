@@ -694,6 +694,91 @@ mcpManager:
   resources: {}
   extraEnv: []
 
+# Provider-neutral agent sandbox data plane. Empty provider preserves the
+# built-in runtime selected by the deployment environment (Kubernetes in the
+# chart). Set exactly one external mode per regional deployment; callers do not
+# send or know this value.
+sandboxRuntime:
+  provider: ""
+  region: ""
+  # Active task sessions are renewed to this lease on every file/command access
+  # and while a command is running. Keep this long enough that a live agent's
+  # unfinished workspace is not reclaimed during ordinary thinking time.
+  leaseTTL: "2h"
+  # Once the workflow explicitly retires a completed task, keep the sandbox for
+  # this short grace period before the provider releases it.
+  idleTTL: "15m"
+  sessionRecordTTL: "24h"
+  resources:
+    cpu: 500m
+    memory: 512Mi
+
+  # External templates must publish an explicit runtime manifest. Omitting a
+  # requested profile makes that profile unavailable rather than falling back
+  # to a weaker image/template.
+  manifests:
+    allowed: {}
+    locked: {}
+
+  opensandbox:
+    url: ""
+    allowInsecure: false
+    # OpenSandbox Docker runtime does not implement secureAccess. It may only
+    # be disabled together with useServerProxy so workload ports stay private.
+    secureAccess: true
+    # Required provider-side isolation contract. Production values are gvisor,
+    # kata, or firecracker. container-dev is accepted only with the explicit
+    # development opt-in below and must never be used for untrusted production
+    # workloads.
+    isolation: ""
+    # provider uses OpenSandbox per-sandbox networkPolicy. host-public is the
+    # dedicated Docker+gVisor profile and requires an audited host firewall.
+    egressMode: ""
+    allowWeakIsolationForDevelopment: false
+    useServerProxy: true
+    persistWorkspace: true
+    volumePrefix: agentarea-task
+    authHeader: OPEN-SANDBOX-API-KEY
+    apiKeySecretRef:
+      name: ""
+      key: ""
+    images:
+      allowed: ""
+      locked: ""
+    entrypoint: []
+
+  # E2B Cloud, BYOC, and self-hosted E2B all use this one adapter; apiUrl and
+  # sandboxUrl select the deployment.
+  e2b:
+    apiUrl: ""
+    sandboxUrl: ""
+    allowInsecure: false
+    internetAccess:
+      allowed: false
+      locked: false
+    apiKeySecretRef:
+      name: ""
+      key: ""
+    templates:
+      allowed: ""
+      locked: ""
+
+  # Cube is E2B protocol-compatible and therefore uses the same adapter with a
+  # separate operator-facing mode and configuration namespace.
+  cube:
+    apiUrl: ""
+    sandboxUrl: ""
+    allowInsecure: false
+    internetAccess:
+      allowed: false
+      locked: false
+    apiKeySecretRef:
+      name: ""
+      key: ""
+    templates:
+      allowed: ""
+      locked: ""
+
 # Sandbox runner data plane. This process consumes sandbox execution requests
 # from Redis Streams and executes them in the selected sandbox backend.
 mcpSandboxRunner:

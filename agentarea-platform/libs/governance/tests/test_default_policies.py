@@ -1,7 +1,6 @@
 """Tests for baseline default-policy provisioning."""
 
 import pytest
-
 from agentarea_governance.application.defaults import (
     default_policy_rules,
     provision_default_policies,
@@ -21,13 +20,15 @@ def test_shipped_defaults_are_workspace_scoped_and_sane():
     pairs = {(rule.target, rule.effect) for rule in rules}
     assert ("spend", PolicyEffect.CAP) in pairs
     assert ("tokens", PolicyEffect.CAP) in pairs
+    assert ("execution", PolicyEffect.CAP) in pairs
     assert ("content", PolicyEffect.SAFETY) in pairs
     # Approval is intentionally NOT a default.
     assert PolicyEffect.APPROVAL not in {rule.effect for rule in rules}
 
 
-def test_missing_config_file_yields_no_rules(tmp_path):
-    assert default_policy_rules("ws-x", path=tmp_path / "absent.yaml") == []
+def test_missing_config_file_fails_loudly(tmp_path):
+    with pytest.raises(FileNotFoundError, match="required governance baseline"):
+        default_policy_rules("ws-x", path=tmp_path / "absent.yaml")
 
 
 def test_custom_config_path_overrides_defaults(tmp_path):
@@ -59,7 +60,7 @@ class _FakeService:
             and (subject_type is None or r.subject_type == subject_type)
         ]
 
-    async def create_rule(self, *, rule, subject_id):  # noqa: ARG002
+    async def create_rule(self, *, rule, subject_id):
         self.rules.append(rule)
         return rule
 
@@ -82,9 +83,7 @@ async def test_provision_fills_only_missing_dimensions():
     service = _FakeService()
     defaults = default_policy_rules("ws-2")
     # User already configured the monthly spend cap (with their own amount).
-    monthly = next(
-        r for r in defaults if r.target == "spend" and r.params.get("period") == "month"
-    )
+    monthly = next(r for r in defaults if r.target == "spend" and r.params.get("period") == "month")
     monthly.params = {"amount_usd": "123.45", "period": "month"}
     service.rules.append(monthly)
 
@@ -95,6 +94,7 @@ async def test_provision_fills_only_missing_dimensions():
     assert ("spend", "month") not in created_keys  # not re-seeded
     assert ("spend", "run") in created_keys
     assert ("tokens", None) in created_keys
+    assert ("execution", None) in created_keys
     assert ("content", None) in created_keys
 
     # User's amount is preserved.

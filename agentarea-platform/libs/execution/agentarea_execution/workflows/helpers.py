@@ -39,7 +39,7 @@ def resolve_effective_budget(
 
     candidates = [to_money(b) for b in (request_budget, policy_budget) if b is not None]
     if not candidates:
-        return None
+        raise ValueError("effective policy is missing required runtime limit budget.run_budget_usd")
     return min(candidates)
 
 
@@ -336,9 +336,13 @@ class BudgetTracker:
         budget_usd: Money | float | None = None,
         service_budget_usd: Money | float | None = None,
     ):
-        from .constants import BUDGET_WARNING_THRESHOLD, DEFAULT_BUDGET_USD
+        from .constants import BUDGET_WARNING_THRESHOLD
 
-        self.budget_limit: Money = to_money(budget_usd or DEFAULT_BUDGET_USD)
+        if budget_usd is None:
+            raise ValueError("budget_usd is required; runtime budgets have no code default")
+        self.budget_limit: Money = to_money(budget_usd)
+        if self.budget_limit <= ZERO:
+            raise ValueError("budget_usd must be greater than zero")
         self.cost: Money = ZERO
         self.warning_threshold = BUDGET_WARNING_THRESHOLD
         self._warning_sent = False
@@ -711,7 +715,12 @@ class ToolCallExtractor:
     @staticmethod
     def extract_usage_info(response: Any) -> dict[str, Any]:
         """Extract usage and cost information from LLM response."""
-        usage_info = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0.0}
+        usage_info = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": None,
+        }
 
         if not hasattr(response, "usage") or not response.usage:
             return usage_info
@@ -726,25 +735,23 @@ class ToolCallExtractor:
         )
 
         # Calculate cost — try multiple sources
-        cost = 0.0
+        cost: float | None = None
 
         # LiteLLM stores cost in _hidden_params.response_cost
         if hasattr(response, "_hidden_params"):
             hidden = response._hidden_params
             if isinstance(hidden, dict):
-                cost = hidden.get("response_cost", 0.0) or 0.0
+                cost = hidden.get("response_cost")
             elif hasattr(hidden, "response_cost"):
-                cost = getattr(hidden, "response_cost", 0.0) or 0.0
+                cost = hidden.response_cost
 
         # Try usage-level cost attributes
-        if cost == 0.0 and hasattr(usage, "completion_tokens_cost"):
-            cost += getattr(usage, "completion_tokens_cost", 0.0) or 0.0
-        if cost == 0.0 and hasattr(usage, "prompt_tokens_cost"):
-            cost += getattr(usage, "prompt_tokens_cost", 0.0) or 0.0
-
-        # Fallback estimate: $0.01 per 1K tokens
-        if cost == 0.0 and getattr(usage, "total_tokens", 0):
-            cost = getattr(usage, "total_tokens", 0) * 0.00001
+        if cost is None and (
+            hasattr(usage, "completion_tokens_cost") or hasattr(usage, "prompt_tokens_cost")
+        ):
+            cost = (getattr(usage, "completion_tokens_cost", 0.0) or 0.0) + (
+                getattr(usage, "prompt_tokens_cost", 0.0) or 0.0
+            )
 
         usage_info["cost"] = cost
         return usage_info

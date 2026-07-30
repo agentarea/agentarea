@@ -235,11 +235,9 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
                     workspace_id=args["workspace_id"],
                     task_query=args["task_query"],
                     task_parameters=args.get("task_parameters", {}),
-                    timeout_seconds=args.get("timeout_seconds", 300),
-                    max_reasoning_iterations=args.get("max_reasoning_iterations", 10),
                     requires_human_approval=args.get("requires_human_approval", False),
                     workflow_metadata=args.get("workflow_metadata", {}),
-                    effective_policy=args.get("effective_policy"),
+                    effective_policy=args["effective_policy"],
                 )
                 workflow_args = [execution_request]
             else:

@@ -101,7 +101,11 @@ class TestParseMCPServers:
                                 "version": "0.6.3",
                                 "environmentVariables": [
                                     {"name": "TELEGRAM_API_ID", "required": True, "isSecret": True},
-                                    {"name": "TELEGRAM_API_HASH", "required": True, "isSecret": True},
+                                    {
+                                        "name": "TELEGRAM_API_HASH",
+                                        "required": True,
+                                        "isSecret": True,
+                                    },
                                     {
                                         "name": "TELEGRAM_SESSION_STRING",
                                         "required": True,
@@ -117,9 +121,7 @@ class TestParseMCPServers:
                             }
                         ],
                     },
-                    "_meta": {
-                        "io.modelcontextprotocol.registry/official": {"isLatest": True}
-                    },
+                    "_meta": {"io.modelcontextprotocol.registry/official": {"isLatest": True}},
                 }
             ]
         }
@@ -267,6 +269,7 @@ class TestParseLLMModels:
         data = {"models": [{"provider_key": "p", "model_name": "m"}]}
         items = RegistryService._parse_llm_models(data)
         assert items[0]["name"] == "m"
+        assert items[0]["spec"]["context_window"] is None
 
 
 class TestParseDefaultAgents:

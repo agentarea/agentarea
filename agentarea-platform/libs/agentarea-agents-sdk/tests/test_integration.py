@@ -16,6 +16,8 @@ class TestAgentIntegration:
                 name="Math Assistant",
                 instruction="You are a helpful math assistant that solves problems step by step.",
                 model="ollama_chat/qwen2.5",
+                max_tokens=500,
+                max_iterations=10,
             )
 
             # Test a simple math problem
@@ -49,6 +51,8 @@ class TestAgentIntegration:
                 name="Logic Assistant",
                 instruction="You are a logical reasoning assistant.",
                 model="ollama_chat/qwen2.5",
+                max_tokens=500,
+                max_iterations=10,
             )
 
             task = "If I have 6 apples and eat half of them, how many do I have left?"
@@ -72,6 +76,8 @@ class TestAgentIntegration:
                 name="Goal-Oriented Agent",
                 instruction="You are a systematic problem solver.",
                 model="ollama_chat/qwen2.5",
+                max_tokens=500,
+                max_iterations=10,
             )
 
             task = "Help me with math"
@@ -125,6 +131,7 @@ class TestAgentIntegration:
                 name="Consistency Test Agent",
                 instruction="You are a helpful assistant. Be concise.",
                 model="ollama_chat/qwen2.5",
+                max_tokens=500,
                 max_iterations=1,  # Limit to one iteration for consistency
             )
 

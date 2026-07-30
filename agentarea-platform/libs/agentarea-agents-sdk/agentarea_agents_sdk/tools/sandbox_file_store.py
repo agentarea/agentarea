@@ -15,7 +15,7 @@ It implements the ``StorageClient`` protocol consumed by
 from __future__ import annotations
 
 import base64
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
@@ -31,6 +31,7 @@ class SandboxFileStore:
         mcp_manager_url: str,
         workspace_id: str,
         task_id: str,
+        package_install: Literal["allowed", "locked"],
         timeout_seconds: float = 30.0,
         http_client: Any = None,
         durable: Any = None,
@@ -42,9 +43,12 @@ class SandboxFileStore:
             raise ValueError("workspace_id is required for the sandbox file store")
         if not task_id:
             raise ValueError("task_id is required for the sandbox file store")
+        if package_install not in {"allowed", "locked"}:
+            raise ValueError("package_install must be allowed or locked")
         self._base = base
         self._workspace_id = workspace_id
         self._task_id = task_id
+        self._package_install = package_install
         self._timeout_seconds = timeout_seconds
         self._http_client = http_client
         # Optional durable, task-scoped export target (WorkspaceRepository). The
@@ -63,6 +67,7 @@ class SandboxFileStore:
         payload = {
             "workspace_id": workspace_id or self._workspace_id,
             "task_id": self._task_id,
+            "package_install": self._package_install,
             "path": path,
             "content_base64": base64.b64encode(data).decode("ascii"),
         }

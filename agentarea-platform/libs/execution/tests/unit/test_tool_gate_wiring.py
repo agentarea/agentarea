@@ -40,7 +40,10 @@ async def test_branch_calls_gate_and_aborts_on_deny(method_name):
     wf._gate_tool_call = AsyncMock(return_value=False)
     tool_call = _tool_call()
 
-    result = await getattr(wf, method_name)(tool_call)
+    if method_name == "_execute_agent_delegation":
+        result = await getattr(wf, method_name)(tool_call, run_budget_usd=1)
+    else:
+        result = await getattr(wf, method_name)(tool_call)
 
     # Denied -> branch returns without touching any downstream executor.
     assert result is None

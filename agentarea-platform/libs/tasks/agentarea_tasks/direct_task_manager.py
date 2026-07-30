@@ -12,6 +12,9 @@ import logging
 from typing import Any, cast
 from uuid import UUID, uuid4
 
+from agentarea_common.money import ZERO, serialize_money, to_money
+from agentarea_governance.domain.policies import effective_policy_from_json
+
 from .domain.interfaces import BaseTaskManager
 from .domain.models import AgentTask
 from .infrastructure.repository import TaskRepository
@@ -48,7 +51,32 @@ class DirectTaskManager(BaseTaskManager):
 
     async def _execute(self, task: AgentTask) -> None:
         """Run the agent loop using DB-resolved config, same as Temporal workflow."""
+        tool_calls_used = 0
+        tokens_used = 0
+        cost_used = ZERO
         try:
+            policy = effective_policy_from_json(task.effective_policy)
+            policy.require_runtime_contract()
+            execution = policy.execution
+            tokens = policy.tokens
+            if execution is None or tokens is None:
+                raise ValueError("effective runtime policy is incomplete")
+            max_iterations = execution.max_model_turns
+            max_tool_calls_per_turn = execution.max_tool_calls_per_turn
+            max_tool_calls_total = execution.max_tool_calls_total
+            max_tokens_per_call = tokens.max_tokens_per_call
+            max_tokens_total = tokens.max_tokens
+            run_budget = policy.budget.run_budget_usd if policy.budget else None
+            if (
+                max_iterations is None
+                or max_tool_calls_per_turn is None
+                or max_tool_calls_total is None
+                or max_tokens_per_call is None
+                or max_tokens_total is None
+                or run_budget is None
+            ):
+                raise ValueError("effective runtime policy is incomplete")
+
             # Resolve agent config from DB — same chain as build_agent_config_activity
             llm, instruction, skills_data = await self._resolve_agent(task)
 
@@ -104,7 +132,6 @@ class DirectTaskManager(BaseTaskManager):
                 {"role": "user", "content": task.query},
             ]
 
-            max_iterations = 10
             for iteration in range(1, max_iterations + 1):
                 logger.info(f"DirectTaskManager: iteration {iteration}")
 
@@ -113,8 +140,20 @@ class DirectTaskManager(BaseTaskManager):
                         messages=messages,
                         tools=tools,
                         temperature=0.1,
+                        max_tokens=max_tokens_per_call,
                     )
                 )
+
+                if response.usage is None or response.usage.total_tokens <= 0:
+                    raise RuntimeError(
+                        "LLM provider returned no usage; token and cost policy cannot be enforced"
+                    )
+                tokens_used += response.usage.total_tokens
+                if tokens_used > max_tokens_total:
+                    raise RuntimeError(f"token budget exceeded: {tokens_used}/{max_tokens_total}")
+                cost_used += to_money(response.cost)
+                if cost_used > to_money(run_budget):
+                    raise RuntimeError(f"run budget exceeded: ${cost_used}/${to_money(run_budget)}")
 
                 assistant_msg: dict[str, Any] = {
                     "role": "assistant",
@@ -131,6 +170,17 @@ class DirectTaskManager(BaseTaskManager):
                         task.result = {"response": final_response}
                         break
                     continue
+
+                if len(response.tool_calls) > max_tool_calls_per_turn:
+                    raise RuntimeError(
+                        "tool-call limit exceeded: "
+                        f"{len(response.tool_calls)}/{max_tool_calls_per_turn} in one turn"
+                    )
+                tool_calls_used += len(response.tool_calls)
+                if tool_calls_used > max_tool_calls_total:
+                    raise RuntimeError(
+                        f"tool-call budget exceeded: {tool_calls_used}/{max_tool_calls_total}"
+                    )
 
                 for tc in response.tool_calls:
                     fn_name = tc["function"]["name"]
@@ -186,6 +236,14 @@ class DirectTaskManager(BaseTaskManager):
                     "error": task.error_message,
                 }
 
+            task.result = {
+                **(task.result or {}),
+                "total_cost": serialize_money(cost_used),
+                "own_cost": serialize_money(cost_used),
+                "total_tokens": tokens_used,
+                "total_tool_calls": tool_calls_used,
+            }
+
             # Persist result to DB
             update_fields: dict[str, Any] = {"result": task.result}
             if task.error_message:
@@ -201,11 +259,18 @@ class DirectTaskManager(BaseTaskManager):
             logger.error(f"DirectTaskManager: execution failed: {e}")
             task.status = "failed"
             task.error_message = str(e)
-            task.result = {"error": str(e)}
+            task.result = {
+                "error": str(e),
+                "total_cost": serialize_money(cost_used),
+                "own_cost": serialize_money(cost_used),
+                "total_tokens": tokens_used,
+                "total_tool_calls": tool_calls_used,
+            }
             await self.task_repository.update_status(
                 task.id,
                 "failed",
                 error=str(e),
+                result=task.result,
             )
             self._tasks[task.id] = task
 
@@ -267,12 +332,18 @@ class DirectTaskManager(BaseTaskManager):
         endpoint_url = (
             model_instance.provider_config.endpoint_url or model_instance.model_spec.endpoint_url
         )
+        input_cost_per_token = model_instance.model_spec.input_cost_per_token
+        output_cost_per_token = model_instance.model_spec.output_cost_per_token
+        if input_cost_per_token is None or output_cost_per_token is None:
+            raise ValueError("model pricing is not configured; run budget cannot be enforced")
 
         llm = LLMModel(
             provider_type=provider_type,
             model_name=model_name,
             api_key=api_key,
             endpoint_url=endpoint_url,
+            input_cost_per_token=input_cost_per_token,
+            output_cost_per_token=output_cost_per_token,
         )
 
         logger.info(
@@ -317,6 +388,9 @@ class DirectTaskManager(BaseTaskManager):
         return task.result if task else None
 
     def _task_to_agent_task(self, task) -> AgentTask:
+        metadata = getattr(task, "metadata", None) or {}
+        snapshot = metadata.get("governance_snapshot") if isinstance(metadata, dict) else None
+        effective_policy = snapshot.get("effective_policy") if isinstance(snapshot, dict) else None
         return AgentTask(
             id=task.id,
             title=getattr(task, "title", ""),
@@ -328,4 +402,6 @@ class DirectTaskManager(BaseTaskManager):
             status=task.status,
             result=task.result,
             execution_id=f"task-{task.id}",
+            metadata=metadata,
+            effective_policy=effective_policy,
         )

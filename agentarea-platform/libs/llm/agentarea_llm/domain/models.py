@@ -77,10 +77,10 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     model_name: Mapped[str] = mapped_column(String, nullable=False)  # gpt-4, claude-3-opus
     display_name: Mapped[str] = mapped_column(String, nullable=False)  # GPT-4, Claude 3 Opus
     description: Mapped[str | None] = mapped_column(String, nullable=True)
-    context_window: Mapped[int] = mapped_column(Integer, nullable=False, default=4096)
-    max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True, default=4096)
-    input_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)
-    output_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)
+    context_window: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    input_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True)
+    output_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True)
     supports_function_calling: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )

@@ -21,7 +21,12 @@ from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_api.api.deps.services import get_agent_service, get_task_service
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
-from agentarea_governance.domain.policies import EffectivePolicy
+from agentarea_governance.domain.policies import (
+    BudgetPolicy,
+    EffectivePolicy,
+    ExecutionLimitsPolicy,
+    TokenPolicy,
+)
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
 from httpx import ASGITransport, AsyncClient
@@ -79,7 +84,17 @@ def _real_task_service(agent):
     task_manager.temporal_executor = None
 
     policy_resolver = MagicMock()
-    policy_resolver.resolve = AsyncMock(return_value=EffectivePolicy())
+    policy_resolver.resolve = AsyncMock(
+        return_value=EffectivePolicy(
+            budget=BudgetPolicy(run_budget_usd="1.00"),
+            tokens=TokenPolicy(max_tokens=1000, max_tokens_per_call=100),
+            execution=ExecutionLimitsPolicy(
+                max_model_turns=10,
+                max_tool_calls_per_turn=10,
+                max_tool_calls_total=100,
+            ),
+        )
+    )
 
     svc = TaskService(
         repository_factory=repo_factory,

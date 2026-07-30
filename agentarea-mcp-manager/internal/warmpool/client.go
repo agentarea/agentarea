@@ -440,10 +440,11 @@ func PostWriteback(ctx context.Context, executeURL string, req workspace.Writeba
 
 // FilePutRequest writes a single file into a task's sandbox workspace.
 type FilePutRequest struct {
-	WorkspaceID   string `json:"workspace_id"`
-	TaskID        string `json:"task_id"`
-	Path          string `json:"path"`
-	ContentBase64 string `json:"content_base64"`
+	WorkspaceID    string `json:"workspace_id"`
+	TaskID         string `json:"task_id"`
+	PackageInstall string `json:"package_install,omitempty"`
+	Path           string `json:"path"`
+	ContentBase64  string `json:"content_base64"`
 }
 
 // FilePutResponse acknowledges a written file.

@@ -38,9 +38,55 @@ def _patched_client_factory(transport: httpx.MockTransport):
 
 
 @pytest.mark.asyncio
+async def test_search_uses_configured_searxng_endpoint(monkeypatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/search"
+        assert request.url.params["q"] == "agent benchmarks"
+        assert request.url.params["format"] == "json"
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "title": "GAIA benchmark",
+                        "url": "https://example.test/gaia",
+                        "content": "A benchmark for general AI assistants.",
+                        "engine": "example",
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr(
+        "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",
+        _patched_client_factory(httpx.MockTransport(handler)),
+    )
+
+    payload = json.loads(
+        await WebToolset(search_base_url="http://search.test/").search_web("agent benchmarks")
+    )
+
+    assert payload["results"] == [
+        {
+            "title": "GAIA benchmark",
+            "url": "https://example.test/gaia",
+            "snippet": "A benchmark for general AI assistants.",
+            "engine": "example",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_search_without_backend_fails_loudly() -> None:
+    result = await WebToolset().search_web("agent benchmarks")
+    assert result.startswith("Error: web search is not configured")
+
+
+@pytest.mark.asyncio
 async def test_text_response_is_returned_inline(monkeypatch) -> None:
     body = (
-        "<html><head><title>T</title></head><body><p>hi</p><a href='/docs'>Docs</a></body></html>"
+        "<html><head><title>T</title><style>.hidden{color:red}</style></head>"
+        "<body><script>alert(1)</script><p>hi</p><a href='/docs'>Docs</a></body></html>"
     )
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -61,6 +107,8 @@ async def test_text_response_is_returned_inline(monkeypatch) -> None:
     assert payload["status"] == 200
     assert "<p>hi</p>" in payload["text"]
     assert "hi" in payload["extracted_text"]
+    assert "alert" not in payload["extracted_text"]
+    assert "color:red" not in payload["extracted_text"]
     assert {"href": "https://example.test/docs", "text": "Docs"} in payload["links"]
     # No artifact written for text responses.
     assert await storage.list("ws-1") == []
@@ -192,21 +240,9 @@ async def test_filename_inferred_from_content_type_when_path_has_none(
     assert payload["artifact_path"].endswith(".pdf")
 
 
-@pytest.mark.asyncio
-async def test_extract_text_strips_script_and_style() -> None:
-    html = (
-        "<html><head><style>.x{color:red}</style>"
-        "<script>alert(1)</script></head>"
-        "<body><h1>Hello</h1><p>World</p></body></html>"
-    )
-    tool = WebToolset()
-    out = await tool.extract_text(html)
-    assert "Hello" in out and "World" in out
-    assert "alert" not in out and "color:red" not in out
-
-
-@pytest.mark.asyncio
-async def test_extract_text_passthrough_for_non_html() -> None:
-    tool = WebToolset()
-    assert await tool.extract_text("just plain text") == "just plain text"
-    assert await tool.extract_text("") == ""
+def test_web_toolset_exposes_only_search_and_fetch() -> None:
+    definitions = WebToolset().get_tool_definitions()
+    assert {definition.name for definition in definitions} == {
+        "web_search_web",
+        "web_fetch_webpage",
+    }

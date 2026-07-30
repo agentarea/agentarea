@@ -50,11 +50,26 @@ sandbox_executor_host_port: 8080
 # placement (sandboxplacement.Capabilities.Region). Not used by the host itself.
 sandbox_region: ""
 
+# OpenSandbox control server. It runs alongside the legacy executor during the
+# first rollout so cutover can be verified before the old data plane is drained.
+opensandbox_enabled: true
+opensandbox_server_image: "opensandbox/server@sha256:8f8762af7565ed9c6f9dbcf009dd56727aa1fef8ce58a17f2b007b88cfe542bb"
+opensandbox_execd_image: "opensandbox/execd@sha256:1dc98c7de10b9a73450ac75aa0f200ad7972f2c40f5225f6a8998e166b45d6dd"
+opensandbox_caddy_image: "caddy:2.10.2-alpine"
+opensandbox_server_port: 8081
+opensandbox_public_hostname: "opensandbox.72-56-235-217.sslip.io"
+opensandbox_max_timeout_seconds: 21600
+opensandbox_api_key: "{{ lookup('ansible.builtin.env', 'OPENSANDBOX_API_KEY') }}"
+# Only these source CIDRs may reach the OpenSandbox HTTPS API. Port 80 remains
+# available for ACME HTTP-01 renewal; it does not proxy the API in plaintext.
+opensandbox_control_plane_cidrs:
+  - "194.87.187.68/32"
+
 # HMAC secret shared with mcp-manager to sign every /execute (activation auth).
 # REQUIRED — provisioning fails hard if empty. Provide via vault / --extra-vars,
 # never commit it. There is deliberately no default: a default secret is a
 # backdoor.
-sandbox_activation_auth_secret: ""
+sandbox_activation_auth_secret: "{{ lookup('ansible.builtin.env', 'SANDBOX_ACTIVATION_AUTH_SECRET') }}"
 
 # Non-root uid/gid the sandbox command runs as inside the executor.
 sandbox_command_uid: 10001

@@ -5031,6 +5031,73 @@ export type ResolveResponse = {
 };
 
 /**
+ * SandboxListResponse
+ */
+export type SandboxListResponse = {
+  /**
+   * Items
+   */
+  items: Array<SandboxSummary>;
+  /**
+   * Total
+   */
+  total: number;
+};
+
+/**
+ * SandboxResources
+ */
+export type SandboxResources = {
+  /**
+   * Cpu
+   */
+  cpu: string;
+  /**
+   * Memory
+   */
+  memory: string;
+};
+
+/**
+ * SandboxSummary
+ */
+export type SandboxSummary = {
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Expires At
+   */
+  expires_at: string | null;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Isolation
+   */
+  isolation: string;
+  /**
+   * Package Install
+   */
+  package_install: string;
+  /**
+   * Provider
+   */
+  provider: string;
+  resources: SandboxResources;
+  /**
+   * State
+   */
+  state: string;
+  /**
+   * Task Id
+   */
+  task_id: string;
+};
+
+/**
  * SetupField
  *
  * A single value the user must provide before the package can run.
@@ -12880,6 +12947,23 @@ export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses = {
 
 export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponse =
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses[keyof UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses];
+
+export type ListSandboxesV1SandboxesGetData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/v1/sandboxes";
+};
+
+export type ListSandboxesV1SandboxesGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: SandboxListResponse;
+};
+
+export type ListSandboxesV1SandboxesGetResponse =
+  ListSandboxesV1SandboxesGetResponses[keyof ListSandboxesV1SandboxesGetResponses];
 
 export type ListCollectionsV1SkillCollectionsGetData = {
   body?: never;

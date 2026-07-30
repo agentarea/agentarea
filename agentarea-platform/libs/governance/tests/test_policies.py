@@ -5,15 +5,103 @@ from agentarea_governance.domain.policies import (
     ApprovalPolicy,
     BudgetPolicy,
     ContentSafetyPolicy,
+    ExecutionLimitsPolicy,
     PolicyDocument,
     PolicyResolver,
     PolicyValidationError,
     PolicyValidator,
+    RuntimePolicyContractError,
     TokenPolicy,
     ToolsPolicy,
     effective_policy_from_json,
     is_approver,
 )
+from pydantic import ValidationError
+
+
+def test_execution_limits_tighten_by_minimum():
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(
+                execution=ExecutionLimitsPolicy(
+                    max_model_turns=100,
+                    max_tool_calls_per_turn=10,
+                    max_tool_calls_total=1000,
+                )
+            ),
+            PolicyDocument(
+                execution=ExecutionLimitsPolicy(
+                    max_model_turns=24,
+                    max_tool_calls_per_turn=5,
+                    max_tool_calls_total=100,
+                )
+            ),
+        ]
+    )
+
+    assert effective.execution == ExecutionLimitsPolicy(
+        max_model_turns=24,
+        max_tool_calls_per_turn=5,
+        max_tool_calls_total=100,
+    )
+
+
+def test_execution_limits_cannot_be_loosened():
+    with pytest.raises(PolicyValidationError, match="max_model_turns"):
+        PolicyResolver().resolve(
+            [
+                PolicyDocument(execution=ExecutionLimitsPolicy(max_model_turns=100)),
+                PolicyDocument(execution=ExecutionLimitsPolicy(max_model_turns=101)),
+            ]
+        )
+
+
+def test_runtime_contract_requires_explicit_persisted_limits():
+    effective = PolicyResolver().resolve([])
+
+    with pytest.raises(RuntimePolicyContractError) as exc_info:
+        effective.require_runtime_contract()
+
+    assert exc_info.value.missing_fields == (
+        "budget.run_budget_usd",
+        "tokens.max_tokens",
+        "tokens.max_tokens_per_call",
+        "execution.max_model_turns",
+        "execution.max_tool_calls_per_turn",
+        "execution.max_tool_calls_total",
+    )
+
+
+def test_runtime_contract_accepts_complete_policy():
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(
+                budget=BudgetPolicy(run_budget_usd="50.00"),
+                tokens=TokenPolicy(max_tokens=20_000_000, max_tokens_per_call=100_000),
+                execution=ExecutionLimitsPolicy(
+                    max_model_turns=100,
+                    max_tool_calls_per_turn=10,
+                    max_tool_calls_total=1000,
+                ),
+            )
+        ]
+    )
+
+    assert effective.require_runtime_contract() is effective
+
+
+@pytest.mark.parametrize(
+    ("policy_type", "kwargs"),
+    [
+        (BudgetPolicy, {"run_budget_usd": "0"}),
+        (BudgetPolicy, {"service_budget_usd": "-1"}),
+        (TokenPolicy, {"max_tokens": 0}),
+        (TokenPolicy, {"max_tokens_per_call": -1}),
+    ],
+)
+def test_runtime_budget_and_token_limits_must_be_positive(policy_type, kwargs):
+    with pytest.raises(ValidationError, match="greater than"):
+        policy_type(**kwargs)
 
 
 def test_numeric_ceilings_tighten_by_minimum():

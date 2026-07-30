@@ -47,6 +47,7 @@ import type {
   ProviderSpecWithModelsResponse,
   RelationshipWriteRequest,
   ResolveRequest,
+  SandboxListResponse,
   SkillContentResponse,
   SkillCreateRequest,
   SkillFileResponse,
@@ -164,6 +165,13 @@ export const listAgents = async () => {
     client: serverClient,
   });
   return { data, error };
+};
+
+export const listSandboxes = async () => {
+  const { data, error } = await sdk.listSandboxesV1SandboxesGet({
+    client: serverClient,
+  });
+  return { data: data as SandboxListResponse | undefined, error };
 };
 
 export const createAgent = async (agent: AgentCreate) => {

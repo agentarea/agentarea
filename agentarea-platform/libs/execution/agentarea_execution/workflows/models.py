@@ -100,10 +100,16 @@ class ContinueAsNewState(BaseModel):
     agent_config: dict[str, Any]
     available_tools: list[dict[str, Any]]
     current_iteration: int
+    tool_calls_used: int = 0
     total_cost: Money = ZERO
+    # Child workflow spend included in total_cost. Kept separately so billing
+    # can sum each task's own model spend exactly once.
+    delegated_cost: Money = ZERO
     tokens_used: int = 0
     budget_usd: Money | None = None
-    context_window: int = 128000
+    # Optional only when decoding pre-change Temporal histories. New runs set it
+    # from the persisted ModelSpec before context management starts.
+    context_window: int | None = None
     user_context_data: dict[str, Any] = Field(default_factory=dict)
     continued_from_run_id: str | None = None
     agent_tool_registry: dict[str, dict[str, Any]] = Field(default_factory=dict)
@@ -161,6 +167,7 @@ class AgentExecutionState(BaseModel):
     goal: AgentGoal | None = None
     status: str = "initializing"  # Will be set to ExecutionStatus.INITIALIZING in workflow
     current_iteration: int = 0
+    tool_calls_used: int = 0
     messages: list[Message] = Field(default_factory=list)
     agent_config: dict[str, Any] = Field(default_factory=dict)
     available_tools: list[dict[str, Any]] = Field(default_factory=list)
@@ -174,7 +181,7 @@ class AgentExecutionState(BaseModel):
     validation_terminal: bool = False
     budget_usd: Money | None = None
     tokens_used: int = 0  # Cumulative tokens consumed across the run (governance)
-    context_window: int = 128000  # From ModelSpec, for context window management
+    context_window: int | None = None  # Loaded from ModelSpec before the first LLM call
     user_context_data: dict[str, Any] = Field(default_factory=dict)
     activated_skills: list[str] = Field(default_factory=list)
     # Dynamic context discovery

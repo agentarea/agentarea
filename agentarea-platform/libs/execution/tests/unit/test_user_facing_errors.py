@@ -30,9 +30,9 @@ from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
 from temporalio import activity
+from temporalio.client import WorkflowFailureError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
-
 
 # ── Forbidden fragments that must never appear in user-facing error events ──
 
@@ -74,6 +74,7 @@ def _base_activities(
                 "name": "Test Agent",
                 "model_id": "gpt-4",
                 "instruction": "You are a helpful assistant.",
+                "context_window": 128000,
                 "tools_config": {"mcp_servers": []},
                 "events_config": {},
                 "planning": False,
@@ -159,15 +160,24 @@ def _base_activities(
 
 
 def _make_request(**overrides) -> AgentExecutionRequest:
-    defaults = dict(
-        task_id=uuid.uuid4(),
-        agent_id=uuid.uuid4(),
-        user_id="test_user",
-        workspace_id="test-workspace",
-        task_query="Hello",
-        timeout_seconds=30,
-        max_reasoning_iterations=3,
-    )
+    defaults = {
+        "task_id": uuid.uuid4(),
+        "agent_id": uuid.uuid4(),
+        "user_id": "test_user",
+        "workspace_id": "test-workspace",
+        "task_query": "Hello",
+        "timeout_seconds": 30,
+        "max_reasoning_iterations": 3,
+        "effective_policy": {
+            "budget": {"run_budget_usd": "1.00"},
+            "tokens": {"max_tokens": 1000, "max_tokens_per_call": 100},
+            "execution": {
+                "max_model_turns": 3,
+                "max_tool_calls_per_turn": 10,
+                "max_tool_calls_total": 100,
+            },
+        },
+    }
     defaults.update(overrides)
     return AgentExecutionRequest(**defaults)
 
@@ -243,7 +253,7 @@ class TestWorkflowErrorSanitization:
                         task_queue=task_queue,
                         execution_timeout=timedelta(minutes=1),
                     )
-                    with pytest.raises(Exception):
+                    with pytest.raises(WorkflowFailureError):
                         await handle.result()
 
             error_msg = _extract_error_from_published_events(captured_events)
@@ -290,7 +300,7 @@ class TestWorkflowErrorSanitization:
                         task_queue=task_queue,
                         execution_timeout=timedelta(minutes=1),
                     )
-                    with pytest.raises(Exception):
+                    with pytest.raises(WorkflowFailureError):
                         await handle.result()
 
             error_msg = _extract_error_from_published_events(captured_events)
@@ -341,11 +351,13 @@ class TestWorkflowErrorSanitization:
                         task_queue=task_queue,
                         execution_timeout=timedelta(minutes=1),
                     )
-                    with pytest.raises(Exception):
+                    with pytest.raises(WorkflowFailureError):
                         await handle.result()
 
             error_msg = _extract_error_from_published_events(captured_events)
             assert error_msg is not None, "No WorkflowFailed event published"
             _assert_no_forbidden_fragments(error_msg)
             # Should be a short, actionable sentence
-            assert len(error_msg) < 200, f"Error message too long ({len(error_msg)} chars): {error_msg}"
+            assert len(error_msg) < 200, (
+                f"Error message too long ({len(error_msg)} chars): {error_msg}"
+            )
