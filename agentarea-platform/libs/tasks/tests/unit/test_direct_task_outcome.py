@@ -4,6 +4,12 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from agentarea_governance.domain.policies import (
+    BudgetPolicy,
+    EffectivePolicy,
+    ExecutionLimitsPolicy,
+    TokenPolicy,
+)
 from agentarea_tasks.direct_task_manager import DirectTaskManager
 from agentarea_tasks.domain.models import AgentTask
 
@@ -16,6 +22,12 @@ async def test_iteration_limit_is_failed_in_direct_execution():
         complete=AsyncMock(
             return_value=SimpleNamespace(
                 content="",
+                cost=0,
+                usage=SimpleNamespace(
+                    prompt_tokens=1,
+                    completion_tokens=1,
+                    total_tokens=2,
+                ),
                 tool_calls=[
                     {
                         "id": "call-1",
@@ -35,6 +47,15 @@ async def test_iteration_limit_is_failed_in_direct_execution():
         agent_id=uuid4(),
         status="running",
         created_at=datetime.now(UTC),
+        effective_policy=EffectivePolicy(
+            budget=BudgetPolicy(run_budget_usd="1.00"),
+            tokens=TokenPolicy(max_tokens=1000, max_tokens_per_call=100),
+            execution=ExecutionLimitsPolicy(
+                max_model_turns=10,
+                max_tool_calls_per_turn=10,
+                max_tool_calls_total=100,
+            ),
+        ).to_json_dict(),
     )
 
     await manager._execute(task)
@@ -46,6 +67,10 @@ async def test_iteration_limit_is_failed_in_direct_execution():
         "status": "failed",
         "failure_reason": "iteration_limit",
         "error": "Maximum iterations reached (10)",
+        "total_cost": "0",
+        "own_cost": "0",
+        "total_tokens": 20,
+        "total_tool_calls": 10,
     }
     assert llm.complete.await_count == 10
     repository.update_status.assert_awaited_once_with(

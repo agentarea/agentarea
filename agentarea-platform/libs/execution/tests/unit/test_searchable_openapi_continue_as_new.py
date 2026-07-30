@@ -9,7 +9,6 @@ import asyncio
 import logging
 
 import pytest
-
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from agentarea_execution.workflows.models import AgentGoal, ContinueAsNewState
 
@@ -21,7 +20,7 @@ def stub_workflow_logger(monkeypatch):
 
     fake_logger = logging.getLogger("test_continue_as_new_stub")
     monkeypatch.setattr(_temporal_workflow, "logger", fake_logger)
-    yield
+    return
 
 
 def _goal():
@@ -52,6 +51,18 @@ def _pool_entry(name: str):
     }
 
 
+def _runtime_policy():
+    return {
+        "budget": {"run_budget_usd": "1.00"},
+        "tokens": {"max_tokens": 1000, "max_tokens_per_call": 100},
+        "execution": {
+            "max_model_turns": 10,
+            "max_tool_calls_per_turn": 10,
+            "max_tool_calls_total": 100,
+        },
+    }
+
+
 def test_continue_as_new_round_trips_searchable_state():
     """ContinueAsNewState carries pool + revealed list verbatim; _restore_from_continued_state
     re-instantiates the disclosure policy and surfaces both fields on the new state."""
@@ -74,6 +85,9 @@ def test_continue_as_new_round_trips_searchable_state():
             revealed_schema,
         ],
         current_iteration=12,
+        budget_usd="1.00",
+        context_window=128000,
+        effective_policy=_runtime_policy(),
         searchable_tool_pool=pool,
         revealed_openapi_tools=["op_01"],
     )
@@ -88,9 +102,7 @@ def test_continue_as_new_round_trips_searchable_state():
     assert wf._disclosure_policy is not None
     # The previously revealed schema is still callable as a regular tool.
     schema_names = [
-        t["function"]["name"]
-        for t in wf.state.available_tools
-        if t.get("type") == "function"
+        t["function"]["name"] for t in wf.state.available_tools if t.get("type") == "function"
     ]
     assert "op_01" in schema_names
 
@@ -125,6 +137,9 @@ def test_continue_as_new_drops_stale_revealed_names_when_pool_shrinks():
             },
         ],
         current_iteration=2,
+        budget_usd="1.00",
+        context_window=128000,
+        effective_policy=_runtime_policy(),
         searchable_tool_pool=[surviving],
         revealed_openapi_tools=["op_keep", "op_gone"],
     )
@@ -133,9 +148,7 @@ def test_continue_as_new_drops_stale_revealed_names_when_pool_shrinks():
 
     assert wf.state.revealed_openapi_tools == ["op_keep"]
     schema_names = [
-        t["function"]["name"]
-        for t in wf.state.available_tools
-        if t.get("type") == "function"
+        t["function"]["name"] for t in wf.state.available_tools if t.get("type") == "function"
     ]
     assert "op_keep" in schema_names
     assert "op_gone" not in schema_names
@@ -153,6 +166,9 @@ def test_continue_as_new_with_empty_pool_leaves_policy_unset():
         agent_config={},
         available_tools=[],
         current_iteration=0,
+        budget_usd="1.00",
+        context_window=128000,
+        effective_policy=_runtime_policy(),
     )
     wf = AgentExecutionWorkflow()
     asyncio.run(wf._restore_from_continued_state(cstate.model_dump()))

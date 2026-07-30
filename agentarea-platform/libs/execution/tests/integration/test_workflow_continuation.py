@@ -23,6 +23,7 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+from agentarea_common.money import serialize_money, to_money
 from agentarea_execution.models import (
     AgentConfigRequest,
     AgentExecutionRequest,
@@ -32,6 +33,8 @@ from agentarea_execution.models import (
     MCPToolRequest,
     ResolveModelRequest,
     ToolDiscoveryRequest,
+    UpdateTaskGovernanceSnapshotRequest,
+    UpdateTaskGovernanceSnapshotResult,
     UpdateTaskStatusRequest,
     WorkflowEventsRequest,
     WorkflowEventsResult,
@@ -39,6 +42,7 @@ from agentarea_execution.models import (
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
+from agentarea_governance.domain.policies import effective_policy_from_json
 from temporalio import activity
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.testing import WorkflowEnvironment
@@ -48,6 +52,7 @@ _published: list[dict[str, Any]] = []
 _status_updates: list[str] = []
 _llm_calls = 0
 _complete_on_call: int | None = None
+_governance_snapshots: list[dict[str, Any]] = []
 
 
 @activity.defn(name="build_agent_config_activity")
@@ -61,6 +66,7 @@ async def _mock_build_config(request: AgentConfigRequest) -> dict[str, Any]:
         "tools_config": {"mcp_servers": []},
         "events_config": {},
         "planning": False,
+        "context_window": 128000,
     }
 
 
@@ -137,6 +143,14 @@ async def _mock_update_status(request: UpdateTaskStatusRequest) -> bool:
     return True
 
 
+@activity.defn(name="update_task_governance_snapshot_activity")
+async def _mock_update_governance_snapshot(
+    request: UpdateTaskGovernanceSnapshotRequest,
+) -> UpdateTaskGovernanceSnapshotResult:
+    _governance_snapshots.append(request.governance_snapshot)
+    return UpdateTaskGovernanceSnapshotResult(success=True)
+
+
 @activity.defn(name="validate_artifacts_activity")
 async def _mock_validate_artifacts(
     request: ArtifactValidationRequest,
@@ -152,8 +166,51 @@ _ALL_ACTIVITIES = [
     _mock_execute_mcp,
     _mock_publish_events,
     _mock_update_status,
+    _mock_update_governance_snapshot,
     _mock_validate_artifacts,
 ]
+
+
+def _policy(*, max_model_turns: int, run_budget_usd: str) -> dict[str, Any]:
+    return effective_policy_from_json(
+        {
+            "budget": {"run_budget_usd": run_budget_usd},
+            "tokens": {
+                "max_tokens": 20_000,
+                "max_tokens_per_call": 2_000,
+            },
+            "execution": {
+                "max_model_turns": max_model_turns,
+                "max_tool_calls_per_turn": 10,
+                "max_tool_calls_total": 100,
+            },
+        }
+    ).to_json_dict()
+
+
+def _continuation_payload(
+    *,
+    current_iterations: int,
+    current_budget_usd: str,
+    additional_iterations: int = 0,
+    additional_budget_usd: str | None = None,
+) -> dict[str, Any]:
+    next_budget = to_money(current_budget_usd) + to_money(additional_budget_usd or "0")
+    policy = _policy(
+        max_model_turns=current_iterations + additional_iterations,
+        run_budget_usd=serialize_money(next_budget),
+    )
+    payload: dict[str, Any] = {
+        "additional_iterations": additional_iterations,
+        "effective_policy": policy,
+        "governance_snapshot": {
+            "effective_policy": policy,
+            "revision": 2,
+        },
+    }
+    if additional_budget_usd is not None:
+        payload["additional_budget_usd"] = additional_budget_usd
+    return payload
 
 
 def _make_request(
@@ -171,6 +228,10 @@ def _make_request(
         max_reasoning_iterations=max_iterations,
         budget_usd=budget_usd,
         workflow_metadata=workflow_metadata or {},
+        effective_policy=_policy(
+            max_model_turns=max_iterations,
+            run_budget_usd=str(budget_usd),
+        ),
     )
 
 
@@ -201,6 +262,7 @@ def _reset_globals():
     global _llm_calls, _complete_on_call
     _published.clear()
     _status_updates.clear()
+    _governance_snapshots.clear()
     _llm_calls = 0
     _complete_on_call = None
     return
@@ -253,10 +315,15 @@ async def test_iteration_limit_waits_then_continuation_update_completes_task():
 
                 update_result = await handle.execute_update(
                     AgentExecutionWorkflow.continue_execution,
-                    {"additional_iterations": 2},
+                    _continuation_payload(
+                        current_iterations=1,
+                        current_budget_usd="1.0",
+                        additional_iterations=2,
+                    ),
                 )
                 assert update_result["accepted"] is True
                 assert update_result["max_iterations"] == 3
+                assert len(_governance_snapshots) == 1
 
                 result = await handle.result()
 
@@ -339,13 +406,15 @@ async def test_budget_exceeded_waits_and_budget_topup_resumes():
                 )
                 assert awaiting_event["data"]["failure_reason"] == "budget_exceeded"
 
-                await handle.signal(
-                    AgentExecutionWorkflow.workflow_command,
-                    args=[
-                        "continue_execution",
-                        {"additional_iterations": 0, "additional_budget_usd": 1.0},
-                    ],
+                update_result = await handle.execute_update(
+                    AgentExecutionWorkflow.continue_execution,
+                    _continuation_payload(
+                        current_iterations=5,
+                        current_budget_usd="0.0005",
+                        additional_budget_usd="1.0",
+                    ),
                 )
+                assert update_result["accepted"] is True
 
                 result = await handle.result()
 

@@ -8,7 +8,6 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-
 from agentarea_execution.models import AgentConfigRequest, AgentConfigResult, SkillInfo
 
 
@@ -51,6 +50,7 @@ class TestSkillPromptInjection:
             description="Test description",
             instruction="You are a test agent.",
             model_id=str(uuid4()),
+            context_window=128000,
             tools=[],
             events_config={},
             planning=False,
@@ -100,6 +100,7 @@ class TestSkillPromptInjection:
             description="",
             instruction="Base instruction",
             model_id=str(uuid4()),
+            context_window=128000,
             skills=skills,
         )
 
@@ -132,9 +133,7 @@ class TestSkillWorkflowIntegration:
             for skill in skills:
                 instruction_parts.append(f"\n## {skill.name}\n{skill.content}")
                 if skill.files:
-                    instruction_parts.append(
-                        f"\n\nFiles available: {', '.join(skill.files)}"
-                    )
+                    instruction_parts.append(f"\n\nFiles available: {', '.join(skill.files)}")
 
         final_instruction = "".join(instruction_parts)
 
@@ -311,6 +310,7 @@ class TestAgentSkillsRelationship:
             description="Desc",
             instruction="Inst",
             model_id=str(uuid4()),
+            context_window=128000,
             skills=skills,
         )
 

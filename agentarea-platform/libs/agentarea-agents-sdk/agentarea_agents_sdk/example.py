@@ -21,6 +21,8 @@ async def streaming_math_example():
         name="Math Assistant",
         instruction="You are a helpful math assistant that solves problems step by step.",
         model="ollama_chat/qwen2.5",
+        max_tokens=500,
+        max_iterations=10,
     )
 
     # Run a simple calculation with streaming
@@ -45,6 +47,8 @@ async def non_streaming_example():
         name="Quick Assistant",
         instruction="You are a quick assistant that provides concise answers.",
         model="ollama_chat/qwen2.5",
+        max_tokens=500,
+        max_iterations=10,
     )
 
     # Use the run method for complete response
@@ -67,6 +71,8 @@ async def reasoning_example():
         name="Logic Assistant",
         instruction="You are a logical reasoning assistant that thinks through problems carefully.",
         model="ollama_chat/qwen2.5",
+        max_tokens=500,
+        max_iterations=10,
     )
 
     task = (

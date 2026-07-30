@@ -22,8 +22,13 @@ class ResolvedModelInfo(BaseModel):
     model_name: str
     api_key_secret: str | None = None  # secret manager key name, not the actual key
     endpoint_url: str | None = None
-    context_window: int = 128000
-    max_output_tokens: int | None = None  # model_spec cap; bounds the per-call max_tokens
+    context_window: int = Field(gt=0)
+    max_output_tokens: int | None = Field(
+        default=None,
+        gt=0,
+    )  # model_spec cap; bounds the per-call max_tokens
+    input_cost_per_token: float | None = Field(default=None, ge=0)
+    output_cost_per_token: float | None = Field(default=None, ge=0)
     display_name: str | None = None
     provider_display_name: str | None = None
     resolved_at: str | None = None  # ISO timestamp for staleness debugging
@@ -52,7 +57,10 @@ class ChangeModelPayload(BaseModel):
     model_name: str
     api_key_secret: str | None = None
     endpoint_url: str | None = None
-    context_window: int = 128000
+    context_window: int = Field(gt=0)
+    max_output_tokens: int | None = Field(default=None, gt=0)
+    input_cost_per_token: float | None = Field(default=None, ge=0)
+    output_cost_per_token: float | None = Field(default=None, ge=0)
     display_name: str | None = None
     provider_display_name: str | None = None
     resolved_at: str | None = None
@@ -69,6 +77,8 @@ class ContinueExecutionPayload(BaseModel):
 
     additional_iterations: int = Field(default=0, ge=0, le=1000)
     additional_budget_usd: Money | None = Field(default=None, gt=ZERO)
+    effective_policy: dict[str, Any] | None = None
+    governance_snapshot: dict[str, Any] | None = None
 
 
 class AgentExecutionRequest(BaseModel):
@@ -85,8 +95,10 @@ class AgentExecutionRequest(BaseModel):
     task_parameters: dict[str, Any] = Field(default_factory=dict)
 
     # Execution configuration
-    timeout_seconds: int = 300
-    max_reasoning_iterations: int = 10
+    timeout_seconds: int | None = None
+    # Legacy input kept for Temporal history compatibility. New workflow runs
+    # derive their model-turn ceiling exclusively from effective_policy.
+    max_reasoning_iterations: int | None = None
     requires_human_approval: bool = False
     budget_usd: Money | None = None  # Optional budget limit in USD
 
@@ -316,7 +328,7 @@ class AgentConfigResult(BaseModel):
     instruction: str
     agent_type: str = "stateless"
     model_id: str
-    context_window: int = 128000  # From ModelSpec, used for context window management
+    context_window: int = Field(gt=0)  # From ModelSpec, used for context window management
     default_context_strategy: str | None = None  # From ModelSpec: "static", "hybrid", "dynamic"
     tools: list[dict[str, Any]] = Field(default_factory=list)
     events_config: dict[str, Any] = Field(default_factory=dict)
@@ -520,12 +532,26 @@ class UpdateTaskStatusRequest(BaseModel):
     result: str | None = None
     error_message: str | None = None
     workspace_id: str
-    total_cost: Money = ZERO
+    total_cost: Money | None = None
+    own_cost: Money | None = None
 
 
 class UpdateTaskStatusResult(BaseModel):
     """Result of task status update."""
 
+    success: bool
+    error: str | None = None
+
+
+class UpdateTaskGovernanceSnapshotRequest(BaseModel):
+    """Persist a re-resolved policy before resuming a waiting workflow."""
+
+    task_id: str
+    workspace_id: str
+    governance_snapshot: dict[str, Any]
+
+
+class UpdateTaskGovernanceSnapshotResult(BaseModel):
     success: bool
     error: str | None = None
 
@@ -538,6 +564,7 @@ class CompactMessagesRequest(BaseModel):
     workspace_id: str
     user_context_data: dict[str, Any] | None = None
     resolved_model: dict | None = None  # Cached ResolvedModelInfo dict; None = DB lookup
+    effective_policy: dict[str, Any] | None = None
 
 
 class CompactMessagesResult(BaseModel):
@@ -546,6 +573,10 @@ class CompactMessagesResult(BaseModel):
     summary: str
     original_message_count: int
     estimated_tokens_saved: int
+    # Optional only for decoding activity results recorded before accounting
+    # was added. New executions require both fields.
+    cost: Money | None = None
+    usage: LLMUsage | None = None
 
 
 # === Trigger Activity Models ===
@@ -610,6 +641,10 @@ class CreateDelegationTaskRequest(BaseModel):
     message: str
     user_id: str
     workspace_id: str
+    # Optional only for Temporal history compatibility. New callers always
+    # provide it and the activity rejects its absence.
+    parent_effective_policy: dict[str, Any] | None = None
+    run_budget_usd: Money | None = Field(default=None, gt=ZERO)
 
 
 class CreateDelegationTaskResult(BaseModel):
@@ -618,6 +653,8 @@ class CreateDelegationTaskResult(BaseModel):
     task_id: UUID | None = None
     status: str
     error: str | None = None
+    # Optional only so old activity payloads remain decodable during rollout.
+    effective_policy: dict[str, Any] | None = None
 
 
 class CreateTaskFromTriggerRequest(BaseModel):

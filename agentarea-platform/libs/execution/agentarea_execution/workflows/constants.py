@@ -3,10 +3,8 @@
 from datetime import timedelta
 from typing import Final
 
-# Execution limits
-MAX_ITERATIONS: Final[int] = 50
-MAX_TOOL_CALLS_PER_ITERATION: Final[int] = 10
-DEFAULT_BUDGET_USD: Final[float] = 10.0
+# Warning threshold is behavior, not a resource entitlement. Resource ceilings
+# live in persisted governance policy and are required at workflow start.
 BUDGET_WARNING_THRESHOLD: Final[float] = 0.8  # 80% of budget
 
 # Timeout configurations
@@ -37,7 +35,6 @@ CONTEXT_WARNING_THRESHOLD: Final[float] = 0.60  # Warn at 60%
 CONTEXT_RESERVE_FOR_OUTPUT: Final[float] = 0.15  # Reserve 15% for model output
 MIN_RECENT_MESSAGES_TO_KEEP: Final[int] = 6  # Always keep last 6 messages (3 turns)
 TOKENS_PER_MESSAGE_OVERHEAD: Final[int] = 4  # ~4 tokens overhead per message
-DEFAULT_CONTEXT_WINDOW: Final[int] = 128000  # Fallback if not set on model
 
 # Dynamic context discovery — output offloading
 TOOL_OUTPUT_OFFLOAD_CHARS: Final[int] = 8000  # ~2000 tokens
@@ -133,6 +130,7 @@ class Activities:
     RESOLVE_AGENT_TOOLS: Final[str] = "resolve_agent_tools_activity"
     RECALL_HISTORY: Final[str] = "recall_history_activity"
     UPDATE_TASK_STATUS: Final[str] = "update_task_status_activity"
+    UPDATE_TASK_GOVERNANCE_SNAPSHOT: Final[str] = "update_task_governance_snapshot_activity"
     MATERIALIZE_SKILL_FILES: Final[str] = "materialize_skill_files_activity"
     CLEANUP_SANDBOX_TASK: Final[str] = "cleanup_sandbox_task_activity"
     # Dynamic context discovery

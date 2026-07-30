@@ -38,6 +38,10 @@ class AppSettings(BaseAppSettings):
     # AgentArea frontend URL (users are redirected here to log in if no session)
     FRONTEND_BASE_URL: str = "http://localhost:3000"
 
+    # Optional SearXNG-compatible endpoint used by agentarea/web.search_web.
+    # When unset, search attempts fail explicitly; URL fetching remains usable.
+    WEB_SEARCH_BASE_URL: str | None = None
+
     # Comma-separated browser origins allowed to make credentialed CORS requests.
     # Defaults to the local frontend. NEVER "*": with allow_credentials=True a
     # wildcard reflects any origin for credentialed reads. In prod set e.g.:

@@ -38,6 +38,51 @@ def _patched_client_factory(transport: httpx.MockTransport):
 
 
 @pytest.mark.asyncio
+async def test_search_uses_configured_searxng_endpoint(monkeypatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/search"
+        assert request.url.params["q"] == "agent benchmarks"
+        assert request.url.params["format"] == "json"
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "title": "GAIA benchmark",
+                        "url": "https://example.test/gaia",
+                        "content": "A benchmark for general AI assistants.",
+                        "engine": "example",
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr(
+        "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",
+        _patched_client_factory(httpx.MockTransport(handler)),
+    )
+
+    payload = json.loads(
+        await WebToolset(search_base_url="http://search.test/").search_web("agent benchmarks")
+    )
+
+    assert payload["results"] == [
+        {
+            "title": "GAIA benchmark",
+            "url": "https://example.test/gaia",
+            "snippet": "A benchmark for general AI assistants.",
+            "engine": "example",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_search_without_backend_fails_loudly() -> None:
+    result = await WebToolset().search_web("agent benchmarks")
+    assert result.startswith("Error: web search is not configured")
+
+
+@pytest.mark.asyncio
 async def test_text_response_is_returned_inline(monkeypatch) -> None:
     body = (
         "<html><head><title>T</title></head><body><p>hi</p><a href='/docs'>Docs</a></body></html>"

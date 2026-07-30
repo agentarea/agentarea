@@ -26,18 +26,26 @@ class AgentGoal:
 
     description: str
     success_criteria: list[str]
-    max_iterations: int = 10
+    max_iterations: int
     context: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.max_iterations <= 0:
+            raise ValueError("max_iterations must be positive")
 
 
 @dataclass
 class RunnerConfig:
     """Configuration for agent runners."""
 
-    max_iterations: int = 25
+    max_iterations: int
     budget_limit: float | None = None
     temperature: float = 0.1
     enable_pause: bool = False
+
+    def __post_init__(self) -> None:
+        if self.max_iterations <= 0:
+            raise ValueError("max_iterations must be positive")
 
 
 @dataclass
@@ -108,13 +116,13 @@ class BaseAgentRunner(ABC):
     behavior and termination conditions.
     """
 
-    def __init__(self, config: RunnerConfig | None = None):
+    def __init__(self, config: RunnerConfig):
         """Initialize the base runner.
 
         Args:
             config: Runner configuration
         """
-        self.config = config or RunnerConfig()
+        self.config = config
         self.terminator = ExecutionTerminator(self.config)
         self.current_iteration = 0
 

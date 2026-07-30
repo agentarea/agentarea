@@ -36,7 +36,7 @@ from agentarea_common.auth.tool_authorization import (
     authorize_tool_invocation,
 )
 from agentarea_common.events.contract import LLM_FAILED, canonical_type
-from agentarea_common.money import to_money
+from agentarea_common.money import ZERO, to_money
 from prometheus_client import Counter
 
 # Third-party imports
@@ -62,6 +62,7 @@ from ..models import (
     GoalEvaluationResult,
     LLMCallRequest,
     LLMCallResult,
+    LLMUsage,
     MaterializeSkillFilesRequest,
     MaterializeSkillFilesResult,
     MCPToolRequest,
@@ -87,6 +88,8 @@ from ..models import (
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
     ToolProviderData,
+    UpdateTaskGovernanceSnapshotRequest,
+    UpdateTaskGovernanceSnapshotResult,
     UpdateTaskStatusRequest,
     UpdateTaskStatusResult,
     WorkflowEventsRequest,
@@ -98,6 +101,28 @@ from .heartbeat import auto_heartbeater
 from .runtime_discovery import fetch_runtime_manifest, render_runtime_prompt, runtime_event_data
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_llm_max_tokens(
+    *,
+    requested: int | None,
+    model_cap: int | None,
+    effective_policy: dict[str, Any] | None,
+) -> int:
+    """Resolve the strictest output-token ceiling with no runtime fallback."""
+    policy_cap = ((effective_policy or {}).get("tokens") or {}).get("max_tokens_per_call")
+    if not isinstance(policy_cap, int) or policy_cap <= 0:
+        raise ValueError(
+            "effective policy is missing required runtime limit tokens.max_tokens_per_call"
+        )
+    candidates = [policy_cap]
+    for name, value in (("request.max_tokens", requested), ("model.max_output_tokens", model_cap)):
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(f"{name} must be a positive integer")
+        candidates.append(value)
+    return min(candidates)
 
 
 def _make_counter(name: str, doc: str, labels: list[str] | None = None):
@@ -354,19 +379,26 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Fetch model context window and context strategy from ModelSpec
             model_id_str = request.override_model or agent.model_id
-            context_window = 128000  # default fallback
-            default_context_strategy = None
-            if model_id_str:
-                try:
-                    model_instance_service = await ctx.get_model_instance_service()
-                    model_instance = await model_instance_service.get(UUID(model_id_str))
-                    if model_instance and model_instance.model_spec:
-                        context_window = model_instance.model_spec.context_window
-                        default_context_strategy = getattr(
-                            model_instance.model_spec, "default_context_strategy", None
-                        )
-                except Exception as e:
-                    logger.warning(f"Could not fetch model spec for model {model_id_str}: {e}")
+            if not model_id_str:
+                raise ModelInstanceNotFoundError(
+                    f"Agent {request.agent_id} has no model instance configured"
+                )
+            model_instance_service = await ctx.get_model_instance_service()
+            model_instance = await model_instance_service.get(UUID(model_id_str))
+            if not model_instance or not model_instance.model_spec:
+                raise ModelInstanceNotFoundError(
+                    f"Model instance {model_id_str} or its ModelSpec was not found"
+                )
+            context_window = model_instance.model_spec.context_window
+            if (
+                isinstance(context_window, bool)
+                or not isinstance(context_window, int)
+                or context_window <= 0
+            ):
+                raise ValueError(f"ModelSpec for {model_id_str} has no valid context_window")
+            default_context_strategy = getattr(
+                model_instance.model_spec, "default_context_strategy", None
+            )
 
             # Build configuration using Pydantic model
             return AgentConfigResult(
@@ -505,8 +537,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
             endpoint_url = getattr(model_instance.provider_config, "endpoint_url", None) or getattr(
                 model_instance.model_spec, "endpoint_url", None
             )
-            context_window = getattr(model_instance.model_spec, "context_window", 128000)
+            context_window = model_instance.model_spec.context_window
+            if (
+                isinstance(context_window, bool)
+                or not isinstance(context_window, int)
+                or context_window <= 0
+            ):
+                raise ValueError(f"ModelSpec for {request.model_id} has no valid context_window")
             max_output_tokens = getattr(model_instance.model_spec, "max_output_tokens", None)
+            input_cost_per_token = getattr(model_instance.model_spec, "input_cost_per_token", None)
+            output_cost_per_token = getattr(
+                model_instance.model_spec, "output_cost_per_token", None
+            )
             api_key_secret = getattr(model_instance.provider_config, "api_key", None)
             display_name = getattr(model_instance.model_spec, "display_name", None)
             provider_display_name = getattr(
@@ -521,6 +563,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
             endpoint_url=endpoint_url,
             context_window=context_window,
             max_output_tokens=max_output_tokens,
+            input_cost_per_token=input_cost_per_token,
+            output_cost_per_token=output_cost_per_token,
             display_name=display_name,
             provider_display_name=provider_display_name,
             resolved_at=datetime.now(UTC).isoformat(),
@@ -559,6 +603,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
             endpoint_url = None
             api_key = None
             max_output_tokens = None
+            input_cost_per_token = None
+            output_cost_per_token = None
 
             if request.resolved_model:
                 cached = request.resolved_model
@@ -566,6 +612,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 model_name = cached.get("model_name")
                 endpoint_url = cached.get("endpoint_url")
                 max_output_tokens = cached.get("max_output_tokens")
+                input_cost_per_token = cached.get("input_cost_per_token")
+                output_cost_per_token = cached.get("output_cost_per_token")
                 api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
                     try:
@@ -611,6 +659,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     max_output_tokens = getattr(
                         model_instance.model_spec, "max_output_tokens", None
                     )
+                    input_cost_per_token = getattr(
+                        model_instance.model_spec, "input_cost_per_token", None
+                    )
+                    output_cost_per_token = getattr(
+                        model_instance.model_spec, "output_cost_per_token", None
+                    )
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                     if api_key_secret_name:
                         from agentarea_common.config import get_database
@@ -626,6 +680,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     else:
                         logger.warning(f"No API key found for model instance {model_instance.id}")
 
+            if input_cost_per_token is None or output_cost_per_token is None:
+                raise ValueError("model pricing is not configured; run budget cannot be enforced")
+
             if endpoint_url:
                 local_host = dependencies.settings.app.local_host
                 endpoint_url = endpoint_url.replace("localhost", local_host).replace(
@@ -637,13 +694,16 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 model_name=str(model_name),
                 api_key=api_key,
                 endpoint_url=endpoint_url,
+                input_cost_per_token=input_cost_per_token,
+                output_cost_per_token=output_cost_per_token,
             )
 
             # Create structured request
-            # Without an explicit cap, providers reserve credits/quota for the
-            # model's full output ceiling (e.g. 64k), which can 402 a low-balance
-            # key. Fall back to the model_spec's max_output_tokens.
-            effective_max_tokens = request.max_tokens or max_output_tokens
+            effective_max_tokens = resolve_llm_max_tokens(
+                requested=request.max_tokens,
+                model_cap=max_output_tokens,
+                effective_policy=request.effective_policy,
+            )
 
             llm_request = LLMRequest(
                 messages=request.messages,
@@ -704,13 +764,16 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 if chunk_response.cost and chunk_response.cost > 0:
                     final_cost = max(final_cost, chunk_response.cost)
 
+            if final_usage is None or getattr(final_usage, "total_tokens", 0) <= 0:
+                raise RuntimeError(
+                    "LLM usage accounting unavailable; token and cost policy cannot be enforced"
+                )
+
             # Publish final chunk event
             if event_publisher:
                 await event_publisher("", chunk_index, True)
 
             # Create final response using Pydantic model
-            from ..models import LLMUsage
-
             usage_model = None
             if final_usage:
                 usage_model = LLMUsage(
@@ -884,6 +947,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             ),
                             "workspace_id": str(request.workspace_id),
                             "task_id": str(request.task_id) if request.task_id else "",
+                            "search_base_url": (dependencies.settings.app.WEB_SEARCH_BASE_URL),
                         }
                     elif tool_name == "agentarea/triggers":
                         # The triggers tool defaults agent_id/workspace_id/user_id to
@@ -1610,13 +1674,19 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         result_dict = json.loads(request.result)
                     except (json.JSONDecodeError, TypeError):
                         result_dict = {"response": request.result}
-                    if request.total_cost:
+                    if request.total_cost is not None:
                         # Serialize Money (Decimal) to string for JSON compatibility
                         result_dict["total_cost"] = str(request.total_cost)
+                    if request.own_cost is not None:
+                        result_dict["own_cost"] = str(request.own_cost)
                     additional_fields["result"] = result_dict
-                elif request.total_cost:
+                elif request.total_cost is not None or request.own_cost is not None:
                     # Serialize Money (Decimal) to string for JSON compatibility
-                    additional_fields["result"] = {"total_cost": str(request.total_cost)}
+                    additional_fields["result"] = {}
+                    if request.total_cost is not None:
+                        additional_fields["result"]["total_cost"] = str(request.total_cost)
+                    if request.own_cost is not None:
+                        additional_fields["result"]["own_cost"] = str(request.own_cost)
                 if request.error_message:
                     # Tasks table stores this as `error`, not `error_message`.
                     additional_fields["error"] = request.error_message
@@ -1630,6 +1700,39 @@ def make_agent_activities(dependencies: ActivityDependencies):
             except Exception as e:
                 logger.error(f"Failed to update task status: {e}")
                 return UpdateTaskStatusResult(success=False, error=str(e))
+
+    @activity.defn
+    async def update_task_governance_snapshot_activity(
+        request: UpdateTaskGovernanceSnapshotRequest,
+    ) -> UpdateTaskGovernanceSnapshotResult:
+        """Persist the policy revision before a waiting workflow resumes."""
+        from uuid import UUID as _UUID
+
+        from agentarea_tasks.infrastructure.repository import TaskRepository
+
+        user_context = create_system_context(request.workspace_id)
+        async with ActivityContext(container, user_context) as ctx:
+            session = container._database.async_session_factory()
+            ctx._sessions.append(session)
+            task_repo = TaskRepository(session, user_context)
+            task = await task_repo.get_task(_UUID(request.task_id))
+            if task is None:
+                return UpdateTaskGovernanceSnapshotResult(
+                    success=False,
+                    error="Task not found",
+                )
+            metadata = dict(task.metadata or {})
+            metadata["governance_snapshot"] = request.governance_snapshot
+            updated = await task_repo.update(
+                _UUID(request.task_id),
+                task_metadata=metadata,
+            )
+            if updated is None:
+                return UpdateTaskGovernanceSnapshotResult(
+                    success=False,
+                    error="Task not found",
+                )
+            return UpdateTaskGovernanceSnapshotResult(success=True)
 
     @activity.defn
     @auto_heartbeater
@@ -1657,12 +1760,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
             model_name = None
             endpoint_url = None
             api_key = None
+            max_output_tokens = None
+            input_cost_per_token = None
+            output_cost_per_token = None
 
             if request.resolved_model:
                 cached = request.resolved_model
                 provider_type = cached.get("provider_type")
                 model_name = cached.get("model_name")
                 endpoint_url = cached.get("endpoint_url")
+                max_output_tokens = cached.get("max_output_tokens")
+                input_cost_per_token = cached.get("input_cost_per_token")
+                output_cost_per_token = cached.get("output_cost_per_token")
                 api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
                     try:
@@ -1699,6 +1808,15 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     endpoint_url = getattr(
                         model_instance.provider_config, "endpoint_url", None
                     ) or getattr(model_instance.model_spec, "endpoint_url", None)
+                    max_output_tokens = getattr(
+                        model_instance.model_spec, "max_output_tokens", None
+                    )
+                    input_cost_per_token = getattr(
+                        model_instance.model_spec, "input_cost_per_token", None
+                    )
+                    output_cost_per_token = getattr(
+                        model_instance.model_spec, "output_cost_per_token", None
+                    )
 
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                     if api_key_secret_name:
@@ -1713,6 +1831,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         finally:
                             await secret_session.close()
 
+            if input_cost_per_token is None or output_cost_per_token is None:
+                raise ValueError(
+                    "model pricing is not configured; compaction budget cannot be enforced"
+                )
+
             if endpoint_url:
                 local_host = dependencies.settings.app.local_host
                 endpoint_url = endpoint_url.replace("localhost", local_host).replace(
@@ -1724,6 +1847,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 model_name=str(model_name),
                 api_key=api_key,
                 endpoint_url=endpoint_url,
+                input_cost_per_token=input_cost_per_token,
+                output_cost_per_token=output_cost_per_token,
             )
 
             # Build compaction prompt
@@ -1765,13 +1890,28 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     },
                     {"role": "user", "content": compaction_prompt},
                 ],
-                max_tokens=2000,
+                max_tokens=resolve_llm_max_tokens(
+                    requested=None,
+                    model_cap=max_output_tokens,
+                    effective_policy=request.effective_policy,
+                ),
             )
 
             complete_content = ""
+            final_usage = None
+            final_cost = ZERO
             async for chunk in llm_model.ainvoke_stream(summary_request):
                 if chunk.content:
                     complete_content += chunk.content
+                if chunk.usage is not None:
+                    final_usage = chunk.usage
+                if chunk.cost and chunk.cost > final_cost:
+                    final_cost = to_money(chunk.cost)
+
+            if final_usage is None or final_usage.total_tokens <= 0:
+                raise RuntimeError(
+                    "compaction usage accounting unavailable; budget cannot be enforced"
+                )
 
             original_tokens = sum(
                 len(msg.get("content", "") or "") // 4 for msg in request.messages_to_compact
@@ -1782,22 +1922,25 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 summary=complete_content,
                 original_message_count=len(request.messages_to_compact),
                 estimated_tokens_saved=max(0, original_tokens - summary_tokens),
+                cost=final_cost,
+                usage=LLMUsage(
+                    prompt_tokens=final_usage.prompt_tokens,
+                    completion_tokens=final_usage.completion_tokens,
+                    total_tokens=final_usage.total_tokens,
+                ),
             )
 
         except Exception as e:
             logger.error(f"Message compaction failed: {e}")
-            # On failure, return a basic concatenation as fallback
-            fallback = "Previous conversation summary (compaction failed):\n"
-            for msg in request.messages_to_compact[-5:]:
-                role = msg.get("role", "?")
-                content = (msg.get("content", "") or "")[:200]
-                fallback += f"- [{role}]: {content}\n"
+            from temporalio.exceptions import ApplicationError
 
-            return CompactMessagesResult(
-                summary=fallback,
-                original_message_count=len(request.messages_to_compact),
-                estimated_tokens_saved=0,
-            )
+            from .event_publisher import _is_non_retryable_error
+
+            raise ApplicationError(
+                f"Message compaction failed: {e}",
+                type=type(e).__name__,
+                non_retryable=_is_non_retryable_error(e),
+            ) from e
 
     @activity.defn
     async def resolve_agent_tools_activity(
@@ -2084,9 +2227,23 @@ def make_agent_activities(dependencies: ActivityDependencies):
         try:
             from agentarea_common.base.repository_factory import RepositoryFactory
             from agentarea_common.config import get_database
+            from agentarea_governance.domain.policies import (
+                BudgetPolicy,
+                PolicyDocument,
+                effective_policy_from_json,
+            )
             from agentarea_tasks.infrastructure.repository import TaskRepository
             from agentarea_tasks.task_service import TaskService
             from agentarea_tasks.temporal_task_manager import TemporalTaskManager
+
+            if request.parent_effective_policy is None:
+                raise ValueError(
+                    "delegation request is missing the parent effective-policy snapshot"
+                )
+            parent_effective_policy = effective_policy_from_json(request.parent_effective_policy)
+            parent_effective_policy.require_runtime_contract()
+            if request.run_budget_usd is None:
+                raise ValueError("delegation request is missing its allocated run budget")
 
             database = get_database()
             async with database.async_session_factory() as session:
@@ -2126,6 +2283,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         "parent_agent_id": request.parent_agent_id,
                         "parent_task_id": request.parent_task_id,
                     },
+                    task_policy=PolicyDocument(
+                        budget=BudgetPolicy(
+                            run_budget_usd=request.run_budget_usd,
+                        )
+                    ),
+                    upper_bound_policy=parent_effective_policy,
+                    require_model=True,
                 )
 
                 logger.info(
@@ -2135,6 +2299,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 return CreateDelegationTaskResult(
                     task_id=task.id,
                     status="created",
+                    effective_policy=task.effective_policy,
                 )
 
         except Exception as e:
@@ -2158,6 +2323,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         resolve_agent_tools_activity,
         recall_history_activity,
         update_task_status_activity,
+        update_task_governance_snapshot_activity,
         materialize_skill_files_activity,
         cleanup_sandbox_task_activity,
         store_context_output_activity,

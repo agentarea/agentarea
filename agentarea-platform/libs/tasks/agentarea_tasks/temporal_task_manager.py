@@ -66,6 +66,13 @@ class TemporalTaskManager(BaseTaskManager):
             # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
             metadata = {}
 
+        governance_snapshot = metadata.get("governance_snapshot")
+        effective_policy = (
+            governance_snapshot.get("effective_policy")
+            if isinstance(governance_snapshot, dict)
+            else None
+        )
+
         return AgentTask(
             id=task.id,
             title=task.description,  # Use description as title
@@ -84,6 +91,7 @@ class TemporalTaskManager(BaseTaskManager):
             completed_at=task.completed_at,
             execution_id=task.execution_id,
             metadata=metadata,
+            effective_policy=effective_policy,
         )
 
     def _agent_task_to_task(self, agent_task: AgentTask):
@@ -147,8 +155,6 @@ class TemporalTaskManager(BaseTaskManager):
                 "workspace_id": execution_request.workspace_id,
                 "task_query": execution_request.task_query,
                 "task_parameters": execution_request.task_parameters,
-                "timeout_seconds": execution_request.timeout_seconds,
-                "max_reasoning_iterations": execution_request.max_reasoning_iterations,
                 "requires_human_approval": execution_request.requires_human_approval,
                 "workflow_metadata": execution_request.workflow_metadata,
                 "effective_policy": execution_request.effective_policy,

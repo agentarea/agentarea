@@ -254,14 +254,19 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         return result.scalar() or 0
 
     async def sum_spend_since(self, since: datetime) -> float:
-        """Sum task.result.total_cost for the current workspace since a given UTC time.
+        """Sum each task's own model spend for the workspace since a UTC time.
 
         Uses started_at (falling back to created_at when started_at is null)
-        as the activity timestamp. Tasks with no total_cost contribute 0.
+        as the activity timestamp. New task results persist ``own_cost`` so
+        delegated child spend is not counted once on the child and again in
+        the parent's transitive ``total_cost``. Historical results fall back
+        to ``total_cost``.
         ``TaskORM.result`` is a plain JSON column, so we extract via the
         ``->>`` operator (returns text) and cast to numeric.
         """
-        cost_expr = cast(TaskORM.result.op("->>")("total_cost"), Numeric)
+        own_cost_expr = cast(TaskORM.result.op("->>")("own_cost"), Numeric)
+        total_cost_expr = cast(TaskORM.result.op("->>")("total_cost"), Numeric)
+        cost_expr = func.coalesce(own_cost_expr, total_cost_expr, 0)
         activity_at = func.coalesce(TaskORM.started_at, TaskORM.created_at)
         stmt = (
             select(func.coalesce(func.sum(cost_expr), 0))

@@ -5,7 +5,6 @@ from typing import ClassVar
 from uuid import uuid4
 
 import pytest
-from agentarea_api.api.deps.services import get_temporal_workflow_service
 from agentarea_api.api.v1 import governance, policies
 from agentarea_api.api.v1.policies import (
     PolicyRuleCreateRequest,
@@ -170,9 +169,7 @@ async def test_http_crud_and_audit(session_factory, audit_capture):
             )
             rule_id = created.json()["id"]
             listed = await client.get("/v1/policies")
-            patched = await client.patch(
-                f"/v1/policies/{rule_id}", json={"enabled": False}
-            )
+            patched = await client.patch(f"/v1/policies/{rule_id}", json={"enabled": False})
             deleted = await client.delete(f"/v1/policies/{rule_id}")
 
         assert created.status_code == 201
@@ -325,20 +322,13 @@ async def test_preview_rejects_loosening_task_policy(session_factory):
         assert "monthly_spend_cap_usd" in preview.json()["detail"]
 
 
-async def test_reads_task_policy_from_workflow(session_factory):
+async def test_reads_task_policy_from_persisted_task_snapshot(session_factory):
     task_id = uuid4()
-    execution_id = f"task-{task_id}"
     context = _context()
 
-    class _FakeWorkflowService:
-        async def get_effective_policy(self, exec_id: str):
-            if exec_id == execution_id:
-                return {"budget": {"run_budget_usd": "1.25"}}
-            return None
-
     async with session_factory() as session:
-        # Seed a task carrying an execution_id; the effective policy lives in the
-        # workflow, served on demand by the (faked) workflow service.
+        # The exact resolved policy is written before Temporal dispatch, so it
+        # remains auditable after workflow retention expires.
         now = datetime.now(UTC)
         await TaskRepository(session, context).create_task(
             Task(
@@ -351,11 +341,15 @@ async def test_reads_task_policy_from_workflow(session_factory):
                 updated_at=now,
                 user_id=context.user_id,
                 workspace_id=context.workspace_id,
-                execution_id=execution_id,
+                metadata={
+                    "governance_snapshot": {
+                        "effective_policy": {"budget": {"run_budget_usd": "1.25"}},
+                        "resolved_at": now.isoformat(),
+                    }
+                },
             )
         )
         app = _app_for(session, context)
-        app.dependency_overrides[get_temporal_workflow_service] = lambda: _FakeWorkflowService()
         transport = ASGITransport(app=app)
 
         async with AsyncClient(transport=transport, base_url="http://test") as client:

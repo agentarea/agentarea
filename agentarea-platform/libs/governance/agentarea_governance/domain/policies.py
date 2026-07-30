@@ -10,7 +10,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from agentarea_common.money import Money, to_money
+from agentarea_common.money import ZERO, Money, to_money
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 RESOLVER_VERSION = "policy-resolver-v1"
@@ -18,6 +18,16 @@ RESOLVER_VERSION = "policy-resolver-v1"
 
 class PolicyValidationError(ValueError):
     """Raised when a lower-scope policy attempts to weaken a higher scope."""
+
+
+class RuntimePolicyContractError(PolicyValidationError):
+    """Raised when a task has no complete, explicitly resolved runtime policy."""
+
+    def __init__(self, missing_fields: list[str]):
+        self.missing_fields = tuple(missing_fields)
+        super().__init__(
+            "effective policy is missing required runtime limits: " + ", ".join(self.missing_fields)
+        )
 
 
 def parse_subject(ref: str) -> tuple[str, str, str | None]:
@@ -82,9 +92,9 @@ class BudgetPolicy(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    monthly_spend_cap_usd: Money | None = None
-    run_budget_usd: Money | None = None
-    service_budget_usd: Money | None = None
+    monthly_spend_cap_usd: Money | None = Field(default=None, ge=ZERO)
+    run_budget_usd: Money | None = Field(default=None, gt=ZERO)
+    service_budget_usd: Money | None = Field(default=None, gt=ZERO)
 
 
 class TokenPolicy(BaseModel):
@@ -92,8 +102,18 @@ class TokenPolicy(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    max_tokens: int | None = None
-    max_tokens_per_call: int | None = None
+    max_tokens: int | None = Field(default=None, gt=0)
+    max_tokens_per_call: int | None = Field(default=None, gt=0)
+
+
+class ExecutionLimitsPolicy(BaseModel):
+    """Ceilings for the agent loop and tool execution."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_model_turns: int | None = Field(default=None, gt=0)
+    max_tool_calls_per_turn: int | None = Field(default=None, gt=0)
+    max_tool_calls_total: int | None = Field(default=None, gt=0)
 
 
 class ToolsPolicy(BaseModel):
@@ -153,6 +173,7 @@ class PolicyDocument(BaseModel):
 
     budget: BudgetPolicy | None = None
     tokens: TokenPolicy | None = None
+    execution: ExecutionLimitsPolicy | None = None
     tools: ToolsPolicy | None = None
     approval: ApprovalPolicy | None = None
     content_safety: ContentSafetyPolicy | None = None
@@ -167,6 +188,25 @@ class EffectivePolicy(PolicyDocument):
 
     source_policy_ids: list[str] = Field(default_factory=list)
     resolver_version: str = RESOLVER_VERSION
+
+    def require_runtime_contract(self) -> EffectivePolicy:
+        """Fail closed unless every runtime limit has an explicit policy source."""
+        missing: list[str] = []
+        if self.budget is None or self.budget.run_budget_usd is None:
+            missing.append("budget.run_budget_usd")
+        if self.tokens is None or self.tokens.max_tokens is None:
+            missing.append("tokens.max_tokens")
+        if self.tokens is None or self.tokens.max_tokens_per_call is None:
+            missing.append("tokens.max_tokens_per_call")
+        if self.execution is None or self.execution.max_model_turns is None:
+            missing.append("execution.max_model_turns")
+        if self.execution is None or self.execution.max_tool_calls_per_turn is None:
+            missing.append("execution.max_tool_calls_per_turn")
+        if self.execution is None or self.execution.max_tool_calls_total is None:
+            missing.append("execution.max_tool_calls_total")
+        if missing:
+            raise RuntimePolicyContractError(missing)
+        return self
 
     def to_execution_state(self, runtime_state: dict[str, Any] | None = None) -> dict[str, Any]:
         """Translate the typed policy snapshot into the guard execution_state.
@@ -190,6 +230,11 @@ class EffectivePolicy(PolicyDocument):
         if self.tokens:
             if self.tokens.max_tokens is not None:
                 state["max_tokens"] = self.tokens.max_tokens
+            if self.tokens.max_tokens_per_call is not None:
+                state["max_tokens_per_call"] = self.tokens.max_tokens_per_call
+
+        if self.execution:
+            state["execution_limits"] = self.execution.model_dump(exclude_none=True)
 
         if self.tools:
             state["tools_config"] = {
@@ -250,6 +295,7 @@ class PolicyResolver:
     def _validate_tightens(self, higher: PolicyDocument, lower: PolicyDocument) -> None:
         self._validate_budget(higher.budget, lower.budget)
         self._validate_tokens(higher.tokens, lower.tokens)
+        self._validate_execution(higher.execution, lower.execution)
         self._validate_tools(higher.tools, lower.tools)
         self._validate_approval(higher.approval, lower.approval)
         self._validate_content_safety(higher.content_safety, lower.content_safety)
@@ -258,6 +304,7 @@ class PolicyResolver:
         return PolicyDocument(
             budget=self._merge_budget(higher.budget, lower.budget),
             tokens=self._merge_tokens(higher.tokens, lower.tokens),
+            execution=self._merge_execution(higher.execution, lower.execution),
             tools=self._merge_tools(higher.tools, lower.tools),
             approval=self._merge_approval(higher.approval, lower.approval),
             content_safety=self._merge_content_safety(higher.content_safety, lower.content_safety),
@@ -282,6 +329,23 @@ class PolicyResolver:
             if higher_value is not None and lower_value is not None:
                 if lower_value > higher_value:
                     raise PolicyValidationError(f"{field} cannot loosen higher-scope ceiling")
+
+    def _validate_execution(
+        self,
+        higher: ExecutionLimitsPolicy | None,
+        lower: ExecutionLimitsPolicy | None,
+    ) -> None:
+        if not higher or not lower:
+            return
+        for field in (
+            "max_model_turns",
+            "max_tool_calls_per_turn",
+            "max_tool_calls_total",
+        ):
+            higher_value = getattr(higher, field)
+            lower_value = getattr(lower, field)
+            if higher_value is not None and lower_value is not None and lower_value > higher_value:
+                raise PolicyValidationError(f"{field} cannot loosen higher-scope ceiling")
 
     def _validate_tools(self, higher: ToolsPolicy | None, lower: ToolsPolicy | None) -> None:
         if not higher or not lower:
@@ -333,6 +397,27 @@ class PolicyResolver:
         return TokenPolicy(
             max_tokens=_min_int(higher.max_tokens, lower.max_tokens),
             max_tokens_per_call=_min_int(higher.max_tokens_per_call, lower.max_tokens_per_call),
+        )
+
+    def _merge_execution(
+        self,
+        higher: ExecutionLimitsPolicy | None,
+        lower: ExecutionLimitsPolicy | None,
+    ) -> ExecutionLimitsPolicy | None:
+        if not higher:
+            return lower
+        if not lower:
+            return higher
+        return ExecutionLimitsPolicy(
+            max_model_turns=_min_int(higher.max_model_turns, lower.max_model_turns),
+            max_tool_calls_per_turn=_min_int(
+                higher.max_tool_calls_per_turn,
+                lower.max_tool_calls_per_turn,
+            ),
+            max_tool_calls_total=_min_int(
+                higher.max_tool_calls_total,
+                lower.max_tool_calls_total,
+            ),
         )
 
     def _merge_tools(

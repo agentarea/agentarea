@@ -136,7 +136,7 @@ def _filename_from_url(url: str, content_type: str | None) -> str:
 @toolset(
     namespace="agentarea/web",
     display_name="Web Tools",
-    description="Fetch URLs; binary responses are stored as task artifacts.",
+    description="Search the web and fetch URLs; binary responses become task artifacts.",
     category="information",
     requires_user_confirmation=True,
 )
@@ -156,8 +156,10 @@ class WebToolset(Toolset):
         task_id: str | None = None,
         lease_owner: str | None = None,
         base_prefix: str = "",
+        search_web: bool = True,
         fetch_webpage: bool = True,
         extract_text: bool = True,
+        search_base_url: str | None = None,
     ) -> None:
         super().__init__()
         self.storage = storage
@@ -166,8 +168,10 @@ class WebToolset(Toolset):
         self.task_id = task_id or ""
         self.lease_owner = lease_owner or ""
         self.base_prefix = base_prefix.strip("/")
+        self._search_enabled = search_web
         self._fetch_enabled = fetch_webpage
         self._extract_enabled = extract_text
+        self.search_base_url = search_base_url.rstrip("/") if search_base_url else None
 
     def _artifact_path(self, file_name: str) -> str:
         clean = file_name.lstrip("/").replace("..", "_")
@@ -181,6 +185,65 @@ class WebToolset(Toolset):
         if self.workspace_repository is not None:
             return f"tasks/{self.task_id}/workspace/{relative_path}"
         return relative_path
+
+    @tool_method
+    async def search_web(
+        self,
+        query: str,
+        max_results: int = 8,
+    ) -> str:
+        """Search the public web through the deployment's configured search service."""
+        if not self._search_enabled:
+            return "Error: search_web is disabled for this toolset instance"
+        if self.search_base_url is None:
+            return (
+                "Error: web search is not configured; set WEB_SEARCH_BASE_URL "
+                "to a SearXNG-compatible endpoint"
+            )
+        if not query or not query.strip():
+            return "Error: query must be non-empty"
+        if isinstance(max_results, bool) or not 1 <= max_results <= 20:
+            return "Error: max_results must be between 1 and 20"
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=_DEFAULT_TIMEOUT_SECONDS,
+                follow_redirects=True,
+            ) as client:
+                response = await client.get(
+                    f"{self.search_base_url}/search",
+                    params={"q": query.strip(), "format": "json"},
+                    headers={"Accept": "application/json"},
+                )
+                response.raise_for_status()
+                payload = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            return f"Error searching the web: {exc}"
+
+        raw_results = payload.get("results")
+        if not isinstance(raw_results, list):
+            return "Error: search service returned an invalid response"
+
+        results: list[dict[str, Any]] = []
+        for item in raw_results[:max_results]:
+            if not isinstance(item, dict):
+                continue
+            url = item.get("url")
+            title = item.get("title")
+            if not isinstance(url, str) or not isinstance(title, str):
+                continue
+            results.append(
+                {
+                    "title": title,
+                    "url": url,
+                    "snippet": str(item.get("content") or ""),
+                    "engine": str(item.get("engine") or ""),
+                }
+            )
+        return json.dumps(
+            {"query": query.strip(), "results": results},
+            ensure_ascii=False,
+        )
 
     @tool_method
     async def fetch_webpage(

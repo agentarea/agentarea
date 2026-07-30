@@ -497,12 +497,25 @@ class RegistryService:
             raise ValueError(
                 f"Provider '{spec['provider_key']}' not found; sync llm_providers registry first"
             )
+        context_window = spec.get("context_window")
+        if (
+            isinstance(context_window, bool)
+            or not isinstance(context_window, int)
+            or context_window <= 0
+        ):
+            raise ValueError(
+                f"Model '{spec['model_name']}' has no explicit positive context_window"
+            )
+        if spec.get("input_cost_per_token") is None:
+            raise ValueError(f"Model '{spec['model_name']}' has no explicit input_cost_per_token")
+        if spec.get("output_cost_per_token") is None:
+            raise ValueError(f"Model '{spec['model_name']}' has no explicit output_cost_per_token")
         model = await self.model_spec_repo.upsert_by_provider_and_model_kwargs(
             provider_spec_id=provider.id,
             model_name=spec["model_name"],
             display_name=item.name,
             description=item.description,
-            context_window=spec.get("context_window", 4096),
+            context_window=context_window,
             max_output_tokens=spec.get("max_output_tokens"),
             input_cost_per_token=spec.get("input_cost_per_token"),
             output_cost_per_token=spec.get("output_cost_per_token"),
@@ -812,7 +825,7 @@ class RegistryService:
                     "spec": {
                         "provider_key": provider_key,
                         "model_name": model_name,
-                        "context_window": entry.get("context_window", 4096),
+                        "context_window": entry.get("context_window"),
                         "max_output_tokens": entry.get("max_output_tokens"),
                         "input_cost_per_token": entry.get("input_cost_per_token"),
                         "output_cost_per_token": entry.get("output_cost_per_token"),

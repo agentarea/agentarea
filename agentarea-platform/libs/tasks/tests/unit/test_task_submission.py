@@ -12,11 +12,18 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents.infrastructure.repository import AgentRepository
-from agentarea_governance.domain.policies import EffectivePolicy
+from agentarea_governance.domain.policies import (
+    BudgetPolicy,
+    EffectivePolicy,
+    ExecutionLimitsPolicy,
+    PolicyDocument,
+    PolicyValidationError,
+    TokenPolicy,
+)
 from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
 from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.infrastructure.repository import TaskRepository
-from agentarea_tasks.schemas.dto import RunCreate
+from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig
 from agentarea_tasks.task_service import TaskService
 
 
@@ -55,7 +62,18 @@ def _make_service(temporal_executor=None):
     task_manager.temporal_executor = temporal_executor
 
     policy_resolver = MagicMock()
-    policy_resolver.resolve = AsyncMock(return_value=EffectivePolicy())
+    policy_resolver.resolve = AsyncMock(
+        return_value=EffectivePolicy(
+            budget=BudgetPolicy(run_budget_usd="50.00"),
+            tokens=TokenPolicy(max_tokens=20_000_000, max_tokens_per_call=100_000),
+            execution=ExecutionLimitsPolicy(
+                max_model_turns=100,
+                max_tool_calls_per_turn=10,
+                max_tool_calls_total=1000,
+            ),
+            source_policy_ids=["workspace-runtime-baseline"],
+        )
+    )
 
     service = TaskService(
         repository_factory=repo_factory,
@@ -75,21 +93,21 @@ def _make_service(temporal_executor=None):
 
 
 def _build_task(**overrides):
-    base = dict(
-        id=uuid4(),
-        title="A2A Message Task",
-        description="Hello from A2A",
-        query="Hello from A2A",
-        user_id="user-123",
-        workspace_id="ws-abc",
-        agent_id=uuid4(),
-        status="submitted",
-        task_parameters={},
-        metadata={
+    base = {
+        "id": uuid4(),
+        "title": "A2A Message Task",
+        "description": "Hello from A2A",
+        "query": "Hello from A2A",
+        "user_id": "user-123",
+        "workspace_id": "ws-abc",
+        "agent_id": uuid4(),
+        "status": "submitted",
+        "task_parameters": {},
+        "metadata": {
             "task_source": "a2a_protocol",
             "a2a_method": "message/send",
         },
-    )
+    }
     base.update(overrides)
     return AgentTask(**base)
 
@@ -150,6 +168,108 @@ async def test_create_and_execute_sets_default_metadata():
     assert submitted.metadata["created_via"] == "api"
     assert submitted.metadata["requires_human_approval"] is False
     assert submitted.metadata["package_install"] == "allowed"
+    snapshot = submitted.metadata["governance_snapshot"]
+    assert snapshot["effective_policy"]["execution"]["max_model_turns"] == 100
+    assert snapshot["effective_policy"] == submitted.effective_policy
+
+
+@pytest.mark.asyncio
+async def test_typed_execution_request_is_snapshotted_without_free_form_parameter():
+    service, mocks = _make_service()
+
+    await service.start_run(
+        RunCreate(
+            agent_id=uuid4(),
+            description="Use an explicit turn ceiling",
+            execution=RunExecutionConfig(max_model_turns=25),
+        ),
+        workspace_id="ws-abc",
+        user_id="user-123",
+    )
+
+    submitted = mocks["task_manager"].submit_task.await_args.args[0]
+    snapshot = submitted.metadata["governance_snapshot"]
+    assert submitted.task_parameters.get("max_iterations") is None
+    assert snapshot["requested_execution"]["max_model_turns"] == 25
+
+
+@pytest.mark.asyncio
+async def test_typed_and_legacy_execution_requests_cannot_conflict():
+    service, _ = _make_service()
+
+    with pytest.raises(PolicyValidationError, match="conflicts"):
+        await service.start_run(
+            RunCreate(
+                agent_id=uuid4(),
+                description="Conflicting ceilings",
+                parameters={"max_iterations": 30},
+                execution=RunExecutionConfig(max_model_turns=25),
+            ),
+            workspace_id="ws-abc",
+            user_id="user-123",
+        )
+
+
+@pytest.mark.asyncio
+async def test_typed_execution_and_task_policy_cannot_conflict():
+    service, _ = _make_service()
+
+    with pytest.raises(PolicyValidationError, match="conflicts"):
+        await service.start_run(
+            RunCreate(
+                agent_id=uuid4(),
+                description="Conflicting typed ceilings",
+                execution=RunExecutionConfig(max_model_turns=25),
+                task_policy=PolicyDocument(execution=ExecutionLimitsPolicy(max_model_turns=20)),
+            ),
+            workspace_id="ws-abc",
+            user_id="user-123",
+        )
+
+
+@pytest.mark.asyncio
+async def test_legacy_iteration_limit_is_translated_and_not_persisted_in_parameters():
+    service, mocks = _make_service()
+
+    await service.start_run(
+        RunCreate(
+            agent_id=uuid4(),
+            description="Legacy client",
+            parameters={"max_iterations": 30, "custom": "kept"},
+        ),
+        workspace_id="ws-abc",
+        user_id="user-123",
+    )
+
+    submitted = mocks["task_manager"].submit_task.await_args.args[0]
+    assert submitted.task_parameters == {"custom": "kept"}
+    assert submitted.metadata["governance_snapshot"]["requested_execution"]["max_model_turns"] == 30
+
+
+@pytest.mark.asyncio
+async def test_delegated_task_cannot_loosen_parent_execution_policy():
+    service, _ = _make_service()
+    parent_policy = EffectivePolicy(
+        budget=BudgetPolicy(run_budget_usd="50.00"),
+        tokens=TokenPolicy(max_tokens=20_000_000, max_tokens_per_call=100_000),
+        execution=ExecutionLimitsPolicy(
+            max_model_turns=10,
+            max_tool_calls_per_turn=10,
+            max_tool_calls_total=1000,
+        ),
+    )
+
+    with pytest.raises(
+        PolicyValidationError,
+        match="max_model_turns cannot loosen",
+    ):
+        await service.create_task_with_policy(
+            agent_id=uuid4(),
+            description="Delegated work",
+            workspace_id="ws-abc",
+            user_id="user-123",
+            upper_bound_policy=parent_policy,
+        )
 
 
 @pytest.mark.asyncio

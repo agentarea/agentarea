@@ -6,6 +6,12 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from agentarea_governance.domain.policies import (
+    BudgetPolicy,
+    EffectivePolicy,
+    ExecutionLimitsPolicy,
+    TokenPolicy,
+)
 from agentarea_tasks.domain.models import AgentTask, Task
 
 
@@ -68,10 +74,21 @@ def _make_task_service(
     else:
         task_manager.temporal_executor.send_workflow_command = AsyncMock(return_value=True)
 
+    policy_resolver = AsyncMock()
+    policy_resolver.resolve.return_value = EffectivePolicy(
+        budget=BudgetPolicy(run_budget_usd="50.00"),
+        tokens=TokenPolicy(max_tokens=20_000_000, max_tokens_per_call=100_000),
+        execution=ExecutionLimitsPolicy(
+            max_model_turns=100,
+            max_tool_calls_per_turn=10,
+            max_tool_calls_total=1000,
+        ),
+    )
     service = TaskService(
         repository_factory=repo_factory,
         event_broker=event_broker,
         task_manager=task_manager,
+        policy_resolver=policy_resolver,
     )
     # Skip agent validation and mock create_task to return the task as-is
     service.agent_repository = None
