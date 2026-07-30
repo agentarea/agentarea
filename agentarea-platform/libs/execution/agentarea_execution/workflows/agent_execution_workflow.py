@@ -764,12 +764,13 @@ class AgentExecutionWorkflow:
                             "items": {"type": "string"},
                             "maxItems": 1000,
                             "description": (
-                                "Workspace-relative paths of artifacts promised in the response. "
-                                "They must exist and pass validation before completion."
+                                "Every workspace-relative artifact path promised in the response. "
+                                "They must exist and pass validation before completion. Use an "
+                                "empty list only when the response promises no files."
                             ),
                         },
                     },
-                    "required": ["result"],
+                    "required": ["result", "artifact_paths"],
                 },
             },
         }
@@ -1627,10 +1628,7 @@ class AgentExecutionWorkflow:
                 agent_instruction += (
                     "\n\nProject input files are available to shell commands in the "
                     "`inputs/` directory of the sandbox. Use ordinary file operations "
-                    "such as `find inputs -maxdepth 2 -type f` to inspect them. "
-                    "When a shell command creates a file that should be returned to "
-                    "the user, pass that relative file path in the shell tool's "
-                    "`artifact_paths` argument so it is stored as a task artifact."
+                    "such as `find inputs -maxdepth 2 -type f` to inspect them."
                 )
 
             agent_instruction += _render_workspace_attachment_prompt(

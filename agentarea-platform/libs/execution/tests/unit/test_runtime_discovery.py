@@ -88,11 +88,13 @@ def test_render_runtime_prompt_describes_the_three_surfaces() -> None:
     # tier 1: org context store, read-only via a tool
     assert "Organization context store" in prompt
     assert "context tool" in prompt
-    # tier 2/3 unified for the agent: its working directory IS the durable task
-    # workspace — files created there (relative paths) are captured, and an
-    # absolute path outside it is scratch that is not delivered.
+    # tier 2/3 unified for the agent: its working directory is the live task
+    # workspace. Text written through the file tool is durable immediately;
+    # shell-produced deliverables must be named in artifact_paths for copy-out.
     assert "working directory" in prompt
-    assert "captured durably" in prompt
+    assert "file tool" in prompt
+    assert "artifact_paths" in prompt
+    assert "copied to durable" in prompt
     assert "relative paths" in prompt
     assert "NOT delivered" in prompt
     # binary deliverables must be produced via the shell, not the text file tool
@@ -126,10 +128,7 @@ def test_effective_runtime_profile_prefers_task_override() -> None:
     ]
 
     assert _effective_runtime_profile(None, tools) == "allowed"
-    assert (
-        _effective_runtime_profile({"package_install": "locked"}, tools)
-        == "locked"
-    )
+    assert _effective_runtime_profile({"package_install": "locked"}, tools) == "locked"
 
 
 def test_effective_runtime_profile_rejects_invalid_agent_setting() -> None:
