@@ -42,7 +42,7 @@ export default async function TriggersContent({
   const agentMap = new Map(agents.map((a) => [a.id, a.name]));
 
   // Enrich triggers with agent names
-  let enrichedTriggers = triggers.map((trigger) => ({
+  const enrichedTriggers = triggers.map((trigger) => ({
     ...trigger,
     agent_name: agentMap.get(trigger.agent_id) || "Unknown Agent",
   }));

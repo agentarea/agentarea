@@ -93,7 +93,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   const [group, setGroup] = useState<GroupKey>(initial.group);
   const [order, setOrder] = useState<OrderKey>(initial.order);
   const [sourceTab, setSourceTab] = useState(initial.sourceTab);
-  const [scope, setScope] = useState(initial.scope);
+  const [scope] = useState(initial.scope);
   const [search, setSearch] = useState(initial.search);
 
   // local-only UI state
