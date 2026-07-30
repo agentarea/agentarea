@@ -158,7 +158,6 @@ class WebToolset(Toolset):
         base_prefix: str = "",
         search_web: bool = True,
         fetch_webpage: bool = True,
-        extract_text: bool = True,
         search_base_url: str | None = None,
     ) -> None:
         super().__init__()
@@ -170,7 +169,6 @@ class WebToolset(Toolset):
         self.base_prefix = base_prefix.strip("/")
         self._search_enabled = search_web
         self._fetch_enabled = fetch_webpage
-        self._extract_enabled = extract_text
         self.search_base_url = search_base_url.rstrip("/") if search_base_url else None
 
     def _artifact_path(self, file_name: str) -> str:
@@ -345,21 +343,3 @@ class WebToolset(Toolset):
                 "size": len(body),
             }
         )
-
-    @tool_method
-    async def extract_text(self, html: str) -> str:
-        """Strip HTML to plain text — useful after ``fetch_webpage`` on HTML.
-
-        Drops <script>/<style>/<noscript>/<head> bodies and collapses
-        whitespace. For non-HTML input, returns the input unchanged.
-        """
-        if not self._extract_enabled:
-            return "Error: extract_text is disabled for this toolset instance"
-        if not html or "<" not in html:
-            return html or ""
-        parser = _TextExtractor()
-        try:
-            parser.feed(html)
-        except Exception as e:
-            return f"Error extracting text: {e}"
-        return parser.text()
