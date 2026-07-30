@@ -289,6 +289,16 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    # S3 API endpoint of the bundled object store, exposed for browser-direct
+    # presigned uploads/downloads. Only the S3 API port (9000) is routed; the
+    # admin console (9001) is never exposed. Set the host to enable, and point
+    # global.storage.publicEndpoint at the same host so presigned URLs are signed
+    # against it. Leave host empty to keep the store cluster-internal.
+    rustfs:
+      host: ""  # e.g., storage.example.com
+      paths:
+        - path: /
+          pathType: Prefix
   # TLS configuration
   tls: []
     # - secretName: agentarea-tls

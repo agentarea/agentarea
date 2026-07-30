@@ -171,6 +171,9 @@ The following table lists configurable parameters of the chart and their default
 | ingress.hosts.kratos.host | string | `""` |  |
 | ingress.hosts.kratos.paths[0].path | string | `"/"` |  |
 | ingress.hosts.kratos.paths[0].pathType | string | `"Prefix"` |  |
+| ingress.hosts.rustfs.host | string | `""` |  |
+| ingress.hosts.rustfs.paths[0].path | string | `"/"` |  |
+| ingress.hosts.rustfs.paths[0].pathType | string | `"Prefix"` |  |
 | ingress.tls | list | `[]` |  |
 | backend.enabled | bool | `true` |  |
 | backend.replicaCount | int | `1` |  |
