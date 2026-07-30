@@ -22,6 +22,7 @@ from typing import Any
 
 import pytest
 from agentarea_common.testing.flows import MainFlow
+from agentarea_common.workflow.sandbox import create_workflow_runner
 from agentarea_execution.models import (
     AgentConfigRequest,
     AgentExecutionRequest,
@@ -67,6 +68,7 @@ async def _mock_build_config(request: AgentConfigRequest) -> dict[str, Any]:
         "description": "Test agent",
         "instruction": "Be helpful.",
         "tools_config": {"mcp_servers": []},
+        "context_window": 128000,
         "events_config": {},
         "planning": False,
     }
@@ -245,8 +247,18 @@ def _make_request() -> AgentExecutionRequest:
         workspace_id="test-workspace",
         task_query="signal test",
         timeout_seconds=30,
-        max_reasoning_iterations=5,
-        budget_usd=1.0,
+        effective_policy={
+            "budget": {"run_budget_usd": "1.00"},
+            "tokens": {
+                "max_tokens": 20_000,
+                "max_tokens_per_call": 2_000,
+            },
+            "execution": {
+                "max_model_turns": 5,
+                "max_tool_calls_per_turn": 10,
+                "max_tool_calls_total": 100,
+            },
+        },
     )
 
 
@@ -329,6 +341,7 @@ async def test_request_user_input_waits_for_queued_reply_then_continues():
                 workflows=[AgentExecutionWorkflow],
                 activities=activities,
                 activity_executor=executor,
+                workflow_runner=create_workflow_runner(),
             )
             async with worker:
                 handle = await env.client.start_workflow(
@@ -402,6 +415,7 @@ async def test_pause_resume_signals_flip_queryable_state():
                 workflows=[AgentExecutionWorkflow],
                 activities=_ALL_ACTIVITIES,
                 activity_executor=executor,
+                workflow_runner=create_workflow_runner(),
             )
             async with worker:
                 handle = await env.client.start_workflow(
@@ -464,6 +478,7 @@ async def test_workflow_command_queue_message_publishes_event():
                 workflows=[AgentExecutionWorkflow],
                 activities=_ALL_ACTIVITIES,
                 activity_executor=executor,
+                workflow_runner=create_workflow_runner(),
             )
             async with worker:
                 handle = await env.client.start_workflow(
@@ -516,6 +531,7 @@ async def test_workflow_command_change_model_swaps_model_and_publishes_event():
                 workflows=[AgentExecutionWorkflow],
                 activities=_ALL_ACTIVITIES,
                 activity_executor=executor,
+                workflow_runner=create_workflow_runner(),
             )
             async with worker:
                 handle = await env.client.start_workflow(
@@ -581,6 +597,7 @@ async def test_unknown_workflow_command_is_ignored_no_event():
                 workflows=[AgentExecutionWorkflow],
                 activities=_ALL_ACTIVITIES,
                 activity_executor=executor,
+                workflow_runner=create_workflow_runner(),
             )
             async with worker:
                 handle = await env.client.start_workflow(
