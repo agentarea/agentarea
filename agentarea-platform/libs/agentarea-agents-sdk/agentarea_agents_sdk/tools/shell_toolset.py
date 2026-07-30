@@ -203,7 +203,7 @@ class ShellToolset(Toolset):
         inputs = await self._workspace_repository.list(
             self._workspace_id,
             self._task_id,
-            prefix="inputs/",
+            prefix="inputs",
         )
         for obj in inputs:
             relative_path = obj.path

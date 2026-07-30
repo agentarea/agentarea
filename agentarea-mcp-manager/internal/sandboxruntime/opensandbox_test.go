@@ -168,6 +168,19 @@ func TestOpenSandboxProviderRejectsImplicitWeakIsolation(t *testing.T) {
 	}
 }
 
+func TestTaskVolumeNameIsScopedByWorkspaceAndTask(t *testing.T) {
+	first := taskVolumeName("agentarea-task", "workspace-1", "task-1")
+	if first == taskVolumeName("agentarea-task", "workspace-2", "task-1") {
+		t.Fatal("the same task ID in different workspaces must not share a volume")
+	}
+	if first == taskVolumeName("agentarea-task", "workspace-1", "task-2") {
+		t.Fatal("different task IDs in the same workspace must not share a volume")
+	}
+	if first != taskVolumeName("agentarea-task", "workspace-1", "task-1") {
+		t.Fatal("volume name must be stable for the same workspace and task")
+	}
+}
+
 func TestOpenSandboxGVisorRequiresExplicitHostEgressProfile(t *testing.T) {
 	base := OpenSandboxConfig{
 		Connection:    opensandbox.ConnectionConfig{Domain: "http://127.0.0.1:8080"},

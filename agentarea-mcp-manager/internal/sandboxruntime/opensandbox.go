@@ -123,7 +123,7 @@ func (p *OpenSandboxProvider) Create(ctx context.Context, req CreateRequest) (*S
 		volumes = []opensandbox.Volume{{
 			Name: "workspace",
 			PVC: &opensandbox.PVC{
-				ClaimName:                  taskVolumeName(p.cfg.VolumePrefix, req.TaskID),
+				ClaimName:                  taskVolumeName(p.cfg.VolumePrefix, req.WorkspaceID, req.TaskID),
 				CreateIfNotExists:          &createVolume,
 				DeleteOnSandboxTermination: &deleteVolume,
 			},
@@ -413,8 +413,8 @@ func valueOrDefault(value, fallback string) string {
 	return fallback
 }
 
-func taskVolumeName(prefix, taskID string) string {
-	digest := sha256.Sum256([]byte(taskID))
+func taskVolumeName(prefix, workspaceID, taskID string) string {
+	digest := sha256.Sum256([]byte(workspaceID + "\x00" + taskID))
 	return fmt.Sprintf("%s-%x", strings.TrimSuffix(prefix, "-"), digest[:12])
 }
 

@@ -73,6 +73,7 @@ class _WorkspaceRepository:
         self.imports: list[dict[str, Any]] = []
         self.files: dict[str, bytes] = {}
         self.content_types: dict[str, str | None] = {}
+        self.list_prefixes: list[str] = []
 
     async def put(
         self,
@@ -111,6 +112,7 @@ class _WorkspaceRepository:
     async def list(self, workspace_id: str, task_id: str, prefix: str = "", **_: Any):
         assert workspace_id
         assert task_id
+        self.list_prefixes.append(prefix)
         return [
             self._object(path)
             for path in sorted(self.files)
@@ -217,6 +219,7 @@ async def test_bash_propagates_workflow_id_from_ctx():
     assert "env" not in payload["command"]
     assert "args" not in payload["command"]
     assert fake.get_calls == ["http://mcp-manager:8000/sandbox/executions/sexec-test"]
+    assert repository.list_prefixes == ["inputs"]
     wire = json.dumps(payload)
     assert "content_base64" not in wire
     assert "input_files" not in wire
