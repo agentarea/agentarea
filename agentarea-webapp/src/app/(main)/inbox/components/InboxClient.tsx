@@ -44,6 +44,12 @@ interface InboxClientProps {
   error: string | null;
 }
 
+type InboxPageData = {
+  items?: InboxTask[];
+  total?: number;
+  status_counts?: Record<string, number>;
+};
+
 export function InboxClient({
   initialItems,
   initialTotal,
@@ -127,8 +133,8 @@ export function InboxClient({
         setReachedEnd(true);
         return;
       }
-      const data = res.data as any;
-      const newItems = (data?.items ?? []) as InboxTask[];
+      const data = res.data as InboxPageData | undefined;
+      const newItems = data?.items ?? [];
       pageRef.current = nextPage;
       if (typeof data?.total === "number") {
         totalRef.current = data.total;
@@ -136,7 +142,7 @@ export function InboxClient({
       }
       // Fresh workspace-wide breakdown; keeps segment counts current.
       if (data?.status_counts) {
-        setStatusCounts(data.status_counts as Record<string, number>);
+        setStatusCounts(data.status_counts);
       }
       setItems((prev) => {
         const seen = new Set(prev.map((task) => String(task.id)));
