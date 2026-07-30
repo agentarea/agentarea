@@ -1479,9 +1479,10 @@ export const zOpenApiToolConfig = z.object({
  *
  * Payload for creating an agent.
  *
- * ``model_id`` accepts either a model-instance UUID configured in the
- * workspace, or a recognized provider identifier (e.g. ``gpt-4o``,
- * ``claude-3-5-sonnet``, ``openrouter/qwen/qwen-2.5-72b-instruct``).
+ * ``model_id`` is the UUID of a model instance configured in the workspace —
+ * the runtime has no other interpretation of it. Omit it (or pass ``null``) to
+ * create an agent with no model bound yet; such an agent cannot be run until a
+ * model is assigned.
  */
 export const zAgentCreate = z.object({
   a2ui_enabled: z.boolean().nullish(),
@@ -1489,7 +1490,7 @@ export const zAgentCreate = z.object({
   description: z.string().max(1000).optional().default(""),
   events_config: zEventsConfig.nullish(),
   instruction: z.string().max(20000).optional().default(""),
-  model_id: z.string(),
+  model_id: z.string().nullish(),
   name: z.string().min(1).max(255),
   planning: z.boolean().nullish(),
   skill_ids: z.array(z.string().uuid()).nullish(),

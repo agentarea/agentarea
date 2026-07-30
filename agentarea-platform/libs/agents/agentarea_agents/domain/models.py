@@ -24,6 +24,9 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     events_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     planning: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     a2ui_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    # DEPRECATED: persisted and surfaced through the API, but nothing reads it —
+    # the runtime treats every agent as stateless. Kept so existing rows and
+    # clients keep working; do not add behaviour keyed on it.
     agent_type: Mapped[str] = mapped_column(String, nullable=False, default="stateless")
     # Forward provenance link to the catalog item this agent was forked from
     # (copy-on-write). Null for agents created from scratch. See ADR-003.

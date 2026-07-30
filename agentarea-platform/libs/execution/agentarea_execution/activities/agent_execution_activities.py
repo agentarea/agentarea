@@ -19,6 +19,7 @@ from datetime import datetime
 from typing import Any, Literal, cast
 from uuid import UUID
 
+from agentarea_agents.domain.config_hash import compute_agent_config_hash
 from agentarea_agents_sdk import (
     GoalProgressEvaluator,
     LLMModel,
@@ -42,7 +43,7 @@ from prometheus_client import Counter
 # Third-party imports
 from temporalio import activity
 
-from ..exceptions import AgentNotFoundError, ModelInstanceNotFoundError
+from ..exceptions import AgentNotFoundError, ModelInstanceNotFoundError, NoModelBoundError
 from ..interfaces import ActivityDependencies
 
 # Add import for new Pydantic models
@@ -108,6 +109,26 @@ def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+async def _record_task_config_hash(ctx: Any, task_id: UUID, config_hash: str) -> None:
+    """Stamp the run with the hash of the agent config it resolved.
+
+    Recorded so a finished run can be told apart from the agent's current
+    definition. Best-effort: losing the stamp must not fail the run, but it is
+    logged loudly enough to notice.
+    """
+    from agentarea_tasks.infrastructure.repository import TaskRepository
+
+    try:
+        session = ctx.container._database.async_session_factory()
+        ctx._sessions.append(session)
+        repo = TaskRepository(session, ctx.user_context)
+        # ActivityContext commits every session it owns on exit.
+        if not await repo.merge_metadata(task_id, {"agent_config_hash": config_hash}):
+            logger.warning("Task %s vanished before its config hash could be recorded", task_id)
+    except Exception:
+        logger.warning("Failed to record config hash for task %s", task_id, exc_info=True)
 
 
 def _agent_runtime_profile(value: Any) -> str:
@@ -354,19 +375,55 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Fetch model context window and context strategy from ModelSpec
             model_id_str = request.override_model or agent.model_id
+            if not model_id_str:
+                # An agent forked from the catalog starts with no model bound.
+                # Fail here with the reason rather than letting UUID("") blow up
+                # inside call_llm three layers down.
+                raise NoModelBoundError(
+                    f"Agent {agent.id} has no model bound. Assign a model instance to the "
+                    "agent, or pass override_model when starting the task."
+                )
+
             context_window = 128000  # default fallback
             default_context_strategy = None
-            if model_id_str:
-                try:
-                    model_instance_service = await ctx.get_model_instance_service()
-                    model_instance = await model_instance_service.get(UUID(model_id_str))
-                    if model_instance and model_instance.model_spec:
-                        context_window = model_instance.model_spec.context_window
-                        default_context_strategy = getattr(
-                            model_instance.model_spec, "default_context_strategy", None
-                        )
-                except Exception as e:
-                    logger.warning(f"Could not fetch model spec for model {model_id_str}: {e}")
+            try:
+                model_instance_service = await ctx.get_model_instance_service()
+                model_instance = await model_instance_service.get(UUID(model_id_str))
+                if model_instance and model_instance.model_spec:
+                    context_window = model_instance.model_spec.context_window
+                    default_context_strategy = getattr(
+                        model_instance.model_spec, "default_context_strategy", None
+                    )
+                else:
+                    logger.warning(
+                        "Model instance %s resolved to no model spec; "
+                        "falling back to context_window=%d",
+                        model_id_str,
+                        context_window,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "Could not fetch model spec for model %s; falling back to "
+                    "context_window=%d: %s",
+                    model_id_str,
+                    context_window,
+                    e,
+                    exc_info=True,
+                )
+
+            config_hash = compute_agent_config_hash(
+                {
+                    "instruction": agent.instruction,
+                    "model_id": model_id_str,
+                    "tools": agent.tools,
+                    "events_config": agent.events_config,
+                    "planning": agent.planning,
+                    "agent_type": getattr(agent, "agent_type", None),
+                },
+                skill_ids=[str(s.id) for s in getattr(agent, "skills", None) or []],
+            )
+            if request.task_id is not None:
+                await _record_task_config_hash(ctx, request.task_id, config_hash)
 
             # Build configuration using Pydantic model
             return AgentConfigResult(
@@ -376,7 +433,8 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 instruction=(agent.instruction or "")
                 + render_runtime_prompt(runtime, package_install=package_install),
                 agent_type=getattr(agent, "agent_type", "stateless") or "stateless",
-                model_id=model_id_str or "",
+                model_id=model_id_str,
+                config_hash=config_hash,
                 context_window=context_window,
                 default_context_strategy=default_context_strategy,
                 tools=_as_tool_config_list(agent.tools),

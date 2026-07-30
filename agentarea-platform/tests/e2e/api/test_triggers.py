@@ -13,7 +13,6 @@ def _create_agent(client: httpx.Client, name: str = "trigger-host") -> str:
             "name": name,
             "description": "for trigger test",
             "instruction": "respond",
-            "model_id": "gpt-4",
             "agent_type": "stateless",
         },
     )

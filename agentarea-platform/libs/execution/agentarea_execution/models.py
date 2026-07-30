@@ -209,6 +209,8 @@ class AgentConfigRequest(BaseModel):
     execution_context: dict[str, Any] | None = None
     step_type: str | None = None
     override_model: str | None = None
+    # Set so the resolved config hash can be recorded against the run.
+    task_id: UUID | None = None
 
 
 class SkillInfo(BaseModel):
@@ -327,6 +329,8 @@ class AgentConfigResult(BaseModel):
     skills: list[SkillInfo] = Field(default_factory=list)
     runtime: RuntimeDiscoveryResult | None = None
     runtime_event_data: dict[str, Any] = Field(default_factory=dict)
+    # Hash of the agent's declared config as resolved for this run.
+    config_hash: str | None = None
 
 
 class ToolDiscoveryRequest(BaseModel):

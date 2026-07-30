@@ -443,7 +443,7 @@
       },
       "AgentCreate": {
         "additionalProperties": false,
-        "description": "Payload for creating an agent.\n\n``model_id`` accepts either a model-instance UUID configured in the\nworkspace, or a recognized provider identifier (e.g. ``gpt-4o``,\n``claude-3-5-sonnet``, ``openrouter/qwen/qwen-2.5-72b-instruct``).",
+        "description": "Payload for creating an agent.\n\n``model_id`` is the UUID of a model instance configured in the workspace \u2014\nthe runtime has no other interpretation of it. Omit it (or pass ``null``) to\ncreate an agent with no model bound yet; such an agent cannot be run until a\nmodel is assigned.",
         "properties": {
           "a2ui_enabled": {
             "anyOf": [
@@ -459,7 +459,8 @@
           },
           "agent_type": {
             "default": "stateless",
-            "description": "'stateless' (each request independent) or 'stateful' (maintains conversation context across runs).",
+            "deprecated": true,
+            "description": "DEPRECATED \u2014 stored and echoed back, but the runtime never reads it, so every agent behaves as 'stateless' regardless of this value. Conversation history does not currently survive across runs. Do not branch on this field.",
             "enum": [
               "stateless",
               "stateful"
@@ -493,9 +494,16 @@
             "type": "string"
           },
           "model_id": {
-            "description": "Model instance UUID or provider model identifier (e.g. 'gpt-4o', 'claude-3-5-sonnet').",
-            "title": "Model Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "UUID of a model instance in this workspace (see GET /v1/model-instances). Null means no model is bound yet and the agent cannot be run.",
+            "title": "Model Id"
           },
           "name": {
             "description": "Human-readable agent name (unique per workspace).",
@@ -571,8 +579,7 @@
           }
         },
         "required": [
-          "name",
-          "model_id"
+          "name"
         ],
         "title": "AgentCreate",
         "type": "object"

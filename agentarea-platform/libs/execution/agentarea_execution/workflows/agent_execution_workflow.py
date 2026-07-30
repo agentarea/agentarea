@@ -580,6 +580,7 @@ class AgentExecutionWorkflow:
             agent_id=UUID(self.state.agent_id),
             user_context_data=self.state.user_context_data,
             execution_context=self._workflow_metadata,
+            task_id=UUID(self.state.task_id),
         )
         agent_config_result: AgentConfigResult = await workflow.execute_activity(
             Activities.BUILD_AGENT_CONFIG,

@@ -1,7 +1,6 @@
 """Agents API endpoints for managing AI agents."""
 
 import logging
-import re
 from contextlib import suppress
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID
@@ -25,9 +24,7 @@ from agentarea_api.api.deps.services import (
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
-from agentarea_common.config import get_database
 from agentarea_common.config.database import get_db_session
-from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_mcp.application.service import MCPServerInstanceService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ValidationError
@@ -45,65 +42,6 @@ DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
-
-
-async def validate_model_id(model_id: str, user_context: UserContext) -> None:
-    """Validate that model_id is an existing model instance or a valid identifier.
-
-    Args:
-        model_id: The model ID to validate
-        user_context: Current user context
-
-    Raises:
-        HTTPException: If the model_id is invalid
-    """
-    # Create database session
-    database = get_database()
-    async with database.async_session_factory() as session:
-        model_instance_repository = ModelInstanceRepository(session, user_context)
-
-        # First, try to treat model_id as a UUID (model instance ID)
-        try:
-            model_uuid = UUID(model_id)
-            model_instance = await model_instance_repository.get_with_relations(model_uuid)
-            if model_instance:
-                # Valid model instance ID
-                return
-        except ValueError:
-            # Not a UUID, continue to check if it's a valid model name
-            pass
-
-        # If not a valid UUID or model instance not found, check if it's a
-        # reasonable model identifier
-        # For now, we'll allow certain patterns that are commonly used for model names
-        valid_model_patterns = [
-            # OpenAI-style models (specific patterns first)
-            r"^gpt-[0-9.]+.*$",
-            r"^claude-.*$",
-            r"^llama.*$",
-            r"^qwen.*$",
-            r"^mistral.*$",
-            # OpenRouter-style: provider/model or provider/model:variant
-            r"^[a-zA-Z][a-zA-Z0-9\-_.]*/[a-zA-Z][a-zA-Z0-9\-_.:]*(:[a-zA-Z0-9\-_.]+)?$",
-            # General model names - must contain at least one letter and one non-letter
-            r"^[a-zA-Z][a-zA-Z0-9\-_.]*[a-zA-Z0-9]$",  # starts with letter
-            r"^[a-zA-Z0-9]*[a-zA-Z][a-zA-Z0-9\-_.]*$",  # contains at least one letter
-        ]
-
-        for pattern in valid_model_patterns:
-            if re.match(pattern, model_id, re.IGNORECASE):
-                # Valid model name pattern - allow it
-                return
-
-        # If we get here, the model_id doesn't match any valid pattern
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Invalid model_id '{model_id}'. Must be either a valid model "
-                f"instance UUID or a recognized model identifier "
-                f"(e.g., 'qwen2.5', 'gpt-4', 'claude-3', etc.)"
-            ),
-        )
 
 
 class AgentResponse(BaseModel):
@@ -232,9 +170,6 @@ async def create_agent(
     agent_service: AgentService = Depends(get_agent_service),
 ):
     """Create a new agent."""
-    # Validate model_id before creating agent
-    await validate_model_id(data.model_id, user_context)
-
     # Validate code tools if provided
     if data.tools:
         available_code_tools = get_code_tools_metadata()
@@ -430,10 +365,6 @@ async def update_agent(
     if not resolved_id:
         raise HTTPException(status_code=404, detail="Agent not found")
     await require_permission("edit", "agent", str(resolved_id), user_context.user_id)
-    # Validate model_id if it's being updated
-    if data.model_id is not None:
-        await validate_model_id(data.model_id, user_context)
-
     agent = await agent_service.update_agent(id=resolved_id, payload=data)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
