@@ -483,8 +483,8 @@ class AgentExecutionWorkflow:
         try:
             current_policy = effective_policy_from_json(self.state.effective_policy)
             next_policy = effective_policy_from_json(info.effective_policy)
-            current_policy.require_runtime_contract()
-            next_policy.require_runtime_contract()
+            current_policy.runtime_contract()
+            next_runtime = next_policy.runtime_contract()
         except (TypeError, ValueError):
             return None, {"accepted": False, "reason": "invalid_governance_snapshot"}
 
@@ -495,10 +495,10 @@ class AgentExecutionWorkflow:
             return None, {"accepted": False, "reason": "invalid_governance_snapshot"}
 
         expected_iterations = self.state.goal.max_iterations + info.additional_iterations
-        if next_policy.execution.max_model_turns != expected_iterations:
+        if next_runtime.max_model_turns != expected_iterations:
             return None, {"accepted": False, "reason": "policy_revision_mismatch"}
         expected_budget = self._budget.budget_limit + (info.additional_budget_usd or ZERO)
-        if next_policy.budget.run_budget_usd != expected_budget:
+        if next_runtime.run_budget_usd != expected_budget:
             return None, {"accepted": False, "reason": "policy_revision_mismatch"}
 
         current_contract = current_policy.to_json_dict()
@@ -521,12 +521,14 @@ class AgentExecutionWorkflow:
     ) -> dict[str, Any]:
         """Commit a policy revision after its task snapshot is durable."""
         next_policy = effective_policy_from_json(info.effective_policy)
-        next_policy.require_runtime_contract()
+        next_runtime = next_policy.runtime_contract()
         if self.state.goal is None:
             raise RuntimeError("goal is not initialized")
 
-        self.state.goal.max_iterations = next_policy.execution.max_model_turns
-        self._budget.set_limit(next_policy.budget.run_budget_usd)
+        self.state.goal = self.state.goal.model_copy(
+            update={"max_iterations": next_runtime.max_model_turns}
+        )
+        self._budget.set_limit(next_runtime.run_budget_usd)
         self.state.budget_usd = self._budget.budget_limit
         self.state.effective_policy = next_policy.to_json_dict()
 
@@ -1818,9 +1820,16 @@ class AgentExecutionWorkflow:
             # Pool lives in workflow state; only this name+description block is
             # sent to the LLM until it explicitly calls load_tools(...).
             if self._disclosure_policy and self.state.searchable_tool_pool:
+                context_window = self.state.context_window
+                if context_window is None:
+                    raise ApplicationError(
+                        "execution state has no ModelSpec context_window",
+                        type="InvalidExecutionSnapshot",
+                        non_retryable=True,
+                    )
                 ctx = DisclosureContext(
                     model_name=str(self.state.agent_config.get("model_id", "")),
-                    context_window=self.state.context_window,
+                    context_window=context_window,
                     iteration=self.state.current_iteration,
                 )
                 pool = [ToolCandidate(**c) for c in self.state.searchable_tool_pool]
@@ -3249,9 +3258,16 @@ class AgentExecutionWorkflow:
             return
 
         pool = [ToolCandidate(**c) for c in self.state.searchable_tool_pool]
+        context_window = self.state.context_window
+        if context_window is None:
+            raise ApplicationError(
+                "execution state has no ModelSpec context_window",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
         ctx = DisclosureContext(
             model_name=str(self.state.agent_config.get("model_id", "")),
-            context_window=self.state.context_window,
+            context_window=context_window,
             iteration=self.state.current_iteration,
         )
         result = self._disclosure_policy.reveal(RevealRequest(tool_names=requested), pool, ctx)
@@ -3495,6 +3511,8 @@ class AgentExecutionWorkflow:
         )
         await self._publish_events_immediately()
 
+        child_task_created = False
+        child_cost_accounted = False
         try:
             # Create a task record in DB for the child agent
             create_task_request = CreateDelegationTaskRequest(

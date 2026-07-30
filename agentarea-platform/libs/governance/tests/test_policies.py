@@ -88,6 +88,13 @@ def test_runtime_contract_accepts_complete_policy():
     )
 
     assert effective.require_runtime_contract() is effective
+    runtime = effective.runtime_contract()
+    assert str(runtime.run_budget_usd) == "50.00"
+    assert runtime.max_tokens == 20_000_000
+    assert runtime.max_tokens_per_call == 100_000
+    assert runtime.max_model_turns == 100
+    assert runtime.max_tool_calls_per_turn == 10
+    assert runtime.max_tool_calls_total == 1000
 
 
 @pytest.mark.parametrize(

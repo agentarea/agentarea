@@ -631,11 +631,11 @@ export const zDiscoverPreviewModelResponse = z.object({
   description: z.string().nullish(),
   display_name: z.string(),
   id: z.string(),
-  input_cost_per_token: z.number().optional().default(0),
+  input_cost_per_token: z.number().nullish(),
   is_new: z.boolean().optional().default(false),
-  max_output_tokens: z.number().int().optional().default(4096),
+  max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().optional().default(0),
+  output_cost_per_token: z.number().nullish(),
   supports_function_calling: z.boolean().optional().default(false),
   supports_reasoning: z.boolean().optional().default(false),
   supports_vision: z.boolean().optional().default(false),
@@ -666,11 +666,11 @@ export const zDiscoveredModelResponse = z.object({
   context_window: z.number().int(),
   description: z.string().nullish(),
   display_name: z.string(),
-  input_cost_per_token: z.number().optional().default(0),
+  input_cost_per_token: z.number().nullish(),
   is_new: z.boolean().optional().default(false),
-  max_output_tokens: z.number().int().optional().default(4096),
+  max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().optional().default(0),
+  output_cost_per_token: z.number().nullish(),
   supports_function_calling: z.boolean().optional().default(false),
   supports_reasoning: z.boolean().optional().default(false),
   supports_vision: z.boolean().optional().default(false),
@@ -746,6 +746,17 @@ export const zExecutionCorrelationResponse = z.object({
   page: z.number().int(),
   page_size: z.number().int(),
   total: z.number().int(),
+});
+
+/**
+ * ExecutionLimitsPolicy
+ *
+ * Ceilings for the agent loop and tool execution.
+ */
+export const zExecutionLimitsPolicy = z.object({
+  max_model_turns: z.number().int().gt(0).nullish(),
+  max_tool_calls_per_turn: z.number().int().gt(0).nullish(),
+  max_tool_calls_total: z.number().int().gt(0).nullish(),
 });
 
 /**
@@ -1315,12 +1326,15 @@ export const zModelInstanceTestResponse = z.object({
  * ModelSpecCreate
  */
 export const zModelSpecCreate = z.object({
-  context_window: z.number().int().optional().default(4096),
+  context_window: z.number().int().gt(0),
   default_context_strategy: z.string().nullish(),
   description: z.string().nullish(),
   display_name: z.string(),
+  input_cost_per_token: z.number().gte(0),
   is_active: z.boolean().optional().default(true),
+  max_output_tokens: z.number().int().gt(0).nullish(),
   model_name: z.string(),
+  output_cost_per_token: z.number().gte(0),
   provider_spec_id: z.string().uuid(),
 });
 
@@ -1328,11 +1342,14 @@ export const zModelSpecCreate = z.object({
  * ModelSpecUpdate
  */
 export const zModelSpecUpdate = z.object({
-  context_window: z.number().int().nullish(),
+  context_window: z.number().int().gt(0).nullish(),
   default_context_strategy: z.string().nullish(),
   description: z.string().nullish(),
   display_name: z.string().nullish(),
+  input_cost_per_token: z.number().gte(0).nullish(),
   is_active: z.boolean().nullish(),
+  max_output_tokens: z.number().int().gt(0).nullish(),
+  output_cost_per_token: z.number().gte(0).nullish(),
 });
 
 /**
@@ -2000,6 +2017,15 @@ export const zResolveResponse = z.object({
 });
 
 /**
+ * RunExecutionConfig
+ *
+ * Caller-requested execution ceiling; governance may only tighten it.
+ */
+export const zRunExecutionConfig = z.object({
+  max_model_turns: z.number().int().gt(0),
+});
+
+/**
  * SandboxResources
  */
 export const zSandboxResources = z.object({
@@ -2467,8 +2493,8 @@ export const zInboxResponse = z.object({
  * Token-related ceilings.
  */
 export const zTokenPolicy = z.object({
-  max_tokens: z.number().int().nullish(),
-  max_tokens_per_call: z.number().int().nullish(),
+  max_tokens: z.number().int().gt(0).nullish(),
+  max_tokens_per_call: z.number().int().gt(0).nullish(),
 });
 
 /**
@@ -2504,6 +2530,7 @@ export const zEffectivePolicy = z.object({
   approval: zApprovalPolicy.nullish(),
   budget: zBudgetPolicyOutput.nullish(),
   content_safety: zContentSafetyPolicy.nullish(),
+  execution: zExecutionLimitsPolicy.nullish(),
   resolver_version: z.string().optional().default("policy-resolver-v1"),
   source_policy_ids: z.array(z.string()).optional(),
   tokens: zTokenPolicy.nullish(),
@@ -2526,6 +2553,7 @@ export const zPolicyDocument = z.object({
   approval: zApprovalPolicy.nullish(),
   budget: zBudgetPolicyInput.nullish(),
   content_safety: zContentSafetyPolicy.nullish(),
+  execution: zExecutionLimitsPolicy.nullish(),
   tokens: zTokenPolicy.nullish(),
   tools: zToolsPolicy.nullish(),
 });
@@ -2546,7 +2574,8 @@ export const zEffectivePolicyPreviewRequest = z.object({
 export const zTaskCreate = z.object({
   attachments: z.array(z.string()).nullish(),
   description: z.string(),
-  parameters: z.record(z.unknown()).optional().default({}),
+  execution: zRunExecutionConfig.nullish(),
+  parameters: z.record(z.unknown()).optional(),
   project_id: z.string().nullish(),
   requires_human_approval: z.boolean().nullish().default(false),
   task_policy: zPolicyDocument.nullish(),
@@ -2926,11 +2955,11 @@ export const zAgentareaApiApiV1ModelSpecsModelSpecResponse = z.object({
   description: z.string().nullable(),
   display_name: z.string(),
   id: z.string(),
-  input_cost_per_token: z.number().nullish().default(0),
+  input_cost_per_token: z.number().nullish(),
   is_active: z.boolean(),
-  max_output_tokens: z.number().int().nullish().default(4096),
+  max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().nullish().default(0),
+  output_cost_per_token: z.number().nullish(),
   provider_key: z.string().nullish(),
   provider_name: z.string().nullish(),
   provider_spec_id: z.string(),
@@ -2949,11 +2978,11 @@ export const zAgentareaApiApiV1ProviderSpecsModelSpecResponse = z.object({
   description: z.string().nullable(),
   display_name: z.string(),
   id: z.string(),
-  input_cost_per_token: z.number().nullish().default(0),
+  input_cost_per_token: z.number().nullish(),
   is_active: z.boolean(),
-  max_output_tokens: z.number().int().nullish().default(4096),
+  max_output_tokens: z.number().int().nullish(),
   model_name: z.string(),
-  output_cost_per_token: z.number().nullish().default(0),
+  output_cost_per_token: z.number().nullish(),
   provider_spec_id: z.string(),
   supports_function_calling: z.boolean().nullish().default(false),
   supports_reasoning: z.boolean().nullish().default(false),

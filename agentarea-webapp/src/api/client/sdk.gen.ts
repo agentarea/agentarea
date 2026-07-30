@@ -3405,10 +3405,7 @@ export const previewEffectivePolicyV1GovernanceEffectivePolicyPreviewPost = <
 /**
  * Get Task Policy Snapshot
  *
- * Read the effective governance policy for a task.
- *
- * The effective policy is no longer persisted; it is served on demand by
- * querying the task's Temporal workflow, where it lives in workflow state.
+ * Read the effective governance policy persisted before workflow dispatch.
  */
 export const getTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGet = <
   ThrowOnError extends boolean = false,

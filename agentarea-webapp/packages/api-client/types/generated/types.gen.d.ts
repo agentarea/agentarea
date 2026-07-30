@@ -1688,7 +1688,7 @@ export type DiscoverPreviewModelResponse = {
     /**
      * Input Cost Per Token
      */
-    input_cost_per_token?: number;
+    input_cost_per_token?: number | null;
     /**
      * Is New
      */
@@ -1696,7 +1696,7 @@ export type DiscoverPreviewModelResponse = {
     /**
      * Max Output Tokens
      */
-    max_output_tokens?: number;
+    max_output_tokens?: number | null;
     /**
      * Model Name
      */
@@ -1704,7 +1704,7 @@ export type DiscoverPreviewModelResponse = {
     /**
      * Output Cost Per Token
      */
-    output_cost_per_token?: number;
+    output_cost_per_token?: number | null;
     /**
      * Supports Function Calling
      */
@@ -1771,7 +1771,7 @@ export type DiscoveredModelResponse = {
     /**
      * Input Cost Per Token
      */
-    input_cost_per_token?: number;
+    input_cost_per_token?: number | null;
     /**
      * Is New
      */
@@ -1779,7 +1779,7 @@ export type DiscoveredModelResponse = {
     /**
      * Max Output Tokens
      */
-    max_output_tokens?: number;
+    max_output_tokens?: number | null;
     /**
      * Model Name
      */
@@ -1787,7 +1787,7 @@ export type DiscoveredModelResponse = {
     /**
      * Output Cost Per Token
      */
-    output_cost_per_token?: number;
+    output_cost_per_token?: number | null;
     /**
      * Supports Function Calling
      */
@@ -1827,6 +1827,7 @@ export type EffectivePolicy = {
     approval?: ApprovalPolicy | null;
     budget?: BudgetPolicyOutput | null;
     content_safety?: ContentSafetyPolicy | null;
+    execution?: ExecutionLimitsPolicy | null;
     /**
      * Resolver Version
      */
@@ -1974,6 +1975,25 @@ export type ExecutionHistoryResponse = {
      * Total
      */
     total: number;
+};
+/**
+ * ExecutionLimitsPolicy
+ *
+ * Ceilings for the agent loop and tool execution.
+ */
+export type ExecutionLimitsPolicy = {
+    /**
+     * Max Model Turns
+     */
+    max_model_turns?: number | null;
+    /**
+     * Max Tool Calls Per Turn
+     */
+    max_tool_calls_per_turn?: number | null;
+    /**
+     * Max Tool Calls Total
+     */
+    max_tool_calls_total?: number | null;
 };
 /**
  * ExecutionMetricsResponse
@@ -3355,7 +3375,7 @@ export type ModelSpecCreate = {
     /**
      * Context Window
      */
-    context_window?: number;
+    context_window: number;
     /**
      * Default Context Strategy
      */
@@ -3369,13 +3389,25 @@ export type ModelSpecCreate = {
      */
     display_name: string;
     /**
+     * Input Cost Per Token
+     */
+    input_cost_per_token: number;
+    /**
      * Is Active
      */
     is_active?: boolean;
     /**
+     * Max Output Tokens
+     */
+    max_output_tokens?: number | null;
+    /**
      * Model Name
      */
     model_name: string;
+    /**
+     * Output Cost Per Token
+     */
+    output_cost_per_token: number;
     /**
      * Provider Spec Id
      */
@@ -3402,9 +3434,21 @@ export type ModelSpecUpdate = {
      */
     display_name?: string | null;
     /**
+     * Input Cost Per Token
+     */
+    input_cost_per_token?: number | null;
+    /**
      * Is Active
      */
     is_active?: boolean | null;
+    /**
+     * Max Output Tokens
+     */
+    max_output_tokens?: number | null;
+    /**
+     * Output Cost Per Token
+     */
+    output_cost_per_token?: number | null;
 };
 /**
  * NetworkEdge
@@ -3873,6 +3917,7 @@ export type PolicyDocument = {
     approval?: ApprovalPolicy | null;
     budget?: BudgetPolicyInput | null;
     content_safety?: ContentSafetyPolicy | null;
+    execution?: ExecutionLimitsPolicy | null;
     tokens?: TokenPolicy | null;
     tools?: ToolsPolicy | null;
 };
@@ -4831,6 +4876,83 @@ export type ResolveResponse = {
     verb: string;
 };
 /**
+ * RunExecutionConfig
+ *
+ * Caller-requested execution ceiling; governance may only tighten it.
+ */
+export type RunExecutionConfig = {
+    /**
+     * Max Model Turns
+     *
+     * Maximum LLM/model turns requested for this run.
+     */
+    max_model_turns: number;
+};
+/**
+ * SandboxListResponse
+ */
+export type SandboxListResponse = {
+    /**
+     * Items
+     */
+    items: Array<SandboxSummary>;
+    /**
+     * Total
+     */
+    total: number;
+};
+/**
+ * SandboxResources
+ */
+export type SandboxResources = {
+    /**
+     * Cpu
+     */
+    cpu: string;
+    /**
+     * Memory
+     */
+    memory: string;
+};
+/**
+ * SandboxSummary
+ */
+export type SandboxSummary = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Expires At
+     */
+    expires_at: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Isolation
+     */
+    isolation: string;
+    /**
+     * Package Install
+     */
+    package_install: string;
+    /**
+     * Provider
+     */
+    provider: string;
+    resources: SandboxResources;
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+};
+/**
  * SetupField
  *
  * A single value the user must provide before the package can run.
@@ -5291,6 +5413,7 @@ export type TaskCreate = {
      * Description
      */
     description: string;
+    execution?: RunExecutionConfig | null;
     /**
      * Parameters
      */
@@ -11373,6 +11496,19 @@ export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses = {
     200: UpdateAllResponse;
 };
 export type UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponse = UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses[keyof UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses];
+export type ListSandboxesV1SandboxesGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/sandboxes';
+};
+export type ListSandboxesV1SandboxesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: SandboxListResponse;
+};
+export type ListSandboxesV1SandboxesGetResponse = ListSandboxesV1SandboxesGetResponses[keyof ListSandboxesV1SandboxesGetResponses];
 export type ListCollectionsV1SkillCollectionsGetData = {
     body?: never;
     path?: never;

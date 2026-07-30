@@ -8,7 +8,7 @@ and that runtime governance can translate into InterceptorContext.execution_stat
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, NamedTuple, cast
 
 from agentarea_common.money import ZERO, Money, to_money
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -28,6 +28,17 @@ class RuntimePolicyContractError(PolicyValidationError):
         super().__init__(
             "effective policy is missing required runtime limits: " + ", ".join(self.missing_fields)
         )
+
+
+class RuntimePolicyContract(NamedTuple):
+    """Complete runtime limits required before an agent workflow may execute."""
+
+    run_budget_usd: Money
+    max_tokens: int
+    max_tokens_per_call: int
+    max_model_turns: int
+    max_tool_calls_per_turn: int
+    max_tool_calls_total: int
 
 
 def parse_subject(ref: str) -> tuple[str, str, str | None]:
@@ -189,23 +200,49 @@ class EffectivePolicy(PolicyDocument):
     source_policy_ids: list[str] = Field(default_factory=list)
     resolver_version: str = RESOLVER_VERSION
 
-    def require_runtime_contract(self) -> EffectivePolicy:
-        """Fail closed unless every runtime limit has an explicit policy source."""
+    def runtime_contract(self) -> RuntimePolicyContract:
+        """Return complete runtime limits or fail closed with every missing field."""
+        run_budget_usd = self.budget.run_budget_usd if self.budget is not None else None
+        max_tokens = self.tokens.max_tokens if self.tokens is not None else None
+        max_tokens_per_call = self.tokens.max_tokens_per_call if self.tokens is not None else None
+        max_model_turns = self.execution.max_model_turns if self.execution is not None else None
+        max_tool_calls_per_turn = (
+            self.execution.max_tool_calls_per_turn if self.execution is not None else None
+        )
+        max_tool_calls_total = (
+            self.execution.max_tool_calls_total if self.execution is not None else None
+        )
+
         missing: list[str] = []
-        if self.budget is None or self.budget.run_budget_usd is None:
+        if run_budget_usd is None:
             missing.append("budget.run_budget_usd")
-        if self.tokens is None or self.tokens.max_tokens is None:
+        if max_tokens is None:
             missing.append("tokens.max_tokens")
-        if self.tokens is None or self.tokens.max_tokens_per_call is None:
+        if max_tokens_per_call is None:
             missing.append("tokens.max_tokens_per_call")
-        if self.execution is None or self.execution.max_model_turns is None:
+        if max_model_turns is None:
             missing.append("execution.max_model_turns")
-        if self.execution is None or self.execution.max_tool_calls_per_turn is None:
+        if max_tool_calls_per_turn is None:
             missing.append("execution.max_tool_calls_per_turn")
-        if self.execution is None or self.execution.max_tool_calls_total is None:
+        if max_tool_calls_total is None:
             missing.append("execution.max_tool_calls_total")
         if missing:
             raise RuntimePolicyContractError(missing)
+
+        # The exhaustive checks above make these casts a type-level projection
+        # of the validated policy; they do not supply fallback values.
+        return RuntimePolicyContract(
+            run_budget_usd=cast(Money, run_budget_usd),
+            max_tokens=cast(int, max_tokens),
+            max_tokens_per_call=cast(int, max_tokens_per_call),
+            max_model_turns=cast(int, max_model_turns),
+            max_tool_calls_per_turn=cast(int, max_tool_calls_per_turn),
+            max_tool_calls_total=cast(int, max_tool_calls_total),
+        )
+
+    def require_runtime_contract(self) -> EffectivePolicy:
+        """Fail closed unless every runtime limit has an explicit policy source."""
+        self.runtime_contract()
         return self
 
     def to_execution_state(self, runtime_state: dict[str, Any] | None = None) -> dict[str, Any]:

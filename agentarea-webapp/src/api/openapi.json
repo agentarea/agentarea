@@ -1678,11 +1678,16 @@
           "monthly_spend_cap_usd": {
             "anyOf": [
               {
-                "type": "number"
-              },
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0"
               },
               {
                 "type": "null"
@@ -1693,11 +1698,16 @@
           "run_budget_usd": {
             "anyOf": [
               {
-                "type": "number"
-              },
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "gt": "0"
               },
               {
                 "type": "null"
@@ -1708,11 +1718,16 @@
           "service_budget_usd": {
             "anyOf": [
               {
-                "type": "number"
-              },
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "gt": "0"
               },
               {
                 "type": "null"
@@ -1731,6 +1746,7 @@
           "monthly_spend_cap_usd": {
             "anyOf": [
               {
+                "ge": "0",
                 "type": "string"
               },
               {
@@ -1742,6 +1758,7 @@
           "run_budget_usd": {
             "anyOf": [
               {
+                "gt": "0",
                 "type": "string"
               },
               {
@@ -1753,6 +1770,7 @@
           "service_budget_usd": {
             "anyOf": [
               {
+                "gt": "0",
                 "type": "string"
               },
               {
@@ -3089,9 +3107,15 @@
             "type": "string"
           },
           "input_cost_per_token": {
-            "default": 0.0,
-            "title": "Input Cost Per Token",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Cost Per Token"
           },
           "is_new": {
             "default": false,
@@ -3099,18 +3123,30 @@
             "type": "boolean"
           },
           "max_output_tokens": {
-            "default": 4096,
-            "title": "Max Output Tokens",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Output Tokens"
           },
           "model_name": {
             "title": "Model Name",
             "type": "string"
           },
           "output_cost_per_token": {
-            "default": 0.0,
-            "title": "Output Cost Per Token",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Cost Per Token"
           },
           "supports_function_calling": {
             "default": false,
@@ -3220,9 +3256,15 @@
             "type": "string"
           },
           "input_cost_per_token": {
-            "default": 0.0,
-            "title": "Input Cost Per Token",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Cost Per Token"
           },
           "is_new": {
             "default": false,
@@ -3230,18 +3272,30 @@
             "type": "boolean"
           },
           "max_output_tokens": {
-            "default": 4096,
-            "title": "Max Output Tokens",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Output Tokens"
           },
           "model_name": {
             "title": "Model Name",
             "type": "string"
           },
           "output_cost_per_token": {
-            "default": 0.0,
-            "title": "Output Cost Per Token",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Cost Per Token"
           },
           "supports_function_calling": {
             "default": false,
@@ -3321,6 +3375,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ContentSafetyPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionLimitsPolicy"
               },
               {
                 "type": "null"
@@ -3577,6 +3641,50 @@
           "has_next"
         ],
         "title": "ExecutionHistoryResponse",
+        "type": "object"
+      },
+      "ExecutionLimitsPolicy": {
+        "additionalProperties": false,
+        "description": "Ceilings for the agent loop and tool execution.",
+        "properties": {
+          "max_model_turns": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Model Turns"
+          },
+          "max_tool_calls_per_turn": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tool Calls Per Turn"
+          },
+          "max_tool_calls_total": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tool Calls Total"
+          }
+        },
+        "title": "ExecutionLimitsPolicy",
         "type": "object"
       },
       "ExecutionMetricsResponse": {
@@ -5916,7 +6024,7 @@
       "ModelSpecCreate": {
         "properties": {
           "context_window": {
-            "default": 4096,
+            "exclusiveMinimum": 0.0,
             "title": "Context Window",
             "type": "integer"
           },
@@ -5946,14 +6054,36 @@
             "title": "Display Name",
             "type": "string"
           },
+          "input_cost_per_token": {
+            "minimum": 0.0,
+            "title": "Input Cost Per Token",
+            "type": "number"
+          },
           "is_active": {
             "default": true,
             "title": "Is Active",
             "type": "boolean"
           },
+          "max_output_tokens": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Output Tokens"
+          },
           "model_name": {
             "title": "Model Name",
             "type": "string"
+          },
+          "output_cost_per_token": {
+            "minimum": 0.0,
+            "title": "Output Cost Per Token",
+            "type": "number"
           },
           "provider_spec_id": {
             "format": "uuid",
@@ -5964,7 +6094,10 @@
         "required": [
           "provider_spec_id",
           "model_name",
-          "display_name"
+          "display_name",
+          "context_window",
+          "input_cost_per_token",
+          "output_cost_per_token"
         ],
         "title": "ModelSpecCreate",
         "type": "object"
@@ -5974,6 +6107,7 @@
           "context_window": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -6015,6 +6149,18 @@
             ],
             "title": "Display Name"
           },
+          "input_cost_per_token": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Cost Per Token"
+          },
           "is_active": {
             "anyOf": [
               {
@@ -6025,6 +6171,30 @@
               }
             ],
             "title": "Is Active"
+          },
+          "max_output_tokens": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Output Tokens"
+          },
+          "output_cost_per_token": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Cost Per Token"
           }
         },
         "title": "ModelSpecUpdate",
@@ -6843,6 +7013,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ContentSafetyPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionLimitsPolicy"
               },
               {
                 "type": "null"
@@ -8531,6 +8711,23 @@
         "title": "ResolveResponse",
         "type": "object"
       },
+      "RunExecutionConfig": {
+        "additionalProperties": false,
+        "description": "Caller-requested execution ceiling; governance may only tighten it.",
+        "properties": {
+          "max_model_turns": {
+            "description": "Maximum LLM/model turns requested for this run.",
+            "exclusiveMinimum": 0.0,
+            "title": "Max Model Turns",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_model_turns"
+        ],
+        "title": "RunExecutionConfig",
+        "type": "object"
+      },
       "SandboxListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -9416,9 +9613,18 @@
             "title": "Description",
             "type": "string"
           },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunExecutionConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "parameters": {
             "additionalProperties": true,
-            "default": {},
             "title": "Parameters",
             "type": "object"
           },
@@ -9951,6 +10157,7 @@
           "max_tokens": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -9962,6 +10169,7 @@
           "max_tokens_per_call": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -11426,7 +11634,6 @@
                 "type": "null"
               }
             ],
-            "default": 0.0,
             "title": "Input Cost Per Token"
           },
           "is_active": {
@@ -11442,7 +11649,6 @@
                 "type": "null"
               }
             ],
-            "default": 4096,
             "title": "Max Output Tokens"
           },
           "model_name": {
@@ -11458,7 +11664,6 @@
                 "type": "null"
               }
             ],
-            "default": 0.0,
             "title": "Output Cost Per Token"
           },
           "provider_key": {
@@ -11581,7 +11786,6 @@
                 "type": "null"
               }
             ],
-            "default": 0.0,
             "title": "Input Cost Per Token"
           },
           "is_active": {
@@ -11597,7 +11801,6 @@
                 "type": "null"
               }
             ],
-            "default": 4096,
             "title": "Max Output Tokens"
           },
           "model_name": {
@@ -11613,7 +11816,6 @@
                 "type": "null"
               }
             ],
-            "default": 0.0,
             "title": "Output Cost Per Token"
           },
           "provider_spec_id": {
@@ -16046,7 +16248,7 @@
     },
     "/v1/governance/task-policy-snapshots/{task_id}": {
       "get": {
-        "description": "Read the effective governance policy for a task.\n\nThe effective policy is no longer persisted; it is served on demand by\nquerying the task's Temporal workflow, where it lives in workflow state.",
+        "description": "Read the effective governance policy persisted before workflow dispatch.",
         "operationId": "get_task_policy_snapshot_v1_governance_task_policy_snapshots__task_id__get",
         "parameters": [
           {
