@@ -2450,6 +2450,10 @@ export type InboxResponse = {
    */
   page_size: number;
   /**
+   * Status Counts
+   */
+  status_counts: Record<string, number>;
+  /**
    * Total
    */
   total: number;
