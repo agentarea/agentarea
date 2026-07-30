@@ -27,6 +27,7 @@ class _FakeControlPlane:
     def __init__(self) -> None:
         self.files: dict[tuple[str, str, str], bytes] = {}
         self.requests: list[tuple[str, str]] = []
+        self.put_payloads: list[dict] = []
 
     async def request(
         self,
@@ -41,6 +42,7 @@ class _FakeControlPlane:
             raise AssertionError(f"unexpected url: {url}")
         if method == "PUT":
             assert json is not None
+            self.put_payloads.append(json)
             key = (json["workspace_id"], json["task_id"], json["path"])
             self.files[key] = base64.b64decode(json["content_base64"])
             return _FakeResponse(200, {"path": json["path"], "size": len(self.files[key])})
@@ -72,6 +74,7 @@ def _store(client: _FakeControlPlane) -> SandboxFileStore:
         mcp_manager_url="http://mcp-manager:8000",
         workspace_id="ws",
         task_id="task",
+        package_install="allowed",
         http_client=client,
     )
 
@@ -89,6 +92,30 @@ async def test_sandbox_file_store_put_get_round_trip():
     assert data == b"print('ok')"
     assert await store.exists("ws", "src/a.py") is True
     assert await store.exists("ws", "missing.py") is False
+
+
+@pytest.mark.asyncio
+async def test_sandbox_file_store_put_carries_locked_runtime_profile():
+    client = _FakeControlPlane()
+    store = SandboxFileStore(
+        mcp_manager_url="http://mcp-manager:8000",
+        workspace_id="ws",
+        task_id="task",
+        package_install="locked",
+        http_client=client,
+    )
+
+    await store.put("ws", "src/a.py", b"print('ok')", "text/plain")
+
+    assert client.put_payloads == [
+        {
+            "workspace_id": "ws",
+            "task_id": "task",
+            "package_install": "locked",
+            "path": "src/a.py",
+            "content_base64": "cHJpbnQoJ29rJyk=",
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -146,6 +173,7 @@ async def test_put_writes_through_to_durable_task_workspace():
         mcp_manager_url="http://mcp-manager:8000",
         workspace_id="ws",
         task_id="task",
+        package_install="allowed",
         http_client=client,
         durable=durable,
     )
@@ -164,6 +192,7 @@ async def test_put_fails_loudly_when_durable_write_fails():
         mcp_manager_url="http://mcp-manager:8000",
         workspace_id="ws",
         task_id="task",
+        package_install="allowed",
         http_client=_FakeControlPlane(),
         durable=_FakeDurable(fail=True),
     )
@@ -185,6 +214,7 @@ async def test_put_falls_back_to_durable_on_503():
         mcp_manager_url="http://mcp-manager:8000",
         workspace_id="ws",
         task_id="task",
+        package_install="allowed",
         http_client=_Unavailable503(),
         durable=durable,
     )
@@ -203,6 +233,7 @@ async def test_get_falls_back_to_durable_on_503():
         mcp_manager_url="http://mcp-manager:8000",
         workspace_id="ws",
         task_id="task",
+        package_install="allowed",
         http_client=_Unavailable503(),
         durable=_DurableWithGet(),
     )
@@ -225,6 +256,7 @@ async def test_get_falls_back_to_durable_on_404_sandbox_miss():
         mcp_manager_url="http://mcp-manager:8000",
         workspace_id="ws",
         task_id="task",
+        package_install="allowed",
         http_client=_FakeControlPlane(),  # returns 404 for the not-yet-copied-in path
         durable=_DurableWithGet(),
     )
@@ -242,6 +274,7 @@ async def test_get_404_with_durable_miss_still_raises_file_not_found():
         mcp_manager_url="http://mcp-manager:8000",
         workspace_id="ws",
         task_id="task",
+        package_install="allowed",
         http_client=_FakeControlPlane(),
         durable=_DurableMiss(),
     )
@@ -251,6 +284,16 @@ async def test_get_404_with_durable_miss_still_raises_file_not_found():
 
 def test_sandbox_file_store_requires_configuration():
     with pytest.raises(ValueError):
-        SandboxFileStore(mcp_manager_url="", workspace_id="ws", task_id="task")
+        SandboxFileStore(
+            mcp_manager_url="",
+            workspace_id="ws",
+            task_id="task",
+            package_install="allowed",
+        )
     with pytest.raises(ValueError):
-        SandboxFileStore(mcp_manager_url="http://x", workspace_id="ws", task_id="")
+        SandboxFileStore(
+            mcp_manager_url="http://x",
+            workspace_id="ws",
+            task_id="",
+            package_install="allowed",
+        )

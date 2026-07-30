@@ -834,6 +834,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                                 mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
                                 workspace_id=str(request.workspace_id),
                                 task_id=str(request.task_id) if request.task_id else "",
+                                package_install=_effective_runtime_profile(
+                                    request.metadata, request.tools
+                                ),
                                 # Write-through so saved files reach the durable,
                                 # user-visible task workspace the /files API serves.
                                 durable=WorkspaceRepository(
@@ -871,6 +874,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                                 mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
                                 workspace_id=str(request.workspace_id),
                                 task_id=str(request.task_id) if request.task_id else "",
+                                package_install=_effective_runtime_profile(
+                                    request.metadata, request.tools
+                                ),
                                 durable=WorkspaceRepository(
                                     recorder=DbArtifactEventRecorder(),
                                     actor=_agent_artifact_actor(request, user_context),
