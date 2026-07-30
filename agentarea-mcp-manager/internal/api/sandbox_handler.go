@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/features"
+	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 	"github.com/gin-gonic/gin"
 )
 
@@ -28,6 +29,20 @@ func (h *Handler) deleteSandboxTask(c *gin.Context) {
 	taskID := c.Param("id")
 	if taskID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "message": "task id is required"})
+		return
+	}
+
+	if retirer, ok := h.sandboxRuntime.(sandboxruntime.TaskRetirer); ok {
+		idleTTL := sandboxTaskIdleTTL()
+		if c.Query("force") == "true" {
+			idleTTL = 0
+		}
+		if err := retirer.RetireSandboxTask(c.Request.Context(), taskID, idleTTL); err != nil {
+			h.logger.Error("sandbox task retire failed", "task_id", taskID, "idle_ttl", idleTTL, "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "cleanup_failed", "message": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
 		return
 	}
 

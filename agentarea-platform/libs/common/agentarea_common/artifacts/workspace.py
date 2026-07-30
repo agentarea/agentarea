@@ -1330,7 +1330,9 @@ class S3WorkspaceRepository:
         output: list[WorkspaceObject] = []
         for path in sorted(entries):
             entry = entries[path]
-            if entry.deleted or (clean_prefix and not path.startswith(clean_prefix)):
+            if entry.deleted or (
+                clean_prefix and path != clean_prefix and not path.startswith(f"{clean_prefix}/")
+            ):
                 continue
             output.append(
                 WorkspaceObject(

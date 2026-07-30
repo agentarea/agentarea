@@ -7,7 +7,11 @@ cloud.google.com/go/compute/metadata v0.9.0 h1:pDUj4QMoPejqq20dK0Pg2N4yG9zIkYGdB
 cloud.google.com/go/compute/metadata v0.9.0/go.mod h1:E0bWwX5wTnLPedCKqk3pJmVgCBSM6qQI1yTBdEb3C10=
 cloud.google.com/go/iam v1.1.11 h1:0mQ8UKSfdHLut6pH9FM3bI55KWR46ketn0PuXleDyxw=
 cloud.google.com/go/iam v1.1.11/go.mod h1:biXoiLWYIKntto2joP+62sd9uW5EpkZmKIvfNcTWlnQ=
+connectrpc.com/connect v1.18.1 h1:PAg7CjSAGvscaf6YZKUefjoih5Z/qYkyaTrBW8xvYPw=
+connectrpc.com/connect v1.18.1/go.mod h1:0292hj1rnx8oFrStN7cB4jjVBeqs+Yx5yDIC2prWDO8=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
+github.com/alibaba/OpenSandbox/sdks/sandbox/go v1.0.5 h1:7mZNkBh4VaI+i4VOTJIknLCBkbGizTkdHYqgcMqeDBM=
+github.com/alibaba/OpenSandbox/sdks/sandbox/go v1.0.5/go.mod h1:w0nIMCTL1L3oSS67ABFOdYxrezYQZhk01UtmKSi2UhA=
 github.com/alicebob/miniredis/v2 v2.38.0 h1:nZAzCR+Lj+Vxk4ZXzm2NuKq2O33RXj1XxJ2e2uP9jiw=
 github.com/alicebob/miniredis/v2 v2.38.0/go.mod h1:TcL7YfarKPGDAthEtl5NBeHZfeUQj6OXMm/+iu5cLMM=
 github.com/aws/aws-sdk-go-v2 v1.43.0 h1:fharf/WhbRAVZ1du0QL7roNFxZ6T/sWr+4Ni617bwSI=

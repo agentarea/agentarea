@@ -38,6 +38,7 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.application }}
                   key: sandbox-activation-secret
+            {{- include "agentarea.sandboxRuntime.envs" . | nindent 12 }}
             - name: SANDBOX_EXECUTION_REQUEST_STREAM
               value: {{ default "agentarea.sandbox.execution.requests" .Values.mcpSandboxRunner.requestStream | quote }}
             - name: SANDBOX_EXECUTION_EVENT_STREAM

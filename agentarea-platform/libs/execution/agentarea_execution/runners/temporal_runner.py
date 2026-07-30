@@ -45,17 +45,17 @@ class TemporalAgentRunner(BaseAgentRunner):
     def __init__(
         self,
         activities_interface,
+        config: RunnerConfig,
         event_manager=None,
         budget_tracker=None,
-        config: RunnerConfig | None = None,
     ):
         """Initialize the Temporal runner.
 
         Args:
             activities_interface: Temporal activities interface
+            config: Explicit execution limits for this runner
             event_manager: Event manager for tracking (optional)
             budget_tracker: Budget tracker (optional)
-            config: Runner configuration (optional)
         """
         super().__init__(config)
         self.activities = activities_interface
@@ -171,13 +171,20 @@ class TemporalAgentRunner(BaseAgentRunner):
             raise ValueError(
                 "Missing user_id in agent_config.user_context_data for workflow execution"
             )
+        model_id = state.agent_config.get("model_id")
+        if not model_id:
+            raise ValueError("Missing model_id in agent_config for workflow execution")
+        effective_policy = state.agent_config.get("effective_policy")
+        if not effective_policy:
+            raise ValueError("Missing effective_policy in agent_config for workflow execution")
 
         llm_request = LLMCallRequest(
             messages=messages_dict,
-            model_id=state.agent_config.get("model_id") or "gpt-4",  # Provide default model
+            model_id=model_id,
             tools=state.available_tools,
             workspace_id=workspace_id,
             user_context_data=user_context_data,
+            effective_policy=effective_policy,
         )
 
         # Call LLM via activity using Pydantic model
@@ -387,10 +394,15 @@ You have a maximum of {goal.max_iterations} iterations to complete this task.
 Work step by step towards achieving the goal. Use available tools as needed."""
 
     def _extract_usage_info(self, response: dict[str, Any]) -> dict[str, Any]:
-        """Extract usage information from LLM response."""
-        # This would extract cost and usage info from the response
-        # Implementation depends on the response format
-        return {"cost": 0.0, "usage": {}}
+        """Extract authoritative usage information from an LLM response."""
+        data = response
+        usage = data.get("usage") if isinstance(data, dict) else None
+        cost = data.get("cost") if isinstance(data, dict) else None
+        if not isinstance(usage, dict) or usage.get("total_tokens", 0) <= 0:
+            raise RuntimeError("LLM usage accounting unavailable; token policy cannot be enforced")
+        if cost is None:
+            raise RuntimeError("LLM cost accounting unavailable; run budget cannot be enforced")
+        return {"cost": cost, "usage": usage}
 
     def _extract_tool_calls(self, message: Message) -> list[dict[str, Any]]:
         """Extract tool calls from assistant message."""

@@ -6,7 +6,7 @@ from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.domain.models import ModelSpec
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(prefix="/model-specs", tags=["model-specs"])
@@ -18,7 +18,10 @@ class ModelSpecCreate(BaseModel):
     model_name: str
     display_name: str
     description: str | None = None
-    context_window: int = 4096
+    context_window: int = Field(gt=0)
+    max_output_tokens: int | None = Field(default=None, gt=0)
+    input_cost_per_token: float = Field(ge=0)
+    output_cost_per_token: float = Field(ge=0)
     default_context_strategy: str | None = None  # Auto-inferred from model_name if None
     is_active: bool = True
 
@@ -26,7 +29,10 @@ class ModelSpecCreate(BaseModel):
 class ModelSpecUpdate(BaseModel):
     display_name: str | None = None
     description: str | None = None
-    context_window: int | None = None
+    context_window: int | None = Field(default=None, gt=0)
+    max_output_tokens: int | None = Field(default=None, gt=0)
+    input_cost_per_token: float | None = Field(default=None, ge=0)
+    output_cost_per_token: float | None = Field(default=None, ge=0)
     default_context_strategy: str | None = None
     is_active: bool | None = None
 
@@ -38,9 +44,9 @@ class ModelSpecResponse(BaseModel):
     display_name: str
     description: str | None
     context_window: int
-    max_output_tokens: int | None = 4096
-    input_cost_per_token: float | None = 0.0
-    output_cost_per_token: float | None = 0.0
+    max_output_tokens: int | None = None
+    input_cost_per_token: float | None = None
+    output_cost_per_token: float | None = None
     supports_function_calling: bool | None = False
     supports_vision: bool | None = False
     supports_reasoning: bool | None = False
@@ -162,6 +168,9 @@ async def create_model_spec(
             display_name=data.display_name,
             description=data.description,
             context_window=data.context_window,
+            max_output_tokens=data.max_output_tokens,
+            input_cost_per_token=data.input_cost_per_token,
+            output_cost_per_token=data.output_cost_per_token,
             default_context_strategy=data.default_context_strategy,
             is_active=data.is_active,
         )
@@ -225,6 +234,9 @@ async def upsert_model_spec(
         display_name=data.display_name,
         description=data.description,
         context_window=data.context_window,
+        max_output_tokens=data.max_output_tokens,
+        input_cost_per_token=data.input_cost_per_token,
+        output_cost_per_token=data.output_cost_per_token,
         default_context_strategy=data.default_context_strategy,
         is_active=data.is_active,
     )

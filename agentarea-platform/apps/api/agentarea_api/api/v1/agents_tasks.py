@@ -31,7 +31,7 @@ from agentarea_governance.domain.policies import PolicyDocument, PolicyValidatio
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
-from agentarea_tasks.schemas.dto import RunCreate
+from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -79,7 +79,8 @@ global_tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 class TaskCreate(BaseModel):
     description: str
-    parameters: dict[str, Any] = {}
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    execution: RunExecutionConfig | None = None
     requires_human_approval: bool | None = False
     project_id: str | None = None
     task_policy: PolicyDocument | None = None
@@ -614,6 +615,7 @@ async def create_task_for_agent_with_stream(
                 agent_id=agent_id,
                 description=data.description,
                 parameters=parameters,
+                execution=data.execution,
                 requires_human_approval=data.requires_human_approval or False,
                 project_id=data.project_id,
                 task_policy=data.task_policy,
@@ -670,6 +672,7 @@ async def create_task_for_agent_with_stream(
                     agent_id=agent_id,
                     description=data.description,
                     parameters=data.parameters,
+                    execution=data.execution,
                     requires_human_approval=data.requires_human_approval or False,
                     project_id=data.project_id,
                     task_policy=data.task_policy,
@@ -797,6 +800,7 @@ async def create_task_for_agent_sync(
                 agent_id=agent_id,
                 description=data.description,
                 parameters={**data.parameters, "attachments": attachment_descriptors},
+                execution=data.execution,
                 requires_human_approval=data.requires_human_approval or False,
                 project_id=data.project_id,
                 task_policy=data.task_policy,
@@ -817,6 +821,7 @@ async def create_task_for_agent_sync(
                 agent_id=agent_id,
                 description=data.description,
                 parameters=data.parameters,
+                execution=data.execution,
                 requires_human_approval=data.requires_human_approval or False,
                 project_id=data.project_id,
                 task_policy=data.task_policy,
@@ -1487,16 +1492,24 @@ async def _resolve_model_info(
     provider_config = instance.provider_config
     model_spec = instance.model_spec
     provider_spec = provider_config.provider_spec if provider_config else None
+    if not provider_config or not provider_spec or not model_spec:
+        raise HTTPException(
+            status_code=409,
+            detail="Model instance has incomplete provider or model configuration",
+        )
 
     return {
         "model_id": str(instance.id),
-        "provider_type": provider_spec.provider_type if provider_spec else "",
-        "model_name": model_spec.model_name if model_spec else "",
-        "api_key_secret": provider_config.api_key if provider_config else None,
-        "endpoint_url": provider_config.endpoint_url if provider_config else None,
-        "context_window": model_spec.context_window if model_spec else 128000,
-        "display_name": model_spec.display_name if model_spec else None,
-        "provider_display_name": provider_spec.name if provider_spec else None,
+        "provider_type": provider_spec.provider_type,
+        "model_name": model_spec.model_name,
+        "api_key_secret": provider_config.api_key,
+        "endpoint_url": provider_config.endpoint_url,
+        "context_window": model_spec.context_window,
+        "max_output_tokens": model_spec.max_output_tokens,
+        "input_cost_per_token": model_spec.input_cost_per_token,
+        "output_cost_per_token": model_spec.output_cost_per_token,
+        "display_name": model_spec.display_name,
+        "provider_display_name": provider_spec.name,
         "resolved_at": datetime.now(UTC).isoformat(),
     }
 

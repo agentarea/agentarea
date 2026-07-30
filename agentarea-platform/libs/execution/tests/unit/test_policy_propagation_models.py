@@ -3,6 +3,7 @@
 import inspect
 from uuid import uuid4
 
+from agentarea_common.workflow.temporal_executor import TemporalWorkflowExecutor
 from agentarea_execution.models import (
     AgentExecutionRequest,
     LLMCallRequest,
@@ -15,13 +16,17 @@ from agentarea_execution.workflows.models import (
     AgentGoal,
     ContinueAsNewState,
 )
-from agentarea_common.workflow.temporal_executor import TemporalWorkflowExecutor
 
 
 def _effective_policy() -> dict:
     return {
         "budget": {"run_budget_usd": "1.25"},
-        "tokens": {"max_tokens": 1000},
+        "tokens": {"max_tokens": 1000, "max_tokens_per_call": 250},
+        "execution": {
+            "max_model_turns": 7,
+            "max_tool_calls_per_turn": 4,
+            "max_tool_calls_total": 25,
+        },
         "tools": {"allowed": ["github_*"], "denied": ["delete_*"]},
     }
 
@@ -105,23 +110,37 @@ def test_workflow_initialization_stores_effective_policy_from_request():
 def test_temporal_executor_passes_effective_policy_to_agent_execution_request():
     source = inspect.getsource(TemporalWorkflowExecutor.start_workflow)
 
-    assert 'effective_policy=args.get("effective_policy")' in source
+    assert 'effective_policy=args["effective_policy"]' in source
 
 
-def test_workflow_goal_uses_request_max_reasoning_iterations_by_default():
+def test_workflow_goal_uses_resolved_policy_and_ignores_parameter_override():
     request = AgentExecutionRequest(
         task_id=uuid4(),
         agent_id=uuid4(),
         user_id="user-1",
         workspace_id="workspace-1",
         task_query="do work",
-        max_reasoning_iterations=7,
+        task_parameters={"max_iterations": 999},
+        effective_policy=_effective_policy(),
     )
 
     workflow_obj = AgentExecutionWorkflow()
     goal = workflow_obj._build_goal_from_request(request)
 
     assert goal.max_iterations == 7
+
+
+def test_agent_execution_request_has_no_iteration_default():
+    request = AgentExecutionRequest(
+        task_id=uuid4(),
+        agent_id=uuid4(),
+        user_id="user-1",
+        workspace_id="workspace-1",
+        task_query="do work",
+        effective_policy=_effective_policy(),
+    )
+
+    assert request.max_reasoning_iterations is None
 
 
 def test_workflow_iteration_limit_allows_configured_final_iteration():

@@ -21,7 +21,7 @@ def _workflow() -> AgentExecutionWorkflow:
     instance.event_manager = EventManager(
         task_id="task-1", agent_id="agent-1", execution_id="workflow-1"
     )
-    instance.budget_tracker = BudgetTracker(None)
+    instance.budget_tracker = BudgetTracker(1)
     return instance
 
 
@@ -30,9 +30,7 @@ def _completion(call_id: str = "completion-1") -> ToolCall:
         id=call_id,
         function={
             "name": "completion",
-            "arguments": json.dumps(
-                {"result": "done", "artifact_paths": ["reports/q3.xlsx"]}
-            ),
+            "arguments": json.dumps({"result": "done", "artifact_paths": ["reports/q3.xlsx"]}),
         },
     )
 
@@ -44,12 +42,15 @@ async def test_completion_updates_task_only_after_validation_passes() -> None:
         return_value=ArtifactValidationResult(state="passed", generation=4)
     )
 
-    with patch(
-        "agentarea_execution.workflows.agent_execution_workflow.workflow.execute_activity",
-        new=AsyncMock(),
-    ) as execute_activity, patch(
-        "agentarea_execution.workflows.agent_execution_workflow.workflow.logger",
-        new=Mock(),
+    with (
+        patch(
+            "agentarea_execution.workflows.agent_execution_workflow.workflow.execute_activity",
+            new=AsyncMock(),
+        ) as execute_activity,
+        patch(
+            "agentarea_execution.workflows.agent_execution_workflow.workflow.logger",
+            new=Mock(),
+        ),
     ):
         await instance._handle_task_completion(_completion())
 
@@ -70,9 +71,7 @@ async def test_failed_validation_returns_tool_feedback_for_two_repairs() -> None
         Message(
             role="assistant",
             content="",
-            tool_calls=[
-                {"id": completion.id, "type": "function", "function": completion.function}
-            ],
+            tool_calls=[{"id": completion.id, "type": "function", "function": completion.function}],
         )
     )
     failure = ArtifactValidationResult(
@@ -136,12 +135,15 @@ async def test_validation_audit_events_precede_any_terminal_event() -> None:
     instance = _workflow()
     instance._publish_events_immediately = AsyncMock()
 
-    with patch(
-        "agentarea_execution.workflows.agent_execution_workflow.workflow.execute_activity",
-        new=AsyncMock(return_value=ArtifactValidationResult(state="passed", generation=9)),
-    ), patch(
-        "agentarea_execution.workflows.helpers.workflow.logger",
-        new=Mock(),
+    with (
+        patch(
+            "agentarea_execution.workflows.agent_execution_workflow.workflow.execute_activity",
+            new=AsyncMock(return_value=ArtifactValidationResult(state="passed", generation=9)),
+        ),
+        patch(
+            "agentarea_execution.workflows.helpers.workflow.logger",
+            new=Mock(),
+        ),
     ):
         result = await instance._validate_completion_artifacts(["reports/q3.xlsx"])
 

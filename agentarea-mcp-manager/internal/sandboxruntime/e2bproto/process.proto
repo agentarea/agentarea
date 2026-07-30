@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: Apache-2.0
+// Minimal compatible subset of E2B envd's process protocol:
+// https://github.com/e2b-dev/E2B
+syntax = "proto3";
+
+package process;
+
+option go_package = "github.com/agentarea/mcp-manager/internal/sandboxruntime/e2bproto;process";
+
+service Process {
+  rpc Start(StartRequest) returns (stream StartResponse);
+}
+
+message ProcessConfig {
+  string cmd = 1;
+  repeated string args = 2;
+  map<string, string> envs = 3;
+  optional string cwd = 4;
+}
+
+message StartRequest {
+  ProcessConfig process = 1;
+  optional bool stdin = 4;
+}
+
+message ProcessEvent {
+  oneof event {
+    StartEvent start = 1;
+    DataEvent data = 2;
+    EndEvent end = 3;
+    KeepAlive keepalive = 4;
+  }
+
+  message StartEvent {
+    uint32 pid = 1;
+  }
+
+  message DataEvent {
+    oneof output {
+      bytes stdout = 1;
+      bytes stderr = 2;
+      bytes pty = 3;
+    }
+  }
+
+  message EndEvent {
+    sint32 exit_code = 1;
+    bool exited = 2;
+    string status = 3;
+    optional string error = 4;
+  }
+
+  message KeepAlive {}
+}
+
+message StartResponse {
+  ProcessEvent event = 1;
+}

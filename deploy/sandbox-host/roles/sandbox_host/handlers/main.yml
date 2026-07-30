@@ -23,6 +23,21 @@
     state: restarted
   when: sandbox_executor_enabled | bool
 
+- name: Restart opensandbox-input-firewall
+  ansible.builtin.systemd:
+    name: opensandbox-input-firewall
+    state: restarted
+  when: not ansible_check_mode
+
+- name: Restart opensandbox
+  ansible.builtin.systemd:
+    name: opensandbox
+    state: restarted
+    daemon_reload: true
+  when:
+    - opensandbox_enabled | bool
+    - not ansible_check_mode
+
 - name: Restart k3s
   ansible.builtin.systemd:
     name: k3s

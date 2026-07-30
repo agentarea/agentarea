@@ -6,8 +6,10 @@ from uuid import uuid4
 import pytest
 from agentarea_governance.domain.policies import (
     BudgetPolicy,
+    ExecutionLimitsPolicy,
     PolicyDocument,
     PolicyValidationError,
+    TokenPolicy,
 )
 from agentarea_governance.domain.rules import (
     PolicyEffect,
@@ -76,6 +78,18 @@ def _policy_repo_with_cap(cap):
 
     policy_repo.list_rules.side_effect = list_rules
     return policy_repo
+
+
+def _runtime_task_policy() -> PolicyDocument:
+    return PolicyDocument(
+        budget=BudgetPolicy(run_budget_usd="50.00"),
+        tokens=TokenPolicy(max_tokens=20_000_000, max_tokens_per_call=100_000),
+        execution=ExecutionLimitsPolicy(
+            max_model_turns=100,
+            max_tool_calls_per_turn=10,
+            max_tool_calls_total=1000,
+        ),
+    )
 
 
 @pytest.fixture
@@ -178,11 +192,10 @@ class TestCreationEntryPointsInvokeBudgetCap:
 
         agent_id = uuid4()
 
-        with patch.object(
-            service, "_enforce_budget_cap", new_callable=AsyncMock
-        ) as mock_enforce, patch.object(
-            service, "create_task", new_callable=AsyncMock
-        ) as mock_create:
+        with (
+            patch.object(service, "_enforce_budget_cap", new_callable=AsyncMock) as mock_enforce,
+            patch.object(service, "create_task", new_callable=AsyncMock) as mock_create,
+        ):
             mock_create.return_value = MagicMock()
             await service.create_task_with_policy(
                 agent_id=agent_id,
@@ -191,6 +204,7 @@ class TestCreationEntryPointsInvokeBudgetCap:
                 user_id="user-123",
                 title="Test task",
                 query="do something",
+                task_policy=_runtime_task_policy(),
             )
 
         mock_enforce.assert_awaited_once()
@@ -208,14 +222,13 @@ class TestCreationEntryPointsInvokeBudgetCap:
         service.agent_repository = AsyncMock()
         service.agent_repository.get.return_value = mock_agent
 
-        with patch.object(
-            service, "_enforce_budget_cap", new_callable=AsyncMock
-        ) as mock_enforce, patch.object(
-            service, "create_task", new_callable=AsyncMock
-        ) as mock_create, patch.object(
-            service, "_try_route_to_active_workflow", new_callable=AsyncMock
-        ) as mock_route, patch.object(
-            service.task_manager, "submit_task", new_callable=AsyncMock
+        with (
+            patch.object(service, "_enforce_budget_cap", new_callable=AsyncMock) as mock_enforce,
+            patch.object(service, "create_task", new_callable=AsyncMock) as mock_create,
+            patch.object(
+                service, "_try_route_to_active_workflow", new_callable=AsyncMock
+            ) as mock_route,
+            patch.object(service.task_manager, "submit_task", new_callable=AsyncMock),
         ):
             mock_created = MagicMock()
             mock_created.id = uuid4()
@@ -228,6 +241,7 @@ class TestCreationEntryPointsInvokeBudgetCap:
                 description="run a workflow",
                 workspace_id=workspace_id,
                 user_id="user-123",
+                task_policy=_runtime_task_policy(),
             )
 
         mock_enforce.assert_awaited_once()
@@ -258,13 +272,12 @@ class TestCreationEntryPointsInvokeBudgetCap:
                 agent_id=agent_id,
                 description="blocked task",
                 workspace_id=workspace_id,
+                task_policy=_runtime_task_policy(),
             )
 
         service.agent_repository.get.assert_not_called()
 
-    async def test_loosening_task_policy_blocks_workflow_start(
-        self, workspace_id, mock_task_repo
-    ):
+    async def test_loosening_task_policy_blocks_workflow_start(self, workspace_id, mock_task_repo):
         policy_repo = _policy_repo_with_cap("100.00")
         service = _make_service(
             governance_policy_repository=policy_repo,
@@ -273,20 +286,19 @@ class TestCreationEntryPointsInvokeBudgetCap:
 
         agent_id = uuid4()
 
-        with patch.object(
-            service, "create_task", new_callable=AsyncMock
-        ) as mock_create, patch.object(
-            service.task_manager, "submit_task", new_callable=AsyncMock
-        ) as mock_submit:
+        with (
+            patch.object(service, "create_task", new_callable=AsyncMock) as mock_create,
+            patch.object(
+                service.task_manager, "submit_task", new_callable=AsyncMock
+            ) as mock_submit,
+        ):
             with pytest.raises(PolicyValidationError):
                 await service.create_and_execute_task_with_workflow(
                     agent_id=agent_id,
                     description="run a workflow",
                     workspace_id=workspace_id,
                     user_id="user-123",
-                    task_policy=PolicyDocument(
-                        budget=BudgetPolicy(monthly_spend_cap_usd="200.00")
-                    ),
+                    task_policy=PolicyDocument(budget=BudgetPolicy(monthly_spend_cap_usd="200.00")),
                 )
 
         mock_create.assert_not_awaited()

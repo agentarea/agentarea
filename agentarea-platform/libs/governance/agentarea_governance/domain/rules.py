@@ -21,6 +21,7 @@ from .policies import (
     ApprovalPolicy,
     BudgetPolicy,
     ContentSafetyPolicy,
+    ExecutionLimitsPolicy,
     PolicyDocument,
     TokenPolicy,
     ToolsPolicy,
@@ -81,6 +82,7 @@ _TARGET_KINDS = frozenset(
         "spend",
         "service",
         "tokens",
+        "execution",
         "content",
         "all",
     }
@@ -128,6 +130,7 @@ class _DocumentAccumulator:
     def __init__(self) -> None:
         self.budget: dict[str, Any] = {}
         self.tokens: dict[str, Any] = {}
+        self.execution: dict[str, Any] = {}
         self.tools_allowed: list[str] = []
         self.tools_denied: list[str] = []
         self.approval_required: bool = False
@@ -139,6 +142,7 @@ class _DocumentAccumulator:
     def to_document(self) -> PolicyDocument:
         budget = BudgetPolicy(**self.budget) if self.budget else None
         tokens = TokenPolicy(**self.tokens) if self.tokens else None
+        execution = ExecutionLimitsPolicy(**self.execution) if self.execution else None
 
         tools: ToolsPolicy | None = None
         if self.tools_allowed or self.tools_denied:
@@ -168,6 +172,7 @@ class _DocumentAccumulator:
         return PolicyDocument(
             budget=budget,
             tokens=tokens,
+            execution=execution,
             tools=tools,
             approval=approval,
             content_safety=content_safety,
@@ -276,6 +281,16 @@ def _apply_cap(
             acc.tokens["max_tokens"] = params["max_tokens"]
         if "max_tokens_per_call" in params:
             acc.tokens["max_tokens_per_call"] = params["max_tokens_per_call"]
+        return
+
+    if kind == "execution":
+        for field in (
+            "max_model_turns",
+            "max_tool_calls_per_turn",
+            "max_tool_calls_total",
+        ):
+            if field in params:
+                acc.execution[field] = params[field]
         return
 
     logger.debug("skipping cap rule %s: unsupported cap target %r", rule.id, rule.target)

@@ -20,6 +20,17 @@ from agentarea_governance.domain.policies import PolicyDocument
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class RunExecutionConfig(BaseModel):
+    """Caller-requested execution ceiling; governance may only tighten it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_model_turns: int = Field(
+        gt=0,
+        description="Maximum LLM/model turns requested for this run.",
+    )
+
+
 class RunCreate(BaseModel):
     """Payload for starting a new agent run.
 
@@ -47,6 +58,13 @@ class RunCreate(BaseModel):
             "``channel_origin`` (routes follow-ups to an existing workflow), "
             "``model_override`` (per-run model id), and any agent-specific "
             "context the workflow should see."
+        ),
+    )
+    execution: RunExecutionConfig | None = Field(
+        default=None,
+        description=(
+            "Typed execution request. The resolved value is capped by governance "
+            "and persisted in the task governance snapshot."
         ),
     )
     requires_human_approval: bool = Field(

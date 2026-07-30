@@ -26,6 +26,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
 	"github.com/agentarea/mcp-manager/internal/sandboxplacement"
 	"github.com/agentarea/mcp-manager/internal/sandboxrunner"
+	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 	"github.com/agentarea/mcp-manager/internal/secrets"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
@@ -197,9 +198,34 @@ func main() {
 		}
 	}()
 
+	// The MCP backend and sandbox data plane are independent. A built-in
+	// sandbox provider needs the backend runtime; external providers do not.
+	legacySandboxRuntime, _ := backend.(sandboxruntime.Runtime)
+	sandboxStore, err := sandboxcontrol.NewRedisStore(
+		cfg.Redis.URL,
+		os.Getenv("SANDBOX_CONTROL_REDIS_PREFIX"),
+		24*time.Hour,
+	)
+	if err != nil {
+		logger.Error("Failed to initialize sandbox provider state", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer sandboxStore.Close()
+	sandboxRuntime, sandboxProviderName, err := sandboxruntime.NewFromEnv(
+		ctx,
+		legacySandboxRuntime,
+		sandboxStore.RedisClient(),
+		envType,
+	)
+	if err != nil {
+		logger.Error("Failed to configure sandbox runtime", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	logger.Info("Sandbox runtime configured", slog.String("provider", sandboxProviderName))
+
 	// Setup HTTP router
 	router := setupRouter(cfg, logger)
-	handler := api.NewHandler(backend, containerManager, logger, version)
+	handler := api.NewHandler(backend, containerManager, logger, version, sandboxRuntime)
 	handler.SetupRoutes(router)
 
 	if features.IsEnabled(features.WarmPool) {
@@ -214,7 +240,7 @@ func main() {
 	// works without a standalone runner — used by docker-compose. Off by default
 	// so Kubernetes, which runs a dedicated agentarea-sandbox-runner, keeps all
 	// execution work out of the (more privileged) control plane.
-	startEmbeddedSandboxRunner(ctx, cfg, backend, logger)
+	startEmbeddedSandboxRunner(ctx, cfg, sandboxRuntime, sandboxProviderName, logger)
 
 	// Reclaim MCP instances nobody is calling. Lazy provisioning starts them on
 	// demand; without this half they are never stopped again. It runs against
@@ -392,15 +418,9 @@ func startSandboxTaskGC(ctx context.Context, logger *slog.Logger, client *warmpo
 // standalone sandbox-runner. Opt-in via SANDBOX_EMBEDDED_RUNNER=true; off by
 // default so Kubernetes (which runs a dedicated agentarea-sandbox-runner) keeps
 // execution work out of the more-privileged control plane.
-func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, backend backends.Backend, logger *slog.Logger) {
+func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, runtime sandboxruntime.Runtime, providerName string, logger *slog.Logger) {
 	if enabled, _ := strconv.ParseBool(os.Getenv("SANDBOX_EMBEDDED_RUNNER")); !enabled {
 		logger.Info("Embedded sandbox runner disabled (set SANDBOX_EMBEDDED_RUNNER=true to enable)")
-		return
-	}
-
-	executor, ok := backend.(sandboxrunner.SandboxExecutor)
-	if !ok {
-		logger.Warn("Backend does not support sandbox execution; embedded runner not started")
 		return
 	}
 
@@ -410,12 +430,8 @@ func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, backend
 		return
 	}
 
-	providerName := os.Getenv("SANDBOX_PROVIDER_NAME")
-	if providerName == "" {
-		providerName = "docker"
-	}
 	placer, err := sandboxplacement.NewRegistry(sandboxplacement.Target{
-		Executor: executor,
+		Executor: runtime,
 		Capabilities: sandboxplacement.Capabilities{
 			Name:   providerName,
 			Region: os.Getenv("SANDBOX_REGION"),

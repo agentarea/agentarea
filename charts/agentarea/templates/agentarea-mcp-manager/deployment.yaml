@@ -49,6 +49,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "agentarea.sandboxCleanupSecretName" . }}
                   key: token
+            - name: SANDBOX_INSPECTION_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentarea.sandboxInspectionSecretName" . }}
+                  key: token
+            {{- include "agentarea.sandboxRuntime.envs" . | nindent 12 }}
             {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
             {{- $ip := .Values.mcpManager.instancePod }}
             {{- if and $ip (or $ip.labels $ip.annotations $ip.nodeSelector $ip.tolerations $ip.affinity $ip.imagePullSecrets $ip.priorityClassName) }}

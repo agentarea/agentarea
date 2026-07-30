@@ -96,6 +96,77 @@ Supported runtime implementations can include:
 Live process memory is not portable across runtimes. The portable unit is a
 workspace snapshot, artifact manifest, and session metadata.
 
+## Implemented Provider Boundary
+
+`mcp-manager` now selects one sandbox data plane per regional deployment with
+`SANDBOX_PROVIDER`. The Python worker still calls the same manager endpoints and
+does not send a provider name:
+
+- `kubernetes`, `docker`, or `agentarea` use the built-in AgentArea runtime;
+- `e2b` uses an E2B-compatible lifecycle/exec/files adapter;
+- `cube` uses the same E2B-compatible adapter with a separate configuration
+  namespace;
+- `opensandbox` uses the official OpenSandbox Go SDK.
+
+The manager stores the task-to-provider-session binding in Redis. File staging
+and the later shell execution therefore use the same sandbox even when the HTTP
+manager and asynchronous runner are separate processes. Every access renews the
+active-task lease (`sandboxRuntime.leaseTTL`), and an execution keeps renewing it
+while a command is running.
+Provider expiration is recreated on the next create-capable operation. A file
+read never creates an empty replacement sandbox.
+
+For E2B-compatible providers that Redis record includes short-lived sandbox
+access tokens. Production Redis is therefore part of the data-plane trust
+boundary and must use the deployment's authenticated/encrypted storage policy.
+
+Profiles remain fail-closed. Each provider deployment must configure a separate
+image/template and runtime manifest for every enabled `package_install` profile.
+If the requested profile is absent, the request fails instead of using another
+profile. `locked` also forces public internet access off: OpenSandbox receives a
+deny-by-default network policy, while E2B/Cube reject any configuration that
+sets `internetAccess.locked=true`.
+
+OpenSandbox additionally requires an explicit isolation declaration:
+`gvisor`, `kata`, or `firecracker` for production. Local Docker/runc validation
+is available only as `container-dev` together with
+`SANDBOX_OPENSANDBOX_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT=true`. This setting is
+an operator declaration and audit label; the production release gate must still
+prove that the OpenSandbox host actually uses the declared runtime. Do not use
+the development mode for untrusted customer code.
+
+Provider API and sandbox URLs require HTTPS. Plain HTTP is accepted only through
+the corresponding explicit `allowInsecure` Helm value for local validation.
+OpenSandbox's Docker runtime also requires `secureAccess=false`; AgentArea
+accepts that explicit mode only with `useServerProxy=true`. Workload ports stay
+bound to the data-plane loopback interface, while lifecycle and proxied exec/file
+traffic remain behind the authenticated OpenSandbox API.
+
+The equivalent Helm surface is `sandboxRuntime`. Credentials are accepted only
+through provider-specific Secret references. The same rendered environment is
+injected into both `mcp-manager` and `mcp-sandbox-runner`, so they cannot select
+different providers accidentally.
+
+Infrastructure requirements are provider-side, not Python requirements:
+
+| Mode | Where code runs | Cluster/host requirement |
+| --- | --- | --- |
+| `e2b` hosted | E2B data plane | no KVM or sandbox runtime in the AgentArea cluster |
+| `cube` self-hosted | Cube data plane | KVM-capable worker hosts for its microVM runtime |
+| `opensandbox` + `gvisor` | OpenSandbox hosts | `runsc`; KVM is not required |
+| `opensandbox` + `kata`/`firecracker` | OpenSandbox hosts | KVM-capable worker hosts |
+| `opensandbox` + `container-dev` | local Docker host | no KVM, but no production-grade kernel boundary |
+
+Automatic retirement of an idle *live* task is intentionally not enabled yet.
+The current cleanup call occurs when a workflow finishes, then the provider
+keeps the sandbox for `sandboxRuntime.idleTTL`. In the OpenSandbox Docker
+profile, terminating a sandbox removes the container but retains a stable
+per-task named volume mounted at `/workspace`; recreating the task reattaches
+that volume. A separate task-retention garbage collector must delete the volume
+after the task's durable retention deadline. `sandboxRuntime.leaseTTL` remains
+the orphan-safety bound, matching the existing Kubernetes task lease rather than
+the shorter completed-task grace.
+
 ## Enterprise Deployment Modes
 
 Hosted AgentArea:

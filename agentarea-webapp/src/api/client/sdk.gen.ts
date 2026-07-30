@@ -523,6 +523,8 @@ import type {
   ListRelationshipsV1AccessControlRelationshipsGetData,
   ListRelationshipsV1AccessControlRelationshipsGetErrors,
   ListRelationshipsV1AccessControlRelationshipsGetResponses,
+  ListSandboxesV1SandboxesGetData,
+  ListSandboxesV1SandboxesGetResponses,
   ListSkillFilesV1SkillsSkillIdFilesGetData,
   ListSkillFilesV1SkillsSkillIdFilesGetErrors,
   ListSkillFilesV1SkillsSkillIdFilesGetResponses,
@@ -3403,10 +3405,7 @@ export const previewEffectivePolicyV1GovernanceEffectivePolicyPreviewPost = <
 /**
  * Get Task Policy Snapshot
  *
- * Read the effective governance policy for a task.
- *
- * The effective policy is no longer persisted; it is served on demand by
- * querying the task's Temporal workflow, where it lives in workflow state.
+ * Read the effective governance policy persisted before workflow dispatch.
  */
 export const getTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGet = <
   ThrowOnError extends boolean = false,
@@ -6979,6 +6978,32 @@ export const updateAllSpecsV1RegistriesRegistryIdUpdateAllPost = <
       },
     ],
     url: "/v1/registries/{registry_id}/update-all",
+    ...options,
+  });
+
+/**
+ * List Sandboxes
+ *
+ * Return live provider state for the authenticated workspace only.
+ */
+export const listSandboxesV1SandboxesGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListSandboxesV1SandboxesGetData, ThrowOnError>
+): RequestResult<ListSandboxesV1SandboxesGetResponses, unknown, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListSandboxesV1SandboxesGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/sandboxes",
     ...options,
   });
 

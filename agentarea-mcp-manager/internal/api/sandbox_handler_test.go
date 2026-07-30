@@ -1,14 +1,46 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
+	"github.com/agentarea/mcp-manager/internal/warmpool"
 	"github.com/gin-gonic/gin"
 )
+
+type retiringSandboxRuntime struct {
+	taskID  string
+	ttl     time.Duration
+	filePut *warmpool.FilePutRequest
+}
+
+func (r *retiringSandboxRuntime) ExecuteSandbox(context.Context, warmpool.ExecuteRequest) (*warmpool.ExecuteResponse, error) {
+	return nil, nil
+}
+func (r *retiringSandboxRuntime) SandboxFilePut(_ context.Context, req warmpool.FilePutRequest) (*warmpool.FilePutResponse, error) {
+	r.filePut = &req
+	return &warmpool.FilePutResponse{Path: req.Path}, nil
+}
+func (r *retiringSandboxRuntime) SandboxFileGet(context.Context, string, string, string) (*warmpool.FileGetResponse, error) {
+	return nil, nil
+}
+func (r *retiringSandboxRuntime) SandboxFileList(context.Context, string, string, string) (*warmpool.FileListResponse, error) {
+	return nil, nil
+}
+func (r *retiringSandboxRuntime) RuntimeManifest(context.Context, string) (*runtimeinfo.Manifest, error) {
+	return nil, nil
+}
+func (r *retiringSandboxRuntime) RetireSandboxTask(_ context.Context, taskID string, ttl time.Duration) error {
+	r.taskID = taskID
+	r.ttl = ttl
+	return nil
+}
 
 func TestSandboxCleanupRouteUsesTaskIdentityOnly(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -91,5 +123,53 @@ func TestSandboxTaskIdleTTLIgnoresWorkflowSetting(t *testing.T) {
 	t.Setenv("SANDBOX_WORKFLOW_IDLE_TTL", "1s")
 	if got := sandboxTaskIdleTTL(); got != 15*time.Minute {
 		t.Fatalf("sandboxTaskIdleTTL() = %s, want task default", got)
+	}
+}
+
+func TestExternalSandboxCleanupRunsEvenWhenWarmPoolFeatureIsDisabled(t *testing.T) {
+	t.Setenv(sandboxCleanupAuthSecretEnv, "cleanup-secret-for-tests")
+	t.Setenv("MCP_FEATURE_WARM_POOL", "false")
+	t.Setenv("SANDBOX_TASK_IDLE_TTL", "42s")
+	runtime := &retiringSandboxRuntime{}
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Params = gin.Params{{Key: "id", Value: "task-123"}}
+	context.Request = httptest.NewRequest(http.MethodDelete, "/sandbox/task/task-123", nil)
+	context.Request.Header.Set("Authorization", "Bearer cleanup-secret-for-tests")
+
+	handler := &Handler{logger: slog.Default(), sandboxRuntime: runtime}
+	handler.deleteSandboxTask(context)
+	context.Writer.WriteHeaderNow()
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", recorder.Code)
+	}
+	if runtime.taskID != "task-123" || runtime.ttl != 42*time.Second {
+		t.Fatalf("retire = task %q ttl %s", runtime.taskID, runtime.ttl)
+	}
+}
+
+func TestSandboxFileRouteUsesExternalRuntimeWithoutBackend(t *testing.T) {
+	runtime := &retiringSandboxRuntime{}
+	handler := &Handler{logger: slog.Default(), sandboxRuntime: runtime}
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodPut, "/sandbox/files", strings.NewReader(`{
+		"workspace_id": "workspace-1",
+		"task_id": "task-1",
+		"package_install": "locked",
+		"path": "input.txt",
+		"content_base64": "aGVsbG8="
+	}`))
+	context.Request.Header.Set("Content-Type", "application/json")
+
+	handler.sandboxFiles(context)
+	context.Writer.WriteHeaderNow()
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+	}
+	if runtime.filePut == nil || runtime.filePut.PackageInstall != "locked" {
+		t.Fatalf("external runtime request = %+v", runtime.filePut)
 	}
 }

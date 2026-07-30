@@ -31,7 +31,7 @@ def _project_catalog_model_spec(item: CatalogModelSpecItem) -> ModelSpec:
         model_name=spec.get("model_name") or item.name,
         display_name=item.name,
         description=item.description if item.description is not None else spec.get("description"),
-        context_window=spec.get("context_window", 4096),
+        context_window=spec["context_window"],
         max_output_tokens=spec.get("max_output_tokens"),
         input_cost_per_token=spec.get("input_cost_per_token"),
         output_cost_per_token=spec.get("output_cost_per_token"),

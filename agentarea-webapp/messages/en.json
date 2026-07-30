@@ -94,6 +94,7 @@
   },
   "Sidebar": {
     "dashboard": "Dashboard",
+    "sandboxes": "Sandboxes",
     "home": "Home",
     "inbox": "Inbox",
     "admin": "Admin",
@@ -1709,6 +1710,24 @@
     "periodLast30": "Last 30 days",
     "periodMonthToDate": "Month to date",
     "periodLast90": "Last 90 days"
+  },
+  "SandboxesPage": {
+    "title": "Sandboxes",
+    "description": "Live isolated compute sessions used by agents in this workspace.",
+    "state": "State",
+    "sandbox": "Sandbox",
+    "task": "Task",
+    "provider": "Provider",
+    "age": "Age",
+    "expires": "Expires",
+    "resources": "Resources",
+    "isolation": "Isolation",
+    "activeCount": "{count} active",
+    "emptyTitle": "No active sandboxes",
+    "emptyDescription": "A sandbox appears here when an agent first runs a command or accesses its workspace.",
+    "unavailableTitle": "Sandbox inventory is unavailable",
+    "unavailableDescription": "The control plane could not read live state from the configured sandbox provider.",
+    "staleWarning": "Live refresh failed. Showing the last known inventory."
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Couldn't load budget data",

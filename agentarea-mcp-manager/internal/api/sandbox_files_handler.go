@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/agentarea/mcp-manager/internal/backends"
+	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
 
@@ -34,7 +35,13 @@ var (
 // instead of the S3 task workspace bash cannot see. The control plane signs the
 // ScopeFiles token; the activation secret never reaches the worker.
 func (h *Handler) sandboxFiles(c *gin.Context) {
-	provider, ok := h.backend.(sandboxFilesProvider)
+	var provider sandboxFilesProvider
+	if h.sandboxRuntime != nil {
+		provider = h.sandboxRuntime
+	} else {
+		provider, _ = h.backend.(sandboxFilesProvider)
+	}
+	ok := provider != nil
 	if !ok {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error":   "sandbox_files_unavailable",
@@ -95,3 +102,5 @@ func (h *Handler) sandboxFiles(c *gin.Context) {
 		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method_not_allowed"})
 	}
 }
+
+var _ sandboxFilesProvider = (sandboxruntime.Runtime)(nil)

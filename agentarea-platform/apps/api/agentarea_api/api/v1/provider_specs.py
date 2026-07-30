@@ -54,9 +54,9 @@ class ModelSpecResponse(BaseModel):
     display_name: str
     description: str | None
     context_window: int
-    max_output_tokens: int | None = 4096
-    input_cost_per_token: float | None = 0.0
-    output_cost_per_token: float | None = 0.0
+    max_output_tokens: int | None = None
+    input_cost_per_token: float | None = None
+    output_cost_per_token: float | None = None
     supports_function_calling: bool | None = False
     supports_vision: bool | None = False
     supports_reasoning: bool | None = False

@@ -15,6 +15,7 @@ on:
       - 'agentarea-platform/apps/api/**'
       - 'agentarea-platform/libs/**'
       - 'agentarea-webapp/src/api/openapi.json'
+      - 'docs/api-reference/openapi.json'
 
 permissions:
   contents: read
@@ -68,3 +69,21 @@ jobs:
             exit 1
           fi
           echo "openapi.json is up to date with the backend"
+
+      - name: Check docs copy of the spec
+        run: |
+          # docs/ publishes the API reference straight from the spec, so it keeps
+          # its own copy (Mintlify resolves local spec paths inside the docs root).
+          # Guard it here rather than letting the published reference drift.
+          jq -S . docs/api-reference/openapi.json > /tmp/docs.json
+          if ! diff -q /tmp/committed.json /tmp/docs.json > /dev/null 2>&1; then
+            echo "::error::docs/api-reference/openapi.json is out of date."
+            echo ""
+            echo "Fix with:"
+            echo ""
+            echo "  cd docs && npm run sync:openapi"
+            echo ""
+            diff --unified=3 /tmp/committed.json /tmp/docs.json | head -50
+            exit 1
+          fi
+          echo "docs copy of openapi.json is in sync"

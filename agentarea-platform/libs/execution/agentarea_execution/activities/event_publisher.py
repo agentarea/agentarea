@@ -293,7 +293,19 @@ def _is_non_retryable_error(error: Exception) -> bool:
     """
     if _is_rate_limit_error(error):
         return False
-    return _is_auth_error(error) or _is_quota_error(error) or _is_model_error(error)
+    error_str = str(error).lower()
+    accounting_contract_error = (
+        "usage accounting unavailable" in error_str
+        or "returned no usage" in error_str
+        or "pricing is not configured" in error_str
+        or "effective policy is missing required runtime limit" in error_str
+    )
+    return (
+        accounting_contract_error
+        or _is_auth_error(error)
+        or _is_quota_error(error)
+        or _is_model_error(error)
+    )
 
 
 def _extract_retry_after(error: Exception) -> int | None:

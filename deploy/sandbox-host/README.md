@@ -2,8 +2,9 @@
 
 Ansible that stands up a **dedicated host for running untrusted agent `bash()`**,
 isolated with [gVisor](https://gvisor.dev) (`runsc`). It installs Docker,
-installs and registers gVisor, hardens the box, and runs the AgentArea
-sandbox-executor under a userspace kernel.
+registers gVisor, hardens the box, and deploys an authenticated OpenSandbox
+server behind a source-allowlisted TLS proxy. The legacy single
+`sandbox-executor` can remain online during a controlled migration.
 
 ## Why a dedicated host + gVisor
 
@@ -32,17 +33,30 @@ boundary.
 cd deploy/sandbox-host
 cp inventory.example.ini inventory.ini      # edit host IP / region
 export SANDBOX_ACTIVATION_AUTH_SECRET=...    # the SAME value mcp-manager uses
+export OPENSANDBOX_API_KEY=...               # from the regional GitOps Secret
 
-# dry run
-ansible-playbook site.yml --check -e sandbox_activation_auth_secret="$SANDBOX_ACTIVATION_AUTH_SECRET"
-# apply
-ansible-playbook site.yml -e sandbox_activation_auth_secret="$SANDBOX_ACTIVATION_AUTH_SECRET"
+# OpenSandbox-only dry run and apply; the legacy executor is not restarted.
+ansible-playbook site.yml --check --diff --tags opensandbox
+ansible-playbook site.yml --tags opensandbox
 ```
 
-Then point the control plane at it: set `SANDBOX_EXECUTOR_URL=http://<host>:8080`
-on mcp-manager (the docker backend calls `/execute` there over the signed
-transport). The host is region-labelled via `sandbox_region`; once control-plane
-placement targets are declared, that label is how a task routes here.
+Then select the OpenSandbox adapter in both `mcp-manager` and
+`mcp-sandbox-runner`:
+
+```text
+SANDBOX_PROVIDER=opensandbox
+SANDBOX_OPENSANDBOX_URL=https://<opensandbox-host>
+SANDBOX_OPENSANDBOX_API_KEY=<from Secret>
+SANDBOX_OPENSANDBOX_ISOLATION=gvisor
+SANDBOX_OPENSANDBOX_EGRESS_MODE=host-public
+SANDBOX_OPENSANDBOX_USE_SERVER_PROXY=true
+SANDBOX_OPENSANDBOX_SECURE_ACCESS=false
+```
+
+OpenSandbox's Docker runtime does not implement its `secureAccess` endpoint
+tokens. Disabling that flag is accepted only with server-proxy routing. Direct
+sandbox ports bind to `127.0.0.1`; the control API remains authenticated and
+source-allowlisted.
 
 ## Kubernetes mode — one substrate for sandboxes *and* MCP servers
 
@@ -100,7 +114,8 @@ a pod now, and leaving a second execution path on the box would only rot.
 ```bash
 runsc --version
 docker info | grep -i runtimes           # runsc listed
-systemctl status agentarea-sandbox-executor sandbox-egress
+systemctl status opensandbox opensandbox-input-firewall sandbox-egress
+docker inspect sandbox-<id> --format '{{.HostConfig.Runtime}}'  # must be runsc
 # prove gVisor is actually the kernel the workload sees (NOT the host kernel):
 docker run --rm --runtime=runsc alpine uname -a   # shows a gVisor kernel string
 # metadata + private ranges are blocked from containers, public egress works:
@@ -132,17 +147,16 @@ role enforces:
 
 ## Isolation model — what this increment does and does not give you
 
-This runs **one long-lived executor container** under gVisor, serving all tasks
-(state separated per task by workspace dir + non-root uid, exactly like the dev
-docker backend — but now the whole container is gVisor-isolated from the host).
+OpenSandbox runs **one disposable `runsc` container per task session**. A stable
+Docker named volume is derived from the task ID and mounted at `/workspace`.
+Terminating the sandbox releases CPU and memory but deliberately retains that
+volume so unfinished agent work survives a later recreation. A separate
+workspace-retention policy must remove volumes after the task itself is deleted
+or passes its retention deadline.
 
-- **Gained:** untrusted code no longer touches the host kernel; host-level
-  multi-tenant escape needs a gVisor escape, not just a container escape.
-- **Not yet:** per-tenant isolation *between* tasks (they share one gVisor
-  sandbox). Full per-task isolation = the **HostPool provider** (per-task
-  disposable `runsc` container + per-task volume, assignment in the store) — the
-  next stage. This host is already provisioned correctly for it; only what runs
-  on top changes.
+The legacy executor still uses one long-lived shared container and exists only
+for rollback during the migration. Do not treat it as the target isolation
+model.
 
 ## Note on repo placement
 

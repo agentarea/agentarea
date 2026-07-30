@@ -1,5 +1,6 @@
 import {
   Bot,
+  Boxes,
   Brain,
   ClipboardList,
   Compass,
@@ -142,6 +143,12 @@ export const navData = {
           titleKey: "dashboard",
           url: "/dashboard",
           icon: Gauge,
+        },
+        {
+          title: "Sandboxes",
+          titleKey: "sandboxes",
+          url: "/sandboxes",
+          icon: Boxes,
         },
         {
           title: "Network",

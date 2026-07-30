@@ -37,6 +37,7 @@ class TestContinueAsNewState:
             available_tools=[{"type": "function", "function": {"name": "search"}}],
             current_iteration=5,
             total_cost=0.05,
+            delegated_cost=0.02,
             budget_usd=10.0,
             context_window=128000,
             user_context_data={"key": "val"},
@@ -57,6 +58,7 @@ class TestContinueAsNewState:
         assert restored.execution_id == sample_state.execution_id
         assert restored.current_iteration == 5
         assert restored.total_cost == Decimal("0.05")
+        assert restored.delegated_cost == Decimal("0.02")
         assert len(restored.messages) == 2
         assert restored.goal.description == "Test goal"
 

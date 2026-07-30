@@ -38,6 +38,7 @@ from . import (
     provider_configs,
     provider_specs,
     registries,
+    sandboxes,
     skill_collections,
     skills,
     triggers,
@@ -164,3 +165,6 @@ protected_v1_router.include_router(inbox.router)
 
 # Workspace files (read-only listing of S3 objects under workspaces/{workspace_id}/) - PROTECTED
 protected_v1_router.include_router(files.router)
+
+# Live sandbox inventory - PROTECTED and scoped by UserContext.
+protected_v1_router.include_router(sandboxes.router)

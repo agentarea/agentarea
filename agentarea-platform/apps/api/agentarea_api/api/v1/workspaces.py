@@ -54,9 +54,11 @@ def get_workspace_service(session: SessionDep, user: UserContextDep) -> Workspac
         Seeds the baseline governance policy row and the authorization graph
         (creator as admin, default root project). Fires for both personal
         (``ensure_personal``) and shared workspaces. Scoped to the new workspace
-        (not the caller's current one) so rows land in the right place. Never
-        propagates failures — a workspace must still be created even if seeding
-        hiccups — but logs loudly.
+        (not the caller's current one) so rows land in the right place.
+
+        Governance provisioning is part of workspace admission and therefore
+        fails closed. A workspace without a runtime baseline must not appear
+        ready and later execute under weaker implicit settings.
         """
         try:
             ctx = UserContext(user_id=user.user_id, workspace_id=workspace.id)
@@ -67,6 +69,7 @@ def get_workspace_service(session: SessionDep, user: UserContextDep) -> Workspac
         except Exception:
             logger.exception("failed to seed default policies for workspace %s", workspace.id)
             await session.rollback()
+            raise
         try:
             await seed_workspace(
                 workspace_id=workspace.id,
