@@ -169,6 +169,31 @@ func TestOpenSandboxProviderRejectsImplicitWeakIsolation(t *testing.T) {
 	}
 }
 
+func TestOpenSandboxProviderDerivesProxyProtocolFromDomain(t *testing.T) {
+	base := OpenSandboxConfig{
+		Connection: opensandbox.ConnectionConfig{
+			Domain:         "https://opensandbox.example.com",
+			UseServerProxy: true,
+		},
+		LeaseTTL:   time.Minute,
+		Isolation:  "gvisor",
+		EgressMode: "host-public",
+	}
+
+	provider, err := NewOpenSandboxProvider(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider.cfg.Connection.Protocol != "https" {
+		t.Fatalf("protocol = %q, want https", provider.cfg.Connection.Protocol)
+	}
+
+	base.Connection.Protocol = "http"
+	if _, err := NewOpenSandboxProvider(base); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("mismatched protocol error = %v", err)
+	}
+}
+
 func TestTaskVolumeNameIsScopedByWorkspaceAndTask(t *testing.T) {
 	first := taskVolumeName("agentarea-task", "workspace-1", "task-1")
 	if first == taskVolumeName("agentarea-task", "workspace-2", "task-1") {
