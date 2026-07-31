@@ -52,6 +52,18 @@ func NewOpenSandboxProvider(cfg OpenSandboxConfig) (*OpenSandboxProvider, error)
 	if endpoint.Scheme != "https" && (endpoint.Scheme != "http" || !cfg.AllowInsecure) {
 		return nil, fmt.Errorf("OpenSandbox domain must use HTTPS unless insecure development mode is explicitly enabled")
 	}
+	if cfg.Connection.Protocol != "" && cfg.Connection.Protocol != endpoint.Scheme {
+		return nil, fmt.Errorf(
+			"OpenSandbox protocol %q does not match domain scheme %q",
+			cfg.Connection.Protocol,
+			endpoint.Scheme,
+		)
+	}
+	// Server-proxy endpoints are intentionally returned without a scheme.
+	// The SDK uses Connection.Protocol to restore it, so it must match the
+	// lifecycle endpoint. Otherwise an HTTPS deployment is contacted over HTTP
+	// and a 301 redirect rewrites streaming POST requests such as /command to GET.
+	cfg.Connection.Protocol = endpoint.Scheme
 	if cfg.LeaseTTL <= 0 {
 		return nil, fmt.Errorf("OpenSandbox task lease TTL must be positive")
 	}
