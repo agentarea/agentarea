@@ -103,8 +103,11 @@ COPY --from=builder /app/bin/activation-service /usr/local/bin/activation-servic
 # 8080 - Activation API, 3000 - MCP protocol (configurable)
 EXPOSE 8080 3000
 
+# The image has two entrypoint modes: the native activation API and OpenSandbox's
+# injected execd bootstrap.  Check the process OpenSandbox actually supervises
+# instead of marking every otherwise-runnable sandbox unhealthy.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -fsS http://localhost:8080/health || exit 1
+    CMD curl -fsS http://localhost:8080/health || grep -qsx execd /proc/[0-9]*/comm
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["/usr/local/bin/activation-service"]
