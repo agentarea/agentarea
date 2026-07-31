@@ -236,8 +236,8 @@ class TestAgentToolUseFlow:
                             },
                             "execution": {
                                 "max_model_turns": 5,
-                                "max_tool_calls_per_turn": 10,
-                                "max_tool_calls_total": 100,
+                                "max_tool_calls_per_turn": 1,
+                                "max_tool_calls_total": 1,
                             },
                             "tools": {"allowed": ["*"]},
                         },
@@ -284,3 +284,4 @@ class TestAgentToolUseFlow:
                     assert _FAKE_TOOL_RESULT in result.final_response, (
                         f"Final response should contain tool result. Got: {result.final_response!r}"
                     )
+                    assert result.total_tool_calls == 1

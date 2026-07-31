@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 from agentarea_common.money import ZERO, serialize_money, to_money
 from agentarea_governance.domain.policies import effective_policy_from_json
+from agentarea_governance.domain.tool_calls import metered_tool_call_count
 
 from .domain.interfaces import BaseTaskManager
 from .domain.models import AgentTask
@@ -171,12 +172,15 @@ class DirectTaskManager(BaseTaskManager):
                         break
                     continue
 
-                if len(response.tool_calls) > max_tool_calls_per_turn:
+                metered_calls_this_turn = metered_tool_call_count(
+                    tc["function"]["name"] for tc in response.tool_calls
+                )
+                if metered_calls_this_turn > max_tool_calls_per_turn:
                     raise RuntimeError(
                         "tool-call limit exceeded: "
-                        f"{len(response.tool_calls)}/{max_tool_calls_per_turn} in one turn"
+                        f"{metered_calls_this_turn}/{max_tool_calls_per_turn} in one turn"
                     )
-                tool_calls_used += len(response.tool_calls)
+                tool_calls_used += metered_calls_this_turn
                 if tool_calls_used > max_tool_calls_total:
                     raise RuntimeError(
                         f"tool-call budget exceeded: {tool_calls_used}/{max_tool_calls_total}"
