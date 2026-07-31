@@ -160,9 +160,12 @@ class TemporalTaskManager(BaseTaskManager):
                 "effective_policy": execution_request.effective_policy,
             }
 
-            # Create workflow config with task queue
+            # Activity retries handle transient failures at the side-effect boundary.
+            # Retrying the whole agent workflow would replay a fresh run after a
+            # terminal failure and can execute shell/MCP side effects again.
             config = WorkflowConfig(
-                task_queue="agent-tasks"  # Use the same task queue as the worker
+                task_queue="agent-tasks",
+                retry_attempts=1,
             )
 
             # Debug: Log args_dict to verify workspace_id is present
