@@ -26,6 +26,7 @@ with workflow.unsafe.imports_passed_through():
     )
     from agentarea_common.money import ZERO, Money, serialize_money, to_money
     from agentarea_governance.domain.policies import effective_policy_from_json
+    from agentarea_governance.domain.tool_calls import metered_tool_call_count
 
     from .context_manager import (
         ContextWindowManager,
@@ -2196,13 +2197,17 @@ class AgentExecutionWorkflow:
                 type="InvalidExecutionSnapshot",
                 non_retryable=True,
             )
-        if len(tool_calls) > max_per_turn:
+        metered_calls_this_turn = metered_tool_call_count(
+            tool_call.function["name"] for tool_call in tool_calls
+        )
+        if metered_calls_this_turn > max_per_turn:
             raise ApplicationError(
-                f"model requested {len(tool_calls)} tool calls; policy allows {max_per_turn} per turn",
+                f"model requested {metered_calls_this_turn} metered tool calls; "
+                f"policy allows {max_per_turn} per turn",
                 type="ToolCallLimitExceeded",
                 non_retryable=True,
             )
-        attempted_total = self.state.tool_calls_used + len(tool_calls)
+        attempted_total = self.state.tool_calls_used + metered_calls_this_turn
         if attempted_total > max_total:
             raise ApplicationError(
                 f"tool-call budget exceeded: {attempted_total}/{max_total}",
