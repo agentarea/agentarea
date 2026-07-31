@@ -126,10 +126,64 @@ class TestParseMCPServers:
             ]
         }
 
+    def test_agentarea_flattened_format_parses(self):
+        items = RegistryService._parse_mcp_servers(
+            {
+                "servers": [
+                    {
+                        "registry_id": "agency.lona/trading",
+                        "name": "Lona Trading",
+                        "description": "Trading tools",
+                        "version": "2.0.0",
+                        "connection_type": "url",
+                        "transport": "streamable-http",
+                        "package_registry": "remote",
+                        "requires_auth": False,
+                        "json_spec": {
+                            "url": "https://mcp.lona.agency/mcp",
+                            "transport": "streamable-http",
+                            "raw_spec": {"name": "agency.lona/trading"},
+                        },
+                    }
+                ]
+            }
+        )
+
+        assert items == [
+            {
+                "external_id": "agency.lona/trading",
+                "name": "Lona Trading",
+                "description": "Trading tools",
+                "version": "2.0.0",
+                "spec": {
+                    "url": "https://mcp.lona.agency/mcp",
+                    "transport": "streamable-http",
+                    "raw_spec": {"name": "agency.lona/trading"},
+                    "connection_type": "url",
+                },
+                "tags": ["remote", "streamable-http"],
+            }
+        ]
+
     def test_unrecognized_format_raises(self):
-        with pytest.raises(ValueError, match="'server' key"):
+        with pytest.raises(ValueError, match="AgentArea keys"):
             RegistryService._parse_mcp_servers(
                 {"servers": [{"registry_id": "io.example/echo", "connection_type": "url"}]}
+            )
+
+    def test_mixed_formats_raise(self):
+        with pytest.raises(ValueError, match="cannot be mixed"):
+            RegistryService._parse_mcp_servers(
+                {
+                    "servers": [
+                        {"server": {"name": "io.example/remote", "remotes": []}},
+                        {
+                            "registry_id": "io.example/echo",
+                            "connection_type": "url",
+                            "json_spec": {"url": "https://example.com/mcp"},
+                        },
+                    ]
+                }
             )
 
     def test_pypi_package_parses_to_uvx_command(self):
