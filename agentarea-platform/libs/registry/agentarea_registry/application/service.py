@@ -597,22 +597,47 @@ class RegistryService:
 
     @staticmethod
     def _parse_mcp_servers(data: dict[str, Any]) -> list[dict[str, Any]]:
-        """Parse MCP servers from the standard registry format.
+        """Parse MCP servers from an official or AgentArea registry artifact.
 
         Standard format (registry.modelcontextprotocol.io):
             {"servers": [{"server": {"name": ..., "remotes": [...], "packages": [...]}, "_meta": {...}}]}
+
+        AgentArea flattened format (published system catalog):
+            {"servers": [{"registry_id": ..., "connection_type": ..., "json_spec": {...}}]}
         """
         servers = data.get("servers", [])
         if not servers:
             return []
 
-        first = servers[0]
-        if "server" not in first:
+        formats: set[str] = set()
+        for index, entry in enumerate(servers):
+            if not isinstance(entry, dict):
+                raise ValueError(
+                    "Unrecognized MCP registry format: each entry of 'servers' must be a mapping "
+                    f"(entry {index} is {type(entry).__name__})"
+                )
+            if isinstance(entry.get("server"), dict):
+                formats.add("standard")
+            elif (
+                isinstance(entry.get("registry_id"), str)
+                and isinstance(entry.get("connection_type"), str)
+                and isinstance(entry.get("json_spec"), dict)
+            ):
+                formats.add("agentarea")
+            else:
+                raise ValueError(
+                    "Unrecognized MCP registry format: each entry of 'servers' must contain either "
+                    "a mapping 'server' key or the AgentArea keys 'registry_id', "
+                    f"'connection_type', and 'json_spec' (entry {index} keys: {sorted(entry)})"
+                )
+
+        if len(formats) != 1:
             raise ValueError(
-                "Unrecognized MCP registry format: each entry of 'servers' must contain a "
-                f"'server' key (got keys: {sorted(first)})"
+                "Unrecognized MCP registry format: official and AgentArea entries cannot be mixed"
             )
-        return RegistryService._parse_standard_mcp_registry(servers)
+        if "standard" in formats:
+            return RegistryService._parse_standard_mcp_registry(servers)
+        return RegistryService._parse_agentarea_mcp_registry(servers)
 
     @staticmethod
     def _parse_standard_mcp_registry(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -756,6 +781,44 @@ class RegistryService:
                     }
                 )
 
+        return items
+
+    @staticmethod
+    def _parse_agentarea_mcp_registry(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Parse the normalized format published by the AgentArea catalog pipeline."""
+        items = []
+        for entry in servers:
+            external_id = entry["registry_id"]
+            connection_type = entry["connection_type"]
+            json_spec = entry["json_spec"]
+
+            item_external_id = (
+                f"{external_id}/{connection_type}" if connection_type != "url" else external_id
+            )
+
+            tags = []
+            if entry.get("package_registry"):
+                tags.append(entry["package_registry"])
+            if entry.get("requires_auth"):
+                tags.append("requires-auth")
+            transport = entry.get("transport") or json_spec.get("transport", "")
+            if transport:
+                tags.append(transport)
+
+            spec = {**json_spec, "connection_type": connection_type}
+            if entry.get("env_schema"):
+                spec["env_schema"] = entry["env_schema"]
+
+            items.append(
+                {
+                    "external_id": item_external_id,
+                    "name": entry.get("name") or external_id,
+                    "description": (entry.get("description") or "")[:500],
+                    "version": entry.get("version") or "latest",
+                    "spec": spec,
+                    "tags": tags,
+                }
+            )
         return items
 
     @staticmethod
