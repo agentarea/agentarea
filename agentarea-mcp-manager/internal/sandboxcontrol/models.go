@@ -53,14 +53,14 @@ type ExecutionCreateRequest struct {
 // selector is intentionally NOT present until it is actually wired for routing,
 // so the contract never advertises a selector that silently does nothing.
 type RuntimeSelector struct {
-	Region         string `json:"region,omitempty"`
-	PackageInstall string `json:"package_install"`
+	Region string `json:"region,omitempty"`
 }
 
 type SandboxObjectReference = workspace.Entry
 
 type ExecutionRecord struct {
 	ID                   string                    `json:"id"`
+	Revision             int64                     `json:"revision"`
 	SessionID            string                    `json:"session_id,omitempty"`
 	WorkflowID           string                    `json:"workflow_id,omitempty"`
 	TaskID               string                    `json:"task_id,omitempty"`
@@ -75,7 +75,9 @@ type ExecutionRecord struct {
 	Error                string                    `json:"error,omitempty"`
 	CreatedAt            time.Time                 `json:"created_at"`
 	UpdatedAt            time.Time                 `json:"updated_at"`
+	QueueExpiresAt       time.Time                 `json:"queue_expires_at"`
 	StartedAt            *time.Time                `json:"started_at,omitempty"`
+	ExecutionExpiresAt   *time.Time                `json:"execution_expires_at,omitempty"`
 	CompletedAt          *time.Time                `json:"completed_at,omitempty"`
 }
 
@@ -86,7 +88,7 @@ func (r *ExecutionCreateRequest) UnmarshalJSON(data []byte) error {
 	}
 	for _, field := range []string{"args", "env", "script", "metadata", "input_files", "content_base64", "script_content", "script_name"} {
 		if _, exists := fields[field]; exists {
-			return fmt.Errorf("unsupported_contract_version: inline commands and files are forbidden; use command_path and workspace_manifest_ref")
+			return fmt.Errorf("unsupported_contract_version: top-level inline execution fields are forbidden; use command.command_body and manager-owned task inputs")
 		}
 	}
 	type requestAlias ExecutionCreateRequest

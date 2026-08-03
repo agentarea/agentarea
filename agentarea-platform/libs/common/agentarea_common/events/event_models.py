@@ -27,6 +27,7 @@ class EventType(StrEnum):
     TASK_CANCELLED = "task.cancelled"
     TASK_PAUSED = "task.paused"
     TASK_RESUMED = "task.resumed"
+    TASK_AWAITING_FOLLOW_UP = "task.awaiting_follow_up"
     TASK_AWAITING_CONTINUATION = "task.awaiting_continuation"
     TASK_CONTINUED = "task.continued"
 

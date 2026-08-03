@@ -115,7 +115,11 @@ func (h *HealthChecker) PerformHealthCheck(ctx context.Context, container *model
 					result.Healthy = false
 				}
 
-				result.Details["direct_http_endpoint"] = directURL
+				// The probe dials the workload directly because it *is* the
+				// health check, but the address is deliberately not published:
+				// callers that saw it used it, which routed MCP traffic around
+				// the demand gateway's on-demand start, request lease and idle
+				// reclamation. Health reports health, not a way in.
 				result.Details["internal_port"] = internalPort
 				result.Details["response_time_ms"] = responseTime.Milliseconds()
 			}

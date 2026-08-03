@@ -10,16 +10,26 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 
-	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
 	"github.com/agentarea/mcp-manager/internal/sandboxplacement"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
 
+const testExecutionTimeoutSeconds = 1800
+
+func testRunnerExecutionPolicy() sandboxcontrol.ExecutionPolicy {
+	return sandboxcontrol.ExecutionPolicy{
+		DefaultTimeoutSeconds: 120,
+		MaxTimeoutSeconds:     testExecutionTimeoutSeconds,
+		QueueTimeout:          5 * time.Minute,
+		CompletionGrace:       time.Minute,
+	}
+}
+
 func regionExecution(t *testing.T, runner *Runner, taskID, region string) *sandboxcontrol.ExecutionRecord {
 	t.Helper()
 	record, err := runner.service.CreateExecution(context.Background(), sandboxcontrol.ExecutionCreateRequest{
-		Runtime:     sandboxcontrol.RuntimeSelector{PackageInstall: runtimeinfo.PackageInstallAllowed, Region: region},
+		Runtime:     sandboxcontrol.RuntimeSelector{Region: region},
 		WorkspaceID: "workspace-1",
 		TaskID:      taskID,
 		Command:     warmpool.ExecuteRequest{CommandBody: "echo ok"},
@@ -34,7 +44,7 @@ func regionExecution(t *testing.T, runner *Runner, taskID, region string) *sandb
 // matches the task's runtime selector — the control plane owns "which sandbox".
 func TestRunnerRoutesExecutionToMatchingRegion(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-place-ok", time.Hour)
+	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-place-ok", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("place-ok.requests", "place-ok.events", "test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +86,7 @@ func TestRunnerRoutesExecutionToMatchingRegion(t *testing.T) {
 // another region. This is the residency invariant enforced at the control plane.
 func TestRunnerFailsExecutionWhenNoRegionTarget(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-place-fail", time.Hour)
+	store, err := sandboxcontrol.NewRedisStore("redis://"+server.Addr(), "runner-place-fail", time.Hour, testRunnerExecutionPolicy(), sandboxcontrol.WithEventStreams("place-fail.requests", "place-fail.events", "test"))
 	if err != nil {
 		t.Fatal(err)
 	}

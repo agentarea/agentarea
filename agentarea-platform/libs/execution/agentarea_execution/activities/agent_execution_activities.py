@@ -16,7 +16,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Any, Literal, cast
+from typing import Any
 from uuid import UUID
 
 from agentarea_agents_sdk import (
@@ -95,7 +95,7 @@ from ..models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
-from .artifact_validation import validate_workspace_artifacts
+from .artifact_validation import validate_published_artifacts
 from .event_publisher import create_event_publisher, publish_enriched_llm_error_event
 from .heartbeat import auto_heartbeater
 from .runtime_discovery import fetch_runtime_manifest, render_runtime_prompt, runtime_event_data
@@ -135,28 +135,21 @@ def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)]
 
 
-def _agent_runtime_profile(value: Any) -> str:
-    """Read the shell tool's managed-environment selection."""
-    for tool in _as_tool_config_list(value):
-        if tool.get("name") != "agentarea/shell":
-            continue
-        settings = tool.get("settings")
-        if isinstance(settings, dict) and settings.get("package_install") is not None:
-            return str(settings["package_install"])
-    return "allowed"
+def _sandbox_file_auth_secret(dependencies: ActivityDependencies) -> str:
+    secret = dependencies.settings.mcp.SANDBOX_FILE_AUTH_SECRET
+    if secret is None or not secret.get_secret_value():
+        raise ValueError("SANDBOX_FILE_AUTH_SECRET is required for sandbox file access")
+    return secret.get_secret_value()
 
 
-def _effective_runtime_profile(
-    execution_context: dict[str, Any] | None,
-    tools: Any,
-) -> Literal["allowed", "locked"]:
-    value = (execution_context or {}).get(
-        "package_install",
-        _agent_runtime_profile(tools),
-    )
-    if not isinstance(value, str) or value not in {"allowed", "locked"}:
-        raise ValueError("package_install must be allowed or locked")
-    return cast(Literal["allowed", "locked"], value)
+def _sandbox_control_auth_secret(dependencies: ActivityDependencies) -> str:
+    secret = dependencies.settings.mcp.SANDBOX_CONTROL_AUTH_SECRET
+    if secret is None:
+        raise ValueError("SANDBOX_CONTROL_AUTH_SECRET is required for sandbox execution")
+    value = secret.get_secret_value()
+    if len(value.encode()) < 32:
+        raise ValueError("SANDBOX_CONTROL_AUTH_SECRET must contain at least 32 bytes")
+    return value
 
 
 def _deny_tool_result(tool_name: str, reason: str) -> MCPToolResult:
@@ -311,24 +304,23 @@ def make_agent_activities(dependencies: ActivityDependencies):
     container = ActivityServiceContainer(dependencies)
 
     @activity.defn
-    async def discover_runtime_manifest_activity(
-        package_install: Literal["allowed", "locked"] = "allowed",
-    ) -> RuntimeDiscoveryResult:
+    async def discover_runtime_manifest_activity() -> RuntimeDiscoveryResult:
         """Discover the manifest exposed by the active sandbox data plane."""
-        return await fetch_runtime_manifest(
-            dependencies.settings.mcp.MCP_MANAGER_URL,
-            package_install=package_install,
-        )
+        return await fetch_runtime_manifest(dependencies.settings.mcp.MCP_MANAGER_URL)
 
     @activity.defn(name="validate_artifacts_activity")
     async def validate_artifacts_activity(
         request: ArtifactValidationRequest,
     ) -> ArtifactValidationResult:
-        """Completion barrier: every declared deliverable must be durable in the task workspace."""
-        from agentarea_common.artifacts import WorkspaceRepository
-
-        repository = WorkspaceRepository()
-        return await validate_workspace_artifacts(request, repository=repository)
+        """Completion barrier: persist the declared files before the task is done."""
+        if not request.declared_paths:
+            return ArtifactValidationResult(state="passed", generation=0)
+        secret = dependencies.settings.mcp.SANDBOX_FILE_AUTH_SECRET
+        return await validate_published_artifacts(
+            request,
+            manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+            auth_secret=secret.get_secret_value() if secret is not None else "",
+        )
 
     @activity.defn
     async def build_agent_config_activity(
@@ -350,11 +342,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             if not agent:
                 raise AgentNotFoundError(f"Agent {request.agent_id} not found")
 
-            package_install = _effective_runtime_profile(
-                request.execution_context,
-                agent.tools,
-            )
-            runtime = await discover_runtime_manifest_activity(package_install)
+            runtime = await discover_runtime_manifest_activity()
 
             # Build skill information
             skills_info = []
@@ -406,7 +394,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 name=agent.name,
                 description=agent.description or "",
                 instruction=(agent.instruction or "")
-                + render_runtime_prompt(runtime, package_install=package_install),
+                + render_runtime_prompt(runtime),
                 agent_type=getattr(agent, "agent_type", "stateless") or "stateless",
                 model_id=model_id_str or "",
                 context_window=context_window,
@@ -419,7 +407,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 step_type=request.step_type,
                 skills=skills_info,
                 runtime=runtime,
-                runtime_event_data=runtime_event_data(runtime, package_install=package_install),
+                runtime_event_data=runtime_event_data(runtime),
             )
 
     @activity.defn
@@ -887,25 +875,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         # cannot see. No workspace_repository is passed, so
                         # FileToolset resolves against self.storage.
                         from agentarea_agents_sdk.tools.sandbox_file_store import SandboxFileStore
-                        from agentarea_common.artifacts import (
-                            DbArtifactEventRecorder,
-                            WorkspaceRepository,
-                        )
 
                         extra_kwargs = {
                             "storage": SandboxFileStore(
                                 mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
                                 workspace_id=str(request.workspace_id),
                                 task_id=str(request.task_id) if request.task_id else "",
-                                package_install=_effective_runtime_profile(
-                                    request.metadata, request.tools
-                                ),
-                                # Write-through so saved files reach the durable,
-                                # user-visible task workspace the /files API serves.
-                                durable=WorkspaceRepository(
-                                    recorder=DbArtifactEventRecorder(),
-                                    actor=_agent_artifact_actor(request, user_context),
-                                ),
+                                auth_secret=_sandbox_file_auth_secret(dependencies),
                             ),
                             "workspace_id": str(request.workspace_id),
                         }
@@ -927,27 +903,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         # commands it runs next. Durable write-through keeps it
                         # retrievable through the /files API. Mirrors agentarea/files.
                         from agentarea_agents_sdk.tools.sandbox_file_store import SandboxFileStore
-                        from agentarea_common.artifacts import (
-                            DbArtifactEventRecorder,
-                            WorkspaceRepository,
-                        )
 
                         extra_kwargs = {
                             "storage": SandboxFileStore(
                                 mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
                                 workspace_id=str(request.workspace_id),
                                 task_id=str(request.task_id) if request.task_id else "",
-                                package_install=_effective_runtime_profile(
-                                    request.metadata, request.tools
-                                ),
-                                durable=WorkspaceRepository(
-                                    recorder=DbArtifactEventRecorder(),
-                                    actor=_agent_artifact_actor(request, user_context),
-                                ),
+                                auth_secret=_sandbox_file_auth_secret(dependencies),
                             ),
                             "workspace_id": str(request.workspace_id),
                             "task_id": str(request.task_id) if request.task_id else "",
                             "search_base_url": (dependencies.settings.app.WEB_SEARCH_BASE_URL),
+                            "fetch_base_url": (dependencies.settings.app.WEB_FETCH_BASE_URL),
                         }
                     elif tool_name == "agentarea/triggers":
                         # The triggers tool defaults agent_id/workspace_id/user_id to
@@ -977,6 +944,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                         extra_kwargs = {
                             "mcp_manager_url": dependencies.settings.mcp.MCP_MANAGER_URL,
+                            "auth_secret": _sandbox_control_auth_secret(dependencies),
                             "ctx": ToolInvocationContext(
                                 workflow_id=wf_id or "",
                                 task_id=str(request.task_id) if request.task_id else "",
@@ -2130,37 +2098,6 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 success=False, error=f"Failed to materialize skill files: {e}"
             )
 
-    @activity.defn(name="cleanup_sandbox_task_activity")
-    async def cleanup_sandbox_task_activity(task_id: str) -> None:
-        """Retire the warm-pool sandbox pod assigned to a completed task."""
-        import httpx
-        from agentarea_common.config.mcp import MCPSettings
-
-        if not task_id:
-            return
-
-        mcp_settings = MCPSettings()
-        cleanup_secret = mcp_settings.SANDBOX_CLEANUP_AUTH_SECRET
-        if cleanup_secret is None or not cleanup_secret.get_secret_value():
-            logger.error("Sandbox task cleanup auth secret is not configured")
-            return
-
-        url = f"{mcp_settings.MCP_MANAGER_URL}/sandbox/task/{task_id}"
-        headers = {
-            "Authorization": f"Bearer {cleanup_secret.get_secret_value()}",
-        }
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.delete(url, headers=headers)
-                if resp.status_code >= 400:
-                    logger.warning(
-                        "Sandbox task cleanup returned %s: %s",
-                        resp.status_code,
-                        resp.text[:300],
-                    )
-        except Exception as e:
-            logger.warning("Sandbox task cleanup failed for %s: %s", task_id, e)
-
     # --- Dynamic Context Discovery Activities ---
 
     @activity.defn(name="store_context_output")
@@ -2325,7 +2262,6 @@ def make_agent_activities(dependencies: ActivityDependencies):
         update_task_status_activity,
         update_task_governance_snapshot_activity,
         materialize_skill_files_activity,
-        cleanup_sandbox_task_activity,
         store_context_output_activity,
         read_context_output_activity,
         store_history_chunk_activity,

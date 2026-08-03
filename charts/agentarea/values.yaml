@@ -48,6 +48,17 @@ global:
     # Application secrets (JWT, encryption keys)
     application: "agentarea-app-secrets"
 
+  # Pre-provision this Secret through SOPS/SealedSecret/ExternalSecret or the
+  # customer's secret manager. The chart never generates these cross-service
+  # credentials, which keeps ArgoCD rendering deterministic.
+  runtimeCredentials:
+    existingSecret: "agentarea-runtime-credentials"
+    keys:
+      mcpGateway: "mcp-gateway-token"
+      sandboxFile: "sandbox-file-token"
+      sandboxInspection: "sandbox-inspection-token"
+      sandboxCleanup: "sandbox-cleanup-token"
+
   # Database configuration
   database:
     # Secret name where database credentials are stored
@@ -517,20 +528,20 @@ mcpManager:
   # first call and reclaimed once it has gone idle, instead of running from
   # creation until it is deleted.
   #
-  # Off by default. Enabling changes two user-visible things: an instance's
-  # first call pays a cold start, and creating a connection no longer verifies
-  # it immediately — a bad image or a missing variable surfaces on first use
-  # rather than in the form. That is a product decision, not a chart upgrade.
-  #
-  # Only instances created while this is on are serverless; the choice is
-  # recorded per instance, so turning it on does not retroactively change the
-  # lifetime of instances that already exist.
+  # All container-backed calls pass through the manager demand gateway. This
+  # switch controls idle reclaim only: with it disabled, the first verification
+  # or call starts the workload and it remains running; with it enabled, the
+  # workload is also reclaimed after idleTimeout and restarted by the next call.
   serverless:
     enabled: false
     # How long an instance may go uncalled before its workload is reclaimed.
     idleTimeout: "10m"
     # How often to look for idle instances.
     sweepInterval: "60s"
+    # Renewable DB lease held for the complete lifetime of each HTTP request.
+    requestLeaseTTL: "90s"
+    # Maximum time the gateway waits for a cold workload to become Ready.
+    startupTimeout: "5m"
 
   # Egress restriction for spawned MCP instance pods (which may run untrusted,
   # user-supplied images). Denies cluster-internal + cloud-metadata egress while
@@ -602,7 +613,7 @@ mcpManager:
   #
   # The name must match a RuntimeClass that exists in the cluster; Kubernetes
   # refuses to schedule the pod otherwise, which is the correct failure.
-  runtimeClass: ""
+  runtimeClass: "gvisor"
 
   # Untrusted MCP runtime and sandbox task pods use this zero-RBAC
   # ServiceAccount instead of the control-plane ServiceAccount.
@@ -629,7 +640,7 @@ mcpManager:
     enabled:
       - gateway_api        # HTTPRoute creation for Envoy Gateway
       - state_reconciler   # Background state reconciliation
-      # - warm_pool        # Fast cold start pool (requires extra memory)
+      - warm_pool          # Built-in Kubernetes sandbox data plane
       # - kata_runtime     # VM isolation (requires Kata installed)
       # - advanced_scaling # KEDA autoscaling
     
@@ -638,36 +649,22 @@ mcpManager:
   
   # Warm pool configuration for fast cold starts
   warmPool:
-    enabled: false  # Enable for fast activation (200-500ms vs 5-15s)
-    # Pools are profile-specific. `allowed` must point at a mutable image build;
-    # `locked` must point at an immutable image build. The manager routes by the
-    # exact package-install label and never falls back across profiles.
-    profiles:
-      - packageInstall: allowed
-        managedEnvironment: mutable
-        image:
-          repository: agentarea/agentarea-mcp-runner
-          tag: "latest"
-          pullPolicy: IfNotPresent
-      - packageInstall: locked
-        managedEnvironment: immutable
-        image:
-          repository: agentarea/agentarea-mcp-runner-locked
-          tag: "latest"
-          pullPolicy: IfNotPresent
+    # Required by the chart's default built-in Kubernetes sandbox provider.
+    # Disable only when sandboxRuntime.provider selects an external provider.
+    enabled: true
+    # One deployment-owned runtime image serves every sandbox task. Callers do
+    # not select images or runtime policy.
+    image:
+      repository: agentarea/agentarea-mcp-runner
+      tag: "latest"
+      pullPolicy: IfNotPresent
 
-    # Locked pods get no public egress. Add only stable S3 endpoint CIDRs here
-    # when object storage is external to the cluster. Broad public routes are
-    # rejected by the template; DNS and in-cluster RustFS are already allowed.
-    lockedNetworkPolicy:
-      s3EgressCIDRs: []
-
-    # Maximum duration of a single sandbox command. Task pod lifetime is
-    # controlled separately by MCP Manager task lease/idle TTL settings.
-    maxExecutionTimeoutSeconds: 1800
+    # Explicit zero disables process-local idle exit; pod retirement is owned
+    # by the manager's fenced task lifecycle.
+    idleTimeoutSeconds: 0
     
     # Number of warm pods per node
-    size: 10
+    size: 1
     
     # Logging level
     logLevel: "info"
@@ -691,24 +688,53 @@ mcpManager:
 sandboxRuntime:
   provider: ""
   region: ""
+  # Deployment-level public internet policy. The manager applies this to the
+  # selected provider; task/tool callers cannot override it.
+  allowInternet: false
   # Active task sessions are renewed to this lease on every file/command access
   # and while a command is running. Keep this long enough that a live agent's
   # unfinished workspace is not reclaimed during ordinary thinking time.
   leaseTTL: "2h"
+  # Upper bound for one external provider create request. The durable
+  # provisioning intent remains fenced for this interval plus leaseTTL.
+  provisioningTimeout: "30s"
   # Once the workflow explicitly retires a completed task, keep the sandbox for
   # this short grace period before the provider releases it.
   idleTTL: "15m"
   sessionRecordTTL: "24h"
+  # How long finished sandbox execution records stay queryable. Required: the
+  # API and the runner both read this one value, so retention cannot drift.
+  executionRecordTTL: "24h"
+  # One admission limit shared by the API/runner and every executor. Requests
+  # above it are rejected rather than silently shortened by a data plane.
+  maxExecutionTimeoutSeconds: 1800
+  # Applied by the manager only when a caller omits timeout_seconds. The
+  # resolved value is persisted in the execution aggregate before scheduling.
+  defaultExecutionTimeoutSeconds: 120
+  # Separate server-owned queue/startup window; command runtime begins only
+  # after the runner records the started transition.
+  executionQueueTimeout: "5m"
+  # Bounded allowance for provider shutdown, workspace commit, and durable
+  # output publication after the command deadline.
+  executionCompletionGrace: "2m"
+  workspace:
+    # Explicit admission policy shared by live sandbox files, durable inputs,
+    # and published artifacts. MaxFileBytes is enforced synchronously for task
+    # commands through RLIMIT_FSIZE. maxFiles and aggregate maxBytes are audited
+    # after a command reaches proven process quiescence; the built-in Kubernetes
+    # runtime additionally applies emptyDir.sizeLimit and an ephemeral-storage
+    # container limit. The manager refuses malformed or missing values.
+    maxFiles: "10000"
+    maxFileBytes: "268435456"
+    maxBytes: "2147483648"
+    signedUrlTTL: "1h"
+    forcePathStyle: true
   resources:
     cpu: 500m
     memory: 512Mi
 
-  # External templates must publish an explicit runtime manifest. Omitting a
-  # requested profile makes that profile unavailable rather than falling back
-  # to a weaker image/template.
-  manifests:
-    allowed: {}
-    locked: {}
+  # External runtimes must publish exactly one explicit capability manifest.
+  manifest: {}
 
   opensandbox:
     url: ""
@@ -716,25 +742,30 @@ sandboxRuntime:
     # OpenSandbox Docker runtime does not implement secureAccess. It may only
     # be disabled together with useServerProxy so workload ports stay private.
     secureAccess: true
-    # Required provider-side isolation contract. Production values are gvisor,
-    # kata, or firecracker. container-dev is accepted only with the explicit
-    # development opt-in below and must never be used for untrusted production
-    # workloads.
+    # Required provider-side isolation contract. The current OpenSandbox
+    # adapter accepts only gvisor for production because it can verify runsc;
+    # kata/firecracker fail startup until a verifiable provider attestation is
+    # implemented. container-dev is accepted only with the explicit development
+    # opt-in below and must never be used for untrusted production workloads.
     isolation: ""
+    # Operator-pinned identity of the OpenSandbox server + secure runtime
+    # profile (for example server image/config digest plus runsc version).
+    # Required for strong isolation and recorded on every provider binding.
+    runtimeIdentity: ""
     # provider uses OpenSandbox per-sandbox networkPolicy. host-public is the
     # dedicated Docker+gVisor profile and requires an audited host firewall.
     egressMode: ""
     allowWeakIsolationForDevelopment: false
     useServerProxy: true
-    persistWorkspace: true
+    # Full-volume retention is intentionally unavailable until archive/delete
+    # lifecycle and garbage collection are configured.
+    persistWorkspace: false
     volumePrefix: agentarea-task
     authHeader: OPEN-SANDBOX-API-KEY
     apiKeySecretRef:
       name: ""
       key: ""
-    images:
-      allowed: ""
-      locked: ""
+    image: ""
     entrypoint: []
 
   # E2B Cloud, BYOC, and self-hosted E2B all use this one adapter; apiUrl and
@@ -743,15 +774,18 @@ sandboxRuntime:
     apiUrl: ""
     sandboxUrl: ""
     allowInsecure: false
-    internetAccess:
-      allowed: false
-      locked: false
+    # The boundary the template must attest before it runs task code. Accepted
+    # values are firecracker, gvisor and kata — there is no weaker tier and no
+    # fallback: an endpoint that cannot attest one is refused.
+    isolation: firecracker
+    # Where the template publishes its attestation document.
+    attestationPath: /etc/agentarea/isolation-attestation.json
+    # Optional pin of the attested runtime build.
+    runtimeIdentity: ""
     apiKeySecretRef:
       name: ""
       key: ""
-    templates:
-      allowed: ""
-      locked: ""
+    template: ""
 
   # Cube is E2B protocol-compatible and therefore uses the same adapter with a
   # separate operator-facing mode and configuration namespace.
@@ -759,15 +793,13 @@ sandboxRuntime:
     apiUrl: ""
     sandboxUrl: ""
     allowInsecure: false
-    internetAccess:
-      allowed: false
-      locked: false
+    isolation: firecracker
+    attestationPath: /etc/agentarea/isolation-attestation.json
+    runtimeIdentity: ""
     apiKeySecretRef:
       name: ""
       key: ""
-    templates:
-      allowed: ""
-      locked: ""
+    template: ""
 
 # Sandbox runner data plane. This process consumes sandbox execution requests
 # from Redis Streams and executes them in the selected sandbox backend.
@@ -875,7 +907,9 @@ rustfs:
     tag: "latest"
   auth:
     existingSecret: "agentarea-rustfs-secret"
-  defaultBuckets: "agentarea-documents"
+  # Optional bootstrap override. Empty means global.storage.bucket, keeping
+  # every application and the RustFS init job on one storage contract.
+  defaultBuckets: ""
   resources:
     limits:
       cpu: 500m

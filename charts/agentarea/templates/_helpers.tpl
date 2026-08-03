@@ -37,12 +37,35 @@ If release name contains chart name it will be used as a full name.
 
 {{/* Dedicated secret name for worker-to-manager sandbox cleanup authentication. */}}
 {{- define "agentarea.sandboxCleanupSecretName" -}}
-{{- printf "%s-sandbox-cleanup-auth" (include "agentarea.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- required "global.runtimeCredentials.existingSecret is required" .Values.global.runtimeCredentials.existingSecret -}}
 {{- end -}}
 
 {{/* Read-only bearer for backend-to-manager sandbox inventory. */}}
 {{- define "agentarea.sandboxInspectionSecretName" -}}
-{{- printf "%s-sandbox-inspection-auth" (include "agentarea.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- required "global.runtimeCredentials.existingSecret is required" .Values.global.runtimeCredentials.existingSecret -}}
+{{- end -}}
+
+{{/* Read/write bearer for internal live-workspace and artifact operations. */}}
+{{- define "agentarea.sandboxFileSecretName" -}}
+{{- required "global.runtimeCredentials.existingSecret is required" .Values.global.runtimeCredentials.existingSecret -}}
+{{- end -}}
+
+{{/* Dedicated bearer for Python-to-manager MCP demand traffic. */}}
+{{- define "agentarea.mcpGatewaySecretName" -}}
+{{- required "global.runtimeCredentials.existingSecret is required" .Values.global.runtimeCredentials.existingSecret -}}
+{{- end -}}
+
+{{- define "agentarea.sandboxCleanupSecretKey" -}}
+{{- required "global.runtimeCredentials.keys.sandboxCleanup is required" .Values.global.runtimeCredentials.keys.sandboxCleanup -}}
+{{- end -}}
+{{- define "agentarea.sandboxInspectionSecretKey" -}}
+{{- required "global.runtimeCredentials.keys.sandboxInspection is required" .Values.global.runtimeCredentials.keys.sandboxInspection -}}
+{{- end -}}
+{{- define "agentarea.sandboxFileSecretKey" -}}
+{{- required "global.runtimeCredentials.keys.sandboxFile is required" .Values.global.runtimeCredentials.keys.sandboxFile -}}
+{{- end -}}
+{{- define "agentarea.mcpGatewaySecretKey" -}}
+{{- required "global.runtimeCredentials.keys.mcpGateway is required" .Values.global.runtimeCredentials.keys.mcpGateway -}}
 {{- end -}}
 
 {{/*
@@ -56,8 +79,11 @@ rendered into values-backed ConfigMaps.
 {{- if not (has $runtime.provider $knownProviders) -}}
 {{- fail (printf "sandboxRuntime.provider=%q is unsupported" $runtime.provider) -}}
 {{- end -}}
-{{- if and (or (eq $runtime.provider "opensandbox") (eq $runtime.provider "e2b") (eq $runtime.provider "cube")) (not (or $runtime.manifests.allowed $runtime.manifests.locked)) -}}
-{{- fail "an external sandboxRuntime.provider requires at least one sandboxRuntime.manifests profile" -}}
+{{- if not (hasKey $runtime "allowInternet") -}}
+{{- fail "sandboxRuntime.allowInternet is required; sandbox egress has no implicit default" -}}
+{{- end -}}
+{{- if and (or (eq $runtime.provider "opensandbox") (eq $runtime.provider "e2b") (eq $runtime.provider "cube")) (empty $runtime.manifest) -}}
+{{- fail "an external sandboxRuntime.provider requires sandboxRuntime.manifest" -}}
 {{- end -}}
 {{- if $runtime.provider }}
 - name: SANDBOX_PROVIDER
@@ -71,22 +97,42 @@ rendered into values-backed ConfigMaps.
   value: {{ $runtime.idleTTL | quote }}
 - name: SANDBOX_TASK_LEASE_TTL
   value: {{ $runtime.leaseTTL | quote }}
+- name: SANDBOX_PROVIDER_PROVISIONING_TIMEOUT
+  value: {{ required "sandboxRuntime.provisioningTimeout is required; ambiguous creates must have a bounded reconciliation window" $runtime.provisioningTimeout | quote }}
 - name: SANDBOX_PROVIDER_SESSION_TTL
   value: {{ $runtime.sessionRecordTTL | quote }}
+- name: SANDBOX_EXECUTION_RECORD_TTL
+  value: {{ required "sandboxRuntime.executionRecordTTL is required; execution-record retention has no application default" $runtime.executionRecordTTL | quote }}
+- name: SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS
+  value: {{ required "sandboxRuntime.maxExecutionTimeoutSeconds is required; execution admission has no application default" $runtime.maxExecutionTimeoutSeconds | quote }}
+- name: SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS
+  value: {{ required "sandboxRuntime.defaultExecutionTimeoutSeconds is required; execution admission has no application default" $runtime.defaultExecutionTimeoutSeconds | quote }}
+- name: SANDBOX_EXECUTION_QUEUE_TIMEOUT
+  value: {{ required "sandboxRuntime.executionQueueTimeout is required; queued work needs a server-owned expiry" $runtime.executionQueueTimeout | quote }}
+- name: SANDBOX_EXECUTION_COMPLETION_GRACE
+  value: {{ required "sandboxRuntime.executionCompletionGrace is required; post-command completion needs a bounded deadline" $runtime.executionCompletionGrace | quote }}
 - name: SANDBOX_PROVIDER_CPU
   value: {{ $runtime.resources.cpu | quote }}
 - name: SANDBOX_PROVIDER_MEMORY
   value: {{ $runtime.resources.memory | quote }}
-{{- if $runtime.manifests.allowed }}
-- name: SANDBOX_RUNTIME_MANIFEST_ALLOWED_JSON
-  value: {{ $runtime.manifests.allowed | toJson | quote }}
-{{- end }}
-{{- if $runtime.manifests.locked }}
-- name: SANDBOX_RUNTIME_MANIFEST_LOCKED_JSON
-  value: {{ $runtime.manifests.locked | toJson | quote }}
+- name: SANDBOX_ALLOW_INTERNET
+  value: {{ $runtime.allowInternet | quote }}
+{{- if not (empty $runtime.manifest) }}
+- name: SANDBOX_RUNTIME_MANIFEST_JSON
+  value: {{ $runtime.manifest | toJson | quote }}
 {{- end }}
 {{- if eq $runtime.provider "opensandbox" }}
 {{- $openSandboxIsolation := required "sandboxRuntime.opensandbox.isolation is required" $runtime.opensandbox.isolation -}}
+{{- if not (has $openSandboxIsolation (list "gvisor" "container-dev")) -}}
+{{- fail "sandboxRuntime.opensandbox.isolation currently supports only gvisor or container-dev; kata/firecracker require verifiable provider attestation" -}}
+{{- end -}}
+{{- if $runtime.opensandbox.persistWorkspace -}}
+{{- fail "sandboxRuntime.opensandbox.persistWorkspace is not supported until archive/delete lifecycle and retention GC are implemented" -}}
+{{- end -}}
+{{- $openSandboxRuntimeIdentity := "" -}}
+{{- if eq $openSandboxIsolation "gvisor" -}}
+{{- $openSandboxRuntimeIdentity = required "sandboxRuntime.opensandbox.runtimeIdentity is required for gvisor" $runtime.opensandbox.runtimeIdentity -}}
+{{- end -}}
 {{- if and (eq $openSandboxIsolation "container-dev") (not $runtime.opensandbox.allowWeakIsolationForDevelopment) -}}
 {{- fail "sandboxRuntime.opensandbox.isolation=container-dev requires allowWeakIsolationForDevelopment=true" -}}
 {{- end }}
@@ -94,14 +140,17 @@ rendered into values-backed ConfigMaps.
 {{- if and (eq $openSandboxIsolation "gvisor") (ne $egressMode "host-public") -}}
 {{- fail "sandboxRuntime.opensandbox.isolation=gvisor requires egressMode=host-public because OpenSandbox networkPolicy is incompatible with gVisor" -}}
 {{- end }}
-{{- if and (eq $egressMode "host-public") $runtime.manifests.locked -}}
-{{- fail "sandboxRuntime.opensandbox.egressMode=host-public cannot advertise a locked manifest" -}}
+{{- if and (eq $openSandboxIsolation "container-dev") (ne $egressMode "provider") -}}
+{{- fail "sandboxRuntime.opensandbox.isolation=container-dev requires egressMode=provider" -}}
 {{- end }}
-{{- if and $runtime.manifests.allowed (not $runtime.opensandbox.images.allowed) -}}
-{{- fail "sandboxRuntime.opensandbox.images.allowed is required for the allowed manifest" -}}
+{{- if and (eq $egressMode "host-public") (not $runtime.allowInternet) -}}
+{{- fail "sandboxRuntime.opensandbox.egressMode=host-public requires sandboxRuntime.allowInternet=true; use provider mode for deny-by-default policy" -}}
 {{- end }}
-{{- if and $runtime.manifests.locked (not $runtime.opensandbox.images.locked) -}}
-{{- fail "sandboxRuntime.opensandbox.images.locked is required for the locked manifest" -}}
+{{- if not $runtime.opensandbox.image -}}
+{{- fail "sandboxRuntime.opensandbox.image is required" -}}
+{{- end }}
+{{- if and (eq $openSandboxIsolation "gvisor") (not (contains "@sha256:" $runtime.opensandbox.image)) -}}
+{{- fail "sandboxRuntime.opensandbox.image must use an immutable sha256 digest for gvisor" -}}
 {{- end }}
 {{- if and (not $runtime.opensandbox.allowInsecure) (or (not $runtime.opensandbox.apiKeySecretRef.name) (not $runtime.opensandbox.apiKeySecretRef.key)) -}}
 {{- fail "sandboxRuntime.opensandbox.apiKeySecretRef name and key are required unless allowInsecure=true" -}}
@@ -117,6 +166,10 @@ rendered into values-backed ConfigMaps.
   value: {{ $runtime.opensandbox.secureAccess | quote }}
 - name: SANDBOX_OPENSANDBOX_ISOLATION
   value: {{ $openSandboxIsolation | quote }}
+{{- if $openSandboxRuntimeIdentity }}
+- name: SANDBOX_OPENSANDBOX_RUNTIME_IDENTITY
+  value: {{ $openSandboxRuntimeIdentity | quote }}
+{{- end }}
 - name: SANDBOX_OPENSANDBOX_EGRESS_MODE
   value: {{ $egressMode | quote }}
 - name: SANDBOX_OPENSANDBOX_PERSIST_WORKSPACE
@@ -129,14 +182,8 @@ rendered into values-backed ConfigMaps.
   value: {{ $runtime.opensandbox.useServerProxy | quote }}
 - name: SANDBOX_OPENSANDBOX_AUTH_HEADER
   value: {{ $runtime.opensandbox.authHeader | quote }}
-{{- if $runtime.opensandbox.images.allowed }}
-- name: SANDBOX_OPENSANDBOX_IMAGE_ALLOWED
-  value: {{ $runtime.opensandbox.images.allowed | quote }}
-{{- end }}
-{{- if $runtime.opensandbox.images.locked }}
-- name: SANDBOX_OPENSANDBOX_IMAGE_LOCKED
-  value: {{ $runtime.opensandbox.images.locked | quote }}
-{{- end }}
+- name: SANDBOX_OPENSANDBOX_IMAGE
+  value: {{ $runtime.opensandbox.image | quote }}
 {{- if $runtime.opensandbox.entrypoint }}
 - name: SANDBOX_OPENSANDBOX_ENTRYPOINT
   value: {{ $runtime.opensandbox.entrypoint | toJson | quote }}
@@ -152,38 +199,30 @@ rendered into values-backed ConfigMaps.
 {{- end }}
 {{- end }}
 {{- if eq $runtime.provider "e2b" }}
-{{- if and $runtime.manifests.allowed (not $runtime.e2b.templates.allowed) -}}
-{{- fail "sandboxRuntime.e2b.templates.allowed is required for the allowed manifest" -}}
-{{- end }}
-{{- if and $runtime.manifests.locked (not $runtime.e2b.templates.locked) -}}
-{{- fail "sandboxRuntime.e2b.templates.locked is required for the locked manifest" -}}
+{{- if not $runtime.e2b.template -}}
+{{- fail "sandboxRuntime.e2b.template is required" -}}
 {{- end }}
 {{- if or (not $runtime.e2b.apiKeySecretRef.name) (not $runtime.e2b.apiKeySecretRef.key) -}}
 {{- fail "sandboxRuntime.e2b.apiKeySecretRef name and key are required" -}}
 {{- end }}
 - name: SANDBOX_E2B_API_URL
   value: {{ required "sandboxRuntime.e2b.apiUrl is required" $runtime.e2b.apiUrl | quote }}
+- name: SANDBOX_E2B_ISOLATION
+  value: {{ required "sandboxRuntime.e2b.isolation is required; an E2B-compatible endpoint must attest a verifiable boundary" $runtime.e2b.isolation | quote }}
+- name: SANDBOX_E2B_ATTESTATION_PATH
+  value: {{ required "sandboxRuntime.e2b.attestationPath is required" $runtime.e2b.attestationPath | quote }}
+{{- if $runtime.e2b.runtimeIdentity }}
+- name: SANDBOX_E2B_RUNTIME_IDENTITY
+  value: {{ $runtime.e2b.runtimeIdentity | quote }}
+{{- end }}
 {{- if $runtime.e2b.sandboxUrl }}
 - name: SANDBOX_E2B_SANDBOX_URL
   value: {{ $runtime.e2b.sandboxUrl | quote }}
 {{- end }}
-{{- if $runtime.e2b.internetAccess.locked }}
-{{- fail "sandboxRuntime.e2b.internetAccess.locked must remain false" -}}
-{{- end }}
-- name: SANDBOX_E2B_ALLOW_INTERNET_ALLOWED
-  value: {{ $runtime.e2b.internetAccess.allowed | quote }}
-- name: SANDBOX_E2B_ALLOW_INTERNET_LOCKED
-  value: {{ $runtime.e2b.internetAccess.locked | quote }}
 - name: SANDBOX_E2B_ALLOW_INSECURE
   value: {{ $runtime.e2b.allowInsecure | quote }}
-{{- if $runtime.e2b.templates.allowed }}
-- name: SANDBOX_E2B_TEMPLATE_ALLOWED
-  value: {{ $runtime.e2b.templates.allowed | quote }}
-{{- end }}
-{{- if $runtime.e2b.templates.locked }}
-- name: SANDBOX_E2B_TEMPLATE_LOCKED
-  value: {{ $runtime.e2b.templates.locked | quote }}
-{{- end }}
+- name: SANDBOX_E2B_TEMPLATE
+  value: {{ $runtime.e2b.template | quote }}
 {{- with $runtime.e2b.apiKeySecretRef }}
 {{- if and .name .key }}
 - name: SANDBOX_E2B_API_KEY
@@ -195,38 +234,30 @@ rendered into values-backed ConfigMaps.
 {{- end }}
 {{- end }}
 {{- if eq $runtime.provider "cube" }}
-{{- if and $runtime.manifests.allowed (not $runtime.cube.templates.allowed) -}}
-{{- fail "sandboxRuntime.cube.templates.allowed is required for the allowed manifest" -}}
-{{- end }}
-{{- if and $runtime.manifests.locked (not $runtime.cube.templates.locked) -}}
-{{- fail "sandboxRuntime.cube.templates.locked is required for the locked manifest" -}}
+{{- if not $runtime.cube.template -}}
+{{- fail "sandboxRuntime.cube.template is required" -}}
 {{- end }}
 {{- if or (not $runtime.cube.apiKeySecretRef.name) (not $runtime.cube.apiKeySecretRef.key) -}}
 {{- fail "sandboxRuntime.cube.apiKeySecretRef name and key are required" -}}
 {{- end }}
 - name: SANDBOX_CUBE_API_URL
   value: {{ required "sandboxRuntime.cube.apiUrl is required" $runtime.cube.apiUrl | quote }}
+- name: SANDBOX_CUBE_ISOLATION
+  value: {{ required "sandboxRuntime.cube.isolation is required; a Cube endpoint must attest a verifiable boundary" $runtime.cube.isolation | quote }}
+- name: SANDBOX_CUBE_ATTESTATION_PATH
+  value: {{ required "sandboxRuntime.cube.attestationPath is required" $runtime.cube.attestationPath | quote }}
+{{- if $runtime.cube.runtimeIdentity }}
+- name: SANDBOX_CUBE_RUNTIME_IDENTITY
+  value: {{ $runtime.cube.runtimeIdentity | quote }}
+{{- end }}
 {{- if $runtime.cube.sandboxUrl }}
 - name: SANDBOX_CUBE_SANDBOX_URL
   value: {{ $runtime.cube.sandboxUrl | quote }}
 {{- end }}
-{{- if $runtime.cube.internetAccess.locked }}
-{{- fail "sandboxRuntime.cube.internetAccess.locked must remain false" -}}
-{{- end }}
-- name: SANDBOX_CUBE_ALLOW_INTERNET_ALLOWED
-  value: {{ $runtime.cube.internetAccess.allowed | quote }}
-- name: SANDBOX_CUBE_ALLOW_INTERNET_LOCKED
-  value: {{ $runtime.cube.internetAccess.locked | quote }}
 - name: SANDBOX_CUBE_ALLOW_INSECURE
   value: {{ $runtime.cube.allowInsecure | quote }}
-{{- if $runtime.cube.templates.allowed }}
-- name: SANDBOX_CUBE_TEMPLATE_ALLOWED
-  value: {{ $runtime.cube.templates.allowed | quote }}
-{{- end }}
-{{- if $runtime.cube.templates.locked }}
-- name: SANDBOX_CUBE_TEMPLATE_LOCKED
-  value: {{ $runtime.cube.templates.locked | quote }}
-{{- end }}
+- name: SANDBOX_CUBE_TEMPLATE
+  value: {{ $runtime.cube.template | quote }}
 {{- with $runtime.cube.apiKeySecretRef }}
 {{- if and .name .key }}
 - name: SANDBOX_CUBE_API_KEY

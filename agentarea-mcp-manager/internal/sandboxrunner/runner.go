@@ -100,35 +100,34 @@ func NewWithPlacer(cfg Config, store *sandboxcontrol.RedisStore, placer sandboxp
 	if cfg.HeartbeatEvery <= 0 {
 		cfg.HeartbeatEvery = 30 * time.Second
 	}
-	eventBus := sandboxcontrol.NewRedisEventBus(
-		store.RedisClient(),
-		cfg.RequestStream,
-		cfg.EventStream,
-		"agentarea.sandbox-runner",
-	)
+	service, err := sandboxcontrol.NewService(store, store.ExecutionPolicy())
+	if err != nil {
+		panic(fmt.Sprintf("invalid sandbox execution policy: %v", err))
+	}
 	runner := &Runner{
 		cfg:     cfg,
 		store:   store,
-		service: sandboxcontrol.NewService(store, eventBus),
+		service: service,
 		placer:  placer,
 		logger:  logger,
-	}
-	if workspace.ConfigFromEnv().Bucket != "" {
-		repository, err := workspace.NewRepositoryFromEnv(context.Background())
-		if err != nil {
-			logger.Warn("sandbox runner output offload disabled: workspace repository init failed",
-				slog.String("error", err.Error()))
-		} else {
-			runner.workspaceRepository = repository
-		}
-	} else {
-		logger.Warn("sandbox runner output offload disabled: no workspace bucket configured; command stdout/stderr will be dropped (only exit codes persist)")
 	}
 	return runner
 }
 
 func NewWithWorkspaceRepository(cfg Config, store *sandboxcontrol.RedisStore, executor SandboxExecutor, logger *slog.Logger, repository *workspace.Repository) *Runner {
 	runner := New(cfg, store, executor, logger)
+	runner.workspaceRepository = repository
+	return runner
+}
+
+func NewWithPlacerAndWorkspaceRepository(
+	cfg Config,
+	store *sandboxcontrol.RedisStore,
+	placer sandboxplacement.Placer,
+	logger *slog.Logger,
+	repository workspaceRepository,
+) *Runner {
+	runner := NewWithPlacer(cfg, store, placer, logger)
 	runner.workspaceRepository = repository
 	return runner
 }
@@ -299,17 +298,22 @@ func (r *Runner) handleMessage(ctx context.Context, message redis.XMessage) erro
 }
 
 func (r *Runner) execute(ctx context.Context, record *sandboxcontrol.ExecutionRecord) (*warmpool.ExecuteResponse, []workspace.Entry, error) {
-	if _, err := r.service.ApplyExecutionEvent(ctx, record.ID, sandboxcontrol.ExecutionEventRequest{
+	started, err := r.service.ApplyExecutionEvent(ctx, record.ID, sandboxcontrol.ExecutionEventRequest{
 		EventType: sandboxcontrol.EventTypeExecutionStarted,
 		Metadata: map[string]string{
 			"runner_consumer": r.cfg.Consumer,
 		},
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, nil, err
 	}
+	if started.ExecutionExpiresAt == nil {
+		return nil, nil, fmt.Errorf("running sandbox execution has no server deadline")
+	}
+	executionCtx, cancelExecution := context.WithDeadline(ctx, *started.ExecutionExpiresAt)
+	defer cancelExecution()
 
 	req := record.Command
-	req.PackageInstall = record.Runtime.PackageInstall
 	req.TaskID = record.TaskID
 	req.WorkspaceID = record.WorkspaceID
 	if req.WorkflowID == "" {
@@ -323,7 +327,7 @@ func (r *Runner) execute(ctx context.Context, record *sandboxcontrol.ExecutionRe
 	// where the task MAY run (e.g. a region), and the placer resolves that to a
 	// concrete data plane. Refusing to run is correct when no target qualifies —
 	// we never silently fall back to the wrong sandbox.
-	target, err := r.placer.Select(ctx, sandboxplacement.Constraints{
+	target, err := r.placer.Select(executionCtx, sandboxplacement.Constraints{
 		Region: record.Runtime.Region,
 	})
 	if err != nil {
@@ -334,7 +338,7 @@ func (r *Runner) execute(ctx context.Context, record *sandboxcontrol.ExecutionRe
 		slog.String("sandbox_target", target.Capabilities.Name),
 		slog.String("sandbox_region", target.Capabilities.Region))
 
-	result, err := target.Executor.ExecuteSandbox(ctx, req)
+	result, err := target.Executor.ExecuteSandbox(executionCtx, req)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -348,11 +352,11 @@ func (r *Runner) execute(ctx context.Context, record *sandboxcontrol.ExecutionRe
 	if r.workspaceRepository == nil {
 		return result, nil, nil
 	}
-	stdoutRef, err := r.workspaceRepository.PutExecutionOutput(ctx, record.WorkspaceID, record.TaskID, record.ID, "stdout", []byte(stdout))
+	stdoutRef, err := r.workspaceRepository.PutExecutionOutput(executionCtx, record.WorkspaceID, record.TaskID, record.ID, "stdout", []byte(stdout))
 	if err != nil {
 		return nil, nil, fmt.Errorf("persist stdout: %w", err)
 	}
-	stderrRef, err := r.workspaceRepository.PutExecutionOutput(ctx, record.WorkspaceID, record.TaskID, record.ID, "stderr", []byte(stderr))
+	stderrRef, err := r.workspaceRepository.PutExecutionOutput(executionCtx, record.WorkspaceID, record.TaskID, record.ID, "stderr", []byte(stderr))
 	if err != nil {
 		return nil, nil, fmt.Errorf("persist stderr: %w", err)
 	}

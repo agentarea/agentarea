@@ -242,11 +242,11 @@ func (dr *DatabaseSecretResolver) ResolveInstanceEnvVars(instanceID string, envV
 	for _, envName := range envVarNames {
 		secretValue, err := dr.getSecretFromDatabase(instanceID, envName)
 		if err != nil {
-			dr.logger.Warn("Failed to resolve env var from database",
+			dr.logger.Error("Failed to resolve requested env var from database",
 				slog.String("instance_id", instanceID),
 				slog.String("env_var", envName),
 				slog.String("error", err.Error()))
-			continue // Skip missing secrets rather than failing the whole container
+			return nil, fmt.Errorf("resolve requested secret %s: %w", envName, err)
 		}
 		resolved[envName] = secretValue
 	}

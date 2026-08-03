@@ -17,6 +17,7 @@ from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerInstanceCreate
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_instance(
     instance_type: str = "docker",
     verification: dict | None = None,
@@ -45,7 +46,9 @@ def _make_instance(
     return inst
 
 
-def _make_service(instances: dict[str, MCPServerInstance] | None = None) -> MCPServerInstanceService:
+def _make_service(
+    instances: dict[str, MCPServerInstance] | None = None,
+) -> MCPServerInstanceService:
     """Build a service with a mocked repository."""
     instances = instances or {}
 
@@ -119,9 +122,79 @@ def _make_service(instances: dict[str, MCPServerInstance] | None = None) -> MCPS
     return svc
 
 
+class _RetireResponse:
+    def __init__(self, status_code: int):
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        raise AssertionError(f"unexpected non-retryable status {self.status_code}")
+
+
+class _RetireClient:
+    def __init__(self, statuses: list[int]):
+        self.statuses = list(statuses)
+        self.calls: list[tuple[str, dict[str, str]]] = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return None
+
+    async def delete(self, url: str, *, headers: dict[str, str]):
+        self.calls.append((url, headers))
+        return _RetireResponse(self.statuses.pop(0))
+
+
+@pytest.mark.asyncio
+async def test_delete_container_instance_retires_runtime_before_desired_state():
+    instance = _make_instance("docker")
+    svc = _make_service({str(instance.id): instance})
+    client = _RetireClient([204])
+    mcp_settings = MagicMock()
+    mcp_settings.MCP_CLIENT_TIMEOUT = 30
+    mcp_settings.manager_retire_url.return_value = f"http://manager/mcp/{instance.id}"
+    mcp_settings.manager_gateway_headers.return_value = {"X-Auth": "secret"}
+
+    with (
+        patch("agentarea_mcp.application.service.httpx.AsyncClient", return_value=client),
+        patch("agentarea_mcp.application.service.get_settings") as settings,
+    ):
+        settings.return_value.mcp = mcp_settings
+        assert await svc.delete_instance(instance.id) is True
+
+    assert client.calls == [(f"http://manager/mcp/{instance.id}", {"X-Auth": "secret"})]
+    assert await svc.repository.get_by_id(instance.id) is None
+    svc.event_broker.publish.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_preserves_desired_state_when_runtime_retirement_fails():
+    instance = _make_instance("docker")
+    svc = _make_service({str(instance.id): instance})
+    client = _RetireClient([503, 503, 503])
+    mcp_settings = MagicMock()
+    mcp_settings.MCP_CLIENT_TIMEOUT = 30
+    mcp_settings.manager_retire_url.return_value = f"http://manager/mcp/{instance.id}"
+    mcp_settings.manager_gateway_headers.return_value = {"X-Auth": "secret"}
+
+    with (
+        patch("agentarea_mcp.application.service.httpx.AsyncClient", return_value=client),
+        patch("agentarea_mcp.application.service.get_settings") as settings,
+        patch("agentarea_mcp.application.service.asyncio.sleep", new=AsyncMock()),
+    ):
+        settings.return_value.mcp = mcp_settings
+        with pytest.raises(RuntimeError, match="desired state was preserved"):
+            await svc.delete_instance(instance.id)
+
+    assert await svc.repository.get_by_id(instance.id) is instance
+    svc.event_broker.publish.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # create_instance_with_spec - slug regression
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_create_instance_with_spec_populates_slug():
@@ -285,6 +358,7 @@ async def test_verify_instance_surfaces_reauth_when_refresh_dead():
 # derive_bundle_verification
 # ---------------------------------------------------------------------------
 
+
 class TestDeriveBundleVerification:
     def _make_bundle(self, member_ids: list[str]) -> MCPServerInstance:
         b = MagicMock(spec=MCPServerInstance)
@@ -340,6 +414,7 @@ class TestDeriveBundleVerification:
 # service.create_instance
 # ---------------------------------------------------------------------------
 
+
 class TestServiceCreateInstance:
     @pytest.mark.asyncio
     async def test_url_type_sync_verify(self):
@@ -363,8 +438,16 @@ class TestServiceCreateInstance:
             "error": None,
         }
 
-        with patch("agentarea_mcp.application.service.verify", new=AsyncMock(return_value=fake_verification)), \
-             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
+        with (
+            patch(
+                "agentarea_mcp.application.service.verify",
+                new=AsyncMock(return_value=fake_verification),
+            ),
+            patch(
+                "agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec",
+                return_value=[],
+            ),
+        ):
             inst = await svc.create_instance(
                 MCPServerInstanceCreate(
                     name="url-inst",
@@ -404,8 +487,16 @@ class TestServiceCreateInstance:
         svc._materialize_workspace_spec_copy = AsyncMock(return_value=owned_copy)
 
         fake_verification = {"schema_version": 1, "status": "succeeded", "at": "x", "error": None}
-        with patch("agentarea_mcp.application.service.verify", new=AsyncMock(return_value=fake_verification)), \
-             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
+        with (
+            patch(
+                "agentarea_mcp.application.service.verify",
+                new=AsyncMock(return_value=fake_verification),
+            ),
+            patch(
+                "agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec",
+                return_value=[],
+            ),
+        ):
             inst = await svc.create_instance(
                 MCPServerInstanceCreate(
                     name="asana",
@@ -428,8 +519,13 @@ class TestServiceCreateInstance:
         async def fake_verify(instance):
             verify_called.append(str(instance.id))
 
-        with patch("agentarea_mcp.application.service.verify", side_effect=fake_verify), \
-             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
+        with (
+            patch("agentarea_mcp.application.service.verify", side_effect=fake_verify),
+            patch(
+                "agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec",
+                return_value=[],
+            ),
+        ):
             inst = await svc.create_instance(
                 MCPServerInstanceCreate(
                     name="docker-inst",
@@ -442,96 +538,6 @@ class TestServiceCreateInstance:
         # Drain event loop to allow background task to run
         await asyncio.sleep(0)
         assert len(verify_called) == 1
-
-    @pytest.mark.asyncio
-    async def test_container_instance_is_marked_lazy_when_enabled(self, monkeypatch):
-        """Nothing else writes lazy_provisioning, so if creation does not stamp
-        it the platform flag is inert: every instance stays eager, is never
-        reaped, and runs until someone deletes it."""
-        monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "true")
-        svc = _make_service()
-
-        with patch("agentarea_mcp.application.service.verify", new=AsyncMock()), \
-             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
-            inst = await svc.create_instance(
-                MCPServerInstanceCreate(
-                    name="docker-inst",
-                    server_spec_id="test-spec-id",
-                    json_spec={"type": "docker"},
-                )
-            )
-
-        assert inst is not None
-        assert inst.json_spec.get("lazy_provisioning") is True
-
-    @pytest.mark.asyncio
-    async def test_container_instance_is_eager_when_flag_off(self, monkeypatch):
-        """The decision is recorded at creation, so turning the flag on later
-        must not retroactively shorten the life of an existing instance."""
-        monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "false")
-        svc = _make_service()
-
-        with patch("agentarea_mcp.application.service.verify", new=AsyncMock()), \
-             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
-            inst = await svc.create_instance(
-                MCPServerInstanceCreate(
-                    name="docker-inst",
-                    server_spec_id="test-spec-id",
-                    json_spec={"type": "docker"},
-                )
-            )
-
-        assert inst is not None
-        assert inst.json_spec.get("lazy_provisioning") is False
-
-    @pytest.mark.asyncio
-    async def test_url_instance_is_never_lazy(self, monkeypatch):
-        """A url-type instance has no container to start or stop, so marking it
-        lazy would defer a verification that costs nothing to run now."""
-        monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "true")
-        svc = _make_service()
-        url_spec = MagicMock()
-        url_spec.id = "test-spec-id"
-        url_spec.workspace_id = svc.repository.user_context.workspace_id
-        url_spec.remote_url = "http://test.example.com/mcp"
-        url_spec.cmd = None
-        url_spec.docker_image_url = None
-        url_spec.json_spec = {"type": "url", "endpoint_url": "http://test.example.com/mcp"}
-        url_spec.env_schema = []
-        svc.mcp_server_repository.get_server_by_id = AsyncMock(return_value=url_spec)
-
-        fake_verification = {"schema_version": 1, "status": "succeeded", "at": "x", "error": None}
-        with patch("agentarea_mcp.application.service.verify", new=AsyncMock(return_value=fake_verification)), \
-             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
-            inst = await svc.create_instance(
-                MCPServerInstanceCreate(
-                    name="url-inst",
-                    server_spec_id="test-spec-id",
-                    json_spec={"type": "url", "endpoint_url": "http://test.example.com/mcp"},
-                )
-            )
-
-        assert inst is not None
-        assert "lazy_provisioning" not in inst.json_spec
-
-    @pytest.mark.asyncio
-    async def test_explicit_lazy_choice_is_not_overridden(self, monkeypatch):
-        """An explicit per-instance choice wins over the platform default."""
-        monkeypatch.setenv("MCP_LAZY_PROVISIONING_ENABLED", "false")
-        svc = _make_service()
-
-        with patch("agentarea_mcp.application.service.verify", new=AsyncMock()), \
-             patch("agentarea_mcp.application.service.MCPConfigurationValidator.validate_json_spec", return_value=[]):
-            inst = await svc.create_instance(
-                MCPServerInstanceCreate(
-                    name="docker-inst",
-                    server_spec_id="test-spec-id",
-                    json_spec={"type": "docker", "lazy_provisioning": True},
-                )
-            )
-
-        assert inst is not None
-        assert inst.json_spec.get("lazy_provisioning") is True
 
     def test_bundle_create_payload_is_rejected(self):
         """Bundle is no longer a valid MCP server instance type."""
@@ -565,6 +571,7 @@ class TestServiceCreateInstance:
 # service.verify_instance
 # ---------------------------------------------------------------------------
 
+
 class TestServiceVerifyInstance:
     @pytest.mark.asyncio
     async def test_verify_instance_returns_payload(self):
@@ -578,7 +585,9 @@ class TestServiceVerifyInstance:
             "error": None,
         }
 
-        with patch("agentarea_mcp.application.service.verify", new=AsyncMock(return_value=fake_payload)):
+        with patch(
+            "agentarea_mcp.application.service.verify", new=AsyncMock(return_value=fake_payload)
+        ):
             result = await svc.verify_instance(inst.id)
 
         assert result["status"] == "succeeded"
@@ -612,12 +621,14 @@ class TestServiceVerifyInstance:
 # service.execute_tool — all failure paths have populated result
 # ---------------------------------------------------------------------------
 
+
 class TestServiceExecuteTool:
     @pytest.mark.asyncio
     async def test_result_not_empty_when_instance_not_found(self):
         svc = _make_service()
 
         import agentarea_execution.activities.agent_execution_activities as mod
+
         orig = getattr(mod, "_enqueue_last_dispatch", None)
         mod._enqueue_last_dispatch = lambda *a, **k: None
         try:
@@ -631,15 +642,28 @@ class TestServiceExecuteTool:
         assert len(result["result"]) > 0
 
     @pytest.mark.asyncio
-    async def test_result_not_empty_when_verification_not_succeeded(self):
+    async def test_result_not_empty_when_the_instance_is_unreachable(self):
+        """A failed dispatch must carry a message the agent can act on.
+
+        The service no longer consults verification status before dispatching —
+        whether a workload is running is the substrate's business, and a cached
+        status is wrong in both directions. It just calls, and an unreachable
+        instance surfaces as a failed call. What must not regress is an empty
+        `result`, which would leave the agent with nothing to report.
+        """
         inst = _make_instance(
             "docker",
-            verification={"schema_version": 1, "status": "failed", "at": "x",
-                          "error": {"code": "list_tools_timeout", "message": "timed out", "detail": None}},
+            verification={
+                "schema_version": 1,
+                "status": "failed",
+                "at": "x",
+                "error": {"code": "list_tools_timeout", "message": "timed out", "detail": None},
+            },
         )
         svc = _make_service({str(inst.id): inst})
 
         import agentarea_execution.activities.agent_execution_activities as mod
+
         orig = getattr(mod, "_enqueue_last_dispatch", None)
         mod._enqueue_last_dispatch = lambda *a, **k: None
         try:
@@ -650,7 +674,7 @@ class TestServiceExecuteTool:
 
         assert result["success"] is False
         assert result["result"]
-        assert "timed out" in result["result"] or "not available" in result["result"]
+        assert inst.name in result["result"]
 
     @pytest.mark.asyncio
     async def test_bundle_member_not_ready_returns_populated_result(self):
@@ -658,8 +682,12 @@ class TestServiceExecuteTool:
         m_id = uuid.uuid4()
         member = _make_instance(
             "docker",
-            verification={"schema_version": 1, "status": "failed", "at": "x",
-                          "error": {"code": "image_not_found", "message": "Image missing", "detail": None}},
+            verification={
+                "schema_version": 1,
+                "status": "failed",
+                "at": "x",
+                "error": {"code": "image_not_found", "message": "Image missing", "detail": None},
+            },
             instance_id=m_id,
             name="bad-member",
         )
@@ -678,6 +706,7 @@ class TestServiceExecuteTool:
         svc = _make_service({str(m_id): member, str(bundle.id): bundle})
 
         import agentarea_execution.activities.agent_execution_activities as mod
+
         orig = getattr(mod, "_enqueue_last_dispatch", None)
         mod._enqueue_last_dispatch = lambda *a, **k: None
         try:
@@ -715,6 +744,7 @@ class TestServiceExecuteTool:
         svc._call_tool_via_mcp = fake_call_tool_via_mcp
 
         import agentarea_execution.activities.agent_execution_activities as mod
+
         orig = getattr(mod, "_enqueue_last_dispatch", None)
         mod._enqueue_last_dispatch = lambda *a, **k: None
         try:
@@ -736,9 +766,11 @@ class TestServiceExecuteTool:
 # API endpoint presence tests (unit — no DB)
 # ---------------------------------------------------------------------------
 
+
 class TestAPIEndpoints:
     def _get_router_routes(self):
         from agentarea_api.api.v1.mcp_server_instances import router
+
         return {route.path: set(route.methods) for route in router.routes}
 
     def test_start_endpoint_removed(self):
@@ -757,15 +789,16 @@ class TestAPIEndpoints:
 
     def test_validate_endpoint_present(self):
         routes = self._get_router_routes()
-        assert any(
-            path.endswith("/validate") or "/validate" in path for path in routes
-        ), "POST /validate must exist"
+        assert any(path.endswith("/validate") or "/validate" in path for path in routes), (
+            "POST /validate must exist"
+        )
 
     def test_create_returns_different_status_codes(self):
         """Verify the create endpoint sets 202 for docker/command types."""
         import inspect
 
         from agentarea_api.api.v1.mcp_server_instances import create_mcp_server_instance
+
         src = inspect.getsource(create_mcp_server_instance)
         assert "202" in src, "create endpoint must set 202 for docker/command"
 

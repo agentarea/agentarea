@@ -529,8 +529,8 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 }
 
 // buildContainerRunArgs builds the arguments for the container runtime run command.
-// Traefik labels are added so that Traefik auto-discovers the container and routes
-// /mcp/{slug}/* traffic to it.
+// MCP containers intentionally have no external router labels: every request
+// must cross the manager demand gateway so lifecycle leases stay authoritative.
 func (m *Manager) buildContainerRunArgs(container *models.Container) []string {
 	args := []string{"run", "-d"}
 
@@ -549,18 +549,6 @@ func (m *Manager) buildContainerRunArgs(container *models.Container) []string {
 	for key, value := range container.Labels {
 		args = append(args, "--label", fmt.Sprintf("%s=%s", key, value))
 	}
-
-	// Add Traefik labels for automatic routing
-	slug := container.Slug
-	port := container.Port
-	args = append(args,
-		"--label", "traefik.enable=true",
-		"--label", fmt.Sprintf("traefik.http.routers.%s.rule=PathPrefix(`/mcp/%s`)", slug, slug),
-		"--label", fmt.Sprintf("traefik.http.routers.%s.entrypoints=mcp", slug),
-		"--label", fmt.Sprintf("traefik.http.services.%s.loadbalancer.server.port=%d", slug, port),
-		"--label", fmt.Sprintf("traefik.http.middlewares.%s-strip.stripprefix.prefixes=/mcp/%s", slug, slug),
-		"--label", fmt.Sprintf("traefik.http.routers.%s.middlewares=%s-strip", slug, slug),
-	)
 
 	// Add isolation flags. MCP servers are third-party code; without these the
 	// container runs with the daemon's full default capability set next to the
@@ -716,6 +704,10 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 	if image == "" {
 		return fmt.Errorf("image is required in json_spec (or use type='command')")
 	}
+	isolation, err := config.ResolveIsolation(m.config.Container.DefaultIsolationTier)
+	if err != nil {
+		return fmt.Errorf("resolve MCP isolation policy: %w", err)
+	}
 
 	// Get container name for later use
 	containerName := m.config.GetContainerName(name)
@@ -730,8 +722,11 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 	defer m.mutex.Unlock()
 
 	// Check if container already exists
-	if _, exists := m.containers[name]; exists {
-		return fmt.Errorf("container %s already exists", name)
+	if existing, exists := m.containers[name]; exists {
+		if existing.Status == models.StatusRunning || existing.Status == models.StatusHealthy || existing.Status == models.StatusStarting {
+			return nil
+		}
+		return fmt.Errorf("container %s already exists in state %s", name, existing.Status)
 	}
 
 	// Check container limit
@@ -757,6 +752,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		Labels:      make(map[string]string),
 		Environment: environment,
 		Command:     command,
+		Isolation:   isolation,
 	}
 
 	// Store container in tracking map with validating status

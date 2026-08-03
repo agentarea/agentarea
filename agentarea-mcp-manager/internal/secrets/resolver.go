@@ -224,11 +224,11 @@ func (sr *InfisicalSecretResolver) ResolveInstanceEnvVars(instanceID string, env
 	for _, envName := range envVarNames {
 		secretValue, err := sr.resolveSecretFromInfisical(instanceID, envName)
 		if err != nil {
-			sr.logger.Warn("Failed to resolve env var from Infisical",
+			sr.logger.Error("Failed to resolve requested env var from Infisical",
 				slog.String("instance_id", instanceID),
 				slog.String("env_var", envName),
 				slog.String("error", err.Error()))
-			continue
+			return nil, fmt.Errorf("resolve requested secret %s: %w", envName, err)
 		}
 		resolved[envName] = secretValue
 	}

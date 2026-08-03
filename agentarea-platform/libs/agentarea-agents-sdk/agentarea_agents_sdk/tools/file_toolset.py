@@ -1,9 +1,9 @@
-"""File tool backed by a workspace-scoped object store.
+"""File tool backed by the task's selected workspace storage.
 
-Every call is issued against an injected ``StorageClient``. In production the
-platform injects an S3-backed ``ArtifactService`` (RustFS locally, real S3 in
-cloud). For standalone SDK usage we fall back to a tiny in-memory store so
-examples and unit tests keep working without pulling boto3.
+Every call is issued against an injected ``StorageClient``. Agent execution
+injects ``SandboxFileStore`` so file and shell tools see the same live
+``/workspace`` filesystem. Durable publication is a separate explicit artifact
+operation. Standalone SDK usage retains a tiny in-memory store for examples.
 
 The public tool method names (``save_file``/``read_file``/``list_files``/
 ``search_files``) are kept because LLMs have mental models around them — the
@@ -241,7 +241,7 @@ class FileToolset(Toolset):
 
     @tool_method
     async def save_file(self, contents: str, file_name: str, overwrite: bool = True) -> str:
-        """Save ``contents`` as a text file under the task's artifact scope.
+        """Save ``contents`` as a text file in the live task workspace.
 
         Args:
             contents: Text content. Use a generator tool for binary payloads.
@@ -287,7 +287,7 @@ class FileToolset(Toolset):
 
     @tool_method
     async def read_file(self, file_name: str) -> str:
-        """Read a text file from the task's artifact scope.
+        """Read a text file from the live task workspace.
 
         Binary objects (images, PDFs) should be fetched through the
         authenticated AgentArea file API; this method always decodes as UTF-8.

@@ -5,13 +5,8 @@ import (
 	"crypto/subtle"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 
-	"github.com/agentarea/mcp-manager/internal/backends"
-	"github.com/agentarea/mcp-manager/internal/features"
-	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 	"github.com/gin-gonic/gin"
 )
 
@@ -27,46 +22,22 @@ func (h *Handler) deleteSandboxTask(c *gin.Context) {
 	}
 
 	taskID := c.Param("id")
-	if taskID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "message": "task id is required"})
+	workspaceID := c.Query("workspace_id")
+	if taskID == "" || workspaceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "message": "workspace_id and task id are required"})
 		return
 	}
 
-	if retirer, ok := h.sandboxRuntime.(sandboxruntime.TaskRetirer); ok {
-		idleTTL := sandboxTaskIdleTTL()
-		if c.Query("force") == "true" {
-			idleTTL = 0
-		}
-		if err := retirer.RetireSandboxTask(c.Request.Context(), taskID, idleTTL); err != nil {
-			h.logger.Error("sandbox task retire failed", "task_id", taskID, "idle_ttl", idleTTL, "error", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "cleanup_failed", "message": err.Error()})
-			return
-		}
-		c.Status(http.StatusNoContent)
+	idleTTL := h.sandboxPolicy.TaskIdleTTL
+	if idleTTL < 0 {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "sandbox_policy_unavailable", "message": "sandbox task idle TTL is not configured"})
 		return
 	}
-
-	if !features.IsEnabled(features.WarmPool) {
-		c.Status(http.StatusNoContent)
-		return
-	}
-	k8sBackend, ok := h.backend.(*backends.KubernetesBackend)
-	if !ok {
-		c.Status(http.StatusNoContent)
-		return
-	}
-	wpClient := k8sBackend.GetWarmPoolClient()
-	if wpClient == nil {
-		c.Status(http.StatusNoContent)
-		return
-	}
-
-	idleTTL := sandboxTaskIdleTTL()
 	if c.Query("force") == "true" {
 		idleTTL = 0
 	}
-	if err := wpClient.RetirePodForTask(c.Request.Context(), taskID, idleTTL); err != nil {
-		h.logger.Error("warm pool pod retire failed", "task_id", taskID, "idle_ttl", idleTTL, "error", err)
+	if err := h.sandboxRuntime.RetireSandboxTask(c.Request.Context(), workspaceID, taskID, idleTTL); err != nil {
+		h.logger.Error("sandbox task retire failed", "task_id", taskID, "idle_ttl", idleTTL, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "cleanup_failed", "message": err.Error()})
 		return
 	}
@@ -88,18 +59,4 @@ func sandboxCleanupAuthorized(authorizationHeader, expectedSecret string) bool {
 	expectedDigest := sha256.Sum256([]byte(expectedSecret))
 	presentedDigest := sha256.Sum256([]byte(presentedSecret))
 	return subtle.ConstantTimeCompare(presentedDigest[:], expectedDigest[:]) == 1
-}
-
-func sandboxTaskIdleTTL() time.Duration {
-	raw := os.Getenv("SANDBOX_TASK_IDLE_TTL")
-	if raw == "" {
-		return 15 * time.Minute
-	}
-	if duration, err := time.ParseDuration(raw); err == nil && duration >= 0 {
-		return duration
-	}
-	if seconds, err := strconv.Atoi(raw); err == nil && seconds >= 0 {
-		return time.Duration(seconds) * time.Second
-	}
-	return 15 * time.Minute
 }

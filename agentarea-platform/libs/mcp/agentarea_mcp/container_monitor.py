@@ -67,7 +67,6 @@ WHERE COALESCE(
     END
   ) IN ('docker', 'command')
   AND (i.verification->>'status') = 'never_attempted'
-  AND COALESCE((i.json_spec->>'lazy_provisioning')::boolean, false) = false
 """
 
 
@@ -110,18 +109,20 @@ class _InstanceProxy:
 
     @property
     def endpoint_url(self) -> str:
+        """Direct endpoint for URL-type servers only.
+
+        The monitor never dials a container-backed workload itself; it drives
+        verification, which goes through the manager gateway. Synthesizing an
+        address here would reintroduce a path around that boundary.
+        """
         t = self.json_spec.get("type", "")
         if t == "url":
             return self.json_spec.get("endpoint_url", "")
-        if t in ("docker", "command"):
-            resolved = self.json_spec.get("internal_url")
-            if isinstance(resolved, str) and "://" in resolved:
-                return resolved
-            if t == "command":
-                port = 8080
-            else:
-                port = self.json_spec.get("port") or 8000
-            return f"http://mcp-{self.id}:{port}"
+        if t in ("docker", "command", "kubernetes"):
+            raise ValueError(
+                f"container-backed MCP instance {self.id} has no direct endpoint; "
+                "route the request through the manager gateway"
+            )
         raise ValueError("bundle has no endpoint_url")
 
 

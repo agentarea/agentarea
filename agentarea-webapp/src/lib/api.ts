@@ -96,7 +96,6 @@ interface McpContainerHealthCheck {
   container_status: string;
   details?: {
     proxy_url?: string;
-    direct_http_endpoint?: string;
     container_port?: number;
     container_image?: string;
   };
@@ -345,6 +344,29 @@ export const getAgentTaskStatus = async (agentId: string, taskId: string) => {
       error: error as Error,
     };
   }
+};
+
+export const listTaskArtifacts = async (agentId: string, taskId: string) => {
+  const result =
+    await sdk.listTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGet({
+      client: serverClient,
+      path: { agent_id: agentId, task_id: taskId },
+    });
+  return withStatus(result);
+};
+
+export const listTaskSandboxFiles = async (
+  agentId: string,
+  taskId: string,
+  prefix = ""
+) => {
+  const result =
+    await sdk.listTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGet({
+      client: serverClient,
+      path: { agent_id: agentId, task_id: taskId },
+      query: { prefix },
+    });
+  return withStatus(result);
 };
 
 export const pauseAgentTask = async (agentId: string, taskId: string) => {

@@ -13,7 +13,6 @@ info:
     - **Multi-Backend**: Supports both Docker and Kubernetes environments
     - **Resource Management**: Configure CPU and memory limits for instances
     - **Network Routing**: HTTP proxy routing to MCP instances
-    - **Legacy Compatibility**: Backward compatibility with existing container APIs
     
     ## Backends
     - **Docker Backend**: Uses Podman for rootless container management
@@ -40,9 +39,10 @@ info:
     curl http://localhost:8000/instances/my-mcp-server/health
     ```
     
-    ### Access Instance via Proxy
+    ### Call an Instance Through the Demand Gateway
     ```bash
-    curl http://localhost:8000/mcp/my-service-abc123/some-endpoint
+    curl -X POST http://localhost:8000/mcp/{instance_id}/mcp \
+      -H "X-AgentArea-Manager-Authorization: Bearer $MCP_GATEWAY_AUTH_SECRET"
     ```
     
   version: 0.1.0
@@ -128,71 +128,6 @@ paths:
                     updated_at: "2025-07-29T09:00:05Z"
                 total: 1
 
-    post:
-      tags: [Instances]
-      summary: Create a new MCP instance
-      description: |
-        Create and start a new MCP server instance. The instance will be created using the specified image and configuration.
-        
-        **Environment Variables**: The service automatically injects environment variables:
-        - `MCP_INSTANCE_ID`: The instance ID
-        - `MCP_SERVICE_NAME`: The service name
-        - `MCP_CONTAINER_PORT`: The exposed port
-        
-        **Networking**: Instances are accessible via:
-        - Proxy URL: `http://host:port/mcp/{service_name}-{hash}/`
-        - Direct access (Docker): `http://{container_ip}:{port}/`
-        
-      operationId: createInstance
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateInstanceRequest'
-            example:
-              instance_id: "my-mcp-server"
-              name: "My MCP Server"
-              service_name: "my-service"
-              image: "my-mcp-image:latest"
-              port: 3000
-              environment:
-                API_KEY: "secret-key"
-                DEBUG: "true"
-              workspace_id: "workspace-123"
-              resources:
-                requests:
-                  cpu: "100m"
-                  memory: "128Mi"
-                limits:
-                  cpu: "500m"
-                  memory: "512Mi"
-      responses:
-        '201':
-          description: Instance created successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Instance'
-        '400':
-          description: Invalid request payload
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Instance already exists
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Failed to create instance
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
   /instances/validate:
     post:
       tags: [Instances]
@@ -244,86 +179,6 @@ paths:
                 $ref: '#/components/schemas/Instance'
         '404':
           description: Instance not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    put:
-      tags: [Instances]
-      summary: Update instance configuration
-      description: |
-        Update an existing MCP instance. Some fields like image require instance restart.
-        
-        **Note**: Updating certain fields (image, port, resources) may require restarting the instance.
-      operationId: updateInstance
-      parameters:
-        - $ref: '#/components/parameters/InstanceId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateInstanceRequest'
-      responses:
-        '200':
-          description: Instance updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Instance'
-        '404':
-          description: Instance not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '400':
-          description: Invalid update request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    delete:
-      tags: [Instances]
-      summary: Delete an MCP instance
-      description: |
-        Stop and remove an MCP instance. This action is irreversible.
-        
-        **Warning**: All data in the instance will be lost unless persisted externally.
-      operationId: deleteInstance
-      parameters:
-        - $ref: '#/components/parameters/InstanceId'
-        - name: force
-          in: query
-          description: Force delete even if instance is not responding
-          required: false
-          schema:
-            type: boolean
-            default: false
-      responses:
-        '200':
-          description: Instance deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Instance deleted successfully"
-                  instance_id:
-                    type: string
-                    example: "abc123"
-        '404':
-          description: Instance not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Failed to delete instance
           content:
             application/json:
               schema:
@@ -414,17 +269,12 @@ paths:
 
   /containers:
     get:
-      tags: [Legacy]
-      summary: List containers (legacy)
+      tags: [Containers]
+      summary: List containers
       description: |
-        **Legacy endpoint for backward compatibility**
-        
-        Lists all containers managed by the Docker backend. This endpoint is only available
-        when using the Docker backend and is maintained for compatibility with existing clients.
-        
-        **Note**: New applications should use `/instances` instead.
+        Lists containers managed by the Docker backend. Available only on that
+        backend; instance-level callers should use `/instances`.
       operationId: listContainers
-      deprecated: true
       responses:
         '200':
           description: List of containers (Docker backend only)
@@ -445,121 +295,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
-  /mcp/{service_path}:
-    get:
-      tags: [Proxy]
-      summary: Proxy requests to MCP instances
-      description: |
-        **HTTP Proxy to MCP Instances**
-        
-        Routes HTTP requests to running MCP instances. The service path format is:
-        `{service_name}-{hash}` where hash is generated during instance creation.
-        
-        **Examples**:
-        - `/mcp/my-service-abc123/` → Routes to instance with service_name="my-service"
-        - `/mcp/my-service-abc123/api/data` → Routes to `/api/data` on the instance
-        
-        **Headers**: All request headers are forwarded to the target instance.
-      operationId: proxyToInstance
-      parameters:
-        - name: service_path
-          in: path
-          required: true
-          description: Service path including hash (e.g., "my-service-abc123/endpoint")
-          schema:
-            type: string
-            pattern: '^[a-zA-Z0-9\-]+(/.*)?$'
-      responses:
-        '200':
-          description: Response from MCP instance
-          content:
-            '*/*':
-              schema:
-                type: string
-                description: Raw response from the target MCP instance
-        '404':
-          description: Instance not found or not accessible
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '502':
-          description: Instance is not responding
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '503':
-          description: Instance is not healthy
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    post:
-      tags: [Proxy]
-      summary: Proxy POST requests to MCP instances
-      description: Proxy POST requests to MCP instances with request body forwarding
-      operationId: proxyPostToInstance
-      parameters:
-        - name: service_path
-          in: path
-          required: true
-          description: Service path including hash
-          schema:
-            type: string
-      requestBody:
-        description: Request body to forward to the instance
-        content:
-          '*/*':
-            schema:
-              type: string
-      responses:
-        '200':
-          description: Response from MCP instance
-          content:
-            '*/*':
-              schema:
-                type: string
-
-    put:
-      tags: [Proxy]
-      summary: Proxy PUT requests to MCP instances
-      description: Proxy PUT requests to MCP instances
-      operationId: proxyPutToInstance
-      parameters:
-        - name: service_path
-          in: path
-          required: true
-          description: Service path including hash
-          schema:
-            type: string
-      requestBody:
-        description: Request body to forward to the instance
-        content:
-          '*/*':
-            schema:
-              type: string
-      responses:
-        '200':
-          description: Response from MCP instance
-
-    delete:
-      tags: [Proxy]
-      summary: Proxy DELETE requests to MCP instances
-      description: Proxy DELETE requests to MCP instances
-      operationId: proxyDeleteToInstance
-      parameters:
-        - name: service_path
-          in: path
-          required: true
-          description: Service path including hash
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Response from MCP instance
 
 components:
   parameters:
@@ -800,8 +535,6 @@ components:
               type: string
             container_port:
               type: integer
-            direct_http_endpoint:
-              type: string
             internal_port:
               type: integer
             proxy_url:
@@ -885,7 +618,7 @@ components:
 
     Container:
       type: object
-      description: Legacy container object for backward compatibility
+      description: Container object reported by the Docker backend
       properties:
         id:
           type: string
@@ -944,10 +677,8 @@ tags:
     description: MCP instance management operations
   - name: Monitoring
     description: System monitoring and metrics
-  - name: Proxy
-    description: HTTP proxy to MCP instances
-  - name: Legacy
-    description: Legacy endpoints for backward compatibility
+  - name: Containers
+    description: Docker-backend container inspection
 
 externalDocs:
   description: Find more info about MCP Manager

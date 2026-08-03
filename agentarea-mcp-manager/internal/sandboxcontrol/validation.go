@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 	"github.com/agentarea/mcp-manager/internal/workspace"
 )
@@ -19,7 +18,6 @@ const (
 	maxArtifactPathBytesTotal   = 16 * 1024
 	maxOutputRefs               = 10002
 	maxWorkspaceChanges         = 10000
-	maxTimeoutSeconds           = 3600
 	maxPersistedOutputByteLimit = 16 * 1024 * 1024
 )
 
@@ -30,7 +28,7 @@ var allowedRunnerPhases = map[string]struct{}{
 	"workspace_commit_pending": {},
 }
 
-func validateCreateRequest(req *ExecutionCreateRequest) error {
+func validateCreateRequest(req *ExecutionCreateRequest, maxExecutionTimeoutSeconds int) error {
 	if req == nil {
 		return fmt.Errorf("execution request is required")
 	}
@@ -49,10 +47,10 @@ func validateCreateRequest(req *ExecutionCreateRequest) error {
 	if err := validateRuntimeSelector(req.Runtime); err != nil {
 		return err
 	}
-	if err := validatePersistedCommand(req.Command); err != nil {
+	if err := validatePersistedCommand(req.Command, maxExecutionTimeoutSeconds); err != nil {
 		return err
 	}
-	if req.Command.PackageInstall != "" || req.Command.TaskID != "" || req.Command.WorkspaceID != "" || req.Command.WorkspaceManifestRef != nil || req.Command.WorkspaceHydration != nil {
+	if req.Command.TaskID != "" || req.Command.WorkspaceID != "" || req.Command.WorkspaceManifestRef != nil || req.Command.WorkspaceHydration != nil {
 		return fmt.Errorf("command workspace identity and hydration are activation-only")
 	}
 	if req.WorkflowID != "" && req.Command.WorkflowID != "" && req.WorkflowID != req.Command.WorkflowID {
@@ -64,12 +62,15 @@ func validateCreateRequest(req *ExecutionCreateRequest) error {
 	return nil
 }
 
-func validateExecutionRecord(record *ExecutionRecord) error {
+func validateExecutionRecord(record *ExecutionRecord, maxExecutionTimeoutSeconds int) error {
 	if record == nil {
 		return fmt.Errorf("execution record is required")
 	}
 	if err := validateExecutionID(record.ID); err != nil {
 		return err
+	}
+	if record.Revision <= 0 {
+		return fmt.Errorf("execution revision must be positive")
 	}
 	for name, value := range map[string]string{
 		"session_id": record.SessionID, "workflow_id": record.WorkflowID,
@@ -88,10 +89,10 @@ func validateExecutionRecord(record *ExecutionRecord) error {
 	if err := validateStatus(record.Status); err != nil {
 		return err
 	}
-	if err := validatePersistedCommand(record.Command); err != nil {
+	if err := validatePersistedCommand(record.Command, maxExecutionTimeoutSeconds); err != nil {
 		return err
 	}
-	if record.Command.PackageInstall != "" || record.Command.TaskID != "" || record.Command.WorkspaceID != "" || record.Command.WorkspaceManifestRef != nil || record.Command.WorkspaceHydration != nil {
+	if record.Command.TaskID != "" || record.Command.WorkspaceID != "" || record.Command.WorkspaceManifestRef != nil || record.Command.WorkspaceHydration != nil {
 		return fmt.Errorf("activation-only command workspace data cannot be persisted")
 	}
 	if record.Command.WorkflowID != "" && record.WorkflowID != "" && record.Command.WorkflowID != record.WorkflowID {
@@ -122,22 +123,30 @@ func validateExecutionRecord(record *ExecutionRecord) error {
 	if err := validateBoundedString("error", record.Error, maxPersistedErrorBytes); err != nil {
 		return err
 	}
+	if record.CreatedAt.IsZero() || record.UpdatedAt.IsZero() || record.QueueExpiresAt.IsZero() || !record.QueueExpiresAt.After(record.CreatedAt) {
+		return fmt.Errorf("execution timestamps and queue expiry are invalid")
+	}
+	if record.StartedAt == nil && record.ExecutionExpiresAt != nil {
+		return fmt.Errorf("execution expiry requires a started timestamp")
+	}
+	if record.StartedAt != nil && (record.ExecutionExpiresAt == nil || !record.ExecutionExpiresAt.After(*record.StartedAt)) {
+		return fmt.Errorf("started execution requires a later execution expiry")
+	}
 	return nil
 }
 
 func validateExecutionEvent(event ExecutionEventRequest) error {
-	if event.EventType != "" {
-		switch event.EventType {
-		case EventTypeExecutionClaimed, EventTypeExecutionStarted, EventTypeExecutionProgress,
-			EventTypeExecutionCompleted, EventTypeExecutionFailed, EventTypeExecutionCancelled:
-		default:
-			return fmt.Errorf("invalid execution event_type")
-		}
+	if event.EventType == "" {
+		return fmt.Errorf("execution event_type is required")
+	}
+	switch event.EventType {
+	case EventTypeExecutionClaimed, EventTypeExecutionStarted, EventTypeExecutionProgress,
+		EventTypeExecutionCompleted, EventTypeExecutionFailed, EventTypeExecutionCancelled:
+	default:
+		return fmt.Errorf("invalid execution event_type")
 	}
 	if event.Status != "" {
-		if err := validateStatus(event.Status); err != nil {
-			return err
-		}
+		return fmt.Errorf("execution status is derived from event_type and must not be supplied")
 	}
 	if err := validateBoundedString("error", event.Error, maxPersistedErrorBytes); err != nil {
 		return err
@@ -167,10 +176,10 @@ func validateRuntimeSelector(selector RuntimeSelector) error {
 			return err
 		}
 	}
-	return runtimeinfo.ValidatePackageInstall(selector.PackageInstall)
+	return nil
 }
 
-func validatePersistedCommand(command warmpool.ExecuteRequest) error {
+func validatePersistedCommand(command warmpool.ExecuteRequest, maxExecutionTimeoutSeconds int) error {
 	if command.CommandBody == "" {
 		return fmt.Errorf("command_body is required")
 	}
@@ -186,8 +195,11 @@ func validatePersistedCommand(command warmpool.ExecuteRequest) error {
 	if err := validateOptionalIdentifier("command workflow_id", command.WorkflowID); err != nil {
 		return err
 	}
-	if command.TimeoutSeconds < 0 || command.TimeoutSeconds > maxTimeoutSeconds {
-		return fmt.Errorf("timeout_seconds must be between 0 and %d", maxTimeoutSeconds)
+	if maxExecutionTimeoutSeconds <= 0 {
+		return fmt.Errorf("sandbox maximum execution timeout is unavailable")
+	}
+	if command.TimeoutSeconds <= 0 || command.TimeoutSeconds > maxExecutionTimeoutSeconds {
+		return fmt.Errorf("timeout_seconds must be between 1 and %d", maxExecutionTimeoutSeconds)
 	}
 	if command.StdoutMaxBytes < 0 || command.StdoutMaxBytes > maxPersistedOutputByteLimit ||
 		command.StderrMaxBytes < 0 || command.StderrMaxBytes > maxPersistedOutputByteLimit {

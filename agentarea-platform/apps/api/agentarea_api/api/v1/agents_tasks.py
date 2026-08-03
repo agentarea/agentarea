@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 import re
 import unicodedata
 from collections.abc import AsyncGenerator
@@ -8,6 +9,7 @@ from typing import Any
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
+import httpx
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.temporal_workflow_service import (
     TemporalWorkflowService,
@@ -24,6 +26,7 @@ from agentarea_api.api.deps.services import (
 )
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.base import ReadRepositoryFactoryDep
+from agentarea_common.config import get_settings
 from agentarea_common.events.contract import TASK_CANCELLED, TASK_COMPLETED, TASK_FAILED
 from agentarea_common.money import ZERO, Money, serialize_money
 from agentarea_common.utils.types import UtcDatetime
@@ -1014,18 +1017,158 @@ async def get_agent_task_status(
             "usage_metadata": status.get("usage_metadata"),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 class TaskArtifactItem(BaseModel):
-    """A single artifact stored under a task's workspace scope."""
+    """A file explicitly published from a live task sandbox."""
 
+    id: str
     path: str
+    name: str
     size: int
     content_type: str | None
-    last_modified: str | None
+    sha256: str | None
+    created_at: datetime | None
     download_url: str
+
+
+class _ManagerArtifact(BaseModel):
+    id: str
+    path: str
+    name: str
+    size: int
+    content_type: str = ""
+    sha256: str = ""
+    created_at: datetime | None = None
+
+
+class _ManagerArtifactList(BaseModel):
+    items: list[_ManagerArtifact]
+
+
+class SandboxFileItem(BaseModel):
+    path: str
+
+
+class SandboxFileListResponse(BaseModel):
+    items: list[SandboxFileItem]
+    total: int
+
+
+class _ManagerSandboxFileList(BaseModel):
+    paths: list[str]
+
+
+async def _sandbox_manager_request(
+    method: str,
+    path: str,
+    *,
+    params: dict[str, str] | None = None,
+) -> httpx.Response:
+    settings = get_settings().mcp
+    secret = settings.SANDBOX_FILE_AUTH_SECRET
+    if secret is None or not secret.get_secret_value():
+        raise HTTPException(status_code=503, detail="Sandbox file access is not configured")
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            return await client.request(
+                method,
+                f"{settings.MCP_MANAGER_URL.rstrip('/')}{path}",
+                params=params,
+                headers={"Authorization": f"Bearer {secret.get_secret_value()}"},
+            )
+    except httpx.RequestError as exc:
+        logger.warning("Sandbox manager request failed: %s", exc)
+        raise HTTPException(
+            status_code=503, detail="Sandbox file access is temporarily unavailable"
+        ) from exc
+
+
+async def _sandbox_manager_stream(
+    path: str,
+    *,
+    params: dict[str, str],
+) -> tuple[httpx.AsyncClient, httpx.Response]:
+    settings = get_settings().mcp
+    secret = settings.SANDBOX_FILE_AUTH_SECRET
+    if secret is None or not secret.get_secret_value():
+        raise HTTPException(status_code=503, detail="Sandbox file access is not configured")
+
+    client = httpx.AsyncClient(timeout=300)
+    request = client.build_request(
+        "GET",
+        f"{settings.MCP_MANAGER_URL.rstrip('/')}{path}",
+        params=params,
+        headers={"Authorization": f"Bearer {secret.get_secret_value()}"},
+    )
+    try:
+        response = await client.send(request, stream=True)
+    except httpx.RequestError as exc:
+        await client.aclose()
+        logger.warning("Sandbox manager streaming request failed: %s", exc)
+        raise HTTPException(
+            status_code=503, detail="Sandbox file access is temporarily unavailable"
+        ) from exc
+    return client, response
+
+
+async def _stream_manager_download(
+    client: httpx.AsyncClient,
+    response: httpx.Response,
+    *,
+    resource: str,
+    filename: str,
+    default_content_type: str,
+) -> StreamingResponse:
+    if response.status_code >= 400:
+        try:
+            await response.aread()
+            _raise_sandbox_manager_error(response, resource=resource)
+        finally:
+            await response.aclose()
+            await client.aclose()
+
+    async def stream_content() -> AsyncGenerator[bytes, None]:
+        try:
+            async for chunk in response.aiter_bytes():
+                yield chunk
+        finally:
+            await response.aclose()
+            await client.aclose()
+
+    headers = {
+        "Content-Disposition": response.headers.get(
+            "content-disposition", _attachment_content_disposition(filename)
+        )
+    }
+    if content_length := response.headers.get("content-length"):
+        headers["Content-Length"] = content_length
+    return StreamingResponse(
+        stream_content(),
+        media_type=response.headers.get("content-type", default_content_type),
+        headers=headers,
+    )
+
+
+def _raise_sandbox_manager_error(response: httpx.Response, *, resource: str) -> None:
+    if response.status_code == 404:
+        raise HTTPException(status_code=404, detail=f"{resource} not found")
+    if response.status_code == 410:
+        raise HTTPException(status_code=410, detail="Sandbox workspace has expired")
+    if response.status_code >= 400:
+        logger.warning(
+            "Sandbox manager %s request returned %s: %s",
+            resource,
+            response.status_code,
+            response.text[:300],
+        )
+        raise HTTPException(
+            status_code=503, detail="Sandbox file access is temporarily unavailable"
+        )
 
 
 async def _list_task_artifact_items(
@@ -1034,49 +1177,41 @@ async def _list_task_artifact_items(
     workspace_id: str,
     task_id: UUID,
 ) -> list[TaskArtifactItem]:
-    from agentarea_common.artifacts import WorkspaceRepository
-
-    items: list[TaskArtifactItem] = []
-    workspace_repository = WorkspaceRepository()
-    workspace_objects = await workspace_repository.list(workspace_id, str(task_id))
-    for obj in workspace_objects:
-        public_path = f"tasks/{task_id}/workspace/{obj.path}"
-        items.append(
-            TaskArtifactItem(
-                path=public_path,
-                size=obj.size,
-                content_type=obj.content_type,
-                last_modified=None,
-                download_url=_task_artifact_download_url(agent_id, task_id, public_path),
-            )
+    response = await _sandbox_manager_request(
+        "GET",
+        "/sandbox/artifacts",
+        params={"workspace_id": workspace_id, "task_id": str(task_id)},
+    )
+    _raise_sandbox_manager_error(response, resource="Artifact list")
+    try:
+        result = _ManagerArtifactList.model_validate(response.json())
+    except (ValueError, ValidationError) as exc:
+        logger.error("Sandbox manager returned an invalid artifact list: %s", exc)
+        raise HTTPException(status_code=502, detail="Artifact list response is invalid") from exc
+    return [
+        TaskArtifactItem(
+            id=item.id,
+            path=item.path,
+            name=item.name,
+            size=item.size,
+            content_type=item.content_type or None,
+            sha256=item.sha256 or None,
+            created_at=item.created_at,
+            download_url=_task_artifact_download_url(agent_id, task_id, item.id),
         )
-    return items
+        for item in result.items
+    ]
 
 
-def _task_artifact_parts(path: str, task_id: UUID) -> tuple[str, ...] | None:
-    clean = path.lstrip("/")
-    parts = PurePosixPath(clean).parts
-    if (
-        len(parts) < 3
-        or parts[0] != "tasks"
-        or parts[1] != str(task_id)
-        or clean != "/".join(parts)
-        or "\\" in clean
-        or any(part in {".", ".."} for part in parts)
-    ):
-        return None
-    return parts
+def _task_artifact_download_url(agent_id: UUID, task_id: UUID, artifact_id: str) -> str:
+    return f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_id}"
 
 
-def _task_artifact_download_url(agent_id: UUID, task_id: UUID, artifact_path: str) -> str:
-    encoded_path = quote(artifact_path.lstrip("/"), safe="/")
-    return f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{encoded_path}"
-
-
-async def _verify_task_for_agent(task_service: TaskService, agent_id: UUID, task_id: UUID) -> None:
+async def _verify_task_for_agent(task_service: TaskService, agent_id: UUID, task_id: UUID) -> Any:
     task = await task_service.get_task(task_id)
     if not task or str(task.agent_id) != str(agent_id):
         raise HTTPException(status_code=404, detail="Task not found")
+    return task
 
 
 @router.get("/{task_id}/artifacts", response_model=list[TaskArtifactItem])
@@ -1087,7 +1222,7 @@ async def list_task_artifacts(
     expires_in: int = Query(3600, ge=60, le=86400),
     task_service: TaskService = Depends(get_read_task_service),
 ) -> list[TaskArtifactItem]:
-    """List artifacts the agent produced under ``tasks/{task_id}/``.
+    """List files the agent explicitly published as durable artifacts.
 
     Workspace-scoped: the task must belong to the caller's workspace, or we
     return 404. Each item carries an AgentArea API download URL, so access
@@ -1114,33 +1249,91 @@ async def download_task_artifact(
 ):
     """Stream a task artifact through the AgentArea API."""
     await _verify_task_for_agent(task_service, agent_id, task_id)
-    parts = _task_artifact_parts(artifact_path, task_id)
-    if parts is None:
+    if not re.fullmatch(r"art_[0-9a-f]{32}", artifact_path):
         raise HTTPException(status_code=404, detail="Artifact not found")
-
-    from agentarea_common.artifacts import (
-        WorkspaceRepository,
-        WorkspaceValidationError,
-        normalize_workspace_path,
+    client, response = await _sandbox_manager_stream(
+        f"/sandbox/artifacts/{artifact_path}",
+        params={"workspace_id": user_context.workspace_id, "task_id": str(task_id)},
+    )
+    return await _stream_manager_download(
+        client,
+        response,
+        resource="Artifact",
+        filename=artifact_path,
+        default_content_type="application/octet-stream",
     )
 
-    try:
-        if parts[2] == "workspace" and len(parts) >= 4:
-            relative_path = normalize_workspace_path("/".join(parts[3:]))
-            body, content_type, size = await WorkspaceRepository().stream(
-                user_context.workspace_id, str(task_id), relative_path
-            )
-        else:
-            raise FileNotFoundError(artifact_path)
-    except (FileNotFoundError, WorkspaceValidationError):
-        raise HTTPException(status_code=404, detail="Artifact not found") from None
 
-    filename = PurePosixPath(artifact_path).name or "artifact.bin"
-    headers = {
-        "Content-Disposition": _attachment_content_disposition(filename),
-        "Content-Length": str(size),
-    }
-    return StreamingResponse(body, media_type=content_type, headers=headers)
+def _normalize_live_sandbox_path(value: str, *, allow_empty: bool = False) -> str:
+    if allow_empty and value == "":
+        return ""
+    if not value or value.startswith("/") or "\\" in value or "\x00" in value:
+        raise HTTPException(status_code=422, detail="Sandbox path must be relative")
+    parts = PurePosixPath(value).parts
+    if any(part in {"", ".", ".."} for part in parts):
+        raise HTTPException(status_code=422, detail="Sandbox path must be relative")
+    return "/".join(parts)
+
+
+@router.get("/{task_id}/sandbox/files", response_model=SandboxFileListResponse)
+async def list_task_sandbox_files(
+    agent_id: UUID,
+    task_id: UUID,
+    user_context: UserContextDep,
+    prefix: str = Query(""),
+    task_service: TaskService = Depends(get_read_task_service),
+) -> SandboxFileListResponse:
+    """Inspect regular files in the existing live sandbox without recreating it."""
+    await _verify_task_for_agent(task_service, agent_id, task_id)
+    normalized_prefix = _normalize_live_sandbox_path(prefix, allow_empty=True)
+    response = await _sandbox_manager_request(
+        "GET",
+        "/sandbox/files",
+        params={
+            "workspace_id": user_context.workspace_id,
+            "task_id": str(task_id),
+            "list": normalized_prefix,
+            "ensure": "false",
+        },
+    )
+    _raise_sandbox_manager_error(response, resource="Sandbox workspace")
+    try:
+        result = _ManagerSandboxFileList.model_validate(response.json())
+    except (ValueError, ValidationError) as exc:
+        logger.error("Sandbox manager returned an invalid file list: %s", exc)
+        raise HTTPException(status_code=502, detail="Sandbox file list is invalid") from exc
+    items = [SandboxFileItem(path=path) for path in result.paths]
+    return SandboxFileListResponse(items=items, total=len(items))
+
+
+@router.get("/{task_id}/sandbox/files/{file_path:path}")
+async def read_task_sandbox_file(
+    agent_id: UUID,
+    task_id: UUID,
+    file_path: str,
+    user_context: UserContextDep,
+    task_service: TaskService = Depends(get_read_task_service),
+):
+    """Read one file from the existing live sandbox without recreating it."""
+    await _verify_task_for_agent(task_service, agent_id, task_id)
+    normalized = _normalize_live_sandbox_path(file_path)
+    client, response = await _sandbox_manager_stream(
+        "/sandbox/file-content",
+        params={
+            "workspace_id": user_context.workspace_id,
+            "task_id": str(task_id),
+            "path": normalized,
+            "ensure": "false",
+        },
+    )
+    content_type = mimetypes.guess_type(normalized)[0] or "application/octet-stream"
+    return await _stream_manager_download(
+        client,
+        response,
+        resource="Sandbox file",
+        filename=PurePosixPath(normalized).name,
+        default_content_type=content_type,
+    )
 
 
 class TaskSummary(BaseModel):

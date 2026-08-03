@@ -40,6 +40,7 @@ with workflow.unsafe.imports_passed_through():
         resolve_context_strategy,
     )
     from .helpers import (
+        CONTROL_FLOW_TOOLS,
         BudgetTracker,
         EventManager,
         MessageBuilder,
@@ -915,18 +916,19 @@ class AgentExecutionWorkflow:
                             "type": "string",
                             "description": "Your complete response to the user. This is what they will read.",
                         },
-                        "artifact_paths": {
+                        "artifacts": {
                             "type": "array",
                             "items": {"type": "string"},
                             "maxItems": 1000,
                             "description": (
-                                "Every workspace-relative artifact path promised in the response. "
-                                "They must exist and pass validation before completion. Use an "
-                                "empty list only when the response promises no files."
+                                "Workspace-relative paths of every file the response delivers, "
+                                "for example reports/result.pdf. They are saved for the user on "
+                                "completion. Use an empty list only when the response promises "
+                                "no files."
                             ),
                         },
                     },
-                    "required": ["result", "artifact_paths"],
+                    "required": ["result", "artifacts"],
                 },
             },
         }
@@ -2152,7 +2154,7 @@ class AgentExecutionWorkflow:
                 id=str(workflow.uuid4()),
                 function={
                     "name": "completion",
-                    "arguments": json.dumps({"result": effective_content.strip()}),
+                    "arguments": json.dumps({"result": effective_content.strip(), "artifacts": []}),
                 },
             )
             await self._handle_task_completion(completion_call)
@@ -2172,37 +2174,7 @@ class AgentExecutionWorkflow:
         """
         import asyncio
 
-        execution_limits = (self.state.effective_policy or {}).get("execution") or {}
-        max_per_turn = execution_limits.get("max_tool_calls_per_turn")
-        max_total = execution_limits.get("max_tool_calls_total")
-        if not isinstance(max_per_turn, int) or max_per_turn <= 0:
-            raise ApplicationError(
-                "effective policy is missing execution.max_tool_calls_per_turn",
-                type="InvalidExecutionSnapshot",
-                non_retryable=True,
-            )
-        if not isinstance(max_total, int) or max_total <= 0:
-            raise ApplicationError(
-                "effective policy is missing execution.max_tool_calls_total",
-                type="InvalidExecutionSnapshot",
-                non_retryable=True,
-            )
-        if len(tool_calls) > max_per_turn:
-            raise ApplicationError(
-                f"model requested {len(tool_calls)} tool calls; policy allows {max_per_turn} per turn",
-                type="ToolCallLimitExceeded",
-                non_retryable=True,
-            )
-        attempted_total = self.state.tool_calls_used + len(tool_calls)
-        if attempted_total > max_total:
-            raise ApplicationError(
-                f"tool-call budget exceeded: {attempted_total}/{max_total}",
-                type="ToolCallLimitExceeded",
-                non_retryable=True,
-            )
-        self.state.tool_calls_used = attempted_total
-
-        completion_call = None
+        completion_calls: list[ToolCall] = []
         agent_calls: list[ToolCall] = []
         regular_calls: list[ToolCall] = []
         recall_calls: list[ToolCall] = []
@@ -2215,7 +2187,7 @@ class AgentExecutionWorkflow:
         for tool_call in tool_calls:
             tool_name = tool_call.function["name"]
             if tool_name in {"completion", "task_complete"}:
-                completion_call = tool_call
+                completion_calls.append(tool_call)
             elif tool_name == "request_user_input":
                 input_calls.append(tool_call)
             elif tool_name == "recall_history":
@@ -2232,6 +2204,53 @@ class AgentExecutionWorkflow:
                 agent_calls.append(tool_call)
             else:
                 regular_calls.append(tool_call)
+
+        if len(completion_calls) > 1:
+            raise ApplicationError(
+                "model requested more than one completion call in a single turn",
+                type="InvalidCompletionCall",
+                non_retryable=True,
+            )
+        completion_call = completion_calls[0] if completion_calls else None
+
+        # Control-flow tools are workflow signals, not capability invocations:
+        # they reach no external system and stay disclosed under a deny-by-default
+        # policy, so none of them may consume or exceed the tool-call budget.
+        # CONTROL_FLOW_TOOLS is the single classification used here and by
+        # disclosure, so the two can never drift apart.
+        capability_call_count = sum(
+            1 for call in tool_calls if call.function["name"] not in CONTROL_FLOW_TOOLS
+        )
+        execution_limits = (self.state.effective_policy or {}).get("execution") or {}
+        max_per_turn = execution_limits.get("max_tool_calls_per_turn")
+        max_total = execution_limits.get("max_tool_calls_total")
+        if not isinstance(max_per_turn, int) or max_per_turn <= 0:
+            raise ApplicationError(
+                "effective policy is missing execution.max_tool_calls_per_turn",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
+        if not isinstance(max_total, int) or max_total <= 0:
+            raise ApplicationError(
+                "effective policy is missing execution.max_tool_calls_total",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
+        if capability_call_count > max_per_turn:
+            raise ApplicationError(
+                f"model requested {capability_call_count} capability calls; "
+                f"policy allows {max_per_turn} per turn",
+                type="ToolCallLimitExceeded",
+                non_retryable=True,
+            )
+        attempted_total = self.state.tool_calls_used + capability_call_count
+        if attempted_total > max_total:
+            raise ApplicationError(
+                f"tool-call budget exceeded: {attempted_total}/{max_total}",
+                type="ToolCallLimitExceeded",
+                non_retryable=True,
+            )
+        self.state.tool_calls_used = attempted_total
 
         # User-input requests are exclusive: the workflow must pause and get a
         # reply before any further side effects or final completion happen.
@@ -2312,21 +2331,51 @@ class AgentExecutionWorkflow:
             await self._handle_task_completion(completion_call)
 
     async def _handle_task_completion(self, completion_call: ToolCall) -> None:
-        """Gate completion on code-enforced validation of committed artifacts."""
+        """Gate completion on code-enforced validation of published artifacts."""
         try:
             tool_args = json.loads(completion_call.function["arguments"])
-            if not isinstance(tool_args, dict):
-                tool_args = {}
-            result_text = str(tool_args.get("result") or "Task completed")
-            raw_paths = tool_args.get("artifact_paths")
-            declared_paths = (
-                [path for path in raw_paths[:1000] if isinstance(path, str)]
-                if isinstance(raw_paths, list)
-                else []
+        except (json.JSONDecodeError, KeyError, TypeError) as exc:
+            self._reject_invalid_completion_arguments(
+                completion_call, f"arguments must be valid JSON: {exc}"
             )
-        except (json.JSONDecodeError, KeyError, TypeError):
-            result_text = "Task completed"
-            declared_paths = []
+            return
+        if not isinstance(tool_args, dict):
+            self._reject_invalid_completion_arguments(
+                completion_call, "arguments must be a JSON object"
+            )
+            return
+        result_value = tool_args.get("result")
+        if not isinstance(result_value, str) or not result_value.strip():
+            self._reject_invalid_completion_arguments(
+                completion_call, "result must be a non-empty string"
+            )
+            return
+        if "artifacts" not in tool_args:
+            self._reject_invalid_completion_arguments(
+                completion_call, "artifacts is required; use [] when the response delivers no files"
+            )
+            return
+        raw_paths = tool_args["artifacts"]
+        if not isinstance(raw_paths, list):
+            self._reject_invalid_completion_arguments(
+                completion_call, "artifacts must be an array of workspace-relative paths"
+            )
+            return
+        if len(raw_paths) > 1000 or any(
+            not isinstance(path, str) or not path.strip() for path in raw_paths
+        ):
+            self._reject_invalid_completion_arguments(
+                completion_call,
+                "artifacts must contain at most 1000 non-empty workspace-relative paths",
+            )
+            return
+        if len(set(raw_paths)) != len(raw_paths):
+            self._reject_invalid_completion_arguments(
+                completion_call, "artifacts must not contain duplicates"
+            )
+            return
+        result_text = result_value.strip()
+        declared_paths = raw_paths
 
         validation = await self._validate_completion_artifacts(declared_paths)
         if validation.state != "passed":
@@ -2385,6 +2434,7 @@ class AgentExecutionWorkflow:
                     result=json.dumps(
                         {
                             "response": result_text,
+                            "artifacts": [evidence.path for evidence in validation.evidence],
                             "validation_state": self.state.validation_state,
                         }
                     ),
@@ -2396,11 +2446,65 @@ class AgentExecutionWorkflow:
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
+        self._events.add_event(
+            EventTypes.WORKFLOW_AWAITING_FOLLOW_UP,
+            {
+                "state": "awaiting_follow_up",
+                "timeout_seconds": 1800,
+            },
+        )
+        await self._publish_events_immediately()
+
+    def _reject_invalid_completion_arguments(self, completion_call: ToolCall, reason: str) -> None:
+        """Return a tool-paired contract error instead of inventing completion data."""
+        self.state.success = False
+        self.state.final_response = None
+        self._awaiting_input = False
+        call_is_in_history = any(
+            call.get("id") == completion_call.id
+            for message in self.state.messages
+            for call in (message.tool_calls or [])
+            if isinstance(call, dict)
+        )
+        if not call_is_in_history:
+            self.state.messages.append(
+                Message(
+                    role="assistant",
+                    content="",
+                    tool_calls=[
+                        {
+                            "id": completion_call.id,
+                            "type": "function",
+                            "function": completion_call.function,
+                        }
+                    ],
+                )
+            )
+        self.state.messages.append(
+            Message(
+                role="tool",
+                name="completion",
+                tool_call_id=completion_call.id,
+                content=json.dumps(
+                    {
+                        "status": "invalid_completion_arguments",
+                        "error": reason,
+                        "instruction": (
+                            "Call completion again with a non-empty result and an explicit "
+                            "artifacts array of workspace-relative paths. Use [] only when the "
+                            "response delivers no files."
+                        ),
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+            )
+        )
 
     async def _validate_completion_artifacts(
         self, declared_paths: list[str]
     ) -> ArtifactValidationResult:
-        """Run the refs-only Temporal validation gate and persist its audit events."""
+        """Persist the files the completion delivers and record the audit events."""
         self.state.validation_state = "running"
         self._events.add_event(
             EventTypes.VALIDATION_STARTED,
@@ -2421,11 +2525,6 @@ class AgentExecutionWorkflow:
                         task_id=self.state.task_id,
                         workflow_id=self.state.execution_id,
                         declared_paths=declared_paths,
-                        package_install=(
-                            "locked"
-                            if (self._workflow_metadata or {}).get("package_install") == "locked"
-                            else "allowed"
-                        ),
                     )
                 ],
                 result_type=ArtifactValidationResult,
@@ -2502,8 +2601,9 @@ class AgentExecutionWorkflow:
             "generation": result.generation,
             "issues": [item.model_dump() for item in result.issues],
             "instruction": (
-                "Repair the listed workspace artifacts, then call completion again. "
-                "Do not claim success until validation passes."
+                "Repair or create the missing output in the workspace, then call completion "
+                "again with the workspace-relative paths in artifacts. Do not claim success "
+                "until validation passes."
             ),
         }
         self.state.messages.append(
@@ -3992,16 +4092,6 @@ class AgentExecutionWorkflow:
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
-
-        try:
-            await workflow.execute_activity(
-                Activities.CLEANUP_SANDBOX_TASK,
-                args=[self.state.task_id],
-                start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=make_retry_policy(1),
-            )
-        except Exception as e:
-            workflow.logger.warning(f"Sandbox task cleanup failed: {e}")
 
         # Return result - convert messages to dict format for response
         conversation_history: list[dict[str, Any]] = []

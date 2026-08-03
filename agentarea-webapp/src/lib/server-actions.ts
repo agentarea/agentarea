@@ -98,6 +98,8 @@ import {
   listProviderSpecsWithModels,
   listSkillMembers,
   listSkills,
+  listTaskArtifacts,
+  listTaskSandboxFiles,
   listTriggers,
   listWorkspaceFiles,
   pauseAgentTask,
@@ -223,6 +225,18 @@ export async function getAgentTaskStatusAction(
   taskId: string
 ) {
   return await getAgentTaskStatus(agentId, taskId);
+}
+
+export async function listTaskArtifactsAction(agentId: string, taskId: string) {
+  return await listTaskArtifacts(agentId, taskId);
+}
+
+export async function listTaskSandboxFilesAction(
+  agentId: string,
+  taskId: string,
+  prefix = ""
+) {
+  return await listTaskSandboxFiles(agentId, taskId, prefix);
 }
 
 export async function getTaskPolicySnapshotAction(taskId: string) {

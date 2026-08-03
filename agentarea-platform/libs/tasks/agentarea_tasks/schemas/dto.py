@@ -13,7 +13,7 @@ doc.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 from uuid import UUID
 
 from agentarea_governance.domain.policies import PolicyDocument
@@ -74,13 +74,6 @@ class RunCreate(BaseModel):
     project_id: str | None = Field(
         default=None,
         description="Optional project scope for billing / organization.",
-    )
-    package_install: Literal["allowed", "locked"] | None = Field(
-        default=None,
-        description=(
-            "Sandbox managed-environment profile for this run. When omitted, "
-            "the agent shell-tool setting is used, then defaults to 'allowed'."
-        ),
     )
     task_policy: PolicyDocument | None = Field(
         default=None,

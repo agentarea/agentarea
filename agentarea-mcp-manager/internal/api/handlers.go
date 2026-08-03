@@ -1,7 +1,7 @@
 package api
 
 import (
-	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -10,9 +10,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/container"
-	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/models"
-	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontrol"
 	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 )
@@ -22,18 +20,38 @@ type Handler struct {
 	backend          backends.Backend
 	containerManager *container.Manager // Keep for backward compatibility
 	sandboxControl   *sandboxcontrol.Service
-	sandboxRuntime   sandboxruntime.Runtime
+	sandboxRuntime   sandboxruntime.ControlRuntime
+	sandboxArtifacts sandboxArtifactStore
 	logger           *slog.Logger
 	startTime        time.Time
 	version          string
+	sandboxPolicy    SandboxPolicy
 }
 
-// NewHandler creates a new API handler
-func NewHandler(backend backends.Backend, containerManager *container.Manager, logger *slog.Logger, version string, runtimes ...sandboxruntime.Runtime) *Handler {
-	sandboxControl := newSandboxControlService(logger)
-	var sandboxRuntime sandboxruntime.Runtime
-	if len(runtimes) > 0 {
-		sandboxRuntime = runtimes[0]
+type SandboxPolicy struct {
+	TaskIdleTTL      time.Duration
+	MaxFileBytes     int64
+	MCPIsolationTier string
+}
+
+// NewHandler creates a new API handler. The sandbox control configuration is
+// resolved by the composition root: a store that cannot be built is a startup
+// error, not a service that silently answers 503 for the process lifetime.
+func NewHandler(
+	backend backends.Backend,
+	containerManager *container.Manager,
+	logger *slog.Logger,
+	version string,
+	policy SandboxPolicy,
+	controlConfig sandboxcontrol.Config,
+	sandboxRuntime sandboxruntime.ControlRuntime,
+) (*Handler, error) {
+	if sandboxRuntime == nil {
+		return nil, fmt.Errorf("sandbox control runtime is required")
+	}
+	sandboxControl, err := newSandboxControlService(controlConfig)
+	if err != nil {
+		return nil, err
 	}
 	return &Handler{
 		backend:          backend,
@@ -43,7 +61,8 @@ func NewHandler(backend backends.Backend, containerManager *container.Manager, l
 		logger:           logger,
 		startTime:        time.Now(),
 		version:          version,
-	}
+		sandboxPolicy:    policy,
+	}, nil
 }
 
 // SetupRoutes sets up the HTTP routes
@@ -55,14 +74,17 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	router.GET("/health", h.healthCheck)
 	router.GET("/runtime/manifest", h.runtimeManifest)
 
-	// Instance management (backend-agnostic)
+	// Instance inspection only. Creating, updating and destroying an MCP
+	// workload belongs to the demand gateway alone: it serializes cold start
+	// under a lifecycle lock, records runtime state the reaper needs, and
+	// refuses deletion while a request lease is live. A second, unauthenticated
+	// mutation path here would silently defeat all three — an instance created
+	// this way has no runtime row and can never be reaped, and one deleted this
+	// way can be torn down mid-request.
 	router.GET("/instances", h.listInstances)
-	router.POST("/instances", h.createInstance)
 	router.GET("/instances/:id", h.getInstance)
-	router.PUT("/instances/:id", h.updateInstance)
-	router.DELETE("/instances/:id", h.deleteInstance)
 
-	// Instance validation
+	// Instance validation inspects a spec; it never creates a workload.
 	router.POST("/instances/validate", h.validateInstance)
 
 	// Instance monitoring and health checks
@@ -77,19 +99,25 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	router.GET("/sandbox/sessions", h.listSandboxes)
 	router.POST("/sandbox/executions", h.createSandboxExecution)
 	router.GET("/sandbox/executions/:id", h.getSandboxExecution)
-	router.POST("/sandbox/executions/:id/events", h.applySandboxExecutionEvent)
+	router.DELETE("/sandbox/executions/:id", h.cancelSandboxExecution)
 	// Sandbox file API: the file tool writes to the same filesystem bash uses.
 	router.PUT("/sandbox/files", h.sandboxFiles)
 	router.GET("/sandbox/files", h.sandboxFiles)
-	// Per-task sandbox teardown, invoked by the Temporal workflow finalizer.
+	router.PUT("/sandbox/file-content", h.sandboxFileContent)
+	router.GET("/sandbox/file-content", h.sandboxFileContent)
+	router.POST("/sandbox/artifacts", h.sandboxArtifactsCollection)
+	router.GET("/sandbox/artifacts", h.sandboxArtifactsCollection)
+	router.GET("/sandbox/artifacts/:id", h.getSandboxArtifact)
+	// Administrative force teardown. Normal task retirement is owned by the
+	// sandbox runtime and does not depend on workflow orchestration.
 	router.DELETE("/sandbox/task/:id", h.deleteSandboxTask)
 
 	// Container endpoints — only the Docker backend supplies a container manager.
+	// Inspection only, for the same reason as /instances above: container
+	// creation and teardown are the gateway's, on every backend.
 	if h.containerManager != nil {
 		router.GET("/containers", h.listContainers)
-		router.POST("/containers", h.createContainer)
 		router.GET("/containers/:service", h.getContainer)
-		router.DELETE("/containers/:service", h.deleteContainer)
 		router.POST("/containers/validate", h.validateContainer)
 		router.GET("/containers/:service/health", h.checkContainerHealth)
 		router.POST("/containers/:service/health", h.healthCheckContainer)
@@ -98,34 +126,8 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	}
 }
 
-type runtimeManifestProvider interface {
-	RuntimeManifest(context.Context, string) (*runtimeinfo.Manifest, error)
-}
-
 func (h *Handler) runtimeManifest(c *gin.Context) {
-	packageInstall := c.DefaultQuery("package_install", runtimeinfo.PackageInstallAllowed)
-	if err := runtimeinfo.ValidatePackageInstall(packageInstall); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "invalid_package_install",
-			"message": err.Error(),
-		})
-		return
-	}
-	var provider runtimeManifestProvider
-	if h.sandboxRuntime != nil {
-		provider = h.sandboxRuntime
-	} else {
-		provider, _ = h.backend.(runtimeManifestProvider)
-	}
-	ok := provider != nil
-	if !ok {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error":   "runtime_manifest_unavailable",
-			"message": "sandbox backend does not expose a runtime manifest",
-		})
-		return
-	}
-	manifest, err := provider.RuntimeManifest(c.Request.Context(), packageInstall)
+	manifest, err := h.sandboxRuntime.RuntimeManifest(c.Request.Context())
 	if err != nil {
 		h.logger.Warn("Runtime manifest discovery failed", slog.String("error", err.Error()))
 		c.JSON(http.StatusServiceUnavailable, gin.H{
@@ -185,128 +187,6 @@ func (h *Handler) listInstances(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// createInstance creates a new MCP server instance
-func (h *Handler) createInstance(c *gin.Context) {
-	var req struct {
-		InstanceID  string                 `json:"instance_id" binding:"required"`
-		Name        string                 `json:"name" binding:"required"`
-		ServiceName string                 `json:"service_name" binding:"required"`
-		Image       string                 `json:"image"` // optional when json_spec is provided
-		Port        int                    `json:"port"`
-		Command     []string               `json:"command,omitempty"`
-		Environment map[string]string      `json:"environment,omitempty"`
-		WorkspaceID string                 `json:"workspace_id" binding:"required"`
-		JSONSpec    map[string]interface{} `json:"json_spec,omitempty"` // full spec; takes precedence when present
-		Resources   struct {
-			Requests backends.ResourceList `json:"requests,omitempty"`
-			Limits   backends.ResourceList `json:"limits,omitempty"`
-		} `json:"resources,omitempty"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	// If a full json_spec is supplied, resolve the effective image/port/command from it.
-	// This handles both "docker" type (image+port) and "command" type (sandbox+mcp-bridge).
-	if len(req.JSONSpec) > 0 {
-		image, port, command, environment := container.ResolveContainerSpec(req.JSONSpec)
-		if req.Image == "" {
-			req.Image = image
-		}
-		if req.Port == 0 {
-			req.Port = port
-		}
-		if len(req.Command) == 0 {
-			req.Command = command
-		}
-		// Merge environment: json_spec env vars are the base; request-level env overrides
-		if req.Environment == nil {
-			req.Environment = make(map[string]string)
-		}
-		for k, v := range environment {
-			if _, exists := req.Environment[k]; !exists {
-				req.Environment[k] = v
-			}
-		}
-
-		// Resolve secret env vars (json_spec.env_vars -> encrypted_secrets) and
-		// merge them in. This HTTP path owns provisioning, so secrets must be
-		// injected here — they are stripped out of json_spec.environment at create
-		// time and only their names travel in the spec. Request-level env wins.
-		for k, v := range h.containerManager.ResolveSecretEnvVars(req.InstanceID, req.JSONSpec) {
-			if _, exists := req.Environment[k]; !exists {
-				req.Environment[k] = v
-			}
-		}
-	}
-
-	if req.Image == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Code:    http.StatusBadRequest,
-			Message: "image is required (provide image directly or via json_spec with type='docker'/'command')",
-		})
-		return
-	}
-
-	// Set default port if not specified
-	if req.Port == 0 {
-		req.Port = 8000
-	}
-
-	// Use instance_id as service_name for deterministic routing
-	serviceName := req.InstanceID
-
-	// Create instance spec
-	spec := &backends.InstanceSpec{
-		InstanceID:  req.InstanceID,
-		Name:        req.Name,
-		ServiceName: serviceName,
-		Image:       req.Image,
-		Port:        req.Port,
-		Command:     req.Command,
-		Environment: req.Environment,
-		WorkspaceID: req.WorkspaceID,
-		Resources: backends.ResourceRequirements{
-			Requests: req.Resources.Requests,
-			Limits:   req.Resources.Limits,
-		},
-	}
-
-	var result *backends.InstanceResult
-	var err error
-
-	// Try warm pool if enabled and backend supports it
-	if features.IsEnabled(features.WarmPool) {
-		if k8sBackend, ok := h.backend.(*backends.KubernetesBackend); ok {
-			h.logger.Info("Attempting to create instance with warm pool",
-				slog.String("instance_id", req.InstanceID))
-			result, err = k8sBackend.CreateInstanceWithWarmPool(c.Request.Context(), spec)
-		} else {
-			result, err = h.backend.CreateInstance(c.Request.Context(), spec)
-		}
-	} else {
-		result, err = h.backend.CreateInstance(c.Request.Context(), spec)
-	}
-	if err != nil {
-		h.logger.Error("Failed to create instance", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "instance_creation_failed",
-			Code:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusCreated, result)
-}
-
 // getInstance returns details of a specific instance
 func (h *Handler) getInstance(c *gin.Context) {
 	instanceID := c.Param("id")
@@ -323,110 +203,6 @@ func (h *Handler) getInstance(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, instance)
-}
-
-// updateInstance updates an existing instance
-func (h *Handler) updateInstance(c *gin.Context) {
-	instanceID := c.Param("id")
-
-	var req struct {
-		Image       string            `json:"image,omitempty"`
-		Port        int               `json:"port,omitempty"`
-		Command     []string          `json:"command,omitempty"`
-		Environment map[string]string `json:"environment,omitempty"`
-		Resources   struct {
-			Requests backends.ResourceList `json:"requests,omitempty"`
-			Limits   backends.ResourceList `json:"limits,omitempty"`
-		} `json:"resources,omitempty"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	// Get current instance to fill in missing fields
-	currentInstance, err := h.backend.GetInstanceStatus(c.Request.Context(), instanceID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{
-			Error:   "instance_not_found",
-			Code:    http.StatusNotFound,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	// Create update spec with current values as defaults
-	spec := &backends.InstanceSpec{
-		InstanceID:  currentInstance.ID,
-		Name:        currentInstance.Name,
-		ServiceName: currentInstance.ServiceName,
-		Image:       currentInstance.Image,
-		Port:        currentInstance.Port,
-		Environment: currentInstance.Environment,
-		WorkspaceID: "", // This should come from the current instance context
-	}
-
-	// Apply updates
-	if req.Image != "" {
-		spec.Image = req.Image
-	}
-	if req.Port != 0 {
-		spec.Port = req.Port
-	}
-	if req.Command != nil {
-		spec.Command = req.Command
-	}
-	if req.Environment != nil {
-		spec.Environment = req.Environment
-	}
-
-	// Update resources
-	spec.Resources = backends.ResourceRequirements{
-		Requests: req.Resources.Requests,
-		Limits:   req.Resources.Limits,
-	}
-
-	err = h.backend.UpdateInstance(c.Request.Context(), instanceID, spec)
-	if err != nil {
-		h.logger.Error("Failed to update instance", slog.String("instance_id", instanceID), slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "instance_update_failed",
-			Code:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":     "Instance updated successfully",
-		"instance_id": instanceID,
-	})
-}
-
-// deleteInstance removes an instance
-func (h *Handler) deleteInstance(c *gin.Context) {
-	instanceID := c.Param("id")
-
-	err := h.backend.DeleteInstance(c.Request.Context(), instanceID)
-	if err != nil {
-		h.logger.Error("Failed to delete instance", slog.String("instance_id", instanceID), slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "instance_deletion_failed",
-			Code:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":     "Instance deleted successfully",
-		"instance_id": instanceID,
-	})
 }
 
 // validateInstance validates an instance configuration without creating it
@@ -635,32 +411,6 @@ func (h *Handler) listContainers(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// createContainer creates a new container from a template
-func (h *Handler) createContainer(c *gin.Context) {
-	var req models.CreateContainerRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	// Create container (Traefik routing is handled automatically via labels)
-	container, err := h.containerManager.CreateContainer(c.Request.Context(), req)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "container_creation_failed",
-			Code:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusCreated, container)
-}
-
 // getContainer returns details of a specific container
 func (h *Handler) getContainer(c *gin.Context) {
 	serviceName := c.Param("service")
@@ -676,26 +426,6 @@ func (h *Handler) getContainer(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, container)
-}
-
-// deleteContainer stops and removes a container
-func (h *Handler) deleteContainer(c *gin.Context) {
-	serviceName := c.Param("service")
-
-	// Delete container (Traefik routes are automatically removed when container stops)
-	if err := h.containerManager.DeleteContainer(c.Request.Context(), serviceName); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "container_deletion_failed",
-			Code:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Container deleted successfully",
-		"service": serviceName,
-	})
 }
 
 // validateContainer validates a container configuration without creating it

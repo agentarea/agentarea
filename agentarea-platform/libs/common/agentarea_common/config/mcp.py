@@ -1,18 +1,23 @@
 """MCP (Model Context Protocol) configuration."""
 
+from uuid import UUID
+
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings
 
 from .base import BaseAppSettings
+
+MCP_MANAGER_AUTH_HEADER = "X-AgentArea-Manager-Authorization"
 
 
 class MCPSettings(BaseAppSettings):
     """MCP (Model Context Protocol) configuration."""
 
     MCP_MANAGER_URL: str = "http://mcp-manager:8000"
-    SANDBOX_CLEANUP_AUTH_SECRET: SecretStr | None = None
+    MCP_GATEWAY_AUTH_SECRET: SecretStr | None = None
     SANDBOX_INSPECTION_AUTH_SECRET: SecretStr | None = None
-    MCP_GATEWAY_URL: str = "http://agentarea-traefik:8080"
+    SANDBOX_FILE_AUTH_SECRET: SecretStr | None = None
+    SANDBOX_CONTROL_AUTH_SECRET: SecretStr | None = None
     MCP_CLIENT_TIMEOUT: int = 30
     REDIS_URL: str = "redis://localhost:6379"
     HYDRA_PUBLIC_URL: str = "http://hydra:4444"
@@ -26,6 +31,20 @@ class MCPSettings(BaseAppSettings):
     MCP_OAUTH_SCOPES: str = "openid offline_access"
     # Allow OpenAPI connections to reach localhost/private IPs (self-hosted deployments)
     ALLOW_PRIVATE_URLS: bool = False
+
+    def manager_gateway_url(self, instance_id: UUID | str) -> str:
+        return f"{self.MCP_MANAGER_URL.rstrip('/')}/mcp/{instance_id}/mcp"
+
+    def manager_retire_url(self, instance_id: UUID | str) -> str:
+        return f"{self.MCP_MANAGER_URL.rstrip('/')}/mcp/{instance_id}"
+
+    def manager_gateway_headers(self) -> dict[str, str]:
+        if self.MCP_GATEWAY_AUTH_SECRET is None:
+            raise RuntimeError("MCP_GATEWAY_AUTH_SECRET is required for container-backed MCP")
+        secret = self.MCP_GATEWAY_AUTH_SECRET.get_secret_value()
+        if len(secret) < 32:
+            raise RuntimeError("MCP_GATEWAY_AUTH_SECRET must contain at least 32 bytes")
+        return {MCP_MANAGER_AUTH_HEADER: f"Bearer {secret}"}
 
 
 class MCPManagerSettings(BaseSettings):

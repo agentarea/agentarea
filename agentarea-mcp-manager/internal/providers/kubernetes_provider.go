@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/secrets"
 )
 
 // sandboxImage / sandboxPort mirror the constants in internal/container.
@@ -27,8 +29,9 @@ type BackendInstanceSpec struct {
 	Labels      map[string]string
 	// Command maps to CMD / K8s container.args — arguments appended to
 	// the image's existing ENTRYPOINT.
-	Command   []string
-	Resources struct {
+	Command       []string
+	IsolationTier string
+	Resources     struct {
 		Limits   struct{ CPU, Memory string }
 		Requests struct{ CPU, Memory string }
 	}
@@ -52,13 +55,15 @@ type Backend interface {
 type KubernetesProvider struct {
 	backend Backend
 	logger  *slog.Logger
+	secrets secrets.SecretResolver
 }
 
 // NewKubernetesProvider creates a new Kubernetes provider
-func NewKubernetesProvider(backend Backend, logger *slog.Logger) *KubernetesProvider {
+func NewKubernetesProvider(backend Backend, secretResolver secrets.SecretResolver, logger *slog.Logger) *KubernetesProvider {
 	return &KubernetesProvider{
 		backend: backend,
 		logger:  logger,
+		secrets: secretResolver,
 	}
 }
 
@@ -68,8 +73,14 @@ func (p *KubernetesProvider) CreateInstance(ctx context.Context, instance *model
 		slog.String("instance_id", instance.InstanceID),
 		slog.String("name", instance.Name))
 
+	resolvedJSON, err := resolveInstanceSpecSecrets(p.secrets, instance.InstanceID, instance.JSONSpec)
+	if err != nil {
+		return err
+	}
+	resolvedInstance := *instance
+	resolvedInstance.JSONSpec = resolvedJSON
 	// Convert MCPServerInstance to backend InstanceSpec
-	spec := p.convertToInstanceSpec(instance)
+	spec := p.convertToInstanceSpec(&resolvedInstance)
 
 	// Use the backend to create the instance
 	result, err := p.backend.CreateInstance(ctx, spec)
@@ -99,8 +110,7 @@ func (p *KubernetesProvider) DeleteInstance(ctx context.Context, instanceID, nam
 		p.logger.Error("Failed to delete Kubernetes instance via backend",
 			slog.String("instance_id", instanceID),
 			slog.String("error", err.Error()))
-		// Don't return error - instance might not exist
-		return nil
+		return fmt.Errorf("failed to delete Kubernetes instance: %w", err)
 	}
 
 	p.logger.Info("Successfully deleted Kubernetes instance via backend",
@@ -117,9 +127,10 @@ func (p *KubernetesProvider) DeleteInstance(ctx context.Context, instanceID, nam
 // empty image + port=0 and rejected by the K8s apiserver.
 func (p *KubernetesProvider) convertToInstanceSpec(instance *models.MCPServerInstance) *BackendInstanceSpec {
 	spec := &BackendInstanceSpec{
-		InstanceID:  instance.InstanceID,
-		Name:        instance.Name,
-		ServiceName: instance.Name,
+		InstanceID:    instance.InstanceID,
+		Name:          instance.InstanceID,
+		ServiceName:   instance.InstanceID,
+		IsolationTier: config.IsolationUntrusted,
 	}
 
 	jsonSpec := instance.JSONSpec

@@ -29,14 +29,11 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       # MCP settings
       - MCP_MANAGER_URL=http://mcp-manager:80
-      - MCP_GATEWAY_URL=http://agentarea-traefik:8080
-      # Serverless MCPs: a container-backed instance is started on its first
-      # call and stopped again once idle (MCP_IDLE_TIMEOUT on mcp-manager),
-      # instead of running from creation until someone deletes it. The instance
-      # records this at creation, so the flag governs new instances only.
-      - MCP_LAZY_PROVISIONING_ENABLED=${MCP_LAZY_PROVISIONING_ENABLED:-true}
       - REDIS_URL=redis://valkey:6379
       - MCP_CLIENT_TIMEOUT=30
+      - SANDBOX_FILE_AUTH_SECRET=${SANDBOX_FILE_AUTH_SECRET:-agentarea-dev-sandbox-file-secret-change-me}
+      - SANDBOX_CONTROL_AUTH_SECRET=${SANDBOX_CONTROL_AUTH_SECRET:-agentarea-dev-sandbox-control-secret-change-me}
+      - MCP_GATEWAY_AUTH_SECRET=${MCP_GATEWAY_AUTH_SECRET:-agentarea-dev-mcp-gateway-secret-change-me}
       # Hydra OAuth2 AS
       - HYDRA_PUBLIC_URL=http://hydra:4444
       - HYDRA_ADMIN_URL=http://hydra:4445
@@ -280,6 +277,13 @@ services:
     networks:
       - mcp-network
       - default
+    depends_on:
+      valkey:
+        condition: service_started
+      rclone-init:
+        condition: service_completed_successfully
+      sandbox-executor:
+        condition: service_started
     # Explicit command to handle both air and fallback scenarios
     command: ["sh", "-c", "if [ -f /app/.air.toml ] && command -v air >/dev/null 2>&1; then exec air -c /app/.air.toml; else exec /app/start-dev.sh; fi"]
     environment:
@@ -311,17 +315,43 @@ services:
       # Cold start of git/uvx-based MCP servers (clone + install ~90s) needs more
       # than the 120s default before a container is declared unhealthy.
       STARTUP_TIMEOUT: 300s
-      # Stop lazily-provisioned MCP instances that have gone unused this long;
-      # the next call brings them back. Only instances created as lazy are
-      # eligible — eager ones were asked to stay up. 0 disables reclaiming.
+      # Reclaim container-backed MCP workloads after this idle period; the
+      # manager demand gateway brings them back on the next call. 0 keeps an
+      # on-demand workload running after its first successful start.
       MCP_IDLE_TIMEOUT: ${MCP_IDLE_TIMEOUT:-10m}
       MCP_IDLE_SWEEP_INTERVAL: ${MCP_IDLE_SWEEP_INTERVAL:-60s}
+      MCP_REQUEST_LEASE_TTL: ${MCP_REQUEST_LEASE_TTL:-90s}
+      MCP_GATEWAY_STARTUP_TIMEOUT: ${MCP_GATEWAY_STARTUP_TIMEOUT:-5m}
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
       SANDBOX_EMBEDDED_RUNNER: "true"
       SANDBOX_EXECUTOR_URL: http://sandbox-executor:8080
+      # Explicit acknowledgement: this compose-only executor shares one host
+      # kernel and is not an isolation boundary for hostile multi-tenant code.
+      SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT: "true"
       SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:-agentarea-dev-sandbox-activation-secret-change-me}
       SANDBOX_CLEANUP_AUTH_SECRET: ${SANDBOX_CLEANUP_AUTH_SECRET:-agentarea-dev-sandbox-cleanup-secret-change-me}
+      SANDBOX_FILE_AUTH_SECRET: ${SANDBOX_FILE_AUTH_SECRET:-agentarea-dev-sandbox-file-secret-change-me}
+      SANDBOX_CONTROL_AUTH_SECRET: ${SANDBOX_CONTROL_AUTH_SECRET:-agentarea-dev-sandbox-control-secret-change-me}
+      MCP_GATEWAY_AUTH_SECRET: ${MCP_GATEWAY_AUTH_SECRET:-agentarea-dev-mcp-gateway-secret-change-me}
+      # Lifecycle policy is explicit: the manager refuses to start when any
+      # value is absent or malformed instead of inventing retention behavior.
+      SANDBOX_TASK_LEASE_TTL: "2h"
+      SANDBOX_PROVIDER_PROVISIONING_TIMEOUT: "30s"
+      SANDBOX_TASK_IDLE_TTL: "15m"
+      SANDBOX_PROVIDER_SESSION_TTL: "24h"
+      SANDBOX_EXECUTION_RECORD_TTL: "24h"
+      SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS: "1800"
+      SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS: "120"
+      SANDBOX_EXECUTION_QUEUE_TIMEOUT: "5m"
+      SANDBOX_EXECUTION_COMPLETION_GRACE: "2m"
+      SANDBOX_ALLOW_INTERNET: ${SANDBOX_ALLOW_INTERNET:-true}
+      SANDBOX_WORKSPACE_PROVIDER: s3
+      SANDBOX_WORKSPACE_MAX_FILES: "10000"
+      SANDBOX_WORKSPACE_MAX_FILE_BYTES: "268435456"
+      SANDBOX_WORKSPACE_MAX_BYTES: "2147483648"
+      SANDBOX_WORKSPACE_SIGNED_URL_TTL: "1h"
+      SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE: "true"
       AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
       AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
       AWS_REGION: ${RUSTFS_REGION:-us-east-1}
@@ -364,6 +394,11 @@ services:
     environment:
       ACTIVATION_PORT: "8080"
       HOME: /home/sandbox
+      MAX_EXECUTION_TIMEOUT_SECONDS: "1800"
+      IDLE_TIMEOUT_SECONDS: "0"
+      SANDBOX_WORKSPACE_MAX_FILES: "10000"
+      SANDBOX_WORKSPACE_MAX_FILE_BYTES: "268435456"
+      SANDBOX_WORKSPACE_MAX_BYTES: "2147483648"
       SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:-agentarea-dev-sandbox-activation-secret-change-me}
 
   # Temporal Infrastructure Services
@@ -474,13 +509,9 @@ services:
 
       # MCP settings
       - MCP_MANAGER_URL=http://mcp-manager:80
-      - MCP_GATEWAY_URL=http://agentarea-traefik:8080
-      # Serverless MCPs: a container-backed instance is started on its first
-      # call and stopped again once idle (MCP_IDLE_TIMEOUT on mcp-manager),
-      # instead of running from creation until someone deletes it. The instance
-      # records this at creation, so the flag governs new instances only.
-      - MCP_LAZY_PROVISIONING_ENABLED=${MCP_LAZY_PROVISIONING_ENABLED:-true}
-      - SANDBOX_CLEANUP_AUTH_SECRET=${SANDBOX_CLEANUP_AUTH_SECRET:-agentarea-dev-sandbox-cleanup-secret-change-me}
+      - SANDBOX_FILE_AUTH_SECRET=${SANDBOX_FILE_AUTH_SECRET:-agentarea-dev-sandbox-file-secret-change-me}
+      - SANDBOX_CONTROL_AUTH_SECRET=${SANDBOX_CONTROL_AUTH_SECRET:-agentarea-dev-sandbox-control-secret-change-me}
+      - MCP_GATEWAY_AUTH_SECRET=${MCP_GATEWAY_AUTH_SECRET:-agentarea-dev-mcp-gateway-secret-change-me}
 
       # Task execution
       - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true

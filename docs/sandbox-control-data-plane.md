@@ -38,8 +38,8 @@ The production path is a durable job model:
    synchronous HTTP responses.
 5. The workflow waits durably for completion by signal/update or by short polling
    activities.
-6. Cleanup retires the sandbox session through lease/idle TTL and garbage
-   collection.
+6. The sandbox manager owns lease renewal, idle transition, provider expiry,
+   and garbage collection. Temporal does not create or destroy sandboxes.
 
 Synchronous `/sandbox/execute` is a compatibility path for the current
 AgentArea-managed K8s warm pool. The production workflow contract is the
@@ -116,23 +116,57 @@ while a command is running.
 Provider expiration is recreated on the next create-capable operation. A file
 read never creates an empty replacement sandbox.
 
+Every runtime manifest is schema v2 and includes a digest-pinned static
+`agentarea-exec-supervisor` plus its non-root command uid/gid. This is an
+execution invariant, not an optional provider capability:
+
+- the provider verifies the supervisor binary through its authenticated file
+  API before admitting the sandbox and again before execution;
+- the supervisor runs as root, drops the task command to the declared uid/gid,
+  becomes a child subreaper, and applies `RLIMIT_FSIZE`;
+- it returns success only after the command has ended and `wait4(-1)` proves
+  there are no descendants left, including processes that escaped their
+  original process group with `setsid` or a double fork;
+- a root-owned status file authenticates the supervisor digest, child exit
+  code, timeout state, and quiescence;
+- a missing/malformed status, transport ambiguity, or failed cleanup causes the
+  manager to quarantine and delete the complete provider binding. It never
+  reuses a sandbox whose process state is uncertain.
+
+The built-in activation service uses the same supervisor. Per-file size is a
+hard in-flight limit. Entry count and aggregate byte count are post-execution
+audits after process quiescence; Kubernetes also constrains the workspace with
+`emptyDir.sizeLimit` and the container's `ephemeral-storage` limit. No 25 ms
+filesystem traversal is used as a pretend synchronous quota.
+
+Before any external create call, the manager persists a provisioning intent and
+passes its identity in provider metadata. If the create response is lost, no
+replacement is allocated until provider inventory has found and removed every
+matching sandbox or the bounded create interval plus remote lease has expired.
+`sandboxRuntime.provisioningTimeout` bounds the create call, and
+`sandboxRuntime.sessionRecordTTL` must outlive that interval plus
+`sandboxRuntime.leaseTTL`.
+
 For E2B-compatible providers that Redis record includes short-lived sandbox
 access tokens. Production Redis is therefore part of the data-plane trust
 boundary and must use the deployment's authenticated/encrypted storage policy.
 
-Profiles remain fail-closed. Each provider deployment must configure a separate
-image/template and runtime manifest for every enabled `package_install` profile.
-If the requested profile is absent, the request fails instead of using another
-profile. `locked` also forces public internet access off: OpenSandbox receives a
-deny-by-default network policy, while E2B/Cube reject any configuration that
-sets `internetAccess.locked=true`.
+Each external provider deployment must configure exactly one runtime manifest
+and one image or template. Task and tool callers do not select a runtime or
+network profile. Public internet access is one explicit deployment setting.
+E2B/Cube receive it directly. OpenSandbox `egressMode=provider` sends a policy
+whose default action matches that setting; `egressMode=host-public` is reserved
+for the gVisor host profile, requires public access to be explicit, and sends no
+provider network policy because that combination is not supported upstream.
 
-OpenSandbox additionally requires an explicit isolation declaration:
-`gvisor`, `kata`, or `firecracker` for production. Local Docker/runc validation
-is available only as `container-dev` together with
+OpenSandbox additionally requires an explicit isolation declaration. The
+current production adapter accepts only `gvisor`, with a non-empty runtime
+identity and digest-pinned images that the manager verifies against the host
+runtime before admitting the sandbox. `kata` and `firecracker` are rejected at
+startup until OpenSandbox exposes an attestation the adapter can verify. Local
+Docker/runc validation is available only as `container-dev` together with
 `SANDBOX_OPENSANDBOX_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT=true`. This setting is
-an operator declaration and audit label; the production release gate must still
-prove that the OpenSandbox host actually uses the declared runtime. Do not use
+an explicit development exception, not a production isolation claim. Do not use
 the development mode for untrusted customer code.
 
 Provider API and sandbox URLs require HTTPS. Plain HTTP is accepted only through
@@ -154,18 +188,17 @@ Infrastructure requirements are provider-side, not Python requirements:
 | `e2b` hosted | E2B data plane | no KVM or sandbox runtime in the AgentArea cluster |
 | `cube` self-hosted | Cube data plane | KVM-capable worker hosts for its microVM runtime |
 | `opensandbox` + `gvisor` | OpenSandbox hosts | `runsc`; KVM is not required |
-| `opensandbox` + `kata`/`firecracker` | OpenSandbox hosts | KVM-capable worker hosts |
+| `opensandbox` + `kata`/`firecracker` | not currently accepted by AgentArea | future adapter work requires verifiable runtime attestation; KVM-capable hosts alone are insufficient |
 | `opensandbox` + `container-dev` | local Docker host | no KVM, but no production-grade kernel boundary |
 
-Automatic retirement of an idle *live* task is intentionally not enabled yet.
-The current cleanup call occurs when a workflow finishes, then the provider
-keeps the sandbox for `sandboxRuntime.idleTTL`. In the OpenSandbox Docker
-profile, terminating a sandbox removes the container but retains a stable
-per-task named volume mounted at `/workspace`; recreating the task reattaches
-that volume. A separate task-retention garbage collector must delete the volume
-after the task's durable retention deadline. `sandboxRuntime.leaseTTL` remains
-the orphan-safety bound, matching the existing Kubernetes task lease rather than
-the shorter completed-task grace.
+Retirement is a data-plane concern. The manager renews the active lease while a
+command or file operation is in progress and moves an inactive binding to the
+deployment's idle lease. Provider expiry and reconciliation remove it without a
+Temporal activity or workflow callback. A later demand creates a fresh sandbox
+and the manager rehydrates committed `inputs/` entries from the immutable S3
+manifest. Intermediate files disappear unless the agent explicitly publishes
+them as artifacts. Full-workspace archive/restore and its retention GC are not
+implemented.
 
 ## Enterprise Deployment Modes
 

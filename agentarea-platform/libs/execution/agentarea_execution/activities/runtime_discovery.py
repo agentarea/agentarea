@@ -1,7 +1,7 @@
 """Sandbox runtime discovery and prompt rendering."""
 
 import logging
-from typing import Any, Literal
+from typing import Any
 
 import httpx
 
@@ -17,16 +17,12 @@ logger = logging.getLogger(__name__)
 async def fetch_runtime_manifest(
     mcp_manager_url: str,
     *,
-    package_install: Literal["allowed", "locked"] = "allowed",
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> RuntimeDiscoveryResult:
     url = f"{mcp_manager_url.rstrip('/')}/runtime/manifest"
     try:
         async with httpx.AsyncClient(timeout=10.0, transport=transport) as client:
-            response = await client.get(
-                url,
-                params={"package_install": package_install},
-            )
+            response = await client.get(url)
             response.raise_for_status()
         return RuntimeDiscoveryResult(manifest=RuntimeManifest.model_validate(response.json()))
     except (httpx.HTTPError, ValueError) as exc:
@@ -36,8 +32,6 @@ async def fetch_runtime_manifest(
 
 def render_runtime_prompt(
     result: RuntimeDiscoveryResult,
-    *,
-    package_install: str = "allowed",
 ) -> str:
     manifest = result.manifest
     if manifest is None:
@@ -48,25 +42,6 @@ def render_runtime_prompt(
         )
 
     package_names = ", ".join(sorted(manifest.packages, key=str.casefold))
-    compatible = (package_install == "allowed" and manifest.managed_environment == "mutable") or (
-        package_install == "locked" and manifest.managed_environment == "immutable"
-    )
-    if package_install == "allowed":
-        environment_policy = (
-            "Package installation profile: allowed. The selected runtime must expose a mutable "
-            "managed Python environment before pip commands can run."
-        )
-    else:
-        environment_policy = (
-            "Package installation profile: locked. The selected runtime must expose an "
-            "immutable managed Python environment with pip removed."
-        )
-    compatibility_policy = (
-        "The active runtime satisfies the requested package-install profile."
-        if compatible
-        else "The active runtime does not satisfy this profile; sandbox execution will fail closed."
-    )
-
     if manifest.features.browser == "none":
         browser_policy = (
             "Browser automation: unavailable in this runtime. If the task requires a browser, "
@@ -83,25 +58,21 @@ def render_runtime_prompt(
         f"- Managed environment: {manifest.managed_environment}\n"
         f"- Preinstalled Python packages: {package_names or 'none declared'}\n"
         f"- {browser_policy}\n"
-        f"- {environment_policy}\n"
-        f"- {compatibility_policy}\n"
-        "- Arbitrary code can still be downloaded and run inside the writable task workspace; "
-        "the managed-environment profile is not an egress or workspace-code restriction."
+        "- Arbitrary workspace code is supported. Network access and managed-environment "
+        "behavior are defined by the active runtime."
         "\n\n# Workspace and context\n\n"
         "- Organization context store: read shared organization files with the context tool "
         "(read-only). It is never changed by anything you do in the sandbox.\n"
-        "- Your working directory is the live task workspace. Text saved with the file tool "
-        "is written there and copied to durable task storage immediately.\n"
-        "- Files created by a shell command stay only in the live sandbox unless that shell "
-        "call includes their plain relative paths (for example `report.xlsx`) in `artifact_paths`. "
-        "Every shell-produced file you promise to the user must be listed there so it is "
-        "copied to durable task storage before the command returns. A file written to an "
-        "absolute path outside your working directory is scratch and is NOT delivered.\n"
+        "- Your working directory is the live task workspace. User-provided inputs are under "
+        "`/workspace/inputs`. File and shell tools operate on the same live filesystem.\n"
+        "- Live workspace files are ephemeral. A file survives the task only if you list its "
+        "workspace-relative path in completion `artifacts`; everything else is discarded with "
+        "the sandbox. List only user-facing outputs, not caches, dependencies, or intermediate "
+        "files. A file written outside `/workspace` is scratch and cannot be kept.\n"
         "- Binary deliverables (.xlsx, .pptx, .docx, .pdf, images): the file tool saves text "
         "only, so writing binary through it corrupts the file. Generate them by running a "
-        "program in the shell that writes the file into your working directory, and include "
-        "every resulting binary in that shell call's `artifact_paths`, using a library from "
-        "the preinstalled packages listed above."
+        "program in the shell that writes the file into your working directory, using a library "
+        "from the preinstalled packages listed above, then list that path in `artifacts`."
     )
 
 
@@ -125,21 +96,12 @@ def require_runtime_capability(
 
 def runtime_event_data(
     result: RuntimeDiscoveryResult,
-    *,
-    package_install: str = "allowed",
 ) -> dict[str, Any]:
     if result.manifest is None:
         return {
             "runtime_discovery_error": result.error or "runtime manifest unavailable",
-            "package_install": package_install,
-            "runtime_profile_compatible": False,
         }
-    compatible = (
-        package_install == "allowed" and result.manifest.managed_environment == "mutable"
-    ) or (package_install == "locked" and result.manifest.managed_environment == "immutable")
     return {
         "runtime_version": result.manifest.image_version,
         "managed_environment": result.manifest.managed_environment,
-        "package_install": package_install,
-        "runtime_profile_compatible": compatible,
     }

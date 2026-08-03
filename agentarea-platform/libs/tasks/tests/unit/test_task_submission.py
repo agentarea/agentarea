@@ -35,6 +35,13 @@ def _make_service(temporal_executor=None):
 
     agent_stub = MagicMock(id=uuid4())
     agent_stub.name = "stub-agent"  # MagicMock(name=...) is the mock's own name, not a field
+    agent_stub.tools = [
+        {
+            "type": "code",
+            "name": "agentarea/shell",
+            "settings": {},
+        }
+    ]
     agent_repo = MagicMock()
     agent_repo.get = AsyncMock(return_value=agent_stub)
 
@@ -167,8 +174,8 @@ async def test_create_and_execute_sets_default_metadata():
     submitted = mocks["task_manager"].submit_task.await_args.args[0]
     assert submitted.metadata["created_via"] == "api"
     assert submitted.metadata["requires_human_approval"] is False
-    assert submitted.metadata["package_install"] == "allowed"
     snapshot = submitted.metadata["governance_snapshot"]
+    assert snapshot["resolved_execution"] == snapshot["effective_policy"]["execution"]
     assert snapshot["effective_policy"]["execution"]["max_model_turns"] == 100
     assert snapshot["effective_policy"] == submitted.effective_policy
 
@@ -272,31 +279,10 @@ async def test_delegated_task_cannot_loosen_parent_execution_policy():
         )
 
 
-@pytest.mark.asyncio
-async def test_run_package_install_overrides_agent_shell_profile():
-    service, mocks = _make_service()
-    agent = await mocks["agent_repo"].get(uuid4())
-    agent.tools = [
-        {
-            "type": "code",
-            "name": "agentarea/shell",
-            "settings": {"package_install": "allowed"},
-        }
-    ]
+def test_run_contract_has_no_sandbox_policy_toggle() -> None:
+    removed_field = "package" + "_install"
 
-    await service.start_run(
-        RunCreate(
-            agent_id=uuid4(),
-            description="Use only installed packages",
-            package_install="locked",
-        ),
-        workspace_id="ws-abc",
-        user_id="user-123",
-    )
-
-    submitted = mocks["task_manager"].submit_task.await_args.args[0]
-    assert submitted.metadata["package_install"] == "locked"
-    assert submitted.metadata["agent_name"] == "stub-agent"
+    assert removed_field not in RunCreate.model_fields
 
 
 @pytest.mark.asyncio
@@ -363,6 +349,13 @@ def _model_less_agent():
     agent = MagicMock(id=uuid4())
     agent.name = "no-model-agent"
     agent.model_id = None  # installed catalog agent with no matching workspace model
+    agent.tools = [
+        {
+            "type": "code",
+            "name": "agentarea/shell",
+            "settings": {},
+        }
+    ]
     return agent
 
 

@@ -44,13 +44,22 @@ func TestLoadInstancePodFromEnv(t *testing.T) {
 	}
 }
 
-// Malformed JSON must be ignored (empty config), never break instance creation.
-func TestLoadInstancePodInvalidJSONIgnored(t *testing.T) {
+func TestLoadInstancePodInvalidJSONFailsClosed(t *testing.T) {
 	t.Setenv("KUBERNETES_INSTANCE_POD", "{not valid json")
+	defer func() {
+		if recover() == nil {
+			t.Fatal("invalid placement JSON did not fail configuration")
+		}
+	}()
+	_ = loadKubernetesConfig()
+}
 
-	ip := loadKubernetesConfig().InstancePod
-
-	if ip.Labels != nil || ip.NodeSelector != nil || len(ip.Tolerations) != 0 {
-		t.Fatalf("expected empty InstancePod on invalid JSON, got %+v", ip)
-	}
+func TestInvalidConfiguredDurationFailsClosed(t *testing.T) {
+	t.Setenv("STARTUP_TIMEOUT", "eventually")
+	defer func() {
+		if recover() == nil {
+			t.Fatal("invalid duration did not fail configuration")
+		}
+	}()
+	_ = Load()
 }

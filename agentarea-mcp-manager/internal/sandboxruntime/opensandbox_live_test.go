@@ -2,7 +2,12 @@ package sandboxruntime
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -17,7 +22,7 @@ import (
 
 // TestOpenSandboxLiveConformance is skipped in normal unit runs. Operators can
 // point it at a real OpenSandbox deployment to prove lifecycle, exec, file
-// proxying, renewal, live inventory, and persistent task workspace behavior
+// proxying, renewal, live inventory, and ephemeral task workspace behavior
 // through the same adapter used by the manager.
 func TestOpenSandboxLiveConformance(t *testing.T) {
 	endpoint := os.Getenv("OPENSANDBOX_LIVE_URL")
@@ -26,8 +31,17 @@ func TestOpenSandboxLiveConformance(t *testing.T) {
 	}
 	apiKey := os.Getenv("OPENSANDBOX_LIVE_API_KEY")
 	image := os.Getenv("OPENSANDBOX_LIVE_IMAGE")
-	if apiKey == "" || image == "" {
-		t.Fatal("OPENSANDBOX_LIVE_API_KEY and OPENSANDBOX_LIVE_IMAGE are required")
+	runtimeIdentity := os.Getenv("OPENSANDBOX_LIVE_RUNTIME_IDENTITY")
+	manifestJSON := os.Getenv("OPENSANDBOX_LIVE_MANIFEST")
+	if apiKey == "" || image == "" || runtimeIdentity == "" || manifestJSON == "" {
+		t.Fatal("OPENSANDBOX_LIVE_API_KEY, OPENSANDBOX_LIVE_IMAGE, OPENSANDBOX_LIVE_RUNTIME_IDENTITY, and OPENSANDBOX_LIVE_MANIFEST are required")
+	}
+	var manifest runtimeinfo.Manifest
+	if err := json.Unmarshal([]byte(manifestJSON), &manifest); err != nil {
+		t.Fatalf("OPENSANDBOX_LIVE_MANIFEST: %v", err)
+	}
+	if err := manifest.Validate(); err != nil {
+		t.Fatalf("OPENSANDBOX_LIVE_MANIFEST is invalid: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
@@ -41,18 +55,18 @@ func TestOpenSandboxLiveConformance(t *testing.T) {
 			UseServerProxy: true,
 			RequestTimeout: 30 * time.Second,
 		},
-		Images: map[string]string{
-			runtimeinfo.PackageInstallAllowed: image,
-		},
-		ResourceCPU:      "500m",
-		ResourceMemory:   "512Mi",
-		LeaseTTL:         2 * time.Minute,
-		Isolation:        "gvisor",
-		AllowInsecure:    strings.HasPrefix(endpoint, "http://"),
-		SecureAccess:     &secureAccess,
-		EgressMode:       "host-public",
-		PersistWorkspace: true,
-		VolumePrefix:     "agentarea-live-smoke",
+		Image:               image,
+		ResourceCPU:         "500m",
+		ResourceMemory:      "512Mi",
+		ResourceStorage:     "2147483648",
+		LeaseTTL:            2 * time.Minute,
+		Isolation:           "gvisor",
+		RuntimeIdentity:     runtimeIdentity,
+		AllowInsecure:       strings.HasPrefix(endpoint, "http://"),
+		SecureAccess:        &secureAccess,
+		EgressMode:          "host-public",
+		AllowInternetAccess: true,
+		PersistWorkspace:    false,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +79,8 @@ func TestOpenSandboxLiveConformance(t *testing.T) {
 		session, createErr := provider.Create(ctx, CreateRequest{
 			WorkspaceID:    workspaceID,
 			TaskID:         taskID,
-			PackageInstall: runtimeinfo.PackageInstallAllowed,
+			ProvisioningID: "live-" + taskID,
+			Supervisor:     manifest.ExecutionSupervisor,
 		})
 		if createErr != nil {
 			t.Fatalf("Create() error = %v", createErr)
@@ -75,60 +90,99 @@ func TestOpenSandboxLiveConformance(t *testing.T) {
 	}
 
 	first := create()
-	result, err := provider.Execute(ctx, first, warmpool.ExecuteRequest{
-		CommandBody:    "printf persistent > persisted.txt && printf agentarea-live",
-		TimeoutSeconds: 30,
+	deleted := false
+	defer func() {
+		if !deleted {
+			if err := provider.Delete(context.Background(), first); err != nil {
+				t.Errorf("Delete() error = %v", err)
+			}
+		}
+	}()
+	sandbox, err := provider.connect(ctx, first)
+	if err != nil {
+		t.Fatalf("connect sandbox for isolation probe: %v", err)
+	}
+	capabilities, err := sandbox.IsolationCapabilities(ctx)
+	if err != nil {
+		t.Fatalf("IsolationCapabilities() error = %v", err)
+	}
+	t.Logf("isolated_execution available=%v isolator=%s version=%s setpriv=%v userns=%v", capabilities.Available, capabilities.Isolator, capabilities.Version, capabilities.SetprivAvailable, capabilities.UsernsAvailable)
+	result, err := provider.ExecuteQuiescent(ctx, first, QuiescentExecution{
+		Request: warmpool.ExecuteRequest{
+			CommandBody:    "printf persistent > persisted.txt && printf agentarea-live",
+			TimeoutSeconds: 30,
+		},
+		Supervisor: manifest.ExecutionSupervisor, MaxFileBytes: 268435456,
 	})
 	if err != nil {
-		_ = provider.Delete(context.Background(), first)
 		t.Fatalf("Execute() error = %v", err)
 	}
 	if result.ExitCode != 0 || result.Stdout != "agentarea-live" {
-		_ = provider.Delete(context.Background(), first)
 		t.Fatalf("Execute() = %+v", result)
 	}
-	if err := provider.PutFile(ctx, first, WorkspaceRoot+"/upload.txt", []byte("file-roundtrip")); err != nil {
-		_ = provider.Delete(context.Background(), first)
+	escapeMarker := WorkspaceRoot + "/escaped-after-return"
+	escape, err := provider.ExecuteQuiescent(ctx, first, QuiescentExecution{
+		Request: warmpool.ExecuteRequest{
+			CommandBody:    "setsid /bin/sh -c 'sleep 1; printf escaped > " + escapeMarker + "' >/dev/null 2>&1 & printf quiescent",
+			TimeoutSeconds: 30,
+		},
+		Supervisor: manifest.ExecutionSupervisor, MaxFileBytes: 268435456,
+	})
+	if err != nil || escape.ExitCode != 0 || escape.Stdout != "quiescent" {
+		t.Fatalf("detached-process execution = %+v, %v", escape, err)
+	}
+	time.Sleep(1500 * time.Millisecond)
+	if leaked, err := provider.OpenFile(ctx, first, escapeMarker); leaked != nil || !errors.Is(err, ErrFileNotFound) {
+		if leaked != nil {
+			_ = leaked.Content.Close()
+		}
+		t.Fatalf("detached process mutated workspace after ExecuteQuiescent returned: file=%v error=%v", leaked, err)
+	}
+	digest := sha256.Sum256([]byte("file-roundtrip"))
+	if err := provider.PutFile(ctx, first, FileUpload{
+		Path: WorkspaceRoot + "/upload.txt", Size: int64(len("file-roundtrip")), SHA256: hex.EncodeToString(digest[:]), Mode: 0o600,
+	}, strings.NewReader("file-roundtrip")); err != nil {
 		t.Fatalf("PutFile() error = %v", err)
 	}
-	content, err := provider.GetFile(ctx, first, WorkspaceRoot+"/upload.txt")
+	download, err := provider.OpenFile(ctx, first, WorkspaceRoot+"/upload.txt")
+	if err != nil {
+		t.Fatalf("OpenFile() error=%v", err)
+	}
+	content, err := io.ReadAll(download.Content)
+	download.Content.Close()
 	if err != nil || string(content) != "file-roundtrip" {
-		_ = provider.Delete(context.Background(), first)
 		t.Fatalf("GetFile() content=%q error=%v", content, err)
 	}
+	usage, err := provider.AuditWorkspace(ctx, first)
+	if err != nil {
+		t.Fatalf("AuditWorkspace() error = %v", err)
+	}
+	if usage != (WorkspaceUsage{Entries: 2, TotalBytes: 24, LargestBytes: 14}) {
+		t.Fatalf("AuditWorkspace() = %+v", usage)
+	}
 	if err := provider.Renew(ctx, first, 4*time.Minute); err != nil {
-		_ = provider.Delete(context.Background(), first)
 		t.Fatalf("Renew() error = %v", err)
 	}
 	assertLiveSandbox(t, ctx, provider, workspaceID, first.ID)
-
-	if err := provider.Delete(ctx, first); err != nil {
-		t.Fatalf("Delete(first) error = %v", err)
-	}
-	second := create()
-	defer func() {
-		if err := provider.Delete(context.Background(), second); err != nil {
-			t.Errorf("Delete(second) error = %v", err)
-		}
-	}()
-	content, err = provider.GetFile(ctx, second, WorkspaceRoot+"/persisted.txt")
-	if err != nil || string(content) != "persistent" {
-		t.Fatalf("persistent workspace content=%q error=%v", content, err)
-	}
-	assertLiveSandbox(t, ctx, provider, workspaceID, second.ID)
 
 	if hold := os.Getenv("OPENSANDBOX_LIVE_HOLD"); hold != "" {
 		duration, parseErr := time.ParseDuration(hold)
 		if parseErr != nil {
 			t.Fatalf("OPENSANDBOX_LIVE_HOLD: %v", parseErr)
 		}
-		t.Logf("holding sandbox %s for %s for runtime inspection", second.ID, duration)
+		t.Logf("holding sandbox %s for %s for runtime inspection", first.ID, duration)
 		select {
 		case <-time.After(duration):
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
 		}
 	}
+	if err := provider.Delete(context.Background(), first); err != nil {
+		t.Errorf("Delete() error = %v", err)
+	} else {
+		deleted = true
+	}
+	assertLiveSandboxAbsent(t, ctx, provider, workspaceID, first.ID)
 }
 
 func assertLiveSandbox(t *testing.T, ctx context.Context, provider *OpenSandboxProvider, workspaceID, sandboxID string) {
@@ -149,4 +203,17 @@ func assertLiveSandbox(t *testing.T, ctx context.Context, provider *OpenSandboxP
 		}
 	}
 	t.Fatal(fmt.Errorf("sandbox %s missing from live workspace inventory", sandboxID))
+}
+
+func assertLiveSandboxAbsent(t *testing.T, ctx context.Context, provider *OpenSandboxProvider, workspaceID, sandboxID string) {
+	t.Helper()
+	items, err := provider.List(ctx, workspaceID)
+	if err != nil {
+		t.Fatalf("List() after delete error = %v", err)
+	}
+	for _, item := range items {
+		if item.ID == sandboxID {
+			t.Fatalf("deleted sandbox %s remains in live inventory", sandboxID)
+		}
+	}
 }

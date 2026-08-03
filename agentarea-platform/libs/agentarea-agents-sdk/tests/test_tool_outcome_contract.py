@@ -114,12 +114,28 @@ def test_shell_result_stays_readable_for_the_model():
     assert outcome["result"] == "hello"
 
 
-def test_shell_artifacts_survive_alongside_the_outcome():
+def test_shell_outcome_publishes_no_implicit_artifacts():
+    """Artifacts are published explicitly, never harvested from a shell call.
+
+    The shell tool used to copy requested paths out on the agent's behalf. That
+    made every command a potential artifact producer and left the task with
+    files nobody declared. Publication now goes through the artifact tool or the
+    completion contract, so the shell outcome carries execution facts only.
+    """
     from agentarea_agents_sdk.tools.shell_toolset import _shell_outcome
 
-    outcome = _shell_outcome(
-        {"exit_code": 0, "stdout": "{}", "stderr": ""},
-        artifacts=[{"artifact_path": "sandbox/report.txt"}],
-    )
-    assert outcome["artifact_paths"] == ["sandbox/report.txt"]
+    outcome = _shell_outcome({"exit_code": 0, "stdout": "{}", "stderr": ""})
+
+    assert set(outcome) == {"success", "result", "exit_code", "outcome"}
+    assert "artifact_paths" not in outcome
+    assert "artifacts" not in outcome
     json.dumps(outcome)  # must stay serializable for the event payload
+
+
+def test_shell_tool_no_longer_accepts_an_artifact_paths_argument():
+    import inspect
+
+    from agentarea_agents_sdk.tools.shell_toolset import ShellToolset
+
+    parameters = inspect.signature(ShellToolset.bash).parameters
+    assert "artifact_paths" not in parameters

@@ -78,7 +78,6 @@ class CodeToolSettings(BaseToolSettings):
     """Settings for a built-in code toolset."""
 
     disabled_methods: list[str] | None = None
-    package_install: Literal["allowed", "locked"] | None = None
 
 
 class McpToolSettings(BaseToolSettings):

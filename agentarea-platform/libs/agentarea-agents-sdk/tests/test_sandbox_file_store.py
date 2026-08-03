@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import base64
+import hashlib
 
 import pytest
 
@@ -9,9 +9,11 @@ from agentarea_agents_sdk.tools.sandbox_file_store import SandboxFileStore
 
 
 class _FakeResponse:
-    def __init__(self, status_code: int, payload: dict) -> None:
+    def __init__(self, status_code: int, payload: dict | None = None, content: bytes = b"") -> None:
         self.status_code = status_code
-        self._payload = payload
+        self._payload = payload or {}
+        self.content = content
+        self.headers = {"content-type": "application/octet-stream"}
 
     @property
     def text(self) -> str:
@@ -27,7 +29,7 @@ class _FakeControlPlane:
     def __init__(self) -> None:
         self.files: dict[tuple[str, str, str], bytes] = {}
         self.requests: list[tuple[str, str]] = []
-        self.put_payloads: list[dict] = []
+        self.put_params: list[dict] = []
 
     async def request(
         self,
@@ -36,21 +38,25 @@ class _FakeControlPlane:
         *,
         json: dict | None = None,
         params: dict | None = None,
+        content: bytes | None = None,
+        headers: dict | None = None,
     ):
+        assert headers is not None
+        assert headers["Authorization"] == "Bearer file-secret"
         self.requests.append((method, url))
-        if not url.endswith("/sandbox/files"):
-            raise AssertionError(f"unexpected url: {url}")
-        if method == "PUT":
-            assert json is not None
-            self.put_payloads.append(json)
-            key = (json["workspace_id"], json["task_id"], json["path"])
-            self.files[key] = base64.b64decode(json["content_base64"])
-            return _FakeResponse(200, {"path": json["path"], "size": len(self.files[key])})
+        if method == "PUT" and url.endswith("/sandbox/file-content"):
+            assert params is not None and content is not None
+            self.put_params.append(params)
+            assert params["size"] == len(content)
+            assert params["sha256"] == hashlib.sha256(content).hexdigest()
+            key = (params["workspace_id"], params["task_id"], params["path"])
+            self.files[key] = content
+            return _FakeResponse(200, {"path": params["path"], "size": len(content)})
         if method == "GET":
             assert params is not None
             workspace_id = params["workspace_id"]
             task_id = params["task_id"]
-            if "list" in params:
+            if url.endswith("/sandbox/files") and "list" in params:
                 prefix = params["list"]
                 paths = [
                     path
@@ -62,10 +68,9 @@ class _FakeControlPlane:
             if key not in self.files:
                 return _FakeResponse(404, {"error": "not_found"})
             data = self.files[key]
-            return _FakeResponse(
-                200,
-                {"content_base64": base64.b64encode(data).decode("ascii"), "size": len(data)},
-            )
+            if not url.endswith("/sandbox/file-content"):
+                raise AssertionError(f"unexpected url: {url}")
+            return _FakeResponse(200, content=data)
         raise AssertionError(f"unexpected method: {method}")
 
 
@@ -74,7 +79,7 @@ def _store(client: _FakeControlPlane) -> SandboxFileStore:
         mcp_manager_url="http://mcp-manager:8000",
         workspace_id="ws",
         task_id="task",
-        package_install="allowed",
+        auth_secret="file-secret",
         http_client=client,
     )
 
@@ -95,25 +100,20 @@ async def test_sandbox_file_store_put_get_round_trip():
 
 
 @pytest.mark.asyncio
-async def test_sandbox_file_store_put_carries_locked_runtime_profile():
+async def test_sandbox_file_store_put_carries_only_file_and_task_metadata():
     client = _FakeControlPlane()
-    store = SandboxFileStore(
-        mcp_manager_url="http://mcp-manager:8000",
-        workspace_id="ws",
-        task_id="task",
-        package_install="locked",
-        http_client=client,
-    )
+    store = _store(client)
 
     await store.put("ws", "src/a.py", b"print('ok')", "text/plain")
 
-    assert client.put_payloads == [
+    assert client.put_params == [
         {
             "workspace_id": "ws",
             "task_id": "task",
-            "package_install": "locked",
             "path": "src/a.py",
-            "content_base64": "cHJpbnQoJ29rJyk=",
+            "size": len(b"print('ok')"),
+            "sha256": hashlib.sha256(b"print('ok')").hexdigest(),
+            "mode": "600",
         }
     ]
 
@@ -123,6 +123,13 @@ async def test_sandbox_file_store_get_missing_raises_file_not_found():
     store = _store(_FakeControlPlane())
     with pytest.raises(FileNotFoundError):
         await store.get("ws", "nope.txt")
+
+
+@pytest.mark.asyncio
+async def test_sandbox_file_store_rejects_workspace_override():
+    store = _store(_FakeControlPlane())
+    with pytest.raises(ValueError, match="bound to a different workspace"):
+        await store.put("other-workspace", "nope.txt", b"secret")
 
 
 @pytest.mark.asyncio
@@ -152,134 +159,24 @@ async def test_file_toolset_over_sandbox_store_round_trips_and_lists():
     assert listed["files"] == ["notes/todo.txt"]
 
 
-class _FakeDurable:
-    """Records write-through puts to the durable, user-visible task workspace."""
-
-    def __init__(self, fail: bool = False) -> None:
-        self.puts: list[tuple[str, str, str, bytes, str | None]] = []
-        self._fail = fail
-
-    async def put(self, workspace_id, task_id, path, data, content_type=None, **kwargs):
-        if self._fail:
-            raise RuntimeError("durable store unavailable")
-        self.puts.append((workspace_id, task_id, path, data, content_type))
-
-
-@pytest.mark.asyncio
-async def test_put_writes_through_to_durable_task_workspace():
-    client = _FakeControlPlane()
-    durable = _FakeDurable()
-    store = SandboxFileStore(
-        mcp_manager_url="http://mcp-manager:8000",
-        workspace_id="ws",
-        task_id="task",
-        package_install="allowed",
-        http_client=client,
-        durable=durable,
-    )
-    await store.put("ws", "outputs/deck.pptx", b"PPTXDATA", "application/vnd.ms-powerpoint")
-    # landed in the sandbox /workspace (bash-visible)
-    assert client.files[("ws", "task", "outputs/deck.pptx")] == b"PPTXDATA"
-    # AND written through to the durable, user-visible task workspace
-    assert durable.puts == [
-        ("ws", "task", "outputs/deck.pptx", b"PPTXDATA", "application/vnd.ms-powerpoint")
-    ]
-
-
-@pytest.mark.asyncio
-async def test_put_fails_loudly_when_durable_write_fails():
-    store = SandboxFileStore(
-        mcp_manager_url="http://mcp-manager:8000",
-        workspace_id="ws",
-        task_id="task",
-        package_install="allowed",
-        http_client=_FakeControlPlane(),
-        durable=_FakeDurable(fail=True),
-    )
-    with pytest.raises(RuntimeError):
-        await store.put("ws", "a.txt", b"x")
-
-
 class _Unavailable503:
-    """Control plane that has no per-task file routing (K8s path) — always 503."""
+    """A failed manager call must never fall back to a second Python store."""
 
-    async def request(self, method, url, *, json=None, params=None):
+    async def request(self, method, url, *, json=None, params=None, content=None, headers=None):
         return _FakeResponse(503, {"error": "sandbox files unavailable"})
 
 
 @pytest.mark.asyncio
-async def test_put_falls_back_to_durable_on_503():
-    durable = _FakeDurable()
+async def test_put_fails_loudly_on_manager_503():
     store = SandboxFileStore(
         mcp_manager_url="http://mcp-manager:8000",
         workspace_id="ws",
         task_id="task",
-        package_install="allowed",
+        auth_secret="file-secret",
         http_client=_Unavailable503(),
-        durable=durable,
     )
-    await store.put("ws", "outputs/a.txt", b"hi", "text/plain")
-    # persisted to the durable store, not lost
-    assert durable.puts == [("ws", "task", "outputs/a.txt", b"hi", "text/plain")]
-
-
-@pytest.mark.asyncio
-async def test_get_falls_back_to_durable_on_503():
-    class _DurableWithGet(_FakeDurable):
-        async def get(self, workspace_id, task_id, path):
-            return b"durable-bytes", "text/plain"
-
-    store = SandboxFileStore(
-        mcp_manager_url="http://mcp-manager:8000",
-        workspace_id="ws",
-        task_id="task",
-        package_install="allowed",
-        http_client=_Unavailable503(),
-        durable=_DurableWithGet(),
-    )
-    data, _ = await store.get("ws", "a.txt")
-    assert data == b"durable-bytes"
-
-
-@pytest.mark.asyncio
-async def test_get_falls_back_to_durable_on_404_sandbox_miss():
-    """A task input lives in durable storage but is not on the sandbox disk until
-    the first bash copy-in. The file tool must still read it (one coherent view),
-    so a sandbox 404 falls back to the durable task workspace."""
-
-    class _DurableWithGet(_FakeDurable):
-        async def get(self, workspace_id, task_id, path):
-            assert (workspace_id, task_id, path) == ("ws", "task", "inputs/attachments/sales.csv")
-            return b"product,month,revenue\n", "text/csv"
-
-    store = SandboxFileStore(
-        mcp_manager_url="http://mcp-manager:8000",
-        workspace_id="ws",
-        task_id="task",
-        package_install="allowed",
-        http_client=_FakeControlPlane(),  # returns 404 for the not-yet-copied-in path
-        durable=_DurableWithGet(),
-    )
-    data, _ = await store.get("ws", "inputs/attachments/sales.csv")
-    assert data == b"product,month,revenue\n"
-
-
-@pytest.mark.asyncio
-async def test_get_404_with_durable_miss_still_raises_file_not_found():
-    class _DurableMiss(_FakeDurable):
-        async def get(self, workspace_id, task_id, path):
-            raise FileNotFoundError(path)
-
-    store = SandboxFileStore(
-        mcp_manager_url="http://mcp-manager:8000",
-        workspace_id="ws",
-        task_id="task",
-        package_install="allowed",
-        http_client=_FakeControlPlane(),
-        durable=_DurableMiss(),
-    )
-    with pytest.raises(FileNotFoundError):
-        await store.get("ws", "genuinely-missing.txt")
+    with pytest.raises(RuntimeError, match="HTTP 503"):
+        await store.put("ws", "outputs/a.txt", b"hi", "text/plain")
 
 
 def test_sandbox_file_store_requires_configuration():
@@ -288,12 +185,19 @@ def test_sandbox_file_store_requires_configuration():
             mcp_manager_url="",
             workspace_id="ws",
             task_id="task",
-            package_install="allowed",
+            auth_secret="file-secret",
         )
     with pytest.raises(ValueError):
         SandboxFileStore(
             mcp_manager_url="http://x",
             workspace_id="ws",
             task_id="",
-            package_install="allowed",
+            auth_secret="file-secret",
+        )
+    with pytest.raises(ValueError):
+        SandboxFileStore(
+            mcp_manager_url="http://x",
+            workspace_id="ws",
+            task_id="task",
+            auth_secret="",
         )

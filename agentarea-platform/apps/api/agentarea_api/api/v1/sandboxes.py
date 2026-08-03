@@ -28,7 +28,6 @@ class SandboxSummary(BaseModel):
     provider: str
     workspace_id: str = Field(exclude=True)
     task_id: str
-    package_install: str
     state: str
     created_at: datetime
     expires_at: datetime | None
