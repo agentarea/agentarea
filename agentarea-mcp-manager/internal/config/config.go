@@ -155,6 +155,9 @@ func Load() *Config {
 	if _, err := ResolveIsolation(config.Container.DefaultIsolationTier); err != nil {
 		panic(err)
 	}
+	if _, err := config.Kubernetes.InstancePod.ScratchSizeLimitQuantity(); err != nil {
+		panic(err)
+	}
 	return config
 }
 

@@ -14,7 +14,10 @@ KUBERNETES_NAMESPACE: "{{ .Release.Namespace }}"
 KUBERNETES_DOMAIN: "{{ .Values.mcpManager.domain | default "mcp.local" }}"
 KUBERNETES_GATEWAY_NAME: "{{ .Values.mcpManager.gateway.name | default "envoy-gateway" }}"
 KUBERNETES_GATEWAY_NAMESPACE: "{{ .Values.mcpManager.gateway.namespace | default "envoy-gateway-system" }}"
-KUBERNETES_RUNTIME_CLASS: "{{ required "mcpManager.runtimeClass is required for untrusted MCP and sandbox workloads" .Values.mcpManager.runtimeClass }}"
+KUBERNETES_RUNTIME_CLASS: "{{ .Values.mcpManager.runtimeClass }}"
+DEFAULT_ISOLATION_TIER: "{{ required "mcpManager.isolationTier is required" .Values.mcpManager.isolationTier }}"
+MCP_ALLOWED_IMAGE_REPOSITORIES: "{{ join "," .Values.mcpManager.admission.allowedImageRepositories }}"
+MCP_ALLOWED_COMMAND_PACKAGES: "{{ join "," .Values.mcpManager.admission.allowedCommandPackages }}"
 KUBERNETES_POD_SERVICE_ACCOUNT_NAME: "{{ include "agentarea.mcpRuntimeServiceAccountName" . }}"
 SANDBOX_WORKSPACE_PROVIDER: "s3"
 SANDBOX_WORKSPACE_MAX_FILES: "{{ .Values.sandboxRuntime.workspace.maxFiles }}"
@@ -95,6 +98,21 @@ MCP_GATEWAY_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: KUBERNETES_RUNTIME_CLASS
+- name: DEFAULT_ISOLATION_TIER
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: DEFAULT_ISOLATION_TIER
+- name: MCP_ALLOWED_IMAGE_REPOSITORIES
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_ALLOWED_IMAGE_REPOSITORIES
+- name: MCP_ALLOWED_COMMAND_PACKAGES
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_ALLOWED_COMMAND_PACKAGES
 - name: KUBERNETES_POD_SERVICE_ACCOUNT_NAME
   valueFrom:
     configMapKeyRef:
@@ -125,6 +143,21 @@ MCP_GATEWAY_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS
+- name: SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS
+- name: SANDBOX_EXECUTION_QUEUE_TIMEOUT
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_EXECUTION_QUEUE_TIMEOUT
+- name: SANDBOX_EXECUTION_COMPLETION_GRACE
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_EXECUTION_COMPLETION_GRACE
 - name: SANDBOX_WORKSPACE_SIGNED_URL_TTL
   valueFrom:
     configMapKeyRef:

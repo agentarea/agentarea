@@ -23,17 +23,20 @@ spec:
     spec:
       {{- /*
         Sandbox pods run LLM-written shell commands — the least trusted workload
-        on the platform. They take their isolation from mcpManager.runtimeClass,
-        the same value that drives MCP instance pods, so one setting governs both
-        and neither can silently end up weaker than the other.
+        on the platform, and a strictly different trust tier from an MCP server
+        image the workspace owner picked from a catalog. They therefore have
+        their own runtime class, and an empty one has to be asked for out loud.
 
         Previously this hardcoded `kata-qemu` behind the kata_runtime flag, which
         pinned the chart to one vendor's runtime and offered nothing to clusters
         without KVM. The runtime class is now declared, not chosen for you.
       */ -}}
-      {{- $runtimeClass := required "mcpManager.runtimeClass is required for untrusted MCP and sandbox workloads" .Values.mcpManager.runtimeClass }}
+      {{- $runtimeClass := .Values.sandboxRuntime.runtimeClass }}
+      {{- if and (not $runtimeClass) (not .Values.sandboxRuntime.allowWeakIsolationForDevelopment) }}
+        {{- fail "sandboxRuntime.runtimeClass is required: sandbox pods execute agent-authored code. Set \"gvisor\" or \"kata-qemu\", or set sandboxRuntime.allowWeakIsolationForDevelopment=true to accept the node's default runtime for local development." }}
+      {{- end }}
       {{- if and (has "kata_runtime" .Values.mcpManager.features.enabled) (not $runtimeClass) }}
-        {{- fail "mcpManager.features.enabled includes kata_runtime but mcpManager.runtimeClass is empty. The runtime class is no longer hardcoded: set mcpManager.runtimeClass explicitly (\"kata-qemu\" to keep the previous behaviour, or \"gvisor\")." }}
+        {{- fail "mcpManager.features.enabled includes kata_runtime but sandboxRuntime.runtimeClass is empty. The runtime class is no longer hardcoded: set sandboxRuntime.runtimeClass explicitly (\"kata-qemu\" to keep the previous behaviour, or \"gvisor\")." }}
       {{- end }}
       {{- if $runtimeClass }}
       runtimeClassName: {{ $runtimeClass | quote }}

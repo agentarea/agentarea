@@ -533,7 +533,10 @@ mcpManager:
   # or call starts the workload and it remains running; with it enabled, the
   # workload is also reclaimed after idleTimeout and restarted by the next call.
   serverless:
-    enabled: false
+    # Scale-to-zero. The instance row is desired state and is never removed by
+    # a timer; only the workload behind it is reclaimed and re-created on the
+    # next request.
+    enabled: true
     # How long an instance may go uncalled before its workload is reclaimed.
     idleTimeout: "10m"
     # How often to look for idle instances.
@@ -598,22 +601,51 @@ mcpManager:
     name: "envoy-gateway"              # Name of the Gateway resource
     namespace: "envoy-gateway-system"  # Namespace where Gateway is deployed
   
-  # Container runtime class for every workload that executes code we did not
-  # write: MCP server instances AND agent sandbox pods. One setting governs
-  # both, so the sandbox can never end up less confined than an MCP server.
+  # Container runtime class for MCP server instance pods. Sandbox pods have
+  # their own setting (sandboxRuntime.runtimeClass) and a stricter rule — the
+  # two workloads carry different code and cannot share one answer. A sandbox
+  # runs code the agent wrote; an MCP server runs an image the workspace owner
+  # picked from a catalog.
   #
   #   "gvisor"    — gVisor/runsc. Needs no KVM or nested virtualization, so it
   #                 works on ordinary cloud VMs. Requires runsc + the containerd
   #                 shim installed on the nodes and a matching RuntimeClass.
   #   "kata-qemu" — Kata Containers. A real kernel per pod, but requires KVM,
   #                 which managed clusters on virtualized nodes rarely expose.
-  #   ""          — the node's default runtime (runc). NO kernel isolation:
-  #                 untrusted code shares the host kernel. Acceptable for local
-  #                 development only.
+  #   ""          — the node's default runtime (runc). No kernel isolation.
+  #                 Permitted here because MCP instances are additionally
+  #                 confined by the standard isolation tier (all capabilities
+  #                 dropped, no privilege escalation, bounded scratch) and
+  #                 restricted to catalog images. Do NOT open user-supplied
+  #                 images on an empty runtime class.
   #
   # The name must match a RuntimeClass that exists in the cluster; Kubernetes
   # refuses to schedule the pod otherwise, which is the correct failure.
-  runtimeClass: "gvisor"
+  runtimeClass: ""
+
+  # Confinement applied to every MCP instance pod, on top of runtimeClass.
+  #   trusted   — images we build and ship ourselves
+  #   standard  — third-party catalog images: all capabilities dropped, no
+  #               privilege escalation, bounded pids, host default runtime
+  #   untrusted — adds a syscall-interposing runtime class, so the cluster must
+  #               actually provide one or the pod never schedules
+  isolationTier: "standard"
+
+  # What an MCP instance is allowed to run. This is admission, not confinement:
+  # the isolation tier decides how tightly a workload is boxed, this decides
+  # whether it may exist. On nodes offering only the default container runtime
+  # there is no kernel boundary behind it, so the set has to be closed by name.
+  #
+  # At least one list must be non-empty or no instance could ever start.
+  admission:
+    # Image repositories, without tag or digest, e.g.
+    # "ghcr.io/vendor/notion-mcp". Any tag in an admitted repository is allowed;
+    # pin digests in the catalog when you need immutability.
+    allowedImageRepositories: []
+    # Executables a command-type (stdio) instance may run, e.g.
+    # "mcp-server-notion". Without this list, a command instance would reach
+    # arbitrary code through our own bridge image and bypass the one above.
+    allowedCommandPackages: []
 
   # Untrusted MCP runtime and sandbox task pods use this zero-RBAC
   # ServiceAccount instead of the control-plane ServiceAccount.
@@ -688,6 +720,13 @@ mcpManager:
 sandboxRuntime:
   provider: ""
   region: ""
+  # Container runtime class for sandbox/warm-pool pods. Unlike MCP instances
+  # these execute code the agent itself wrote, so an empty value is refused
+  # unless allowWeakIsolationForDevelopment is explicitly set.
+  runtimeClass: "gvisor"
+  # Opt out of the runtimeClass requirement for local development. Never set
+  # this where a real workspace can submit a task.
+  allowWeakIsolationForDevelopment: false
   # Deployment-level public internet policy. The manager applies this to the
   # selected provider; task/tool callers cannot override it.
   allowInternet: false

@@ -14,6 +14,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,6 +31,9 @@ type KubernetesBackend struct {
 	logger       *slog.Logger
 	scheme       *runtime.Scheme
 	taskLeaseTTL time.Duration
+	// scratchSizeLimit bounds every ephemeral volume on a spawned instance pod.
+	// Resolved once here so no code path can reach a pod with an unbounded one.
+	scratchSizeLimit resource.Quantity
 	// taskOperations fences composite task work against in-process retirement.
 	taskOperations *sandboxruntime.TaskOperationGate
 }
@@ -38,6 +42,10 @@ type KubernetesBackend struct {
 func NewKubernetesBackend(cfg *config.Config, logger *slog.Logger, taskLeaseTTL time.Duration) (*KubernetesBackend, error) {
 	if taskLeaseTTL <= 0 {
 		return nil, fmt.Errorf("sandbox task lease TTL must be positive")
+	}
+	scratchSizeLimit, err := cfg.Kubernetes.InstancePod.ScratchSizeLimitQuantity()
+	if err != nil {
+		return nil, err
 	}
 	k8sConfig, err := resolveClusterConfig(cfg.Kubernetes.Kubeconfig, logger)
 	if err != nil {
@@ -76,7 +84,8 @@ func NewKubernetesBackend(cfg *config.Config, logger *slog.Logger, taskLeaseTTL 
 		scheme:       scheme,
 		taskLeaseTTL: taskLeaseTTL,
 
-		taskOperations: sandboxruntime.NewTaskOperationGate("kubernetes"),
+		scratchSizeLimit: scratchSizeLimit,
+		taskOperations:   sandboxruntime.NewTaskOperationGate("kubernetes"),
 	}, nil
 }
 

@@ -190,14 +190,24 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 			TimeoutSeconds:      5,
 			FailureThreshold:    3,
 		},
+		// Scale-to-zero means every call may pay this. A fixed initial delay is
+		// dead time the fastest image cannot avoid, so slow starts are absorbed by
+		// startupProbe's budget instead and readiness polls at one second.
+		StartupProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(spec.Port)},
+			},
+			PeriodSeconds:    1,
+			TimeoutSeconds:   2,
+			FailureThreshold: 120,
+		},
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(spec.Port)},
 			},
-			InitialDelaySeconds: 5,
-			PeriodSeconds:       3,
-			TimeoutSeconds:      2,
-			FailureThreshold:    5,
+			PeriodSeconds:    1,
+			TimeoutSeconds:   2,
+			FailureThreshold: 5,
 		},
 	}
 
@@ -284,6 +294,10 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 						// kube-apiserver; withholding the SA token means a hostile
 						// image cannot use it to reach the control plane.
 						AutomountServiceAccountToken: boolPtr(false),
+						// Nothing is flushed on the way out — the workload holds no
+						// durable state — so the default 30s only keeps a reaped
+						// instance occupying its name and quota.
+						TerminationGracePeriodSeconds: int64Ptr(5),
 					}
 					if k.k8sConfig.PodServiceAccountName != "" {
 						spec.ServiceAccountName = k.k8sConfig.PodServiceAccountName
@@ -330,21 +344,27 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 	return nil
 }
 
-// createVolumes creates the volume specifications for writable directories
+// createVolumes creates the volume specifications for writable directories.
+//
+// Every volume is bounded. An MCP workload keeps nothing across a restart, so
+// unbounded scratch buys the instance nothing and lets one image exhaust the
+// node's ephemeral storage for every other pod scheduled there.
 func (k *KubernetesBackend) createVolumes(spec *InstanceSpec) []corev1.Volume {
+	scratchLimit := k.scratchSizeLimit
+
 	// Default volumes (always needed for security)
 	volumes := make([]corev1.Volume, 0, 2+len(spec.WritablePaths))
 	volumes = append(volumes,
 		corev1.Volume{
 			Name: "tmp",
 			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
+				EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &scratchLimit},
 			},
 		},
 		corev1.Volume{
 			Name: "var-run",
 			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
+				EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &scratchLimit},
 			},
 		},
 	)
@@ -355,7 +375,7 @@ func (k *KubernetesBackend) createVolumes(spec *InstanceSpec) []corev1.Volume {
 		volumes = append(volumes, corev1.Volume{
 			Name: volumeName,
 			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
+				EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &scratchLimit},
 			},
 		})
 	}
@@ -681,6 +701,10 @@ func (k *KubernetesBackend) performHTTPHealthCheck(_ context.Context, instanceNa
 }
 
 // Helper function for int32 pointer
+func int64Ptr(i int64) *int64 {
+	return &i
+}
+
 func int32Ptr(i int32) *int32 {
 	return &i
 }

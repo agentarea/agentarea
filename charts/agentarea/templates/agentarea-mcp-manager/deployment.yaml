@@ -1,4 +1,8 @@
 {{- if .Values.mcpManager.enabled }}
+{{- $admission := .Values.mcpManager.admission }}
+{{- if and (empty $admission.allowedImageRepositories) (empty $admission.allowedCommandPackages) }}
+  {{- fail "mcpManager.admission declares nothing runnable: set allowedImageRepositories (registry/repository, no tag) and/or allowedCommandPackages. MCP instance pods run third-party code on the node's container runtime, so the set of admissible code is declared, never inferred." }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

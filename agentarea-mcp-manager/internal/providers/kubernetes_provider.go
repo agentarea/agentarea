@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/secrets"
 )
@@ -126,11 +125,15 @@ func (p *KubernetesProvider) DeleteInstance(ctx context.Context, instanceID, nam
 // the docker-mode handler does). Otherwise deployment would be created with
 // empty image + port=0 and rejected by the K8s apiserver.
 func (p *KubernetesProvider) convertToInstanceSpec(instance *models.MCPServerInstance) *BackendInstanceSpec {
+	// The tier is deliberately left empty: the backend then applies the
+	// operator's DEFAULT_ISOLATION_TIER. Pinning "untrusted" here asked every MCP
+	// pod for a syscall-interposing RuntimeClass, so on a cluster without one the
+	// pod stayed Pending until the gateway's startup timeout and the instance was
+	// unreachable forever.
 	spec := &BackendInstanceSpec{
-		InstanceID:    instance.InstanceID,
-		Name:          instance.InstanceID,
-		ServiceName:   instance.InstanceID,
-		IsolationTier: config.IsolationUntrusted,
+		InstanceID:  instance.InstanceID,
+		Name:        instance.InstanceID,
+		ServiceName: instance.InstanceID,
 	}
 
 	jsonSpec := instance.JSONSpec

@@ -2,9 +2,11 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // KubernetesConfig holds Kubernetes-specific configuration
@@ -104,6 +106,33 @@ type InstancePodConfig struct {
 	Affinity          *corev1.Affinity    `json:"affinity,omitempty"`
 	ImagePullSecrets  []string            `json:"imagePullSecrets,omitempty"`
 	PriorityClassName string              `json:"priorityClassName,omitempty"`
+
+	// ScratchSizeLimit bounds every ephemeral volume mounted into an instance
+	// pod. Empty takes defaultScratchSizeLimit; an unparsable value is a startup
+	// error rather than a silently unbounded volume.
+	ScratchSizeLimit string `json:"scratchSizeLimit,omitempty"`
+}
+
+// defaultScratchSizeLimit is the bound applied when the operator declares none.
+// MCP workloads keep nothing across a restart, so scratch only has to hold one
+// request's working set.
+const defaultScratchSizeLimit = "256Mi"
+
+// ScratchSizeLimitQuantity resolves the configured bound. It is validated at
+// startup, so the backend can rely on it parsing.
+func (c InstancePodConfig) ScratchSizeLimitQuantity() (resource.Quantity, error) {
+	raw := strings.TrimSpace(c.ScratchSizeLimit)
+	if raw == "" {
+		raw = defaultScratchSizeLimit
+	}
+	quantity, err := resource.ParseQuantity(raw)
+	if err != nil {
+		return resource.Quantity{}, fmt.Errorf("instance pod scratchSizeLimit %q is not a quantity: %w", c.ScratchSizeLimit, err)
+	}
+	if quantity.Sign() <= 0 {
+		return resource.Quantity{}, fmt.Errorf("instance pod scratchSizeLimit must be positive, got %q", c.ScratchSizeLimit)
+	}
+	return quantity, nil
 }
 
 // NetworkPolicyRule defines a network policy rule

@@ -24,14 +24,21 @@ type ProviderRuntime struct {
 	providers      ProviderSelector
 	backend        backends.Backend
 	config         *config.Config
+	imagePolicy    ImagePolicy
 	startupTimeout time.Duration
 }
 
-func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backend, cfg *config.Config, startupTimeout time.Duration) (*ProviderRuntime, error) {
+func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backend, cfg *config.Config, imagePolicy ImagePolicy, startupTimeout time.Duration) (*ProviderRuntime, error) {
 	if providerManager == nil || backend == nil || cfg == nil || startupTimeout <= 0 {
 		return nil, fmt.Errorf("MCP provider runtime requires providers, backend, config, and positive startup timeout")
 	}
-	return &ProviderRuntime{providers: providerManager, backend: backend, config: cfg, startupTimeout: startupTimeout}, nil
+	return &ProviderRuntime{
+		providers:      providerManager,
+		backend:        backend,
+		config:         cfg,
+		imagePolicy:    imagePolicy,
+		startupTimeout: startupTimeout,
+	}, nil
 }
 
 func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPServerInstance) (string, error) {
@@ -42,6 +49,12 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 	instanceType, _ := instance.JSONSpec["type"].(string)
 	if instanceType != "docker" && instanceType != "command" && instanceType != "kubernetes" {
 		return "", fmt.Errorf("MCP demand gateway supports container-backed instances only, got %q", instanceType)
+	}
+	// Admission runs before the workload is inspected, not just before it is
+	// created: an instance whose spec was edited to something inadmissible must
+	// stop being served, not keep answering from the pod it already had.
+	if err := r.authorize(instanceType, instance); err != nil {
+		return "", err
 	}
 
 	status, statusErr := r.backend.GetInstanceStatus(ctx, instance.InstanceID)
@@ -112,6 +125,18 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 		base = r.config.GetServiceURL(instance.InstanceID, port)
 	}
 	return strings.TrimRight(base, "/") + "/mcp", nil
+}
+
+// authorize admits the instance against the operator's declared lists. The two
+// container-backed shapes name their code differently — an image reference or a
+// package to fetch — so each is checked against the list that describes it.
+func (r *ProviderRuntime) authorize(instanceType string, instance *models.MCPServerInstance) error {
+	if instanceType == "command" {
+		command, _ := instance.JSONSpec["command"].(string)
+		return r.imagePolicy.AuthorizeCommand(command)
+	}
+	image, _ := instance.JSONSpec["image"].(string)
+	return r.imagePolicy.AuthorizeImage(image)
 }
 
 func (r *ProviderRuntime) cleanupFailedStart(instance *models.MCPServerInstance, cause error) error {

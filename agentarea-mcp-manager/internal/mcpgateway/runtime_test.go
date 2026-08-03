@@ -85,6 +85,7 @@ func testProviderRuntime(t *testing.T, backend backends.Backend, provider provid
 		selectorStub{provider: provider},
 		backend,
 		&config.Config{Environment: "docker"},
+		testImagePolicy(t),
 		startup,
 	)
 	if err != nil {
@@ -97,8 +98,22 @@ func dockerInstance() *models.MCPServerInstance {
 	return &models.MCPServerInstance{
 		InstanceID: "8ca9f331-9cc9-4a51-9933-27d7bb73860b",
 		Name:       "8ca9f331-9cc9-4a51-9933-27d7bb73860b",
-		JSONSpec:   map[string]any{"type": "docker"},
+		JSONSpec: map[string]any{
+			"type":  "docker",
+			"image": "ghcr.io/agentarea/allowed-mcp:1.2.3",
+		},
 	}
+}
+
+func testImagePolicy(t *testing.T) ImagePolicy {
+	t.Helper()
+	t.Setenv("MCP_ALLOWED_IMAGE_REPOSITORIES", "ghcr.io/agentarea/allowed-mcp")
+	t.Setenv("MCP_ALLOWED_COMMAND_PACKAGES", "allowed-mcp-package")
+	policy, err := LoadImagePolicyFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return policy
 }
 
 // TestOnlyAMissingInstanceTriggersCreation is the typed-error contract: an
