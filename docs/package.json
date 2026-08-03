@@ -8,7 +8,8 @@
     "validate-full": "./validate-docs.sh",
     "build": "mintlify build",
     "preview": "mintlify dev --port 3000",
-    "check": "npm run validate-full"
+    "check": "npm run sync:openapi && npm run validate-full",
+    "sync:openapi": "cp ../agentarea-webapp/src/api/openapi.json api-reference/openapi.json"
   },
   "devDependencies": {
     "mintlify": "^4.2.577"
