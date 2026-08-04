@@ -663,12 +663,23 @@ func (d *DockerBackend) ListInstances(ctx context.Context) ([]*InstanceStatus, e
 			}
 		}
 
+		// Same address rule as GetInstanceStatus. Reporting it in one place and
+		// not the other would make a caller's behaviour depend on which endpoint
+		// it happened to use.
+		internalURL := ""
+		if container.Status == models.StatusRunning {
+			if address, err := d.manager.ContainerAddress(ctx, container.ServiceName); err == nil {
+				internalURL = "http://" + address
+			}
+		}
+
 		instance := &InstanceStatus{
 			ID:           container.ID,
 			Name:         container.ServiceName,
 			ServiceName:  container.ServiceName,
 			Status:       string(container.Status),
 			URL:          container.URL,
+			InternalURL:  internalURL,
 			Image:        container.Image,
 			Port:         container.Port,
 			Environment:  container.Environment,

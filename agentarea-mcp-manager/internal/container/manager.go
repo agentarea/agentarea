@@ -569,6 +569,19 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 			continue
 		}
 
+		// The name prefix alone is too broad: the manager's own container is
+		// called mcp-manager, and anything a human started by hand can share the
+		// prefix too. Adopting those would put the manager under its own
+		// lifecycle management. Every instance the manager creates is stamped
+		// with MCP_INSTANCE_ID, so that — not the name — is what marks a
+		// container as ours.
+		environment := m.containerEnvironment(ctx, jsonString(pc, "Id", "ID"))
+		if environment["MCP_INSTANCE_ID"] == "" {
+			m.logger.Debug("Ignoring container that this manager did not create",
+				slog.String("name", containerName))
+			continue
+		}
+
 		// Same split as Names: Podman spells this "Id", Docker "ID". A bare type
 		// assertion on the missing one panics the process during startup.
 		containerID := jsonString(pc, "Id", "ID")
@@ -651,7 +664,7 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 			// resolved back to a service name. Left empty, every lookup by
 			// instance id misses and the container is unreachable after a
 			// restart even though it is sitting right there.
-			Environment: m.containerEnvironment(ctx, containerID),
+			Environment: environment,
 			CreatedAt:   time.Now(), // We don't have exact creation time
 			UpdatedAt:   time.Now(),
 		}
