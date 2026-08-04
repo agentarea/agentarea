@@ -312,6 +312,25 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         await self.session.flush()
         return await self.get_task(task_id)
 
+    async def merge_metadata(self, task_id: UUID, patch: dict[str, Any]) -> bool:
+        """Shallow-merge ``patch`` into the task's metadata, leaving status alone.
+
+        Returns False when the task no longer exists.
+        """
+        task_orm = await self.session.get(TaskORM, task_id)
+        if task_orm is None:
+            return False
+
+        existing = task_orm.task_metadata if isinstance(task_orm.task_metadata, dict) else {}
+        stmt = (
+            update(TaskORM)
+            .where(TaskORM.id == task_id)
+            .values(task_metadata={**existing, **patch}, updated_at=datetime.utcnow())
+        )
+        await self.session.execute(stmt)
+        await self.session.flush()
+        return True
+
     def _orm_to_domain(self, task_orm: TaskORM) -> Task:
         """Convert ORM model to domain model."""
         task_metadata = task_orm.task_metadata or {}

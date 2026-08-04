@@ -61,7 +61,7 @@
         "type": "object"
       },
       "APIKeyCreateResponse": {
-        "description": "Extends APIKeyResponse with the raw token — shown ONCE at creation.",
+        "description": "Extends APIKeyResponse with the raw token \u2014 shown ONCE at creation.",
         "properties": {
           "access_count": {
             "title": "Access Count",
@@ -107,7 +107,7 @@
             "type": "string"
           },
           "token": {
-            "description": "Raw token value — copy it now, it won't be shown again",
+            "description": "Raw token value \u2014 copy it now, it won't be shown again",
             "title": "Token",
             "type": "string"
           },
@@ -443,7 +443,7 @@
       },
       "AgentCreate": {
         "additionalProperties": false,
-        "description": "Payload for creating an agent.\n\n``model_id`` accepts either a model-instance UUID configured in the\nworkspace, or a recognized provider identifier (e.g. ``gpt-4o``,\n``claude-3-5-sonnet``, ``openrouter/qwen/qwen-2.5-72b-instruct``).",
+        "description": "Payload for creating an agent.\n\n``model_id`` is the UUID of a model instance configured in the workspace \u2014\nthe runtime has no other interpretation of it. Omit it (or pass ``null``) to\ncreate an agent with no model bound yet; such an agent cannot be run until a\nmodel is assigned.",
         "properties": {
           "a2ui_enabled": {
             "anyOf": [
@@ -459,7 +459,8 @@
           },
           "agent_type": {
             "default": "stateless",
-            "description": "'stateless' (each request independent) or 'stateful' (maintains conversation context across runs).",
+            "deprecated": true,
+            "description": "DEPRECATED \u2014 stored and echoed back, but the runtime never reads it, so every agent behaves as 'stateless' regardless of this value. Conversation history does not currently survive across runs. Do not branch on this field.",
             "enum": [
               "stateless",
               "stateful"
@@ -493,9 +494,16 @@
             "type": "string"
           },
           "model_id": {
-            "description": "Model instance UUID or provider model identifier (e.g. 'gpt-4o', 'claude-3-5-sonnet').",
-            "title": "Model Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "UUID of a model instance in this workspace (see GET /v1/model-instances). Null means no model is bound yet and the agent cannot be run.",
+            "title": "Model Id"
           },
           "name": {
             "description": "Human-readable agent name (unique per workspace).",
@@ -571,14 +579,13 @@
           }
         },
         "required": [
-          "name",
-          "model_id"
+          "name"
         ],
         "title": "AgentCreate",
         "type": "object"
       },
       "AgentInterface": {
-        "description": "A2A v1.0.0 AgentInterface — a (url, protocolBinding, protocolVersion) tuple.",
+        "description": "A2A v1.0.0 AgentInterface \u2014 a (url, protocolBinding, protocolVersion) tuple.",
         "properties": {
           "protocolBinding": {
             "default": "JSONRPC",
@@ -1067,7 +1074,7 @@
         "type": "object"
       },
       "AgentToolSettings": {
-        "description": "Settings for an agent-to-agent (delegation) tool.\n\n``a2a_url`` selects the *remote* transport binding; absent → same-platform\ndirect delegation. Lives here only — A2A is a per-edge binding, not a\nproperty every tool type carries.",
+        "description": "Settings for an agent-to-agent (delegation) tool.\n\n``a2a_url`` selects the *remote* transport binding; absent \u2192 same-platform\ndirect delegation. Lives here only \u2014 A2A is a per-edge binding, not a\nproperty every tool type carries.",
         "properties": {
           "a2a_url": {
             "anyOf": [
@@ -1108,7 +1115,7 @@
       },
       "AgentUpdate": {
         "additionalProperties": false,
-        "description": "Patch payload for an agent. All fields optional — unset = unchanged.",
+        "description": "Patch payload for an agent. All fields optional \u2014 unset = unchanged.",
         "properties": {
           "a2ui_enabled": {
             "anyOf": [
@@ -2073,7 +2080,7 @@
       },
       "BundleChannel": {
         "additionalProperties": false,
-        "description": "A messaging channel that lets an agent receive and reply to messages.\n\nInstalls as an inbound trigger (e.g. a Telegram webhook): a message to the\nbot becomes a task for ``agent``, and the reply is delivered back on the same\nchannel. Credentials (a bot token) enter via ``bindings`` → ``${setup.x}``,\nexactly like an MCP's secret bindings, so the token is never inlined.",
+        "description": "A messaging channel that lets an agent receive and reply to messages.\n\nInstalls as an inbound trigger (e.g. a Telegram webhook): a message to the\nbot becomes a task for ``agent``, and the reply is delivered back on the same\nchannel. Credentials (a bot token) enter via ``bindings`` \u2192 ``${setup.x}``,\nexactly like an MCP's secret bindings, so the token is never inlined.",
         "properties": {
           "agent": {
             "description": "BundleAgent key that handles inbound messages.",
@@ -2253,7 +2260,7 @@
       },
       "BundlePolicy": {
         "additionalProperties": false,
-        "description": "A governance rule the package installs (maps to a PolicyRule).\n\nPortable like everything else: ``subject`` is the literal \"workspace\" or a\nBundleAgent ``key`` (never a DB id); the installer resolves it to a real\nsubject id. ``target``/``effect``/``params`` mirror the unified governance\nrule model, so this is \"our policy format\" — not a new one.",
+        "description": "A governance rule the package installs (maps to a PolicyRule).\n\nPortable like everything else: ``subject`` is the literal \"workspace\" or a\nBundleAgent ``key`` (never a DB id); the installer resolves it to a real\nsubject id. ``target``/``effect``/``params`` mirror the unified governance\nrule model, so this is \"our policy format\" \u2014 not a new one.",
         "properties": {
           "condition": {
             "anyOf": [
@@ -2679,21 +2686,6 @@
               }
             ],
             "title": "Disabled Methods"
-          },
-          "package_install": {
-            "anyOf": [
-              {
-                "enum": [
-                  "allowed",
-                  "locked"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Package Install"
           },
           "requires_user_confirmation": {
             "anyOf": [
@@ -3983,7 +3975,7 @@
       },
       "HeaderInput": {
         "additionalProperties": false,
-        "description": "One custom HTTP header attached to an OpenAPI connection.\n\nNon-safe header names (e.g. ``Authorization``) are stored encrypted in the\nsecret manager — pass the plaintext value here at create/update time.",
+        "description": "One custom HTTP header attached to an OpenAPI connection.\n\nNon-safe header names (e.g. ``Authorization``) are stored encrypted in the\nsecret manager \u2014 pass the plaintext value here at create/update time.",
         "properties": {
           "name": {
             "description": "HTTP header name. Allowed characters: letters, digits, '-', '_'.",
@@ -4528,13 +4520,13 @@
           },
           "config": {
             "additionalProperties": true,
-            "description": "Non-sensitive config (header_name, token_url, client_id, scopes, …)",
+            "description": "Non-sensitive config (header_name, token_url, client_id, scopes, \u2026)",
             "title": "Config",
             "type": "object"
           },
           "credentials": {
             "additionalProperties": true,
-            "description": "Sensitive credentials encrypted at rest (header_value, token, client_secret, …)",
+            "description": "Sensitive credentials encrypted at rest (header_value, token, client_secret, \u2026)",
             "title": "Credentials",
             "type": "object"
           },
@@ -5055,7 +5047,7 @@
       },
       "MCPServerInstanceUpdate": {
         "additionalProperties": false,
-        "description": "Patch payload for an MCP server instance. All fields optional — unset = unchanged.",
+        "description": "Patch payload for an MCP server instance. All fields optional \u2014 unset = unchanged.",
         "properties": {
           "description": {
             "anyOf": [
@@ -5230,7 +5222,7 @@
       },
       "MCPServerUpdate": {
         "additionalProperties": false,
-        "description": "Patch payload for an MCP server spec. All fields optional — unset = unchanged.",
+        "description": "Patch payload for an MCP server spec. All fields optional \u2014 unset = unchanged.",
         "properties": {
           "cmd": {
             "anyOf": [
@@ -6338,7 +6330,7 @@
           },
           "provider_config": {
             "additionalProperties": true,
-            "description": "OAuth provider config: provider, auth_url, token_url, client_id, scopes, …",
+            "description": "OAuth provider config: provider, auth_url, token_url, client_id, scopes, \u2026",
             "title": "Provider Config",
             "type": "object"
           }
@@ -6420,7 +6412,7 @@
       },
       "OpenAPIConnectionCreate": {
         "additionalProperties": false,
-        "description": "Payload for creating an OpenAPI connection.\n\nThe connection ties a base URL (where requests are sent) to an\nOpenAPI 3.x specification (which is parsed eagerly into a tool list).\nProvide either ``spec_url`` or ``spec_content`` — not both required.",
+        "description": "Payload for creating an OpenAPI connection.\n\nThe connection ties a base URL (where requests are sent) to an\nOpenAPI 3.x specification (which is parsed eagerly into a tool list).\nProvide either ``spec_url`` or ``spec_content`` \u2014 not both required.",
         "properties": {
           "auth_config_id": {
             "anyOf": [
@@ -6604,7 +6596,7 @@
       },
       "OpenAPIConnectionUpdate": {
         "additionalProperties": false,
-        "description": "Patch payload for an OpenAPI connection. All fields optional — unset = unchanged.",
+        "description": "Patch payload for an OpenAPI connection. All fields optional \u2014 unset = unchanged.",
         "properties": {
           "auth_config_id": {
             "anyOf": [
@@ -6727,7 +6719,7 @@
         "type": "object"
       },
       "OpenApiToolSettings": {
-        "description": "Settings for an OpenAPI connection tool.\n\n``load_mode`` picks schema disclosure: \"explicit\" inlines every operation's\nschema into each LLM call (legacy); \"searchable\" defers them behind a\n``load_tools`` meta-tool. Honored only for openapi tools — which is exactly\nwhy it lives here and nowhere else.",
+        "description": "Settings for an OpenAPI connection tool.\n\n``load_mode`` picks schema disclosure: \"explicit\" inlines every operation's\nschema into each LLM call (legacy); \"searchable\" defers them behind a\n``load_tools`` meta-tool. Honored only for openapi tools \u2014 which is exactly\nwhy it lives here and nowhere else.",
         "properties": {
           "allowed_tools": {
             "anyOf": [
@@ -7675,7 +7667,7 @@
       },
       "ProjectUpdate": {
         "additionalProperties": false,
-        "description": "Patch payload for a project. All fields optional — unset = unchanged.",
+        "description": "Patch payload for a project. All fields optional \u2014 unset = unchanged.",
         "properties": {
           "description": {
             "anyOf": [
@@ -7746,7 +7738,7 @@
                 "type": "null"
               }
             ],
-            "description": "Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic — the backend suppresses the Authorization header when this is empty.",
+            "description": "Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic \u2014 the backend suppresses the Authorization header when this is empty.",
             "title": "Api Key"
           },
           "description": {
@@ -8831,10 +8823,6 @@
             "title": "Isolation",
             "type": "string"
           },
-          "package_install": {
-            "title": "Package Install",
-            "type": "string"
-          },
           "provider": {
             "title": "Provider",
             "type": "string"
@@ -8855,7 +8843,6 @@
           "id",
           "provider",
           "task_id",
-          "package_install",
           "state",
           "created_at",
           "expires_at",
@@ -9949,7 +9936,7 @@
         "type": "object"
       },
       "TaskSummary": {
-        "description": "Headline rollup for a single task, derived from the event log.\n\nBacked by the ``task_summary`` Postgres view. Stable contract — when\nthe view's implementation moves to a materialized view or projection\ntable, this shape stays the same. Per-tool breakdowns and per-artifact\nlists are deliberately not here; they live in their own endpoints so\nthis stays small and additive.",
+        "description": "Headline rollup for a single task, derived from the event log.\n\nBacked by the ``task_summary`` Postgres view. Stable contract \u2014 when\nthe view's implementation moves to a materialized view or projection\ntable, this shape stays the same. Per-tool breakdowns and per-artifact\nlists are deliberately not here; they live in their own endpoints so\nthis stays small and additive.",
         "properties": {
           "agent_id": {
             "format": "uuid",
@@ -10327,7 +10314,7 @@
       },
       "TriggerCreate": {
         "additionalProperties": false,
-        "description": "Payload for creating a trigger.\n\nA trigger fires an agent — either on a cron schedule (``trigger_type='cron'``)\nor in response to an inbound webhook (``trigger_type='webhook'``). For poll-based\nchannels (e.g. email inbox), use ``trigger_type='polling'`` plus a\n``data_extractor`` configuration.",
+        "description": "Payload for creating a trigger.\n\nA trigger fires an agent \u2014 either on a cron schedule (``trigger_type='cron'``)\nor in response to an inbound webhook (``trigger_type='webhook'``). For poll-based\nchannels (e.g. email inbox), use ``trigger_type='polling'`` plus a\n``data_extractor`` configuration.",
         "properties": {
           "agent_id": {
             "description": "UUID of the agent to invoke when the trigger fires.",
@@ -10870,7 +10857,7 @@
       },
       "TriggerUpdate": {
         "additionalProperties": false,
-        "description": "Patch payload for a trigger. All fields optional — unset = unchanged.",
+        "description": "Patch payload for a trigger. All fields optional \u2014 unset = unchanged.",
         "properties": {
           "allowed_methods": {
             "anyOf": [
@@ -11983,28 +11970,6 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/": {
-      "get": {
-        "description": "Root endpoint.",
-        "operationId": "root__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Root"
-      }
-    },
     "/.well-known/jwks.json": {
       "get": {
         "description": "Proxy JWKS so token verification works against our API URL.",
@@ -12082,8 +12047,8 @@
     },
     "/health": {
       "get": {
-        "description": "Health check endpoint for the main application.",
-        "operationId": "health_check_health_get",
+        "description": "Health check endpoint.",
+        "operationId": "health_health_get",
         "responses": {
           "200": {
             "content": {
@@ -12099,7 +12064,7 @@
             "bearer": []
           }
         ],
-        "summary": "Health Check"
+        "summary": "Health"
       }
     },
     "/oauth2/auth": {
@@ -12129,7 +12094,7 @@
     },
     "/oauth2/register": {
       "post": {
-        "description": "Dynamic Client Registration (RFC 7591) — proxy to Hydra admin API.\n\nHydra v2 doesn't expose public DCR; we proxy POST /oauth2/register to\nHydra's admin endpoint so Cursor / Claude Desktop can self-register.\n\nWe inject server-side defaults:\n  - skip_consent: true — MCP clients accessing their own workspace don't need consent\n  - audience: [API_BASE_URL] — ensures issued JWTs have the correct audience for validation",
+        "description": "Dynamic Client Registration (RFC 7591) \u2014 proxy to Hydra admin API.\n\nHydra v2 doesn't expose public DCR; we proxy POST /oauth2/register to\nHydra's admin endpoint so Cursor / Claude Desktop can self-register.\n\nWe inject server-side defaults:\n  - skip_consent: true \u2014 MCP clients accessing their own workspace don't need consent\n  - audience: [API_BASE_URL] \u2014 ensures issued JWTs have the correct audience for validation",
         "operationId": "hydra_dcr_proxy_oauth2_register_post",
         "responses": {
           "200": {
@@ -12155,7 +12120,7 @@
     "/oauth2/{path}": {
       "delete": {
         "description": "Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).",
-        "operationId": "hydra_oauth2_proxy_oauth2__path__post",
+        "operationId": "hydra_oauth2_proxy_oauth2__path__delete",
         "parameters": [
           {
             "in": "path",
@@ -12199,7 +12164,7 @@
       },
       "get": {
         "description": "Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).",
-        "operationId": "hydra_oauth2_proxy_oauth2__path__post",
+        "operationId": "hydra_oauth2_proxy_oauth2__path__get",
         "parameters": [
           {
             "in": "path",
@@ -12243,7 +12208,7 @@
       },
       "patch": {
         "description": "Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).",
-        "operationId": "hydra_oauth2_proxy_oauth2__path__post",
+        "operationId": "hydra_oauth2_proxy_oauth2__path__patch",
         "parameters": [
           {
             "in": "path",
@@ -12331,7 +12296,7 @@
       },
       "put": {
         "description": "Proxy all /oauth2/* requests through to Hydra (excluding /register handled above).",
-        "operationId": "hydra_oauth2_proxy_oauth2__path__post",
+        "operationId": "hydra_oauth2_proxy_oauth2__path__put",
         "parameters": [
           {
             "in": "path",
@@ -14630,7 +14595,7 @@
     },
     "/v1/agents/{agent_id}/tasks/{task_id}/summary": {
       "get": {
-        "description": "Per-task rollup derived from the event log via the ``task_summary`` view.\n\nWorkspace-scoped: the row must belong to the caller's workspace and\nthe agent must match, or we return 404 (same shape as other task\nendpoints — no information leak).",
+        "description": "Per-task rollup derived from the event log via the ``task_summary`` view.\n\nWorkspace-scoped: the row must belong to the caller's workspace and\nthe agent must match, or we return 404 (same shape as other task\nendpoints \u2014 no information leak).",
         "operationId": "get_task_summary_v1_agents__agent_id__tasks__task_id__summary_get",
         "parameters": [
           {
@@ -15193,7 +15158,7 @@
         ]
       },
       "post": {
-        "description": "Create a new API key. The raw ``token`` value is returned once — store it securely.",
+        "description": "Create a new API key. The raw ``token`` value is returned once \u2014 store it securely.",
         "operationId": "create_api_key_v1_api_keys__post",
         "requestBody": {
           "content": {
@@ -16174,7 +16139,7 @@
         ]
       },
       "post": {
-        "description": "Upload a file, server-proxied.\n\n``purpose=\"workspace\"`` (the default) lands the file at the workspace\nartifact root. ``purpose=\"attachment\"`` stages it under\n``staging/{id}/{filename}`` — hidden from the workspace listing — and\nreturns a ``ref`` the task-create endpoint resolves into the task workspace.",
+        "description": "Upload a file, server-proxied.\n\n``purpose=\"workspace\"`` (the default) lands the file at the workspace\nartifact root. ``purpose=\"attachment\"`` stages it under\n``staging/{id}/{filename}`` \u2014 hidden from the workspace listing \u2014 and\nreturns a ``ref`` the task-create endpoint resolves into the task workspace.",
         "operationId": "upload_file_v1_files_post",
         "requestBody": {
           "content": {
@@ -16319,7 +16284,7 @@
     },
     "/v1/files/upload-url": {
       "post": {
-        "description": "Mint a presigned PUT for a task attachment uploaded directly to the store.\n\nThe client-declared sha256 is bound into the signature as ``ChecksumSHA256``,\nso the object store rejects a body that does not hash to it — the upload is\ncontent-verified without the API ever seeing the bytes. The returned ``ref``\nis consumed by the task-create endpoint exactly like a server-proxied one.",
+        "description": "Mint a presigned PUT for a task attachment uploaded directly to the store.\n\nThe client-declared sha256 is bound into the signature as ``ChecksumSHA256``,\nso the object store rejects a body that does not hash to it \u2014 the upload is\ncontent-verified without the API ever seeing the bytes. The returned ``ref``\nis consumed by the task-create endpoint exactly like a server-proxied one.",
         "operationId": "create_attachment_upload_url_v1_files_upload_url_post",
         "requestBody": {
           "content": {
@@ -17092,7 +17057,7 @@
     },
     "/v1/mcp-oauth/authorize": {
       "get": {
-        "description": "Initiate MCP OAuth flow: discover AS, register client, redirect to auth page.\n\n1. Look up the MCP instance's remote URL\n2. Discover the authorization server (RFC 9728 → RFC 8414)\n3. Dynamically register as an OAuth client (RFC 7591)\n4. Generate PKCE pair and state\n5. Redirect user to the authorization endpoint",
+        "description": "Initiate MCP OAuth flow: discover AS, register client, redirect to auth page.\n\n1. Look up the MCP instance's remote URL\n2. Discover the authorization server (RFC 9728 \u2192 RFC 8414)\n3. Dynamically register as an OAuth client (RFC 7591)\n4. Generate PKCE pair and state\n5. Redirect user to the authorization endpoint",
         "operationId": "oauth_authorize_v1_mcp_oauth_authorize_get",
         "parameters": [
           {
@@ -17155,7 +17120,7 @@
     },
     "/v1/mcp-oauth/callback": {
       "get": {
-        "description": "OAuth callback — exchange code for token and store in MCPAuthConfig.\n\nThis endpoint does NOT require auth (the user is mid-redirect from the\nremote AS). The state token proves the flow was initiated by our /authorize.",
+        "description": "OAuth callback \u2014 exchange code for token and store in MCPAuthConfig.\n\nThis endpoint does NOT require auth (the user is mid-redirect from the\nremote AS). The state token proves the flow was initiated by our /authorize.",
         "operationId": "oauth_callback_v1_mcp_oauth_callback_get",
         "parameters": [
           {
@@ -17685,7 +17650,7 @@
     },
     "/v1/mcp-server-instances/{instance_id}/consumers": {
       "get": {
-        "description": "List agents in the workspace that attach this MCP instance, with their enabled tools.\n\nA read-only reverse lookup over the agents' ``tools`` JSON. Which tools need\nconfirmation is not read from that JSON — it lives in approval policy rules,\nthe single source of truth — so it is resolved from there per agent.",
+        "description": "List agents in the workspace that attach this MCP instance, with their enabled tools.\n\nA read-only reverse lookup over the agents' ``tools`` JSON. Which tools need\nconfirmation is not read from that JSON \u2014 it lives in approval policy rules,\nthe single source of truth \u2014 so it is resolved from there per agent.",
         "operationId": "list_mcp_server_instance_consumers_v1_mcp_server_instances__instance_id__consumers_get",
         "parameters": [
           {
@@ -18043,7 +18008,7 @@
     },
     "/v1/mcp-server-instances/{instance_id}/verify": {
       "post": {
-        "description": "Run verification on an MCP server instance and return the fresh result synchronously.\n\nHTTP 200 regardless of verification outcome — the call itself succeeded.\nCheck verification.status in the response to determine success/failure.",
+        "description": "Run verification on an MCP server instance and return the fresh result synchronously.\n\nHTTP 200 regardless of verification outcome \u2014 the call itself succeeded.\nCheck verification.status in the response to determine success/failure.",
         "operationId": "verify_mcp_server_instance_v1_mcp_server_instances__instance_id__verify_post",
         "parameters": [
           {
@@ -18511,7 +18476,7 @@
       },
       "get": {
         "description": "Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.",
-        "operationId": "proxy_instance_v1_mcp__instance_id__mcp_delete",
+        "operationId": "proxy_instance_v1_mcp__instance_id__mcp_get",
         "parameters": [
           {
             "in": "path",
@@ -18558,7 +18523,7 @@
       },
       "post": {
         "description": "Reverse-proxy MCP Streamable HTTP traffic to the instance's upstream.",
-        "operationId": "proxy_instance_v1_mcp__instance_id__mcp_delete",
+        "operationId": "proxy_instance_v1_mcp__instance_id__mcp_post",
         "parameters": [
           {
             "in": "path",
@@ -24070,7 +24035,7 @@
     },
     "/v1/triggers/catalog": {
       "get": {
-        "description": "Get the trigger catalog — available trigger types with metadata and events.",
+        "description": "Get the trigger catalog \u2014 available trigger types with metadata and events.",
         "operationId": "get_catalog_v1_triggers_catalog_get",
         "responses": {
           "200": {
@@ -25349,7 +25314,7 @@
     },
     "/v1/workspaces/{workspace_id}/invitations/{invitation_id}": {
       "delete": {
-        "description": "Revoke a pending invitation. Idempotent — already-resolved invitations are no-ops.",
+        "description": "Revoke a pending invitation. Idempotent \u2014 already-resolved invitations are no-ops.",
         "operationId": "revoke_invitation_v1_workspaces__workspace_id__invitations__invitation_id__delete",
         "parameters": [
           {
@@ -25538,7 +25503,7 @@
     "/webhooks/{webhook_id}": {
       "delete": {
         "description": "Process incoming webhook requests for registered triggers",
-        "operationId": "handle_webhook_webhooks__webhook_id__post",
+        "operationId": "handle_webhook_webhooks__webhook_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -25583,7 +25548,7 @@
       },
       "get": {
         "description": "Process incoming webhook requests for registered triggers",
-        "operationId": "handle_webhook_webhooks__webhook_id__post",
+        "operationId": "handle_webhook_webhooks__webhook_id__get",
         "parameters": [
           {
             "in": "path",
@@ -25628,7 +25593,7 @@
       },
       "head": {
         "description": "Process incoming webhook requests for registered triggers",
-        "operationId": "handle_webhook_webhooks__webhook_id__post",
+        "operationId": "handle_webhook_webhooks__webhook_id__head",
         "parameters": [
           {
             "in": "path",
@@ -25673,7 +25638,7 @@
       },
       "options": {
         "description": "Process incoming webhook requests for registered triggers",
-        "operationId": "handle_webhook_webhooks__webhook_id__post",
+        "operationId": "handle_webhook_webhooks__webhook_id__options",
         "parameters": [
           {
             "in": "path",
@@ -25718,7 +25683,7 @@
       },
       "patch": {
         "description": "Process incoming webhook requests for registered triggers",
-        "operationId": "handle_webhook_webhooks__webhook_id__post",
+        "operationId": "handle_webhook_webhooks__webhook_id__patch",
         "parameters": [
           {
             "in": "path",
@@ -25808,7 +25773,7 @@
       },
       "put": {
         "description": "Process incoming webhook requests for registered triggers",
-        "operationId": "handle_webhook_webhooks__webhook_id__post",
+        "operationId": "handle_webhook_webhooks__webhook_id__put",
         "parameters": [
           {
             "in": "path",

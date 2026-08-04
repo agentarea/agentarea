@@ -443,7 +443,7 @@
       },
       "AgentCreate": {
         "additionalProperties": false,
-        "description": "Payload for creating an agent.\n\n``model_id`` accepts either a model-instance UUID configured in the\nworkspace, or a recognized provider identifier (e.g. ``gpt-4o``,\n``claude-3-5-sonnet``, ``openrouter/qwen/qwen-2.5-72b-instruct``).",
+        "description": "Payload for creating an agent.\n\n``model_id`` is the UUID of a model instance configured in the workspace \u2014\nthe runtime has no other interpretation of it. Omit it (or pass ``null``) to\ncreate an agent with no model bound yet; such an agent cannot be run until a\nmodel is assigned.",
         "properties": {
           "a2ui_enabled": {
             "anyOf": [
@@ -459,7 +459,8 @@
           },
           "agent_type": {
             "default": "stateless",
-            "description": "'stateless' (each request independent) or 'stateful' (maintains conversation context across runs).",
+            "deprecated": true,
+            "description": "DEPRECATED \u2014 stored and echoed back, but the runtime never reads it, so every agent behaves as 'stateless' regardless of this value. Conversation history does not currently survive across runs. Do not branch on this field.",
             "enum": [
               "stateless",
               "stateful"
@@ -493,9 +494,16 @@
             "type": "string"
           },
           "model_id": {
-            "description": "Model instance UUID or provider model identifier (e.g. 'gpt-4o', 'claude-3-5-sonnet').",
-            "title": "Model Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "UUID of a model instance in this workspace (see GET /v1/model-instances). Null means no model is bound yet and the agent cannot be run.",
+            "title": "Model Id"
           },
           "name": {
             "description": "Human-readable agent name (unique per workspace).",
@@ -571,8 +579,7 @@
           }
         },
         "required": [
-          "name",
-          "model_id"
+          "name"
         ],
         "title": "AgentCreate",
         "type": "object"
@@ -1678,11 +1685,16 @@
           "monthly_spend_cap_usd": {
             "anyOf": [
               {
-                "type": "number"
-              },
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0"
               },
               {
                 "type": "null"
@@ -1693,11 +1705,16 @@
           "run_budget_usd": {
             "anyOf": [
               {
-                "type": "number"
-              },
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "gt": "0"
               },
               {
                 "type": "null"
@@ -1708,11 +1725,16 @@
           "service_budget_usd": {
             "anyOf": [
               {
-                "type": "number"
-              },
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "gt": "0"
               },
               {
                 "type": "null"
@@ -1731,6 +1753,7 @@
           "monthly_spend_cap_usd": {
             "anyOf": [
               {
+                "ge": "0",
                 "type": "string"
               },
               {
@@ -1742,6 +1765,7 @@
           "run_budget_usd": {
             "anyOf": [
               {
+                "gt": "0",
                 "type": "string"
               },
               {
@@ -1753,6 +1777,7 @@
           "service_budget_usd": {
             "anyOf": [
               {
+                "gt": "0",
                 "type": "string"
               },
               {
@@ -2662,21 +2687,6 @@
             ],
             "title": "Disabled Methods"
           },
-          "package_install": {
-            "anyOf": [
-              {
-                "enum": [
-                  "allowed",
-                  "locked"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Package Install"
-          },
           "requires_user_confirmation": {
             "anyOf": [
               {
@@ -3089,9 +3099,15 @@
             "type": "string"
           },
           "input_cost_per_token": {
-            "default": 0.0,
-            "title": "Input Cost Per Token",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Cost Per Token"
           },
           "is_new": {
             "default": false,
@@ -3099,18 +3115,30 @@
             "type": "boolean"
           },
           "max_output_tokens": {
-            "default": 4096,
-            "title": "Max Output Tokens",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Output Tokens"
           },
           "model_name": {
             "title": "Model Name",
             "type": "string"
           },
           "output_cost_per_token": {
-            "default": 0.0,
-            "title": "Output Cost Per Token",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Cost Per Token"
           },
           "supports_function_calling": {
             "default": false,
@@ -3220,9 +3248,15 @@
             "type": "string"
           },
           "input_cost_per_token": {
-            "default": 0.0,
-            "title": "Input Cost Per Token",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Cost Per Token"
           },
           "is_new": {
             "default": false,
@@ -3230,18 +3264,30 @@
             "type": "boolean"
           },
           "max_output_tokens": {
-            "default": 4096,
-            "title": "Max Output Tokens",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Output Tokens"
           },
           "model_name": {
             "title": "Model Name",
             "type": "string"
           },
           "output_cost_per_token": {
-            "default": 0.0,
-            "title": "Output Cost Per Token",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Cost Per Token"
           },
           "supports_function_calling": {
             "default": false,
@@ -3321,6 +3367,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ContentSafetyPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionLimitsPolicy"
               },
               {
                 "type": "null"
@@ -3577,6 +3633,50 @@
           "has_next"
         ],
         "title": "ExecutionHistoryResponse",
+        "type": "object"
+      },
+      "ExecutionLimitsPolicy": {
+        "additionalProperties": false,
+        "description": "Ceilings for the agent loop and tool execution.",
+        "properties": {
+          "max_model_turns": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Model Turns"
+          },
+          "max_tool_calls_per_turn": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tool Calls Per Turn"
+          },
+          "max_tool_calls_total": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tool Calls Total"
+          }
+        },
+        "title": "ExecutionLimitsPolicy",
         "type": "object"
       },
       "ExecutionMetricsResponse": {
@@ -5916,7 +6016,7 @@
       "ModelSpecCreate": {
         "properties": {
           "context_window": {
-            "default": 4096,
+            "exclusiveMinimum": 0.0,
             "title": "Context Window",
             "type": "integer"
           },
@@ -5946,14 +6046,36 @@
             "title": "Display Name",
             "type": "string"
           },
+          "input_cost_per_token": {
+            "minimum": 0.0,
+            "title": "Input Cost Per Token",
+            "type": "number"
+          },
           "is_active": {
             "default": true,
             "title": "Is Active",
             "type": "boolean"
           },
+          "max_output_tokens": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Output Tokens"
+          },
           "model_name": {
             "title": "Model Name",
             "type": "string"
+          },
+          "output_cost_per_token": {
+            "minimum": 0.0,
+            "title": "Output Cost Per Token",
+            "type": "number"
           },
           "provider_spec_id": {
             "format": "uuid",
@@ -5964,7 +6086,10 @@
         "required": [
           "provider_spec_id",
           "model_name",
-          "display_name"
+          "display_name",
+          "context_window",
+          "input_cost_per_token",
+          "output_cost_per_token"
         ],
         "title": "ModelSpecCreate",
         "type": "object"
@@ -5974,6 +6099,7 @@
           "context_window": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -6015,6 +6141,18 @@
             ],
             "title": "Display Name"
           },
+          "input_cost_per_token": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Cost Per Token"
+          },
           "is_active": {
             "anyOf": [
               {
@@ -6025,6 +6163,30 @@
               }
             ],
             "title": "Is Active"
+          },
+          "max_output_tokens": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Output Tokens"
+          },
+          "output_cost_per_token": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Cost Per Token"
           }
         },
         "title": "ModelSpecUpdate",
@@ -6843,6 +7005,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ContentSafetyPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionLimitsPolicy"
               },
               {
                 "type": "null"
@@ -8531,6 +8703,57 @@
         "title": "ResolveResponse",
         "type": "object"
       },
+      "RunExecutionConfig": {
+        "additionalProperties": false,
+        "description": "Caller-requested execution ceiling; governance may only tighten it.",
+        "properties": {
+          "max_model_turns": {
+            "description": "Maximum LLM/model turns requested for this run.",
+            "exclusiveMinimum": 0.0,
+            "title": "Max Model Turns",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_model_turns"
+        ],
+        "title": "RunExecutionConfig",
+        "type": "object"
+      },
+      "SandboxFileItem": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "SandboxFileItem",
+        "type": "object"
+      },
+      "SandboxFileListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SandboxFileItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "SandboxFileListResponse",
+        "type": "object"
+      },
       "SandboxListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -8600,10 +8823,6 @@
             "title": "Isolation",
             "type": "string"
           },
-          "package_install": {
-            "title": "Package Install",
-            "type": "string"
-          },
           "provider": {
             "title": "Provider",
             "type": "string"
@@ -8624,7 +8843,6 @@
           "id",
           "provider",
           "task_id",
-          "package_install",
           "state",
           "created_at",
           "expires_at",
@@ -9288,7 +9506,7 @@
         "type": "object"
       },
       "TaskArtifactItem": {
-        "description": "A single artifact stored under a task's workspace scope.",
+        "description": "A file explicitly published from a live task sandbox.",
         "properties": {
           "content_type": {
             "anyOf": [
@@ -9301,11 +9519,35 @@
             ],
             "title": "Content Type"
           },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
           "download_url": {
             "title": "Download Url",
             "type": "string"
           },
-          "last_modified": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "sha256": {
             "anyOf": [
               {
                 "type": "string"
@@ -9314,11 +9556,7 @@
                 "type": "null"
               }
             ],
-            "title": "Last Modified"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
+            "title": "Sha256"
           },
           "size": {
             "title": "Size",
@@ -9326,10 +9564,13 @@
           }
         },
         "required": [
+          "id",
           "path",
+          "name",
           "size",
           "content_type",
-          "last_modified",
+          "sha256",
+          "created_at",
           "download_url"
         ],
         "title": "TaskArtifactItem",
@@ -9416,9 +9657,18 @@
             "title": "Description",
             "type": "string"
           },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunExecutionConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "parameters": {
             "additionalProperties": true,
-            "default": {},
             "title": "Parameters",
             "type": "object"
           },
@@ -9951,6 +10201,7 @@
           "max_tokens": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -9962,6 +10213,7 @@
           "max_tokens_per_call": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -11426,7 +11678,6 @@
                 "type": "null"
               }
             ],
-            "default": 0.0,
             "title": "Input Cost Per Token"
           },
           "is_active": {
@@ -11442,7 +11693,6 @@
                 "type": "null"
               }
             ],
-            "default": 4096,
             "title": "Max Output Tokens"
           },
           "model_name": {
@@ -11458,7 +11708,6 @@
                 "type": "null"
               }
             ],
-            "default": 0.0,
             "title": "Output Cost Per Token"
           },
           "provider_key": {
@@ -11581,7 +11830,6 @@
                 "type": "null"
               }
             ],
-            "default": 0.0,
             "title": "Input Cost Per Token"
           },
           "is_active": {
@@ -11597,7 +11845,6 @@
                 "type": "null"
               }
             ],
-            "default": 4096,
             "title": "Max Output Tokens"
           },
           "model_name": {
@@ -11613,7 +11860,6 @@
                 "type": "null"
               }
             ],
-            "default": 0.0,
             "title": "Output Cost Per Token"
           },
           "provider_spec_id": {
@@ -13504,7 +13750,7 @@
     },
     "/v1/agents/{agent_id}/tasks/{task_id}/artifacts": {
       "get": {
-        "description": "List artifacts the agent produced under ``tasks/{task_id}/``.\n\nWorkspace-scoped: the task must belong to the caller's workspace, or we\nreturn 404. Each item carries an AgentArea API download URL, so access\nstays behind our auth, audit, and workspace checks instead of exposing\nobject-storage URLs directly.",
+        "description": "List files the agent explicitly published as durable artifacts.\n\nWorkspace-scoped: the task must belong to the caller's workspace, or we\nreturn 404. Each item carries an AgentArea API download URL, so access\nstays behind our auth, audit, and workspace checks instead of exposing\nobject-storage URLs directly.",
         "operationId": "list_task_artifacts_v1_agents__agent_id__tasks__task_id__artifacts_get",
         "parameters": [
           {
@@ -14142,6 +14388,145 @@
           }
         ],
         "summary": "Resume Agent Task",
+        "tags": [
+          "v1",
+          "protected",
+          "agent-tasks"
+        ]
+      }
+    },
+    "/v1/agents/{agent_id}/tasks/{task_id}/sandbox/files": {
+      "get": {
+        "description": "Inspect regular files in the existing live sandbox without recreating it.",
+        "operationId": "list_task_sandbox_files_v1_agents__agent_id__tasks__task_id__sandbox_files_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "prefix",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Prefix",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxFileListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Task Sandbox Files",
+        "tags": [
+          "v1",
+          "protected",
+          "agent-tasks"
+        ]
+      }
+    },
+    "/v1/agents/{agent_id}/tasks/{task_id}/sandbox/files/{file_path}": {
+      "get": {
+        "description": "Read one file from the existing live sandbox without recreating it.",
+        "operationId": "read_task_sandbox_file_v1_agents__agent_id__tasks__task_id__sandbox_files__file_path__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_path",
+            "required": true,
+            "schema": {
+              "title": "File Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Task Sandbox File",
         "tags": [
           "v1",
           "protected",
@@ -16046,7 +16431,7 @@
     },
     "/v1/governance/task-policy-snapshots/{task_id}": {
       "get": {
-        "description": "Read the effective governance policy for a task.\n\nThe effective policy is no longer persisted; it is served on demand by\nquerying the task's Temporal workflow, where it lives in workflow state.",
+        "description": "Read the effective governance policy persisted before workflow dispatch.",
         "operationId": "get_task_policy_snapshot_v1_governance_task_policy_snapshots__task_id__get",
         "parameters": [
           {
