@@ -15,6 +15,10 @@ type Environment string
 const (
 	EnvironmentDocker     Environment = "docker"
 	EnvironmentKubernetes Environment = "kubernetes"
+	// EnvironmentAgent runs containers on a remote agent instead of on this
+	// host. It is never auto-detected: nothing about a machine indicates that
+	// workloads belong somewhere else, so it has to be declared.
+	EnvironmentAgent Environment = "agent"
 )
 
 // Detector handles environment detection logic
@@ -151,13 +155,16 @@ func (d *Detector) ForceEnvironment(env string) (Environment, error) {
 	case "docker", "podman":
 		d.logger.Info("Forced Docker environment via configuration")
 		return EnvironmentDocker, nil
+	case "agent":
+		d.logger.Info("Forced remote agent environment via configuration")
+		return EnvironmentAgent, nil
 	default:
 		// Auto-detecting past an unrecognised value is the wrong recovery: the
 		// operator said where workloads should run, and a typo like
 		// "kubernets" would otherwise start the docker backend, quietly
 		// creating untrusted workloads on the control plane's own host.
 		return "", fmt.Errorf(
-			"unknown backend environment %q (expected one of: kubernetes, k8s, docker, podman)", env)
+			"unknown backend environment %q (expected one of: kubernetes, k8s, docker, podman, agent)", env)
 	}
 }
 
