@@ -4,14 +4,22 @@ After=docker.service sandbox-egress.service
 Requires=docker.service
 
 [Service]
-Type=oneshot
-RemainAfterExit=true
-WorkingDirectory=/etc/mcp-dataplane
-ExecStart=/usr/bin/docker compose -f /etc/mcp-dataplane/compose.yaml up -d --remove-orphans
-ExecReload=/usr/bin/docker compose -f /etc/mcp-dataplane/compose.yaml up -d --remove-orphans
-ExecStop=/usr/bin/docker compose -f /etc/mcp-dataplane/compose.yaml down
-TimeoutStartSec=300
-TimeoutStopSec=60
+# Runs on the host rather than in a container: this process drives containers
+# through the Docker CLI, which the host already has. Putting it in a container
+# would mean shipping a second copy of that CLI and mounting the socket in, for
+# no isolation gain — the process is the trusted half on a host whose container
+# runtime is already the trust boundary.
+Type=simple
+EnvironmentFile=/etc/mcp-dataplane/dataplane.env
+ExecStart={{ sandbox_mcp_dataplane_binary_dest }}
+Restart=always
+RestartSec=5
+
+# The token lives in the environment file, not the command line, so it does not
+# appear in the process table.
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=full
 
 [Install]
 WantedBy=multi-user.target

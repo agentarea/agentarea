@@ -1,5 +1,5 @@
 ---
-# Run the MCP data plane on this host: the manager image in dataplane mode,
+# Run the MCP data plane on this host: the manager binary in dataplane mode,
 # behind the TLS proxy this host already runs.
 #
 # Deliberately separate from the executor and from OpenSandbox. Those serve agent
@@ -12,13 +12,14 @@
       - sandbox_mcp_dataplane_auth_token | length >= 32
       - sandbox_mcp_dataplane_id | length > 0
       - sandbox_mcp_dataplane_public_hostname | length > 0
+      - sandbox_mcp_dataplane_binary_src | length > 0
       - sandbox_runtime == "runsc"
     fail_msg: >-
       The MCP data plane requires a 32+ character shared token (the same value
       the control plane sends), an id that marks this data plane's instances as
-      its own, a TLS hostname, and the runsc runtime. A data plane reachable
-      without a token hands container creation on a gVisor host to whoever finds
-      the port.
+      its own, a TLS hostname, a binary to install, and the runsc runtime. A data
+      plane reachable without a token hands container creation on a gVisor host
+      to whoever finds the port.
 
 - name: Create data-plane configuration directory
   ansible.builtin.file:
@@ -39,6 +40,15 @@
     - _mcp_network.rc != 0
     - "'already exists' not in _mcp_network.stderr"
 
+- name: Install the data-plane binary
+  ansible.builtin.copy:
+    src: "{{ sandbox_mcp_dataplane_binary_src }}"
+    dest: "{{ sandbox_mcp_dataplane_binary_dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart mcp-dataplane
+
 - name: Render data-plane environment
   ansible.builtin.template:
     src: mcp-dataplane.env.j2
@@ -46,15 +56,6 @@
     owner: root
     group: root
     mode: "0600"
-  notify: Restart mcp-dataplane
-
-- name: Render data-plane compose file
-  ansible.builtin.template:
-    src: mcp-dataplane-compose.yaml.j2
-    dest: /etc/mcp-dataplane/compose.yaml
-    owner: root
-    group: root
-    mode: "0640"
   notify: Restart mcp-dataplane
 
 - name: Install data-plane service unit
@@ -73,6 +74,24 @@
     state: started
     daemon_reload: true
 
+- name: Apply pending data-plane restarts before verifying
+  ansible.builtin.meta: flush_handlers
+
+# Publishes the data plane on its own hostname through the TLS proxy this host
+# already runs. Written even when OpenSandbox is disabled: the template's other
+# site block is driven by defaults, so the file is complete either way.
+- name: Write TLS proxy configuration
+  ansible.builtin.template:
+    src: opensandbox-Caddyfile.j2
+    dest: /etc/opensandbox/Caddyfile
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Restart caddy
+
+- name: Apply the proxy configuration
+  ansible.builtin.meta: flush_handlers
+
 # A green play that never reached the process would only prove the files were
 # written.
 - name: Wait for the data plane to answer
@@ -88,4 +107,20 @@
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ sandbox_mcp_dataplane_port }}/dataplane/v1/instances"
     status_code: 401
+  changed_when: false
+
+# Resolved to loopback on purpose. The host's inbound firewall admits only the
+# control plane, so reaching the public address from here — or from the host
+# itself, which would have to hairpin — proves nothing about the proxy. This
+# exercises the same TLS listener and virtual host without depending on who is
+# allowed to reach it.
+- name: Verify the data plane answers over TLS
+  ansible.builtin.command: >-
+    curl -sf --max-time 15
+    --resolve {{ sandbox_mcp_dataplane_public_hostname }}:443:127.0.0.1
+    https://{{ sandbox_mcp_dataplane_public_hostname }}/healthz
+  register: _mcp_dp_tls
+  retries: 10
+  delay: 6
+  until: _mcp_dp_tls.rc == 0
   changed_when: false
