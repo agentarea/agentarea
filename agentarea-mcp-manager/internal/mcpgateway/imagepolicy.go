@@ -63,19 +63,67 @@ func requiredStringSetEnv(name string) (map[string]struct{}, error) {
 	return set, nil
 }
 
-// AuthorizeImage admits one container image by repository. The tag or digest is
-// not part of the decision: pinning is a separate guarantee, and pretending a
+// AuthorizeImage admits one container image by repository, together with any
+// command the instance overrides the image's own with. The tag or digest is not
+// part of the decision: pinning is a separate guarantee, and pretending a
 // repository allowlist provides it would overstate what was checked.
-func (p ImagePolicy) AuthorizeImage(image string) error {
+//
+// The override is judged because it reaches the pod as container args, so an
+// image vouched for as published is not the program that runs once the caller
+// chooses its argv. A repository-only entry therefore admits the image only as
+// the image ships it; to permit an override the operator declares the whole
+// invocation, "<repository> <arg>...", exactly as they do for stdio commands.
+func (p ImagePolicy) AuthorizeImage(image string, command []string) error {
 	repository, ok := ociRepository(image)
 	if !ok {
 		return fmt.Errorf("MCP instance image %q is not a usable OCI reference", image)
 	}
-	if _, admitted := p.repositories[repository]; !admitted {
+	invocation := repository
+	if len(command) > 0 {
+		invocation = strings.Join(append([]string{repository}, command...), " ")
+	}
+	if _, admitted := p.repositories[invocation]; !admitted {
 		return fmt.Errorf(
-			"MCP instance image repository %q is not in MCP_ALLOWED_IMAGE_REPOSITORIES",
-			repository,
+			"MCP instance image invocation %q is not in MCP_ALLOWED_IMAGE_REPOSITORIES",
+			invocation,
 		)
+	}
+	return nil
+}
+
+// launcherEnvironmentDenied names the environment a package launcher reads to
+// decide where code comes from, by exact name or by namespace prefix. Compared
+// case-insensitively because npm reads npm_config_* in either case.
+var launcherEnvironmentDenied = struct {
+	prefixes []string
+	exact    []string
+}{
+	prefixes: []string{"NPM_CONFIG_", "UV_", "PIP_"},
+	exact:    []string{"PATH", "PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "NODE_OPTIONS", "NODE_PATH"},
+}
+
+// AuthorizeLauncherEnvironment refuses instance environment that would move a
+// launcher off the registry its allowlist entry was written against.
+//
+// An entry like "npx -y @scope/server" is a statement about a specific package
+// from a specific registry. npm_config_registry, UV_INDEX_URL and PIP_INDEX_URL
+// each rewrite the second half of that sentence while leaving the first half
+// matching, so admitting them would hand back the whole npm and PyPI namespace
+// the invocation check exists to close. Where code is fetched from is the
+// operator's decision, so it is not one an instance gets to carry.
+func (p ImagePolicy) AuthorizeLauncherEnvironment(environment map[string]string) error {
+	for name := range environment {
+		upper := strings.ToUpper(strings.TrimSpace(name))
+		for _, exact := range launcherEnvironmentDenied.exact {
+			if upper == exact {
+				return fmt.Errorf("MCP command instance may not set %q: it redirects package resolution", name)
+			}
+		}
+		for _, prefix := range launcherEnvironmentDenied.prefixes {
+			if strings.HasPrefix(upper, prefix) {
+				return fmt.Errorf("MCP command instance may not set %q: it redirects package resolution", name)
+			}
+		}
 	}
 	return nil
 }

@@ -318,13 +318,14 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         Returns False when the task no longer exists.
         """
         task_orm = await self.session.get(TaskORM, task_id)
-        if task_orm is None:
+        if task_orm is None or task_orm.workspace_id != self.user_context.workspace_id:
             return False
 
         existing = task_orm.task_metadata if isinstance(task_orm.task_metadata, dict) else {}
         stmt = (
             update(TaskORM)
             .where(TaskORM.id == task_id)
+            .where(TaskORM.workspace_id == self.user_context.workspace_id)
             .values(task_metadata={**existing, **patch}, updated_at=datetime.utcnow())
         )
         await self.session.execute(stmt)

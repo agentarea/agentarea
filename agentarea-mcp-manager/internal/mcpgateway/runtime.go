@@ -133,10 +133,13 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 func (r *ProviderRuntime) authorize(instanceType string, instance *models.MCPServerInstance) error {
 	if instanceType == "command" {
 		command, _ := instance.JSONSpec["command"].(string)
-		return r.imagePolicy.AuthorizeCommand(command, commandArgs(instance.JSONSpec))
+		if err := r.imagePolicy.AuthorizeCommand(command, commandArgs(instance.JSONSpec)); err != nil {
+			return err
+		}
+		return r.imagePolicy.AuthorizeLauncherEnvironment(instanceEnvironment(instance.JSONSpec))
 	}
 	image, _ := instance.JSONSpec["image"].(string)
-	return r.imagePolicy.AuthorizeImage(image)
+	return r.imagePolicy.AuthorizeImage(image, containerCommandOverride(instance.JSONSpec))
 }
 
 // commandArgs reads the stdio arguments the same way the Kubernetes provider
@@ -154,6 +157,39 @@ func commandArgs(jsonSpec map[string]any) []string {
 		}
 	}
 	return args
+}
+
+// containerCommandOverride mirrors the docker branch of the provider's spec
+// conversion, including its removal of --transport=stdio, so the gate judges
+// the argv the container is actually started with.
+func containerCommandOverride(jsonSpec map[string]any) []string {
+	raw, ok := jsonSpec["command"].([]any)
+	if !ok {
+		return nil
+	}
+	command := make([]string, 0, len(raw))
+	for _, entry := range raw {
+		if arg, ok := entry.(string); ok && arg != "--transport=stdio" {
+			command = append(command, arg)
+		}
+	}
+	return command
+}
+
+// instanceEnvironment reads both spec keys the provider merges into the pod
+// environment, so nothing reaches the container by a key admission skipped.
+func instanceEnvironment(jsonSpec map[string]any) map[string]string {
+	environment := make(map[string]string)
+	for _, key := range []string{"environment", "env_vars"} {
+		raw, ok := jsonSpec[key].(map[string]any)
+		if !ok {
+			continue
+		}
+		for name, value := range raw {
+			environment[name] = fmt.Sprintf("%v", value)
+		}
+	}
+	return environment
 }
 
 func (r *ProviderRuntime) cleanupFailedStart(instance *models.MCPServerInstance, cause error) error {

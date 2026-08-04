@@ -297,6 +297,9 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.instanceNetworkPolicy.blockedEgressCIDRs[1] | string | `"172.16.0.0/12"` |  |
 | mcpManager.instanceNetworkPolicy.blockedEgressCIDRs[2] | string | `"192.168.0.0/16"` |  |
 | mcpManager.instanceNetworkPolicy.blockedEgressCIDRs[3] | string | `"169.254.0.0/16"` |  |
+| mcpManager.instanceNetworkPolicy.probeIngressCIDRs[0] | string | `"10.0.0.0/8"` |  |
+| mcpManager.instanceNetworkPolicy.probeIngressCIDRs[1] | string | `"172.16.0.0/12"` |  |
+| mcpManager.instanceNetworkPolicy.probeIngressCIDRs[2] | string | `"192.168.0.0/16"` |  |
 | mcpManager.instanceNetworkPolicy.extraEgress | list | `[]` |  |
 | mcpManager.instancePod.labels | object | `{}` |  |
 | mcpManager.instancePod.annotations | object | `{}` |  |

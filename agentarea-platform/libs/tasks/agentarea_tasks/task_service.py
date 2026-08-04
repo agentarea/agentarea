@@ -394,20 +394,6 @@ class TaskService(BaseTaskService):
                 {"max_iterations": requested_value},
             )
 
-        parameters = dict(payload.parameters)
-        task_policy = payload.task_policy
-        if payload.execution is not None:
-            legacy_value = parameters.get("max_iterations")
-            requested_value = payload.execution.max_model_turns
-            if legacy_value is not None and legacy_value != requested_value:
-                raise PolicyValidationError(
-                    "execution.max_model_turns conflicts with parameters.max_iterations"
-                )
-            task_policy = self._with_requested_execution_limits(
-                task_policy,
-                {"max_iterations": requested_value},
-            )
-
         return await self.create_and_execute_task_with_workflow(
             agent_id=payload.agent_id,
             description=payload.description,

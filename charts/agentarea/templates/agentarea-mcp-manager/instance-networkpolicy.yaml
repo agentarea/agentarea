@@ -36,6 +36,22 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: mcp-manager
+    {{- with .Values.mcpManager.instanceNetworkPolicy.probeIngressCIDRs }}
+    # Readiness is what the gateway waits on: the manager reads
+    # Deployment.Status.ReadyReplicas, which only advances when the kubelet's
+    # probe succeeds. Probes originate from the node, matching no pod selector,
+    # so on a CNI that enforces node-to-pod ingress the probe is dropped, the
+    # instance never reports ready, and every request times out and tears the
+    # workload down. These ranges are the node network, not a trust boundary --
+    # the instance port is unauthenticated either way, and what protects it is
+    # gateway authorization and request leases. Egress to the same ranges stays
+    # denied, so an instance still cannot reach another tenant's.
+    - from:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+    {{- end }}
   egress:
     # DNS resolution (CoreDNS/kube-dns).
     - to:

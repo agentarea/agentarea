@@ -47,10 +47,10 @@ func TestListFormattingDoesNotChangeWhatIsAdmitted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := policy.AuthorizeImage("ghcr.io/agentarea/mcp:1.0"); err != nil {
+	if err := policy.AuthorizeImage("ghcr.io/agentarea/mcp:1.0", nil); err != nil {
 		t.Fatalf("a padded entry was not admitted: %v", err)
 	}
-	if err := policy.AuthorizeImage("docker.io/attacker/mcp"); err == nil {
+	if err := policy.AuthorizeImage("docker.io/attacker/mcp", nil); err == nil {
 		t.Fatal("stray separators widened the list")
 	}
 }
@@ -65,8 +65,8 @@ func TestAllowedRepositoryAdmitsAnyTagOrDigest(t *testing.T) {
 		"ghcr.io/agentarea/mcp:1.4.2",
 		"ghcr.io/agentarea/mcp@sha256:" + strings.Repeat("a", 64),
 	} {
-		if err := policy.AuthorizeImage(image); err != nil {
-			t.Fatalf("AuthorizeImage(%q) = %v", image, err)
+		if err := policy.AuthorizeImage(image, nil); err != nil {
+			t.Fatalf("AuthorizeImage(%q, nil) = %v", image, err)
 		}
 	}
 }
@@ -76,7 +76,7 @@ func TestRegistryPortIsNotMistakenForATag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := policy.AuthorizeImage("registry.internal:5000/agentarea/mcp:2.0"); err != nil {
+	if err := policy.AuthorizeImage("registry.internal:5000/agentarea/mcp:2.0", nil); err != nil {
 		t.Fatalf("a registry port was stripped as if it were a tag: %v", err)
 	}
 }
@@ -92,8 +92,8 @@ func TestUndeclaredRepositoryIsRefused(t *testing.T) {
 		"",
 		"   ",
 	} {
-		if err := policy.AuthorizeImage(image); err == nil {
-			t.Fatalf("AuthorizeImage(%q) admitted an undeclared image", image)
+		if err := policy.AuthorizeImage(image, nil); err == nil {
+			t.Fatalf("AuthorizeImage(%q, nil) admitted an undeclared image", image)
 		}
 	}
 }
@@ -136,6 +136,73 @@ func TestAllowingOneNpxPackageDoesNotAllowEveryNpxPackage(t *testing.T) {
 		if err := policy.AuthorizeCommand("npx", args); err == nil {
 			t.Fatalf("npx %v was admitted by a policy that only declared %q", args, admitted)
 		}
+	}
+}
+
+// An allowlist entry names a package, and a package only means something
+// together with the registry it is fetched from. Environment that moves the
+// launcher off that registry leaves the invocation matching while changing the
+// code, so it has to be refused rather than carried into the pod.
+func TestLauncherEnvironmentCannotRedirectPackageResolution(t *testing.T) {
+	policy, err := policyFrom(t, "ghcr.io/agentarea/mcp", "npx -y @modelcontextprotocol/server-everything")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{
+		"npm_config_registry", "NPM_CONFIG_REGISTRY", "UV_INDEX_URL", "UV_DEFAULT_INDEX",
+		"PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL", "PYTHONPATH", "NODE_OPTIONS", "PATH",
+	} {
+		if err := policy.AuthorizeLauncherEnvironment(map[string]string{name: "https://attacker.tld/"}); err == nil {
+			t.Fatalf("%s was accepted; the declared package could be fetched from anywhere", name)
+		}
+	}
+	if err := policy.AuthorizeLauncherEnvironment(map[string]string{"NOTION_TOKEN": "secret"}); err != nil {
+		t.Fatalf("ordinary server configuration was refused: %v", err)
+	}
+}
+
+// An image is vouched for as published. Choosing its argv makes it a different
+// program, so a repository-only entry must not admit a command override.
+func TestImageEntryDoesNotAdmitACallerChosenCommand(t *testing.T) {
+	policy, err := policyFrom(t, "mcp/fetch", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := policy.AuthorizeImage("mcp/fetch:latest", nil); err != nil {
+		t.Fatalf("the declared image was refused: %v", err)
+	}
+	if err := policy.AuthorizeImage("mcp/fetch:latest", []string{"--proxy-url", "http://attacker.tld"}); err == nil {
+		t.Fatal("a repository entry admitted a caller-chosen command override")
+	}
+
+	withCommand, err := policyFrom(t, "mcp/fetch --ignore-robots-txt", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := withCommand.AuthorizeImage("mcp/fetch:latest", []string{"--ignore-robots-txt"}); err != nil {
+		t.Fatalf("the declared invocation was refused: %v", err)
+	}
+	if err := withCommand.AuthorizeImage("mcp/fetch:latest", nil); err == nil {
+		t.Fatal("an invocation entry admitted the bare image it does not describe")
+	}
+}
+
+func TestContainerCommandOverrideMirrorsTheProviderStrip(t *testing.T) {
+	got := containerCommandOverride(map[string]any{
+		"command": []any{"server", "--transport=stdio", "--root", "/data"},
+	})
+	if strings.Join(got, " ") != "server --root /data" {
+		t.Fatalf("override = %v", got)
+	}
+}
+
+func TestInstanceEnvironmentReadsBothSpecKeys(t *testing.T) {
+	got := instanceEnvironment(map[string]any{
+		"environment": map[string]any{"A": "1"},
+		"env_vars":    map[string]any{"B": 2},
+	})
+	if got["A"] != "1" || got["B"] != "2" {
+		t.Fatalf("environment = %v", got)
 	}
 }
 

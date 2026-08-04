@@ -564,6 +564,14 @@ mcpManager:
       - 172.16.0.0/12
       - 192.168.0.0/16
       - 169.254.0.0/16
+    # Ranges the kubelet probes instance pods from — normally the node network.
+    # An enforcing CNI drops the readiness probe without this, the instance never
+    # reports ready, and container-backed MCP is permanently unavailable. Narrow
+    # to your actual node CIDR; set to [] only on a CNI that exempts host traffic.
+    probeIngressCIDRs:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
     # Extra raw NetworkPolicyEgressRule entries appended as-is (e.g. to allow a
     # specific in-cluster dependency).
     extraEgress: []

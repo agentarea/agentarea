@@ -336,11 +336,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
         """Completion barrier: persist the declared files before the task is done."""
         if not request.declared_paths:
             return ArtifactValidationResult(state="passed", generation=0)
-        secret = dependencies.settings.mcp.SANDBOX_FILE_AUTH_SECRET
         return await validate_published_artifacts(
             request,
             manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
-            auth_secret=secret.get_secret_value() if secret is not None else "",
+            auth_secret=_sandbox_file_auth_secret(dependencies),
         )
 
     @activity.defn

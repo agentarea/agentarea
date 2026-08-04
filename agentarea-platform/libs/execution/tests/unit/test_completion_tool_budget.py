@@ -3,7 +3,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
-from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
+from agentarea_governance.domain.tool_calls import (
+    CONTROL_FLOW_TOOL_NAMES,
+    UNMETERED_TOOL_CALL_NAMES,
+)
 from agentarea_execution.workflows.models import ToolCall
 
 
@@ -54,19 +57,36 @@ async def test_completion_is_excluded_from_per_turn_capability_count() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("tool_name", sorted(CONTROL_FLOW_TOOL_NAMES))
-async def test_no_control_flow_tool_consumes_tool_call_budget(tool_name: str) -> None:
-    """Budget classification must use the same canonical set disclosure uses."""
+@pytest.mark.parametrize("tool_name", sorted(UNMETERED_TOOL_CALL_NAMES))
+async def test_terminal_control_flow_does_not_consume_tool_call_budget(tool_name: str) -> None:
+    """Terminal control flow ends the run, so it cannot be repeated to spend quota."""
+    instance = _workflow(used=1, total=1)
+
+    await instance._execute_tool_calls([_call(tool_name, f"{tool_name}-1")])
+
+    assert instance.state.tool_calls_used == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "tool_name", sorted(CONTROL_FLOW_TOOL_NAMES - UNMETERED_TOOL_CALL_NAMES)
+)
+async def test_repeatable_control_flow_still_consumes_budget(tool_name: str) -> None:
+    """Disclosure exempts these from policy; the quota still has to bound them.
+
+    Each dispatches a real activity and a turn may carry any number of them, so
+    exempting them from metering would make both execution limits unenforceable.
+    """
     instance = _workflow(used=1, total=1)
     instance._execute_request_user_input = AsyncMock()
     instance._execute_recall_history = AsyncMock()
     instance._execute_read_tool_output = AsyncMock()
     instance._execute_activate_tool_source = AsyncMock()
     instance._execute_load_tools = AsyncMock()
+    instance._execute_activate_skill = AsyncMock()
 
-    await instance._execute_tool_calls([_call(tool_name, f"{tool_name}-1")])
-
-    assert instance.state.tool_calls_used == 1
+    with pytest.raises(Exception, match="tool-call budget exceeded"):
+        await instance._execute_tool_calls([_call(tool_name, f"{tool_name}-1")])
 
 
 @pytest.mark.asyncio

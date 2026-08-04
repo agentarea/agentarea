@@ -2250,11 +2250,16 @@ class AgentExecutionWorkflow:
                 regular_calls.append(tool_call)
 
         if len(completion_calls) > 1:
-            raise ApplicationError(
-                "model requested more than one completion call in a single turn",
-                type="InvalidCompletionCall",
-                non_retryable=True,
-            )
+            # Two completions in one message is a malformed answer, not a policy
+            # breach, and every other malformed completion here is handed back
+            # for repair rather than killing the run and the budget spent on it.
+            # None of them is accepted: picking one would be guessing which
+            # answer the model meant.
+            for duplicate in completion_calls:
+                self._reject_invalid_completion_arguments(
+                    duplicate, "exactly one completion call may be made per turn"
+                )
+            completion_calls = []
         completion_call = completion_calls[0] if completion_calls else None
 
         # User-input requests are exclusive: the workflow must pause and get a
