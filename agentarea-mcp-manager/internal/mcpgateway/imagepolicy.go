@@ -94,12 +94,26 @@ func (p ImagePolicy) AuthorizeImage(image string, command []string) error {
 // launcherEnvironmentDenied names the environment a package launcher reads to
 // decide where code comes from, by exact name or by namespace prefix. Compared
 // case-insensitively because npm reads npm_config_* in either case.
+//
+// Three ways to move a launcher off its registry, all closed here: name another
+// index outright (npm_config_registry, UV_INDEX_URL, PIP_INDEX_URL), route the
+// fetch through a host you control (the proxy variables), or keep the address
+// and break the proof of who answered (NODE_TLS_REJECT_UNAUTHORIZED and the CA
+// bundle overrides). Whole namespaces rather than known keys, so a launcher
+// adding a setting does not quietly open the door again.
 var launcherEnvironmentDenied = struct {
 	prefixes []string
 	exact    []string
 }{
 	prefixes: []string{"NPM_CONFIG_", "UV_", "PIP_"},
-	exact:    []string{"PATH", "PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "NODE_OPTIONS", "NODE_PATH"},
+	exact: []string{
+		"PATH", "HOME",
+		"PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP",
+		"NODE_OPTIONS", "NODE_PATH", "NODE_EXTRA_CA_CERTS", "NODE_TLS_REJECT_UNAUTHORIZED",
+		"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
+		"SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
+		"GIT_SSL_NO_VERIFY", "GIT_SSL_CAINFO",
+	},
 }
 
 // AuthorizeLauncherEnvironment refuses instance environment that would move a

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/agentarea/mcp-manager/internal/models"
 )
 
 func policyFrom(t *testing.T, repositories, packages string) (ImagePolicy, error) {
@@ -149,8 +151,16 @@ func TestLauncherEnvironmentCannotRedirectPackageResolution(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{
-		"npm_config_registry", "NPM_CONFIG_REGISTRY", "UV_INDEX_URL", "UV_DEFAULT_INDEX",
-		"PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL", "PYTHONPATH", "NODE_OPTIONS", "PATH",
+		// Name another index outright.
+		"npm_config_registry", "NPM_CONFIG_REGISTRY", "NPM_CONFIG_USERCONFIG",
+		"UV_INDEX_URL", "UV_DEFAULT_INDEX", "PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL",
+		// Route the fetch through a host the caller controls.
+		"HTTP_PROXY", "https_proxy", "ALL_PROXY",
+		// Keep the address but break the proof of who answered.
+		"NODE_TLS_REJECT_UNAUTHORIZED", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE",
+		"REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "GIT_SSL_NO_VERIFY",
+		// Change which binary or config is found at all.
+		"PATH", "HOME", "PYTHONPATH", "NODE_OPTIONS", "NODE_PATH",
 	} {
 		if err := policy.AuthorizeLauncherEnvironment(map[string]string{name: "https://attacker.tld/"}); err == nil {
 			t.Fatalf("%s was accepted; the declared package could be fetched from anywhere", name)
@@ -203,6 +213,40 @@ func TestInstanceEnvironmentReadsBothSpecKeys(t *testing.T) {
 	})
 	if got["A"] != "1" || got["B"] != "2" {
 		t.Fatalf("environment = %v", got)
+	}
+}
+
+// The environment check has to sit on the path EnsureReady takes, not only in
+// the policy type: a declared invocation carrying a redirected registry must be
+// refused before any workload is inspected or created.
+func TestRedirectedRegistryIsRefusedOnTheAdmissionPath(t *testing.T) {
+	policy, err := policyFrom(t, "ghcr.io/agentarea/allowed-mcp", "npx -y @modelcontextprotocol/server-everything")
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend := &runtimeBackendStub{statuses: []statusReply{{status: "running"}}}
+	provider := &runtimeProviderStub{}
+	runtime := testProviderRuntime(t, backend, provider, time.Second)
+	runtime.imagePolicy = policy
+
+	instance := &models.MCPServerInstance{
+		InstanceID: "8ca9f331-9cc9-4a51-9933-27d7bb73860b",
+		Name:       "8ca9f331-9cc9-4a51-9933-27d7bb73860b",
+		JSONSpec: map[string]any{
+			"type":        "command",
+			"command":     "npx",
+			"args":        []any{"-y", "@modelcontextprotocol/server-everything"},
+			"environment": map[string]any{"npm_config_registry": "https://attacker.tld/"},
+		},
+	}
+
+	if _, err := runtime.EnsureReady(context.Background(), instance); err == nil {
+		t.Fatal("a declared invocation was admitted while pointed at another registry")
+	}
+
+	delete(instance.JSONSpec, "environment")
+	if _, err := runtime.EnsureReady(context.Background(), instance); err != nil {
+		t.Fatalf("the same invocation without the redirect was refused: %v", err)
 	}
 }
 
