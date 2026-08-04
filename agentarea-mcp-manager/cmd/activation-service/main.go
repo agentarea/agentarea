@@ -2348,9 +2348,13 @@ func resolveExecutionWorkspace(workspaceID, taskID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	workspacesRoot := filepath.Join(workspaceRoot, "workspaces")
-	workspaceDir := filepath.Join(workspacesRoot, workspaceID)
-	tasksRoot := filepath.Join(workspaceDir, "tasks")
+	// Derive the parents from the path executionWorkspacePath already validated
+	// and confined to workspaceRoot, rather than re-joining the raw identifiers.
+	// Rebuilding from the request would put an unchecked value back on a path
+	// that is about to be created and chmod'ed.
+	tasksRoot := filepath.Dir(dir)
+	workspaceDir := filepath.Dir(tasksRoot)
+	workspacesRoot := filepath.Dir(workspaceDir)
 	if err := os.MkdirAll(tasksRoot, 0o711); err != nil {
 		return "", fmt.Errorf("failed to create task workspace root: %w", err)
 	}
