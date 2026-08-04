@@ -31,6 +31,7 @@ spec:
             {{- include "agentarea.redis.envs" . | nindent 12 }}
             {{- include "agentarea.redis.urlEnv" . | nindent 12 }}
             {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
+            {{- include "agentarea.mcpManager.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.storage.envs" . | nindent 12 }}
             {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
             - name: SANDBOX_ACTIVATION_AUTH_SECRET

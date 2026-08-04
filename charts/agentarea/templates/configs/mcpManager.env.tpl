@@ -8,7 +8,8 @@ LOG_LEVEL: "INFO"
 CORE_API_URL: "http://{{ include "agentarea.fullname" . }}-backend:8000"
 SERVER_HOST: "0.0.0.0"
 SERVER_PORT: "80"
-BACKEND_TYPE: "kubernetes"
+BACKEND_TYPE: "{{ include "agentarea.mcpManager.backendType" . }}"
+MCP_DATAPLANE_URL: "{{ .Values.mcpManager.dataPlane.url | default "" }}"
 KUBERNETES_ENABLED: "true"
 KUBERNETES_NAMESPACE: "{{ .Release.Namespace }}"
 KUBERNETES_DOMAIN: "{{ .Values.mcpManager.domain | default "mcp.local" }}"
@@ -69,6 +70,11 @@ MCP_GATEWAY_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: BACKEND_TYPE
+- name: MCP_DATAPLANE_URL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_DATAPLANE_URL
 - name: KUBERNETES_ENABLED
   valueFrom:
     configMapKeyRef:
@@ -229,4 +235,14 @@ MCP_GATEWAY_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: MCP_GATEWAY_STARTUP_TIMEOUT
+{{- end }}
+
+{{- define "agentarea.mcpManager.secrets.envs" }}
+{{- if .Values.mcpManager.dataPlane.url }}
+- name: MCP_DATAPLANE_AUTH_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: "{{ .Values.mcpManager.dataPlane.tokenSecret }}"
+      key: {{ .Values.mcpManager.dataPlane.tokenKey }}
+{{- end }}
 {{- end }}

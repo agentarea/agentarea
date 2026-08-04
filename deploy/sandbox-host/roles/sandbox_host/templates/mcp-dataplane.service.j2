@@ -1,0 +1,17 @@
+[Unit]
+Description=AgentArea MCP data plane
+After=docker.service sandbox-egress.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+WorkingDirectory=/etc/mcp-dataplane
+ExecStart=/usr/bin/docker compose -f /etc/mcp-dataplane/compose.yaml up -d --remove-orphans
+ExecReload=/usr/bin/docker compose -f /etc/mcp-dataplane/compose.yaml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f /etc/mcp-dataplane/compose.yaml down
+TimeoutStartSec=300
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

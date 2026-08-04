@@ -1,0 +1,91 @@
+---
+# Run the MCP data plane on this host: the manager image in dataplane mode,
+# behind the TLS proxy this host already runs.
+#
+# Deliberately separate from the executor and from OpenSandbox. Those serve agent
+# sandboxes; this serves MCP servers. They share a machine and its gVisor runtime
+# and nothing else.
+
+- name: Require data-plane security inputs
+  ansible.builtin.assert:
+    that:
+      - sandbox_mcp_dataplane_auth_token | length >= 32
+      - sandbox_mcp_dataplane_id | length > 0
+      - sandbox_mcp_dataplane_public_hostname | length > 0
+      - sandbox_runtime == "runsc"
+    fail_msg: >-
+      The MCP data plane requires a 32+ character shared token (the same value
+      the control plane sends), an id that marks this data plane's instances as
+      its own, a TLS hostname, and the runsc runtime. A data plane reachable
+      without a token hands container creation on a gVisor host to whoever finds
+      the port.
+
+- name: Create data-plane configuration directory
+  ansible.builtin.file:
+    path: /etc/mcp-dataplane
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+# Instances land on this network and the data plane reaches them across it. A
+# dedicated network rather than the default one keeps MCP containers off the
+# bridge everything else on the host shares.
+- name: Create the MCP instance network
+  ansible.builtin.command: docker network create {{ sandbox_mcp_dataplane_network }}
+  register: _mcp_network
+  changed_when: _mcp_network.rc == 0
+  failed_when:
+    - _mcp_network.rc != 0
+    - "'already exists' not in _mcp_network.stderr"
+
+- name: Render data-plane environment
+  ansible.builtin.template:
+    src: mcp-dataplane.env.j2
+    dest: /etc/mcp-dataplane/dataplane.env
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart mcp-dataplane
+
+- name: Render data-plane compose file
+  ansible.builtin.template:
+    src: mcp-dataplane-compose.yaml.j2
+    dest: /etc/mcp-dataplane/compose.yaml
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Restart mcp-dataplane
+
+- name: Install data-plane service unit
+  ansible.builtin.template:
+    src: mcp-dataplane.service.j2
+    dest: /etc/systemd/system/mcp-dataplane.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart mcp-dataplane
+
+- name: Enable and start the data plane
+  ansible.builtin.systemd:
+    name: mcp-dataplane
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# A green play that never reached the process would only prove the files were
+# written.
+- name: Wait for the data plane to answer
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ sandbox_mcp_dataplane_port }}/healthz"
+    status_code: 200
+  register: _mcp_dp_health
+  retries: 20
+  delay: 3
+  until: _mcp_dp_health is succeeded
+
+- name: Verify the data plane refuses unauthenticated calls
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ sandbox_mcp_dataplane_port }}/dataplane/v1/instances"
+    status_code: 401
+  changed_when: false

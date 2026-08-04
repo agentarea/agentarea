@@ -546,6 +546,25 @@ mcpManager:
     # Maximum time the gateway waits for a cold workload to become Ready.
     startupTimeout: "5m"
 
+  # Run MCP containers on a remote host instead of in this cluster.
+  #
+  # That host runs this same image with MCP_MANAGER_MODE=dataplane, which builds
+  # only a container backend — no database, no Redis, no secret manager. It is
+  # the arrangement that keeps user-supplied MCP images off the control plane's
+  # nodes without requiring a second Kubernetes cluster, and the data plane can
+  # only touch instances it created itself.
+  #
+  # Setting url switches BACKEND_TYPE to dataplane. All three fields go together
+  # or none do; a partial set stops the render rather than silently falling back
+  # to running containers here.
+  dataPlane:
+    # Base URL of the data plane, e.g. https://mcp-dp.example.com. Must be https
+    # unless the hop is already private, since the token travels on it.
+    url: ""
+    # Existing Secret holding the shared token, and the key inside it.
+    tokenSecret: ""
+    tokenKey: ""
+
   # Egress restriction for spawned MCP instance pods (which may run untrusted,
   # user-supplied images). Denies cluster-internal + cloud-metadata egress while
   # allowing DNS + public internet. CIDRs are configurable so this is not pinned

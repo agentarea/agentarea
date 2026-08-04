@@ -42,3 +42,12 @@
   ansible.builtin.systemd:
     name: k3s
     state: restarted
+
+- name: Restart mcp-dataplane
+  ansible.builtin.systemd:
+    name: mcp-dataplane
+    state: restarted
+    daemon_reload: true
+  when:
+    - sandbox_mcp_dataplane_enabled | bool
+    - not ansible_check_mode

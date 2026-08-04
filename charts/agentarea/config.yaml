@@ -111,7 +111,13 @@ groups:
       CORE_API_URL: 'http://{{ include "agentarea.fullname" . }}-backend:8000'
       SERVER_HOST: '0.0.0.0'
       SERVER_PORT: '80'
-      BACKEND_TYPE: 'kubernetes'
+      # Derived from whether mcpManager.dataPlane names a host, so the backend
+      # and the address it is given cannot disagree. Half-configuration stops
+      # the render — see the helper.
+      BACKEND_TYPE: '{{ include "agentarea.mcpManager.backendType" . }}'
+      # Where MCP containers run when BACKEND_TYPE is dataplane. Empty otherwise,
+      # which the manager reads as "no data plane declared".
+      MCP_DATAPLANE_URL: '{{ .Values.mcpManager.dataPlane.url | default "" }}'
       KUBERNETES_ENABLED: 'true'
       KUBERNETES_NAMESPACE: '{{ .Release.Namespace }}'
       KUBERNETES_DOMAIN: '{{ .Values.mcpManager.domain | default "mcp.local" }}'
@@ -150,6 +156,14 @@ groups:
       MCP_IDLE_SWEEP_INTERVAL: '{{ .Values.mcpManager.serverless.sweepInterval }}'
       MCP_REQUEST_LEASE_TTL: '{{ .Values.mcpManager.serverless.requestLeaseTTL }}'
       MCP_GATEWAY_STARTUP_TIMEOUT: '{{ .Values.mcpManager.serverless.startupTimeout }}'
+    secrets:
+      # The shared token the data plane checks on every call. Carried from a
+      # Secret rather than the ConfigMap because it grants container creation on
+      # that host. Absent unless a data plane is configured.
+      - name: MCP_DATAPLANE_AUTH_TOKEN
+        conditional: '{{ .Values.mcpManager.dataPlane.url }}'
+        secretName: "{{ .Values.mcpManager.dataPlane.tokenSecret }}"
+        key: "{{ .Values.mcpManager.dataPlane.tokenKey }}"
 
   temporalUi:
     configVars:

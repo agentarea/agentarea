@@ -333,6 +333,33 @@ Create the name of the MCP runtime service account.
 {{- end }}
 
 {{/*
+Which backend the manager drives.
+
+"dataplane" hands MCP containers to a remote host running the same binary in
+data-plane mode; "kubernetes" creates them in a cluster. Derived from whether a
+data plane was named rather than configured separately, so the two cannot
+disagree about where workloads go.
+
+Half-configuration is refused. A URL without a token reaches a data plane that
+must reject it, and a token without a URL names no data plane at all; either one
+would otherwise render as in-cluster mode and put untrusted MCP servers on the
+control plane's own nodes while the operator believes they were moved off.
+*/}}
+{{- define "agentarea.mcpManager.backendType" -}}
+{{- $dp := .Values.mcpManager.dataPlane | default dict -}}
+{{- $url := $dp.url | default "" -}}
+{{- $secret := $dp.tokenSecret | default "" -}}
+{{- $key := $dp.tokenKey | default "" -}}
+{{- if and $url (or (not $secret) (not $key)) -}}
+{{- fail "mcpManager.dataPlane.url is set but tokenSecret/tokenKey are not: name the Secret and key holding the shared data-plane token" -}}
+{{- end -}}
+{{- if and (or $secret $key) (not $url) -}}
+{{- fail "mcpManager.dataPlane token is configured but url is empty: name the data plane to reach, or clear the token to run MCP containers in this cluster" -}}
+{{- end -}}
+{{- if $url -}}dataplane{{- else -}}kubernetes{{- end -}}
+{{- end -}}
+
+{{/*
 Directory the execution cluster kubeconfig is projected into. One definition
 feeds both the volume mount and the path handed to the manager, so the two
 cannot drift; it matches the path the dev compose stack uses.

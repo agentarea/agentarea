@@ -2,11 +2,12 @@
   "$schema": "https://mintlify.com/schema.json",
   "name": "AgentArea",
   "theme": "maple",
-  "colors": { 
+  "colors": {
     "primary": "#3b82f6"
   },
-  
-  "versions": ["v1"],
+  "versions": [
+    "v1"
+  ],
   "feedback": {
     "thumbsRating": true,
     "suggestEdit": true
@@ -137,6 +138,7 @@
           "self-host/configuration",
           "self-host/docker-compose",
           "self-host/kubernetes",
+          "self-host/mcp-data-plane",
           "self-host/networking",
           "self-host/secrets-backends",
           "self-host/database-and-migrations",
