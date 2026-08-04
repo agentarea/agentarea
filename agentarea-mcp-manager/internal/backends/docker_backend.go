@@ -551,6 +551,27 @@ func (d *DockerBackend) DeleteInstance(ctx context.Context, instanceID string) e
 	return nil
 }
 
+// StartInstance starts an instance whose container exists but is not running.
+//
+// This is what makes a reclaimed instance answer its next call: the idle sweep
+// stops the container rather than deleting it, so bringing it back is a start,
+// not a create.
+func (d *DockerBackend) StartInstance(ctx context.Context, instanceID string) error {
+	serviceName := d.findServiceNameByID(instanceID)
+	if serviceName == "" {
+		return fmt.Errorf("instance not found: %s", instanceID)
+	}
+
+	if err := d.manager.StartContainer(ctx, serviceName); err != nil {
+		return fmt.Errorf("failed to start container: %w", err)
+	}
+
+	d.logger.Info("Started instance on demand",
+		slog.String("instance_id", instanceID),
+		slog.String("service_name", serviceName))
+	return nil
+}
+
 // GetInstanceStatus retrieves the current status of an instance
 func (d *DockerBackend) GetInstanceStatus(ctx context.Context, instanceID string) (*InstanceStatus, error) {
 	serviceName := d.findServiceNameByID(instanceID)
@@ -601,6 +622,20 @@ func (d *DockerBackend) GetInstanceStatus(ctx context.Context, instanceID string
 		CreatedAt:    container.CreatedAt,
 		UpdatedAt:    container.UpdatedAt,
 		HealthStatus: healthStatus,
+	}
+
+	// The Kubernetes backend has always reported where an instance can actually
+	// be reached; the Docker one did not, so nothing could route to a container
+	// it started. Only a running container has an address, and a stopped one
+	// leaves this empty rather than reporting a stale one.
+	if status == models.StatusRunning {
+		if address, err := d.manager.ContainerAddress(ctx, serviceName); err != nil {
+			d.logger.Warn("Failed to resolve container address",
+				slog.String("service_name", serviceName),
+				slog.String("error", err.Error()))
+		} else {
+			instanceStatus.InternalURL = "http://" + address
+		}
 	}
 
 	return instanceStatus, nil

@@ -1,4 +1,4 @@
-package agent
+package dataplane
 
 import (
 	"bytes"
@@ -86,10 +86,10 @@ func TestInstanceRoutesRejectMissingToken(t *testing.T) {
 	router := newTestServer(&fakeBackend{instances: map[string]*backends.InstanceStatus{}})
 
 	for _, tc := range []struct{ method, path string }{
-		{http.MethodGet, "/agent/v1/instances"},
-		{http.MethodPost, "/agent/v1/instances"},
-		{http.MethodGet, "/agent/v1/instances/abc"},
-		{http.MethodDelete, "/agent/v1/instances/abc"},
+		{http.MethodGet, "/dataplane/v1/instances"},
+		{http.MethodPost, "/dataplane/v1/instances"},
+		{http.MethodGet, "/dataplane/v1/instances/abc"},
+		{http.MethodDelete, "/dataplane/v1/instances/abc"},
 	} {
 		if got := request(t, router, tc.method, tc.path, "", nil); got.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s without a token: got %d, want 401", tc.method, tc.path, got.Code)
@@ -100,7 +100,7 @@ func TestInstanceRoutesRejectMissingToken(t *testing.T) {
 func TestInstanceRoutesRejectWrongToken(t *testing.T) {
 	router := newTestServer(&fakeBackend{instances: map[string]*backends.InstanceStatus{}})
 
-	got := request(t, router, http.MethodGet, "/agent/v1/instances", "wrong-token-wrong-token-wrong-to", nil)
+	got := request(t, router, http.MethodGet, "/dataplane/v1/instances", "wrong-token-wrong-token-wrong-to", nil)
 	if got.Code != http.StatusUnauthorized {
 		t.Fatalf("got %d, want 401", got.Code)
 	}
@@ -127,7 +127,7 @@ func TestCreateStampsOwnerLabelOverCallerValue(t *testing.T) {
 		Image:      "example:latest",
 		Labels:     map[string]string{OwnerLabel: "someone-else", "keep": "me"},
 	}
-	if got := request(t, router, http.MethodPost, "/agent/v1/instances", testToken, spec); got.Code != http.StatusCreated {
+	if got := request(t, router, http.MethodPost, "/dataplane/v1/instances", testToken, spec); got.Code != http.StatusCreated {
 		t.Fatalf("got %d, want 201: %s", got.Code, got.Body.String())
 	}
 
@@ -147,10 +147,10 @@ func TestUnownedInstanceIsIndistinguishableFromMissing(t *testing.T) {
 	router := newTestServer(backend)
 
 	for _, id := range []string{"theirs", "bare", "absent"} {
-		if got := request(t, router, http.MethodGet, "/agent/v1/instances/"+id, testToken, nil); got.Code != http.StatusNotFound {
+		if got := request(t, router, http.MethodGet, "/dataplane/v1/instances/"+id, testToken, nil); got.Code != http.StatusNotFound {
 			t.Errorf("GET %s: got %d, want 404", id, got.Code)
 		}
-		if got := request(t, router, http.MethodDelete, "/agent/v1/instances/"+id, testToken, nil); got.Code != http.StatusNotFound {
+		if got := request(t, router, http.MethodDelete, "/dataplane/v1/instances/"+id, testToken, nil); got.Code != http.StatusNotFound {
 			t.Errorf("DELETE %s: got %d, want 404", id, got.Code)
 		}
 	}
@@ -168,7 +168,7 @@ func TestListReturnsOnlyOwnedInstances(t *testing.T) {
 	}}
 	router := newTestServer(backend)
 
-	got := request(t, router, http.MethodGet, "/agent/v1/instances", testToken, nil)
+	got := request(t, router, http.MethodGet, "/dataplane/v1/instances", testToken, nil)
 	if got.Code != http.StatusOK {
 		t.Fatalf("got %d, want 200", got.Code)
 	}

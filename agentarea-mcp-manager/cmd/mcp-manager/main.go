@@ -14,13 +14,13 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
-	"github.com/agentarea/mcp-manager/internal/agent"
 	"github.com/agentarea/mcp-manager/internal/api"
 	"github.com/agentarea/mcp-manager/internal/artifactstore"
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/container"
 	"github.com/agentarea/mcp-manager/internal/database"
+	"github.com/agentarea/mcp-manager/internal/dataplane"
 	"github.com/agentarea/mcp-manager/internal/environment"
 	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/mcpgateway"
@@ -121,15 +121,15 @@ func initBackend(
 		// Get the container manager from the docker backend for compatibility
 		containerManager = dockerBackend.GetManager()
 
-	case "agent":
-		logger.Info("Initializing remote agent backend")
-		agentCfg, err := agent.ClientConfigFromEnv()
+	case "dataplane":
+		logger.Info("Initializing remote data-plane backend")
+		agentCfg, err := dataplane.ClientConfigFromEnv()
 		if err != nil {
-			logger.Error("Failed to configure remote agent backend", slog.String("error", err.Error()))
+			logger.Error("Failed to configure remote data-plane backend", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
-		backend = agent.NewClient(agentCfg)
-		logger.Info("Remote agent backend configured", slog.String("url", agentCfg.BaseURL))
+		backend = dataplane.NewClient(agentCfg)
+		logger.Info("Remote data-plane backend configured", slog.String("url", agentCfg.BaseURL))
 
 	default:
 		logger.Error("Unsupported environment type", slog.String("type", envType))
@@ -213,11 +213,11 @@ func main() {
 	// Detect environment and initialize appropriate backend
 	envType, backend, containerManager := initBackend(ctx, cfg, logger, sandboxPolicy.TaskLeaseTTL)
 
-	// Agent mode stops here: this process is a data plane, and everything below
+	// Data-plane mode stops here: this process is a data plane, and everything below
 	// — secrets, Redis, the event bus, the sandbox runtime — is control-plane
 	// wiring that must not exist on a host running untrusted containers.
-	if agent.Enabled() {
-		runAgentMode(ctx, cfg, backend, logger)
+	if dataplane.Enabled() {
+		runDataplaneMode(ctx, cfg, backend, logger)
 		return
 	}
 
@@ -466,36 +466,38 @@ func setupRouter(cfg *config.Config, logger *slog.Logger) *gin.Engine {
 	return router
 }
 
-// runAgentMode serves the data-plane API and blocks until the process is signalled.
+// runDataplaneMode serves the data-plane API and blocks until the process is signalled.
 //
 // It is reached only after the backend exists and before any control-plane
 // dependency is constructed, so an agent host never holds database, Redis or
 // secret-manager credentials — losing the host loses container control on that
 // host and nothing more.
-func runAgentMode(ctx context.Context, cfg *config.Config, backend backends.Backend, logger *slog.Logger) {
-	agentCfg, err := agent.ConfigFromEnv()
+func runDataplaneMode(ctx context.Context, cfg *config.Config, backend backends.Backend, logger *slog.Logger) {
+	dpCfg, err := dataplane.ConfigFromEnv()
 	if err != nil {
-		logger.Error("Refusing to start in agent mode", slog.String("error", err.Error()))
+		logger.Error("Refusing to start in data-plane mode", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
 	router := setupRouter(cfg, logger)
-	agent.NewServer(agentCfg, backend, logger).Routes(router)
+	dataplane.NewServer(dpCfg, backend, logger).Routes(router)
 
+	// No WriteTimeout: proxied MCP traffic answers over SSE, and a write deadline
+	// cuts a live stream mid-session rather than protecting anything. Slow
+	// clients are bounded by ReadTimeout and by the request context instead.
 	server := &http.Server{
-		Addr:         agentCfg.ListenAddr,
-		Handler:      router,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 120 * time.Second,
+		Addr:        dpCfg.ListenAddr,
+		Handler:     router,
+		ReadTimeout: 30 * time.Second,
 	}
 
 	go func() {
-		logger.Info("MCP manager running as data-plane agent",
-			slog.String("agent_id", agentCfg.AgentID),
-			slog.String("listen", agentCfg.ListenAddr),
+		logger.Info("MCP manager running as data plane",
+			slog.String("agent_id", dpCfg.AgentID),
+			slog.String("listen", dpCfg.ListenAddr),
 		)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("Agent server failed", slog.String("error", err.Error()))
+			logger.Error("Data-plane server failed", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
 	}()
@@ -507,11 +509,11 @@ func runAgentMode(ctx context.Context, cfg *config.Config, backend backends.Back
 	case <-ctx.Done():
 	}
 
-	logger.Info("Shutting down agent")
+	logger.Info("Shutting down data plane")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		logger.Error("Agent shutdown failed", slog.String("error", err.Error()))
+		logger.Error("Data-plane shutdown failed", slog.String("error", err.Error()))
 	}
 	if err := backend.Shutdown(shutdownCtx); err != nil {
 		logger.Error("Backend shutdown failed", slog.String("error", err.Error()))
