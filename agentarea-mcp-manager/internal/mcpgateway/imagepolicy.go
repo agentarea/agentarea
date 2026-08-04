@@ -80,18 +80,26 @@ func (p ImagePolicy) AuthorizeImage(image string) error {
 	return nil
 }
 
-// AuthorizeCommand admits one stdio command. The executable is matched whole:
-// a command-type instance names a package to fetch and run, so the package name
-// is the thing an operator can meaningfully vouch for.
-func (p ImagePolicy) AuthorizeCommand(command string) error {
-	trimmed := strings.TrimSpace(command)
-	if trimmed == "" {
+// AuthorizeCommand admits one stdio invocation, matched whole: the executable
+// and every argument together.
+//
+// The executable alone would not be a gate. `npx` and `uvx` fetch and run
+// whatever package they are pointed at, so admitting the interpreter admits the
+// entire npm and PyPI namespaces — the exact door this type exists to close.
+// The package lives in the arguments, and so does anything that redirects which
+// package is fetched (`--package`, `--from`, a version pin), which is why the
+// decision is made on the whole invocation rather than on a name parsed out of
+// it. Instance arguments come from the catalog's server spec, not from user
+// input, so an exact invocation is something an operator can actually vouch for.
+func (p ImagePolicy) AuthorizeCommand(command string, args []string) error {
+	if strings.TrimSpace(command) == "" {
 		return fmt.Errorf("MCP command instance declares no command")
 	}
-	if _, admitted := p.packages[trimmed]; !admitted {
+	invocation := strings.Join(append([]string{strings.TrimSpace(command)}, args...), " ")
+	if _, admitted := p.packages[invocation]; !admitted {
 		return fmt.Errorf(
 			"MCP instance command %q is not in MCP_ALLOWED_COMMAND_PACKAGES",
-			trimmed,
+			invocation,
 		)
 	}
 	return nil

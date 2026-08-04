@@ -16,9 +16,7 @@ COPY . .
 ARG TARGETARCH
 ARG TARGETOS
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build \
-    -a -installsuffix cgo -o bin/activation-service ./cmd/activation-service \
-    && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build \
-    -a -installsuffix cgo -o bin/agentarea-exec-supervisor ./cmd/exec-supervisor
+    -a -installsuffix cgo -o bin/activation-service ./cmd/activation-service
 
 FROM python:3.12-slim-bookworm
 
@@ -45,11 +43,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # `pip install` works without --break-system-packages (no PEP 668 marker).
 ENV PATH=/opt/runtime/venv/bin:$PATH
 ENV SANDBOX_COMMAND_UID=10001 SANDBOX_COMMAND_GID=10001
-ENV EXEC_SUPERVISOR_PATH=/usr/local/bin/agentarea-exec-supervisor
 COPY runtime/requirements.txt /opt/runtime/requirements.txt
 RUN python -m venv /opt/runtime/venv \
     && pip install --no-cache-dir -r /opt/runtime/requirements.txt
-COPY --from=builder /app/bin/agentarea-exec-supervisor /usr/local/bin/agentarea-exec-supervisor
 
 # The version stamped into the runtime manifest, from the VERSION file via the
 # build workflow's APP_VERSION — one version source rather than a second one to
@@ -64,12 +60,35 @@ COPY --from=builder /app/bin/agentarea-exec-supervisor /usr/local/bin/agentarea-
 # shipping a plausible-looking wrong answer. Every build site now states its
 # own version, including compose.
 ARG APP_VERSION
+ARG MANAGED_ENVIRONMENT=mutable
 COPY runtime/generate_manifest.py /opt/runtime/generate_manifest.py
+COPY runtime/test_locked_profile.sh /opt/runtime/test_locked_profile.sh
 RUN mkdir -p /etc/agentarea \
-    && chown -R 10001:10001 /opt/runtime/venv \
-    && RUNTIME_VERSION=${APP_VERSION} python /opt/runtime/generate_manifest.py \
+    && case "${MANAGED_ENVIRONMENT}" in \
+         mutable) chown -R 10001:10001 /opt/runtime/venv ;; \
+         immutable) \
+           rm -f /opt/runtime/venv/bin/pip /opt/runtime/venv/bin/pip3 /opt/runtime/venv/bin/pip3.12 \
+             /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12 \
+             /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+             /usr/bin/npm /usr/bin/npx /usr/bin/corepack /usr/bin/yarn /usr/bin/pnpm; \
+           find /opt/runtime/venv/lib/python3.12/site-packages -maxdepth 1 \
+             \( -name 'pip' -o -name 'pip-*.dist-info' \) -exec rm -rf '{}' +; \
+           find /usr/local/lib/python3.12/site-packages -maxdepth 1 \
+             \( -name 'pip' -o -name 'pip-*.dist-info' \) -exec rm -rf '{}' +; \
+           rm -rf /usr/local/lib/python3.12/ensurepip /usr/local/lib/python3.12/venv \
+             /usr/lib/node_modules/npm /usr/lib/node_modules/corepack; \
+           chown -R root:root /opt/runtime/venv; \
+           chmod -R a-w /opt/runtime/venv \
+           ;; \
+         *) echo "MANAGED_ENVIRONMENT must be mutable or immutable" >&2; exit 1 ;; \
+       esac \
+    && RUNTIME_VERSION=${APP_VERSION} MANAGED_ENVIRONMENT=${MANAGED_ENVIRONMENT} \
+       python /opt/runtime/generate_manifest.py \
        > /etc/agentarea/runtime.json \
     && cat /etc/agentarea/runtime.json \
+    && if [ "${MANAGED_ENVIRONMENT}" = immutable ]; then \
+         sh /opt/runtime/test_locked_profile.sh; \
+       fi \
     && find /opt/runtime -type d -name __pycache__ -prune -exec rm -rf '{}' +
 
 # The activation service may retain its container privileges for image-overlay
@@ -83,6 +102,12 @@ COPY --from=builder /app/bin/activation-service /usr/local/bin/activation-servic
 
 # 8080 - Activation API, 3000 - MCP protocol (configurable)
 EXPOSE 8080 3000
+
+# The image has two entrypoint modes: the native activation API and OpenSandbox's
+# injected execd bootstrap.  Check the process OpenSandbox actually supervises
+# instead of marking every otherwise-runnable sandbox unhealthy.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -fsS http://localhost:8080/health || grep -qsx execd /proc/[0-9]*/comm
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["/usr/local/bin/activation-service"]

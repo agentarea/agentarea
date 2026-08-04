@@ -661,6 +661,38 @@ func TestOpenSandboxProviderRejectsImplicitWeakIsolation(t *testing.T) {
 	}
 }
 
+// The RU deployment exposes the lifecycle API over HTTPS only, while
+// server-proxy endpoints come back without a scheme. If the SDK restores the
+// wrong one, a 301 rewrites streaming POSTs such as /command into GETs and the
+// command silently returns nothing.
+func TestOpenSandboxProviderDerivesProxyProtocolFromDomain(t *testing.T) {
+	base := OpenSandboxConfig{
+		Connection: opensandbox.ConnectionConfig{
+			Domain:         "https://opensandbox.example.com",
+			UseServerProxy: true,
+		},
+		LeaseTTL:            time.Minute,
+		Isolation:           "gvisor",
+		RuntimeIdentity:     "runsc",
+		EgressMode:          "host-public",
+		AllowInternetAccess: true,
+		ResourceStorage:     "2147483648",
+	}
+
+	provider, err := NewOpenSandboxProvider(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider.cfg.Connection.Protocol != "https" {
+		t.Fatalf("protocol = %q, want https", provider.cfg.Connection.Protocol)
+	}
+
+	base.Connection.Protocol = "http"
+	if _, err := NewOpenSandboxProvider(base); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("mismatched protocol error = %v", err)
+	}
+}
+
 func TestOpenSandboxGVisorRequiresExplicitHostEgressProfile(t *testing.T) {
 	base := OpenSandboxConfig{
 		Connection:      opensandbox.ConnectionConfig{Domain: "http://127.0.0.1:8080"},

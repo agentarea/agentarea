@@ -10,6 +10,7 @@ from agentarea_common.auth.tool_authorization import (
     decide_tool_policy,
 )
 from agentarea_common.events.contract import canonical_type, ensure_terminal_message
+from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
@@ -95,23 +96,6 @@ def decide_tool_action(effective_policy: dict[str, Any] | None, tool_name: str) 
     return ToolAction.DENY
 
 
-# Workflow control flow, not capabilities: these tools reach no external system,
-# are never policy-gated on execution, and must survive a deny-by-default policy
-# — without completion the agent can never finish, without request_user_input it
-# can never ask. Keep in sync with the ungated branches of _execute_tool_calls.
-CONTROL_FLOW_TOOLS = frozenset(
-    {
-        "completion",
-        "task_complete",
-        "request_user_input",
-        "recall_history",
-        "read_tool_output",
-        "activate_tool_source",
-        "load_tools",
-    }
-)
-
-
 def tool_definition_name(tool: dict[str, Any]) -> str | None:
     """Read a tool's name from either definition shape (OpenAI function or bare)."""
     if tool.get("type") == "function":
@@ -134,7 +118,7 @@ def filter_disclosed_tools(
         name = tool_definition_name(tool)
         if not name:
             continue
-        if name in CONTROL_FLOW_TOOLS:
+        if name in CONTROL_FLOW_TOOL_NAMES:
             disclosed.append(tool)
             continue
         if decide_tool_action(effective_policy, name) is not ToolAction.DENY:

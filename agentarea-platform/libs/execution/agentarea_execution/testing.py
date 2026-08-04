@@ -36,7 +36,9 @@ def llm_response_text(content: str = "Hello!", cost: float = 0.001) -> dict[str,
     }
 
 
-def llm_response_completion(result: str = "Task completed") -> dict[str, Any]:
+def llm_response_completion(
+    result: str = "Task completed", artifacts: list[str] | None = None
+) -> dict[str, Any]:
     """LLM calls the completion tool -> triggers task_complete."""
     return {
         "content": "",
@@ -47,7 +49,7 @@ def llm_response_completion(result: str = "Task completed") -> dict[str, Any]:
                 "type": "function",
                 "function": {
                     "name": "completion",
-                    "arguments": json.dumps({"result": result}),
+                    "arguments": json.dumps({"result": result, "artifacts": artifacts or []}),
                 },
             }
         ],

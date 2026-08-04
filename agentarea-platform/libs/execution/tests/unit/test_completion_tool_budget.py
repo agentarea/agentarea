@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
-from agentarea_execution.workflows.helpers import CONTROL_FLOW_TOOLS
+from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
 from agentarea_execution.workflows.models import ToolCall
 
 
@@ -54,7 +54,7 @@ async def test_completion_is_excluded_from_per_turn_capability_count() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("tool_name", sorted(CONTROL_FLOW_TOOLS))
+@pytest.mark.parametrize("tool_name", sorted(CONTROL_FLOW_TOOL_NAMES))
 async def test_no_control_flow_tool_consumes_tool_call_budget(tool_name: str) -> None:
     """Budget classification must use the same canonical set disclosure uses."""
     instance = _workflow(used=1, total=1)

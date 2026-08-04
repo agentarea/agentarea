@@ -133,10 +133,27 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 func (r *ProviderRuntime) authorize(instanceType string, instance *models.MCPServerInstance) error {
 	if instanceType == "command" {
 		command, _ := instance.JSONSpec["command"].(string)
-		return r.imagePolicy.AuthorizeCommand(command)
+		return r.imagePolicy.AuthorizeCommand(command, commandArgs(instance.JSONSpec))
 	}
 	image, _ := instance.JSONSpec["image"].(string)
 	return r.imagePolicy.AuthorizeImage(image)
+}
+
+// commandArgs reads the stdio arguments the same way the Kubernetes provider
+// does when it builds the container command, so admission judges the invocation
+// that will actually run.
+func commandArgs(jsonSpec map[string]any) []string {
+	raw, ok := jsonSpec["args"].([]any)
+	if !ok {
+		return nil
+	}
+	args := make([]string, 0, len(raw))
+	for _, entry := range raw {
+		if arg, ok := entry.(string); ok {
+			args = append(args, arg)
+		}
+	}
+	return args
 }
 
 func (r *ProviderRuntime) cleanupFailedStart(instance *models.MCPServerInstance, cause error) error {

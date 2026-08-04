@@ -26,6 +26,7 @@ with workflow.unsafe.imports_passed_through():
     )
     from agentarea_common.money import ZERO, Money, serialize_money, to_money
     from agentarea_governance.domain.policies import effective_policy_from_json
+    from agentarea_governance.domain.tool_calls import metered_tool_call_count
 
     from .context_manager import (
         ContextWindowManager,
@@ -40,7 +41,6 @@ with workflow.unsafe.imports_passed_through():
         resolve_context_strategy,
     )
     from .helpers import (
-        CONTROL_FLOW_TOOLS,
         BudgetTracker,
         EventManager,
         MessageBuilder,
@@ -484,8 +484,8 @@ class AgentExecutionWorkflow:
         try:
             current_policy = effective_policy_from_json(self.state.effective_policy)
             next_policy = effective_policy_from_json(info.effective_policy)
-            current_policy.require_runtime_contract()
-            next_policy.require_runtime_contract()
+            current_policy.runtime_contract()
+            next_runtime = next_policy.runtime_contract()
         except (TypeError, ValueError):
             return None, {"accepted": False, "reason": "invalid_governance_snapshot"}
 
@@ -496,10 +496,10 @@ class AgentExecutionWorkflow:
             return None, {"accepted": False, "reason": "invalid_governance_snapshot"}
 
         expected_iterations = self.state.goal.max_iterations + info.additional_iterations
-        if next_policy.execution.max_model_turns != expected_iterations:
+        if next_runtime.max_model_turns != expected_iterations:
             return None, {"accepted": False, "reason": "policy_revision_mismatch"}
         expected_budget = self._budget.budget_limit + (info.additional_budget_usd or ZERO)
-        if next_policy.budget.run_budget_usd != expected_budget:
+        if next_runtime.run_budget_usd != expected_budget:
             return None, {"accepted": False, "reason": "policy_revision_mismatch"}
 
         current_contract = current_policy.to_json_dict()
@@ -522,12 +522,14 @@ class AgentExecutionWorkflow:
     ) -> dict[str, Any]:
         """Commit a policy revision after its task snapshot is durable."""
         next_policy = effective_policy_from_json(info.effective_policy)
-        next_policy.require_runtime_contract()
+        next_runtime = next_policy.runtime_contract()
         if self.state.goal is None:
             raise RuntimeError("goal is not initialized")
 
-        self.state.goal.max_iterations = next_policy.execution.max_model_turns
-        self._budget.set_limit(next_policy.budget.run_budget_usd)
+        self.state.goal = self.state.goal.model_copy(
+            update={"max_iterations": next_runtime.max_model_turns}
+        )
+        self._budget.set_limit(next_runtime.run_budget_usd)
         self.state.budget_usd = self._budget.budget_limit
         self.state.effective_policy = next_policy.to_json_dict()
 
@@ -1820,9 +1822,16 @@ class AgentExecutionWorkflow:
             # Pool lives in workflow state; only this name+description block is
             # sent to the LLM until it explicitly calls load_tools(...).
             if self._disclosure_policy and self.state.searchable_tool_pool:
+                context_window = self.state.context_window
+                if context_window is None:
+                    raise ApplicationError(
+                        "execution state has no ModelSpec context_window",
+                        type="InvalidExecutionSnapshot",
+                        non_retryable=True,
+                    )
                 ctx = DisclosureContext(
                     model_name=str(self.state.agent_config.get("model_id", "")),
-                    context_window=self.state.context_window,
+                    context_window=context_window,
                     iteration=self.state.current_iteration,
                 )
                 pool = [ToolCandidate(**c) for c in self.state.searchable_tool_pool]
@@ -2174,6 +2183,40 @@ class AgentExecutionWorkflow:
         """
         import asyncio
 
+        execution_limits = (self.state.effective_policy or {}).get("execution") or {}
+        max_per_turn = execution_limits.get("max_tool_calls_per_turn")
+        max_total = execution_limits.get("max_tool_calls_total")
+        if not isinstance(max_per_turn, int) or max_per_turn <= 0:
+            raise ApplicationError(
+                "effective policy is missing execution.max_tool_calls_per_turn",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
+        if not isinstance(max_total, int) or max_total <= 0:
+            raise ApplicationError(
+                "effective policy is missing execution.max_tool_calls_total",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
+        metered_calls_this_turn = metered_tool_call_count(
+            tool_call.function["name"] for tool_call in tool_calls
+        )
+        if metered_calls_this_turn > max_per_turn:
+            raise ApplicationError(
+                f"model requested {metered_calls_this_turn} metered tool calls; "
+                f"policy allows {max_per_turn} per turn",
+                type="ToolCallLimitExceeded",
+                non_retryable=True,
+            )
+        attempted_total = self.state.tool_calls_used + metered_calls_this_turn
+        if attempted_total > max_total:
+            raise ApplicationError(
+                f"tool-call budget exceeded: {attempted_total}/{max_total}",
+                type="ToolCallLimitExceeded",
+                non_retryable=True,
+            )
+        self.state.tool_calls_used = attempted_total
+
         completion_calls: list[ToolCall] = []
         agent_calls: list[ToolCall] = []
         regular_calls: list[ToolCall] = []
@@ -2212,45 +2255,6 @@ class AgentExecutionWorkflow:
                 non_retryable=True,
             )
         completion_call = completion_calls[0] if completion_calls else None
-
-        # Control-flow tools are workflow signals, not capability invocations:
-        # they reach no external system and stay disclosed under a deny-by-default
-        # policy, so none of them may consume or exceed the tool-call budget.
-        # CONTROL_FLOW_TOOLS is the single classification used here and by
-        # disclosure, so the two can never drift apart.
-        capability_call_count = sum(
-            1 for call in tool_calls if call.function["name"] not in CONTROL_FLOW_TOOLS
-        )
-        execution_limits = (self.state.effective_policy or {}).get("execution") or {}
-        max_per_turn = execution_limits.get("max_tool_calls_per_turn")
-        max_total = execution_limits.get("max_tool_calls_total")
-        if not isinstance(max_per_turn, int) or max_per_turn <= 0:
-            raise ApplicationError(
-                "effective policy is missing execution.max_tool_calls_per_turn",
-                type="InvalidExecutionSnapshot",
-                non_retryable=True,
-            )
-        if not isinstance(max_total, int) or max_total <= 0:
-            raise ApplicationError(
-                "effective policy is missing execution.max_tool_calls_total",
-                type="InvalidExecutionSnapshot",
-                non_retryable=True,
-            )
-        if capability_call_count > max_per_turn:
-            raise ApplicationError(
-                f"model requested {capability_call_count} capability calls; "
-                f"policy allows {max_per_turn} per turn",
-                type="ToolCallLimitExceeded",
-                non_retryable=True,
-            )
-        attempted_total = self.state.tool_calls_used + capability_call_count
-        if attempted_total > max_total:
-            raise ApplicationError(
-                f"tool-call budget exceeded: {attempted_total}/{max_total}",
-                type="ToolCallLimitExceeded",
-                non_retryable=True,
-            )
-        self.state.tool_calls_used = attempted_total
 
         # User-input requests are exclusive: the workflow must pause and get a
         # reply before any further side effects or final completion happen.
@@ -3349,9 +3353,16 @@ class AgentExecutionWorkflow:
             return
 
         pool = [ToolCandidate(**c) for c in self.state.searchable_tool_pool]
+        context_window = self.state.context_window
+        if context_window is None:
+            raise ApplicationError(
+                "execution state has no ModelSpec context_window",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
         ctx = DisclosureContext(
             model_name=str(self.state.agent_config.get("model_id", "")),
-            context_window=self.state.context_window,
+            context_window=context_window,
             iteration=self.state.current_iteration,
         )
         result = self._disclosure_policy.reveal(RevealRequest(tool_names=requested), pool, ctx)
@@ -3595,6 +3606,8 @@ class AgentExecutionWorkflow:
         )
         await self._publish_events_immediately()
 
+        child_task_created = False
+        child_cost_accounted = False
         try:
             # Create a task record in DB for the child agent
             create_task_request = CreateDelegationTaskRequest(

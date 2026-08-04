@@ -394,7 +394,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 name=agent.name,
                 description=agent.description or "",
                 instruction=(agent.instruction or "")
-                + render_runtime_prompt(runtime),
+                + render_runtime_prompt(
+                    runtime,
+                    has_org_context=any(
+                        t.get("name") == "agentarea/context"
+                        for t in _as_tool_config_list(agent.tools)
+                    ),
+                ),
                 agent_type=getattr(agent, "agent_type", "stateless") or "stateless",
                 model_id=model_id_str or "",
                 context_window=context_window,

@@ -47,9 +47,7 @@ class _RecordingClient:
         self.request_headers: list[dict[str, str]] = []
         self.delete_calls: list[str] = []
 
-    async def post(
-        self, url: str, *, content: bytes, headers: dict[str, str]
-    ) -> _FakeResponse:
+    async def post(self, url: str, *, content: bytes, headers: dict[str, str]) -> _FakeResponse:
         payload = json.loads(content)
         self.calls.append((url, payload))
         self.request_headers.append(headers)
@@ -240,7 +238,9 @@ async def test_bash_propagates_workflow_id_from_ctx():
     assert "args" not in payload["command"]
     assert fake.get_calls == ["http://mcp-manager:8000/sandbox/executions/sexec-test"]
     assert all(header["Authorization"].startswith("Bearer ") for header in fake.request_headers)
-    assert all(header["X-Agentarea-Workspace-ID"] == "workspace-1" for header in fake.request_headers)
+    assert all(
+        header["X-Agentarea-Workspace-ID"] == "workspace-1" for header in fake.request_headers
+    )
     # Python schedules the command only. The Go workspace runtime resolves the
     # task input manifest and materializes it before execution.
     assert repository.list_prefixes == []
@@ -367,7 +367,12 @@ async def test_bash_rejects_output_ref_that_does_not_match_committed_identity():
 @pytest.mark.asyncio
 async def test_bash_handles_empty_command():
     fake = _RecordingClient(_FakeResponse(payload={}))
-    tool = ShellToolset(mcp_manager_url="http://mcp:8000", ctx=_ctx("w"), auth_secret=TEST_CONTROL_SECRET, http_client=fake)
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp:8000",
+        ctx=_ctx("w"),
+        auth_secret=TEST_CONTROL_SECRET,
+        http_client=fake,
+    )
     result = await tool.bash("   ")
     assert result["success"] is False
     assert result["result"].startswith("Error:")

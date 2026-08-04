@@ -32,6 +32,8 @@ async def fetch_runtime_manifest(
 
 def render_runtime_prompt(
     result: RuntimeDiscoveryResult,
+    *,
+    has_org_context: bool = False,
 ) -> str:
     manifest = result.manifest
     if manifest is None:
@@ -50,6 +52,14 @@ def render_runtime_prompt(
     else:
         browser_policy = "Browser automation: Playwright is available."
 
+    org_context_line = (
+        "- Organization library: read the organization's shared files with the "
+        "`list_org_files` and `read_org_file` tools (read-only). It is never changed by "
+        "anything you do in the sandbox.\n"
+        if has_org_context
+        else ""
+    )
+
     return (
         "\n\n# Runtime environment\n\n"
         f"- Image: {manifest.image_version}\n"
@@ -61,8 +71,7 @@ def render_runtime_prompt(
         "- Arbitrary workspace code is supported. Network access and managed-environment "
         "behavior are defined by the active runtime."
         "\n\n# Workspace and context\n\n"
-        "- Organization context store: read shared organization files with the context tool "
-        "(read-only). It is never changed by anything you do in the sandbox.\n"
+        f"{org_context_line}"
         "- Your working directory is the live task workspace. User-provided inputs are under "
         "`/workspace/inputs`. File and shell tools operate on the same live filesystem.\n"
         "- Live workspace files are ephemeral. A file survives the task only if you list its "

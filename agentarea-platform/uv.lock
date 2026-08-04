@@ -259,6 +259,7 @@ version = "0.0.13"
 source = { editable = "libs/execution" }
 dependencies = [
     { name = "agentarea-agents-sdk" },
+    { name = "agentarea-governance" },
     { name = "agentarea-payment" },
     { name = "agentarea-wallet" },
     { name = "prometheus-client" },
@@ -276,6 +277,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agentarea-agents-sdk", editable = "libs/agentarea-agents-sdk" },
+    { name = "agentarea-governance", editable = "libs/governance" },
     { name = "agentarea-payment", editable = "libs/payment" },
     { name = "agentarea-wallet", editable = "libs/wallet" },
     { name = "prometheus-client", specifier = ">=0.23.0" },

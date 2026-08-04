@@ -105,13 +105,49 @@ func TestCommandInstancesAreGatedSeparatelyFromImages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := policy.AuthorizeCommand("mcp-server-notion"); err != nil {
+	if err := policy.AuthorizeCommand("mcp-server-notion", nil); err != nil {
 		t.Fatalf("AuthorizeCommand admitted nothing: %v", err)
 	}
 	for _, command := range []string{"curl", "mcp-server-evil", "", "  "} {
-		if err := policy.AuthorizeCommand(command); err == nil {
+		if err := policy.AuthorizeCommand(command, nil); err == nil {
 			t.Fatalf("AuthorizeCommand(%q) admitted an undeclared package", command)
 		}
+	}
+}
+
+// Admitting the interpreter would admit everything it can fetch, so the
+// arguments are part of the decision: `npx` is not a package, `npx -y <pkg>` is.
+func TestAllowingOneNpxPackageDoesNotAllowEveryNpxPackage(t *testing.T) {
+	const admitted = "npx -y @modelcontextprotocol/server-everything"
+	policy, err := policyFrom(t, "ghcr.io/agentarea/mcp", admitted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := policy.AuthorizeCommand("npx", []string{"-y", "@modelcontextprotocol/server-everything"}); err != nil {
+		t.Fatalf("the declared invocation was refused: %v", err)
+	}
+	refused := [][]string{
+		nil,
+		{"-y", "@attacker/exfiltrate"},
+		{"-y", "--package=@attacker/exfiltrate", "@modelcontextprotocol/server-everything"},
+		{"-y", "@modelcontextprotocol/server-everything", "--extra"},
+	}
+	for _, args := range refused {
+		if err := policy.AuthorizeCommand("npx", args); err == nil {
+			t.Fatalf("npx %v was admitted by a policy that only declared %q", args, admitted)
+		}
+	}
+}
+
+// The gate reads the arguments the provider will actually run, not a
+// differently-shaped copy of them.
+func TestCommandArgsAreReadTheSameWayTheProviderBuildsThem(t *testing.T) {
+	args := commandArgs(map[string]any{"args": []any{"-y", "@scope/pkg"}})
+	if strings.Join(args, " ") != "-y @scope/pkg" {
+		t.Fatalf("unexpected args: %v", args)
+	}
+	if got := commandArgs(map[string]any{}); got != nil {
+		t.Fatalf("a spec without args yielded %v", got)
 	}
 }
 

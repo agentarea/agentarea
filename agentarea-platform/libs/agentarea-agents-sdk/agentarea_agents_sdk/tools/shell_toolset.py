@@ -252,7 +252,9 @@ async def wait_for_sandbox_execution(
                 )
                 continue
             if status == "running" and not record.get("execution_expires_at"):
-                raise SandboxHTTPError("invalid sandbox status response: running execution has no deadline")
+                raise SandboxHTTPError(
+                    "invalid sandbox status response: running execution has no deadline"
+                )
 
             headers = signer.headers("execution.read", execution_id=execution_id)
             resp = await client.get(
@@ -274,7 +276,9 @@ async def wait_for_sandbox_execution(
             try:
                 await _cancel_pending_execution(client, mcp_manager_url, signer, execution_id)
             except Exception:
-                logger.exception("failed to cancel abandoned pending sandbox execution %s", execution_id)
+                logger.exception(
+                    "failed to cancel abandoned pending sandbox execution %s", execution_id
+                )
 
 
 async def _cancel_pending_execution(
@@ -311,7 +315,9 @@ def _deadline_reached(value: Any) -> bool:
     try:
         deadline = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
-        raise SandboxHTTPError("invalid sandbox status response: malformed queue_expires_at") from exc
+        raise SandboxHTTPError(
+            "invalid sandbox status response: malformed queue_expires_at"
+        ) from exc
     return datetime.now(UTC) >= deadline
 
 

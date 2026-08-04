@@ -46,18 +46,39 @@ def _app_for(task_service, context: UserContext) -> FastAPI:
 def test_task_artifact_download_url_is_api_relative():
     agent_id = uuid4()
     task_id = uuid4()
+    artifact_id = "art_0123456789abcdef0123456789abcdef"
 
-    url = agents_tasks._task_artifact_download_url(
-        agent_id,
-        task_id,
-        f"tasks/{task_id}/report with spaces.html",
-    )
+    url = agents_tasks._task_artifact_download_url(agent_id, task_id, artifact_id)
 
-    assert url == (
-        f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/"
-        f"tasks/{task_id}/report%20with%20spaces.html"
-    )
+    assert url == f"/v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_id}"
     assert "agentarea-backend" not in url
+
+
+@pytest.mark.asyncio
+async def test_task_artifact_download_rejects_anything_but_an_opaque_id():
+    """Artifacts are addressed by minted id, never by workspace path.
+
+    The id is the whole reason the route cannot be walked out of the task's
+    own artifacts: a path-shaped identifier is refused before the request ever
+    reaches the sandbox manager.
+    """
+    agent_id = uuid4()
+    context = UserContext(user_id="user-a", workspace_id="workspace-a")
+    task = _task(agent_id)
+    task_service = SimpleNamespace(get_task=AsyncMock(return_value=task))
+    app = _app_for(task_service, context)
+    app.dependency_overrides[agents_tasks.get_read_task_service] = lambda: task_service
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            f"/v1/agents/{agent_id}/tasks/{task.id}/artifacts/files/"
+            "tasks/other-task/report.html"
+        )
+
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio

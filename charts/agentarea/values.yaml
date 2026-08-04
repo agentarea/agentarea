@@ -637,15 +637,27 @@ mcpManager:
   # there is no kernel boundary behind it, so the set has to be closed by name.
   #
   # At least one list must be non-empty or no instance could ever start.
+  # Both lists below ship a small trusted starter set rather than an empty one,
+  # so a default install has something runnable. Narrow or replace them to match
+  # what your catalog actually offers.
   admission:
     # Image repositories, without tag or digest, e.g.
     # "ghcr.io/vendor/notion-mcp". Any tag in an admitted repository is allowed;
     # pin digests in the catalog when you need immutability.
-    allowedImageRepositories: []
-    # Executables a command-type (stdio) instance may run, e.g.
-    # "mcp-server-notion". Without this list, a command instance would reach
-    # arbitrary code through our own bridge image and bypass the one above.
-    allowedCommandPackages: []
+    allowedImageRepositories:
+      - ghcr.io/github/github-mcp-server
+      - mcp/fetch
+    # Whole stdio invocations a command-type instance may run, executable and
+    # arguments together, exactly as the catalog spells them: npm packages come
+    # through as "npx -y <package>" and PyPI ones as "uvx <package>". The
+    # arguments are part of the entry because the executable alone is not a
+    # gate — npx and uvx will fetch and run whatever package they are pointed
+    # at, so admitting "npx" would admit all of npm through our bridge image.
+    allowedCommandPackages:
+      - npx -y @modelcontextprotocol/server-everything
+      - npx -y @modelcontextprotocol/server-sequential-thinking
+      - uvx mcp-server-fetch
+      - uvx mcp-server-time
 
   # Untrusted MCP runtime and sandbox task pods use this zero-RBAC
   # ServiceAccount instead of the control-plane ServiceAccount.

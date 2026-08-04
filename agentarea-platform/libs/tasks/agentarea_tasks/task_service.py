@@ -394,6 +394,20 @@ class TaskService(BaseTaskService):
                 {"max_iterations": requested_value},
             )
 
+        parameters = dict(payload.parameters)
+        task_policy = payload.task_policy
+        if payload.execution is not None:
+            legacy_value = parameters.get("max_iterations")
+            requested_value = payload.execution.max_model_turns
+            if legacy_value is not None and legacy_value != requested_value:
+                raise PolicyValidationError(
+                    "execution.max_model_turns conflicts with parameters.max_iterations"
+                )
+            task_policy = self._with_requested_execution_limits(
+                task_policy,
+                {"max_iterations": requested_value},
+            )
+
         return await self.create_and_execute_task_with_workflow(
             agent_id=payload.agent_id,
             description=payload.description,
@@ -761,7 +775,7 @@ class TaskService(BaseTaskService):
         if not isinstance(current_policy_data, dict):
             return {"accepted": False, "reason": "governance_snapshot_missing"}
         current_policy = effective_policy_from_json(current_policy_data)
-        current_policy.require_runtime_contract()
+        current_runtime = current_policy.runtime_contract()
 
         requested_policy = PolicyDocument.model_validate(
             current_snapshot.get("requested_policy") or {}
@@ -769,14 +783,12 @@ class TaskService(BaseTaskService):
         requested_data = requested_policy.to_json_dict()
         if additional_iterations:
             execution = dict(requested_data.get("execution") or {})
-            execution["max_model_turns"] = (
-                current_policy.execution.max_model_turns + additional_iterations
-            )
+            execution["max_model_turns"] = current_runtime.max_model_turns + additional_iterations
             requested_data["execution"] = execution
         if additional_budget_usd is not None:
             budget = dict(requested_data.get("budget") or {})
             budget["run_budget_usd"] = serialize_money(
-                current_policy.budget.run_budget_usd + additional_budget_usd
+                current_runtime.run_budget_usd + additional_budget_usd
             )
             requested_data["budget"] = budget
         requested_policy = PolicyDocument.model_validate(requested_data)
@@ -788,17 +800,19 @@ class TaskService(BaseTaskService):
                 task_id=task.id,
                 task_policy=requested_policy,
             )
-            next_policy.require_runtime_contract()
+            next_policy.runtime_contract()
         except PolicyValidationError:
             return {"accepted": False, "reason": "policy_ceiling"}
 
-        resolved_execution = next_policy.execution.model_dump(exclude_none=True)
+        resolved_execution = next_policy.execution
+        if resolved_execution is None:
+            return {"accepted": False, "reason": "governance_snapshot_missing"}
         next_snapshot = {
             "requested_policy": requested_policy.to_json_dict(),
             "requested_execution": requested_policy.execution.model_dump(exclude_none=True)
             if requested_policy.execution is not None
             else {},
-            "resolved_execution": resolved_execution,
+            "resolved_execution": resolved_execution.model_dump(exclude_none=True),
             "effective_policy": next_policy.to_json_dict(),
             "resolved_at": datetime.now(UTC).isoformat(),
             "revision": int(current_snapshot.get("revision") or 1) + 1,
