@@ -102,6 +102,22 @@ control plane running inside its own cluster still schedules onto this one. If
 the file cannot be loaded, the manager refuses to start rather than quietly
 using the cluster it happens to live in.
 
+Through the Helm chart the same thing is a Secret plus two values, and the chart
+derives the path:
+
+```bash
+kubectl create secret generic exec-kubeconfig \
+  --from-file=kubeconfig=./execution-cluster.kubeconfig
+```
+
+```yaml
+mcpManager:
+  runtimeClass: gvisor
+  executionCluster:
+    kubeconfigSecret: exec-kubeconfig
+    kubeconfigKey: kubeconfig
+```
+
 The play refuses to finish unless a pod actually ran under gVisor: it schedules
 one with `runtimeClassName: gvisor` and greps `dmesg` for the gVisor kernel
 banner. A provisioning run that skipped that check would prove nothing.

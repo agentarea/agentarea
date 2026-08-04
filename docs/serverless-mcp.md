@@ -99,6 +99,27 @@ inside its own cluster still schedules onto this one. An unloadable file, or an
 unrecognised `BACKEND_TYPE`, stops the manager rather than silently using
 whatever is nearest.
 
+On Helm, put the kubeconfig in a Secret and name it. The chart mounts it into
+every process that creates workloads and sets `KUBERNETES_KUBECONFIG` to the
+mounted path:
+
+```bash
+kubectl create secret generic exec-kubeconfig \
+  --from-file=kubeconfig=./execution-cluster.kubeconfig
+```
+
+```yaml
+mcpManager:
+  runtimeClass: gvisor
+  executionCluster:
+    kubeconfigSecret: exec-kubeconfig
+    kubeconfigKey: kubeconfig
+```
+
+Name both fields or neither. Naming one alone stops the render, because a
+half-configured execution cluster would otherwise deploy as in-cluster mode —
+untrusted workloads back on the control plane's nodes, with nothing to say so.
+
 **3. Turn serverless on** with the values above, and confirm with the checks
 under *Verifying it works*.
 

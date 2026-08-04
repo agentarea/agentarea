@@ -320,6 +320,8 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.admission.allowedCommandPackages[1] | string | `"npx -y @modelcontextprotocol/server-sequential-thinking"` |  |
 | mcpManager.admission.allowedCommandPackages[2] | string | `"uvx mcp-server-fetch"` |  |
 | mcpManager.admission.allowedCommandPackages[3] | string | `"uvx mcp-server-time"` |  |
+| mcpManager.executionCluster.kubeconfigSecret | string | `""` |  |
+| mcpManager.executionCluster.kubeconfigKey | string | `""` |  |
 | mcpManager.runtime.serviceAccount.create | bool | `true` |  |
 | mcpManager.runtime.serviceAccount.name | string | `""` |  |
 | mcpManager.runtime.imagePullSecrets | list | `[]` |  |

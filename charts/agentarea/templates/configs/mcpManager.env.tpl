@@ -18,6 +18,7 @@ KUBERNETES_RUNTIME_CLASS: "{{ .Values.mcpManager.runtimeClass }}"
 DEFAULT_ISOLATION_TIER: "{{ required "mcpManager.isolationTier is required" .Values.mcpManager.isolationTier }}"
 MCP_ALLOWED_IMAGE_REPOSITORIES: "{{ join "," .Values.mcpManager.admission.allowedImageRepositories }}"
 MCP_ALLOWED_COMMAND_PACKAGES: "{{ join "," .Values.mcpManager.admission.allowedCommandPackages }}"
+KUBERNETES_KUBECONFIG: "{{ include "agentarea.mcpManager.executionKubeconfigPath" . }}"
 KUBERNETES_POD_SERVICE_ACCOUNT_NAME: "{{ include "agentarea.mcpRuntimeServiceAccountName" . }}"
 SANDBOX_WORKSPACE_PROVIDER: "s3"
 SANDBOX_WORKSPACE_MAX_FILES: "{{ .Values.sandboxRuntime.workspace.maxFiles }}"
@@ -113,6 +114,11 @@ MCP_GATEWAY_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: MCP_ALLOWED_COMMAND_PACKAGES
+- name: KUBERNETES_KUBECONFIG
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: KUBERNETES_KUBECONFIG
 - name: KUBERNETES_POD_SERVICE_ACCOUNT_NAME
   valueFrom:
     configMapKeyRef:

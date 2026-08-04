@@ -123,17 +123,25 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 6
-          {{- if eq (default "kubernetes" .Values.mcpManager.backend) "docker" }}
-          # Docker backend: drive containers through the host Docker socket.
+          {{- $dockerBackend := eq (default "kubernetes" .Values.mcpManager.backend) "docker" }}
+          {{- $execKubeconfig := include "agentarea.mcpManager.executionKubeconfigPath" . }}
+          {{- if or $dockerBackend $execKubeconfig }}
           volumeMounts:
+            {{- if $dockerBackend }}
+            # Docker backend: drive containers through the host Docker socket.
             - name: docker-sock
               mountPath: /var/run/docker.sock
+            {{- end }}
+            {{- include "agentarea.mcpManager.executionKubeconfigMount" . | nindent 12 }}
+          {{- end }}
+      {{- if or $dockerBackend $execKubeconfig }}
       volumes:
+        {{- if $dockerBackend }}
         - name: docker-sock
           hostPath:
             path: /var/run/docker.sock
             type: Socket
-      {{- else }}
-          # Kubernetes backend - no special volumes needed
+        {{- end }}
+        {{- include "agentarea.mcpManager.executionKubeconfigVolume" . | nindent 8 }}
       {{- end }}
 {{- end }}

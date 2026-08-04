@@ -54,4 +54,13 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- $execKubeconfig := include "agentarea.mcpManager.executionKubeconfigPath" . }}
+          {{- if $execKubeconfig }}
+          volumeMounts:
+            {{- include "agentarea.mcpManager.executionKubeconfigMount" . | nindent 12 }}
+          {{- end }}
+      {{- if $execKubeconfig }}
+      volumes:
+        {{- include "agentarea.mcpManager.executionKubeconfigVolume" . | nindent 8 }}
+      {{- end }}
 {{- end }}

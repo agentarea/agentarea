@@ -333,6 +333,73 @@ Create the name of the MCP runtime service account.
 {{- end }}
 
 {{/*
+Directory the execution cluster kubeconfig is projected into. One definition
+feeds both the volume mount and the path handed to the manager, so the two
+cannot drift; it matches the path the dev compose stack uses.
+*/}}
+{{- define "agentarea.mcpManager.executionKubeconfigDir" -}}
+/etc/agentarea/exec
+{{- end -}}
+
+{{/*
+Path of the execution cluster kubeconfig inside the mcp-manager pod, or empty
+when no execution cluster is configured — the manager reads empty as "use the
+cluster I am in".
+
+Half-configuration is refused rather than rendered. A key without a Secret, or
+a Secret without a key, would otherwise render as in-cluster mode: untrusted
+MCP servers and agent sandboxes landing on the control plane's nodes while the
+operator believes they were moved off, with nothing in the output to say so.
+*/}}
+{{- define "agentarea.mcpManager.executionKubeconfigPath" -}}
+{{- $exec := .Values.mcpManager.executionCluster | default dict -}}
+{{- $secret := $exec.kubeconfigSecret | default "" -}}
+{{- $key := $exec.kubeconfigKey | default "" -}}
+{{- if and $secret (not $key) -}}
+{{- fail "mcpManager.executionCluster.kubeconfigSecret is set but kubeconfigKey is empty: name the key inside that Secret that holds the kubeconfig" -}}
+{{- end -}}
+{{- if and $key (not $secret) -}}
+{{- fail "mcpManager.executionCluster.kubeconfigKey is set but kubeconfigSecret is empty: name the existing Secret holding the execution cluster kubeconfig, or clear kubeconfigKey to run workloads in this cluster" -}}
+{{- end -}}
+{{- if $secret -}}
+{{- printf "%s/%s" (include "agentarea.mcpManager.executionKubeconfigDir" .) $key -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Mount and volume for the execution cluster kubeconfig; both render empty when
+no execution cluster is configured.
+
+Every workload that builds a Kubernetes backend from the mcpManager env block
+needs these, and that is not only the manager: the sandbox runner builds the
+same backend from the same KUBERNETES_KUBECONFIG and exits if the file it names
+is absent. Keeping the pair here is what stops one deployment from getting the
+path without the file.
+*/}}
+{{- define "agentarea.mcpManager.executionKubeconfigMount" }}
+{{- if include "agentarea.mcpManager.executionKubeconfigPath" . }}
+# Credentials for the separate execution cluster, at the path handed to the
+# process as KUBERNETES_KUBECONFIG.
+- name: execution-kubeconfig
+  mountPath: {{ include "agentarea.mcpManager.executionKubeconfigDir" . }}
+  readOnly: true
+{{- end }}
+{{- end }}
+
+{{- define "agentarea.mcpManager.executionKubeconfigVolume" }}
+{{- if include "agentarea.mcpManager.executionKubeconfigPath" . }}
+- name: execution-kubeconfig
+  secret:
+    secretName: {{ .Values.mcpManager.executionCluster.kubeconfigSecret | quote }}
+    # Project only the configured key, so an unrelated entry in the same Secret
+    # never becomes a file in this pod.
+    items:
+      - key: {{ .Values.mcpManager.executionCluster.kubeconfigKey | quote }}
+        path: {{ .Values.mcpManager.executionCluster.kubeconfigKey | quote }}
+{{- end }}
+{{- end }}
+
+{{/*
 Frontend URL
 */}}
 {{- define "agentarea.frontendUrl" -}}
