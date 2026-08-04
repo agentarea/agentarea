@@ -82,6 +82,79 @@ func (a *backendAdapter) DeleteInstance(ctx context.Context, instanceID string) 
 	return a.inner.DeleteInstance(ctx, instanceID)
 }
 
+func initBackend(
+	ctx context.Context,
+	cfg *config.Config,
+	logger *slog.Logger,
+	taskLeaseTTL time.Duration,
+) (string, backends.Backend, *container.Manager) {
+	if cfg.Environment != "" {
+		logger.Info("Using forced environment", slog.String("environment", cfg.Environment))
+	}
+
+	envType, err := environment.DetectEnvironment(cfg.Environment, logger)
+	if err != nil {
+		logger.Error("Refusing to start", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	logger.Info("Environment detected", slog.String("type", envType))
+
+	var backend backends.Backend
+	var containerManager *container.Manager
+
+	switch envType {
+	case "kubernetes":
+		logger.Info("Initializing Kubernetes backend")
+		k8sBackend, err := backends.NewKubernetesBackend(cfg, logger, taskLeaseTTL)
+		if err != nil {
+			logger.Error("Failed to create Kubernetes backend", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		backend = k8sBackend
+
+	case "docker":
+		logger.Info("Initializing Docker backend")
+		dockerBackend := backends.NewDockerBackend(cfg, logger)
+		backend = dockerBackend
+
+		// Get the container manager from the docker backend for compatibility
+		containerManager = dockerBackend.GetManager()
+
+	default:
+		logger.Error("Unsupported environment type", slog.String("type", envType))
+		os.Exit(1)
+	}
+
+	if err := backend.Initialize(ctx); err != nil {
+		logger.Error("Failed to initialize backend", slog.String("environment", envType), slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	return envType, backend, containerManager
+}
+
+func initProviderManager(
+	envType string,
+	backend backends.Backend,
+	containerManager *container.Manager,
+	secretResolver secrets.SecretResolver,
+	logger *slog.Logger,
+) *providers.ProviderManager {
+	urlProvider := providers.NewURLProvider(logger)
+	switch {
+	case envType == "docker" && containerManager != nil:
+		dockerProvider := providers.NewDockerProvider(secretResolver, containerManager, logger)
+		return providers.NewProviderManager(dockerProvider, nil, urlProvider)
+	case envType == "kubernetes":
+		// For Kubernetes, create a Kubernetes provider that uses the backend
+		adapter := &backendAdapter{inner: backend}
+		kubernetesProvider := providers.NewKubernetesProvider(adapter, secretResolver, logger)
+		return providers.NewProviderManager(nil, kubernetesProvider, urlProvider)
+	default:
+		// Fallback - only URL provider
+		return providers.NewProviderManager(nil, nil, urlProvider)
+	}
+}
+
 func main() {
 	// Load configuration
 	cfg := config.Load()
@@ -125,54 +198,7 @@ func main() {
 	}
 
 	// Detect environment and initialize appropriate backend
-	var backend backends.Backend
-	var containerManager *container.Manager
-
-	if cfg.Environment != "" {
-		logger.Info("Using forced environment", slog.String("environment", cfg.Environment))
-	}
-
-	envType, err := environment.DetectEnvironment(cfg.Environment, logger)
-	if err != nil {
-		logger.Error("Refusing to start", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	logger.Info("Environment detected", slog.String("type", envType))
-
-	switch envType {
-	case "kubernetes":
-		logger.Info("Initializing Kubernetes backend")
-		k8sBackend, err := backends.NewKubernetesBackend(cfg, logger, sandboxPolicy.TaskLeaseTTL)
-		if err != nil {
-			logger.Error("Failed to create Kubernetes backend", slog.String("error", err.Error()))
-			os.Exit(1)
-		}
-		backend = k8sBackend
-
-		// Initialize Kubernetes backend
-		if err := backend.Initialize(ctx); err != nil {
-			logger.Error("Failed to initialize Kubernetes backend", slog.String("error", err.Error()))
-			os.Exit(1)
-		}
-
-	case "docker":
-		logger.Info("Initializing Docker backend")
-		dockerBackend := backends.NewDockerBackend(cfg, logger)
-		backend = dockerBackend
-
-		// Get the container manager from the docker backend for compatibility
-		containerManager = dockerBackend.GetManager()
-
-		// Initialize Docker backend (Traefik handles routing via container labels)
-		if err := backend.Initialize(ctx); err != nil {
-			logger.Error("Failed to initialize Docker backend", slog.String("error", err.Error()))
-			os.Exit(1)
-		}
-
-	default:
-		logger.Error("Unsupported environment type", slog.String("type", envType))
-		os.Exit(1)
-	}
+	envType, backend, containerManager := initBackend(ctx, cfg, logger, sandboxPolicy.TaskLeaseTTL)
 
 	// Initialize secret resolver with Infisical SDK
 	secretResolver, err := secrets.NewSecretResolver(logger)
@@ -187,22 +213,7 @@ func main() {
 		containerManager.SetSecretResolver(secretResolver)
 	}
 
-	// Initialize providers based on environment
-	var providerManager *providers.ProviderManager
-	urlProvider := providers.NewURLProvider(logger)
-
-	if envType == "docker" && containerManager != nil {
-		dockerProvider := providers.NewDockerProvider(secretResolver, containerManager, logger)
-		providerManager = providers.NewProviderManager(dockerProvider, nil, urlProvider)
-	} else if envType == "kubernetes" {
-		// For Kubernetes, create a Kubernetes provider that uses the backend
-		adapter := &backendAdapter{inner: backend}
-		kubernetesProvider := providers.NewKubernetesProvider(adapter, secretResolver, logger)
-		providerManager = providers.NewProviderManager(nil, kubernetesProvider, urlProvider)
-	} else {
-		// Fallback - only URL provider
-		providerManager = providers.NewProviderManager(nil, nil, urlProvider)
-	}
+	providerManager := initProviderManager(envType, backend, containerManager, secretResolver, logger)
 
 	// Container-backed MCP traffic always crosses this demand boundary. It is
 	// the sole owner of cold start, request leases, and idle reclamation; Python

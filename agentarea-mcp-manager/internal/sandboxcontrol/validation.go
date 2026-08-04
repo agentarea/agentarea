@@ -101,6 +101,19 @@ func validateExecutionRecord(record *ExecutionRecord, maxExecutionTimeoutSeconds
 	if err := validateInternalMetadata(record.Metadata); err != nil {
 		return err
 	}
+	if err := validateRecordWorkspaceRefs(record); err != nil {
+		return err
+	}
+	if err := validateExecutionResult(record.Result); err != nil {
+		return err
+	}
+	if err := validateBoundedString("error", record.Error, maxPersistedErrorBytes); err != nil {
+		return err
+	}
+	return validateRecordTimestamps(record)
+}
+
+func validateRecordWorkspaceRefs(record *ExecutionRecord) error {
 	if record.WorkspaceManifestRef != nil {
 		if err := validateManifestRef(record.WorkspaceManifestRef); err != nil {
 			return err
@@ -117,12 +130,10 @@ func validateExecutionRecord(record *ExecutionRecord, maxExecutionTimeoutSeconds
 			return fmt.Errorf("invalid output_ref: %w", err)
 		}
 	}
-	if err := validateExecutionResult(record.Result); err != nil {
-		return err
-	}
-	if err := validateBoundedString("error", record.Error, maxPersistedErrorBytes); err != nil {
-		return err
-	}
+	return nil
+}
+
+func validateRecordTimestamps(record *ExecutionRecord) error {
 	if record.CreatedAt.IsZero() || record.UpdatedAt.IsZero() || record.QueueExpiresAt.IsZero() || !record.QueueExpiresAt.After(record.CreatedAt) {
 		return fmt.Errorf("execution timestamps and queue expiry are invalid")
 	}

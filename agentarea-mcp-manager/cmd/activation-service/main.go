@@ -719,6 +719,31 @@ type ExecuteResponse struct {
 	WorkspaceChanges []workspace.ChangeDescriptor `json:"workspace_changes,omitempty"`
 }
 
+func validateExecuteRequestFields(req *ExecuteRequest) error {
+	if req.CommandBody == "" {
+		return fmt.Errorf("command_body is required")
+	}
+	if len(req.CommandBody) > maxCommandBodyBytes || strings.ContainsRune(req.CommandBody, 0) {
+		return fmt.Errorf("command_body is too large or malformed")
+	}
+	if req.TaskID == "" || req.WorkspaceID == "" {
+		return fmt.Errorf("task_id and workspace_id are required")
+	}
+	return nil
+}
+
+func executeOutputLimits(req *ExecuteRequest) (int64, int64, error) {
+	stdoutLimit, err := outputCaptureLimit(req.StdoutMaxBytes)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid stdout_max_bytes")
+	}
+	stderrLimit, err := outputCaptureLimit(req.StderrMaxBytes)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid stderr_max_bytes")
+	}
+	return stdoutLimit, stderrLimit, nil
+}
+
 func executeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
@@ -739,16 +764,8 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.CommandBody == "" {
-		http.Error(w, `{"error": "command_body is required"}`, http.StatusBadRequest)
-		return
-	}
-	if len(req.CommandBody) > maxCommandBodyBytes || strings.ContainsRune(req.CommandBody, 0) {
-		http.Error(w, `{"error": "command_body is too large or malformed"}`, http.StatusBadRequest)
-		return
-	}
-	if req.TaskID == "" || req.WorkspaceID == "" {
-		http.Error(w, `{"error": "task_id and workspace_id are required"}`, http.StatusBadRequest)
+	if err := validateExecuteRequestFields(req); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
 		return
 	}
 	if !authorizeActivationRequest(w, r, activationauth.ScopeExecute, activationauth.Identity{
@@ -768,14 +785,9 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	unlockWorkspace := lockWorkspaceMutation(req.WorkspaceID, req.TaskID)
 	defer unlockWorkspace()
 
-	stdoutLimit, err := outputCaptureLimit(req.StdoutMaxBytes)
+	stdoutLimit, stderrLimit, err := executeOutputLimits(req)
 	if err != nil {
-		http.Error(w, `{"error": "invalid stdout_max_bytes"}`, http.StatusBadRequest)
-		return
-	}
-	stderrLimit, err := outputCaptureLimit(req.StderrMaxBytes)
-	if err != nil {
-		http.Error(w, `{"error": "invalid stderr_max_bytes"}`, http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusBadRequest)
 		return
 	}
 
@@ -1025,10 +1037,6 @@ func collectArtifactsContext(ctx context.Context, workspace string, paths []stri
 	}
 
 	return artifacts, nil
-}
-
-func collectWorkspaceChanges(workspaceDir string, hydration *workspace.Hydration) ([]workspace.ChangeDescriptor, error) {
-	return collectWorkspaceChangesContext(context.Background(), workspaceDir, hydration)
 }
 
 func collectWorkspaceChangesContext(ctx context.Context, workspaceDir string, hydration *workspace.Hydration) ([]workspace.ChangeDescriptor, error) {
@@ -1370,40 +1378,69 @@ func fileContentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func fileContentPutHandler(w http.ResponseWriter, r *http.Request) {
+// fileUpload is the validated form of a streamed workspace write. Parsing it
+// away from the handler keeps every rejection in one place, so no field reaches
+// the filesystem on a path that skipped a check.
+type fileUpload struct {
+	workspaceID         string
+	taskID              string
+	executorIncarnation string
+	clean               string
+	expectedSHA256      string
+	expectedSize        int64
+	mode                uint32
+}
+
+func parseFileUpload(r *http.Request) (fileUpload, int, error) {
 	query := r.URL.Query()
-	workspaceID := query.Get("workspace_id")
-	taskID := query.Get("task_id")
-	executorIncarnation := query.Get("executor_incarnation")
+	upload := fileUpload{
+		workspaceID:         query.Get("workspace_id"),
+		taskID:              query.Get("task_id"),
+		executorIncarnation: query.Get("executor_incarnation"),
+		expectedSHA256:      query.Get("sha256"),
+	}
 	pathParam := query.Get("path")
-	expectedSHA256 := query.Get("sha256")
 	expectedSize, sizeErr := strconv.ParseInt(query.Get("size"), 10, 64)
 	modeValue, modeErr := strconv.ParseUint(query.Get("mode"), 8, 32)
-	if err := workspace.ValidateIdentifier("workspace_id", workspaceID); err != nil {
-		http.Error(w, `{"error": "invalid workspace_id"}`, http.StatusBadRequest)
-		return
+	if err := workspace.ValidateIdentifier("workspace_id", upload.workspaceID); err != nil {
+		return upload, http.StatusBadRequest, fmt.Errorf("invalid workspace_id")
 	}
-	if err := workspace.ValidateIdentifier("task_id", taskID); err != nil {
-		http.Error(w, `{"error": "invalid task_id"}`, http.StatusBadRequest)
-		return
+	if err := workspace.ValidateIdentifier("task_id", upload.taskID); err != nil {
+		return upload, http.StatusBadRequest, fmt.Errorf("invalid task_id")
 	}
 	clean, pathErr := cleanSandboxRelativePath(pathParam)
-	digest, digestErr := hex.DecodeString(expectedSHA256)
-	if pathErr != nil || strings.ContainsRune(pathParam, 0) || sizeErr != nil || expectedSize < 0 || modeErr != nil || modeValue == 0 || modeValue&^uint64(0o777) != 0 || digestErr != nil || len(digest) != sha256.Size || expectedSHA256 != strings.ToLower(expectedSHA256) {
-		http.Error(w, `{"error": "path, size, mode, and lowercase sha256 are required"}`, http.StatusBadRequest)
-		return
+	digest, digestErr := hex.DecodeString(upload.expectedSHA256)
+	if pathErr != nil || strings.ContainsRune(pathParam, 0) || sizeErr != nil || expectedSize < 0 || modeErr != nil || modeValue == 0 || modeValue&^uint64(0o777) != 0 || digestErr != nil || len(digest) != sha256.Size || upload.expectedSHA256 != strings.ToLower(upload.expectedSHA256) {
+		return upload, http.StatusBadRequest, fmt.Errorf("path, size, mode, and lowercase sha256 are required")
 	}
 	if expectedSize > servicePolicy.WorkspaceLimits.MaxFileBytes {
-		http.Error(w, `{"error": "file exceeds workspace per-file limit"}`, http.StatusRequestEntityTooLarge)
-		return
+		return upload, http.StatusRequestEntityTooLarge, fmt.Errorf("file exceeds workspace per-file limit")
 	}
 	if r.ContentLength != expectedSize {
-		http.Error(w, `{"error": "Content-Length does not match declared size"}`, http.StatusBadRequest)
+		return upload, http.StatusBadRequest, fmt.Errorf("Content-Length does not match declared size")
+	}
+	upload.clean = clean
+	upload.expectedSize = expectedSize
+	upload.mode = uint32(modeValue)
+	return upload, http.StatusOK, nil
+}
+
+func fileContentPutHandler(w http.ResponseWriter, r *http.Request) {
+	upload, status, err := parseFileUpload(r)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), status)
 		return
 	}
+	workspaceID := upload.workspaceID
+	taskID := upload.taskID
+	executorIncarnation := upload.executorIncarnation
+	clean := upload.clean
+	expectedSHA256 := upload.expectedSHA256
+	expectedSize := upload.expectedSize
+	modeValue := upload.mode
 	if !authorizeActivationRequest(w, r, activationauth.ScopeFiles, activationauth.Identity{
 		WorkspaceID: workspaceID, TaskID: taskID, Generation: 0, FencingToken: 1,
-	}, activationauth.BoundTransferSHA256(http.MethodPut, clean, expectedSize, uint32(modeValue), expectedSHA256, executorIncarnation)) {
+	}, activationauth.BoundTransferSHA256(http.MethodPut, clean, expectedSize, modeValue, expectedSHA256, executorIncarnation)) {
 		return
 	}
 	if !requireExecutorIncarnation(w, executorIncarnation) {

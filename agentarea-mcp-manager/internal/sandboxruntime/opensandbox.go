@@ -52,19 +52,42 @@ const maxOpenSandboxInventoryPages = 10_000
 const maxOpenSandboxInspectionBytes = 64 * 1024
 
 func NewOpenSandboxProvider(cfg OpenSandboxConfig) (*OpenSandboxProvider, error) {
+	if err := resolveOpenSandboxEndpoint(&cfg); err != nil {
+		return nil, err
+	}
+	if err := resolveOpenSandboxAccess(&cfg); err != nil {
+		return nil, err
+	}
+	if err := resolveOpenSandboxIsolation(&cfg); err != nil {
+		return nil, err
+	}
+	if err := resolveOpenSandboxResources(&cfg); err != nil {
+		return nil, err
+	}
+	if err := resolveOpenSandboxEgress(&cfg); err != nil {
+		return nil, err
+	}
+	if cfg.PersistWorkspace {
+		return nil, fmt.Errorf("OpenSandbox persistent workspaces are disabled until archive/delete lifecycle and GC are configured")
+	}
+	return &OpenSandboxProvider{cfg: cfg}, nil
+}
+
+func resolveOpenSandboxEndpoint(cfg *OpenSandboxConfig) error {
 	domain := strings.TrimSpace(cfg.Connection.Domain)
 	if domain == "" {
-		return nil, fmt.Errorf("OpenSandbox domain is required")
+		return fmt.Errorf("OpenSandbox domain is required")
 	}
 	endpoint, err := url.Parse(domain)
 	if err != nil || endpoint.Scheme == "" || endpoint.Host == "" {
-		return nil, fmt.Errorf("OpenSandbox domain must be an absolute URL")
+		return fmt.Errorf("OpenSandbox domain must be an absolute URL")
 	}
-	if endpoint.Scheme != "https" && !(endpoint.Scheme == "http" && cfg.AllowInsecure) {
-		return nil, fmt.Errorf("OpenSandbox domain must use HTTPS unless insecure development mode is explicitly enabled")
+	insecureAllowed := endpoint.Scheme == "http" && cfg.AllowInsecure
+	if endpoint.Scheme != "https" && !insecureAllowed {
+		return fmt.Errorf("OpenSandbox domain must use HTTPS unless insecure development mode is explicitly enabled")
 	}
 	if cfg.Connection.Protocol != "" && cfg.Connection.Protocol != endpoint.Scheme {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"OpenSandbox protocol %q does not match domain scheme %q",
 			cfg.Connection.Protocol,
 			endpoint.Scheme,
@@ -75,36 +98,48 @@ func NewOpenSandboxProvider(cfg OpenSandboxConfig) (*OpenSandboxProvider, error)
 	// lifecycle endpoint. Otherwise an HTTPS deployment is contacted over HTTP
 	// and a 301 redirect rewrites streaming POST requests such as /command to GET.
 	cfg.Connection.Protocol = endpoint.Scheme
+	return nil
+}
+
+func resolveOpenSandboxAccess(cfg *OpenSandboxConfig) error {
 	if cfg.LeaseTTL <= 0 {
-		return nil, fmt.Errorf("OpenSandbox task lease TTL must be positive")
+		return fmt.Errorf("OpenSandbox task lease TTL must be positive")
 	}
 	secureAccess := true
 	if cfg.SecureAccess != nil {
 		secureAccess = *cfg.SecureAccess
 	}
 	if !secureAccess && !cfg.Connection.UseServerProxy {
-		return nil, fmt.Errorf("OpenSandbox secureAccess=false requires server proxy routing")
+		return fmt.Errorf("OpenSandbox secureAccess=false requires server proxy routing")
 	}
 	cfg.SecureAccess = &secureAccess
+	return nil
+}
+
+func resolveOpenSandboxIsolation(cfg *OpenSandboxConfig) error {
 	cfg.Isolation = strings.ToLower(strings.TrimSpace(cfg.Isolation))
 	cfg.RuntimeIdentity = strings.TrimSpace(cfg.RuntimeIdentity)
 	switch cfg.Isolation {
 	case "gvisor":
 		if cfg.RuntimeIdentity == "" {
-			return nil, fmt.Errorf("OpenSandbox gVisor runtime identity is required")
+			return fmt.Errorf("OpenSandbox gVisor runtime identity is required")
 		}
 		if cfg.Image != "" && !immutableOCIImage(cfg.Image) {
-			return nil, fmt.Errorf("OpenSandbox image must use an immutable digest for strong isolation")
+			return fmt.Errorf("OpenSandbox image must use an immutable digest for strong isolation")
 		}
 	case "kata", "firecracker":
-		return nil, fmt.Errorf("OpenSandbox isolation=%s is not supported until the provider exposes a verifiable runtime attestation", cfg.Isolation)
+		return fmt.Errorf("OpenSandbox isolation=%s is not supported until the provider exposes a verifiable runtime attestation", cfg.Isolation)
 	case "container-dev":
 		if !cfg.AllowWeakDev {
-			return nil, fmt.Errorf("OpenSandbox isolation=container-dev requires explicit weak-isolation development opt-in")
+			return fmt.Errorf("OpenSandbox isolation=container-dev requires explicit weak-isolation development opt-in")
 		}
 	default:
-		return nil, fmt.Errorf("OpenSandbox isolation must be one of gvisor, kata, firecracker, or container-dev")
+		return fmt.Errorf("OpenSandbox isolation must be one of gvisor, kata, firecracker, or container-dev")
 	}
+	return nil
+}
+
+func resolveOpenSandboxResources(cfg *OpenSandboxConfig) error {
 	if cfg.ResourceCPU == "" {
 		cfg.ResourceCPU = "500m"
 	}
@@ -112,31 +147,32 @@ func NewOpenSandboxProvider(cfg OpenSandboxConfig) (*OpenSandboxProvider, error)
 		cfg.ResourceMemory = "512Mi"
 	}
 	if cfg.ResourceStorage == "" {
-		return nil, fmt.Errorf("OpenSandbox ephemeral storage limit is required")
-	}
-	cfg.EgressMode = strings.ToLower(strings.TrimSpace(cfg.EgressMode))
-	switch cfg.EgressMode {
-	case "provider":
-		if cfg.Isolation == "gvisor" {
-			return nil, fmt.Errorf("OpenSandbox provider network policy is incompatible with gVisor; configure an audited host-public egress policy")
-		}
-	case "host-public":
-		if cfg.Isolation != "gvisor" {
-			return nil, fmt.Errorf("OpenSandbox egress mode host-public is only supported by the dedicated gVisor host profile")
-		}
-		if !cfg.AllowInternetAccess {
-			return nil, fmt.Errorf("OpenSandbox egress mode host-public requires deployment-level internet access")
-		}
-	default:
-		return nil, fmt.Errorf("OpenSandbox egress mode must be provider or host-public")
+		return fmt.Errorf("OpenSandbox ephemeral storage limit is required")
 	}
 	if cfg.PersistWorkspace && strings.TrimSpace(cfg.VolumePrefix) == "" {
 		cfg.VolumePrefix = "agentarea-task"
 	}
-	if cfg.PersistWorkspace {
-		return nil, fmt.Errorf("OpenSandbox persistent workspaces are disabled until archive/delete lifecycle and GC are configured")
+	return nil
+}
+
+func resolveOpenSandboxEgress(cfg *OpenSandboxConfig) error {
+	cfg.EgressMode = strings.ToLower(strings.TrimSpace(cfg.EgressMode))
+	switch cfg.EgressMode {
+	case "provider":
+		if cfg.Isolation == "gvisor" {
+			return fmt.Errorf("OpenSandbox provider network policy is incompatible with gVisor; configure an audited host-public egress policy")
+		}
+	case "host-public":
+		if cfg.Isolation != "gvisor" {
+			return fmt.Errorf("OpenSandbox egress mode host-public is only supported by the dedicated gVisor host profile")
+		}
+		if !cfg.AllowInternetAccess {
+			return fmt.Errorf("OpenSandbox egress mode host-public requires deployment-level internet access")
+		}
+	default:
+		return fmt.Errorf("OpenSandbox egress mode must be provider or host-public")
 	}
-	return &OpenSandboxProvider{cfg: cfg}, nil
+	return nil
 }
 
 func (p *OpenSandboxProvider) Name() string { return "opensandbox" }
@@ -904,13 +940,6 @@ func openSandboxNetworkPolicy(allowInternet bool) *opensandbox.NetworkPolicy {
 		defaultAction = "allow"
 	}
 	return &opensandbox.NetworkPolicy{DefaultAction: defaultAction}
-}
-
-func truncateOutput(value string, limit int64) (string, bool) {
-	if int64(len(value)) <= limit {
-		return value, false
-	}
-	return value[:limit], true
 }
 
 // OpenSandbox's execd API represents POSIX permissions as decimal integers

@@ -105,7 +105,8 @@ func NewE2BProvider(cfg E2BConfig) (*E2BProvider, error) {
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return nil, fmt.Errorf("%s API URL must be an absolute URL", cfg.ProviderName)
 	}
-	if parsed.Scheme != "https" && !(parsed.Scheme == "http" && cfg.AllowInsecure) {
+	insecureAllowed := parsed.Scheme == "http" && cfg.AllowInsecure
+	if parsed.Scheme != "https" && !insecureAllowed {
 		return nil, fmt.Errorf("%s API URL must use HTTPS unless insecure development mode is explicitly enabled", cfg.ProviderName)
 	}
 	if cfg.APIKey == "" {
@@ -985,7 +986,8 @@ func (p *E2BProvider) envdURL(sandboxID, domain string) (string, error) {
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			return "", fmt.Errorf("%s sandbox URL must be absolute", p.Name())
 		}
-		if parsed.Scheme != "https" && !(parsed.Scheme == "http" && p.cfg.AllowInsecure) {
+		insecureAllowed := parsed.Scheme == "http" && p.cfg.AllowInsecure
+		if parsed.Scheme != "https" && !insecureAllowed {
 			return "", fmt.Errorf("%s sandbox URL must use HTTPS unless insecure development mode is explicitly enabled", p.Name())
 		}
 		return strings.TrimRight(parsed.String(), "/"), nil
@@ -1022,8 +1024,4 @@ func mapE2BError(err error) error {
 		return fmt.Errorf("%w: %v", ErrSessionNotFound, err)
 	}
 	return err
-}
-
-func shellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }

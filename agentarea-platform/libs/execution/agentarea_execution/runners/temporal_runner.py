@@ -395,9 +395,8 @@ Work step by step towards achieving the goal. Use available tools as needed."""
 
     def _extract_usage_info(self, response: dict[str, Any]) -> dict[str, Any]:
         """Extract authoritative usage information from an LLM response."""
-        data = response.model_dump() if hasattr(response, "model_dump") else response
-        usage = data.get("usage") if isinstance(data, dict) else None
-        cost = data.get("cost") if isinstance(data, dict) else None
+        usage = response.get("usage")
+        cost = response.get("cost")
         if not isinstance(usage, dict) or usage.get("total_tokens", 0) <= 0:
             raise RuntimeError("LLM usage accounting unavailable; token policy cannot be enforced")
         if cost is None:

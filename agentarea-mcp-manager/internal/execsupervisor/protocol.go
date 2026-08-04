@@ -156,7 +156,8 @@ func RunArgs(
 	if timeoutSeconds <= 0 || maxFileBytes <= 0 || len(command) == 0 || command[0] == "" {
 		return nil, fmt.Errorf("execution supervisor requires a command, timeout, and file-size limit")
 	}
-	args := []string{
+	args := make([]string, 0, 14+len(command))
+	args = append(args,
 		"run",
 		"--protocol", strconv.Itoa(attestation.ProtocolVersion),
 		"--status", statusPath,
@@ -165,7 +166,7 @@ func RunArgs(
 		"--timeout-seconds", strconv.Itoa(timeoutSeconds),
 		"--max-file-bytes", strconv.FormatInt(maxFileBytes, 10),
 		"--",
-	}
+	)
 	return append(args, command...), nil
 }
 

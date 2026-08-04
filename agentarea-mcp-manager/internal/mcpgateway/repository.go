@@ -166,7 +166,7 @@ func (r *SQLRepository) MarkReadyAndBeginRequest(ctx context.Context, instanceID
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	result, err := tx.ExecContext(ctx, `UPDATE mcp_runtime_instances SET state='ready', last_used_at=now(), last_error=NULL, updated_at=now() WHERE instance_id=$1::uuid`, instanceID)
 	if err != nil {
 		return err
@@ -198,7 +198,7 @@ func (r *SQLRepository) FinishRequest(ctx context.Context, instanceID, requestID
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	result, err := tx.ExecContext(ctx, `DELETE FROM mcp_runtime_request_leases WHERE request_id=$1::uuid AND instance_id=$2::uuid`, requestID, instanceID)
 	if err != nil {
 		return err

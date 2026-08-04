@@ -286,7 +286,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.image.tag | string | `"latest"` |  |
 | mcpManager.service.type | string | `"ClusterIP"` |  |
 | mcpManager.service.port | int | `80` |  |
-| mcpManager.serverless.enabled | bool | `false` |  |
+| mcpManager.serverless.enabled | bool | `true` |  |
 | mcpManager.serverless.idleTimeout | string | `"10m"` |  |
 | mcpManager.serverless.sweepInterval | string | `"60s"` |  |
 | mcpManager.serverless.requestLeaseTTL | string | `"90s"` |  |
@@ -309,7 +309,14 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.domain | string | `"mcp.local"` |  |
 | mcpManager.gateway.name | string | `"envoy-gateway"` |  |
 | mcpManager.gateway.namespace | string | `"envoy-gateway-system"` |  |
-| mcpManager.runtimeClass | string | `"gvisor"` |  |
+| mcpManager.runtimeClass | string | `""` |  |
+| mcpManager.isolationTier | string | `"standard"` |  |
+| mcpManager.admission.allowedImageRepositories[0] | string | `"ghcr.io/github/github-mcp-server"` |  |
+| mcpManager.admission.allowedImageRepositories[1] | string | `"mcp/fetch"` |  |
+| mcpManager.admission.allowedCommandPackages[0] | string | `"npx -y @modelcontextprotocol/server-everything"` |  |
+| mcpManager.admission.allowedCommandPackages[1] | string | `"npx -y @modelcontextprotocol/server-sequential-thinking"` |  |
+| mcpManager.admission.allowedCommandPackages[2] | string | `"uvx mcp-server-fetch"` |  |
+| mcpManager.admission.allowedCommandPackages[3] | string | `"uvx mcp-server-time"` |  |
 | mcpManager.runtime.serviceAccount.create | bool | `true` |  |
 | mcpManager.runtime.serviceAccount.name | string | `""` |  |
 | mcpManager.runtime.imagePullSecrets | list | `[]` |  |
@@ -333,6 +340,8 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.extraEnv | list | `[]` |  |
 | sandboxRuntime.provider | string | `""` |  |
 | sandboxRuntime.region | string | `""` |  |
+| sandboxRuntime.runtimeClass | string | `"gvisor"` |  |
+| sandboxRuntime.allowWeakIsolationForDevelopment | bool | `false` |  |
 | sandboxRuntime.allowInternet | bool | `false` |  |
 | sandboxRuntime.leaseTTL | string | `"2h"` |  |
 | sandboxRuntime.provisioningTimeout | string | `"30s"` |  |

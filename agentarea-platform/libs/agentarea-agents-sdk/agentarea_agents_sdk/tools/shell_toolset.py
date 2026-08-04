@@ -158,6 +158,8 @@ class ShellToolset(Toolset):
         large project inputs, when requested, are migrated directly between the
         trusted repository and object storage — never through Redis.
         """
+        if self._ctx is None:
+            raise ValueError("execution context is not configured")
         project_id = (self._ctx.metadata or {}).get("project_id")
         if not project_id:
             return

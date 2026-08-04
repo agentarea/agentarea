@@ -478,7 +478,7 @@ func dockerTaskKey(workspaceID, taskID string) string {
 func (d *DockerBackend) Initialize(ctx context.Context) error {
 	d.logger.Info("Initializing Docker backend")
 	if os.Getenv("SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT") != "true" {
-		return fmt.Errorf("Docker shared sandbox executor is development-only; set SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT=true explicitly")
+		return fmt.Errorf("docker shared sandbox executor is development-only; set SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT=true explicitly")
 	}
 	return d.manager.Initialize(ctx)
 }

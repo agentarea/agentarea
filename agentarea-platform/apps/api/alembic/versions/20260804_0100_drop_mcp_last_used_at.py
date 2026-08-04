@@ -6,9 +6,9 @@ Runtime state is independent from desired instance state and verification, so
 reaping a workload never invalidates discovered tools or asks Python to
 provision it again.
 
-Revision ID: 20260730_0100_drop_last_used
-Revises: 20260727_0100_mcp_last_used
-Create Date: 2026-07-30 01:00:00.000000
+Revision ID: 20260804_0100_drop_last_used
+Revises: 20260731_1200_policy_baseline
+Create Date: 2026-08-04 01:00:00.000000
 """
 
 from collections.abc import Sequence
@@ -16,8 +16,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260730_0100_drop_last_used"
-down_revision: str | None = "20260727_0100_mcp_last_used"
+revision: str = "20260804_0100_drop_last_used"
+down_revision: str | None = "20260731_1200_policy_baseline"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

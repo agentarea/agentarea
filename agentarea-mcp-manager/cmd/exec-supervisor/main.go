@@ -93,7 +93,8 @@ type executionResult struct {
 }
 
 func supervise(command []string, uid, gid uint32, timeout time.Duration, maxFileBytes uint64) (executionResult, error) {
-	childArgs := []string{"child", "--max-file-bytes", strconv.FormatUint(maxFileBytes, 10), "--"}
+	childArgs := make([]string, 0, 4+len(command))
+	childArgs = append(childArgs, "child", "--max-file-bytes", strconv.FormatUint(maxFileBytes, 10), "--")
 	childArgs = append(childArgs, command...)
 	// The non-root child stage applies RLIMIT_FSIZE to itself and then execs the
 	// requested command. The privileged supervisor never inherits that limit, so
