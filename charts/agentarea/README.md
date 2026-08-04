@@ -371,8 +371,6 @@ The following table lists configurable parameters of the chart and their default
 | sandboxRuntime.opensandbox.egressMode | string | `""` |  |
 | sandboxRuntime.opensandbox.allowWeakIsolationForDevelopment | bool | `false` |  |
 | sandboxRuntime.opensandbox.useServerProxy | bool | `true` |  |
-| sandboxRuntime.opensandbox.persistWorkspace | bool | `false` |  |
-| sandboxRuntime.opensandbox.volumePrefix | string | `"agentarea-task"` |  |
 | sandboxRuntime.opensandbox.authHeader | string | `"OPEN-SANDBOX-API-KEY"` |  |
 | sandboxRuntime.opensandbox.apiKeySecretRef.name | string | `""` |  |
 | sandboxRuntime.opensandbox.apiKeySecretRef.key | string | `""` |  |

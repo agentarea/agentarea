@@ -167,10 +167,6 @@ func NewFromEnv(_ context.Context, builtin ManagedRuntime, redisClient *redis.Cl
 			return nil, "", err
 		}
 		retryConfig := opensandbox.DefaultRetryConfig()
-		persistWorkspace, err := strictBoolEnv("SANDBOX_OPENSANDBOX_PERSIST_WORKSPACE", false)
-		if err != nil {
-			return nil, "", err
-		}
 		provider, err = NewOpenSandboxProvider(OpenSandboxConfig{
 			Connection: opensandbox.ConnectionConfig{
 				Domain:         os.Getenv("SANDBOX_OPENSANDBOX_URL"),
@@ -193,8 +189,6 @@ func NewFromEnv(_ context.Context, builtin ManagedRuntime, redisClient *redis.Cl
 			SecureAccess:        &secureAccess,
 			EgressMode:          os.Getenv("SANDBOX_OPENSANDBOX_EGRESS_MODE"),
 			AllowInternetAccess: allowInternet,
-			PersistWorkspace:    persistWorkspace,
-			VolumePrefix:        getenv("SANDBOX_OPENSANDBOX_VOLUME_PREFIX", "agentarea-task"),
 		})
 		if err != nil {
 			return nil, "", err

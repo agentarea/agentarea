@@ -39,8 +39,6 @@ type OpenSandboxConfig struct {
 	SecureAccess        *bool
 	EgressMode          string
 	AllowInternetAccess bool
-	PersistWorkspace    bool
-	VolumePrefix        string
 }
 
 type OpenSandboxProvider struct {
@@ -66,9 +64,6 @@ func NewOpenSandboxProvider(cfg OpenSandboxConfig) (*OpenSandboxProvider, error)
 	}
 	if err := resolveOpenSandboxEgress(&cfg); err != nil {
 		return nil, err
-	}
-	if cfg.PersistWorkspace {
-		return nil, fmt.Errorf("OpenSandbox persistent workspaces are disabled until archive/delete lifecycle and GC are configured")
 	}
 	return &OpenSandboxProvider{cfg: cfg}, nil
 }
@@ -148,9 +143,6 @@ func resolveOpenSandboxResources(cfg *OpenSandboxConfig) error {
 	}
 	if cfg.ResourceStorage == "" {
 		return fmt.Errorf("OpenSandbox ephemeral storage limit is required")
-	}
-	if cfg.PersistWorkspace && strings.TrimSpace(cfg.VolumePrefix) == "" {
-		cfg.VolumePrefix = "agentarea-task"
 	}
 	return nil
 }

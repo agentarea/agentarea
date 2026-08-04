@@ -66,7 +66,6 @@ func TestOpenSandboxLiveConformance(t *testing.T) {
 		SecureAccess:        &secureAccess,
 		EgressMode:          "host-public",
 		AllowInternetAccess: true,
-		PersistWorkspace:    false,
 	})
 	if err != nil {
 		t.Fatal(err)

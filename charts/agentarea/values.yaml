@@ -818,8 +818,6 @@ sandboxRuntime:
     useServerProxy: true
     # Full-volume retention is intentionally unavailable until archive/delete
     # lifecycle and garbage collection are configured.
-    persistWorkspace: false
-    volumePrefix: agentarea-task
     authHeader: OPEN-SANDBOX-API-KEY
     apiKeySecretRef:
       name: ""

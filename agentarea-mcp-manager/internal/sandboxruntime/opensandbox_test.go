@@ -179,7 +179,6 @@ func TestOpenSandboxProviderUsesOfficialLifecycleAndExecdContracts(t *testing.T)
 		AllowInsecure:       true,
 		EgressMode:          "host-public",
 		AllowInternetAccess: true,
-		PersistWorkspace:    false,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -587,22 +586,6 @@ func TestOpenSandboxAuditUsesAuthenticatedFilesystemAPI(t *testing.T) {
 	}
 	if commandCalls.Load() != 0 {
 		t.Fatalf("workspace audit executed %d guest commands", commandCalls.Load())
-	}
-}
-
-func TestOpenSandboxProviderRejectsUnmanagedPersistentWorkspace(t *testing.T) {
-	_, err := NewOpenSandboxProvider(OpenSandboxConfig{
-		Connection:          opensandbox.ConnectionConfig{Domain: "https://opensandbox.example"},
-		LeaseTTL:            time.Minute,
-		Isolation:           "gvisor",
-		RuntimeIdentity:     "opensandbox-docker-gvisor-runsc-20260721",
-		EgressMode:          "host-public",
-		AllowInternetAccess: true,
-		PersistWorkspace:    true,
-		ResourceStorage:     "2147483648",
-	})
-	if err == nil || !strings.Contains(err.Error(), "persistent workspaces are disabled") {
-		t.Fatalf("NewOpenSandboxProvider() error = %v", err)
 	}
 }
 

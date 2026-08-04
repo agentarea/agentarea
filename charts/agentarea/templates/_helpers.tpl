@@ -126,9 +126,6 @@ rendered into values-backed ConfigMaps.
 {{- if not (has $openSandboxIsolation (list "gvisor" "container-dev")) -}}
 {{- fail "sandboxRuntime.opensandbox.isolation currently supports only gvisor or container-dev; kata/firecracker require verifiable provider attestation" -}}
 {{- end -}}
-{{- if $runtime.opensandbox.persistWorkspace -}}
-{{- fail "sandboxRuntime.opensandbox.persistWorkspace is not supported until archive/delete lifecycle and retention GC are implemented" -}}
-{{- end -}}
 {{- $openSandboxRuntimeIdentity := "" -}}
 {{- if eq $openSandboxIsolation "gvisor" -}}
 {{- $openSandboxRuntimeIdentity = required "sandboxRuntime.opensandbox.runtimeIdentity is required for gvisor" $runtime.opensandbox.runtimeIdentity -}}
@@ -172,10 +169,6 @@ rendered into values-backed ConfigMaps.
 {{- end }}
 - name: SANDBOX_OPENSANDBOX_EGRESS_MODE
   value: {{ $egressMode | quote }}
-- name: SANDBOX_OPENSANDBOX_PERSIST_WORKSPACE
-  value: {{ $runtime.opensandbox.persistWorkspace | quote }}
-- name: SANDBOX_OPENSANDBOX_VOLUME_PREFIX
-  value: {{ $runtime.opensandbox.volumePrefix | quote }}
 - name: SANDBOX_OPENSANDBOX_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT
   value: {{ $runtime.opensandbox.allowWeakIsolationForDevelopment | quote }}
 - name: SANDBOX_OPENSANDBOX_USE_SERVER_PROXY
