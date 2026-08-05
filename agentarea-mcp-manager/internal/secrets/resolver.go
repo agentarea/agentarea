@@ -3,6 +3,7 @@ package secrets
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -156,10 +157,8 @@ func (sr *InfisicalSecretResolver) ResolveSecrets(instanceID string, envVars map
 			secretValue, err := sr.resolveSecretFromInfisical(instanceID, key)
 			if err != nil {
 				sr.logger.Error("Failed to resolve secret from Infisical",
-					slog.String("instance_id", instanceID),
-					slog.String("secret_key", key),
-					slog.String("error", err.Error()))
-				return nil, fmt.Errorf("failed to resolve secret %s: %w", key, err)
+					slog.String("instance_id", instanceID))
+				return nil, errors.New("failed to resolve secrets for instance")
 			}
 			resolved[key] = secretValue
 		} else {
@@ -183,13 +182,11 @@ func (sr *InfisicalSecretResolver) resolveSecretFromInfisical(instanceID, secret
 	infisicalSecretKey := fmt.Sprintf("mcp_instance_%s_%s", instanceID, secretKey)
 
 	sr.logger.Debug("Retrieving secret from Infisical",
-		slog.String("instance_id", instanceID),
-		slog.String("secret_key", secretKey),
-		slog.String("infisical_key", infisicalSecretKey))
+		slog.String("instance_id", instanceID))
 
 	// If client is not initialized (fallback mode), return error
 	if sr.client == nil {
-		return "", fmt.Errorf("infisical client not initialized - secret resolution not available for: %s", infisicalSecretKey)
+		return "", errors.New("secret resolution unavailable")
 	}
 
 	// Retrieve secret from Infisical
@@ -202,17 +199,12 @@ func (sr *InfisicalSecretResolver) resolveSecretFromInfisical(instanceID, secret
 
 	if err != nil {
 		sr.logger.Error("Failed to retrieve secret from Infisical",
-			slog.String("infisical_key", infisicalSecretKey),
-			slog.String("project_id", sr.projectID),
-			slog.String("environment", sr.environment),
-			slog.String("error", err.Error()))
-		return "", fmt.Errorf("failed to retrieve secret from Infisical: %w", err)
+			slog.String("instance_id", instanceID))
+		return "", errors.New("secret retrieval failed")
 	}
 
 	sr.logger.Info("Successfully retrieved secret from Infisical",
-		slog.String("instance_id", instanceID),
-		slog.String("secret_key", secretKey),
-		slog.String("infisical_key", infisicalSecretKey))
+		slog.String("instance_id", instanceID))
 
 	return secret.SecretValue, nil
 }
@@ -224,11 +216,9 @@ func (sr *InfisicalSecretResolver) ResolveInstanceEnvVars(instanceID string, env
 	for _, envName := range envVarNames {
 		secretValue, err := sr.resolveSecretFromInfisical(instanceID, envName)
 		if err != nil {
-			sr.logger.Error("Failed to resolve requested env var from Infisical",
-				slog.String("instance_id", instanceID),
-				slog.String("env_var", envName),
-				slog.String("error", err.Error()))
-			return nil, fmt.Errorf("resolve requested secret %s: %w", envName, err)
+			sr.logger.Error("Failed to resolve requested environment variable",
+				slog.String("instance_id", instanceID))
+			return nil, errors.New("failed to resolve requested environment variable")
 		}
 		resolved[envName] = secretValue
 	}

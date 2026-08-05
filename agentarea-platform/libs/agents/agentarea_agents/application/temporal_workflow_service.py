@@ -55,12 +55,12 @@ class TemporalWorkflowService:
     async def get_workflow_status(self, execution_id: str) -> dict[str, Any]:
         try:
             return await self._execution_service.get_status(execution_id)
-        except Exception as e:
-            logger.error(f"Failed to get workflow status: {e}")
+        except Exception as exc:
+            logger.error("Failed to get workflow status (%s)", type(exc).__name__)
             return {
                 "status": "error",
                 "success": False,
-                "error": str(e),
+                "error": "Workflow status unavailable",
             }
 
     async def get_effective_policy(self, execution_id: str) -> dict[str, Any] | None:

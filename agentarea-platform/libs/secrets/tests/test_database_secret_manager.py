@@ -3,10 +3,13 @@
 Tests encryption, decryption, CRUD operations, and error handling.
 """
 
+import logging
+from unittest.mock import MagicMock, patch
+from uuid import uuid4
+
 import pytest
 from agentarea_secrets.database_secret_manager import DatabaseSecretManager, EncryptedSecret
 from cryptography.fernet import Fernet
-from unittest.mock import MagicMock, patch
 
 
 class TestDatabaseSecretManager:
@@ -25,24 +28,23 @@ class TestDatabaseSecretManager:
         assert manager.workspace_id == "test-workspace-456"
         assert manager._fernet is not None
 
-    @patch.dict("os.environ", {"SECRET_MANAGER_ENCRYPTION_KEY": "test-key-from-env"})
-    def test_init_with_env_key(self, mock_db_session, test_user_context):
-        """Test initialization with encryption key from environment."""
-        # Generate a valid Fernet key for env
+    def test_init_ignores_environment_key(self, mock_db_session, test_user_context):
+        """DatabaseSecretManager accepts its key only from the factory."""
         env_key = Fernet.generate_key().decode("utf-8")
 
-        with patch.dict("os.environ", {"SECRET_MANAGER_ENCRYPTION_KEY": env_key}):
-            manager = DatabaseSecretManager(
+        with (
+            patch.dict("os.environ", {"SECRET_MANAGER_ENCRYPTION_KEY": env_key}),
+            pytest.raises(ValueError, match="Encryption key is required"),
+        ):
+            DatabaseSecretManager(
                 session=mock_db_session,
                 user_context=test_user_context,
             )
 
-            assert manager._fernet is not None
-
     def test_init_fails_without_key(self, mock_db_session, test_user_context):
         """Test initialization fails when no encryption key is provided."""
         with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="SECRET_MANAGER_ENCRYPTION_KEY"):
+            with pytest.raises(ValueError, match="Encryption key is required"):
                 DatabaseSecretManager(
                     session=mock_db_session,
                     user_context=test_user_context,
@@ -56,7 +58,7 @@ class TestDatabaseSecretManager:
             encryption_key=encryption_key,
         )
 
-        secret_value = "my-super-secret-api-key"
+        secret_value = "my-super-secret-api-key"  # noqa: S105 - test fixture
         encrypted = manager._encrypt(secret_value)
 
         # Encrypted value should be different from original
@@ -88,6 +90,26 @@ class TestDatabaseSecretManager:
         with pytest.raises(ValueError, match="Failed to decrypt secret"):
             manager2._decrypt(encrypted)
 
+    def test_decrypt_does_not_log_exception_contents(
+        self, mock_db_session, test_user_context, encryption_key, caplog
+    ):
+        """Decrypt failures must not expose sensitive exception details in logs."""
+        manager = DatabaseSecretManager(
+            session=mock_db_session,
+            user_context=test_user_context,
+            encryption_key=encryption_key,
+        )
+        sensitive_error = f"private-{uuid4()}"
+
+        with (
+            caplog.at_level(logging.ERROR, logger="agentarea_secrets.database_secret_manager"),
+            patch.object(manager._fernet, "decrypt", side_effect=RuntimeError(sensitive_error)),
+            pytest.raises(ValueError, match="Failed to decrypt secret"),
+        ):
+            manager._decrypt("ciphertext")
+
+        assert sensitive_error not in caplog.text
+
     @pytest.mark.asyncio
     async def test_get_secret_found(self, mock_db_session, test_user_context, encryption_key):
         """Test getting a secret that exists."""
@@ -101,7 +123,7 @@ class TestDatabaseSecretManager:
         encrypted_value = manager._encrypt("my-api-key")
         mock_secret = EncryptedSecret(
             workspace_id="test-workspace-456",
-            secret_name="openai_api_key",
+            secret_name="openai_api_key",  # noqa: S106 - test fixture
             encrypted_value=encrypted_value,
             created_by="test-user-123",
         )
@@ -136,6 +158,45 @@ class TestDatabaseSecretManager:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_get_secret_does_not_log_secret_identifier(
+        self, mock_db_session, test_user_context, encryption_key, caplog
+    ):
+        """Reading a missing secret must not reveal its identifier in logs."""
+        manager = DatabaseSecretManager(
+            session=mock_db_session,
+            user_context=test_user_context,
+            encryption_key=encryption_key,
+        )
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db_session.execute.return_value = mock_result
+        secret_name = f"private-{uuid4()}"
+
+        with caplog.at_level(logging.DEBUG, logger="agentarea_secrets.database_secret_manager"):
+            assert await manager.get_secret(secret_name) is None
+
+        assert secret_name not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_get_secret_does_not_log_exception_contents(
+        self, mock_db_session, test_user_context, encryption_key, caplog
+    ):
+        """Read failures must not expose sensitive exception details in logs."""
+        manager = DatabaseSecretManager(
+            session=mock_db_session,
+            user_context=test_user_context,
+            encryption_key=encryption_key,
+        )
+        sensitive_error = f"private-{uuid4()}"
+        mock_db_session.execute.side_effect = Exception(sensitive_error)
+
+        with caplog.at_level(logging.ERROR, logger="agentarea_secrets.database_secret_manager"):
+            with pytest.raises(Exception, match=sensitive_error):
+                await manager.get_secret("secret-name")
+
+        assert sensitive_error not in caplog.text
+
+    @pytest.mark.asyncio
     async def test_set_secret_creates_new(self, mock_db_session, test_user_context, encryption_key):
         """Test setting a secret that doesn't exist (create)."""
         manager = DatabaseSecretManager(
@@ -160,14 +221,55 @@ class TestDatabaseSecretManager:
         added_secret = mock_db_session.add.call_args[0][0]
         assert isinstance(added_secret, EncryptedSecret)
         assert added_secret.workspace_id == "test-workspace-456"
-        assert added_secret.secret_name == "new_secret"
+        assert added_secret.secret_name == "new_secret"  # noqa: S105 - test fixture
         assert added_secret.created_by == "test-user-123"
         # Verify it's encrypted
         decrypted = manager._decrypt(added_secret.encrypted_value)
         assert decrypted == "secret-value"
 
     @pytest.mark.asyncio
-    async def test_set_secret_updates_existing(self, mock_db_session, test_user_context, encryption_key):
+    async def test_set_secret_does_not_log_secret_name(
+        self, mock_db_session, test_user_context, encryption_key, caplog
+    ):
+        """Secret names must not be emitted to application logs."""
+        manager = DatabaseSecretManager(
+            session=mock_db_session,
+            user_context=test_user_context,
+            encryption_key=encryption_key,
+        )
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db_session.execute.return_value = mock_result
+        secret_name = f"private-{uuid4()}"
+
+        with caplog.at_level(logging.INFO, logger="agentarea_secrets.database_secret_manager"):
+            await manager.set_secret(secret_name, "secret-value")
+
+        assert secret_name not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_set_secret_does_not_log_exception_contents(
+        self, mock_db_session, test_user_context, encryption_key, caplog
+    ):
+        """Database errors must not expose sensitive exception details in logs."""
+        manager = DatabaseSecretManager(
+            session=mock_db_session,
+            user_context=test_user_context,
+            encryption_key=encryption_key,
+        )
+        secret_value = f"private-{uuid4()}"
+        mock_db_session.execute.side_effect = Exception(secret_value)
+
+        with caplog.at_level(logging.ERROR, logger="agentarea_secrets.database_secret_manager"):
+            with pytest.raises(Exception, match=secret_value):
+                await manager.set_secret("secret-name", secret_value)
+
+        assert secret_value not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_set_secret_updates_existing(
+        self, mock_db_session, test_user_context, encryption_key
+    ):
         """Test setting a secret that already exists (update)."""
         manager = DatabaseSecretManager(
             session=mock_db_session,
@@ -178,7 +280,7 @@ class TestDatabaseSecretManager:
         # Mock database - secret exists
         existing_secret = EncryptedSecret(
             workspace_id="test-workspace-456",
-            secret_name="existing_secret",
+            secret_name="existing_secret",  # noqa: S106 - test fixture
             encrypted_value=manager._encrypt("old-value"),
             created_by="test-user-123",
         )
@@ -194,7 +296,9 @@ class TestDatabaseSecretManager:
         mock_db_session.commit.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_set_secret_rollback_on_error(self, mock_db_session, test_user_context, encryption_key):
+    async def test_set_secret_rollback_on_error(
+        self, mock_db_session, test_user_context, encryption_key
+    ):
         """Test that set_secret rolls back on error."""
         manager = DatabaseSecretManager(
             session=mock_db_session,
@@ -223,7 +327,7 @@ class TestDatabaseSecretManager:
         # Mock database - secret exists
         mock_secret = EncryptedSecret(
             workspace_id="test-workspace-456",
-            secret_name="to_delete",
+            secret_name="to_delete",  # noqa: S106 - test fixture
             encrypted_value=manager._encrypt("value"),
             created_by="test-user-123",
         )
@@ -239,7 +343,9 @@ class TestDatabaseSecretManager:
         mock_db_session.commit.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_delete_secret_not_exists(self, mock_db_session, test_user_context, encryption_key):
+    async def test_delete_secret_not_exists(
+        self, mock_db_session, test_user_context, encryption_key
+    ):
         """Test deleting a secret that doesn't exist."""
         manager = DatabaseSecretManager(
             session=mock_db_session,
@@ -259,7 +365,48 @@ class TestDatabaseSecretManager:
         mock_db_session.delete.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_delete_secret_rollback_on_error(self, mock_db_session, test_user_context, encryption_key):
+    async def test_delete_secret_does_not_log_secret_identifier(
+        self, mock_db_session, test_user_context, encryption_key, caplog
+    ):
+        """Deleting a missing secret must not reveal its identifier in logs."""
+        manager = DatabaseSecretManager(
+            session=mock_db_session,
+            user_context=test_user_context,
+            encryption_key=encryption_key,
+        )
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db_session.execute.return_value = mock_result
+        secret_name = f"private-{uuid4()}"
+
+        with caplog.at_level(logging.DEBUG, logger="agentarea_secrets.database_secret_manager"):
+            assert await manager.delete_secret(secret_name) is False
+
+        assert secret_name not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_delete_secret_does_not_log_exception_contents(
+        self, mock_db_session, test_user_context, encryption_key, caplog
+    ):
+        """Delete failures must not expose sensitive exception details in logs."""
+        manager = DatabaseSecretManager(
+            session=mock_db_session,
+            user_context=test_user_context,
+            encryption_key=encryption_key,
+        )
+        sensitive_error = f"private-{uuid4()}"
+        mock_db_session.execute.side_effect = Exception(sensitive_error)
+
+        with caplog.at_level(logging.ERROR, logger="agentarea_secrets.database_secret_manager"):
+            with pytest.raises(Exception, match=sensitive_error):
+                await manager.delete_secret("secret-name")
+
+        assert sensitive_error not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_delete_secret_rollback_on_error(
+        self, mock_db_session, test_user_context, encryption_key
+    ):
         """Test that delete_secret rolls back on error."""
         manager = DatabaseSecretManager(
             session=mock_db_session,

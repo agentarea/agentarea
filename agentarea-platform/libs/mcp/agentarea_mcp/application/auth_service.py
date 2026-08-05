@@ -232,7 +232,7 @@ class MCPAuthService:
             if created is None:
                 raise ValueError(f"MCPAuthConfig {auth_config.id} disappeared during update")
 
-        logger.info("Created MCPAuthConfig %s (type=%s)", created.id, auth_type)
+        logger.info("Created MCPAuthConfig %s", created.id)
         return created
 
     async def get(self, config_id: UUID) -> MCPAuthConfig | None:

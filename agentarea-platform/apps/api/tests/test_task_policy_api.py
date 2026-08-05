@@ -74,8 +74,7 @@ async def test_task_artifact_download_rejects_anything_but_an_opaque_id():
         base_url="http://test",
     ) as client:
         response = await client.get(
-            f"/v1/agents/{agent_id}/tasks/{task.id}/artifacts/files/"
-            "tasks/other-task/report.html"
+            f"/v1/agents/{agent_id}/tasks/{task.id}/artifacts/files/tasks/other-task/report.html"
         )
 
     assert response.status_code == 404
@@ -156,4 +155,4 @@ async def test_task_sync_maps_policy_validation_error_to_422():
         )
 
     assert response.status_code == 422
-    assert "run_budget_usd" in response.json()["detail"]
+    assert response.json()["detail"] == "Task policy rejected"

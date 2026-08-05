@@ -64,7 +64,7 @@ class TestSecretManager(BaseSecretManager):
     async def set_secret(self, secret_name: str, secret_value: str) -> None:
         """Set a secret value."""
         self._secrets[secret_name] = secret_value
-        logger.debug("Test Secret Set: %s", secret_name)
+        logger.debug("Test secret set")
 
     async def delete_secret(self, secret_name: str) -> bool:
         """Delete a secret and return True if it existed."""

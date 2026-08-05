@@ -635,9 +635,9 @@ async def create_task_for_agent_with_stream(
                 trusted_metadata={"workspace_attachments": attachment_descriptors},
             )
         except PolicyValidationError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise HTTPException(status_code=422, detail="Task policy rejected") from exc
         except AgentModelNotConfiguredError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise HTTPException(status_code=422, detail="Agent model is not configured") from exc
 
         try:
             created_task = await task_service.dispatch_reserved_run(created_task)
@@ -724,22 +724,22 @@ async def create_task_for_agent_with_stream(
                     },
                 )
 
-        except PolicyValidationError as e:
+        except PolicyValidationError:
             yield _format_sse_event(
                 "error",
                 {
                     "agent_id": str(agent_id),
-                    "error": str(e),
+                    "error": "Task policy rejected",
                     "error_type": "policy_validation_error",
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
-        except AgentModelNotConfiguredError as e:
+        except AgentModelNotConfiguredError:
             yield _format_sse_event(
                 "error",
                 {
                     "agent_id": str(agent_id),
-                    "error": str(e),
+                    "error": "Agent model is not configured",
                     "error_type": "model_not_configured",
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
@@ -755,8 +755,8 @@ async def create_task_for_agent_with_stream(
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
-        except Exception as e:
-            logger.error(f"Failed to create task for agent {agent_id}: {e}")
+        except Exception:
+            logger.error("Task creation failed")
             yield _format_sse_event(
                 "error",
                 {
@@ -840,16 +840,16 @@ async def create_task_for_agent_sync(
 
     except HTTPException:
         raise
-    except PolicyValidationError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-    except AgentModelNotConfiguredError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
+    except PolicyValidationError as exc:
+        raise HTTPException(status_code=422, detail="Task policy rejected") from exc
+    except AgentModelNotConfiguredError as exc:
+        raise HTTPException(status_code=422, detail="Agent model is not configured") from exc
     except ValueError as e:
         # Agent validation errors
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        logger.error(f"Failed to create task for agent {agent_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    except Exception as exc:
+        logger.error("Task creation failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/", response_model=list[TaskResponse])
@@ -1008,7 +1008,7 @@ async def get_agent_task_status(
             "start_time": status.get("start_time"),
             "end_time": status.get("end_time"),
             "execution_time": status.get("execution_time"),
-            "error": task.error_message or status.get("error"),
+            "error": task.error_message,
             "result": task.result if task.result is not None else status.get("result"),
             # A2A-compatible fields for frontend
             "message": status.get("message"),
