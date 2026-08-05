@@ -42,21 +42,32 @@ class TemporalWorkflowService:
                 "message": result.content or "Task started",
                 "error": result.error,
             }
-        except Exception as e:
-            logger.error(f"Failed to execute agent task: {e}")
+        except Exception as exc:
+            # ``error`` reaches API responses, so keep the cause in the log only.
+            logger.error(
+                "Failed to execute agent task for agent %s (%s)",
+                agent_id,
+                type(exc).__name__,
+                exc_info=True,
+            )
             return {
                 "success": False,
                 "task_id": "unknown",
                 "execution_id": "unknown",
                 "status": "failed",
-                "error": str(e),
+                "error": "Task execution could not be started",
             }
 
     async def get_workflow_status(self, execution_id: str) -> dict[str, Any]:
         try:
             return await self._execution_service.get_status(execution_id)
         except Exception as exc:
-            logger.error("Failed to get workflow status (%s)", type(exc).__name__)
+            logger.error(
+                "Failed to get workflow status for %s (%s)",
+                execution_id,
+                type(exc).__name__,
+                exc_info=True,
+            )
             return {
                 "status": "error",
                 "success": False,

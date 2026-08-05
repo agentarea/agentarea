@@ -55,7 +55,7 @@ class SecretManagerFactory:
                     "Set SECRET_MANAGER_ACCESS_KEY and SECRET_MANAGER_SECRET_KEY."
                 )
 
-        logger.info("Initialized secret manager factory")
+        logger.info("Initialized SecretManagerFactory with type: %s", settings.SECRET_MANAGER_TYPE)
 
     def create(
         self,

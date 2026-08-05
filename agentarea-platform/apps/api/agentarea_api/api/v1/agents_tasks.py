@@ -756,7 +756,7 @@ async def create_task_for_agent_with_stream(
                 },
             )
         except Exception:
-            logger.error("Task creation failed")
+            logger.error("Task creation failed for agent %s", agent_id, exc_info=True)
             yield _format_sse_event(
                 "error",
                 {
@@ -844,11 +844,12 @@ async def create_task_for_agent_sync(
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
     except AgentModelNotConfiguredError as exc:
         raise HTTPException(status_code=422, detail="Agent model is not configured") from exc
-    except ValueError as e:
+    except ValueError as exc:
         # Agent validation errors
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        logger.error("Agent validation failed for agent %s", agent_id, exc_info=True)
+        raise HTTPException(status_code=404, detail="Agent validation error") from exc
     except Exception as exc:
-        logger.error("Task creation failed")
+        logger.error("Task creation failed for agent %s", agent_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 

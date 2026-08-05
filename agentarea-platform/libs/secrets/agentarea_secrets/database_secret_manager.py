@@ -128,15 +128,19 @@ class DatabaseSecretManager(BaseSecretManager):
             secret = result.scalar_one_or_none()
 
             if secret is None:
-                logger.debug("Secret not found")
+                logger.debug("Secret not found in workspace %s", self.workspace_id)
                 return None
 
             decrypted_value = self._decrypt(secret.encrypted_value)
-            logger.debug("Retrieved secret")
+            logger.debug("Retrieved secret from workspace %s", self.workspace_id)
             return decrypted_value
 
-        except Exception:
-            logger.error("Failed to retrieve secret")
+        except Exception as exc:
+            logger.error(
+                "Failed to retrieve secret from workspace %s (%s)",
+                self.workspace_id,
+                type(exc).__name__,
+            )
             raise
 
     async def set_secret(self, secret_name: str, secret_value: str) -> None:
@@ -172,7 +176,7 @@ class DatabaseSecretManager(BaseSecretManager):
                         updated_at=func.now(),
                     )
                 )
-                logger.info("Updated secret")
+                logger.info("Updated secret in workspace %s", self.workspace_id)
             else:
                 # Create new secret
                 new_secret = EncryptedSecret(
@@ -183,13 +187,17 @@ class DatabaseSecretManager(BaseSecretManager):
                     created_by=self.user_context.user_id,
                 )
                 self.session.add(new_secret)
-                logger.info("Created secret")
+                logger.info("Created secret in workspace %s", self.workspace_id)
 
             await self.session.commit()
 
-        except Exception:
+        except Exception as exc:
             await self.session.rollback()
-            logger.error("Failed to set secret")
+            logger.error(
+                "Failed to set secret in workspace %s (%s)",
+                self.workspace_id,
+                type(exc).__name__,
+            )
             raise
 
     async def delete_secret(self, secret_name: str) -> bool:
@@ -211,16 +219,20 @@ class DatabaseSecretManager(BaseSecretManager):
             secret = result.scalar_one_or_none()
 
             if secret is None:
-                logger.debug("Secret not found for deletion")
+                logger.debug("Secret not found for deletion in workspace %s", self.workspace_id)
                 return False
 
             await self.session.delete(secret)
             await self.session.commit()
 
-            logger.info("Deleted secret")
+            logger.info("Deleted secret from workspace %s", self.workspace_id)
             return True
 
-        except Exception:
+        except Exception as exc:
             await self.session.rollback()
-            logger.error("Failed to delete secret")
+            logger.error(
+                "Failed to delete secret from workspace %s (%s)",
+                self.workspace_id,
+                type(exc).__name__,
+            )
             raise

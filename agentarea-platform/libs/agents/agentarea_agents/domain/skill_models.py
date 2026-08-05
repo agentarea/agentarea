@@ -75,10 +75,11 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     network_scope: Mapped[str] = mapped_column(String(20), nullable=False, default="private")
 
     # Relationships
-    # Element type stays untyped on purpose: importing Agent here — even under
-    # TYPE_CHECKING — reintroduces a module-level import cycle with
-    # agentarea_agents.domain.models, which imports Skill for Agent.skills.
-    # The mapper target is resolved from the "Agent" registry name below.
+    # Element type stays untyped on purpose. Importing Agent here closes a cycle
+    # with agentarea_agents.domain.models, which imports Skill for Agent.skills;
+    # CodeQL counts a TYPE_CHECKING import as module-level, so guarding it still
+    # fails py/unsafe-cyclic-import — on both sides. Runtime resolution is
+    # unaffected: relationship() keeps the explicit "Agent" registry name.
     agents: Mapped[list[Any]] = relationship(
         "Agent",
         secondary="agent_skills",
