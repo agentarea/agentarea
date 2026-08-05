@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from sqlalchemy import (
@@ -21,6 +21,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+if TYPE_CHECKING:
+    from agentarea_agents.domain.models import Agent
 
 
 class SkillSourceType(StrEnum):
@@ -169,7 +172,3 @@ class SkillMember:
         self.order = order
         self.is_required = is_required
         self.dependencies = dependencies or []
-
-
-# Import Agent for type hints (avoid circular import at runtime)
-from agentarea_agents.domain.models import Agent  # noqa: E402
