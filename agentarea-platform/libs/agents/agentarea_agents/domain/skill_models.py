@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from sqlalchemy import (
@@ -21,9 +21,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-if TYPE_CHECKING:
-    from agentarea_agents.domain.models import Agent
 
 
 class SkillSourceType(StrEnum):
@@ -78,7 +75,11 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     network_scope: Mapped[str] = mapped_column(String(20), nullable=False, default="private")
 
     # Relationships
-    agents: Mapped[list["Agent"]] = relationship(
+    # Element type stays untyped on purpose: importing Agent here — even under
+    # TYPE_CHECKING — reintroduces a module-level import cycle with
+    # agentarea_agents.domain.models, which imports Skill for Agent.skills.
+    # The mapper target is resolved from the "Agent" registry name below.
+    agents: Mapped[list[Any]] = relationship(
         "Agent",
         secondary="agent_skills",
         back_populates="skills",
