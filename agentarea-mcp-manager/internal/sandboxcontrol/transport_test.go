@@ -40,17 +40,36 @@ func TestRedisCASAllowsOnlyOneConcurrentQueuedTransition(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Both writers must race from the same observed revision. Deriving the
+	// revision inside each goroutine would let a fully serialized schedule turn
+	// this into a legal queued -> claimed -> cancelled sequence.
+	transitions := []struct {
+		eventType string
+		status    string
+	}{
+		{EventTypeExecutionClaimed, ExecutionStatusClaimed},
+		{EventTypeExecutionCancelled, ExecutionStatusCancelled},
+	}
 	start := make(chan struct{})
-	errorsByTransition := make(chan error, 2)
+	errorsByTransition := make(chan error, len(transitions))
 	var wait sync.WaitGroup
-	for _, eventType := range []string{EventTypeExecutionClaimed, EventTypeExecutionCancelled} {
+	for _, transition := range transitions {
+		next := cloneExecutionRecord(record)
+		next.Revision = record.Revision + 1
+		next.Status = transition.status
+		next.UpdatedAt = time.Now().UTC()
+		if isTerminalStatus(next.Status) {
+			completedAt := next.UpdatedAt
+			next.CompletedAt = &completedAt
+		}
 		wait.Add(1)
-		go func(eventType string) {
+		go func(eventType string, next *ExecutionRecord) {
 			defer wait.Done()
 			<-start
-			_, applyErr := service.ApplyExecutionEvent(context.Background(), record.ID, ExecutionEventRequest{EventType: eventType})
-			errorsByTransition <- applyErr
-		}(eventType)
+			errorsByTransition <- store.UpdateExecution(
+				context.Background(), record.Revision, next, eventType,
+			)
+		}(transition.eventType, next)
 	}
 	close(start)
 	wait.Wait()
