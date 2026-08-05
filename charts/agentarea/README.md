@@ -291,6 +291,9 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.serverless.sweepInterval | string | `"60s"` |  |
 | mcpManager.serverless.requestLeaseTTL | string | `"90s"` |  |
 | mcpManager.serverless.startupTimeout | string | `"5m"` |  |
+| mcpManager.dataPlane.url | string | `""` |  |
+| mcpManager.dataPlane.tokenSecret | string | `""` |  |
+| mcpManager.dataPlane.tokenKey | string | `""` |  |
 | mcpManager.instanceNetworkPolicy.enabled | bool | `true` |  |
 | mcpManager.instanceNetworkPolicy.dnsNamespace | string | `"kube-system"` |  |
 | mcpManager.instanceNetworkPolicy.blockedEgressCIDRs[0] | string | `"10.0.0.0/8"` |  |

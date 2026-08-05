@@ -213,13 +213,12 @@ func main() {
 	// Detect environment and initialize appropriate backend
 	envType, backend, containerManager := initBackend(ctx, cfg, logger, sandboxPolicy.TaskLeaseTTL)
 
-	// Data-plane mode stops here: this process is a data plane, and everything below
-	// — secrets, Redis, the event bus, the sandbox runtime — is control-plane
-	// wiring that must not exist on a host running untrusted containers.
-	if dataplane.Enabled() {
-		runDataplaneMode(ctx, cfg, backend, logger)
-		return
-	}
+	// Data-plane mode stops here: this process is a data plane, and everything
+	// below — secrets, Redis, the event bus, the sandbox runtime — is
+	// control-plane wiring that must not exist on a host running untrusted
+	// containers. The check lives inside the call so main does not grow another
+	// branch; it returns immediately unless data-plane mode was requested.
+	serveDataPlaneAndExit(ctx, cfg, backend, logger)
 
 	// Initialize secret resolver with Infisical SDK
 	secretResolver, err := secrets.NewSecretResolver(logger)
@@ -464,6 +463,17 @@ func setupRouter(cfg *config.Config, logger *slog.Logger) *gin.Engine {
 	}
 
 	return router
+}
+
+// serveDataPlaneAndExit serves the data-plane API and never returns, unless the
+// process was not asked to be a data plane — then it returns at once and the
+// caller continues into control-plane wiring.
+func serveDataPlaneAndExit(ctx context.Context, cfg *config.Config, backend backends.Backend, logger *slog.Logger) {
+	if !dataplane.Enabled() {
+		return
+	}
+	runDataplaneMode(ctx, cfg, backend, logger)
+	os.Exit(0)
 }
 
 // runDataplaneMode serves the data-plane API and blocks until the process is signalled.
