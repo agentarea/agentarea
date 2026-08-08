@@ -12,6 +12,16 @@ for command in pip pip3 pip3.12 npm npx corepack yarn pnpm; do
     fi
 done
 
+# PATH absence is not enough: `node /usr/lib/node_modules/npm/bin/npm-cli.js`
+# installs packages without ever consulting PATH, so the module trees the image
+# deletes have to be gone too.
+for tree in /usr/lib/node_modules/npm /usr/lib/node_modules/corepack \
+            /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack; do
+    if [ -e "$tree" ]; then
+        fail "$tree remains installed"
+    fi
+done
+
 if python -m pip --version >/dev/null 2>&1; then
     fail "python -m pip remains available"
 fi

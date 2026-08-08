@@ -14,6 +14,7 @@ const DefaultManifestPath = "/etc/agentarea/runtime.json"
 type Manifest struct {
 	SchemaVersion       int                        `json:"schema_version"`
 	ImageVersion        string                     `json:"image_version"`
+	ManagedEnvironment  string                     `json:"managed_environment"`
 	Python              PythonRuntime              `json:"python"`
 	Node                NodeRuntime                `json:"node"`
 	Tools               map[string]string          `json:"tools"`
@@ -33,8 +34,9 @@ type NodeRuntime struct {
 }
 
 type Features struct {
-	Browser                string `json:"browser"`
-	ArbitraryWorkspaceCode bool   `json:"arbitrary_workspace_code"`
+	Browser                    string `json:"browser"`
+	ManagedEnvironmentMutation bool   `json:"managed_environment_mutation"`
+	ArbitraryWorkspaceCode     bool   `json:"arbitrary_workspace_code"`
 }
 
 func (m Manifest) Validate() error {
@@ -43,6 +45,12 @@ func (m Manifest) Validate() error {
 	}
 	if m.ImageVersion == "" || m.Python.Version == "" || m.Node.Version == "" {
 		return fmt.Errorf("runtime manifest is missing image/python/node version")
+	}
+	if m.ManagedEnvironment != "mutable" && m.ManagedEnvironment != "immutable" {
+		return fmt.Errorf("managed_environment must be mutable or immutable, got %q", m.ManagedEnvironment)
+	}
+	if m.Features.ManagedEnvironmentMutation != (m.ManagedEnvironment == "mutable") {
+		return fmt.Errorf("managed environment feature disagrees with %q profile", m.ManagedEnvironment)
 	}
 	if m.Features.Browser != "none" {
 		return fmt.Errorf("browser capability must remain none in this runtime")

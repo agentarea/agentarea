@@ -68,7 +68,9 @@ COPY runtime/test_locked_profile.sh /opt/runtime/test_locked_profile.sh
 # The manifest attests this binary by digest, so it has to be in place, at its
 # final path and permissions, before generate_manifest.py runs. The activation
 # service re-verifies both at execution time (verifyLocalExecutionSupervisor).
-ENV EXEC_SUPERVISOR_PATH=/usr/local/bin/agentarea-exec-supervisor
+# Build-scoped, not ENV: task commands inherit this image's environment, and the
+# attested path already travels in the manifest.
+ARG EXEC_SUPERVISOR_PATH=/usr/local/bin/agentarea-exec-supervisor
 COPY --from=builder /app/bin/agentarea-exec-supervisor ${EXEC_SUPERVISOR_PATH}
 RUN chown root:root ${EXEC_SUPERVISOR_PATH} && chmod 0755 ${EXEC_SUPERVISOR_PATH}
 RUN mkdir -p /etc/agentarea \
@@ -91,6 +93,7 @@ RUN mkdir -p /etc/agentarea \
          *) echo "MANAGED_ENVIRONMENT must be mutable or immutable" >&2; exit 1 ;; \
        esac \
     && RUNTIME_VERSION=${APP_VERSION} MANAGED_ENVIRONMENT=${MANAGED_ENVIRONMENT} \
+       EXEC_SUPERVISOR_PATH=${EXEC_SUPERVISOR_PATH} \
        python /opt/runtime/generate_manifest.py \
        > /etc/agentarea/runtime.json \
     && cat /etc/agentarea/runtime.json \

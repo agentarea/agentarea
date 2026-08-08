@@ -66,10 +66,6 @@ jobs:
             mcp_runner:
               - 'agentarea-mcp-manager/Dockerfile.runner'
               - 'agentarea-mcp-manager/cmd/activation-service/**'
-              # Baked into the runner image: the manifest generator, the locked
-              # profile check, and the supervisor the manifest attests.
-              - 'agentarea-mcp-manager/runtime/**'
-              - 'agentarea-mcp-manager/cmd/exec-supervisor/**'
             operator:
               - 'agentarea-operator/**'
             events:

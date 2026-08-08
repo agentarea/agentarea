@@ -19,11 +19,12 @@ func TestGetRuntimeManifestValidatesDataPlaneResponse(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
   "schema_version": 2,
+  "managed_environment": "mutable",
   "image_version": "test-runtime",
   "python": {"version": "3.12.9", "executable": "/opt/runtime/venv/bin/python"},
   "node": {"version": "v22.1.0", "npm_version": "10.0.0"},
   "tools": {}, "packages": {},
-  "features": {"browser": "none", "arbitrary_workspace_code": true},
+  "features": {"browser": "none", "managed_environment_mutation": true, "arbitrary_workspace_code": true},
   "execution_supervisor": {"path":"/usr/local/bin/agentarea-exec-supervisor","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","protocol_version":1,"command_uid":10001,"command_gid":10001}
 }`))
 	}))

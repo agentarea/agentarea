@@ -243,7 +243,8 @@ class RuntimePython(BaseModel):
 
 class RuntimeNode(BaseModel):
     version: str
-    npm_version: str
+    # None in a locked runtime: the immutable image strips npm on purpose.
+    npm_version: str | None = None
 
 
 class RuntimeFeatures(BaseModel):

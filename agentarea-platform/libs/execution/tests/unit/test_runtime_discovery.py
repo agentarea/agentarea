@@ -97,6 +97,20 @@ def test_render_runtime_prompt_describes_the_workspace() -> None:
     assert "corrupts the file" in prompt
 
 
+def test_locked_runtime_reports_npm_as_absent() -> None:
+    """The immutable image strips npm, so the manifest says so and must validate."""
+    from agentarea_execution.models import RuntimeDiscoveryResult, RuntimeManifest
+
+    payload = _manifest()
+    payload["node"]["npm_version"] = None
+
+    result = RuntimeDiscoveryResult(manifest=RuntimeManifest.model_validate(payload))
+    prompt = render_runtime_prompt(result)
+
+    assert "npm not available" in prompt
+    assert "npm None" not in prompt
+
+
 def test_org_library_line_is_gated_on_the_tool_being_equipped() -> None:
     from agentarea_execution.models import RuntimeDiscoveryResult, RuntimeManifest
 
