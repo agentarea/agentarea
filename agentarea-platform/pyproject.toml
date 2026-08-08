@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentarea-workspace"
-version = "0.0.13"
+version = "0.0.14"
 authors = [
     { name="Artem Astapenko", email="artem.astapenko@agentarea.ai" },
     { name="Julia Astapenko", email="julia.astapenko@agentarea.ai" },
