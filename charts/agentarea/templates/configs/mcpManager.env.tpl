@@ -25,10 +25,6 @@ SANDBOX_WORKSPACE_PROVIDER: "s3"
 SANDBOX_WORKSPACE_MAX_FILES: "{{ .Values.sandboxRuntime.workspace.maxFiles }}"
 SANDBOX_WORKSPACE_MAX_FILE_BYTES: "{{ .Values.sandboxRuntime.workspace.maxFileBytes }}"
 SANDBOX_WORKSPACE_MAX_BYTES: "{{ .Values.sandboxRuntime.workspace.maxBytes }}"
-SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS: "{{ .Values.sandboxRuntime.maxExecutionTimeoutSeconds }}"
-SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS: "{{ .Values.sandboxRuntime.defaultExecutionTimeoutSeconds }}"
-SANDBOX_EXECUTION_QUEUE_TIMEOUT: "{{ .Values.sandboxRuntime.executionQueueTimeout }}"
-SANDBOX_EXECUTION_COMPLETION_GRACE: "{{ .Values.sandboxRuntime.executionCompletionGrace }}"
 SANDBOX_WORKSPACE_SIGNED_URL_TTL: "{{ .Values.sandboxRuntime.workspace.signedUrlTTL }}"
 SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE: "{{ .Values.sandboxRuntime.workspace.forcePathStyle }}"
 KUBERNETES_SECURITY_RUN_AS_NON_ROOT: "true"
@@ -150,26 +146,6 @@ MCP_GATEWAY_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: SANDBOX_WORKSPACE_MAX_BYTES
-- name: SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS
-- name: SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS
-- name: SANDBOX_EXECUTION_QUEUE_TIMEOUT
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: SANDBOX_EXECUTION_QUEUE_TIMEOUT
-- name: SANDBOX_EXECUTION_COMPLETION_GRACE
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
-      key: SANDBOX_EXECUTION_COMPLETION_GRACE
 - name: SANDBOX_WORKSPACE_SIGNED_URL_TTL
   valueFrom:
     configMapKeyRef:

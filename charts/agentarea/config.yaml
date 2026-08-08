@@ -136,10 +136,12 @@ groups:
       SANDBOX_WORKSPACE_MAX_FILES: '{{ .Values.sandboxRuntime.workspace.maxFiles }}'
       SANDBOX_WORKSPACE_MAX_FILE_BYTES: '{{ .Values.sandboxRuntime.workspace.maxFileBytes }}'
       SANDBOX_WORKSPACE_MAX_BYTES: '{{ .Values.sandboxRuntime.workspace.maxBytes }}'
-      SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS: '{{ .Values.sandboxRuntime.maxExecutionTimeoutSeconds }}'
-      SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS: '{{ .Values.sandboxRuntime.defaultExecutionTimeoutSeconds }}'
-      SANDBOX_EXECUTION_QUEUE_TIMEOUT: '{{ .Values.sandboxRuntime.executionQueueTimeout }}'
-      SANDBOX_EXECUTION_COMPLETION_GRACE: '{{ .Values.sandboxRuntime.executionCompletionGrace }}'
+      # SANDBOX_{MAX,DEFAULT}_EXECUTION_TIMEOUT_SECONDS,
+      # SANDBOX_EXECUTION_QUEUE_TIMEOUT and SANDBOX_EXECUTION_COMPLETION_GRACE
+      # are deliberately absent here. agentarea.sandboxRuntime.envs emits them
+      # from the same sandboxRuntime values to both mcp-manager and
+      # sandbox-runner; declaring them again produced two env entries with one
+      # name, which makes server-side apply reject the Deployment.
       SANDBOX_WORKSPACE_SIGNED_URL_TTL: '{{ .Values.sandboxRuntime.workspace.signedUrlTTL }}'
       SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE: '{{ .Values.sandboxRuntime.workspace.forcePathStyle }}'
       KUBERNETES_SECURITY_RUN_AS_NON_ROOT: 'true'
