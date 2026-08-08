@@ -1020,15 +1020,17 @@ func newTestManager(t *testing.T) (*Manager, *fakeExternalProvider) {
 
 func testManifest() *runtimeinfo.Manifest {
 	return &runtimeinfo.Manifest{
-		SchemaVersion: 2,
-		ImageVersion:  "runtime-test",
-		Python:        runtimeinfo.PythonRuntime{Version: "3.12", Executable: "/usr/bin/python3"},
-		Node:          runtimeinfo.NodeRuntime{Version: "v22"},
-		Tools:         map[string]string{},
-		Packages:      map[string]string{},
+		SchemaVersion:      2,
+		ImageVersion:       "runtime-test",
+		Python:             runtimeinfo.PythonRuntime{Version: "3.12", Executable: "/usr/bin/python3"},
+		Node:               runtimeinfo.NodeRuntime{Version: "v22"},
+		Tools:              map[string]string{},
+		Packages:           map[string]string{},
+		ManagedEnvironment: "mutable",
 		Features: runtimeinfo.Features{
-			Browser:                "none",
-			ArbitraryWorkspaceCode: true,
+			Browser:                    "none",
+			ManagedEnvironmentMutation: true,
+			ArbitraryWorkspaceCode:     true,
 		},
 		ExecutionSupervisor: testSupervisorAttestation(),
 	}

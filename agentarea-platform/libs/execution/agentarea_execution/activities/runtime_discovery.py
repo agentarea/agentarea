@@ -60,11 +60,17 @@ def render_runtime_prompt(
         else ""
     )
 
+    npm_state = (
+        f"npm {manifest.node.npm_version}"
+        if manifest.node.npm_version
+        else "npm not available in this runtime"
+    )
+
     return (
         "\n\n# Runtime environment\n\n"
         f"- Image: {manifest.image_version}\n"
         f"- Python: {manifest.python.version}\n"
-        f"- Node: {manifest.node.version} (npm {manifest.node.npm_version})\n"
+        f"- Node: {manifest.node.version} ({npm_state})\n"
         f"- Managed environment: {manifest.managed_environment}\n"
         f"- Preinstalled Python packages: {package_names or 'none declared'}\n"
         f"- {browser_policy}\n"
