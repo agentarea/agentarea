@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 )
@@ -14,48 +13,27 @@ func TestGetRuntimeManifestValidatesDataPlaneResponse(t *testing.T) {
 		if r.URL.Path != "/runtime/manifest" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
-		if got := r.URL.Query().Get("package_install"); got != "allowed" {
-			t.Fatalf("package_install = %q, want allowed", got)
+		if r.URL.RawQuery != "" {
+			t.Fatalf("unexpected query %q", r.URL.RawQuery)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
-  "schema_version": 1,
+  "schema_version": 2,
   "image_version": "test-runtime",
-  "managed_environment": "mutable",
   "python": {"version": "3.12.9", "executable": "/opt/runtime/venv/bin/python"},
   "node": {"version": "v22.1.0", "npm_version": "10.0.0"},
   "tools": {}, "packages": {},
-  "features": {"browser": "none", "managed_environment_mutation": true, "arbitrary_workspace_code": true}
+  "features": {"browser": "none", "arbitrary_workspace_code": true},
+  "execution_supervisor": {"path":"/usr/local/bin/agentarea-exec-supervisor","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","protocol_version":1,"command_uid":10001,"command_gid":10001}
 }`))
 	}))
 	defer server.Close()
 
-	manifest, err := GetRuntimeManifest(context.Background(), server.URL, time.Second, "allowed")
+	manifest, err := GetRuntimeManifest(context.Background(), server.URL, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if manifest.ImageVersion != "test-runtime" || manifest.ManagedEnvironment != "mutable" {
+	if manifest.ImageVersion != "test-runtime" {
 		t.Fatalf("unexpected manifest: %#v", manifest)
-	}
-}
-
-func TestGetRuntimeManifestRejectsProfileMismatch(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
-  "schema_version": 1,
-  "image_version": "test-runtime",
-  "managed_environment": "mutable",
-  "python": {"version": "3.12.9", "executable": "/opt/runtime/venv/bin/python"},
-  "node": {"version": "v22.1.0", "npm_version": "10.0.0"},
-  "tools": {}, "packages": {},
-  "features": {"browser": "none", "managed_environment_mutation": true, "arbitrary_workspace_code": true}
-}`))
-	}))
-	defer server.Close()
-
-	_, err := GetRuntimeManifest(context.Background(), server.URL, time.Second, "locked")
-	if err == nil || !strings.Contains(err.Error(), "does not support") {
-		t.Fatalf("GetRuntimeManifest() error = %v, want profile mismatch", err)
 	}
 }

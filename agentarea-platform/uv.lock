@@ -77,6 +77,7 @@ dependencies = [
     { name = "a2a-sdk" },
     { name = "agentarea-common" },
     { name = "agentarea-governance" },
+    { name = "agentarea-llm" },
     { name = "httpx" },
     { name = "pydantic" },
     { name = "python-frontmatter" },
@@ -87,6 +88,7 @@ requires-dist = [
     { name = "a2a-sdk", specifier = ">=0.2.8" },
     { name = "agentarea-common", editable = "libs/common" },
     { name = "agentarea-governance", editable = "libs/governance" },
+    { name = "agentarea-llm", editable = "libs/llm" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "pydantic", specifier = ">=2.4.2" },
     { name = "python-frontmatter", specifier = ">=1.1.0" },
@@ -259,6 +261,7 @@ version = "0.0.13"
 source = { editable = "libs/execution" }
 dependencies = [
     { name = "agentarea-agents-sdk" },
+    { name = "agentarea-governance" },
     { name = "agentarea-payment" },
     { name = "agentarea-wallet" },
     { name = "prometheus-client" },
@@ -276,6 +279,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agentarea-agents-sdk", editable = "libs/agentarea-agents-sdk" },
+    { name = "agentarea-governance", editable = "libs/governance" },
     { name = "agentarea-payment", editable = "libs/payment" },
     { name = "agentarea-wallet", editable = "libs/wallet" },
     { name = "prometheus-client", specifier = ">=0.23.0" },

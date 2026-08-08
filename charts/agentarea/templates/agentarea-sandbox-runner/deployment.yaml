@@ -31,6 +31,7 @@ spec:
             {{- include "agentarea.redis.envs" . | nindent 12 }}
             {{- include "agentarea.redis.urlEnv" . | nindent 12 }}
             {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
+            {{- include "agentarea.mcpManager.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.storage.envs" . | nindent 12 }}
             {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
             - name: SANDBOX_ACTIVATION_AUTH_SECRET
@@ -54,4 +55,13 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- $execKubeconfig := include "agentarea.mcpManager.executionKubeconfigPath" . }}
+          {{- if $execKubeconfig }}
+          volumeMounts:
+            {{- include "agentarea.mcpManager.executionKubeconfigMount" . | nindent 12 }}
+          {{- end }}
+      {{- if $execKubeconfig }}
+      volumes:
+        {{- include "agentarea.mcpManager.executionKubeconfigVolume" . | nindent 8 }}
+      {{- end }}
 {{- end }}

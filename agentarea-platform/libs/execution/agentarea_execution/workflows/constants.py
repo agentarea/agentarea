@@ -58,6 +58,7 @@ class EventTypes:
     WORKFLOW_COMPLETED: Final[str] = "task.completed"
     WORKFLOW_FAILED: Final[str] = "task.failed"
     WORKFLOW_CANCELLED: Final[str] = "task.cancelled"
+    WORKFLOW_AWAITING_FOLLOW_UP: Final[str] = "task.awaiting_follow_up"
     WORKFLOW_AWAITING_CONTINUATION: Final[str] = "task.awaiting_continuation"
     WORKFLOW_CONTINUED: Final[str] = "task.continued"
     VALIDATION_STARTED: Final[str] = "artifact.validation.started"
@@ -132,7 +133,6 @@ class Activities:
     UPDATE_TASK_STATUS: Final[str] = "update_task_status_activity"
     UPDATE_TASK_GOVERNANCE_SNAPSHOT: Final[str] = "update_task_governance_snapshot_activity"
     MATERIALIZE_SKILL_FILES: Final[str] = "materialize_skill_files_activity"
-    CLEANUP_SANDBOX_TASK: Final[str] = "cleanup_sandbox_task_activity"
     # Dynamic context discovery
     DISCOVER_TOOL_PROVIDERS: Final[str] = "discover_tool_providers_activity"
     STORE_CONTEXT_OUTPUT: Final[str] = "store_context_output"

@@ -7,12 +7,12 @@ so they must survive any policy.
 """
 
 from agentarea_execution.workflows.helpers import (
-    CONTROL_FLOW_TOOLS,
     ToolAction,
     decide_tool_action,
     filter_disclosed_tools,
     tool_definition_name,
 )
+from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
 
 
 def fn(name: str) -> dict:
@@ -40,10 +40,10 @@ def test_control_flow_tools_survive_even_an_explicit_deny():
     # by name must not strand the workflow — without completion the agent can
     # never finish, and without request_user_input it can never ask. A denied
     # capability tool (shell) is still excluded.
-    policy = {"tools": {"denied": ["shell", *CONTROL_FLOW_TOOLS]}}
-    tools = [fn(name) for name in sorted(CONTROL_FLOW_TOOLS)] + [fn("shell")]
+    policy = {"tools": {"denied": ["shell", *CONTROL_FLOW_TOOL_NAMES]}}
+    tools = [fn(name) for name in sorted(CONTROL_FLOW_TOOL_NAMES)] + [fn("shell")]
     kept = names(filter_disclosed_tools(policy, tools))
-    assert set(kept) == CONTROL_FLOW_TOOLS
+    assert set(kept) == CONTROL_FLOW_TOOL_NAMES
     assert "shell" not in kept
 
 

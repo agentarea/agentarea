@@ -6,20 +6,102 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	redis "github.com/go-redis/redis/v8"
 
-	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 	"github.com/agentarea/mcp-manager/internal/workspace"
 )
 
-func TestExecutionContractsRejectLegacyInlineFiles(t *testing.T) {
+func TestRedisCASAllowsOnlyOneConcurrentQueuedTransition(t *testing.T) {
+	server := miniredis.RunT(t)
+	store, err := NewRedisStore(
+		"redis://"+server.Addr(), "cas", time.Hour,
+		testExecutionPolicy(testMaxExecutionTimeoutSeconds),
+		WithEventStreams("cas.requests", "cas.events", "test"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	service := newTestService(t, store, testMaxExecutionTimeoutSeconds)
+	record, err := service.CreateExecution(context.Background(), ExecutionCreateRequest{
+		WorkspaceID: "workspace-1", TaskID: "task-1",
+		Command: warmpool.ExecuteRequest{CommandBody: "true"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Both writers must race from the same observed revision. Deriving the
+	// revision inside each goroutine would let a fully serialized schedule turn
+	// this into a legal queued -> claimed -> cancelled sequence.
+	transitions := []struct {
+		eventType string
+		status    string
+	}{
+		{EventTypeExecutionClaimed, ExecutionStatusClaimed},
+		{EventTypeExecutionCancelled, ExecutionStatusCancelled},
+	}
+	start := make(chan struct{})
+	errorsByTransition := make(chan error, len(transitions))
+	var wait sync.WaitGroup
+	for _, transition := range transitions {
+		next := cloneExecutionRecord(record)
+		next.Revision = record.Revision + 1
+		next.Status = transition.status
+		next.UpdatedAt = time.Now().UTC()
+		if isTerminalStatus(next.Status) {
+			completedAt := next.UpdatedAt
+			next.CompletedAt = &completedAt
+		}
+		wait.Add(1)
+		go func(eventType string, next *ExecutionRecord) {
+			defer wait.Done()
+			<-start
+			errorsByTransition <- store.UpdateExecution(
+				context.Background(), record.Revision, next, eventType,
+			)
+		}(transition.eventType, next)
+	}
+	close(start)
+	wait.Wait()
+	close(errorsByTransition)
+	succeeded, conflicted := 0, 0
+	for applyErr := range errorsByTransition {
+		switch {
+		case applyErr == nil:
+			succeeded++
+		case errors.Is(applyErr, ErrExecutionConflict):
+			conflicted++
+		default:
+			t.Fatalf("unexpected transition error: %v", applyErr)
+		}
+	}
+	if succeeded != 1 || conflicted != 1 {
+		t.Fatalf("concurrent results: succeeded=%d conflicted=%d", succeeded, conflicted)
+	}
+	stored, err := store.GetExecution(context.Background(), record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Revision != 2 {
+		t.Fatalf("stored revision = %d, want 2", stored.Revision)
+	}
+	events, err := store.RedisClient().XLen(context.Background(), "cas.events").Result()
+	if err != nil || events != 1 {
+		t.Fatalf("lifecycle stream length = %d, error = %v", events, err)
+	}
+}
+
+func TestExecutionContractsRejectInlineFiles(t *testing.T) {
 	canary := "REDIS-FILE-BODY-CANARY"
 	encodedCanary := base64.StdEncoding.EncodeToString([]byte(canary))
 	payloads := []string{
@@ -32,7 +114,7 @@ func TestExecutionContractsRejectLegacyInlineFiles(t *testing.T) {
 		var request ExecutionCreateRequest
 		err := json.Unmarshal([]byte(payload), &request)
 		if err == nil || !strings.Contains(err.Error(), "unsupported_contract_version") {
-			t.Fatalf("legacy payload accepted: %s; error = %v", payload, err)
+			t.Fatalf("inline-file payload accepted: %s; error = %v", payload, err)
 		}
 	}
 
@@ -67,7 +149,7 @@ func TestExecutionContractsRejectCallerControlledBodyChannels(t *testing.T) {
 
 func TestRedisStoreRejectsNonInternalMetadata(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := NewRedisStore("redis://"+server.Addr(), "agentarea:sandbox", time.Hour)
+	store, err := NewRedisStore("redis://"+server.Addr(), "agentarea:sandbox", time.Hour, testExecutionPolicy(testMaxExecutionTimeoutSeconds))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +166,7 @@ func TestRedisStoreRejectsNonInternalMetadata(t *testing.T) {
 
 func TestRedisStoreAcceptsAllowlistedRunnerMetadata(t *testing.T) {
 	server := miniredis.RunT(t)
-	store, err := NewRedisStore("redis://"+server.Addr(), "agentarea:sandbox", time.Hour)
+	store, err := NewRedisStore("redis://"+server.Addr(), "agentarea:sandbox", time.Hour, testExecutionPolicy(testMaxExecutionTimeoutSeconds))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,28 +186,34 @@ func validStoredExecutionRecord() *ExecutionRecord {
 	now := time.Now().UTC()
 	return &ExecutionRecord{
 		ID:                   "sexec-test-1",
+		Revision:             1,
 		WorkflowID:           "workflow-1",
 		TaskID:               ref.TaskID,
 		WorkspaceID:          ref.WorkspaceID,
-		Runtime:              RuntimeSelector{PackageInstall: runtimeinfo.PackageInstallAllowed},
 		Status:               ExecutionStatusQueued,
-		Command:              warmpool.ExecuteRequest{CommandBody: "echo ok"},
+		Command:              warmpool.ExecuteRequest{CommandBody: "echo ok", TimeoutSeconds: 120},
 		WorkspaceManifestRef: ref,
 		CreatedAt:            now,
 		UpdatedAt:            now,
+		QueueExpiresAt:       now.Add(5 * time.Minute),
 	}
 }
 
 func TestRedisTransportRefsOnlyCanary(t *testing.T) {
 	server := miniredis.RunT(t)
 	ctx := context.Background()
-	store, err := NewRedisStore("redis://"+server.Addr(), "agentarea:sandbox", time.Hour)
+	store, err := NewRedisStore(
+		"redis://"+server.Addr(),
+		"agentarea:sandbox",
+		time.Hour,
+		testExecutionPolicy(testMaxExecutionTimeoutSeconds),
+		WithEventStreams("test.requests", "test.events", "test"),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	events := NewRedisEventBus(store.RedisClient(), "test.requests", "test.events", "test")
-	service := NewService(store, events)
+	service := newTestService(t, store, testMaxExecutionTimeoutSeconds)
 	pubsub := store.RedisClient().Subscribe(ctx, "test.requests", "test.events")
 	defer pubsub.Close()
 	if _, err := pubsub.Receive(ctx); err != nil {
@@ -136,10 +224,10 @@ func TestRedisTransportRefsOnlyCanary(t *testing.T) {
 	canary := []byte("UNIQUE-WORKSPACE-FILE-CANARY-DO-NOT-TRANSPORT")
 	first := createRefsOnlyExecution(t, ctx, service, canary, 1024, 1)
 	firstRaw := rawExecutionTransport(t, ctx, store.RedisClient(), first.ID, "test.requests", "test.events")
-	firstRaw = append(firstRaw, readPubSubTransport(t, pubsubMessages, first.ID, 2)...)
+	firstRaw = append(firstRaw, readPubSubTransport(t, pubsubMessages, first.ID, 4)...)
 	second := createRefsOnlyExecution(t, ctx, service, canary, 32*1024*1024, 2)
 	secondRaw := rawExecutionTransport(t, ctx, store.RedisClient(), second.ID, "test.requests", "test.events")
-	secondRaw = append(secondRaw, readPubSubTransport(t, pubsubMessages, second.ID, 2)...)
+	secondRaw = append(secondRaw, readPubSubTransport(t, pubsubMessages, second.ID, 4)...)
 
 	combined := append(append([]byte{}, firstRaw...), secondRaw...)
 	for _, forbidden := range [][]byte{
@@ -201,7 +289,6 @@ func createRefsOnlyExecution(t *testing.T, ctx context.Context, service *Service
 		FencingToken:   generation,
 	}
 	record, err := service.CreateExecution(ctx, ExecutionCreateRequest{
-		Runtime:              RuntimeSelector{PackageInstall: runtimeinfo.PackageInstallAllowed},
 		TaskID:               ref.TaskID,
 		WorkspaceID:          ref.WorkspaceID,
 		WorkspaceManifestRef: ref,
@@ -210,6 +297,7 @@ func createRefsOnlyExecution(t *testing.T, ctx context.Context, service *Service
 	if err != nil {
 		t.Fatal(err)
 	}
+	moveExecutionToRunning(t, service, record.ID)
 	next := *ref
 	next.BaseGeneration = ref.Generation
 	next.Generation++

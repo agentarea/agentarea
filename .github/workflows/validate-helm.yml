@@ -110,3 +110,6 @@ jobs:
 
       - name: Verify sandbox cleanup secret isolation
         run: scripts/test-sandbox-cleanup-helm.sh
+
+      - name: Verify execution cluster kubeconfig wiring
+        run: scripts/test-execution-cluster-helm.sh

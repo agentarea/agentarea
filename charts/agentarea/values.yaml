@@ -48,6 +48,17 @@ global:
     # Application secrets (JWT, encryption keys)
     application: "agentarea-app-secrets"
 
+  # Pre-provision this Secret through SOPS/SealedSecret/ExternalSecret or the
+  # customer's secret manager. The chart never generates these cross-service
+  # credentials, which keeps ArgoCD rendering deterministic.
+  runtimeCredentials:
+    existingSecret: "agentarea-runtime-credentials"
+    keys:
+      mcpGateway: "mcp-gateway-token"
+      sandboxFile: "sandbox-file-token"
+      sandboxInspection: "sandbox-inspection-token"
+      sandboxCleanup: "sandbox-cleanup-token"
+
   # Database configuration
   database:
     # Secret name where database credentials are stored
@@ -289,16 +300,6 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-    # S3 API endpoint of the bundled object store, exposed for browser-direct
-    # presigned uploads/downloads. Only the S3 API port (9000) is routed; the
-    # admin console (9001) is never exposed. Set the host to enable, and point
-    # global.storage.publicEndpoint at the same host so presigned URLs are signed
-    # against it. Leave host empty to keep the store cluster-internal.
-    rustfs:
-      host: ""  # e.g., storage.example.com
-      paths:
-        - path: /
-          pathType: Prefix
   # TLS configuration
   tls: []
     # - secretName: agentarea-tls
@@ -527,20 +528,42 @@ mcpManager:
   # first call and reclaimed once it has gone idle, instead of running from
   # creation until it is deleted.
   #
-  # Off by default. Enabling changes two user-visible things: an instance's
-  # first call pays a cold start, and creating a connection no longer verifies
-  # it immediately — a bad image or a missing variable surfaces on first use
-  # rather than in the form. That is a product decision, not a chart upgrade.
-  #
-  # Only instances created while this is on are serverless; the choice is
-  # recorded per instance, so turning it on does not retroactively change the
-  # lifetime of instances that already exist.
+  # All container-backed calls pass through the manager demand gateway. This
+  # switch controls idle reclaim only: with it disabled, the first verification
+  # or call starts the workload and it remains running; with it enabled, the
+  # workload is also reclaimed after idleTimeout and restarted by the next call.
   serverless:
-    enabled: false
+    # Scale-to-zero. The instance row is desired state and is never removed by
+    # a timer; only the workload behind it is reclaimed and re-created on the
+    # next request.
+    enabled: true
     # How long an instance may go uncalled before its workload is reclaimed.
     idleTimeout: "10m"
     # How often to look for idle instances.
     sweepInterval: "60s"
+    # Renewable DB lease held for the complete lifetime of each HTTP request.
+    requestLeaseTTL: "90s"
+    # Maximum time the gateway waits for a cold workload to become Ready.
+    startupTimeout: "5m"
+
+  # Run MCP containers on a remote host instead of in this cluster.
+  #
+  # That host runs this same image with MCP_MANAGER_MODE=dataplane, which builds
+  # only a container backend — no database, no Redis, no secret manager. It is
+  # the arrangement that keeps user-supplied MCP images off the control plane's
+  # nodes without requiring a second Kubernetes cluster, and the data plane can
+  # only touch instances it created itself.
+  #
+  # Setting url switches BACKEND_TYPE to dataplane. All three fields go together
+  # or none do; a partial set stops the render rather than silently falling back
+  # to running containers here.
+  dataPlane:
+    # Base URL of the data plane, e.g. https://mcp-dp.example.com. Must be https
+    # unless the hop is already private, since the token travels on it.
+    url: ""
+    # Existing Secret holding the shared token, and the key inside it.
+    tokenSecret: ""
+    tokenKey: ""
 
   # Egress restriction for spawned MCP instance pods (which may run untrusted,
   # user-supplied images). Denies cluster-internal + cloud-metadata egress while
@@ -560,6 +583,14 @@ mcpManager:
       - 172.16.0.0/12
       - 192.168.0.0/16
       - 169.254.0.0/16
+    # Ranges the kubelet probes instance pods from — normally the node network.
+    # An enforcing CNI drops the readiness probe without this, the instance never
+    # reports ready, and container-backed MCP is permanently unavailable. Narrow
+    # to your actual node CIDR; set to [] only on a CNI that exempts host traffic.
+    probeIngressCIDRs:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
     # Extra raw NetworkPolicyEgressRule entries appended as-is (e.g. to allow a
     # specific in-cluster dependency).
     extraEgress: []
@@ -597,22 +628,87 @@ mcpManager:
     name: "envoy-gateway"              # Name of the Gateway resource
     namespace: "envoy-gateway-system"  # Namespace where Gateway is deployed
   
-  # Container runtime class for every workload that executes code we did not
-  # write: MCP server instances AND agent sandbox pods. One setting governs
-  # both, so the sandbox can never end up less confined than an MCP server.
+  # Container runtime class for MCP server instance pods. Sandbox pods have
+  # their own setting (sandboxRuntime.runtimeClass) and a stricter rule — the
+  # two workloads carry different code and cannot share one answer. A sandbox
+  # runs code the agent wrote; an MCP server runs an image the workspace owner
+  # picked from a catalog.
   #
   #   "gvisor"    — gVisor/runsc. Needs no KVM or nested virtualization, so it
   #                 works on ordinary cloud VMs. Requires runsc + the containerd
   #                 shim installed on the nodes and a matching RuntimeClass.
   #   "kata-qemu" — Kata Containers. A real kernel per pod, but requires KVM,
   #                 which managed clusters on virtualized nodes rarely expose.
-  #   ""          — the node's default runtime (runc). NO kernel isolation:
-  #                 untrusted code shares the host kernel. Acceptable for local
-  #                 development only.
+  #   ""          — the node's default runtime (runc). No kernel isolation.
+  #                 Permitted here because MCP instances are additionally
+  #                 confined by the standard isolation tier (all capabilities
+  #                 dropped, no privilege escalation, bounded scratch) and
+  #                 restricted to catalog images. Do NOT open user-supplied
+  #                 images on an empty runtime class.
   #
   # The name must match a RuntimeClass that exists in the cluster; Kubernetes
   # refuses to schedule the pod otherwise, which is the correct failure.
   runtimeClass: ""
+
+  # Confinement applied to every MCP instance pod, on top of runtimeClass.
+  #   trusted   — images we build and ship ourselves
+  #   standard  — third-party catalog images: all capabilities dropped, no
+  #               privilege escalation, bounded pids, host default runtime
+  #   untrusted — adds a syscall-interposing runtime class, so the cluster must
+  #               actually provide one or the pod never schedules
+  isolationTier: "standard"
+
+  # What an MCP instance is allowed to run. This is admission, not confinement:
+  # the isolation tier decides how tightly a workload is boxed, this decides
+  # whether it may exist. On nodes offering only the default container runtime
+  # there is no kernel boundary behind it, so the set has to be closed by name.
+  #
+  # At least one list must be non-empty or no instance could ever start.
+  # Both lists below ship a small trusted starter set rather than an empty one,
+  # so a default install has something runnable. Narrow or replace them to match
+  # what your catalog actually offers.
+  admission:
+    # Image repositories, without tag or digest, e.g.
+    # "ghcr.io/vendor/notion-mcp". Any tag in an admitted repository is allowed;
+    # pin digests in the catalog when you need immutability.
+    allowedImageRepositories:
+      - ghcr.io/github/github-mcp-server
+      - mcp/fetch
+    # Whole stdio invocations a command-type instance may run, executable and
+    # arguments together, exactly as the catalog spells them: npm packages come
+    # through as "npx -y <package>" and PyPI ones as "uvx <package>". The
+    # arguments are part of the entry because the executable alone is not a
+    # gate — npx and uvx will fetch and run whatever package they are pointed
+    # at, so admitting "npx" would admit all of npm through our bridge image.
+    allowedCommandPackages:
+      - npx -y @modelcontextprotocol/server-everything
+      - npx -y @modelcontextprotocol/server-sequential-thinking
+      - uvx mcp-server-fetch
+      - uvx mcp-server-time
+  # The cluster MCP instances and agent sandboxes are created in, when that is
+  # not the cluster the control plane itself runs in. Runtime class confines
+  # untrusted code to its own kernel; this moves it onto other machines
+  # entirely. `deploy/sandbox-host` provisions such a cluster and leaves a
+  # kubeconfig behind.
+  #
+  # Leaving kubeconfigSecret empty means "create workloads in the cluster I am
+  # in". That is discovery, not a fallback: nothing was declared to fall back
+  # from. Setting it WINS over the manager's in-cluster credentials, and a
+  # kubeconfig that will not load stops the manager rather than sending
+  # untrusted pods to whichever cluster is nearest.
+  #
+  # Both fields or neither. kubeconfigKey has no default because a defaulted
+  # key makes a forgotten Secret name indistinguishable from an execution
+  # cluster that was never configured — the chart would render in-cluster mode
+  # while the operator believed otherwise. Half-configured renders are refused.
+  executionCluster:
+    # Name of an existing Secret in the release namespace holding the execution
+    # cluster's kubeconfig. Create it out of band: cluster credentials passed
+    # through values would be kept in plaintext release history.
+    kubeconfigSecret: ""
+    # Key within that Secret. Projected read-only at /etc/agentarea/exec/<key>,
+    # the same path the dev compose stack mounts it at.
+    kubeconfigKey: ""
 
   # Untrusted MCP runtime and sandbox task pods use this zero-RBAC
   # ServiceAccount instead of the control-plane ServiceAccount.
@@ -639,7 +735,7 @@ mcpManager:
     enabled:
       - gateway_api        # HTTPRoute creation for Envoy Gateway
       - state_reconciler   # Background state reconciliation
-      # - warm_pool        # Fast cold start pool (requires extra memory)
+      - warm_pool          # Built-in Kubernetes sandbox data plane
       # - kata_runtime     # VM isolation (requires Kata installed)
       # - advanced_scaling # KEDA autoscaling
     
@@ -648,36 +744,22 @@ mcpManager:
   
   # Warm pool configuration for fast cold starts
   warmPool:
-    enabled: false  # Enable for fast activation (200-500ms vs 5-15s)
-    # Pools are profile-specific. `allowed` must point at a mutable image build;
-    # `locked` must point at an immutable image build. The manager routes by the
-    # exact package-install label and never falls back across profiles.
-    profiles:
-      - packageInstall: allowed
-        managedEnvironment: mutable
-        image:
-          repository: agentarea/agentarea-mcp-runner
-          tag: "latest"
-          pullPolicy: IfNotPresent
-      - packageInstall: locked
-        managedEnvironment: immutable
-        image:
-          repository: agentarea/agentarea-mcp-runner-locked
-          tag: "latest"
-          pullPolicy: IfNotPresent
+    # Required by the chart's default built-in Kubernetes sandbox provider.
+    # Disable only when sandboxRuntime.provider selects an external provider.
+    enabled: true
+    # One deployment-owned runtime image serves every sandbox task. Callers do
+    # not select images or runtime policy.
+    image:
+      repository: agentarea/agentarea-mcp-runner
+      tag: "latest"
+      pullPolicy: IfNotPresent
 
-    # Locked pods get no public egress. Add only stable S3 endpoint CIDRs here
-    # when object storage is external to the cluster. Broad public routes are
-    # rejected by the template; DNS and in-cluster RustFS are already allowed.
-    lockedNetworkPolicy:
-      s3EgressCIDRs: []
-
-    # Maximum duration of a single sandbox command. Task pod lifetime is
-    # controlled separately by MCP Manager task lease/idle TTL settings.
-    maxExecutionTimeoutSeconds: 1800
+    # Explicit zero disables process-local idle exit; pod retirement is owned
+    # by the manager's fenced task lifecycle.
+    idleTimeoutSeconds: 0
     
     # Number of warm pods per node
-    size: 10
+    size: 1
     
     # Logging level
     logLevel: "info"
@@ -701,24 +783,60 @@ mcpManager:
 sandboxRuntime:
   provider: ""
   region: ""
+  # Container runtime class for sandbox/warm-pool pods. Unlike MCP instances
+  # these execute code the agent itself wrote, so an empty value is refused
+  # unless allowWeakIsolationForDevelopment is explicitly set.
+  runtimeClass: "gvisor"
+  # Opt out of the runtimeClass requirement for local development. Never set
+  # this where a real workspace can submit a task.
+  allowWeakIsolationForDevelopment: false
+  # Deployment-level public internet policy. The manager applies this to the
+  # selected provider; task/tool callers cannot override it.
+  allowInternet: false
   # Active task sessions are renewed to this lease on every file/command access
   # and while a command is running. Keep this long enough that a live agent's
   # unfinished workspace is not reclaimed during ordinary thinking time.
   leaseTTL: "2h"
+  # Upper bound for one external provider create request. The durable
+  # provisioning intent remains fenced for this interval plus leaseTTL.
+  provisioningTimeout: "30s"
   # Once the workflow explicitly retires a completed task, keep the sandbox for
   # this short grace period before the provider releases it.
   idleTTL: "15m"
   sessionRecordTTL: "24h"
+  # How long finished sandbox execution records stay queryable. Required: the
+  # API and the runner both read this one value, so retention cannot drift.
+  executionRecordTTL: "24h"
+  # One admission limit shared by the API/runner and every executor. Requests
+  # above it are rejected rather than silently shortened by a data plane.
+  maxExecutionTimeoutSeconds: 1800
+  # Applied by the manager only when a caller omits timeout_seconds. The
+  # resolved value is persisted in the execution aggregate before scheduling.
+  defaultExecutionTimeoutSeconds: 120
+  # Separate server-owned queue/startup window; command runtime begins only
+  # after the runner records the started transition.
+  executionQueueTimeout: "5m"
+  # Bounded allowance for provider shutdown, workspace commit, and durable
+  # output publication after the command deadline.
+  executionCompletionGrace: "2m"
+  workspace:
+    # Explicit admission policy shared by live sandbox files, durable inputs,
+    # and published artifacts. MaxFileBytes is enforced synchronously for task
+    # commands through RLIMIT_FSIZE. maxFiles and aggregate maxBytes are audited
+    # after a command reaches proven process quiescence; the built-in Kubernetes
+    # runtime additionally applies emptyDir.sizeLimit and an ephemeral-storage
+    # container limit. The manager refuses malformed or missing values.
+    maxFiles: "10000"
+    maxFileBytes: "268435456"
+    maxBytes: "2147483648"
+    signedUrlTTL: "1h"
+    forcePathStyle: true
   resources:
     cpu: 500m
     memory: 512Mi
 
-  # External templates must publish an explicit runtime manifest. Omitting a
-  # requested profile makes that profile unavailable rather than falling back
-  # to a weaker image/template.
-  manifests:
-    allowed: {}
-    locked: {}
+  # External runtimes must publish exactly one explicit capability manifest.
+  manifest: {}
 
   opensandbox:
     url: ""
@@ -726,25 +844,28 @@ sandboxRuntime:
     # OpenSandbox Docker runtime does not implement secureAccess. It may only
     # be disabled together with useServerProxy so workload ports stay private.
     secureAccess: true
-    # Required provider-side isolation contract. Production values are gvisor,
-    # kata, or firecracker. container-dev is accepted only with the explicit
-    # development opt-in below and must never be used for untrusted production
-    # workloads.
+    # Required provider-side isolation contract. The current OpenSandbox
+    # adapter accepts only gvisor for production because it can verify runsc;
+    # kata/firecracker fail startup until a verifiable provider attestation is
+    # implemented. container-dev is accepted only with the explicit development
+    # opt-in below and must never be used for untrusted production workloads.
     isolation: ""
+    # Operator-pinned identity of the OpenSandbox server + secure runtime
+    # profile (for example server image/config digest plus runsc version).
+    # Required for strong isolation and recorded on every provider binding.
+    runtimeIdentity: ""
     # provider uses OpenSandbox per-sandbox networkPolicy. host-public is the
     # dedicated Docker+gVisor profile and requires an audited host firewall.
     egressMode: ""
     allowWeakIsolationForDevelopment: false
     useServerProxy: true
-    persistWorkspace: true
-    volumePrefix: agentarea-task
+    # Full-volume retention is intentionally unavailable until archive/delete
+    # lifecycle and garbage collection are configured.
     authHeader: OPEN-SANDBOX-API-KEY
     apiKeySecretRef:
       name: ""
       key: ""
-    images:
-      allowed: ""
-      locked: ""
+    image: ""
     entrypoint: []
 
   # E2B Cloud, BYOC, and self-hosted E2B all use this one adapter; apiUrl and
@@ -753,15 +874,18 @@ sandboxRuntime:
     apiUrl: ""
     sandboxUrl: ""
     allowInsecure: false
-    internetAccess:
-      allowed: false
-      locked: false
+    # The boundary the template must attest before it runs task code. Accepted
+    # values are firecracker, gvisor and kata — there is no weaker tier and no
+    # fallback: an endpoint that cannot attest one is refused.
+    isolation: firecracker
+    # Where the template publishes its attestation document.
+    attestationPath: /etc/agentarea/isolation-attestation.json
+    # Optional pin of the attested runtime build.
+    runtimeIdentity: ""
     apiKeySecretRef:
       name: ""
       key: ""
-    templates:
-      allowed: ""
-      locked: ""
+    template: ""
 
   # Cube is E2B protocol-compatible and therefore uses the same adapter with a
   # separate operator-facing mode and configuration namespace.
@@ -769,15 +893,13 @@ sandboxRuntime:
     apiUrl: ""
     sandboxUrl: ""
     allowInsecure: false
-    internetAccess:
-      allowed: false
-      locked: false
+    isolation: firecracker
+    attestationPath: /etc/agentarea/isolation-attestation.json
+    runtimeIdentity: ""
     apiKeySecretRef:
       name: ""
       key: ""
-    templates:
-      allowed: ""
-      locked: ""
+    template: ""
 
 # Sandbox runner data plane. This process consumes sandbox execution requests
 # from Redis Streams and executes them in the selected sandbox backend.
@@ -885,7 +1007,9 @@ rustfs:
     tag: "latest"
   auth:
     existingSecret: "agentarea-rustfs-secret"
-  defaultBuckets: "agentarea-documents"
+  # Optional bootstrap override. Empty means global.storage.bucket, keeping
+  # every application and the RustFS init job on one storage contract.
+  defaultBuckets: ""
   resources:
     limits:
       cpu: 500m

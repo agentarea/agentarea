@@ -952,6 +952,7 @@
     "tabs": {
       "overview": "Обзор",
       "events": "События",
+      "files": "Файлы",
       "logs": "Логи",
       "artifacts": "Артефакты",
       "memory": "Память",

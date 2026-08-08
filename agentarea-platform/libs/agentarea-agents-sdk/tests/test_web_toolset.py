@@ -98,7 +98,12 @@ async def test_text_response_is_returned_inline(monkeypatch) -> None:
     )
 
     storage = InMemoryStorage()
-    tool = WebToolset(storage=storage, workspace_id="ws-1", base_prefix="tasks/t")
+    tool = WebToolset(
+        storage=storage,
+        workspace_id="ws-1",
+        base_prefix="tasks/t",
+        fetch_base_url="http://fetch.test",
+    )
 
     result = await tool.fetch_webpage("https://example.test/page")
     payload = json.loads(result)
@@ -127,7 +132,12 @@ async def test_binary_response_is_persisted_as_artifact(monkeypatch) -> None:
     )
 
     storage = InMemoryStorage()
-    tool = WebToolset(storage=storage, workspace_id="ws-7", base_prefix="tasks/t-9")
+    tool = WebToolset(
+        storage=storage,
+        workspace_id="ws-7",
+        base_prefix="tasks/t-9",
+        fetch_base_url="http://fetch.test",
+    )
 
     result = await tool.fetch_webpage("https://cdn.example.test/foo.png")
     payload = json.loads(result)
@@ -136,7 +146,7 @@ async def test_binary_response_is_persisted_as_artifact(monkeypatch) -> None:
     assert payload["content_type"] == "image/png"
     assert payload["size"] == len(png)
     expected_path = "tasks/t-9/downloads/foo.png"
-    assert payload["artifact_path"] == expected_path
+    assert payload["file_path"] == expected_path
 
     # The bytes really landed in the storage layer under the workspace.
     data, ct = await storage.get("ws-7", expected_path)
@@ -162,11 +172,12 @@ async def test_binary_response_is_committed_to_canonical_task_workspace(monkeypa
         workspace_id="ws-7",
         task_id="task-9",
         lease_owner="workflow-9",
+        fetch_base_url="http://fetch.test",
     )
 
     payload = json.loads(await tool.fetch_webpage("https://cdn.example.test/foo.png"))
 
-    assert payload["artifact_path"] == "tasks/task-9/workspace/downloads/foo.png"
+    assert payload["file_path"] == "tasks/task-9/workspace/downloads/foo.png"
     repository.put.assert_awaited_once_with(
         "ws-7",
         "task-9",
@@ -191,6 +202,7 @@ async def test_canonical_binary_write_requires_task_id(monkeypatch) -> None:
     result = await WebToolset(
         workspace_repository=repository,
         workspace_id="ws-7",
+        fetch_base_url="http://fetch.test",
     ).fetch_webpage("https://cdn.example.test/foo.png")
 
     assert result == "Error: task_id is required for canonical workspace writes"
@@ -207,7 +219,7 @@ async def test_binary_without_storage_returns_error(monkeypatch) -> None:
         _patched_client_factory(httpx.MockTransport(handler)),
     )
 
-    tool = WebToolset(storage=None)
+    tool = WebToolset(storage=None, fetch_base_url="http://fetch.test")
     result = await tool.fetch_webpage("https://cdn.example.test/x.png")
     assert result.startswith("Error: response is binary")
 
@@ -234,10 +246,15 @@ async def test_filename_inferred_from_content_type_when_path_has_none(
     )
 
     storage = InMemoryStorage()
-    tool = WebToolset(storage=storage, workspace_id="ws", base_prefix="tasks/t")
+    tool = WebToolset(
+        storage=storage,
+        workspace_id="ws",
+        base_prefix="tasks/t",
+        fetch_base_url="http://fetch.test",
+    )
     payload = json.loads(await tool.fetch_webpage("https://example.test/report"))
 
-    assert payload["artifact_path"].endswith(".pdf")
+    assert payload["file_path"].endswith(".pdf")
 
 
 def test_web_toolset_exposes_only_search_and_fetch() -> None:
@@ -246,3 +263,9 @@ def test_web_toolset_exposes_only_search_and_fetch() -> None:
         "web_search_web",
         "web_fetch_webpage",
     }
+
+
+@pytest.mark.asyncio
+async def test_fetch_without_audited_egress_service_fails_closed() -> None:
+    result = await WebToolset().fetch_webpage("https://example.test/")
+    assert result.startswith("Error: web fetching is not configured")

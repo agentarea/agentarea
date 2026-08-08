@@ -253,9 +253,10 @@ export type AgentCard = {
  *
  * Payload for creating an agent.
  *
- * ``model_id`` accepts either a model-instance UUID configured in the
- * workspace, or a recognized provider identifier (e.g. ``gpt-4o``,
- * ``claude-3-5-sonnet``, ``openrouter/qwen/qwen-2.5-72b-instruct``).
+ * ``model_id`` is the UUID of a model instance configured in the workspace —
+ * the runtime has no other interpretation of it. Omit it (or pass ``null``) to
+ * create an agent with no model bound yet; such an agent cannot be run until a
+ * model is assigned.
  */
 export type AgentCreate = {
     /**
@@ -267,7 +268,9 @@ export type AgentCreate = {
     /**
      * Agent Type
      *
-     * 'stateless' (each request independent) or 'stateful' (maintains conversation context across runs).
+     * DEPRECATED — stored and echoed back, but the runtime never reads it, so every agent behaves as 'stateless' regardless of this value. Conversation history does not currently survive across runs. Do not branch on this field.
+     *
+     * @deprecated
      */
     agent_type?: 'stateless' | 'stateful';
     /**
@@ -289,9 +292,9 @@ export type AgentCreate = {
     /**
      * Model Id
      *
-     * Model instance UUID or provider model identifier (e.g. 'gpt-4o', 'claude-3-5-sonnet').
+     * UUID of a model instance in this workspace (see GET /v1/model-instances). Null means no model is bound yet and the agent cannot be run.
      */
-    model_id: string;
+    model_id?: string | null;
     /**
      * Name
      *
@@ -1465,10 +1468,6 @@ export type CodeToolSettings = {
      * Disabled Methods
      */
     disabled_methods?: Array<string> | null;
-    /**
-     * Package Install
-     */
-    package_install?: 'allowed' | 'locked' | null;
     /**
      * Requires User Confirmation
      */
@@ -4889,6 +4888,28 @@ export type RunExecutionConfig = {
     max_model_turns: number;
 };
 /**
+ * SandboxFileItem
+ */
+export type SandboxFileItem = {
+    /**
+     * Path
+     */
+    path: string;
+};
+/**
+ * SandboxFileListResponse
+ */
+export type SandboxFileListResponse = {
+    /**
+     * Items
+     */
+    items: Array<SandboxFileItem>;
+    /**
+     * Total
+     */
+    total: number;
+};
+/**
  * SandboxListResponse
  */
 export type SandboxListResponse = {
@@ -4934,10 +4955,6 @@ export type SandboxSummary = {
      * Isolation
      */
     isolation: string;
-    /**
-     * Package Install
-     */
-    package_install: string;
     /**
      * Provider
      */
@@ -5352,7 +5369,7 @@ export type SubjectSetBody = {
 /**
  * TaskArtifactItem
  *
- * A single artifact stored under a task's workspace scope.
+ * A file explicitly published from a live task sandbox.
  */
 export type TaskArtifactItem = {
     /**
@@ -5360,17 +5377,29 @@ export type TaskArtifactItem = {
      */
     content_type: string | null;
     /**
+     * Created At
+     */
+    created_at: string | null;
+    /**
      * Download Url
      */
     download_url: string;
     /**
-     * Last Modified
+     * Id
      */
-    last_modified: string | null;
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
     /**
      * Path
      */
     path: string;
+    /**
+     * Sha256
+     */
+    sha256: string | null;
     /**
      * Size
      */
@@ -7861,6 +7890,72 @@ export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors = {
 };
 export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostError = ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors[keyof ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors];
 export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: {
+        /**
+         * Prefix
+         */
+        prefix?: string;
+    };
+    url: '/v1/agents/{agent_id}/tasks/{task_id}/sandbox/files';
+};
+export type ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetError = ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetErrors[keyof ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetErrors];
+export type ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: SandboxFileListResponse;
+};
+export type ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetResponse = ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetResponses[keyof ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetResponses];
+export type ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+        /**
+         * Task Id
+         */
+        task_id: string;
+        /**
+         * File Path
+         */
+        file_path: string;
+    };
+    query?: never;
+    url: '/v1/agents/{agent_id}/tasks/{task_id}/sandbox/files/{file_path}';
+};
+export type ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetError = ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetErrors[keyof ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetErrors];
+export type ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetResponses = {
     /**
      * Successful Response
      */

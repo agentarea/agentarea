@@ -16,9 +16,15 @@ from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
+from agentarea_api.api.deps.services import (
+    get_read_agent_service,
+    get_read_task_service,
+    get_temporal_workflow_service,
+)
 from agentarea_api.api.v1 import agents_tasks, files
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_governance.domain.policies import PolicyValidationError
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -223,6 +229,45 @@ async def test_refs_attach_by_copy_then_dispatch_then_delete(monkeypatch):
     assert reserve_call.kwargs["trusted_metadata"] == {"workspace_attachments": descriptors}
     # No file bytes were ever handed to the API in the descriptors.
     assert b"revenue" not in json.dumps(descriptors).encode()
+
+
+@pytest.mark.asyncio
+async def test_attachment_reservation_hides_policy_error_details(monkeypatch):
+    context = UserContext(user_id="user-a", workspace_id="workspace-a")
+    order: list[str] = []
+    attached: list[dict] = []
+    deleted: list[str] = []
+    heads = {
+        "staging/aaa/report.csv": {
+            "size": 7,
+            "content_type": "text/csv",
+            "metadata": {},
+            "sha256": SHA_REVENUE,
+        }
+    }
+    _install_attachment_fakes(
+        monkeypatch, heads=heads, order=order, attached=attached, deleted=deleted
+    )
+    raw_error = "run_budget_usd cannot loosen higher-scope ceiling"
+    task_service = SimpleNamespace(
+        reserve_run=AsyncMock(side_effect=PolicyValidationError(raw_error)),
+        dispatch_reserved_run=AsyncMock(),
+        update_task_status=AsyncMock(),
+    )
+    agent_service = SimpleNamespace(
+        get_with_catalog=AsyncMock(return_value=SimpleNamespace(name="Analyst"))
+    )
+    app = _task_app(task_service, agent_service, context)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/v1/agents/{uuid4()}/tasks/",
+            json={"description": "Analyze file", "attachments": ["staging/aaa/report.csv"]},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Task policy rejected"
+    assert raw_error not in response.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -652,3 +697,44 @@ async def test_upload_url_rejects_non_hex_sha256(monkeypatch):
 
     assert response.status_code == 422
     assert presigns == []
+
+
+@pytest.mark.asyncio
+async def test_task_status_hides_raw_workflow_error(monkeypatch):
+    context = UserContext(user_id="user-a", workspace_id="workspace-a")
+    agent_id = uuid4()
+    task_id = uuid4()
+    task = SimpleNamespace(
+        agent_id=agent_id,
+        execution_id="workflow-1",
+        status="failed",
+        error_message=None,
+        result=None,
+    )
+    task_service = SimpleNamespace(
+        get_task_with_workflow_status=AsyncMock(return_value=task),
+    )
+    workflow_service = SimpleNamespace(
+        get_workflow_status=AsyncMock(
+            return_value={
+                "status": "failed",
+                "error": "upstream failure: SECRET_MANAGER_ACCESS_KEY=private-value",
+            }
+        )
+    )
+    app = FastAPI()
+    app.include_router(agents_tasks.router, prefix="/v1")
+    app.dependency_overrides[get_user_context] = lambda: context
+    app.dependency_overrides[get_read_agent_service] = lambda: SimpleNamespace(
+        get=AsyncMock(return_value=SimpleNamespace(id=agent_id))
+    )
+    app.dependency_overrides[get_read_task_service] = lambda: task_service
+    app.dependency_overrides[get_temporal_workflow_service] = lambda: workflow_service
+    monkeypatch.setattr(agents_tasks, "_list_task_artifact_items", AsyncMock(return_value=[]))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/status")
+
+    assert response.status_code == 200
+    assert response.json()["error"] is None
+    assert "private-value" not in response.text

@@ -21,6 +21,7 @@ const (
 	ScopeExecute   = "execute"
 	ScopeWriteback = "writeback"
 	ScopeFiles     = "files"
+	ScopeCleanup   = "cleanup"
 	DefaultTTL     = 5 * time.Minute
 )
 
@@ -56,6 +57,23 @@ func BodySHA256(body []byte) string {
 	return hex.EncodeToString(digest[:])
 }
 
+// TransferSHA256 binds a file authorization token to the complete canonical
+// operation, not just to task identity or payload bytes. Size is -1 when it is
+// not known before a read. The path must already be normalized by the caller.
+func TransferSHA256(method, path string, size int64, mode uint32, contentSHA256 string) string {
+	return BodySHA256([]byte(strings.ToUpper(method) + "\x00" + path + "\x00" + fmt.Sprintf("%d", size) + "\x00" + fmt.Sprintf("%o", mode) + "\x00" + contentSHA256))
+}
+
+// BoundTransferSHA256 additionally binds a file operation to one executor
+// process incarnation. An empty incarnation preserves the Kubernetes contract,
+// where pod UID and hydration revision provide the distributed fence.
+func BoundTransferSHA256(method, path string, size int64, mode uint32, contentSHA256, executorIncarnation string) string {
+	if executorIncarnation == "" {
+		return TransferSHA256(method, path, size, mode, contentSHA256)
+	}
+	return BodySHA256([]byte(strings.ToUpper(method) + "\x00" + path + "\x00" + fmt.Sprintf("%d", size) + "\x00" + fmt.Sprintf("%o", mode) + "\x00" + contentSHA256 + "\x00" + executorIncarnation))
+}
+
 func SignFromEnv(scope string, identity Identity, bodySHA256 string, now time.Time) (string, error) {
 	secret, err := SecretFromEnv()
 	if err != nil {
@@ -68,7 +86,7 @@ func Sign(secret []byte, scope string, identity Identity, bodySHA256 string, now
 	if len(secret) < 32 {
 		return "", errors.New("activation auth secret must contain at least 32 bytes")
 	}
-	if scope != ScopeActivate && scope != ScopeExecute && scope != ScopeWriteback && scope != ScopeFiles {
+	if scope != ScopeActivate && scope != ScopeExecute && scope != ScopeWriteback && scope != ScopeFiles && scope != ScopeCleanup {
 		return "", fmt.Errorf("unsupported activation auth scope %q", scope)
 	}
 	if identity.WorkspaceID == "" || identity.TaskID == "" || identity.Generation < 0 || identity.FencingToken <= 0 {

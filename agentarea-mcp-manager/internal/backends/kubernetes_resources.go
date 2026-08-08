@@ -13,15 +13,12 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // createConfigMap creates a ConfigMap for the MCP instance
@@ -193,14 +190,24 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 			TimeoutSeconds:      5,
 			FailureThreshold:    3,
 		},
+		// Scale-to-zero means every call may pay this. A fixed initial delay is
+		// dead time the fastest image cannot avoid, so slow starts are absorbed by
+		// startupProbe's budget instead and readiness polls at one second.
+		StartupProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(spec.Port)},
+			},
+			PeriodSeconds:    1,
+			TimeoutSeconds:   2,
+			FailureThreshold: 120,
+		},
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(spec.Port)},
 			},
-			InitialDelaySeconds: 5,
-			PeriodSeconds:       3,
-			TimeoutSeconds:      2,
-			FailureThreshold:    5,
+			PeriodSeconds:    1,
+			TimeoutSeconds:   2,
+			FailureThreshold: 5,
 		},
 	}
 
@@ -287,6 +294,10 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 						// kube-apiserver; withholding the SA token means a hostile
 						// image cannot use it to reach the control plane.
 						AutomountServiceAccountToken: boolPtr(false),
+						// Nothing is flushed on the way out — the workload holds no
+						// durable state — so the default 30s only keeps a reaped
+						// instance occupying its name and quota.
+						TerminationGracePeriodSeconds: int64Ptr(5),
 					}
 					if k.k8sConfig.PodServiceAccountName != "" {
 						spec.ServiceAccountName = k.k8sConfig.PodServiceAccountName
@@ -333,21 +344,27 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 	return nil
 }
 
-// createVolumes creates the volume specifications for writable directories
+// createVolumes creates the volume specifications for writable directories.
+//
+// Every volume is bounded. An MCP workload keeps nothing across a restart, so
+// unbounded scratch buys the instance nothing and lets one image exhaust the
+// node's ephemeral storage for every other pod scheduled there.
 func (k *KubernetesBackend) createVolumes(spec *InstanceSpec) []corev1.Volume {
+	scratchLimit := k.scratchSizeLimit
+
 	// Default volumes (always needed for security)
 	volumes := make([]corev1.Volume, 0, 2+len(spec.WritablePaths))
 	volumes = append(volumes,
 		corev1.Volume{
 			Name: "tmp",
 			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
+				EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &scratchLimit},
 			},
 		},
 		corev1.Volume{
 			Name: "var-run",
 			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
+				EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &scratchLimit},
 			},
 		},
 	)
@@ -358,7 +375,7 @@ func (k *KubernetesBackend) createVolumes(spec *InstanceSpec) []corev1.Volume {
 		volumes = append(volumes, corev1.Volume{
 			Name: volumeName,
 			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
+				EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &scratchLimit},
 			},
 		})
 	}
@@ -408,208 +425,14 @@ func (k *KubernetesBackend) createService(ctx context.Context, instanceName stri
 	return nil
 }
 
-// createIngress creates an Ingress for external access
-func (k *KubernetesBackend) createIngress(ctx context.Context, instanceName string, spec *InstanceSpec) error {
-	pathType := networkingv1.PathTypePrefix
-
-	ingress := &networkingv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        fmt.Sprintf("mcp-%s", instanceName),
-			Namespace:   k.k8sConfig.Namespace,
-			Labels:      k.getCommonLabels(instanceName),
-			Annotations: k.k8sConfig.GetIngressAnnotations(),
-		},
-		Spec: networkingv1.IngressSpec{
-			IngressClassName: &k.k8sConfig.IngressClass,
-			Rules: []networkingv1.IngressRule{
-				{
-					Host: k.k8sConfig.Domain,
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: []networkingv1.HTTPIngressPath{
-								{
-									Path:     fmt.Sprintf("/mcp/%s(/|$)(.*)", instanceName),
-									PathType: &pathType,
-									Backend: networkingv1.IngressBackend{
-										Service: &networkingv1.IngressServiceBackend{
-											Name: fmt.Sprintf("mcp-%s", instanceName),
-											Port: networkingv1.ServiceBackendPort{
-												Number: 80,
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	// Add TLS configuration if enabled
-	if k.k8sConfig.TLS.Enabled {
-		ingress.Spec.TLS = []networkingv1.IngressTLS{
-			{
-				Hosts:      []string{k.k8sConfig.Domain},
-				SecretName: k.k8sConfig.TLS.SecretName,
-			},
-		}
-	}
-
-	if err := k.client.Create(ctx, ingress); err != nil {
-		return fmt.Errorf("failed to create ingress: %w", err)
-	}
-
-	return nil
-}
-
-// createHTTPRoute creates a Gateway API HTTPRoute for the MCP server
-func (k *KubernetesBackend) createHTTPRoute(ctx context.Context, instanceName string, spec *InstanceSpec) error {
-	// Only create HTTPRoute if Gateway is configured
-	if k.k8sConfig.GatewayName == "" {
-		k.logger.Debug("No gateway configured, skipping HTTPRoute creation",
-			slog.String("instance_name", instanceName))
-		return nil
-	}
-
-	pathPrefix := fmt.Sprintf("/mcp/%s", instanceName)
-
-	// Determine gateway namespace
-	gatewayNs := k.k8sConfig.GatewayNamespace
-	if gatewayNs == "" {
-		gatewayNs = "envoy-gateway-system" // Default for Envoy Gateway
-	}
-
-	httpRoute := &gatewayv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("mcp-%s", instanceName),
-			Namespace: k.k8sConfig.Namespace,
-			Labels:    k.getCommonLabels(instanceName),
-			Annotations: map[string]string{
-				"agentarea.io/instance-id":   spec.InstanceID,
-				"agentarea.io/workspace-id":  spec.WorkspaceID,
-				"agentarea.io/auth-required": "true",
-			},
-		},
-		Spec: gatewayv1.HTTPRouteSpec{
-			CommonRouteSpec: gatewayv1.CommonRouteSpec{
-				ParentRefs: []gatewayv1.ParentReference{
-					{
-						Group:     (*gatewayv1.Group)(strPtr("gateway.networking.k8s.io")),
-						Kind:      (*gatewayv1.Kind)(strPtr("Gateway")),
-						Name:      gatewayv1.ObjectName(k.k8sConfig.GatewayName),
-						Namespace: (*gatewayv1.Namespace)(&gatewayNs),
-					},
-				},
-			},
-			Rules: []gatewayv1.HTTPRouteRule{
-				{
-					Matches: []gatewayv1.HTTPRouteMatch{
-						{
-							Path: &gatewayv1.HTTPPathMatch{
-								Type:  (*gatewayv1.PathMatchType)(strPtr("PathPrefix")),
-								Value: strPtr(pathPrefix),
-							},
-						},
-					},
-					BackendRefs: []gatewayv1.HTTPBackendRef{
-						{
-							BackendRef: gatewayv1.BackendRef{
-								BackendObjectReference: gatewayv1.BackendObjectReference{
-									Group: (*gatewayv1.Group)(strPtr("")),
-									Kind:  (*gatewayv1.Kind)(strPtr("Service")),
-									Name:  gatewayv1.ObjectName(fmt.Sprintf("mcp-%s", instanceName)),
-									Port:  intPtr(80),
-								},
-							},
-						},
-					},
-					Filters: []gatewayv1.HTTPRouteFilter{
-						{
-							Type: gatewayv1.HTTPRouteFilterURLRewrite,
-							URLRewrite: &gatewayv1.HTTPURLRewriteFilter{
-								Path: &gatewayv1.HTTPPathModifier{
-									Type:               gatewayv1.HTTPPathModifierType("ReplacePrefixMatch"),
-									ReplacePrefixMatch: strPtr("/"),
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	if err := k.client.Create(ctx, httpRoute); err != nil {
-		if errors.IsAlreadyExists(err) {
-			k.logger.Debug("HTTPRoute already exists, skipping",
-				slog.String("instance_name", instanceName))
-			return nil
-		}
-		return fmt.Errorf("failed to create HTTPRoute: %w", err)
-	}
-
-	k.logger.Info("Created HTTPRoute for MCP",
-		slog.String("instance_name", instanceName),
-		slog.String("path", pathPrefix),
-		slog.String("gateway", fmt.Sprintf("%s/%s", gatewayNs, k.k8sConfig.GatewayName)))
-
-	return nil
-}
-
-// createRoute creates a route for external access using Gateway API or Ingress
-// Priority: 1) Gateway API HTTPRoute (if configured), 2) Ingress (fallback)
-func (k *KubernetesBackend) createRoute(ctx context.Context, instanceName string, spec *InstanceSpec) error {
-	// Try Gateway API HTTPRoute first if gateway is configured
-	if k.k8sConfig.GatewayName != "" {
-		if err := k.createHTTPRoute(ctx, instanceName, spec); err != nil {
-			// Check if it's because Gateway API is not available
-			if strings.Contains(err.Error(), "no matches for kind") ||
-				strings.Contains(err.Error(), "could not find the requested resource") {
-				k.logger.Warn("Gateway API not available, falling back to Ingress",
-					slog.String("error", err.Error()))
-				// Fall through to Ingress
-			} else {
-				return err
-			}
-		} else {
-			return nil
-		}
-	}
-
-	// Fallback to Ingress
-	k.logger.Info("Using Ingress for routing", slog.String("instance_name", instanceName))
-	return k.createIngress(ctx, instanceName, spec)
-}
-
-// Helper functions for pointer conversion
-func strPtr(s string) *string {
-	return &s
-}
-
-func intPtr(i int32) *int32 {
-	return &i
-}
-
 // cleanupResources removes all resources for an instance
 func (k *KubernetesBackend) cleanupResources(ctx context.Context, instanceName string) error {
 	resourceName := fmt.Sprintf("mcp-%s", instanceName)
 
-	// Delete resources in reverse order
+	// Delete resources in reverse order. Instances are reachable only through
+	// the demand gateway, so no Ingress or HTTPRoute is ever created for them
+	// and none is cleaned up here.
 	resources := []client.Object{
-		&gatewayv1.HTTPRoute{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceName,
-				Namespace: k.k8sConfig.Namespace,
-			},
-		},
-		&networkingv1.Ingress{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceName,
-				Namespace: k.k8sConfig.Namespace,
-			},
-		},
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      resourceName,
@@ -829,7 +652,7 @@ func (k *KubernetesBackend) findInstanceNameByID(ctx context.Context, instanceID
 		}
 	}
 
-	return "", fmt.Errorf("instance not found: %s", instanceID)
+	return "", fmt.Errorf("%w: %s", ErrInstanceNotFound, instanceID)
 }
 
 // getDeploymentStatus determines status from deployment conditions
@@ -878,6 +701,10 @@ func (k *KubernetesBackend) performHTTPHealthCheck(_ context.Context, instanceNa
 }
 
 // Helper function for int32 pointer
+func int64Ptr(i int64) *int64 {
+	return &i
+}
+
 func int32Ptr(i int32) *int32 {
 	return &i
 }

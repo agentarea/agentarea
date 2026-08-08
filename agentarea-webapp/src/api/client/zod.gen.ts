@@ -525,7 +525,6 @@ export const zClientUpdate = z.object({
  */
 export const zCodeToolSettings = z.object({
   disabled_methods: z.array(z.string()).nullish(),
-  package_install: z.enum(["allowed", "locked"]).nullish(),
   requires_user_confirmation: z.boolean().nullish(),
 });
 
@@ -1496,9 +1495,10 @@ export const zOpenApiToolConfig = z.object({
  *
  * Payload for creating an agent.
  *
- * ``model_id`` accepts either a model-instance UUID configured in the
- * workspace, or a recognized provider identifier (e.g. ``gpt-4o``,
- * ``claude-3-5-sonnet``, ``openrouter/qwen/qwen-2.5-72b-instruct``).
+ * ``model_id`` is the UUID of a model instance configured in the workspace —
+ * the runtime has no other interpretation of it. Omit it (or pass ``null``) to
+ * create an agent with no model bound yet; such an agent cannot be run until a
+ * model is assigned.
  */
 export const zAgentCreate = z.object({
   a2ui_enabled: z.boolean().nullish(),
@@ -1506,7 +1506,7 @@ export const zAgentCreate = z.object({
   description: z.string().max(1000).optional().default(""),
   events_config: zEventsConfig.nullish(),
   instruction: z.string().max(20000).optional().default(""),
-  model_id: z.string(),
+  model_id: z.string().nullish(),
   name: z.string().min(1).max(255),
   planning: z.boolean().nullish(),
   skill_ids: z.array(z.string().uuid()).nullish(),
@@ -2026,6 +2026,21 @@ export const zRunExecutionConfig = z.object({
 });
 
 /**
+ * SandboxFileItem
+ */
+export const zSandboxFileItem = z.object({
+  path: z.string(),
+});
+
+/**
+ * SandboxFileListResponse
+ */
+export const zSandboxFileListResponse = z.object({
+  items: z.array(zSandboxFileItem),
+  total: z.number().int(),
+});
+
+/**
  * SandboxResources
  */
 export const zSandboxResources = z.object({
@@ -2041,7 +2056,6 @@ export const zSandboxSummary = z.object({
   expires_at: z.string().datetime().nullable(),
   id: z.string(),
   isolation: z.string(),
-  package_install: z.string(),
   provider: z.string(),
   resources: zSandboxResources,
   state: z.string(),
@@ -2343,13 +2357,16 @@ export const zRelationshipWriteRequest = z.object({
 /**
  * TaskArtifactItem
  *
- * A single artifact stored under a task's workspace scope.
+ * A file explicitly published from a live task sandbox.
  */
 export const zTaskArtifactItem = z.object({
   content_type: z.string().nullable(),
+  created_at: z.string().datetime().nullable(),
   download_url: z.string(),
-  last_modified: z.string().nullable(),
+  id: z.string(),
+  name: z.string(),
   path: z.string(),
+  sha256: z.string().nullable(),
   size: z.number().int(),
 });
 
@@ -3375,6 +3392,30 @@ export const zResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostPath =
   z.object({
     agent_id: z.string().uuid(),
     task_id: z.string().uuid(),
+  });
+
+export const zListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetPath =
+  z.object({
+    agent_id: z.string().uuid(),
+    task_id: z.string().uuid(),
+  });
+
+export const zListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetQuery =
+  z.object({
+    prefix: z.string().optional().default(""),
+  });
+
+/**
+ * Successful Response
+ */
+export const zListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetResponse =
+  zSandboxFileListResponse;
+
+export const zReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetPath =
+  z.object({
+    agent_id: z.string().uuid(),
+    task_id: z.string().uuid(),
+    file_path: z.string(),
   });
 
 export const zGetAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGetPath =

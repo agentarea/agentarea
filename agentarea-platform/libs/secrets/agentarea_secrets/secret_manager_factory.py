@@ -55,7 +55,12 @@ class SecretManagerFactory:
                     "Set SECRET_MANAGER_ACCESS_KEY and SECRET_MANAGER_SECRET_KEY."
                 )
 
-        logger.info(f"Initialized SecretManagerFactory with type: {settings.SECRET_MANAGER_TYPE}")
+        # Log a literal, not the settings value: the backend name is not secret,
+        # but taint analysis treats every SECRET_*-named setting as one.
+        # docs/self-host/secrets-backends.md tells operators to compare this line
+        # across the API and worker, so it has to keep naming the backend.
+        backend = {"database": "database", "infisical": "infisical"}.get(secret_type, "unsupported")
+        logger.info("Initialized SecretManagerFactory with type: %s", backend)
 
     def create(
         self,

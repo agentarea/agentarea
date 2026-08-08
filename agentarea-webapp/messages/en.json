@@ -951,6 +951,7 @@
     "tabs": {
       "overview": "Overview",
       "events": "Events",
+      "files": "Files",
       "logs": "Logs",
       "artifacts": "Artifacts",
       "memory": "Memory",

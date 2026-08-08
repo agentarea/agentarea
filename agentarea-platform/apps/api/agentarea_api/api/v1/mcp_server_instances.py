@@ -593,24 +593,17 @@ async def run_test_auth(
     if not instance.auth_config_id:
         raise HTTPException(status_code=400, detail="No auth config attached to this MCP instance")
 
-    try:
-        mcp_url: str = instance.endpoint_url
-        if not mcp_url:
-            raise HTTPException(status_code=400, detail="MCP instance has no URL in json_spec")
-
-        return {
-            "status": "pending",
-            "message": (
-                "Auth test queued. Use /health/containers to verify connectivity once running."
-            ),
-            "instance_id": str(instance_id),
-            "auth_config_id": str(instance.auth_config_id),
-        }
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail="Internal server error") from exc
+    # The instance address is deliberately not resolved here: container-backed
+    # servers are only reachable through the manager gateway, and this endpoint
+    # queues the check rather than dialing anything itself.
+    return {
+        "status": "pending",
+        "message": (
+            "Auth test queued. Use /health/containers to verify connectivity once running."
+        ),
+        "instance_id": str(instance_id),
+        "auth_config_id": str(instance.auth_config_id),
+    }
 
 
 @router.post("/{instance_id}/oauth-link")

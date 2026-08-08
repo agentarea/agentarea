@@ -9,3 +9,28 @@ http://{{ opensandbox_public_hostname }} {
     X-Content-Type-Options "nosniff"
   }
 }
+{% if sandbox_mcp_dataplane_enabled %}
+
+# MCP data plane. Shares this Caddy because the host already runs one; the two
+# are separate origins on separate hostnames and neither can reach the other's
+# upstream.
+http://{{ sandbox_mcp_dataplane_public_hostname }} {
+  redir https://{{ sandbox_mcp_dataplane_public_hostname }}{uri} permanent
+}
+
+{{ sandbox_mcp_dataplane_public_hostname }} {
+  # MCP answers over SSE. Buffering the response here would hold a live stream
+  # until the server finished, so flushing is immediate and there is no timeout
+  # on a stream that is meant to stay open.
+  reverse_proxy 127.0.0.1:{{ sandbox_mcp_dataplane_port }} {
+    flush_interval -1
+    transport http {
+      response_header_timeout 0
+    }
+  }
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+  }
+}
+{% endif %}

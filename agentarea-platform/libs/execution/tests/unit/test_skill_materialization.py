@@ -40,11 +40,11 @@ def test_a_skill_with_neither_prose_nor_files_still_has_a_manifest():
 
 
 def test_directory_is_derived_from_the_skill_name():
-    assert skill_workspace_dir("docx", "id-1").startswith("skills/docx-")
+    assert skill_workspace_dir("docx", "id-1").startswith("inputs/skills/docx-")
 
 
 def test_directory_name_is_slugified():
-    assert skill_workspace_dir("My Skill v2", "id-1").startswith("skills/my-skill-v2-")
+    assert skill_workspace_dir("My Skill v2", "id-1").startswith("inputs/skills/my-skill-v2-")
 
 
 def test_non_ascii_names_keep_their_identity():
@@ -64,25 +64,25 @@ def test_degenerate_names_are_stable_across_calls():
 
 def test_every_directory_stays_under_the_skills_root():
     for name in ("Отчёт", "!!!", "../../etc", "", "ok"):
-        assert skill_workspace_dir(name, "id-1").startswith("skills/")
+        assert skill_workspace_dir(name, "id-1").startswith("inputs/skills/")
         assert ".." not in skill_workspace_dir(name, "id-1")
 
 
 def test_directory_never_escapes_the_skills_root():
     # A hostile or sloppy skill name must not write outside skills/.
-    assert skill_workspace_dir("../../etc", "id-1").startswith("skills/etc-")
-    assert skill_workspace_dir("/abs/path", "id-1").startswith("skills/abs-path-")
+    assert skill_workspace_dir("../../etc", "id-1").startswith("inputs/skills/etc-")
+    assert skill_workspace_dir("/abs/path", "id-1").startswith("inputs/skills/abs-path-")
 
 
 def test_unnamed_skill_still_gets_a_stable_directory():
-    assert skill_workspace_dir("", "id-1").startswith("skills/skill-")
+    assert skill_workspace_dir("", "id-1").startswith("inputs/skills/skill-")
 
 
 def test_files_are_placed_under_the_skill_directory():
     files = build_skill_workspace_files("docx", "id-1", [("generate.py", b"print(1)")])
 
     assert len(files) == 1
-    assert next(iter(files)).startswith("skills/docx-")
+    assert next(iter(files)).startswith("inputs/skills/docx-")
     assert next(iter(files)).endswith("/generate.py")
 
 

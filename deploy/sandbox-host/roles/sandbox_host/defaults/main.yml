@@ -128,3 +128,32 @@ sandbox_k3s_node_label: "runtime=gvisor"
 # Where the generated kubeconfig lands on the machine running ansible. Feed it
 # to the control plane as KUBERNETES_KUBECONFIG.
 sandbox_k3s_kubeconfig_local_path: "./execution-cluster.kubeconfig"
+
+# MCP data plane. Off by default: enabling it makes this host answer for MCP
+# servers as well as agent sandboxes, which is a change in what the machine is.
+# The control plane reaches it with mcpManager.dataPlane in the Helm chart.
+sandbox_mcp_dataplane_enabled: false
+# The manager binary, built for this host's platform. The same binary the
+# control plane runs — one binary, two modes — started here with
+# MCP_MANAGER_MODE=dataplane. No default source: there is no correct guess for
+# where a build lives.
+sandbox_mcp_dataplane_binary_src: ""
+sandbox_mcp_dataplane_binary_dest: "/usr/local/bin/mcp-dataplane"
+# Marks every instance this data plane creates as its own. Anything without it
+# is refused, so a host shared with other workloads cannot be levered through
+# this API.
+sandbox_mcp_dataplane_id: "{{ inventory_hostname }}"
+# Loopback port; public access is Caddy's job.
+sandbox_mcp_dataplane_port: 8090
+# Network MCP instance containers join.
+sandbox_mcp_dataplane_network: "agentarea-mcp"
+# Confinement for spawned MCP instances. untrusted resolves to gVisor, which is
+# the reason this host exists.
+sandbox_mcp_dataplane_isolation_tier: "untrusted"
+sandbox_mcp_dataplane_log_level: "INFO"
+# TLS hostname, e.g. mcp-dp.203-0-113-10.sslip.io. No default: a wrong one gets
+# a certificate for a name nobody uses.
+sandbox_mcp_dataplane_public_hostname: ""
+# Shared token the control plane sends. Provide out-of-band, never in a file:
+#   ansible-playbook ... -e sandbox_mcp_dataplane_auth_token="$TOKEN"
+sandbox_mcp_dataplane_auth_token: ""

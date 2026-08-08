@@ -85,7 +85,17 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "agentarea.sandboxInspectionSecretName" . }}
-                  key: token
+                  key: {{ include "agentarea.sandboxInspectionSecretKey" . }}
+            - name: SANDBOX_FILE_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentarea.sandboxFileSecretName" . }}
+                  key: {{ include "agentarea.sandboxFileSecretKey" . }}
+            - name: MCP_GATEWAY_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentarea.mcpGatewaySecretName" . }}
+                  key: {{ include "agentarea.mcpGatewaySecretKey" . }}
             {{- include "agentarea.temporal.envs" . | nindent 12 }}
             {{- include "agentarea.backend.envs" . | nindent 12 }}
             {{- include "agentarea.backend.secrets.envs" . | nindent 12 }}

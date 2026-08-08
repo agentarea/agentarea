@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 from agentarea_execution.activities.agent_execution_activities import (
-    _effective_runtime_profile,
+    _as_tool_config_list,
 )
 from agentarea_execution.activities.runtime_discovery import (
     fetch_runtime_manifest,
@@ -15,7 +15,7 @@ from agentarea_execution.activities.runtime_discovery import (
 
 def _manifest() -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "image_version": "runtime-test",
         "managed_environment": "immutable",
         "python": {"version": "3.12.9", "executable": "/opt/runtime/venv/bin/python"},
@@ -27,6 +27,13 @@ def _manifest() -> dict:
             "managed_environment_mutation": False,
             "arbitrary_workspace_code": True,
         },
+        "execution_supervisor": {
+            "path": "/usr/local/bin/agentarea-exec-supervisor",
+            "sha256": "a" * 64,
+            "protocol_version": 1,
+            "command_uid": 10001,
+            "command_gid": 10001,
+        },
     }
 
 
@@ -34,32 +41,24 @@ def _manifest() -> dict:
 async def test_fetch_and_render_runtime_manifest() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/runtime/manifest"
-        assert request.url.params["package_install"] == "locked"
+        assert not request.url.query
         return httpx.Response(200, content=json.dumps(_manifest()).encode())
 
     result = await fetch_runtime_manifest(
         "http://mcp-manager:8000",
-        package_install="locked",
         transport=httpx.MockTransport(handler),
     )
 
     assert result.error is None
     assert result.manifest is not None
-    prompt = render_runtime_prompt(result, package_install="locked")
+    prompt = render_runtime_prompt(result)
     assert "Managed environment: immutable" in prompt
-    assert "Package installation profile: locked" in prompt
-    assert "active runtime satisfies" in prompt
     assert "Browser automation: unavailable" in prompt
-    assert "Arbitrary code can still be downloaded and run" in prompt
-    assert runtime_event_data(result, package_install="locked") == {
+    assert "Arbitrary workspace code is supported" in prompt
+    assert runtime_event_data(result) == {
         "runtime_version": "runtime-test",
         "managed_environment": "immutable",
-        "package_install": "locked",
-        "runtime_profile_compatible": True,
     }
-
-    mismatch = runtime_event_data(result, package_install="allowed")
-    assert mismatch["runtime_profile_compatible"] is False
 
 
 @pytest.mark.asyncio
@@ -83,17 +82,16 @@ def test_render_runtime_prompt_describes_the_workspace() -> None:
     from agentarea_execution.models import RuntimeDiscoveryResult, RuntimeManifest
 
     result = RuntimeDiscoveryResult(manifest=RuntimeManifest.model_validate(_manifest()))
-    prompt = render_runtime_prompt(result, package_install="locked")
+    prompt = render_runtime_prompt(result)
 
-    # tier 2/3 unified for the agent: its working directory is the live task
-    # workspace. Text written through the file tool is durable immediately;
-    # shell-produced deliverables must be named in artifact_paths for copy-out.
+    # tier 2/3 unified for the agent: file and shell share the live task workspace,
+    # while selected deliverables are explicitly published.
     assert "working directory" in prompt
     assert "file tool" in prompt
-    assert "artifact_paths" in prompt
-    assert "copied to durable" in prompt
-    assert "relative paths" in prompt
-    assert "NOT delivered" in prompt
+    assert "completion `artifacts`" in prompt
+    assert "artifact_id" not in prompt
+    assert "Live workspace files are ephemeral" in prompt
+    assert "/workspace/inputs" in prompt
     # binary deliverables must be produced via the shell, not the text file tool
     assert "Binary deliverables" in prompt
     assert "corrupts the file" in prompt
@@ -106,12 +104,12 @@ def test_org_library_line_is_gated_on_the_tool_being_equipped() -> None:
 
     # Default: the agent is NOT equipped with the org-context tool, so the prompt
     # must not advertise it (advertising a tool the agent lacks is a fail-loud lie).
-    without = render_runtime_prompt(result, package_install="locked")
+    without = render_runtime_prompt(result)
     assert "Organization library" not in without
     assert "read_org_file" not in without
 
     # Equipped: the org-library line appears and names the real tools.
-    with_ctx = render_runtime_prompt(result, package_install="locked", has_org_context=True)
+    with_ctx = render_runtime_prompt(result, has_org_context=True)
     assert "Organization library" in with_ctx
     assert "list_org_files" in with_ctx
     assert "read_org_file" in with_ctx
@@ -134,25 +132,10 @@ def test_browser_requirement_is_structured_blocked_result() -> None:
     assert require_runtime_capability(result, "undeclared") is not None
 
 
-def test_effective_runtime_profile_prefers_task_override() -> None:
-    tools = [
-        {
-            "name": "agentarea/shell",
-            "settings": {"package_install": "allowed"},
-        }
-    ]
+def test_runtime_tools_are_not_mutated_outside_resolved_agent_configuration() -> None:
+    tools = [{"name": "agentarea/shell", "type": "code", "settings": {}}]
 
-    assert _effective_runtime_profile(None, tools) == "allowed"
-    assert _effective_runtime_profile({"package_install": "locked"}, tools) == "locked"
+    resolved = _as_tool_config_list(tools)
 
-
-def test_effective_runtime_profile_rejects_invalid_agent_setting() -> None:
-    tools = [
-        {
-            "name": "agentarea/shell",
-            "settings": {"package_install": "unexpected"},
-        }
-    ]
-
-    with pytest.raises(ValueError, match="allowed or locked"):
-        _effective_runtime_profile(None, tools)
+    assert resolved == tools
+    assert all(tool["name"] != "agentarea/artifacts" for tool in resolved)

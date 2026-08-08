@@ -1,7 +1,6 @@
 """MCP tool wrapper using the base tool interface."""
 
 import logging
-import os
 from inspect import isawaitable
 from typing import Any
 from uuid import UUID
@@ -9,15 +8,6 @@ from uuid import UUID
 from .base_tool import BaseTool, ToolExecutionError
 
 logger = logging.getLogger(__name__)
-
-
-def _lazy_mcp_provisioning_enabled() -> bool:
-    return os.getenv("MCP_LAZY_PROVISIONING_ENABLED", "").lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
 
 
 class MCPTool(BaseTool):
@@ -132,12 +122,7 @@ class MCPToolFactory:
             tools_data = getattr(server_instance, "tools", None) or json_spec.get("available_tools")
             # running/connected are container runtime statuses; succeeded is the
             # verification payload status for URL instances.
-            lazy_with_declared_tools = (
-                _lazy_mcp_provisioning_enabled()
-                and bool(json_spec.get("lazy_provisioning"))
-                and bool(tools_data)
-            )
-            if status not in ("running", "connected", "succeeded") and not lazy_with_declared_tools:
+            if status not in ("running", "connected", "succeeded"):
                 logger.info(
                     "MCP instance not verified-succeeded (status=%s); "
                     "this is expected transient during async creation — skipping tool discovery",

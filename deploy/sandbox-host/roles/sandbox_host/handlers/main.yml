@@ -42,3 +42,26 @@
   ansible.builtin.systemd:
     name: k3s
     state: restarted
+
+- name: Restart mcp-dataplane
+  ansible.builtin.systemd:
+    name: mcp-dataplane
+    state: restarted
+    daemon_reload: true
+  when:
+    - sandbox_mcp_dataplane_enabled | bool
+    - not ansible_check_mode
+
+# Restarts the proxy container, not the compose stack it belongs to: this leaves
+# opensandbox-server up, and this host serves production sandboxes.
+#
+# A `caddy reload` is not enough and is actively misleading here. The Caddyfile
+# is bind-mounted as a single FILE, so the container is pinned to the inode it
+# started with; Ansible writes atomically by rename, which gives the host a new
+# inode and orphans the container's view. Caddy then reloads the file it can
+# still see, reports "config is unchanged", and exits zero while the change has
+# not landed. Only re-creating the mount picks it up.
+- name: Restart caddy
+  ansible.builtin.command: docker restart opensandbox-caddy
+  changed_when: true
+  when: not ansible_check_mode

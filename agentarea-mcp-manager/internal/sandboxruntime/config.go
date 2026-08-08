@@ -20,41 +20,121 @@ import (
 // NewFromEnv selects exactly one sandbox data plane for this deployment.
 // Python callers never send a provider name; changing providers is an
 // operator-side configuration change.
-func NewFromEnv(_ context.Context, legacy Runtime, redisClient *redis.Client, defaultProvider string) (Runtime, string, error) {
+type ControlPolicy struct {
+	TaskLeaseTTL                time.Duration
+	TaskIdleTTL                 time.Duration
+	ProviderProvisioningTimeout time.Duration
+	SessionRecordTTL            time.Duration
+}
+
+type WorkspaceLimits struct {
+	// MaxFiles is the maximum number of non-root filesystem entries in a live
+	// workspace. Durable manifests contain files only, while live sandboxes also
+	// count directories and symlinks so none can bypass the inode budget.
+	MaxFiles     int
+	MaxFileBytes int64
+	MaxBytes     int64
+}
+
+func LoadControlPolicyFromEnv() (ControlPolicy, error) {
+	leaseTTL, err := requiredDurationEnv("SANDBOX_TASK_LEASE_TTL")
+	if err != nil {
+		return ControlPolicy{}, err
+	}
+	idleTTL, err := requiredNonNegativeDurationEnv("SANDBOX_TASK_IDLE_TTL")
+	if err != nil {
+		return ControlPolicy{}, err
+	}
+	provisioningTimeout, err := requiredDurationEnv("SANDBOX_PROVIDER_PROVISIONING_TIMEOUT")
+	if err != nil {
+		return ControlPolicy{}, err
+	}
+	sessionTTL, err := requiredDurationEnv("SANDBOX_PROVIDER_SESSION_TTL")
+	if err != nil {
+		return ControlPolicy{}, err
+	}
+	policy := ControlPolicy{
+		TaskLeaseTTL: leaseTTL, TaskIdleTTL: idleTTL,
+		ProviderProvisioningTimeout: provisioningTimeout, SessionRecordTTL: sessionTTL,
+	}
+	if err := policy.validate(); err != nil {
+		return ControlPolicy{}, err
+	}
+	return policy, nil
+}
+
+func (policy ControlPolicy) validate() error {
+	if policy.TaskLeaseTTL <= 0 {
+		return fmt.Errorf("SANDBOX_TASK_LEASE_TTL must be positive")
+	}
+	if policy.TaskIdleTTL < 0 {
+		return fmt.Errorf("SANDBOX_TASK_IDLE_TTL must be non-negative")
+	}
+	if policy.ProviderProvisioningTimeout <= 0 {
+		return fmt.Errorf("SANDBOX_PROVIDER_PROVISIONING_TIMEOUT must be positive")
+	}
+	longestProviderLease := policy.TaskLeaseTTL
+	if policy.TaskIdleTTL > longestProviderLease {
+		longestProviderLease = policy.TaskIdleTTL
+	}
+	provisioningFenceTTL := policy.TaskLeaseTTL + policy.ProviderProvisioningTimeout
+	if provisioningFenceTTL > longestProviderLease {
+		longestProviderLease = provisioningFenceTTL
+	}
+	// A create outcome can remain unknown for the complete provider request
+	// timeout, and its remote lease may start only at the end of that interval.
+	// The durable intent must therefore outlive their sum as well as idle leases.
+	if policy.SessionRecordTTL <= longestProviderLease {
+		return fmt.Errorf("SANDBOX_PROVIDER_SESSION_TTL must be greater than SANDBOX_TASK_IDLE_TTL and SANDBOX_TASK_LEASE_TTL + SANDBOX_PROVIDER_PROVISIONING_TIMEOUT")
+	}
+	return nil
+}
+
+// LoadWorkspaceProviderFromEnv resolves the workspace data plane at composition
+// time. There is no default: running without a declared workspace provider
+// would silently drop task inputs and published artifacts.
+func LoadWorkspaceProviderFromEnv() (WorkspaceProvider, error) {
+	switch value := os.Getenv("SANDBOX_WORKSPACE_PROVIDER"); value {
+	case string(WorkspaceProviderS3):
+		return WorkspaceProviderS3, nil
+	case "":
+		return "", fmt.Errorf("SANDBOX_WORKSPACE_PROVIDER is required; supported value: s3")
+	default:
+		return "", fmt.Errorf("unsupported SANDBOX_WORKSPACE_PROVIDER=%q; supported value: s3", value)
+	}
+}
+
+func NewFromEnv(_ context.Context, builtin ManagedRuntime, redisClient *redis.Client, defaultProvider string, policy ControlPolicy, workspaceLimits WorkspaceLimits) (ManagedRuntime, string, error) {
+	if err := policy.validate(); err != nil {
+		return nil, "", fmt.Errorf("sandbox control policy is invalid: %w", err)
+	}
+	if workspaceLimits.MaxFiles <= 0 || workspaceLimits.MaxFileBytes <= 0 || workspaceLimits.MaxBytes < workspaceLimits.MaxFileBytes {
+		return nil, "", fmt.Errorf("sandbox workspace limits are invalid")
+	}
 	providerName := strings.ToLower(strings.TrimSpace(os.Getenv("SANDBOX_PROVIDER")))
 	if providerName == "" {
 		providerName = defaultProvider
 	}
 	switch providerName {
 	case "kubernetes", "docker", "agentarea":
-		if legacy == nil {
+		if builtin == nil {
 			return nil, "", fmt.Errorf("SANDBOX_PROVIDER=%s requires an AgentArea sandbox backend", providerName)
 		}
-		return legacy, providerName, nil
+		return builtin, providerName, nil
 	case "opensandbox", "e2b", "cube":
 	default:
 		return nil, "", fmt.Errorf("unsupported SANDBOX_PROVIDER=%q; expected kubernetes, docker, opensandbox, e2b, or cube", providerName)
 	}
 
-	leaseTTL, err := strictDurationEnv("SANDBOX_TASK_LEASE_TTL", 2*time.Hour)
+	store, err := NewSessionStore(redisClient, os.Getenv("SANDBOX_CONTROL_REDIS_PREFIX"), policy.SessionRecordTTL)
 	if err != nil {
 		return nil, "", err
 	}
-	if _, err := strictNonNegativeDurationEnv("SANDBOX_TASK_IDLE_TTL", 15*time.Minute); err != nil {
-		return nil, "", err
-	}
-	sessionTTL, err := strictDurationEnv("SANDBOX_PROVIDER_SESSION_TTL", 24*time.Hour)
+	manifest, err := loadExternalManifest()
 	if err != nil {
 		return nil, "", err
 	}
-	if sessionTTL <= leaseTTL {
-		return nil, "", fmt.Errorf("SANDBOX_PROVIDER_SESSION_TTL must be greater than SANDBOX_TASK_LEASE_TTL")
-	}
-	store, err := NewSessionStore(redisClient, os.Getenv("SANDBOX_CONTROL_REDIS_PREFIX"), sessionTTL)
-	if err != nil {
-		return nil, "", err
-	}
-	manifests, err := loadExternalManifests()
+	allowInternet, err := requiredBoolEnv("SANDBOX_ALLOW_INTERNET")
 	if err != nil {
 		return nil, "", err
 	}
@@ -87,112 +167,87 @@ func NewFromEnv(_ context.Context, legacy Runtime, redisClient *redis.Client, de
 			return nil, "", err
 		}
 		retryConfig := opensandbox.DefaultRetryConfig()
-		persistWorkspace, err := strictBoolEnv("SANDBOX_OPENSANDBOX_PERSIST_WORKSPACE", true)
-		if err != nil {
-			return nil, "", err
-		}
 		provider, err = NewOpenSandboxProvider(OpenSandboxConfig{
 			Connection: opensandbox.ConnectionConfig{
 				Domain:         os.Getenv("SANDBOX_OPENSANDBOX_URL"),
 				APIKey:         apiKey,
 				AuthHeader:     getenv("SANDBOX_OPENSANDBOX_AUTH_HEADER", "OPEN-SANDBOX-API-KEY"),
 				UseServerProxy: useProxy,
-				RequestTimeout: 30 * time.Second,
+				RequestTimeout: policy.ProviderProvisioningTimeout,
 				Retry:          &retryConfig,
 			},
-			Images: map[string]string{
-				runtimeinfo.PackageInstallAllowed: os.Getenv("SANDBOX_OPENSANDBOX_IMAGE_ALLOWED"),
-				runtimeinfo.PackageInstallLocked:  os.Getenv("SANDBOX_OPENSANDBOX_IMAGE_LOCKED"),
-			},
-			Entrypoint:       entrypoint,
-			ResourceCPU:      getenv("SANDBOX_PROVIDER_CPU", "500m"),
-			ResourceMemory:   getenv("SANDBOX_PROVIDER_MEMORY", "512Mi"),
-			LeaseTTL:         leaseTTL,
-			Isolation:        os.Getenv("SANDBOX_OPENSANDBOX_ISOLATION"),
-			AllowWeakDev:     allowWeakDev,
-			AllowInsecure:    allowInsecure,
-			SecureAccess:     &secureAccess,
-			EgressMode:       os.Getenv("SANDBOX_OPENSANDBOX_EGRESS_MODE"),
-			PersistWorkspace: persistWorkspace,
-			VolumePrefix:     getenv("SANDBOX_OPENSANDBOX_VOLUME_PREFIX", "agentarea-task"),
+			Image:               os.Getenv("SANDBOX_OPENSANDBOX_IMAGE"),
+			Entrypoint:          entrypoint,
+			ResourceCPU:         getenv("SANDBOX_PROVIDER_CPU", "500m"),
+			ResourceMemory:      getenv("SANDBOX_PROVIDER_MEMORY", "512Mi"),
+			ResourceStorage:     strconv.FormatInt(workspaceLimits.MaxBytes, 10),
+			LeaseTTL:            policy.TaskLeaseTTL,
+			Isolation:           os.Getenv("SANDBOX_OPENSANDBOX_ISOLATION"),
+			RuntimeIdentity:     os.Getenv("SANDBOX_OPENSANDBOX_RUNTIME_IDENTITY"),
+			AllowWeakDev:        allowWeakDev,
+			AllowInsecure:       allowInsecure,
+			SecureAccess:        &secureAccess,
+			EgressMode:          os.Getenv("SANDBOX_OPENSANDBOX_EGRESS_MODE"),
+			AllowInternetAccess: allowInternet,
 		})
 		if err != nil {
 			return nil, "", err
 		}
 	case "e2b", "cube":
 		prefix := "SANDBOX_" + strings.ToUpper(providerName) + "_"
-		allowInternetAllowed, err := strictBoolEnv(prefix+"ALLOW_INTERNET_ALLOWED", false)
-		if err != nil {
-			return nil, "", err
-		}
-		allowInternetLocked, err := strictBoolEnv(prefix+"ALLOW_INTERNET_LOCKED", false)
-		if err != nil {
-			return nil, "", err
-		}
 		allowInsecure, err := strictBoolEnv(prefix+"ALLOW_INSECURE", false)
 		if err != nil {
 			return nil, "", err
 		}
 		provider, err = NewE2BProvider(E2BConfig{
-			ProviderName: providerName,
-			APIURL:       os.Getenv(prefix + "API_URL"),
-			APIKey:       os.Getenv(prefix + "API_KEY"),
-			SandboxURL:   os.Getenv(prefix + "SANDBOX_URL"),
-			Templates: map[string]string{
-				runtimeinfo.PackageInstallAllowed: os.Getenv(prefix + "TEMPLATE_ALLOWED"),
-				runtimeinfo.PackageInstallLocked:  os.Getenv(prefix + "TEMPLATE_LOCKED"),
-			},
-			LeaseTTL:       leaseTTL,
-			RequestTimeout: 30 * time.Second,
-			InternetAccess: map[string]bool{
-				runtimeinfo.PackageInstallAllowed: allowInternetAllowed,
-				runtimeinfo.PackageInstallLocked:  allowInternetLocked,
-			},
-			AllowInsecure: allowInsecure,
+			ProviderName:        providerName,
+			APIURL:              os.Getenv(prefix + "API_URL"),
+			APIKey:              os.Getenv(prefix + "API_KEY"),
+			SandboxURL:          os.Getenv(prefix + "SANDBOX_URL"),
+			Template:            os.Getenv(prefix + "TEMPLATE"),
+			LeaseTTL:            policy.TaskLeaseTTL,
+			RequestTimeout:      policy.ProviderProvisioningTimeout,
+			AllowInternetAccess: allowInternet,
+			AllowInsecure:       allowInsecure,
+			Isolation:           os.Getenv(prefix + "ISOLATION"),
+			RuntimeIdentity:     os.Getenv(prefix + "RUNTIME_IDENTITY"),
+			AttestationPath:     getenv(prefix+"ATTESTATION_PATH", DefaultIsolationAttestationPath),
 		})
 		if err != nil {
 			return nil, "", err
 		}
 	}
 
-	manager, err := NewManager(provider, store, leaseTTL, manifests)
+	manager, err := NewManager(provider, store, policy.TaskLeaseTTL, policy.TaskIdleTTL, manifest, workspaceLimits)
 	if err != nil {
 		return nil, "", err
+	}
+	if lister, ok := provider.(ExternalSandboxLister); ok {
+		return &managerWithInventory{Manager: manager, lister: lister}, providerName, nil
 	}
 	return manager, providerName, nil
 }
 
-func loadExternalManifests() (map[string]*runtimeinfo.Manifest, error) {
-	result := make(map[string]*runtimeinfo.Manifest, 2)
-	for _, profile := range []string{runtimeinfo.PackageInstallAllowed, runtimeinfo.PackageInstallLocked} {
-		prefix := "SANDBOX_RUNTIME_MANIFEST_" + strings.ToUpper(profile)
-		manifestPath := os.Getenv(prefix + "_PATH")
-		manifestJSON := os.Getenv(prefix + "_JSON")
-		if manifestPath != "" && manifestJSON != "" {
-			return nil, fmt.Errorf("%s_PATH and %s_JSON are mutually exclusive", prefix, prefix)
-		}
-		if manifestPath == "" && manifestJSON == "" {
-			continue
-		}
-		var manifest *runtimeinfo.Manifest
-		var err error
-		if manifestPath != "" {
-			manifest, err = runtimeinfo.Load(manifestPath)
-		} else {
-			manifest, err = decodeManifestJSON(manifestJSON)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", prefix, err)
-		}
-		if !manifest.SupportsPackageInstall(profile) {
-			return nil, fmt.Errorf("%s does not enforce package_install=%s", prefix, profile)
-		}
-		result[profile] = manifest
+func loadExternalManifest() (*runtimeinfo.Manifest, error) {
+	manifestPath := os.Getenv("SANDBOX_RUNTIME_MANIFEST_PATH")
+	manifestJSON := os.Getenv("SANDBOX_RUNTIME_MANIFEST_JSON")
+	if manifestPath != "" && manifestJSON != "" {
+		return nil, fmt.Errorf("SANDBOX_RUNTIME_MANIFEST_PATH and SANDBOX_RUNTIME_MANIFEST_JSON are mutually exclusive")
 	}
-	if len(result) == 0 {
-		return nil, fmt.Errorf("external sandbox provider requires at least one SANDBOX_RUNTIME_MANIFEST_{ALLOWED,LOCKED}_{PATH,JSON}")
+	if manifestPath == "" && manifestJSON == "" {
+		return nil, fmt.Errorf("external sandbox provider requires SANDBOX_RUNTIME_MANIFEST_PATH or SANDBOX_RUNTIME_MANIFEST_JSON")
 	}
-	return result, nil
+	var manifest *runtimeinfo.Manifest
+	var err error
+	if manifestPath != "" {
+		manifest, err = runtimeinfo.Load(manifestPath)
+	} else {
+		manifest, err = decodeManifestJSON(manifestJSON)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("sandbox runtime manifest: %w", err)
+	}
+	return manifest, nil
 }
 
 func decodeManifestJSON(value string) (*runtimeinfo.Manifest, error) {
@@ -211,10 +266,10 @@ func decodeManifestJSON(value string) (*runtimeinfo.Manifest, error) {
 	return &manifest, nil
 }
 
-func strictDurationEnv(name string, fallback time.Duration) (time.Duration, error) {
+func requiredDurationEnv(name string) (time.Duration, error) {
 	value := os.Getenv(name)
 	if value == "" {
-		return fallback, nil
+		return 0, fmt.Errorf("%s is required", name)
 	}
 	duration, err := time.ParseDuration(value)
 	if err != nil || duration <= 0 {
@@ -223,10 +278,10 @@ func strictDurationEnv(name string, fallback time.Duration) (time.Duration, erro
 	return duration, nil
 }
 
-func strictNonNegativeDurationEnv(name string, fallback time.Duration) (time.Duration, error) {
+func requiredNonNegativeDurationEnv(name string) (time.Duration, error) {
 	value := os.Getenv(name)
 	if value == "" {
-		return fallback, nil
+		return 0, fmt.Errorf("%s is required", name)
 	}
 	duration, err := time.ParseDuration(value)
 	if err != nil || duration < 0 {
@@ -239,6 +294,18 @@ func strictBoolEnv(name string, fallback bool) (bool, error) {
 	value := os.Getenv(name)
 	if value == "" {
 		return fallback, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("%s must be true or false", name)
+	}
+	return parsed, nil
+}
+
+func requiredBoolEnv(name string) (bool, error) {
+	value := os.Getenv(name)
+	if value == "" {
+		return false, fmt.Errorf("%s is required", name)
 	}
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {

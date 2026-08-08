@@ -7,13 +7,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 	"github.com/gin-gonic/gin"
 )
 
 type inventorySandboxRuntime struct {
+	controlRuntimeStub
 	workspaceID string
 }
 
@@ -27,9 +27,6 @@ func (r *inventorySandboxRuntime) SandboxFileGet(context.Context, string, string
 	return nil, nil
 }
 func (r *inventorySandboxRuntime) SandboxFileList(context.Context, string, string, string) (*warmpool.FileListResponse, error) {
-	return nil, nil
-}
-func (r *inventorySandboxRuntime) RuntimeManifest(context.Context, string) (*runtimeinfo.Manifest, error) {
 	return nil, nil
 }
 func (r *inventorySandboxRuntime) ListSandboxes(_ context.Context, workspaceID string) ([]sandboxruntime.SandboxStatus, error) {

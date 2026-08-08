@@ -1,6 +1,7 @@
 package backends
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/agentarea/mcp-manager/internal/config"
@@ -24,9 +25,17 @@ func resolveSpecIsolation(spec *InstanceSpec, defaultTier string) (models.Isolat
 	}
 
 	// An explicit runtime/writable-path on the spec refines the tier. Neither
-	// can weaken it: a runtime class is an addition, and marking paths writable
-	// only takes effect together with a read-only root.
+	// can weaken it: a spec may name a runtime only where the tier left the
+	// choice open, and marking paths writable only takes effect together with a
+	// read-only root. A spec that disagrees with a tier's pinned runtime is
+	// refused rather than allowed to swap runsc back to runc.
 	if spec.RuntimeClass != "" {
+		if isolation.Runtime != "" && isolation.Runtime != spec.RuntimeClass {
+			return models.Isolation{}, fmt.Errorf(
+				"instance runtime class %q may not replace the %q tier's %q",
+				spec.RuntimeClass, tier, isolation.Runtime,
+			)
+		}
 		isolation.Runtime = spec.RuntimeClass
 	}
 	if len(spec.WritablePaths) > 0 {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/config"
+	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 )
 
 func main() {
@@ -17,7 +18,12 @@ func main() {
 	cfg := config.Load()
 	logger.Info("loaded", "namespace", cfg.Kubernetes.Namespace, "domain", cfg.Kubernetes.Domain)
 
-	b, err := backends.NewKubernetesBackend(cfg, logger)
+	policy, err := sandboxruntime.LoadControlPolicyFromEnv()
+	if err != nil {
+		logger.Error("sandbox policy", "err", err)
+		os.Exit(1)
+	}
+	b, err := backends.NewKubernetesBackend(cfg, logger, policy.TaskLeaseTTL)
 	if err != nil {
 		logger.Error("backend init", "err", err)
 		os.Exit(1)

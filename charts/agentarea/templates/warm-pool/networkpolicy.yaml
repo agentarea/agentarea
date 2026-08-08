@@ -1,4 +1,5 @@
-{{- if and .Values.mcpManager.enabled .Values.mcpManager.warmPool.enabled (has "warm_pool" .Values.mcpManager.features.enabled) }}
+{{- $provider := .Values.sandboxRuntime.provider | default "kubernetes" -}}
+{{- if and .Values.mcpManager.enabled .Values.mcpManager.warmPool.enabled (has "warm_pool" .Values.mcpManager.features.enabled) (or (eq $provider "kubernetes") (eq $provider "agentarea")) }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -58,15 +59,14 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "agentarea.fullname" . }}-sandbox-allowed-public-egress
+  name: {{ include "agentarea.fullname" . }}-sandbox-public-egress
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
-    app.kubernetes.io/component: sandbox-allowed-public-egress
+    app.kubernetes.io/component: sandbox-public-egress
 spec:
   podSelector:
     matchLabels:
       {{- include "agentarea.selectorLabels" . | nindent 6 }}
-      mcp.agentarea.io/package-install: "allowed"
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: In
@@ -75,6 +75,7 @@ spec:
           - workflow-sandbox
   policyTypes:
     - Egress
+  {{- if .Values.sandboxRuntime.allowInternet }}
   egress:
     - to:
         - ipBlock:
@@ -83,44 +84,7 @@ spec:
               {{- range .Values.mcpManager.instanceNetworkPolicy.blockedEgressCIDRs }}
               - {{ . | quote }}
               {{- end }}
-{{- $lockedS3CIDRs := .Values.mcpManager.warmPool.lockedNetworkPolicy.s3EgressCIDRs | default list }}
-{{- range $cidr := $lockedS3CIDRs }}
-{{- if or (eq $cidr "0.0.0.0/0") (eq $cidr "::/0") }}
-{{- fail "mcpManager.warmPool.lockedNetworkPolicy.s3EgressCIDRs must not permit all public egress" }}
-{{- end }}
-{{- end }}
-{{- if $lockedS3CIDRs }}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: {{ include "agentarea.fullname" . }}-sandbox-locked-s3-egress
-  labels:
-    {{- include "agentarea.labels" . | nindent 4 }}
-    app.kubernetes.io/component: sandbox-locked-s3-egress
-spec:
-  podSelector:
-    matchLabels:
-      {{- include "agentarea.selectorLabels" . | nindent 6 }}
-      mcp.agentarea.io/package-install: "locked"
-    matchExpressions:
-      - key: app.kubernetes.io/component
-        operator: In
-        values:
-          - warm-pool
-          - workflow-sandbox
-  policyTypes:
-    - Egress
-  egress:
-    - to:
-        {{- range $cidr := $lockedS3CIDRs }}
-        - ipBlock:
-            cidr: {{ $cidr | quote }}
-        {{- end }}
-      ports:
-        - protocol: TCP
-          port: 443
-        - protocol: TCP
-          port: 9000
-{{- end }}
+  {{- else }}
+  egress: []
+  {{- end }}
 {{- end }}

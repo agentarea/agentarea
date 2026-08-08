@@ -38,6 +38,18 @@ FLOW_TESTS := \
 	libs/openapi/tests/test_service.py \
 	libs/agentarea-agents-sdk/tests/test_flow_a2a_delegation.py
 
+# Hermetic redaction contracts outside the dirs `test` collects. These guard the
+# boundary that secrets, secret identifiers, and raw upstream exception text stay
+# out of logs, SSE payloads, and HTTP responses.
+REDACTION_TESTS := \
+	libs/agents/tests/test_temporal_orchestrator_status.py \
+	libs/agents/tests/test_temporal_workflow_service.py
+
+# Same contract, separate process: libs/secrets/tests/conftest.py and
+# libs/triggers/tests/conftest.py both import as `tests.conftest`, so pytest
+# refuses to collect them in one run.
+SECRET_REDACTION_TESTS := libs/secrets/tests/test_database_secret_manager.py
+
 # Single source of truth for the per-merge gate (run verbatim by CI's
 # `platform-test`). Covers unit + functional + apps/api + libs/common
 # (OSS/Enterprise extension contract) + libs/tasks + all hermetic flow tests.
@@ -45,7 +57,9 @@ FLOW_TESTS := \
 test:
 	uv run python -m pytest tests/unit tests/functional apps/api/tests libs/common/tests libs/tasks/tests \
 		$(FLOW_TESTS) \
+		$(REDACTION_TESTS) \
 		-m "not integration"
+	uv run python -m pytest $(SECRET_REDACTION_TESTS) -m "not integration"
 
 # Canonical main-flow suite — run before a release. Hermetic, no infra.
 # Each flow is registered in agentarea_common.testing.flows.MainFlow and the

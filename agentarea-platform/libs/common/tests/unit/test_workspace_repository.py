@@ -805,7 +805,7 @@ async def test_quotas_fail_explicitly_and_atomically():
 
 @pytest.mark.parametrize(
     "path",
-    ["/absolute", "../escape", "a/../escape", "windows\\escape", "a//b", ""],
+    ["/absolute", "../escape", "a/../escape", "windows\\escape", "a//b", "line\nbreak", ""],
 )
 def test_noncanonical_paths_are_rejected(path: str):
     with pytest.raises(WorkspaceValidationError):

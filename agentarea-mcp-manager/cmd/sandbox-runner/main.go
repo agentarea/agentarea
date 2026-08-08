@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/config"
@@ -15,6 +14,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/sandboxplacement"
 	"github.com/agentarea/mcp-manager/internal/sandboxrunner"
 	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
+	"github.com/agentarea/mcp-manager/internal/workspace"
 )
 
 func main() {
@@ -23,23 +23,37 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+	controlPolicy, err := sandboxruntime.LoadControlPolicyFromEnv()
+	if err != nil {
+		logger.Error("failed to configure sandbox control policy", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	workspaceConfig, err := workspace.LoadConfigFromEnv()
+	if err != nil {
+		logger.Error("failed to configure sandbox workspace policy", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	workspaceLimits := sandboxruntime.WorkspaceLimits{
+		MaxFiles: workspaceConfig.MaxFiles, MaxFileBytes: workspaceConfig.MaxFileBytes, MaxBytes: workspaceConfig.MaxBytes,
+	}
 
-	store, err := sandboxcontrol.NewRedisStore(
-		cfg.Redis.URL,
-		os.Getenv("SANDBOX_CONTROL_REDIS_PREFIX"),
-		durationEnv("SANDBOX_EXECUTION_RECORD_TTL", 24*time.Hour),
-	)
+	controlConfig, err := sandboxcontrol.LoadConfigFromEnv(cfg.Redis.URL)
+	if err != nil {
+		logger.Error("failed to configure sandbox control plane", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	store, err := sandboxcontrol.NewRedisStoreFromConfig(controlConfig)
 	if err != nil {
 		logger.Error("failed to initialize sandbox execution store", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	defer store.Close()
 
-	var legacyRuntime sandboxruntime.Runtime
+	var builtinRuntime sandboxruntime.ManagedRuntime
 	var backend *backends.KubernetesBackend
 	configuredProvider := strings.ToLower(strings.TrimSpace(os.Getenv("SANDBOX_PROVIDER")))
 	if configuredProvider == "" || configuredProvider == "kubernetes" || configuredProvider == "agentarea" {
-		backend, err = backends.NewKubernetesBackend(cfg, logger)
+		backend, err = backends.NewKubernetesBackend(cfg, logger, controlPolicy.TaskLeaseTTL)
 		if err != nil {
 			logger.Error("failed to initialize kubernetes backend", slog.String("error", err.Error()))
 			os.Exit(1)
@@ -49,12 +63,22 @@ func main() {
 			os.Exit(1)
 		}
 		defer func() { _ = backend.Shutdown(context.Background()) }()
-		legacyRuntime = backend
+		builtinRuntime = backend
 	}
 
-	runtime, providerName, err := sandboxruntime.NewFromEnv(ctx, legacyRuntime, store.RedisClient(), "kubernetes")
+	runtime, providerName, err := sandboxruntime.NewFromEnv(ctx, builtinRuntime, store.RedisClient(), "kubernetes", controlPolicy, workspaceLimits)
 	if err != nil {
 		logger.Error("failed to configure sandbox runtime", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	workspaceProvider, err := sandboxruntime.LoadWorkspaceProviderFromEnv()
+	if err != nil {
+		logger.Error("failed to resolve sandbox workspace provider", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	runtime, err = sandboxruntime.NewWorkspaceRuntimeForProvider(ctx, runtime, workspaceProvider, workspaceConfig)
+	if err != nil {
+		logger.Error("failed to configure sandbox workspace runtime", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	placer, err := sandboxplacement.NewRegistry(sandboxplacement.Target{
@@ -69,7 +93,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	runner := sandboxrunner.NewWithPlacer(sandboxrunner.ConfigFromEnv(), store, placer, logger)
+	workspaceRepository, err := workspace.NewRepositoryFromConfig(ctx, workspaceConfig)
+	if err != nil {
+		logger.Error("failed to configure sandbox output repository", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	runner := sandboxrunner.NewWithPlacerAndWorkspaceRepository(
+		sandboxrunner.ConfigFromEnv(), store, placer, logger, workspaceRepository,
+	)
 	if err := runner.Run(ctx); err != nil && err != context.Canceled {
 		logger.Error("sandbox runner stopped", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -96,16 +127,4 @@ func logLevel(level string) slog.Level {
 	default:
 		return slog.LevelInfo
 	}
-}
-
-func durationEnv(name string, fallback time.Duration) time.Duration {
-	value := os.Getenv(name)
-	if value == "" {
-		return fallback
-	}
-	duration, err := time.ParseDuration(value)
-	if err != nil {
-		return fallback
-	}
-	return duration
 }

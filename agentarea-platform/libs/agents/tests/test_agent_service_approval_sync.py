@@ -97,7 +97,7 @@ async def test_create_agent_lifts_toggle_into_a_rule_and_strips_the_flag(session
 
         agent = await service.create_agent(
             AgentCreate(
-                name="Approver", model_id="gpt-4o", tools=[_code_tool("agentarea/shell", True)]
+                name="Approver", model_id=None, tools=[_code_tool("agentarea/shell", True)]
             )
         )
 
@@ -113,7 +113,7 @@ async def test_create_agent_without_confirmation_writes_no_rule(session_factory)
 
         agent = await service.create_agent(
             AgentCreate(
-                name="Plain", model_id="gpt-4o", tools=[_code_tool("agentarea/shell", False)]
+                name="Plain", model_id=None, tools=[_code_tool("agentarea/shell", False)]
             )
         )
 
@@ -124,7 +124,7 @@ async def test_update_agent_reconciles_the_rule_and_strips_the_flag(session_fact
     async with session_factory() as session:
         context = _context()
         service = _service(session, context)
-        agent = await service.create_agent(AgentCreate(name="Editable", model_id="gpt-4o"))
+        agent = await service.create_agent(AgentCreate(name="Editable", model_id=None))
 
         updated = await service.update_agent(
             agent.id,
@@ -143,7 +143,7 @@ async def test_update_agent_unticking_removes_the_rule(session_factory):
         service = _service(session, context)
         agent = await service.create_agent(
             AgentCreate(
-                name="Editable", model_id="gpt-4o", tools=[_code_tool("agentarea/shell", True)]
+                name="Editable", model_id=None, tools=[_code_tool("agentarea/shell", True)]
             )
         )
         assert {r.target for r in await _rules(session, context, agent.id)} == {"tool:shell"}

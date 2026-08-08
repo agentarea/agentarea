@@ -1,72 +1,53 @@
-{{- if and .Values.mcpManager.enabled .Values.mcpManager.warmPool.enabled }}
+{{- $provider := .Values.sandboxRuntime.provider | default "kubernetes" -}}
+{{- if and .Values.mcpManager.enabled .Values.mcpManager.warmPool.enabled (or (eq $provider "kubernetes") (eq $provider "agentarea")) }}
 {{- if has "warm_pool" .Values.mcpManager.features.enabled }}
-{{- $root := . }}
-{{- $profiles := .Values.mcpManager.warmPool.profiles }}
-{{- $profilesByName := dict }}
-{{- range $profile := $profiles }}
-{{- if not (has $profile.packageInstall (list "allowed" "locked")) }}
-{{- fail (printf "mcpManager.warmPool.profiles packageInstall must be allowed or locked, got %q" $profile.packageInstall) }}
-{{- end }}
-{{- if hasKey $profilesByName $profile.packageInstall }}
-{{- fail (printf "duplicate warm-pool packageInstall profile %q" $profile.packageInstall) }}
-{{- end }}
-{{- $_ := set $profilesByName $profile.packageInstall true }}
-{{- $expectedEnvironment := ternary "mutable" "immutable" (eq $profile.packageInstall "allowed") }}
-{{- if ne $profile.managedEnvironment $expectedEnvironment }}
-{{- fail (printf "warm-pool profile %q must use managedEnvironment %q" $profile.packageInstall $expectedEnvironment) }}
-{{- end }}
-{{- end }}
-{{- if or (not (hasKey $profilesByName "allowed")) (not (hasKey $profilesByName "locked")) }}
-{{- fail "mcpManager.warmPool.profiles must configure both allowed and locked profiles" }}
-{{- end }}
-{{- range $profile := $profiles }}
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: {{ include "agentarea.fullname" $root }}-warm-pool-{{ $profile.packageInstall }}
+  name: {{ include "agentarea.fullname" . }}-warm-pool
   labels:
-    {{- include "agentarea.labels" $root | nindent 4 }}
+    {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: warm-pool
-    mcp.agentarea.io/package-install: {{ $profile.packageInstall | quote }}
 spec:
   selector:
     matchLabels:
-      {{- include "agentarea.selectorLabels" $root | nindent 6 }}
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: warm-pool
-      mcp.agentarea.io/package-install: {{ $profile.packageInstall | quote }}
   template:
     metadata:
       labels:
-        {{- include "agentarea.selectorLabels" $root | nindent 8 }}
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: warm-pool
         mcp.agentarea.io/status: "waiting"
-        mcp.agentarea.io/package-install: {{ $profile.packageInstall | quote }}
     spec:
       {{- /*
         Sandbox pods run LLM-written shell commands — the least trusted workload
-        on the platform. They take their isolation from mcpManager.runtimeClass,
-        the same value that drives MCP instance pods, so one setting governs both
-        and neither can silently end up weaker than the other.
+        on the platform, and a strictly different trust tier from an MCP server
+        image the workspace owner picked from a catalog. They therefore have
+        their own runtime class, and an empty one has to be asked for out loud.
 
         Previously this hardcoded `kata-qemu` behind the kata_runtime flag, which
         pinned the chart to one vendor's runtime and offered nothing to clusters
         without KVM. The runtime class is now declared, not chosen for you.
       */ -}}
-      {{- $runtimeClass := $root.Values.mcpManager.runtimeClass }}
-      {{- if and (has "kata_runtime" $root.Values.mcpManager.features.enabled) (not $runtimeClass) }}
-        {{- fail "mcpManager.features.enabled includes kata_runtime but mcpManager.runtimeClass is empty. The runtime class is no longer hardcoded: set mcpManager.runtimeClass explicitly (\"kata-qemu\" to keep the previous behaviour, or \"gvisor\")." }}
+      {{- $runtimeClass := .Values.sandboxRuntime.runtimeClass }}
+      {{- if and (not $runtimeClass) (not .Values.sandboxRuntime.allowWeakIsolationForDevelopment) }}
+        {{- fail "sandboxRuntime.runtimeClass is required: sandbox pods execute agent-authored code. Set \"gvisor\" or \"kata-qemu\", or set sandboxRuntime.allowWeakIsolationForDevelopment=true to accept the node's default runtime for local development." }}
+      {{- end }}
+      {{- if and (has "kata_runtime" .Values.mcpManager.features.enabled) (not $runtimeClass) }}
+        {{- fail "mcpManager.features.enabled includes kata_runtime but sandboxRuntime.runtimeClass is empty. The runtime class is no longer hardcoded: set sandboxRuntime.runtimeClass explicitly (\"kata-qemu\" to keep the previous behaviour, or \"gvisor\")." }}
       {{- end }}
       {{- if $runtimeClass }}
       runtimeClassName: {{ $runtimeClass | quote }}
       {{- end }}
-      serviceAccountName: {{ include "agentarea.mcpRuntimeServiceAccountName" $root }}
+      serviceAccountName: {{ include "agentarea.mcpRuntimeServiceAccountName" . }}
       automountServiceAccountToken: false
-      {{- include "agentarea.imagePullSecrets" $root | nindent 6 }}
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: warm-pod
-          image: "{{ $profile.image.repository }}:{{ $profile.image.tag }}"
-          imagePullPolicy: {{ $profile.image.pullPolicy }}
+          image: "{{ required "mcpManager.warmPool.image.repository is required" .Values.mcpManager.warmPool.image.repository }}:{{ required "mcpManager.warmPool.image.tag is required" .Values.mcpManager.warmPool.image.tag }}"
+          imagePullPolicy: {{ .Values.mcpManager.warmPool.image.pullPolicy }}
           ports:
             - name: activation
               containerPort: 8080
@@ -80,18 +61,28 @@ spec:
             - name: MCP_PORT
               value: "3000"
             - name: LOG_LEVEL
-              value: "{{ $root.Values.mcpManager.warmPool.logLevel }}"
+              value: "{{ .Values.mcpManager.warmPool.logLevel }}"
             - name: MAX_EXECUTION_TIMEOUT_SECONDS
-              value: "{{ $root.Values.mcpManager.warmPool.maxExecutionTimeoutSeconds | default 1800 }}"
-            - name: EXPECTED_MANAGED_ENVIRONMENT
-              value: {{ $profile.managedEnvironment | quote }}
+              value: "{{ .Values.sandboxRuntime.maxExecutionTimeoutSeconds }}"
+            - name: IDLE_TIMEOUT_SECONDS
+              value: "{{ .Values.mcpManager.warmPool.idleTimeoutSeconds }}"
+            - name: SANDBOX_WORKSPACE_MAX_FILES
+              value: "{{ .Values.sandboxRuntime.workspace.maxFiles }}"
+            - name: SANDBOX_WORKSPACE_MAX_FILE_BYTES
+              value: "{{ .Values.sandboxRuntime.workspace.maxFileBytes }}"
+            - name: SANDBOX_WORKSPACE_MAX_BYTES
+              value: "{{ .Values.sandboxRuntime.workspace.maxBytes }}"
             - name: SANDBOX_ACTIVATION_AUTH_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ $root.Values.global.secrets.application }}
+                  name: {{ .Values.global.secrets.application }}
                   key: sandbox-activation-secret
+          {{- $resources := deepCopy .Values.mcpManager.warmPool.resources }}
+          {{- $limits := deepCopy (get $resources "limits" | default dict) }}
+          {{- $_ := set $limits "ephemeral-storage" .Values.sandboxRuntime.workspace.maxBytes }}
+          {{- $_ := set $resources "limits" $limits }}
           resources:
-            {{- toYaml ($profile.resources | default $root.Values.mcpManager.warmPool.resources) | nindent 12 }}
+            {{- toYaml $resources | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -128,7 +119,8 @@ spec:
             path: /var/lib/mcp-image-cache
             type: DirectoryOrCreate
         - name: workspace
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: {{ .Values.sandboxRuntime.workspace.maxBytes | quote }}
       tolerations:
         - operator: Exists
       affinity:
@@ -143,6 +135,5 @@ spec:
                       values:
                         - warm-pool
                 topologyKey: kubernetes.io/hostname
-{{- end }}
 {{- end }}
 {{- end }}

@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"regexp"
 	"strconv"
@@ -72,8 +71,8 @@ type ContainerConfig struct {
 	DefaultCPULimit    string `json:"default_cpu_limit"`
 
 	// DefaultIsolationTier is the confinement applied to instances whose spec
-	// does not name one. It defaults to "standard" rather than "trusted"
-	// because the containers this manager starts are third-party MCP servers.
+	// does not name one. Third-party MCP images are untrusted unless an explicit
+	// call-site policy proves otherwise.
 	DefaultIsolationTier string `json:"default_isolation_tier"`
 
 	// MCPIdleTimeout stops a lazily-provisioned instance whose container has
@@ -100,9 +99,10 @@ type RedisConfig struct {
 	URL string `json:"url"`
 }
 
-// Load loads configuration from environment variables with sensible defaults
+// Load loads configuration from environment variables. Missing operational
+// values may use documented defaults; malformed values always stop startup.
 func Load() *Config {
-	return &Config{
+	config := &Config{
 		Server: ServerConfig{
 			Host:         getEnv("SERVER_HOST", "0.0.0.0"),
 			Port:         getEnvInt("SERVER_PORT", 8000),
@@ -124,7 +124,7 @@ func Load() *Config {
 			DefaultCPULimit:    getEnv("DEFAULT_CPU_LIMIT", "1.0"),
 			SandboxExecutorURL: getEnv("SANDBOX_EXECUTOR_URL", ""),
 
-			DefaultIsolationTier: getEnv("DEFAULT_ISOLATION_TIER", IsolationStandard),
+			DefaultIsolationTier: getEnv("DEFAULT_ISOLATION_TIER", IsolationUntrusted),
 
 			// Off by default: enabling reaping changes how long an instance
 			// lives, so an operator opts in rather than discovering it.
@@ -143,6 +143,22 @@ func Load() *Config {
 		Environment: backendEnvironment(),
 		Features:    loadFeaturesConfig(),
 	}
+	if config.Server.Port <= 0 || config.Server.ReadTimeout <= 0 || config.Server.WriteTimeout <= 0 {
+		panic("server port and timeouts must be positive")
+	}
+	if config.Container.MaxContainers <= 0 || config.Container.StartupTimeout <= 0 || config.Container.ShutdownTimeout <= 0 {
+		panic("container limits and startup/shutdown timeouts must be positive")
+	}
+	if config.Container.MCPIdleTimeout < 0 || config.Container.MCPIdleSweepInterval <= 0 {
+		panic("MCP idle timeout must be non-negative and sweep interval must be positive")
+	}
+	if _, err := ResolveIsolation(config.Container.DefaultIsolationTier); err != nil {
+		panic(err)
+	}
+	if _, err := config.Kubernetes.InstancePod.ScratchSizeLimitQuantity(); err != nil {
+		panic(err)
+	}
+	return config
 }
 
 // Helper functions for environment variable parsing
@@ -158,6 +174,7 @@ func getEnvInt(key string, defaultValue int) int {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue
 		}
+		panic(fmt.Sprintf("%s must be an integer", key))
 	}
 	return defaultValue
 }
@@ -167,6 +184,7 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 		if duration, err := time.ParseDuration(value); err == nil {
 			return duration
 		}
+		panic(fmt.Sprintf("%s must be a duration", key))
 	}
 	return defaultValue
 }
@@ -176,6 +194,7 @@ func getEnvBool(key string, defaultValue bool) bool {
 		if boolValue, err := strconv.ParseBool(value); err == nil {
 			return boolValue
 		}
+		panic(fmt.Sprintf("%s must be true or false", key))
 	}
 	return defaultValue
 }
@@ -218,9 +237,11 @@ func loadKubernetesConfig() KubernetesConfig {
 	// Security context
 	config.SecurityContext.RunAsNonRoot = getEnvBool("KUBERNETES_RUN_AS_NON_ROOT", config.SecurityContext.RunAsNonRoot)
 	if runAsUser := getEnv("KUBERNETES_RUN_AS_USER", ""); runAsUser != "" {
-		if user, err := strconv.ParseInt(runAsUser, 10, 64); err == nil {
-			config.SecurityContext.RunAsUser = user
+		user, err := strconv.ParseInt(runAsUser, 10, 64)
+		if err != nil {
+			panic("KUBERNETES_RUN_AS_USER must be an integer")
 		}
+		config.SecurityContext.RunAsUser = user
 	}
 	config.SecurityContext.ReadOnlyRootFilesystem = getEnvBool("KUBERNETES_READ_ONLY_ROOT_FS", config.SecurityContext.ReadOnlyRootFilesystem)
 	config.SecurityContext.AllowPrivilegeEscalation = getEnvBool("KUBERNETES_ALLOW_PRIVILEGE_ESCALATION", config.SecurityContext.AllowPrivilegeEscalation)
@@ -229,12 +250,11 @@ func loadKubernetesConfig() KubernetesConfig {
 	config.NetworkPolicy.Enabled = getEnvBool("KUBERNETES_NETWORK_POLICY_ENABLED", config.NetworkPolicy.Enabled)
 
 	// Operator-supplied instance pod customization (labels/annotations/scheduling),
-	// passed by the chart as one JSON blob. Parse failures are logged and ignored
-	// so a malformed value cannot break instance creation.
+	// passed by the chart as one JSON blob. Malformed placement policy is a
+	// deployment error rather than permission to run elsewhere.
 	if raw := getEnv("KUBERNETES_INSTANCE_POD", ""); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &config.InstancePod); err != nil {
-			slog.Warn("ignoring invalid KUBERNETES_INSTANCE_POD", slog.String("error", err.Error()))
-			config.InstancePod = InstancePodConfig{}
+			panic(fmt.Sprintf("KUBERNETES_INSTANCE_POD must be valid JSON: %v", err))
 		}
 	}
 
@@ -251,14 +271,18 @@ func loadKubernetesConfig() KubernetesConfig {
 
 	// Timeouts
 	if deploymentTimeout := getEnv("KUBERNETES_DEPLOYMENT_TIMEOUT", ""); deploymentTimeout != "" {
-		if timeout, err := time.ParseDuration(deploymentTimeout); err == nil {
-			config.DeploymentTimeout = timeout
+		timeout, err := time.ParseDuration(deploymentTimeout)
+		if err != nil || timeout <= 0 {
+			panic("KUBERNETES_DEPLOYMENT_TIMEOUT must be a positive duration")
 		}
+		config.DeploymentTimeout = timeout
 	}
 	if readinessTimeout := getEnv("KUBERNETES_READINESS_TIMEOUT", ""); readinessTimeout != "" {
-		if timeout, err := time.ParseDuration(readinessTimeout); err == nil {
-			config.ReadinessTimeout = timeout
+		timeout, err := time.ParseDuration(readinessTimeout)
+		if err != nil || timeout <= 0 {
+			panic("KUBERNETES_READINESS_TIMEOUT must be a positive duration")
 		}
+		config.ReadinessTimeout = timeout
 	}
 
 	return config

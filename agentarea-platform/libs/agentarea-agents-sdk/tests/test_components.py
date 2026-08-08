@@ -155,7 +155,7 @@ class TestTools:
         assert hasattr(tool, "description")
 
         # Test execution: the final answer is passed as `result`
-        result = await tool.execute(result="done")
+        result = await tool.execute(result="done", artifacts=[])
         assert result.get("success") is True
         assert isinstance(result.get("result"), str)
 

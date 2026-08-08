@@ -8,14 +8,29 @@ LOG_LEVEL: "INFO"
 CORE_API_URL: "http://{{ include "agentarea.fullname" . }}-backend:8000"
 SERVER_HOST: "0.0.0.0"
 SERVER_PORT: "80"
-BACKEND_TYPE: "kubernetes"
+BACKEND_TYPE: "{{ include "agentarea.mcpManager.backendType" . }}"
+MCP_DATAPLANE_URL: "{{ .Values.mcpManager.dataPlane.url | default "" }}"
 KUBERNETES_ENABLED: "true"
 KUBERNETES_NAMESPACE: "{{ .Release.Namespace }}"
 KUBERNETES_DOMAIN: "{{ .Values.mcpManager.domain | default "mcp.local" }}"
 KUBERNETES_GATEWAY_NAME: "{{ .Values.mcpManager.gateway.name | default "envoy-gateway" }}"
 KUBERNETES_GATEWAY_NAMESPACE: "{{ .Values.mcpManager.gateway.namespace | default "envoy-gateway-system" }}"
-KUBERNETES_RUNTIME_CLASS: "{{ .Values.mcpManager.runtimeClass | default "" }}"
+KUBERNETES_RUNTIME_CLASS: "{{ .Values.mcpManager.runtimeClass }}"
+DEFAULT_ISOLATION_TIER: "{{ required "mcpManager.isolationTier is required" .Values.mcpManager.isolationTier }}"
+MCP_ALLOWED_IMAGE_REPOSITORIES: "{{ join "," .Values.mcpManager.admission.allowedImageRepositories }}"
+MCP_ALLOWED_COMMAND_PACKAGES: "{{ join "," .Values.mcpManager.admission.allowedCommandPackages }}"
+KUBERNETES_KUBECONFIG: "{{ include "agentarea.mcpManager.executionKubeconfigPath" . }}"
 KUBERNETES_POD_SERVICE_ACCOUNT_NAME: "{{ include "agentarea.mcpRuntimeServiceAccountName" . }}"
+SANDBOX_WORKSPACE_PROVIDER: "s3"
+SANDBOX_WORKSPACE_MAX_FILES: "{{ .Values.sandboxRuntime.workspace.maxFiles }}"
+SANDBOX_WORKSPACE_MAX_FILE_BYTES: "{{ .Values.sandboxRuntime.workspace.maxFileBytes }}"
+SANDBOX_WORKSPACE_MAX_BYTES: "{{ .Values.sandboxRuntime.workspace.maxBytes }}"
+SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS: "{{ .Values.sandboxRuntime.maxExecutionTimeoutSeconds }}"
+SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS: "{{ .Values.sandboxRuntime.defaultExecutionTimeoutSeconds }}"
+SANDBOX_EXECUTION_QUEUE_TIMEOUT: "{{ .Values.sandboxRuntime.executionQueueTimeout }}"
+SANDBOX_EXECUTION_COMPLETION_GRACE: "{{ .Values.sandboxRuntime.executionCompletionGrace }}"
+SANDBOX_WORKSPACE_SIGNED_URL_TTL: "{{ .Values.sandboxRuntime.workspace.signedUrlTTL }}"
+SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE: "{{ .Values.sandboxRuntime.workspace.forcePathStyle }}"
 KUBERNETES_SECURITY_RUN_AS_NON_ROOT: "true"
 KUBERNETES_SECURITY_READ_ONLY_ROOT_FS: "true"
 KUBERNETES_DEFAULT_CPU_REQUEST: "100m"
@@ -25,6 +40,8 @@ KUBERNETES_DEFAULT_MEMORY_LIMIT: "512Mi"
 MCP_FEATURES_ENABLED: "{{ join "," .Values.mcpManager.features.enabled }}"
 MCP_IDLE_TIMEOUT: "{{ if .Values.mcpManager.serverless.enabled }}{{ .Values.mcpManager.serverless.idleTimeout }}{{ else }}0{{ end }}"
 MCP_IDLE_SWEEP_INTERVAL: "{{ .Values.mcpManager.serverless.sweepInterval }}"
+MCP_REQUEST_LEASE_TTL: "{{ .Values.mcpManager.serverless.requestLeaseTTL }}"
+MCP_GATEWAY_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}"
 {{- end }}
 
 {{- define "agentarea.mcpManager.envs" }}
@@ -53,6 +70,11 @@ MCP_IDLE_SWEEP_INTERVAL: "{{ .Values.mcpManager.serverless.sweepInterval }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: BACKEND_TYPE
+- name: MCP_DATAPLANE_URL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_DATAPLANE_URL
 - name: KUBERNETES_ENABLED
   valueFrom:
     configMapKeyRef:
@@ -83,11 +105,81 @@ MCP_IDLE_SWEEP_INTERVAL: "{{ .Values.mcpManager.serverless.sweepInterval }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: KUBERNETES_RUNTIME_CLASS
+- name: DEFAULT_ISOLATION_TIER
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: DEFAULT_ISOLATION_TIER
+- name: MCP_ALLOWED_IMAGE_REPOSITORIES
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_ALLOWED_IMAGE_REPOSITORIES
+- name: MCP_ALLOWED_COMMAND_PACKAGES
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_ALLOWED_COMMAND_PACKAGES
+- name: KUBERNETES_KUBECONFIG
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: KUBERNETES_KUBECONFIG
 - name: KUBERNETES_POD_SERVICE_ACCOUNT_NAME
   valueFrom:
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: KUBERNETES_POD_SERVICE_ACCOUNT_NAME
+- name: SANDBOX_WORKSPACE_PROVIDER
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_WORKSPACE_PROVIDER
+- name: SANDBOX_WORKSPACE_MAX_FILES
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_WORKSPACE_MAX_FILES
+- name: SANDBOX_WORKSPACE_MAX_FILE_BYTES
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_WORKSPACE_MAX_FILE_BYTES
+- name: SANDBOX_WORKSPACE_MAX_BYTES
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_WORKSPACE_MAX_BYTES
+- name: SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS
+- name: SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS
+- name: SANDBOX_EXECUTION_QUEUE_TIMEOUT
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_EXECUTION_QUEUE_TIMEOUT
+- name: SANDBOX_EXECUTION_COMPLETION_GRACE
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_EXECUTION_COMPLETION_GRACE
+- name: SANDBOX_WORKSPACE_SIGNED_URL_TTL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_WORKSPACE_SIGNED_URL_TTL
+- name: SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE
 - name: KUBERNETES_SECURITY_RUN_AS_NON_ROOT
   valueFrom:
     configMapKeyRef:
@@ -133,4 +225,24 @@ MCP_IDLE_SWEEP_INTERVAL: "{{ .Values.mcpManager.serverless.sweepInterval }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: MCP_IDLE_SWEEP_INTERVAL
+- name: MCP_REQUEST_LEASE_TTL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_REQUEST_LEASE_TTL
+- name: MCP_GATEWAY_STARTUP_TIMEOUT
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_GATEWAY_STARTUP_TIMEOUT
+{{- end }}
+
+{{- define "agentarea.mcpManager.secrets.envs" }}
+{{- if .Values.mcpManager.dataPlane.url }}
+- name: MCP_DATAPLANE_AUTH_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: "{{ .Values.mcpManager.dataPlane.tokenSecret }}"
+      key: {{ .Values.mcpManager.dataPlane.tokenKey }}
+{{- end }}
 {{- end }}

@@ -37,11 +37,3 @@ class ToolInvocationContext:
     user_id: str = ""
     agent_id: str = ""
     metadata: dict[str, str] = field(default_factory=dict)
-
-
-_EMPTY = ToolInvocationContext()
-
-
-def empty_context() -> ToolInvocationContext:
-    """Return the canonical "no context" instance for tests / standalone use."""
-    return _EMPTY

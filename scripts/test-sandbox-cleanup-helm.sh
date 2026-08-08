@@ -25,28 +25,69 @@ def find_document(kind: str, name: str) -> str:
     raise AssertionError(f"missing rendered {kind} {name}")
 
 
-activation_secret = next(
-    document
+assert not any(
+    "kind: Secret" in document
+    and re.search(r"(?m)^\s*name:\s*agentarea-runtime-credentials\s*$", document)
     for document in documents
-    if "kind: Secret" in document and "sandbox-activation-secret:" in document
-)
-cleanup_secret = find_document("Secret", "cleanup-auth-agentarea-sandbox-cleanup-auth")
-activation = re.search(
-    r"(?m)^\s*sandbox-activation-secret:\s*([^\s]+)\s*$", activation_secret
-)
-cleanup = re.search(r"(?m)^\s*token:\s*([^\s]+)\s*$", cleanup_secret)
-assert activation is not None, "activation secret is missing"
-assert cleanup is not None, "cleanup secret is missing"
-assert activation.group(1) != cleanup.group(1), "cleanup secret must be dedicated"
+), "the chart must reference, not generate, runtime credentials"
 
-for component in ("mcp-manager", "worker"):
+contracts = {
+    "mcp-manager": {
+        "SANDBOX_CLEANUP_AUTH_SECRET": "sandbox-cleanup-token",
+        "SANDBOX_INSPECTION_AUTH_SECRET": "sandbox-inspection-token",
+        "SANDBOX_FILE_AUTH_SECRET": "sandbox-file-token",
+        "MCP_GATEWAY_AUTH_SECRET": "mcp-gateway-token",
+    },
+    "worker": {
+        "SANDBOX_FILE_AUTH_SECRET": "sandbox-file-token",
+        "MCP_GATEWAY_AUTH_SECRET": "mcp-gateway-token",
+    },
+    "backend": {
+        "SANDBOX_INSPECTION_AUTH_SECRET": "sandbox-inspection-token",
+        "SANDBOX_FILE_AUTH_SECRET": "sandbox-file-token",
+        "MCP_GATEWAY_AUTH_SECRET": "mcp-gateway-token",
+    },
+}
+
+all_runtime_envs = {
+    name for component_contract in contracts.values() for name in component_contract
+}
+for component, expected in contracts.items():
     deployment = find_document("Deployment", f"cleanup-auth-agentarea-{component}")
-    assert deployment.count("name: SANDBOX_CLEANUP_AUTH_SECRET") == 1
-    assert "name: cleanup-auth-agentarea-sandbox-cleanup-auth" in deployment
-    assert "key: token" in deployment
+    for env_name in all_runtime_envs:
+        count = deployment.count(f"name: {env_name}")
+        assert count == (1 if env_name in expected else 0), (
+            f"{component} has unexpected count {count} for {env_name}"
+        )
+    for env_name, secret_key in expected.items():
+        env_block = re.search(
+            rf"(?m)^\s*- name:\s*{re.escape(env_name)}\s*$\n"
+            rf"^\s*valueFrom:\s*$\n"
+            rf"^\s*secretKeyRef:\s*$\n"
+            rf"^\s*name:\s*agentarea-runtime-credentials\s*$\n"
+            rf"^\s*key:\s*{re.escape(secret_key)}\s*$",
+            deployment,
+        )
+        assert env_block is not None, f"{component} does not reference {env_name}/{secret_key}"
 
 for document in documents:
     if "app.kubernetes.io/component: sandbox-runner" in document or "app.kubernetes.io/component: warm-pool" in document:
-        assert "SANDBOX_CLEANUP_AUTH_SECRET" not in document
-        assert "cleanup-auth-agentarea-sandbox-cleanup-auth" not in document
+        for env_name in all_runtime_envs:
+            assert env_name not in document
+        assert "agentarea-runtime-credentials" not in document
+
+# Command admission and the activation data plane must render from one policy
+# value. A control-plane maximum larger than the executor maximum would accept
+# work that the data plane later shortens or rejects.
+manager_config = find_document("ConfigMap", "cleanup-auth-agentarea-env-mcpmanager")
+assert re.search(
+    r'(?m)^\s*SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS:\s*"1800"\s*$',
+    manager_config,
+), "manager timeout policy was not rendered from sandboxRuntime.maxExecutionTimeoutSeconds"
+warm_pool = find_document("DaemonSet", "cleanup-auth-agentarea-warm-pool")
+assert re.search(
+    r'(?m)^\s*- name:\s*MAX_EXECUTION_TIMEOUT_SECONDS\s*$\n'
+    r'^\s*value:\s*"1800"\s*$',
+    warm_pool,
+), "activation timeout diverged from the manager policy"
 PY

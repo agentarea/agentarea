@@ -188,3 +188,28 @@ func TestConvertToInstanceSpec_DockerType_OnlyStdioFlag_CommandBecomesEmpty(t *t
 		t.Errorf("expected empty Command after stripping --transport=stdio, got %v", spec.Command)
 	}
 }
+
+// The provider must not decide the isolation tier. Pinning "untrusted" here
+// asked every MCP pod for a syscall-interposing RuntimeClass; on a cluster
+// without one the pod stayed Pending, the gateway's cold start timed out, and
+// the instance was unreachable no matter what it ran. Leaving the field empty
+// hands the decision to the operator's DEFAULT_ISOLATION_TIER.
+func TestConvertToInstanceSpecLeavesTheIsolationTierToTheOperator(t *testing.T) {
+	p := newTestKubernetesProvider()
+
+	for name, jsonSpec := range map[string]map[string]interface{}{
+		"docker":  {"type": "docker", "image": "ghcr.io/vendor/mcp:1.0", "port": 9000},
+		"command": {"type": "command", "command": "mcp-server-notion"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			spec := p.convertToInstanceSpec(&models.MCPServerInstance{
+				InstanceID: "inst-1",
+				Name:       "server",
+				JSONSpec:   jsonSpec,
+			})
+			if spec.IsolationTier != "" {
+				t.Fatalf("IsolationTier = %q; the provider pinned a tier the cluster may not be able to satisfy", spec.IsolationTier)
+			}
+		})
+	}
+}

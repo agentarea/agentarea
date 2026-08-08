@@ -2,25 +2,86 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/activationauth"
-	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
+	"github.com/agentarea/mcp-manager/internal/execsupervisor"
+	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
+	"github.com/agentarea/mcp-manager/internal/workspace"
 )
+
+func TestPrepareTaskWorkspaceDoesNotFollowAgentSymlinks(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.Symlink(filepath.Join(t.TempDir(), "missing-target"), filepath.Join(workspace, "agent-link")); err != nil {
+		t.Fatal(err)
+	}
+	credential := &syscall.Credential{Uid: uint32(os.Getuid()), Gid: uint32(os.Getgid())}
+	if err := prepareTaskWorkspace(workspace, credential); err != nil {
+		t.Fatalf("prepareTaskWorkspace followed an agent-controlled symlink: %v", err)
+	}
+}
+
+func TestLoadActivationPolicyRejectsMissingOrMalformedValues(t *testing.T) {
+	t.Setenv("MAX_EXECUTION_TIMEOUT_SECONDS", "1800")
+	t.Setenv("SANDBOX_WORKSPACE_MAX_FILES", "10000")
+	t.Setenv("SANDBOX_WORKSPACE_MAX_FILE_BYTES", "268435456")
+	t.Setenv("SANDBOX_WORKSPACE_MAX_BYTES", "2147483648")
+	t.Setenv("IDLE_TIMEOUT_SECONDS", "not-a-number")
+	if _, err := loadActivationPolicy(); err == nil {
+		t.Fatal("malformed idle timeout unexpectedly disabled the watchdog")
+	}
+	t.Setenv("IDLE_TIMEOUT_SECONDS", "0")
+	policy, err := loadActivationPolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if policy.MaxExecutionTimeoutSeconds != 1800 || policy.WorkspaceLimits != (sandboxruntime.WorkspaceLimits{
+		MaxFiles: 10000, MaxFileBytes: 268435456, MaxBytes: 2147483648,
+	}) || policy.IdleTimeout != 0 {
+		t.Fatalf("policy = %+v", policy)
+	}
+}
+
+func TestWorkspaceEntryLimitCountsFilesDirectoriesAndSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "one"), []byte("1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "directory"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("one", filepath.Join(dir, "link")); err != nil {
+		t.Fatal(err)
+	}
+	limits := sandboxruntime.WorkspaceLimits{MaxFiles: 2, MaxFileBytes: 10, MaxBytes: 20}
+	if err := enforceWorkspaceLimits(dir, limits); !errors.Is(err, errWorkspaceQuotaExceeded) {
+		t.Fatalf("live workspace entry overflow error = %v", err)
+	}
+}
 
 func init() {
 	logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	servicePolicy = activationPolicy{
+		MaxExecutionTimeoutSeconds: 30,
+		WorkspaceLimits: sandboxruntime.WorkspaceLimits{
+			MaxFiles: 10_000, MaxFileBytes: 256 * 1024 * 1024, MaxBytes: 2 * 1024 * 1024 * 1024,
+		},
+	}
 }
 
 func decodeExecResp(t *testing.T, w *httptest.ResponseRecorder) ExecuteResponse {
@@ -37,20 +98,43 @@ func decodeExecResp(t *testing.T, w *httptest.ResponseRecorder) ExecuteResponse 
 
 func postExecute(t *testing.T, req ExecuteRequest, commandContent string) ExecuteResponse {
 	t.Helper()
+	return decodeExecResp(t, postExecuteRequest(t, req, commandContent))
+}
+
+func postExecuteRequest(t *testing.T, req ExecuteRequest, commandContent string) *httptest.ResponseRecorder {
+	return postExecuteRequestWithHooks(t, req, commandContent, runTestSandboxCommand, func() {})
+}
+
+func postExecuteRequestWithHooks(
+	t *testing.T,
+	req ExecuteRequest,
+	commandContent string,
+	runner supervisedCommandRunner,
+	invalidator func(),
+) *httptest.ResponseRecorder {
+	t.Helper()
+	originalRunner := runSandboxCommand
+	originalInvalidator := executorInvalidator
+	runSandboxCommand = runner
+	executorInvalidator = invalidator
+	t.Cleanup(func() {
+		runSandboxCommand = originalRunner
+		executorInvalidator = originalInvalidator
+	})
 	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
-	if req.PackageInstall == "" {
-		req.PackageInstall = runtimeinfo.PackageInstallAllowed
+	if req.TimeoutSeconds == 0 {
+		req.TimeoutSeconds = 5
 	}
 	runtimePath := filepath.Join(t.TempDir(), "runtime.json")
 	runtimeJSON := `{
-  "schema_version": 1,
+  "schema_version": 2,
   "image_version": "test-runtime",
-  "managed_environment": "mutable",
   "python": {"version": "3.12.0", "executable": "/opt/runtime/venv/bin/python"},
   "node": {"version": "22.0.0", "npm_version": "10.0.0"},
   "tools": {},
   "packages": {},
-  "features": {"browser": "none", "managed_environment_mutation": true, "arbitrary_workspace_code": true}
+  "features": {"browser": "none", "arbitrary_workspace_code": true},
+  "execution_supervisor": {"path":"/usr/local/bin/agentarea-exec-supervisor","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","protocol_version":1,"command_uid":10001,"command_gid":10001}
 }`
 	if err := os.WriteFile(runtimePath, []byte(runtimeJSON), 0o600); err != nil {
 		t.Fatal(err)
@@ -83,7 +167,167 @@ func postExecute(t *testing.T, req ExecuteRequest, commandContent string) Execut
 	r.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 	executeHandler(w, r)
-	return decodeExecResp(t, w)
+	return w
+}
+
+func TestExecuteHandlerRejectsTimeoutAboveSharedPolicyBeforeExecution(t *testing.T) {
+	originalPolicy := servicePolicy
+	servicePolicy.MaxExecutionTimeoutSeconds = 17
+	t.Cleanup(func() { servicePolicy = originalPolicy })
+
+	var executed bool
+	response := postExecuteRequestWithHooks(t, ExecuteRequest{
+		WorkspaceID: "workspace-timeout", TaskID: "task-timeout",
+		TimeoutSeconds: 18,
+	}, "true", func(context.Context, supervisedCommandRequest) (execsupervisor.Status, error) {
+		executed = true
+		return execsupervisor.Status{}, nil
+	}, func() {})
+
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "between 1 and 17") {
+		t.Fatalf("response = %d %s, want explicit configured timeout rejection", response.Code, response.Body.String())
+	}
+	if executed {
+		t.Fatal("over-policy command reached the execution runtime")
+	}
+}
+
+func runTestSandboxCommand(ctx context.Context, request supervisedCommandRequest) (execsupervisor.Status, error) {
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(request.TimeoutSeconds)*time.Second)
+	defer cancel()
+	command := exec.CommandContext(timeoutCtx, "/bin/sh", request.CommandPath)
+	command.Dir = request.WorkspaceDir
+	command.Env = request.Environment
+	command.Stdout = request.Stdout
+	command.Stderr = request.Stderr
+	err := command.Run()
+	if errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
+		return execsupervisor.Status{
+			ProtocolVersion: execsupervisor.ProtocolVersion, SupervisorSHA256: request.Attestation.SHA256,
+			Quiescent: true, ChildExitCode: 124, TimedOut: true,
+		}, nil
+	}
+	exitCode := 0
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		} else {
+			return execsupervisor.Status{}, err
+		}
+	}
+	return execsupervisor.Status{
+		ProtocolVersion: execsupervisor.ProtocolVersion, SupervisorSHA256: request.Attestation.SHA256,
+		Quiescent: true, ChildExitCode: exitCode,
+	}, nil
+}
+
+func TestExecuteHandlerDiscardsWorkspaceThatCrossesLiveQuota(t *testing.T) {
+	originalRoot := workspaceRoot
+	originalPolicy := servicePolicy
+	workspaceRoot = t.TempDir()
+	t.Cleanup(func() {
+		workspaceRoot = originalRoot
+		servicePolicy = originalPolicy
+	})
+
+	tests := []struct {
+		name    string
+		command string
+		limits  sandboxruntime.WorkspaceLimits
+	}{
+		{
+			name: "single oversized file", command: "printf 12345 > oversized.bin",
+			limits: sandboxruntime.WorkspaceLimits{MaxFiles: 100, MaxFileBytes: 4, MaxBytes: 100},
+		},
+		{
+			name: "total bytes", command: "printf 123 > one.bin; printf 456 > two.bin",
+			limits: sandboxruntime.WorkspaceLimits{MaxFiles: 100, MaxFileBytes: 4, MaxBytes: 5},
+		},
+		{
+			name: "symlink entries", command: "ln -s missing one; ln -s missing two",
+			limits: sandboxruntime.WorkspaceLimits{MaxFiles: 1, MaxFileBytes: 100, MaxBytes: 100},
+		},
+	}
+	for index, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			servicePolicy.WorkspaceLimits = test.limits
+			taskID := fmt.Sprintf("quota-task-%d", index)
+			workspaceID := fmt.Sprintf("quota-workspace-%d", index)
+			response := postExecuteRequest(t, ExecuteRequest{
+				WorkspaceID: workspaceID, TaskID: taskID,
+			}, test.command)
+			if response.Code != http.StatusInsufficientStorage || !strings.Contains(response.Body.String(), "workspace quota exceeded") {
+				t.Fatalf("response = %d %s", response.Code, response.Body.String())
+			}
+			workspaceDir, err := executionWorkspacePath(workspaceID, taskID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(workspaceDir); !os.IsNotExist(err) {
+				t.Fatalf("unsafe workspace was retained: %v", err)
+			}
+		})
+	}
+}
+
+func TestExecuteHandlerPublishesUnsafeIncarnationBeforeInvalidation(t *testing.T) {
+	originalRoot := workspaceRoot
+	originalPolicy := servicePolicy
+	workspaceRoot = t.TempDir()
+	servicePolicy.WorkspaceLimits = sandboxruntime.WorkspaceLimits{MaxFiles: 100, MaxFileBytes: 1, MaxBytes: 100}
+	t.Cleanup(func() {
+		workspaceRoot = originalRoot
+		servicePolicy = originalPolicy
+	})
+
+	invalidated := false
+	response := postExecuteRequestWithHooks(t, ExecuteRequest{
+		WorkspaceID: "workspace-unsafe", TaskID: "task-unsafe",
+	}, "printf 12 > oversized.bin", runTestSandboxCommand, func() { invalidated = true })
+
+	if response.Code != http.StatusInsufficientStorage {
+		t.Fatalf("response = %d %s, want workspace quota rejection", response.Code, response.Body.String())
+	}
+	if response.Header().Get("X-Agentarea-Executor-Unsafe") != "true" {
+		t.Fatalf("unsafe response header = %q", response.Header().Get("X-Agentarea-Executor-Unsafe"))
+	}
+	if !invalidated {
+		t.Fatal("unsafe executor incarnation was not invalidated after publishing the response")
+	}
+}
+
+func TestExecuteHandlerRejectsDifferentExecutorIncarnationBeforeWorkspaceAccess(t *testing.T) {
+	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
+	originalRoot := workspaceRoot
+	workspaceRoot = t.TempDir()
+	t.Cleanup(func() { workspaceRoot = originalRoot })
+	req := ExecuteRequest{
+		ExecutorIncarnation: "00000000-0000-4000-8000-000000000001",
+		CommandBody:         "true",
+		TaskID:              "task-incarnation",
+		WorkspaceID:         "workspace-incarnation",
+	}
+	body, err := json.Marshal(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	token, err := activationauth.SignFromEnv(activationauth.ScopeExecute, activationauth.Identity{
+		WorkspaceID: req.WorkspaceID, TaskID: req.TaskID, Generation: 0, FencingToken: 1,
+	}, activationauth.BodySHA256(body), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	executeHandler(response, request)
+	if response.Code != http.StatusPreconditionFailed || !strings.Contains(response.Body.String(), "executor_incarnation_changed") {
+		t.Fatalf("response = %d %s, want executor incarnation precondition", response.Code, response.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(workspaceRoot, req.WorkspaceID, req.TaskID)); !os.IsNotExist(err) {
+		t.Fatalf("replacement executor touched workspace before rejecting request: %v", err)
+	}
 }
 
 func TestExecuteHandlerSessionWorkspacePersistsAcrossCalls(t *testing.T) {
@@ -208,7 +452,7 @@ func TestExecuteHandlerRejectsBearerReplayedWithAlteredBody(t *testing.T) {
 	}
 }
 
-func TestDecodeExecuteRequestRejectsAllLegacyInlineFileShapes(t *testing.T) {
+func TestDecodeExecuteRequestRejectsAllInlineFileShapes(t *testing.T) {
 	for _, payload := range []string{
 		`{"script_name":"cmd.sh","script_content":"true"}`,
 		`{"script_name":"cmd.sh","script_content":"true","input_files":[]}`,
@@ -218,7 +462,7 @@ func TestDecodeExecuteRequestRejectsAllLegacyInlineFileShapes(t *testing.T) {
 		`{"command_path":".agentarea/commands/command.sh","script":"REDIS-SCRIPT-CANARY"}`,
 	} {
 		if _, err := decodeExecuteRequest(strings.NewReader(payload)); err == nil || !strings.Contains(err.Error(), "unsupported_contract_version") {
-			t.Fatalf("legacy payload accepted: %s; error = %v", payload, err)
+			t.Fatalf("inline-file payload accepted: %s; error = %v", payload, err)
 		}
 	}
 }
@@ -252,16 +496,22 @@ func TestResolveExecutionWorkspaceMakesRootTraversableAndTaskPrivate(t *testing.
 	workspaceRoot = t.TempDir()
 	t.Cleanup(func() { workspaceRoot = originalRoot })
 
-	dir, err := resolveExecutionWorkspace("task-permissions")
+	dir, err := resolveExecutionWorkspace("workspace-permissions", "task-permissions")
 	if err != nil {
 		t.Fatal(err)
 	}
-	tasksInfo, err := os.Stat(filepath.Join(workspaceRoot, "tasks"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := tasksInfo.Mode().Perm(); got != 0o711 {
-		t.Fatalf("tasks root permissions = %04o, want 0711", got)
+	for _, parent := range []string{
+		filepath.Join(workspaceRoot, "workspaces"),
+		filepath.Join(workspaceRoot, "workspaces", "workspace-permissions"),
+		filepath.Join(workspaceRoot, "workspaces", "workspace-permissions", "tasks"),
+	} {
+		info, err := os.Stat(parent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != 0o711 {
+			t.Fatalf("parent %s permissions = %04o, want 0711", parent, got)
+		}
 	}
 	taskInfo, err := os.Stat(dir)
 	if err != nil {
@@ -293,6 +543,35 @@ func TestDiscoverAutoArtifactsDoesNotSilentlyTruncate(t *testing.T) {
 	}
 }
 
+func TestCollectArtifactsRequiresExplicitPaths(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "report.txt"), []byte("temporary"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if artifacts := collectArtifacts(dir, nil); artifacts != nil {
+		t.Fatalf("collectArtifacts() = %v, want no implicit artifacts", artifacts)
+	}
+}
+
+func TestPostExecutionInspectionHonorsSharedDeadline(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "artifact.txt"), []byte("artifact"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := collectArtifactsContext(ctx, dir, []string{"artifact.txt"}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("collectArtifactsContext() error = %v, want context.Canceled", err)
+	}
+	if _, err := collectWorkspaceChangesContext(ctx, dir, &workspace.Hydration{}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("collectWorkspaceChangesContext() error = %v, want context.Canceled", err)
+	}
+	limits := sandboxruntime.WorkspaceLimits{MaxFiles: 10, MaxFileBytes: 1024, MaxBytes: 2048}
+	if err := enforceWorkspaceLimitsContext(ctx, dir, limits); !errors.Is(err, context.Canceled) {
+		t.Fatalf("enforceWorkspaceLimitsContext() error = %v, want context.Canceled", err)
+	}
+}
+
 func TestSandboxProcessEnvironmentRemovesStorageCredentials(t *testing.T) {
 	t.Setenv("AWS_ACCESS_KEY_ID", "canary-access-key")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "canary-secret-key")
@@ -317,14 +596,14 @@ func TestSandboxProcessEnvironmentRemovesStorageCredentials(t *testing.T) {
 func TestRuntimeManifestHandlerServesValidatedManifest(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "runtime.json")
 	payload := `{
-  "schema_version": 1,
+  "schema_version": 2,
   "image_version": "test-runtime",
-  "managed_environment": "mutable",
   "python": {"version": "3.12.9", "executable": "/opt/runtime/venv/bin/python"},
   "node": {"version": "v22.1.0", "npm_version": "10.0.0"},
   "tools": {"git": "git version 2.0", "jq": "jq-1.7", "curl": "curl 8.0"},
   "packages": {"openpyxl": "3.1.5"},
-  "features": {"browser": "none", "managed_environment_mutation": true, "arbitrary_workspace_code": true}
+  "features": {"browser": "none", "arbitrary_workspace_code": true},
+  "execution_supervisor": {"path":"/usr/local/bin/agentarea-exec-supervisor","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","protocol_version":1,"command_uid":10001,"command_gid":10001}
 }`
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatal(err)
@@ -341,7 +620,7 @@ func TestRuntimeManifestHandlerServesValidatedManifest(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["managed_environment"] != "mutable" {
+	if got["image_version"] != "test-runtime" {
 		t.Fatalf("unexpected manifest: %v", got)
 	}
 }
@@ -358,39 +637,6 @@ func TestRuntimeManifestHandlerFailsClosedForInvalidManifest(t *testing.T) {
 	runtimeManifestHandler(response, req)
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d: %s", response.Code, response.Body.String())
-	}
-}
-
-func TestRuntimeManifestHandlerRejectsInvalidProfile(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/runtime/manifest?package_install=untrusted", nil)
-	response := httptest.NewRecorder()
-	runtimeManifestHandler(response, req)
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", response.Code, response.Body.String())
-	}
-}
-
-func TestRuntimeManifestHandlerRejectsManifestFromDifferentProfile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "runtime.json")
-	payload := `{
-  "schema_version": 1,
-  "image_version": "test-runtime",
-  "managed_environment": "mutable",
-  "python": {"version": "3.12.9", "executable": "/opt/runtime/venv/bin/python"},
-  "node": {"version": "v22.1.0", "npm_version": "10.0.0"},
-  "tools": {}, "packages": {},
-  "features": {"browser": "none", "managed_environment_mutation": true, "arbitrary_workspace_code": true}
-}`
-	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("RUNTIME_MANIFEST_PATH", path)
-
-	req := httptest.NewRequest(http.MethodGet, "/runtime/manifest?package_install=locked", nil)
-	response := httptest.NewRecorder()
-	runtimeManifestHandler(response, req)
-	if response.Code != http.StatusConflict {
-		t.Fatalf("expected 409, got %d: %s", response.Code, response.Body.String())
 	}
 }
 

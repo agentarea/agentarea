@@ -537,6 +537,9 @@ import type {
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetData,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetErrors,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetResponses,
+  ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetData,
+  ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetErrors,
+  ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetResponses,
   ListTriggersV1TriggersGetData,
   ListTriggersV1TriggersGetErrors,
   ListTriggersV1TriggersGetResponses,
@@ -581,6 +584,9 @@ import type {
   PullFromProjectV1ClientsClientIdPullFromProjectPostData,
   PullFromProjectV1ClientsClientIdPullFromProjectPostErrors,
   PullFromProjectV1ClientsClientIdPullFromProjectPostResponses,
+  ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetData,
+  ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetErrors,
+  ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetResponses,
   RemoveAgentFromProjectV1ProjectsProjectIdAgentsAgentIdDeleteData,
   RemoveAgentFromProjectV1ProjectsProjectIdAgentsAgentIdDeleteErrors,
   RemoveAgentFromProjectV1ProjectsProjectIdAgentsAgentIdDeleteResponses,
@@ -2029,7 +2035,7 @@ export const sendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPost = <
 /**
  * List Task Artifacts
  *
- * List artifacts the agent produced under ``tasks/{task_id}/``.
+ * List files the agent explicitly published as durable artifacts.
  *
  * Workspace-scoped: the task must belong to the caller's workspace, or we
  * return 404. Each item carries an AgentArea API download URL, so access
@@ -2340,6 +2346,71 @@ export const resumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePost = <
     url: "/v1/agents/{agent_id}/tasks/{task_id}/resume",
     ...options,
   });
+
+/**
+ * List Task Sandbox Files
+ *
+ * Inspect regular files in the existing live sandbox without recreating it.
+ */
+export const listTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetResponses,
+  ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetResponses,
+    ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/agents/{agent_id}/tasks/{task_id}/sandbox/files",
+    ...options,
+  });
+
+/**
+ * Read Task Sandbox File
+ *
+ * Read one file from the existing live sandbox without recreating it.
+ */
+export const readTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetResponses,
+    ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetResponses,
+      ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/agents/{agent_id}/tasks/{task_id}/sandbox/files/{file_path}",
+      ...options,
+    });
 
 /**
  * Get Agent Task Status

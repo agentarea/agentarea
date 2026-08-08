@@ -101,7 +101,8 @@ async def mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
                 "function": {
                     "name": "completion",
                     "arguments": json.dumps({
-                        "result": "Привет! Я готов помочь. Чем могу быть полезен?"
+                        "result": "Привет! Я готов помочь. Чем могу быть полезен?",
+                        "artifacts": [],
                     }),
                 },
             }

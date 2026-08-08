@@ -10,7 +10,7 @@ import uuid
 from agentarea_common.auth import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
@@ -105,9 +105,9 @@ class DatabaseSecretManager(BaseSecretManager):
         """
         try:
             return self._fernet.decrypt(value.encode("utf-8")).decode("utf-8")
-        except (InvalidToken, Exception) as e:
-            logger.error(f"Failed to decrypt secret value: {e}")
-            raise ValueError("Failed to decrypt secret. Key may have changed.") from e
+        except Exception as exc:
+            logger.error("Failed to decrypt secret value")
+            raise ValueError("Failed to decrypt secret. Key may have changed.") from exc
 
     async def get_secret(self, secret_name: str) -> str | None:
         """Get a secret value by name.
@@ -128,16 +128,18 @@ class DatabaseSecretManager(BaseSecretManager):
             secret = result.scalar_one_or_none()
 
             if secret is None:
-                logger.debug(f"Secret '{secret_name}' not found in workspace {self.workspace_id}")
+                logger.debug("Secret not found in workspace %s", self.workspace_id)
                 return None
 
             decrypted_value = self._decrypt(secret.encrypted_value)
-            logger.debug(f"Retrieved secret '{secret_name}' from workspace {self.workspace_id}")
+            logger.debug("Retrieved secret from workspace %s", self.workspace_id)
             return decrypted_value
 
-        except Exception as e:
+        except Exception as exc:
             logger.error(
-                f"Error retrieving secret '{secret_name}' from workspace {self.workspace_id}: {e}"
+                "Failed to retrieve secret from workspace %s (%s)",
+                self.workspace_id,
+                type(exc).__name__,
             )
             raise
 
@@ -174,7 +176,7 @@ class DatabaseSecretManager(BaseSecretManager):
                         updated_at=func.now(),
                     )
                 )
-                logger.info(f"Updated secret '{secret_name}' in workspace {self.workspace_id}")
+                logger.info("Updated secret in workspace %s", self.workspace_id)
             else:
                 # Create new secret
                 new_secret = EncryptedSecret(
@@ -185,14 +187,16 @@ class DatabaseSecretManager(BaseSecretManager):
                     created_by=self.user_context.user_id,
                 )
                 self.session.add(new_secret)
-                logger.info(f"Created secret '{secret_name}' in workspace {self.workspace_id}")
+                logger.info("Created secret in workspace %s", self.workspace_id)
 
             await self.session.commit()
 
-        except Exception as e:
+        except Exception as exc:
             await self.session.rollback()
             logger.error(
-                f"Error setting secret '{secret_name}' in workspace {self.workspace_id}: {e}"
+                "Failed to set secret in workspace %s (%s)",
+                self.workspace_id,
+                type(exc).__name__,
             )
             raise
 
@@ -215,20 +219,20 @@ class DatabaseSecretManager(BaseSecretManager):
             secret = result.scalar_one_or_none()
 
             if secret is None:
-                logger.debug(
-                    f"Secret '{secret_name}' not found for deletion in workspace {self.workspace_id}"
-                )
+                logger.debug("Secret not found for deletion in workspace %s", self.workspace_id)
                 return False
 
             await self.session.delete(secret)
             await self.session.commit()
 
-            logger.info(f"Deleted secret '{secret_name}' from workspace {self.workspace_id}")
+            logger.info("Deleted secret from workspace %s", self.workspace_id)
             return True
 
-        except Exception as e:
+        except Exception as exc:
             await self.session.rollback()
             logger.error(
-                f"Error deleting secret '{secret_name}' from workspace {self.workspace_id}: {e}"
+                "Failed to delete secret from workspace %s (%s)",
+                self.workspace_id,
+                type(exc).__name__,
             )
             raise

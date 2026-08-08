@@ -112,7 +112,7 @@ def _mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
                 "type": "function",
                 "function": {
                     "name": "completion",
-                    "arguments": json.dumps({"result": "done"}),
+                    "arguments": json.dumps({"result": "done", "artifacts": []}),
                 },
             }
         ],
@@ -182,7 +182,7 @@ def _mock_call_llm_request_input(request: LLMCallRequest) -> dict[str, Any]:
                 "type": "function",
                 "function": {
                     "name": "completion",
-                    "arguments": json.dumps({"result": "continued with input"}),
+                    "arguments": json.dumps({"result": "continued with input", "artifacts": []}),
                 },
             }
         ],

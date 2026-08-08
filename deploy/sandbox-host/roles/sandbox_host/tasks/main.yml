@@ -55,3 +55,11 @@
   ansible.builtin.import_tasks: opensandbox.yml
   when: opensandbox_enabled | bool
   tags: [opensandbox]
+
+# After OpenSandbox because it shares that Caddy for TLS. Serves MCP servers,
+# which is a separate concern from the agent sandboxes above — same host, same
+# gVisor runtime, different workload and different API.
+- name: Deploy the MCP data plane
+  ansible.builtin.import_tasks: mcp_dataplane.yml
+  when: sandbox_mcp_dataplane_enabled | bool
+  tags: [mcp-dataplane]

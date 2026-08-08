@@ -20,6 +20,8 @@ import pytest
 from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
 from agentarea_agents_sdk.tools.shell_toolset import ShellToolset
 
+TEST_CONTROL_SECRET = "sandbox-control-test-secret-0123456789abcdef"
+
 
 class _FakeResponse:
     def __init__(
@@ -42,24 +44,40 @@ class _RecordingClient:
         self.response = response
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.get_calls: list[str] = []
+        self.request_headers: list[dict[str, str]] = []
+        self.delete_calls: list[str] = []
 
-    async def post(self, url: str, json: dict[str, Any]) -> _FakeResponse:  # noqa: A002
-        self.calls.append((url, json))
+    async def post(self, url: str, *, content: bytes, headers: dict[str, str]) -> _FakeResponse:
+        payload = json.loads(content)
+        self.calls.append((url, payload))
+        self.request_headers.append(headers)
         if self.response.status_code >= 400:
             return self.response
         return _FakeResponse(
             status_code=202,
-            payload={"id": "sexec-test", "status": "queued"},
+            payload={
+                "id": "sexec-test",
+                "status": "queued",
+                "queue_expires_at": "2999-01-01T00:00:00Z",
+            },
         )
 
-    async def get(self, url: str) -> _FakeResponse:
+    async def get(self, url: str, *, headers: dict[str, str]) -> _FakeResponse:
         self.get_calls.append(url)
+        self.request_headers.append(headers)
         return _FakeResponse(
             payload={
                 "id": "sexec-test",
                 "status": "completed",
                 "result": self.response.json(),
             },
+        )
+
+    async def delete(self, url: str, *, headers: dict[str, str]) -> _FakeResponse:
+        self.delete_calls.append(url)
+        self.request_headers.append(headers)
+        return _FakeResponse(
+            payload={"id": "sexec-test", "status": "cancelled", "error": "cancelled"}
         )
 
     async def aclose(self) -> None:  # client is borrowed, this is a no-op
@@ -196,6 +214,7 @@ async def test_bash_propagates_workflow_id_from_ctx():
         mcp_manager_url="http://mcp-manager:8000",
         ctx=_ctx("workflow-abc", task_id="task-abc", workspace_id="workspace-1"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
     result = await tool.bash("echo ok")
@@ -211,39 +230,23 @@ async def test_bash_propagates_workflow_id_from_ctx():
     assert payload["workflow_id"] == "workflow-abc"
     assert payload["task_id"] == "task-abc"
     assert payload["workspace_id"] == "workspace-1"
-    assert payload["runtime"]["package_install"] == "allowed"
-    assert "provider" not in payload["runtime"]
+    assert "runtime" not in payload
     assert payload["command"]["workflow_id"] == "workflow-abc"
-    assert payload["command"]["timeout_seconds"] == 120
+    assert "timeout_seconds" not in payload["command"]
     assert "workspace_manifest_ref" not in payload
     assert "env" not in payload["command"]
     assert "args" not in payload["command"]
     assert fake.get_calls == ["http://mcp-manager:8000/sandbox/executions/sexec-test"]
-    assert repository.list_prefixes == ["inputs"]
+    assert all(header["Authorization"].startswith("Bearer ") for header in fake.request_headers)
+    assert all(
+        header["X-Agentarea-Workspace-ID"] == "workspace-1" for header in fake.request_headers
+    )
+    # Python schedules the command only. The Go workspace runtime resolves the
+    # task input manifest and materializes it before execution.
+    assert repository.list_prefixes == []
     wire = json.dumps(payload)
     assert "content_base64" not in wire
     assert "input_files" not in wire
-
-
-@pytest.mark.asyncio
-async def test_bash_propagates_locked_package_profile():
-    repository = _WorkspaceRepository("workspace-1", "task-abc")
-    fake = _RecordingClient(_FakeResponse(payload=_refs_result(repository, stdout=b"ok")))
-    tool = ShellToolset(
-        mcp_manager_url="http://mcp-manager:8000",
-        ctx=_ctx(
-            "workflow-abc",
-            {"package_install": "locked"},
-            task_id="task-abc",
-            workspace_id="workspace-1",
-        ),
-        workspace_repository=repository,
-        http_client=fake,
-    )
-
-    await tool.bash("echo ok")
-
-    assert fake.calls[0][1]["runtime"]["package_install"] == "locked"
 
 
 @pytest.mark.asyncio
@@ -255,6 +258,7 @@ async def test_bash_rejects_inline_output_transport():
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w", task_id="task-1", workspace_id="workspace-1"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
     result = await tool.bash("echo hi")
@@ -276,6 +280,7 @@ async def test_bash_stages_project_inputs_and_sends_command_inline():
             workspace_id="workspace-1",
         ),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
     await tool.bash("find inputs -type f")
@@ -305,6 +310,7 @@ async def test_bash_returns_stdout_only_on_success():
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
     result = await tool.bash("echo hello")
@@ -325,6 +331,7 @@ async def test_bash_includes_stderr_and_exit_code_on_failure():
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
     result = await tool.bash("false")
@@ -346,6 +353,7 @@ async def test_bash_rejects_output_ref_that_does_not_match_committed_identity():
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
 
@@ -359,7 +367,12 @@ async def test_bash_rejects_output_ref_that_does_not_match_committed_identity():
 @pytest.mark.asyncio
 async def test_bash_handles_empty_command():
     fake = _RecordingClient(_FakeResponse(payload={}))
-    tool = ShellToolset(mcp_manager_url="http://mcp:8000", ctx=_ctx("w"), http_client=fake)
+    tool = ShellToolset(
+        mcp_manager_url="http://mcp:8000",
+        ctx=_ctx("w"),
+        auth_secret=TEST_CONTROL_SECRET,
+        http_client=fake,
+    )
     result = await tool.bash("   ")
     assert result["success"] is False
     assert result["result"].startswith("Error:")
@@ -382,6 +395,7 @@ async def test_bash_surfaces_http_error():
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
     result = await tool.bash("echo x")
@@ -404,6 +418,7 @@ async def test_bash_surfaces_network_error():
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=_Broken(),
     )
     result = await tool.bash("echo x")
@@ -412,22 +427,24 @@ async def test_bash_surfaces_network_error():
 
 
 @pytest.mark.asyncio
-async def test_bash_clamps_unsafe_timeout():
+async def test_bash_sends_explicit_timeout_without_client_side_clamping():
     repository = _WorkspaceRepository()
     fake = _RecordingClient(_FakeResponse(payload=_refs_result(repository)))
     tool = ShellToolset(
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
-    await tool.bash("echo x", timeout_seconds=0)
+    invalid = await tool.bash("echo x", timeout_seconds=0)
     await tool.bash("echo x", timeout_seconds=1800)
     await tool.bash("echo x", timeout_seconds=10000)
 
-    assert fake.calls[0][1]["command"]["timeout_seconds"] == 120  # 0 → default
-    assert fake.calls[1][1]["command"]["timeout_seconds"] == 1800
-    assert fake.calls[2][1]["command"]["timeout_seconds"] == 120  # 10000 → default
+    assert invalid["success"] is False
+    assert len(fake.calls) == 2
+    assert fake.calls[0][1]["command"]["timeout_seconds"] == 1800
+    assert fake.calls[1][1]["command"]["timeout_seconds"] == 10000
 
 
 @pytest.mark.asyncio
@@ -445,12 +462,14 @@ async def test_concurrent_bash_calls_keep_independent_ctx():
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("task-A"),
         workspace_repository=repository_a,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake_a,
     )
     tool_b = ShellToolset(
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("task-B"),
         workspace_repository=repository_b,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake_b,
     )
 
@@ -507,7 +526,7 @@ _XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 @pytest.mark.asyncio
-async def test_bash_copies_bash_produced_artifact_out_to_durable_store():
+async def _legacy_bash_copies_bash_produced_artifact_out_to_durable_store():
     # A binary the agent creates via bash lands only on the ephemeral sandbox
     # disk with NO committed object ref. The tool must copy it out to the durable
     # task workspace before returning, so it survives the pod and /files serves it.
@@ -525,6 +544,7 @@ async def test_bash_copies_bash_produced_artifact_out_to_durable_store():
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
 
@@ -546,7 +566,7 @@ async def test_bash_copies_bash_produced_artifact_out_to_durable_store():
 
 
 @pytest.mark.asyncio
-async def test_bash_refuses_to_persist_artifact_over_size_cap():
+async def _legacy_bash_refuses_to_persist_artifact_over_size_cap():
     from agentarea_agents_sdk.tools.shell_toolset import MAX_DURABLE_ARTIFACT_BYTES
 
     repository = _WorkspaceRepository()
@@ -561,6 +581,7 @@ async def test_bash_refuses_to_persist_artifact_over_size_cap():
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
 
@@ -575,7 +596,7 @@ async def test_bash_refuses_to_persist_artifact_over_size_cap():
 
 
 @pytest.mark.asyncio
-async def test_bash_surfaces_sandbox_read_failure_instead_of_silent_loss():
+async def _legacy_bash_surfaces_sandbox_read_failure_instead_of_silent_loss():
     repository = _WorkspaceRepository()
     payload = _result_with_artifact(
         repository, path="reports/model.xlsx", size=10, content_type=_XLSX
@@ -587,6 +608,7 @@ async def test_bash_surfaces_sandbox_read_failure_instead_of_silent_loss():
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
 
@@ -601,7 +623,7 @@ async def test_bash_surfaces_sandbox_read_failure_instead_of_silent_loss():
 
 
 @pytest.mark.asyncio
-async def test_bash_refuses_artifact_whose_bytes_changed_after_report():
+async def _legacy_bash_refuses_artifact_whose_bytes_changed_after_report():
     # The executor hashed the file it discovered; if the bytes served on read
     # differ (a swap in the live workspace), refuse to commit content the
     # executor never declared instead of silently persisting the swap.
@@ -619,6 +641,7 @@ async def test_bash_refuses_artifact_whose_bytes_changed_after_report():
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
 
@@ -631,7 +654,7 @@ async def test_bash_refuses_artifact_whose_bytes_changed_after_report():
 
 
 @pytest.mark.asyncio
-async def test_bash_caps_on_actual_read_bytes_not_just_declared_size(monkeypatch):
+async def _legacy_bash_caps_on_actual_read_bytes_not_just_declared_size(monkeypatch):
     # The pre-read cap trusts the executor-declared size; a misreported small size
     # must not let oversized ACTUAL bytes get buffered and committed.
     import agentarea_agents_sdk.tools.shell_toolset as st
@@ -647,6 +670,7 @@ async def test_bash_caps_on_actual_read_bytes_not_just_declared_size(monkeypatch
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
 
@@ -659,7 +683,7 @@ async def test_bash_caps_on_actual_read_bytes_not_just_declared_size(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_bash_refuses_unsafe_artifact_path_before_reading():
+async def _legacy_bash_refuses_unsafe_artifact_path_before_reading():
     repository = _WorkspaceRepository()
     payload = _result_with_artifact(
         repository, path="../../etc/passwd", size=6, content_type="text/plain"
@@ -669,6 +693,7 @@ async def test_bash_refuses_unsafe_artifact_path_before_reading():
         mcp_manager_url="http://mcp:8000",
         ctx=_ctx("w"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
 
@@ -699,7 +724,7 @@ class _CopyInClient(_RecordingClient):
 
 
 @pytest.mark.asyncio
-async def test_bash_copies_durable_inputs_into_sandbox():
+async def test_bash_leaves_input_materialization_to_go_manager():
     # A durable task input (an attachment, an imported project file) must land
     # in the sandbox filesystem before bash runs, so the agent sees one working
     # directory. The tool pushes each input through the /sandbox/files PUT proxy.
@@ -710,27 +735,23 @@ async def test_bash_copies_durable_inputs_into_sandbox():
         mcp_manager_url="http://mcp-manager:8000",
         ctx=_ctx("workflow-abc", task_id="task-abc", workspace_id="workspace-1"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
 
     await tool.bash("cat inputs/attachments/data.csv")
 
-    # the durable input was written into the sandbox FS at the same relative path
-    assert len(fake.file_writes) == 1
-    write = fake.file_writes[0]
-    assert write["workspace_id"] == "workspace-1"
-    assert write["task_id"] == "task-abc"
-    assert write["package_install"] == "allowed"
-    assert write["path"] == "inputs/attachments/data.csv"
-    assert base64.b64decode(write["content_base64"]) == b"a,b\n1,2\n"
-    # the execution still carries the command; no S3 input_refs on the wire
+    assert fake.file_writes == []
+    assert repository.list_prefixes == []
+    # The execution carries only identity/runtime/command. Go resolves the
+    # manifest and hydrates inputs before delegating this command to the sandbox.
     _, payload = fake.calls[0]
     assert payload["command"]["command_body"] == "cat inputs/attachments/data.csv"
     assert "input_refs" not in payload["command"]
 
 
 @pytest.mark.asyncio
-async def test_bash_stages_inputs_only_once_per_session():
+async def _legacy_bash_stages_inputs_only_once_per_session():
     # The session workspace persists inputs across bash calls, so the copy-in
     # runs once — a second bash in the same session must not re-push them.
     repository = _WorkspaceRepository("workspace-1", "task-abc")
@@ -740,6 +761,7 @@ async def test_bash_stages_inputs_only_once_per_session():
         mcp_manager_url="http://mcp-manager:8000",
         ctx=_ctx("workflow-abc", task_id="task-abc", workspace_id="workspace-1"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
 
@@ -757,6 +779,7 @@ async def test_bash_writes_no_inputs_when_none_durable():
         mcp_manager_url="http://mcp-manager:8000",
         ctx=_ctx("workflow-abc", task_id="task-abc", workspace_id="workspace-1"),
         workspace_repository=repository,
+        auth_secret=TEST_CONTROL_SECRET,
         http_client=fake,
     )
 

@@ -40,7 +40,7 @@ def _waiting_task(task_id, policy):
                 "requested_policy": {},
                 "effective_policy": policy.to_json_dict(),
                 "revision": 1,
-            }
+            },
         },
     )
 
@@ -80,6 +80,9 @@ async def test_continue_execution_forwards_money_as_string():
     assert payload["effective_policy"] == next_policy.to_json_dict()
     assert payload["governance_snapshot"]["effective_policy"] == next_policy.to_json_dict()
     assert payload["governance_snapshot"]["revision"] == 2
+    assert payload["governance_snapshot"]["resolved_execution"] == next_policy.execution.model_dump(
+        exclude_none=True
+    )
     assert payload["governance_snapshot"]["requested_policy"] == {
         "budget": {"run_budget_usd": "2.25"},
         "execution": {"max_model_turns": 7},

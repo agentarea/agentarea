@@ -130,7 +130,7 @@ async def test_sync_run_on_agent_without_model_returns_422(async_client, wire):
     resp = await async_client.post(f"/v1/agents/{uuid4()}/tasks/sync", json={"description": "do x"})
 
     assert resp.status_code == 422
-    assert "no model configured" in resp.json()["detail"].lower()
+    assert resp.json()["detail"] == "Agent model is not configured"
     # The run must never reach Temporal dispatch.
     task_manager.submit_task.assert_not_awaited()
 

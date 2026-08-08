@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -264,6 +265,50 @@ func (m *Manager) ListContainers() []models.Container {
 }
 
 // GetContainerStatus gets the real-time status of a container
+// StartContainer starts a container that exists but is stopped.
+//
+// Separate from CreateContainer because an idle-reclaimed instance still has
+// its container, with its image, environment and isolation already settled.
+// Recreating it would re-resolve all of that and could quietly produce a
+// different container than the one that was reclaimed.
+func (m *Manager) StartContainer(ctx context.Context, serviceName string) error {
+	managed, err := m.GetContainer(serviceName)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "start", managed.ID)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("starting %s: %w: %s", serviceName, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+// ContainerAddress returns host:port for reaching a container from this host.
+//
+// Resolved on every call rather than cached: Docker assigns a new IP when a
+// container restarts, and a stale address silently routes traffic to whichever
+// container took it over.
+func (m *Manager) ContainerAddress(ctx context.Context, serviceName string) (string, error) {
+	managed, err := m.GetContainer(serviceName)
+	if err != nil {
+		return "", err
+	}
+
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", managed.ID,
+		"--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("inspecting %s for its address: %w", serviceName, err)
+	}
+
+	address := strings.TrimSpace(string(output))
+	if address == "" {
+		return "", fmt.Errorf("container %s has no network address yet", serviceName)
+	}
+	return net.JoinHostPort(address, strconv.Itoa(managed.Port)), nil
+}
+
 func (m *Manager) GetContainerStatus(ctx context.Context, serviceName string) (models.ContainerStatus, error) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -402,6 +447,76 @@ func (m *Manager) getRunningCountUnsafe() int {
 }
 
 // discoverContainers discovers existing containers managed by this service
+// containerEnvironment reads a container's environment as a map.
+//
+// Discovery previously scraped this output with substring searches for two
+// specific variables. Parsing it once, properly, is what lets a rediscovered
+// container answer lookups by instance id.
+func (m *Manager) containerEnvironment(ctx context.Context, containerID string) map[string]string {
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", containerID,
+		"--format", "{{json .Config.Env}}")
+	output, err := cmd.Output()
+	if err != nil {
+		m.logger.Warn("Failed to read container environment",
+			slog.String("container_id", containerID),
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	var entries []string
+	if err := json.Unmarshal(output, &entries); err != nil {
+		m.logger.Warn("Failed to parse container environment",
+			slog.String("container_id", containerID),
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	environment := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		if name, value, found := strings.Cut(entry, "="); found {
+			environment[name] = value
+		}
+	}
+	return environment
+}
+
+// containerLabels reads the labels the runtime holds for a container.
+//
+// The listing does not carry them in a shape both runtimes agree on, so this
+// asks the runtime directly. An error yields no labels rather than a partial
+// set: a half-read label map would let an ownership check pass on absence.
+func (m *Manager) containerLabels(ctx context.Context, containerID string) map[string]string {
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", containerID,
+		"--format", "{{json .Config.Labels}}")
+	output, err := cmd.Output()
+	if err != nil {
+		m.logger.Warn("Failed to read container labels",
+			slog.String("container_id", containerID),
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	labels := make(map[string]string)
+	if err := json.Unmarshal(output, &labels); err != nil {
+		m.logger.Warn("Failed to parse container labels",
+			slog.String("container_id", containerID),
+			slog.String("error", err.Error()))
+		return nil
+	}
+	return labels
+}
+
+// jsonString reads the first present string field, so one parser handles both
+// the Docker and Podman spellings of the same listing.
+func jsonString(source map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := source[key].(string); ok && value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 func (m *Manager) discoverContainers(ctx context.Context) error {
 	// List all containers with our prefix
 	// Use {{json .}} to get JSON lines output which is compatible across more versions
@@ -433,20 +548,52 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 
 	prefix := m.config.Container.NamePrefix
 	for _, pc := range podmanContainers {
-		names, ok := pc["Names"].([]interface{})
-		if !ok || len(names) == 0 {
+		// Docker and Podman disagree on the shape of this field: Podman emits an
+		// array, Docker a comma-separated string. Reading only the array meant
+		// discovery silently found nothing on Docker — every container failed the
+		// type assertion and was skipped. That went unnoticed while the manager
+		// always re-synced its instances from the Core API on boot; a data plane
+		// has no Core API, so it forgot every instance across a restart and could
+		// never wake a stopped one.
+		containerName := ""
+		switch names := pc["Names"].(type) {
+		case string:
+			containerName, _, _ = strings.Cut(names, ",")
+		case []interface{}:
+			if len(names) > 0 {
+				containerName, _ = names[0].(string)
+			}
+		}
+
+		if containerName == "" || !strings.HasPrefix(containerName, prefix) {
 			continue
 		}
 
-		containerName, ok := names[0].(string)
-		if !ok || !strings.HasPrefix(containerName, prefix) {
+		// The name prefix alone is too broad: the manager's own container is
+		// called mcp-manager, and anything a human started by hand can share the
+		// prefix too. Adopting those would put the manager under its own
+		// lifecycle management. Every instance the manager creates is stamped
+		// with MCP_INSTANCE_ID, so that — not the name — is what marks a
+		// container as ours.
+		environment := m.containerEnvironment(ctx, jsonString(pc, "Id", "ID"))
+		if environment["MCP_INSTANCE_ID"] == "" {
+			m.logger.Debug("Ignoring container that this manager did not create",
+				slog.String("name", containerName))
+			continue
+		}
+
+		// Same split as Names: Podman spells this "Id", Docker "ID". A bare type
+		// assertion on the missing one panics the process during startup.
+		containerID := jsonString(pc, "Id", "ID")
+		if containerID == "" {
+			m.logger.Warn("Skipping container with no id in listing", slog.String("name", containerName))
 			continue
 		}
 
 		// Extract service name from container environment (original name)
 		// First try to get original service name from environment variable
 		originalServiceName := ""
-		if inspectCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", pc["Id"].(string), "--format", "{{.Config.Env}}"); inspectCmd != nil {
+		if inspectCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", containerID, "--format", "{{.Config.Env}}"); inspectCmd != nil {
 			if inspectOutput, err := inspectCmd.CombinedOutput(); err == nil {
 				envStr := string(inspectOutput)
 				if strings.Contains(envStr, "MCP_SERVICE_NAME=") {
@@ -471,8 +618,6 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 		if serviceName == "" {
 			serviceName = strings.TrimPrefix(containerName, prefix)
 		}
-
-		containerID := pc["Id"].(string)
 
 		// Get container port from inspect
 		port := 8000 // Default port
@@ -504,11 +649,22 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 			Name:        containerName,
 			ServiceName: serviceName,
 			Slug:        slug,
-			Image:       pc["Image"].(string),
-			Status:      m.mapPodmanStatus(pc["State"].(string)),
+			Image:       jsonString(pc, "Image"),
+			Status:      m.mapPodmanStatus(jsonString(pc, "State", "Status")),
 			Port:        port,
 			URL:         fmt.Sprintf("/mcp/%s", slug),
 			Host:        containerName,
+			// Labels are read back rather than left empty because they carry
+			// ownership. A data plane decides whether an instance is its own by
+			// the label on it, so a rediscovered container without labels is
+			// indistinguishable from someone else's and can never be served
+			// again after a restart.
+			Labels: m.containerLabels(ctx, containerID),
+			// Carries MCP_INSTANCE_ID, which is how a caller's instance id is
+			// resolved back to a service name. Left empty, every lookup by
+			// instance id misses and the container is unreachable after a
+			// restart even though it is sitting right there.
+			Environment: environment,
 			CreatedAt:   time.Now(), // We don't have exact creation time
 			UpdatedAt:   time.Now(),
 		}
@@ -529,8 +685,8 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 }
 
 // buildContainerRunArgs builds the arguments for the container runtime run command.
-// Traefik labels are added so that Traefik auto-discovers the container and routes
-// /mcp/{slug}/* traffic to it.
+// MCP containers intentionally have no external router labels: every request
+// must cross the manager demand gateway so lifecycle leases stay authoritative.
 func (m *Manager) buildContainerRunArgs(container *models.Container) []string {
 	args := []string{"run", "-d"}
 
@@ -549,18 +705,6 @@ func (m *Manager) buildContainerRunArgs(container *models.Container) []string {
 	for key, value := range container.Labels {
 		args = append(args, "--label", fmt.Sprintf("%s=%s", key, value))
 	}
-
-	// Add Traefik labels for automatic routing
-	slug := container.Slug
-	port := container.Port
-	args = append(args,
-		"--label", "traefik.enable=true",
-		"--label", fmt.Sprintf("traefik.http.routers.%s.rule=PathPrefix(`/mcp/%s`)", slug, slug),
-		"--label", fmt.Sprintf("traefik.http.routers.%s.entrypoints=mcp", slug),
-		"--label", fmt.Sprintf("traefik.http.services.%s.loadbalancer.server.port=%d", slug, port),
-		"--label", fmt.Sprintf("traefik.http.middlewares.%s-strip.stripprefix.prefixes=/mcp/%s", slug, slug),
-		"--label", fmt.Sprintf("traefik.http.routers.%s.middlewares=%s-strip", slug, slug),
-	)
 
 	// Add isolation flags. MCP servers are third-party code; without these the
 	// container runs with the daemon's full default capability set next to the
@@ -716,6 +860,10 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 	if image == "" {
 		return fmt.Errorf("image is required in json_spec (or use type='command')")
 	}
+	isolation, err := config.ResolveIsolation(m.config.Container.DefaultIsolationTier)
+	if err != nil {
+		return fmt.Errorf("resolve MCP isolation policy: %w", err)
+	}
 
 	// Get container name for later use
 	containerName := m.config.GetContainerName(name)
@@ -730,8 +878,11 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 	defer m.mutex.Unlock()
 
 	// Check if container already exists
-	if _, exists := m.containers[name]; exists {
-		return fmt.Errorf("container %s already exists", name)
+	if existing, exists := m.containers[name]; exists {
+		if existing.Status == models.StatusRunning || existing.Status == models.StatusHealthy || existing.Status == models.StatusStarting {
+			return nil
+		}
+		return fmt.Errorf("container %s already exists in state %s", name, existing.Status)
 	}
 
 	// Check container limit
@@ -757,6 +908,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		Labels:      make(map[string]string),
 		Environment: environment,
 		Command:     command,
+		Isolation:   isolation,
 	}
 
 	// Store container in tracking map with validating status

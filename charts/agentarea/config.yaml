@@ -83,9 +83,6 @@ groups:
       LOG_LEVEL: 'info'
       MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
       MCP_CLIENT_TIMEOUT: '30'
-      # Read where instances are created and where tool calls are dispatched, so
-      # the API and the worker must agree with the manager on this.
-      MCP_LAZY_PROVISIONING_ENABLED: '{{ .Values.mcpManager.serverless.enabled }}'
       API_HOST: '{{ .Values.global.api.host }}'
       API_PORT: '{{ .Values.global.api.port }}'
       API_BASE_URL: '{{ include "agentarea.backend.apiUrl" . }}'
@@ -114,14 +111,37 @@ groups:
       CORE_API_URL: 'http://{{ include "agentarea.fullname" . }}-backend:8000'
       SERVER_HOST: '0.0.0.0'
       SERVER_PORT: '80'
-      BACKEND_TYPE: 'kubernetes'
+      # Derived from whether mcpManager.dataPlane names a host, so the backend
+      # and the address it is given cannot disagree. Half-configuration stops
+      # the render — see the helper.
+      BACKEND_TYPE: '{{ include "agentarea.mcpManager.backendType" . }}'
+      # Where MCP containers run when BACKEND_TYPE is dataplane. Empty otherwise,
+      # which the manager reads as "no data plane declared".
+      MCP_DATAPLANE_URL: '{{ .Values.mcpManager.dataPlane.url | default "" }}'
       KUBERNETES_ENABLED: 'true'
       KUBERNETES_NAMESPACE: '{{ .Release.Namespace }}'
       KUBERNETES_DOMAIN: '{{ .Values.mcpManager.domain | default "mcp.local" }}'
       KUBERNETES_GATEWAY_NAME: '{{ .Values.mcpManager.gateway.name | default "envoy-gateway" }}'
       KUBERNETES_GATEWAY_NAMESPACE: '{{ .Values.mcpManager.gateway.namespace | default "envoy-gateway-system" }}'
-      KUBERNETES_RUNTIME_CLASS: '{{ .Values.mcpManager.runtimeClass | default "" }}'
+      KUBERNETES_RUNTIME_CLASS: '{{ .Values.mcpManager.runtimeClass }}'
+      DEFAULT_ISOLATION_TIER: '{{ required "mcpManager.isolationTier is required" .Values.mcpManager.isolationTier }}'
+      MCP_ALLOWED_IMAGE_REPOSITORIES: '{{ join "," .Values.mcpManager.admission.allowedImageRepositories }}'
+      MCP_ALLOWED_COMMAND_PACKAGES: '{{ join "," .Values.mcpManager.admission.allowedCommandPackages }}'
+      # Names the cluster workloads are created in and WINS over the manager's
+      # in-cluster credentials. Empty unless mcpManager.executionCluster names a
+      # Secret, which the deployment projects at this path.
+      KUBERNETES_KUBECONFIG: '{{ include "agentarea.mcpManager.executionKubeconfigPath" . }}'
       KUBERNETES_POD_SERVICE_ACCOUNT_NAME: '{{ include "agentarea.mcpRuntimeServiceAccountName" . }}'
+      SANDBOX_WORKSPACE_PROVIDER: 's3'
+      SANDBOX_WORKSPACE_MAX_FILES: '{{ .Values.sandboxRuntime.workspace.maxFiles }}'
+      SANDBOX_WORKSPACE_MAX_FILE_BYTES: '{{ .Values.sandboxRuntime.workspace.maxFileBytes }}'
+      SANDBOX_WORKSPACE_MAX_BYTES: '{{ .Values.sandboxRuntime.workspace.maxBytes }}'
+      SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS: '{{ .Values.sandboxRuntime.maxExecutionTimeoutSeconds }}'
+      SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS: '{{ .Values.sandboxRuntime.defaultExecutionTimeoutSeconds }}'
+      SANDBOX_EXECUTION_QUEUE_TIMEOUT: '{{ .Values.sandboxRuntime.executionQueueTimeout }}'
+      SANDBOX_EXECUTION_COMPLETION_GRACE: '{{ .Values.sandboxRuntime.executionCompletionGrace }}'
+      SANDBOX_WORKSPACE_SIGNED_URL_TTL: '{{ .Values.sandboxRuntime.workspace.signedUrlTTL }}'
+      SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE: '{{ .Values.sandboxRuntime.workspace.forcePathStyle }}'
       KUBERNETES_SECURITY_RUN_AS_NON_ROOT: 'true'
       KUBERNETES_SECURITY_READ_ONLY_ROOT_FS: 'true'
       KUBERNETES_DEFAULT_CPU_REQUEST: '100m'
@@ -129,14 +149,21 @@ groups:
       KUBERNETES_DEFAULT_MEMORY_REQUEST: '128Mi'
       KUBERNETES_DEFAULT_MEMORY_LIMIT: '512Mi'
       MCP_FEATURES_ENABLED: '{{ join "," .Values.mcpManager.features.enabled }}'
-      # Reaping is derived from serverless.enabled rather than configured
-      # separately: only instances created as lazy are ever eligible, so a
-      # timeout without lazy start reclaims nothing, and lazy start without a
-      # timeout brings instances up on demand and then leaves them up forever.
-      # Deriving both from one switch makes the half-configured states
-      # unreachable.
+      # The manager is always the demand boundary for container-backed MCP.
+      # serverless.enabled controls only whether idle workloads are reclaimed;
+      # 0 keeps an on-demand workload running after its first successful start.
       MCP_IDLE_TIMEOUT: '{{ if .Values.mcpManager.serverless.enabled }}{{ .Values.mcpManager.serverless.idleTimeout }}{{ else }}0{{ end }}'
       MCP_IDLE_SWEEP_INTERVAL: '{{ .Values.mcpManager.serverless.sweepInterval }}'
+      MCP_REQUEST_LEASE_TTL: '{{ .Values.mcpManager.serverless.requestLeaseTTL }}'
+      MCP_GATEWAY_STARTUP_TIMEOUT: '{{ .Values.mcpManager.serverless.startupTimeout }}'
+    secrets:
+      # The shared token the data plane checks on every call. Carried from a
+      # Secret rather than the ConfigMap because it grants container creation on
+      # that host. Absent unless a data plane is configured.
+      - name: MCP_DATAPLANE_AUTH_TOKEN
+        conditional: '{{ .Values.mcpManager.dataPlane.url }}'
+        secretName: "{{ .Values.mcpManager.dataPlane.tokenSecret }}"
+        key: "{{ .Values.mcpManager.dataPlane.tokenKey }}"
 
   temporalUi:
     configVars:
@@ -153,9 +180,6 @@ groups:
       DEBUG: 'false'
       ENVIRONMENT: 'production'
       MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
-      # The worker dispatches agent tool calls, so it is a provisioning trigger
-      # in its own right; without this a reaped instance stays down for agents.
-      MCP_LAZY_PROVISIONING_ENABLED: '{{ .Values.mcpManager.serverless.enabled }}'
 
   application:
     secrets:

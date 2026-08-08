@@ -1,4 +1,8 @@
 {{- if .Values.mcpManager.enabled }}
+{{- $admission := .Values.mcpManager.admission }}
+{{- if and (empty $admission.allowedImageRepositories) (empty $admission.allowedCommandPackages) }}
+  {{- fail "mcpManager.admission declares nothing runnable: set allowedImageRepositories (registry/repository, no tag) and/or allowedCommandPackages. MCP instance pods run third-party code on the node's container runtime, so the set of admissible code is declared, never inferred." }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -38,24 +42,42 @@ spec:
             {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.redis.envs" . | nindent 12 }}
             {{- include "agentarea.redis.urlEnv" . | nindent 12 }}
+            {{- include "agentarea.storage.envs" . | nindent 12 }}
+            {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
             - name: SANDBOX_ACTIVATION_AUTH_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.application }}
                   key: sandbox-activation-secret
+            - name: SANDBOX_CONTROL_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.secrets.application }}
+                  key: sandbox-control-secret
             - name: SANDBOX_CLEANUP_AUTH_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "agentarea.sandboxCleanupSecretName" . }}
-                  key: token
+                  key: {{ include "agentarea.sandboxCleanupSecretKey" . }}
             - name: SANDBOX_INSPECTION_AUTH_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "agentarea.sandboxInspectionSecretName" . }}
-                  key: token
+                  key: {{ include "agentarea.sandboxInspectionSecretKey" . }}
+            - name: SANDBOX_FILE_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentarea.sandboxFileSecretName" . }}
+                  key: {{ include "agentarea.sandboxFileSecretKey" . }}
+            - name: MCP_GATEWAY_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentarea.mcpGatewaySecretName" . }}
+                  key: {{ include "agentarea.mcpGatewaySecretKey" . }}
             {{- include "agentarea.sandboxRuntime.envs" . | nindent 12 }}
             {{- include "agentarea.mcpManager.envs" . | nindent 12 }}
+            {{- include "agentarea.mcpManager.secrets.envs" . | nindent 12 }}
             {{- $ip := .Values.mcpManager.instancePod }}
             {{- if and $ip (or $ip.labels $ip.annotations $ip.nodeSelector $ip.tolerations $ip.affinity $ip.imagePullSecrets $ip.priorityClassName) }}
             # Operator customization for spawned MCP instance pods (one JSON blob;
@@ -102,17 +124,25 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 6
-          {{- if eq (default "kubernetes" .Values.mcpManager.backend) "docker" }}
-          # Docker backend: drive containers through the host Docker socket.
+          {{- $dockerBackend := eq (default "kubernetes" .Values.mcpManager.backend) "docker" }}
+          {{- $execKubeconfig := include "agentarea.mcpManager.executionKubeconfigPath" . }}
+          {{- if or $dockerBackend $execKubeconfig }}
           volumeMounts:
+            {{- if $dockerBackend }}
+            # Docker backend: drive containers through the host Docker socket.
             - name: docker-sock
               mountPath: /var/run/docker.sock
+            {{- end }}
+            {{- include "agentarea.mcpManager.executionKubeconfigMount" . | nindent 12 }}
+          {{- end }}
+      {{- if or $dockerBackend $execKubeconfig }}
       volumes:
+        {{- if $dockerBackend }}
         - name: docker-sock
           hostPath:
             path: /var/run/docker.sock
             type: Socket
-      {{- else }}
-          # Kubernetes backend - no special volumes needed
+        {{- end }}
+        {{- include "agentarea.mcpManager.executionKubeconfigVolume" . | nindent 8 }}
       {{- end }}
 {{- end }}

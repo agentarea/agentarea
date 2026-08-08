@@ -356,9 +356,21 @@ def create_app() -> FastAPI:
     # domain exception stays free of web concerns; the composition layer renders
     # it via the shared problem+json helper, surfacing the numbers so the UI can
     # show "you've spent $X of $Y, raise the cap or wait".
+    from agentarea_agents.application.agent_service import InvalidModelIdError
     from agentarea_common.exceptions import problem_response
     from agentarea_tasks.domain.exceptions import BudgetCapExceededError
     from fastapi import Request
+
+    # A model_id the runtime cannot resolve is a client mistake, not a server
+    # fault: the service rejects it on write so it can no longer surface as a
+    # workflow failure hours later.
+    @app.exception_handler(InvalidModelIdError)
+    async def _invalid_model_id_handler(_request: Request, exc: InvalidModelIdError):
+        return problem_response(
+            status_code=400,
+            code="invalid_model_id",
+            detail=str(exc),
+        )
 
     @app.exception_handler(BudgetCapExceededError)
     async def _budget_cap_exceeded_handler(_request: Request, exc: BudgetCapExceededError):

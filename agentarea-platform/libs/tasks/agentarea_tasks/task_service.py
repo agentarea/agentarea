@@ -42,28 +42,7 @@ logger = logging.getLogger(__name__)
 # because the workflow may legitimately stay alive in await_follow_up
 # after the activity has already persisted "completed" to the DB.
 _TERMINAL_WORKFLOW_STATUSES = frozenset({"completed", "failed", "cancelled", "canceled"})
-_PACKAGE_INSTALL_PROFILES = frozenset({"allowed", "locked"})
 _GOVERNANCE_SNAPSHOT_METADATA_KEY = "governance_snapshot"
-
-
-def _agent_package_install_profile(agent: Any) -> str:
-    """Resolve the agent's sandbox profile from its shell-tool configuration."""
-    tools = getattr(agent, "tools", None)
-    if not isinstance(tools, list):
-        return "allowed"
-    for tool in tools:
-        if not isinstance(tool, dict) or tool.get("name") != "agentarea/shell":
-            continue
-        settings = tool.get("settings")
-        if not isinstance(settings, dict):
-            return "allowed"
-        profile = settings.get("package_install")
-        if profile is None:
-            return "allowed"
-        if profile not in _PACKAGE_INSTALL_PROFILES:
-            raise ValueError(f"invalid agent package_install profile: {profile}")
-        return str(profile)
-    return "allowed"
 
 
 class TaskService(BaseTaskService):
@@ -306,12 +285,6 @@ class TaskService(BaseTaskService):
         metadata.setdefault("created_via", "api")
         metadata["agent_name"] = agent_name
         metadata["requires_human_approval"] = requires_human_approval
-        package_install = metadata.get("package_install")
-        if package_install is None:
-            package_install = _agent_package_install_profile(agent)
-        if package_install not in _PACKAGE_INSTALL_PROFILES:
-            raise ValueError(f"invalid task package_install profile: {package_install}")
-        metadata["package_install"] = package_install
         requested_execution = (
             task_policy.execution.model_dump(exclude_none=True)
             if task_policy is not None and task_policy.execution is not None
@@ -407,9 +380,6 @@ class TaskService(BaseTaskService):
             metadata_overrides.update(trusted_metadata)
         if payload.project_id is not None:
             metadata_overrides["project_id"] = payload.project_id
-        if payload.package_install is not None:
-            metadata_overrides["package_install"] = payload.package_install
-
         parameters = dict(payload.parameters)
         task_policy = payload.task_policy
         if payload.execution is not None:
@@ -457,8 +427,6 @@ class TaskService(BaseTaskService):
             metadata_overrides.update(trusted_metadata)
         if payload.project_id is not None:
             metadata_overrides["project_id"] = payload.project_id
-        if payload.package_install is not None:
-            metadata_overrides["package_install"] = payload.package_install
         parameters = dict(payload.parameters)
         task_policy = payload.task_policy
         if payload.execution is not None:

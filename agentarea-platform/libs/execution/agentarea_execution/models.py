@@ -3,6 +3,7 @@
 Integrates with existing AgentArea domain models and uses proper UUID types.
 """
 
+from pathlib import PurePosixPath
 from typing import Any, Literal
 from uuid import UUID
 
@@ -221,6 +222,8 @@ class AgentConfigRequest(BaseModel):
     execution_context: dict[str, Any] | None = None
     step_type: str | None = None
     override_model: str | None = None
+    # Set so the resolved config hash can be recorded against the run.
+    task_id: UUID | None = None
 
 
 class SkillInfo(BaseModel):
@@ -249,8 +252,23 @@ class RuntimeFeatures(BaseModel):
     arbitrary_workspace_code: bool
 
 
+class RuntimeExecutionSupervisor(BaseModel):
+    path: str
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    protocol_version: Literal[1]
+    command_uid: int = Field(gt=0)
+    command_gid: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_path(self) -> "RuntimeExecutionSupervisor":
+        parsed = PurePosixPath(self.path)
+        if not parsed.is_absolute() or str(parsed) != self.path or self.path == "/":
+            raise ValueError("execution supervisor path must be an absolute clean file path")
+        return self
+
+
 class RuntimeManifest(BaseModel):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     image_version: str
     managed_environment: Literal["mutable", "immutable"]
     python: RuntimePython
@@ -258,6 +276,7 @@ class RuntimeManifest(BaseModel):
     tools: dict[str, str] = Field(default_factory=dict)
     packages: dict[str, str] = Field(default_factory=dict)
     features: RuntimeFeatures
+    execution_supervisor: RuntimeExecutionSupervisor
 
     @model_validator(mode="after")
     def validate_profile_features(self) -> "RuntimeManifest":
@@ -300,13 +319,12 @@ class ArtifactValidationEvidence(BaseModel):
 
 
 class ArtifactValidationRequest(BaseModel):
-    """Refs-only request for validating the current canonical task workspace."""
+    """Request to persist and verify the files a completion claims to deliver."""
 
     workspace_id: str
     task_id: str
     workflow_id: str
     declared_paths: list[str] = Field(default_factory=list, max_length=1000)
-    package_install: Literal["allowed", "locked"] = "allowed"
 
 
 class ArtifactValidationResult(BaseModel):
@@ -339,6 +357,8 @@ class AgentConfigResult(BaseModel):
     skills: list[SkillInfo] = Field(default_factory=list)
     runtime: RuntimeDiscoveryResult | None = None
     runtime_event_data: dict[str, Any] = Field(default_factory=dict)
+    # Hash of the agent's declared config as resolved for this run.
+    config_hash: str | None = None
 
 
 class ToolDiscoveryRequest(BaseModel):

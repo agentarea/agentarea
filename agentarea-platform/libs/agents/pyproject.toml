@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "agentarea-common",
     "agentarea-governance",
+    "agentarea-llm",
     "a2a-sdk>=0.2.8",
     "pydantic>=2.4.2",
     "httpx>=0.25.0",
@@ -20,6 +21,7 @@ dependencies = [
 [tool.uv.sources]
 agentarea-common = { workspace = true }
 agentarea-governance = { workspace = true }
+agentarea-llm = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["agentarea_agents"] 
