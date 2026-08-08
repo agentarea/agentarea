@@ -78,11 +78,15 @@ for document in documents:
 
 # Command admission and the activation data plane must render from one policy
 # value. A control-plane maximum larger than the executor maximum would accept
-# work that the data plane later shortens or rejects.
-manager_config = find_document("ConfigMap", "cleanup-auth-agentarea-env-mcpmanager")
+# work that the data plane later shortens or rejects. The manager reads it from
+# agentarea.sandboxRuntime.envs, the one place that emits it: declaring it in the
+# manager config group as well produced two env entries with the same name,
+# which server-side apply rejects.
+manager = find_document("Deployment", "cleanup-auth-agentarea-mcp-manager")
 assert re.search(
-    r'(?m)^\s*SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS:\s*"1800"\s*$',
-    manager_config,
+    r'(?m)^\s*- name:\s*SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS\s*$\n'
+    r'^\s*value:\s*"1800"\s*$',
+    manager,
 ), "manager timeout policy was not rendered from sandboxRuntime.maxExecutionTimeoutSeconds"
 warm_pool = find_document("DaemonSet", "cleanup-auth-agentarea-warm-pool")
 assert re.search(

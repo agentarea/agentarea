@@ -89,6 +89,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The duplicate-env guard parses rendered manifests with PyYAML; the other
+      # scripts in this job are stdlib-only, so this job has no Python setup yet.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
       - name: Set up Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
         with:
@@ -113,3 +125,6 @@ jobs:
 
       - name: Verify execution cluster kubeconfig wiring
         run: scripts/test-execution-cluster-helm.sh
+
+      - name: Verify no container declares a duplicate env name
+        run: scripts/test-no-duplicate-env-helm.sh
