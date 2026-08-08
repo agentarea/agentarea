@@ -21,6 +21,18 @@ def command_version(*command: str) -> str:
     return out.stdout.strip()
 
 
+def optional_command_version(*command: str) -> str | None:
+    """Report a tool the locked runtime may have removed on purpose.
+
+    The immutable image strips npm/npx/corepack, so the manifest has to be able
+    to say "absent" instead of failing the build.
+    """
+    try:
+        return command_version(*command)
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
 def installed_packages() -> dict[str, str]:
     return dict(
         sorted((dist.metadata["Name"], dist.version) for dist in metadata.distributions())
@@ -56,7 +68,7 @@ def main() -> None:
         },
         "node": {
             "version": command_version("node", "--version"),
-            "npm_version": command_version("npm", "--version"),
+            "npm_version": optional_command_version("npm", "--version"),
         },
         "tools": {
             "curl": command_version("curl", "--version").splitlines()[0],
