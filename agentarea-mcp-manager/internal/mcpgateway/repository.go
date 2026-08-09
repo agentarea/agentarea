@@ -94,16 +94,9 @@ WHERE i.id = $1::uuid
 	if err != nil {
 		return nil, fmt.Errorf("load MCP instance: %w", err)
 	}
-	serverSpec := map[string]any{}
-	instanceSpec := map[string]any{}
-	if err := json.Unmarshal(serverJSON, &serverSpec); err != nil {
-		return nil, fmt.Errorf("decode MCP server spec: %w", err)
-	}
-	if err := json.Unmarshal(instanceJSON, &instanceSpec); err != nil {
-		return nil, fmt.Errorf("decode MCP instance spec: %w", err)
-	}
-	for key, value := range instanceSpec {
-		serverSpec[key] = value
+	serverSpec, err := decodeSpecs(serverJSON, instanceJSON)
+	if err != nil {
+		return nil, err
 	}
 	if remoteURL.Valid && remoteURL.String != "" {
 		serverSpec["type"] = "url"
@@ -135,6 +128,32 @@ WHERE i.id = $1::uuid
 	// Runtime object names are identity-derived. The user-facing display name
 	// remains in Postgres and never participates in data-plane addressing.
 	return &models.MCPServerInstance{InstanceID: id, Name: id, JSONSpec: serverSpec}, nil
+}
+
+// decodeSpecs merges the instance spec over the server spec.
+//
+// Both columns can hold the JSON literal `null` rather than SQL NULL -- the
+// control plane writes it whenever a spec field was omitted -- and COALESCE
+// only defends against the SQL flavour. Unmarshalling `null` into a map yields
+// a nil map, not an empty one, so writing into it panicked with "assignment to
+// entry in nil map" and the gateway answered 500 for every request to that
+// instance.
+func decodeSpecs(serverJSON, instanceJSON []byte) (map[string]any, error) {
+	serverSpec := map[string]any{}
+	instanceSpec := map[string]any{}
+	if err := json.Unmarshal(serverJSON, &serverSpec); err != nil {
+		return nil, fmt.Errorf("decode MCP server spec: %w", err)
+	}
+	if err := json.Unmarshal(instanceJSON, &instanceSpec); err != nil {
+		return nil, fmt.Errorf("decode MCP instance spec: %w", err)
+	}
+	if serverSpec == nil {
+		serverSpec = map[string]any{}
+	}
+	for key, value := range instanceSpec {
+		serverSpec[key] = value
+	}
+	return serverSpec, nil
 }
 
 // MarkStarting opens an activation. An instance that is already ready stays
