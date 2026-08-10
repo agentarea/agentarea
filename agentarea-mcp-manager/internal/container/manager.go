@@ -395,7 +395,8 @@ func (m *Manager) DeleteContainer(ctx context.Context, serviceName string) error
 
 	container.Status = models.StatusStopping
 
-	// Stop container
+	// Stopping is best effort: a container that already exited, or that the host
+	// reaped, cannot be stopped, and neither is a reason to keep the record.
 	stopCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "stop", container.ID)
 	if output, err := stopCmd.CombinedOutput(); err != nil {
 		m.logger.Error("Failed to stop container",
@@ -404,9 +405,13 @@ func (m *Manager) DeleteContainer(ctx context.Context, serviceName string) error
 			slog.String("output", string(output)))
 	}
 
-	// Remove container
-	rmCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "rm", container.ID)
-	if output, err := rmCmd.CombinedOutput(); err != nil {
+	// A container that is no longer there is the state the caller asked for, so
+	// removal is idempotent. Without this, a container reaped out of band -- by
+	// a host cleanup, or a runtime restart -- left a record that nothing could
+	// ever delete: every retirement failed on the missing container and the
+	// instance stayed in the control plane for good.
+	rmCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "rm", "-f", container.ID)
+	if output, err := rmCmd.CombinedOutput(); err != nil && !containerAlreadyGone(output) {
 		m.logger.Error("Failed to remove container",
 			slog.String("container", container.Name),
 			slog.String("error", err.Error()),
@@ -687,6 +692,13 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// containerAlreadyGone reports whether a runtime refused an operation because
+// the container does not exist. Runtimes disagree on the exit code for that, so
+// the message is what can be relied on.
+func containerAlreadyGone(output []byte) bool {
+	return strings.Contains(strings.ToLower(string(output)), "no such container")
 }
 
 // clearContainerName frees the runtime name a workload is about to take.

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/agentarea/mcp-manager/internal/config"
+	"github.com/agentarea/mcp-manager/internal/models"
 )
 
 // stubRuntime writes a fake container runtime whose inspect behaviour is steered
@@ -37,7 +38,13 @@ if [ "$1" = "inspect" ]; then
   esac
   exit 1
 fi
-if [ "$1" = "rm" ]; then exit 0; fi
+if [ "$1" = "rm" ] || [ "$1" = "stop" ]; then
+  if [ -n "$STUB_MISSING" ]; then
+    echo "Error response from daemon: No such container: $3" >&2
+    exit 1
+  fi
+  exit 0
+fi
 exit 1
 `
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
@@ -161,5 +168,29 @@ func TestAbsentNameNeedsNoWork(t *testing.T) {
 
 	if calls := stubCalls(t, logPath); strings.Contains(calls, "rm -f") {
 		t.Fatalf("removal ran for a name nothing holds; runtime calls:\n%s", calls)
+	}
+}
+
+// Retirement has to survive a container that is already gone: the host reaps
+// one, a runtime restart loses it, an operator removes it by hand. Reporting
+// that as a failure left the control-plane record permanently undeletable.
+func TestRetiringAnAlreadyRemovedContainerSucceeds(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_MISSING", "1")
+
+	manager := &Manager{
+		config:     testConfig(runtime),
+		logger:     discardLogger(),
+		containers: map[string]*models.Container{"weather": {ID: "container-1", Name: "mcp-weather"}},
+	}
+
+	if err := manager.DeleteContainer(context.Background(), "weather"); err != nil {
+		t.Fatalf("DeleteContainer() error = %v, want a container that is already gone accepted", err)
+	}
+	if _, still := manager.containers["weather"]; still {
+		t.Fatal("the record survived retirement, so the instance can never be recreated")
+	}
+	if calls := stubCalls(t, logPath); !strings.Contains(calls, "rm -f container-1") {
+		t.Fatalf("removal was not attempted; runtime calls:\n%s", calls)
 	}
 }
