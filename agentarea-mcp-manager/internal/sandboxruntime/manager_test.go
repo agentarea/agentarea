@@ -22,34 +22,35 @@ import (
 )
 
 type fakeExternalProvider struct {
-	mu                     sync.Mutex
-	creates                int
-	renews                 int
-	renewTTLs              []time.Duration
-	puts                   int
-	deletes                int
-	executeIDs             []string
-	files                  map[string][]byte
-	createErr              error
-	createReturnsNil       bool
-	createAllocatedOnError bool
-	createWaitsForCancel   bool
-	createEntered          chan struct{}
-	resolveErr             error
-	provisioned            map[string][]*Session
-	renewErr               error
-	renewErrOn             int
-	executeErr             error
-	putErr                 error
-	deleteErr              error
-	executeDelay           time.Duration
-	readDelay              time.Duration
-	executeEntered         chan struct{}
-	events                 []string
-	usage                  *WorkspaceUsage
-	auditErr               error
-	auditDelay             time.Duration
-	audits                 int
+	mu                       sync.Mutex
+	creates                  int
+	renews                   int
+	renewTTLs                []time.Duration
+	puts                     int
+	deletes                  int
+	executeIDs               []string
+	files                    map[string][]byte
+	createErr                error
+	createReturnsNil         bool
+	createAllocatedOnError   bool
+	createWaitsForCancel     bool
+	createEntered            chan struct{}
+	resolveErr               error
+	provisioned              map[string][]*Session
+	renewErr                 error
+	renewErrOn               int
+	executeErr               error
+	putErr                   error
+	deleteErr                error
+	executeDelay             time.Duration
+	readDelay                time.Duration
+	streamBoundToOpenContext bool
+	executeEntered           chan struct{}
+	events                   []string
+	usage                    *WorkspaceUsage
+	auditErr                 error
+	auditDelay               time.Duration
+	audits                   int
 }
 
 func (p *fakeExternalProvider) Name() string { return "fake" }
@@ -193,7 +194,7 @@ func (p *fakeExternalProvider) PutFile(_ context.Context, _ *Session, transfer F
 	return nil
 }
 
-func (p *fakeExternalProvider) OpenFile(_ context.Context, _ *Session, path string) (*FileDownload, error) {
+func (p *fakeExternalProvider) OpenFile(ctx context.Context, _ *Session, path string) (*FileDownload, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	stored, ok := p.files[path]
@@ -201,12 +202,31 @@ func (p *fakeExternalProvider) OpenFile(_ context.Context, _ *Session, path stri
 		return nil, ErrFileNotFound
 	}
 	copy := append([]byte(nil), stored...)
-	content := io.NopCloser(bytes.NewReader(copy))
+	var content io.ReadCloser = io.NopCloser(bytes.NewReader(copy))
 	if p.readDelay > 0 {
 		content = &slowReadCloser{content: copy, delay: p.readDelay}
 	}
+	if p.streamBoundToOpenContext {
+		// A real provider serves the file as the body of the request opened here,
+		// so reads fail once that request's context is done.
+		content = &contextBoundReadCloser{source: content, ctx: ctx}
+	}
 	return &FileDownload{Content: content, Size: int64(len(copy)), Mode: 0o600}, nil
 }
+
+type contextBoundReadCloser struct {
+	source io.ReadCloser
+	ctx    context.Context
+}
+
+func (r *contextBoundReadCloser) Read(buffer []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.source.Read(buffer)
+}
+
+func (r *contextBoundReadCloser) Close() error { return r.source.Close() }
 
 func (p *fakeExternalProvider) ListFiles(_ context.Context, _ *Session, prefix string) ([]string, error) {
 	p.mu.Lock()
@@ -954,6 +974,40 @@ func TestWorkspaceHydrationIsSerializedAcrossManagerReplicas(t *testing.T) {
 	defer mu.Unlock()
 	if hydrationCalls != 1 {
 		t.Fatalf("hydration calls = %d, want 1", hydrationCalls)
+	}
+}
+
+// The stream a download returns outlives the call that opened it. A provider
+// serves the file as the body of that request, and the artifact publisher reads
+// it afterwards, so cancelling the open context on return made every delivered
+// file unreadable -- the task's own output came back as "context canceled".
+func TestStreamedDownloadOutlivesTheCallThatOpenedIt(t *testing.T) {
+	manager, provider := newTestManager(t)
+	content := []byte("delivered")
+	digest := sha256.Sum256(content)
+	if _, err := manager.SandboxFileUpload(context.Background(), FileUpload{
+		WorkspaceID: "workspace-1", TaskID: "task-1",
+		Path: "report.txt", Size: int64(len(content)), SHA256: hex.EncodeToString(digest[:]), Mode: 0o600,
+	}, bytes.NewReader(content)); err != nil {
+		t.Fatal(err)
+	}
+	provider.mu.Lock()
+	provider.streamBoundToOpenContext = true
+	provider.mu.Unlock()
+
+	download, err := manager.SandboxFileDownload(context.Background(), "workspace-1", "task-1", "report.txt")
+	if err != nil {
+		t.Fatalf("SandboxFileDownload() error = %v", err)
+	}
+	read, err := io.ReadAll(download.Content)
+	if closeErr := download.Content.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatalf("reading the delivered file after the open call returned: %v", err)
+	}
+	if !bytes.Equal(read, content) {
+		t.Fatalf("download = %q, want %q", read, content)
 	}
 }
 
