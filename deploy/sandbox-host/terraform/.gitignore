@@ -1,7 +1,18 @@
+# Holds TWC_TOKEN.
 .envrc
+
+# Provider binaries and any plan output.
 .terraform/
+tfplan*
+*.tfplan
+*.out
+crash.log
+
+# State names a live machine and carries its root and VNC passwords. It belongs
+# in a shared backend, never in git.
 *.tfstate
 *.tfstate.*
-crash.log
-*.out
-tfplan*
+
+# Real inputs stay on the machine that runs terraform; the example is committed.
+terraform.tfvars
+*.auto.tfvars

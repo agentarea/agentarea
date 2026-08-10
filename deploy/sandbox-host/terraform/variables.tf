@@ -55,7 +55,28 @@ variable "ssh_key_name" {
   default = "agentarea-sandbox-ru"
 }
 
+# No default on purpose. Ansible and every later deploy reach the host with this
+# key, so a default would hand the box a key whoever runs this may not hold, and
+# the mistake only surfaces once the machine is already unreachable.
 variable "ssh_public_key_path" {
+  type = string
+}
+
+# The cluster VPC this host joins. Sourced from the RU cluster stack
+# (agentarea-hq/infra .../timeweb-ru, twc_vpc.cluster). Pass null explicitly to
+# keep the host off the private network -- there is no default, because a host
+# that silently ends up outside the VPC looks identical to one inside it.
+variable "vpc_network_id" {
+  type = string
+}
+
+# Egress-only by default: the host reaches the VPC, the VPC does not reach in.
+variable "vpc_nat_mode" {
   type    = string
-  default = "~/.ssh/id_ed25519.pub"
+  default = "snat"
+
+  validation {
+    condition     = contains(["snat", "dnat_and_snat"], var.vpc_nat_mode)
+    error_message = "vpc_nat_mode must be snat or dnat_and_snat."
+  }
 }

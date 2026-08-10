@@ -1,0 +1,3 @@
+# The Timeweb provider reads the API token from the environment. Get one at
+# https://timeweb.cloud/my/api-keys. Never put it in terraform.tfvars.
+export TWC_TOKEN=

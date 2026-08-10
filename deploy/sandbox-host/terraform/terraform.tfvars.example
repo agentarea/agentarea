@@ -1,0 +1,20 @@
+# Copy to terraform.tfvars and fill in. The API token is NOT here: the provider
+# reads TWC_TOKEN from the environment (see .envrc.example).
+
+# The SSH key the host will accept for root. Ansible and every later deploy use
+# this key, so it must be a key the operator actually holds. There is no safe
+# default; a missing file fails the apply, which is the intended behaviour.
+ssh_public_key_path = "~/.ssh/id_mcp_vm.pub"
+
+# Timeweb SSH key objects are named per account, so a rebuild alongside an
+# existing host needs its own name.
+ssh_key_name = "agentarea-sandbox-ru-devbox"
+
+server_name = "agentarea-sandbox-ru-1"
+hostname    = "agentarea-sandbox-ru-1"
+
+# Cluster VPC, from the RU cluster stack (agentarea-hq/infra,
+# environments/production/timeweb-ru -> twc_vpc.cluster). Leave unset to keep the
+# host off the private network.
+vpc_network_id = "network-85a5c12021464b158a929a5216a98d11"
+vpc_nat_mode   = "snat"
