@@ -21,6 +21,7 @@ import (
 )
 
 func TestDockerBackendRehydratesAfterExecutorIncarnationChanges(t *testing.T) {
+	allowSharedExecutor(t)
 	var incarnationMu sync.RWMutex
 	incarnation := uuid.NewString()
 	var executeCalls atomic.Int32
@@ -92,6 +93,7 @@ func TestDockerBackendRehydratesAfterExecutorIncarnationChanges(t *testing.T) {
 }
 
 func TestDockerBackendRejectsExecutorRestartBetweenHealthAndExecute(t *testing.T) {
+	allowSharedExecutor(t)
 	t.Setenv(activationauth.SecretEnv, "0123456789abcdef0123456789abcdef")
 	before := uuid.NewString()
 	after := uuid.NewString()
@@ -135,6 +137,7 @@ func TestDockerBackendRejectsExecutorRestartBetweenHealthAndExecute(t *testing.T
 }
 
 func TestDockerBackendRejectsExecutorRestartBetweenHealthAndFileWrite(t *testing.T) {
+	allowSharedExecutor(t)
 	t.Setenv(activationauth.SecretEnv, "0123456789abcdef0123456789abcdef")
 	before := uuid.NewString()
 	after := uuid.NewString()
@@ -176,6 +179,7 @@ func TestDockerBackendRejectsExecutorRestartBetweenHealthAndFileWrite(t *testing
 }
 
 func TestDockerBackendSerializesConcurrentHydration(t *testing.T) {
+	allowSharedExecutor(t)
 	incarnation := uuid.NewString()
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/health" {

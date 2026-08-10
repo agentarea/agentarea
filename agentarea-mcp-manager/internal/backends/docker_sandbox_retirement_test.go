@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +17,7 @@ import (
 )
 
 func TestDockerBackendForceRetirementDeletesExactTaskWorkspace(t *testing.T) {
+	allowSharedExecutor(t)
 	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
 	requests := make(chan string, 3)
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
@@ -86,6 +89,7 @@ func TestDockerBackendForceRetirementDeletesExactTaskWorkspace(t *testing.T) {
 }
 
 func TestDockerBackendDoesNotRetireWorkspaceDuringActiveTransfer(t *testing.T) {
+	allowSharedExecutor(t)
 	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
 	deleteCalled := make(chan struct{}, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
@@ -124,10 +128,51 @@ func TestDockerBackendDoesNotRetireWorkspaceDuringActiveTransfer(t *testing.T) {
 	}
 }
 
-func TestDockerBackendRejectsSharedExecutorWithoutExplicitDevelopmentOptIn(t *testing.T) {
+// allowSharedExecutor opts a test into the development-only shared sandbox
+// executor. Sandbox paths refuse to run without it.
+func allowSharedExecutor(t *testing.T) {
+	t.Helper()
+	t.Setenv("SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT", "true")
+}
+
+// The weak-isolation refusal belongs to sandbox execution, which is the thing
+// that would run under it.
+func TestSandboxExecutionRefusedWithoutExplicitDevelopmentOptIn(t *testing.T) {
 	t.Setenv("SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT", "")
-	backend := NewDockerBackend(&config.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err := backend.Initialize(context.Background()); err == nil || !strings.Contains(err.Error(), "development-only") {
-		t.Fatalf("Initialize() error = %v, want explicit weak-isolation rejection", err)
+	cfg := &config.Config{}
+	cfg.Container.SandboxExecutorURL = "http://executor.invalid"
+	backend := NewDockerBackend(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	if _, err := backend.RuntimeManifest(context.Background()); err == nil || !strings.Contains(err.Error(), "development-only") {
+		t.Fatalf("RuntimeManifest() error = %v, want explicit weak-isolation rejection", err)
 	}
+	if err := backend.RetireSandboxTask(context.Background(), "workspace-1", "task-1", 0); err == nil || !strings.Contains(err.Error(), "development-only") {
+		t.Fatalf("RetireSandboxTask() error = %v, want explicit weak-isolation rejection", err)
+	}
+}
+
+// MCP container lifecycle is the other half of this backend and shares nothing
+// with the shared executor, so the same refusal must not reach it: a host that
+// serves only MCP has no sandbox executor to opt into.
+func TestMCPLifecycleIsNotGatedByTheSharedExecutorOptIn(t *testing.T) {
+	t.Setenv("SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT", "")
+	cfg := &config.Config{}
+	cfg.Container.Runtime = stubContainerRuntime(t)
+	backend := NewDockerBackend(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	_, err := backend.ListInstances(context.Background())
+	if err != nil && strings.Contains(err.Error(), "development-only") {
+		t.Fatalf("ListInstances() error = %v, want no weak-isolation gate on MCP lifecycle", err)
+	}
+}
+
+// stubContainerRuntime is a container runtime that answers every call with an
+// empty result, so MCP lifecycle calls reach their own code rather than Docker.
+func stubContainerRuntime(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "runtime")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("writing stub runtime: %v", err)
+	}
+	return path
 }

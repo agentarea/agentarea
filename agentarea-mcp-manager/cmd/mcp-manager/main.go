@@ -87,7 +87,6 @@ func initBackend(
 	ctx context.Context,
 	cfg *config.Config,
 	logger *slog.Logger,
-	taskLeaseTTL time.Duration,
 ) (string, backends.Backend, *container.Manager, *mcpgateway.RemoteUpstream) {
 	if cfg.Environment != "" {
 		logger.Info("Using forced environment", slog.String("environment", cfg.Environment))
@@ -108,7 +107,17 @@ func initBackend(
 	switch envType {
 	case "kubernetes":
 		logger.Info("Initializing Kubernetes backend")
-		k8sBackend, err := backends.NewKubernetesBackend(cfg, logger, taskLeaseTTL)
+		// A task lease is the one piece of sandbox policy a backend needs, and
+		// only this backend takes it. Reading the whole policy earlier, before
+		// the backend existed, made every sandbox and workspace setting a
+		// precondition for starting at all -- including on a data plane, which
+		// serves MCP containers and by design holds no sandbox configuration.
+		sandboxPolicy, err := sandboxruntime.LoadControlPolicyFromEnv()
+		if err != nil {
+			logger.Error("Failed to configure sandbox control policy", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		k8sBackend, err := backends.NewKubernetesBackend(cfg, logger, sandboxPolicy.TaskLeaseTTL)
 		if err != nil {
 			logger.Error("Failed to create Kubernetes backend", slog.String("error", err.Error()))
 			os.Exit(1)
@@ -205,6 +214,22 @@ func main() {
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Detect environment and initialize appropriate backend
+	envType, backend, containerManager, remoteUpstream := initBackend(ctx, cfg, logger)
+
+	// Data-plane mode stops here: this process is a data plane, and everything
+	// below — secrets, Redis, the event bus, the sandbox runtime — is
+	// control-plane wiring that must not exist on a host running untrusted
+	// containers. The check lives inside the call so main does not grow another
+	// branch; it returns immediately unless data-plane mode was requested.
+	serveDataPlaneAndExit(ctx, cfg, backend, logger)
+
+	// Sandbox and workspace policy is control-plane wiring too, so it is read
+	// only past the data-plane exit. Requiring it above meant a data plane could
+	// not start without carrying settings it never uses -- workspace storage
+	// among them, which would have put control-plane credentials on the host
+	// that runs untrusted containers.
 	sandboxPolicy, err := sandboxruntime.LoadControlPolicyFromEnv()
 	if err != nil {
 		logger.Error("Failed to configure sandbox control policy", slog.String("error", err.Error()))
@@ -218,16 +243,6 @@ func main() {
 	workspaceLimits := sandboxruntime.WorkspaceLimits{
 		MaxFiles: workspaceConfig.MaxFiles, MaxFileBytes: workspaceConfig.MaxFileBytes, MaxBytes: workspaceConfig.MaxBytes,
 	}
-
-	// Detect environment and initialize appropriate backend
-	envType, backend, containerManager, remoteUpstream := initBackend(ctx, cfg, logger, sandboxPolicy.TaskLeaseTTL)
-
-	// Data-plane mode stops here: this process is a data plane, and everything
-	// below — secrets, Redis, the event bus, the sandbox runtime — is
-	// control-plane wiring that must not exist on a host running untrusted
-	// containers. The check lives inside the call so main does not grow another
-	// branch; it returns immediately unless data-plane mode was requested.
-	serveDataPlaneAndExit(ctx, cfg, backend, logger)
 
 	// Initialize secret resolver with Infisical SDK
 	secretResolver, err := secrets.NewSecretResolver(logger)
