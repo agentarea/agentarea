@@ -20,17 +20,38 @@ type ProviderSelector interface {
 	GetProvider(*models.MCPServerInstance) (providers.Provider, error)
 }
 
+// RemoteUpstream addresses MCP workloads that run on a separate data plane.
+//
+// The token is this control plane's machine credential for that host. It is
+// attached to the outgoing hop by the gateway and never travels to the caller,
+// so an agent speaking MCP to the manager cannot read or replay it.
+type RemoteUpstream struct {
+	BaseURL string
+	Token   string
+}
+
+// InstanceProxyURL is the data plane's authenticated entry point for one
+// instance. The data plane owns the container and starts it on demand behind
+// this path, so the control plane never needs a routable address of its own.
+func (u RemoteUpstream) InstanceProxyURL(instanceID string) string {
+	return strings.TrimRight(u.BaseURL, "/") + "/dataplane/v1/instances/" + instanceID + "/proxy/mcp"
+}
+
 type ProviderRuntime struct {
 	providers      ProviderSelector
 	backend        backends.Backend
 	config         *config.Config
 	imagePolicy    ImagePolicy
 	startupTimeout time.Duration
+	remote         *RemoteUpstream
 }
 
-func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backend, cfg *config.Config, imagePolicy ImagePolicy, startupTimeout time.Duration) (*ProviderRuntime, error) {
+func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backend, cfg *config.Config, imagePolicy ImagePolicy, startupTimeout time.Duration, remote *RemoteUpstream) (*ProviderRuntime, error) {
 	if providerManager == nil || backend == nil || cfg == nil || startupTimeout <= 0 {
 		return nil, fmt.Errorf("MCP provider runtime requires providers, backend, config, and positive startup timeout")
+	}
+	if remote != nil && (remote.BaseURL == "" || remote.Token == "") {
+		return nil, fmt.Errorf("a remote MCP upstream requires both a base URL and a token")
 	}
 	return &ProviderRuntime{
 		providers:      providerManager,
@@ -38,6 +59,7 @@ func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backe
 		config:         cfg,
 		imagePolicy:    imagePolicy,
 		startupTimeout: startupTimeout,
+		remote:         remote,
 	}, nil
 }
 
@@ -92,31 +114,21 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 		}
 	}
 
-	// A declared-but-unusable port is a spec error, not an invitation to guess:
-	// silently falling back to 8000 would proxy the request to whatever happens
-	// to be listening there. Only an absent port takes the documented default.
-	port := 8000
-	if instanceType == "command" {
-		// command instances are wrapped by mcp-bridge, which always listens here
-		// regardless of any port in the spec.
-		port = 8080
-	} else if rawPort, declared := instance.JSONSpec["port"]; declared && rawPort != nil {
-		var parsed int
-		switch value := rawPort.(type) {
-		case float64:
-			parsed = int(value)
-			if float64(parsed) != value {
-				return "", fmt.Errorf("MCP instance port %v is not an integer", value)
-			}
-		case int:
-			parsed = value
-		default:
-			return "", fmt.Errorf("MCP instance port %v is not a number", rawPort)
-		}
-		if parsed <= 0 || parsed > 65535 {
-			return "", fmt.Errorf("MCP instance port %d is outside 1-65535", parsed)
-		}
-		port = parsed
+	return r.upstreamURL(instance, instanceType)
+}
+
+// upstreamURL is where the gateway proxies this instance's MCP traffic.
+func (r *ProviderRuntime) upstreamURL(instance *models.MCPServerInstance, instanceType string) (string, error) {
+	// A remote data plane exposes one authenticated path per instance and keeps
+	// the container unaddressable from here, so the local service URL -- which
+	// resolves nothing in this mode -- must not be consulted, and the port in
+	// the spec is the data plane's business rather than ours.
+	if r.remote != nil {
+		return r.remote.InstanceProxyURL(instance.InstanceID), nil
+	}
+	port, err := instancePort(instance, instanceType)
+	if err != nil {
+		return "", err
 	}
 	var base string
 	if r.config.Environment == "kubernetes" {
@@ -125,6 +137,39 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 		base = r.config.GetServiceURL(instance.InstanceID, port)
 	}
 	return strings.TrimRight(base, "/") + "/mcp", nil
+}
+
+// instancePort resolves the port the workload listens on.
+//
+// A declared-but-unusable port is a spec error, not an invitation to guess:
+// silently falling back to 8000 would proxy the request to whatever happens to
+// be listening there. Only an absent port takes the documented default.
+func instancePort(instance *models.MCPServerInstance, instanceType string) (int, error) {
+	if instanceType == "command" {
+		// command instances are wrapped by mcp-bridge, which always listens here
+		// regardless of any port in the spec.
+		return 8080, nil
+	}
+	rawPort, declared := instance.JSONSpec["port"]
+	if !declared || rawPort == nil {
+		return 8000, nil
+	}
+	var parsed int
+	switch value := rawPort.(type) {
+	case float64:
+		parsed = int(value)
+		if float64(parsed) != value {
+			return 0, fmt.Errorf("MCP instance port %v is not an integer", value)
+		}
+	case int:
+		parsed = value
+	default:
+		return 0, fmt.Errorf("MCP instance port %v is not a number", rawPort)
+	}
+	if parsed <= 0 || parsed > 65535 {
+		return 0, fmt.Errorf("MCP instance port %d is outside 1-65535", parsed)
+	}
+	return parsed, nil
 }
 
 // authorize admits the instance against the operator's declared lists. The two

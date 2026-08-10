@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -108,7 +109,12 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("data plane %s %s returned %d: %s", method, path, resp.StatusCode, strings.TrimSpace(string(payload)))
+		return &responseError{
+			status: resp.StatusCode,
+			method: method,
+			path:   path,
+			body:   strings.TrimSpace(string(payload)),
+		}
 	}
 	if out == nil || len(payload) == 0 {
 		return nil
@@ -119,6 +125,31 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	return nil
 }
 
+// responseError preserves the data plane's HTTP status so callers can act on it.
+// Without it every failure was one opaque string, and the demand gateway could
+// not tell "this instance does not exist yet" -- its signal to create the
+// workload -- from "the data plane is broken".
+type responseError struct {
+	status int
+	method string
+	path   string
+	body   string
+}
+
+func (e *responseError) Error() string {
+	return fmt.Sprintf("data plane %s %s returned %d: %s", e.method, e.path, e.status, e.body)
+}
+
+func (e *responseError) StatusCode() int { return e.status }
+
+func statusCodeOf(err error) int {
+	var responseErr *responseError
+	if errors.As(err, &responseErr) {
+		return responseErr.status
+	}
+	return 0
+}
+
 func (c *Client) CreateInstance(ctx context.Context, spec *backends.InstanceSpec) (*backends.InstanceResult, error) {
 	var result backends.InstanceResult
 	if err := c.do(ctx, http.MethodPost, "/dataplane/v1/instances", spec, &result); err != nil {
@@ -127,13 +158,28 @@ func (c *Client) CreateInstance(ctx context.Context, spec *backends.InstanceSpec
 	return &result, nil
 }
 
+// DeleteInstance treats an unknown instance as already retired. Retirement is
+// driven by the control plane's own records, which can outlive the workload
+// (the data plane reaped it, or the host was replaced); failing here left such
+// an instance permanently undeletable.
 func (c *Client) DeleteInstance(ctx context.Context, instanceID string) error {
-	return c.do(ctx, http.MethodDelete, "/dataplane/v1/instances/"+url.PathEscape(instanceID), nil, nil)
+	err := c.do(ctx, http.MethodDelete, "/dataplane/v1/instances/"+url.PathEscape(instanceID), nil, nil)
+	if statusCodeOf(err) == http.StatusNotFound {
+		return nil
+	}
+	return err
 }
 
+// GetInstanceStatus reports a missing instance as backends.ErrInstanceNotFound,
+// the typed signal the demand gateway uses to decide it must create the
+// workload. Any other failure stays an inspection error so an outage cannot be
+// mistaken for absence and duplicate a running workload.
 func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*backends.InstanceStatus, error) {
 	var status backends.InstanceStatus
 	if err := c.do(ctx, http.MethodGet, "/dataplane/v1/instances/"+url.PathEscape(instanceID), nil, &status); err != nil {
+		if statusCodeOf(err) == http.StatusNotFound {
+			return nil, backends.ErrInstanceNotFound
+		}
 		return nil, err
 	}
 	return &status, nil

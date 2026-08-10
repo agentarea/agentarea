@@ -110,16 +110,41 @@ type Gateway struct {
 	runtime    InstanceRuntime
 	policy     Policy
 	logger     *slog.Logger
+	remote     *RemoteUpstream
 }
 
-func New(repository LifecycleRepository, runtime InstanceRuntime, policy Policy, logger *slog.Logger) (*Gateway, error) {
+func New(repository LifecycleRepository, runtime InstanceRuntime, policy Policy, logger *slog.Logger, remote *RemoteUpstream) (*Gateway, error) {
 	if repository == nil || runtime == nil || logger == nil {
 		return nil, fmt.Errorf("MCP gateway repository, runtime, and logger are required")
 	}
 	if err := policy.Validate(); err != nil {
 		return nil, err
 	}
-	return &Gateway{repository: repository, runtime: runtime, policy: policy, logger: logger}, nil
+	if remote != nil && (remote.BaseURL == "" || remote.Token == "") {
+		return nil, fmt.Errorf("a remote MCP upstream requires both a base URL and a token")
+	}
+	return &Gateway{repository: repository, runtime: runtime, policy: policy, logger: logger, remote: remote}, nil
+}
+
+// isRemoteUpstream reports whether this upstream is the configured data plane,
+// which is the only destination allowed to receive the machine credential.
+//
+// Origin and path prefix must both match: an upstream that names any other host,
+// or the right host by some other route, is proxied without the credential
+// rather than handed one it should never see.
+func (g *Gateway) isRemoteUpstream(target *url.URL, parseErr error) bool {
+	if g.remote == nil || parseErr != nil || target == nil {
+		return false
+	}
+	base, err := url.Parse(g.remote.BaseURL)
+	if err != nil || base.Host == "" {
+		return false
+	}
+	if target.Scheme != base.Scheme || target.Host != base.Host {
+		return false
+	}
+	prefix := strings.TrimRight(base.Path, "/") + "/dataplane/v1/instances/"
+	return strings.HasPrefix(target.Path, prefix)
 }
 
 func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -186,7 +211,12 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	}
 
 	target, err := url.Parse(upstream)
-	if err != nil || target.Scheme != "http" || target.Host == "" {
+	remoteHop := g.isRemoteUpstream(target, err)
+	// In-cluster workloads are plain http. The data-plane hop leaves this
+	// network, so it must be https unless the operator declared the path
+	// private, which the data-plane client validates at startup.
+	allowedScheme := target != nil && (target.Scheme == "http" || (remoteHop && target.Scheme == "https"))
+	if err != nil || !allowedScheme || target.Host == "" {
 		g.finishRequest(instanceID, requestID)
 		http.Error(response, "MCP runtime returned an invalid internal endpoint", http.StatusBadGateway)
 		return
@@ -205,6 +235,12 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		outbound.URL.Path = target.Path
 		outbound.URL.RawPath = ""
 		outbound.Host = target.Host
+		if remoteHop {
+			// Set, never add: whatever the caller sent is replaced, so a client
+			// can neither read this credential nor smuggle its own to the data
+			// plane. The header exists only on this outgoing request.
+			outbound.Header.Set("Authorization", "Bearer "+g.remote.Token)
+		}
 	}
 	proxy.ErrorHandler = func(writer http.ResponseWriter, _ *http.Request, proxyErr error) {
 		g.logger.Warn("MCP upstream request failed", slog.String("instance_id", instanceID), slog.String("error", proxyErr.Error()))

@@ -50,16 +50,17 @@ type Backend interface {
 	DeleteInstance(ctx context.Context, instanceID string) error
 }
 
-// KubernetesProvider handles Kubernetes-based MCP server instances
-type KubernetesProvider struct {
+// BackendProvider drives MCP workloads through a Backend: an in-cluster
+// Kubernetes API, or a remote data plane reached over HTTP.
+type BackendProvider struct {
 	backend Backend
 	logger  *slog.Logger
 	secrets secrets.SecretResolver
 }
 
-// NewKubernetesProvider creates a new Kubernetes provider
-func NewKubernetesProvider(backend Backend, secretResolver secrets.SecretResolver, logger *slog.Logger) *KubernetesProvider {
-	return &KubernetesProvider{
+// NewBackendProvider creates a provider over any Backend
+func NewBackendProvider(backend Backend, secretResolver secrets.SecretResolver, logger *slog.Logger) *BackendProvider {
+	return &BackendProvider{
 		backend: backend,
 		logger:  logger,
 		secrets: secretResolver,
@@ -67,7 +68,7 @@ func NewKubernetesProvider(backend Backend, secretResolver secrets.SecretResolve
 }
 
 // CreateInstance creates a new Kubernetes deployment/service for the MCP server
-func (p *KubernetesProvider) CreateInstance(ctx context.Context, instance *models.MCPServerInstance) error {
+func (p *BackendProvider) CreateInstance(ctx context.Context, instance *models.MCPServerInstance) error {
 	p.logger.Info("Creating Kubernetes instance via backend",
 		slog.String("instance_id", instance.InstanceID),
 		slog.String("name", instance.Name))
@@ -99,7 +100,7 @@ func (p *KubernetesProvider) CreateInstance(ctx context.Context, instance *model
 }
 
 // DeleteInstance removes the Kubernetes resources for an MCP server
-func (p *KubernetesProvider) DeleteInstance(ctx context.Context, instanceID, name string) error {
+func (p *BackendProvider) DeleteInstance(ctx context.Context, instanceID, name string) error {
 	p.logger.Info("Deleting Kubernetes instance via backend",
 		slog.String("instance_id", instanceID),
 		slog.String("name", name))
@@ -124,7 +125,7 @@ func (p *KubernetesProvider) DeleteInstance(ctx context.Context, instanceID, nam
 // For command-type instances we wrap the stdio command in mcp-bridge (same as
 // the docker-mode handler does). Otherwise deployment would be created with
 // empty image + port=0 and rejected by the K8s apiserver.
-func (p *KubernetesProvider) convertToInstanceSpec(instance *models.MCPServerInstance) *BackendInstanceSpec {
+func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstance) *BackendInstanceSpec {
 	// The tier is deliberately left empty: the backend then applies the
 	// operator's DEFAULT_ISOLATION_TIER. Pinning "untrusted" here asked every MCP
 	// pod for a syscall-interposing RuntimeClass, so on a cluster without one the

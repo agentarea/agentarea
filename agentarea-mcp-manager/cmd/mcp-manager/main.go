@@ -88,7 +88,7 @@ func initBackend(
 	cfg *config.Config,
 	logger *slog.Logger,
 	taskLeaseTTL time.Duration,
-) (string, backends.Backend, *container.Manager) {
+) (string, backends.Backend, *container.Manager, *mcpgateway.RemoteUpstream) {
 	if cfg.Environment != "" {
 		logger.Info("Using forced environment", slog.String("environment", cfg.Environment))
 	}
@@ -102,6 +102,8 @@ func initBackend(
 
 	var backend backends.Backend
 	var containerManager *container.Manager
+	// Non-nil only when MCP workloads live on a separate data plane.
+	var remoteUpstream *mcpgateway.RemoteUpstream
 
 	switch envType {
 	case "kubernetes":
@@ -129,6 +131,9 @@ func initBackend(
 			os.Exit(1)
 		}
 		backend = dataplane.NewClient(agentCfg)
+		// MCP traffic is proxied to the data plane's per-instance path, and this
+		// credential is attached to that outgoing hop only.
+		remoteUpstream = &mcpgateway.RemoteUpstream{BaseURL: agentCfg.BaseURL, Token: agentCfg.Token}
 		logger.Info("Remote data-plane backend configured", slog.String("url", agentCfg.BaseURL))
 
 	default:
@@ -142,7 +147,7 @@ func initBackend(
 		logger.Error("Failed to initialize backend", slog.String("environment", envType), slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	return envType, backend, containerManager
+	return envType, backend, containerManager, remoteUpstream
 }
 
 func initProviderManager(
@@ -157,11 +162,15 @@ func initProviderManager(
 	case envType == "docker" && containerManager != nil:
 		dockerProvider := providers.NewDockerProvider(secretResolver, containerManager, logger)
 		return providers.NewProviderManager(dockerProvider, nil, urlProvider)
-	case envType == "kubernetes":
-		// For Kubernetes, create a Kubernetes provider that uses the backend
+	case envType == "kubernetes" || envType == "dataplane":
+		// Both drive workloads through a Backend rather than a local container
+		// runtime: the Kubernetes API in-cluster, the remote data plane's HTTP
+		// API otherwise. Without this case a data-plane deployment fell through
+		// to the URL-only manager and every container-backed instance failed
+		// with "no container provider available".
 		adapter := &backendAdapter{inner: backend}
-		kubernetesProvider := providers.NewKubernetesProvider(adapter, secretResolver, logger)
-		return providers.NewProviderManager(nil, kubernetesProvider, urlProvider)
+		backendProvider := providers.NewBackendProvider(adapter, secretResolver, logger)
+		return providers.NewProviderManager(nil, backendProvider, urlProvider)
 	default:
 		// Fallback - only URL provider
 		return providers.NewProviderManager(nil, nil, urlProvider)
@@ -211,7 +220,7 @@ func main() {
 	}
 
 	// Detect environment and initialize appropriate backend
-	envType, backend, containerManager := initBackend(ctx, cfg, logger, sandboxPolicy.TaskLeaseTTL)
+	envType, backend, containerManager, remoteUpstream := initBackend(ctx, cfg, logger, sandboxPolicy.TaskLeaseTTL)
 
 	// Data-plane mode stops here: this process is a data plane, and everything
 	// below — secrets, Redis, the event bus, the sandbox runtime — is
@@ -254,12 +263,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer gatewayRepository.Close()
-	gatewayRuntime, err := mcpgateway.NewProviderRuntime(providerManager, backend, cfg, imagePolicy, gatewayPolicy.StartupTimeout)
+	gatewayRuntime, err := mcpgateway.NewProviderRuntime(providerManager, backend, cfg, imagePolicy, gatewayPolicy.StartupTimeout, remoteUpstream)
 	if err != nil {
 		logger.Error("Failed to initialize MCP demand runtime", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	mcpGateway, err := mcpgateway.New(gatewayRepository, gatewayRuntime, gatewayPolicy, logger)
+	mcpGateway, err := mcpgateway.New(gatewayRepository, gatewayRuntime, gatewayPolicy, logger, remoteUpstream)
 	if err != nil {
 		logger.Error("Failed to initialize MCP demand gateway", slog.String("error", err.Error()))
 		os.Exit(1)

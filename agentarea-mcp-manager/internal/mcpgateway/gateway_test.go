@@ -102,7 +102,7 @@ func testGateway(t *testing.T, repository *gatewayRepositoryStub, runtime Instan
 		IdleTimeout:     time.Minute,
 		SweepInterval:   time.Second,
 		AuthSecret:      testGatewaySecret,
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
