@@ -227,6 +227,20 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 	// Wait for container to be running
 	if err := m.waitForContainer(ctx, container.ID); err != nil {
 		container.Status = models.StatusError
+		// No caller ever receives a handle to this container, and it was never
+		// recorded, so nothing can reclaim it later: it would sit dead on the
+		// host holding its name and its disk, unknown to the control plane.
+		// What it printed is the only record of why it stopped, so that is kept
+		// before the corpse goes.
+		m.logger.Error("Container exited before it could serve",
+			slog.String("container", containerName),
+			slog.String("id", container.ID),
+			slog.String("output", m.containerOutput(ctx, container.ID)))
+		if reapErr := m.clearContainerName(ctx, container.Name); reapErr != nil {
+			m.logger.Warn("Could not remove the container that failed to start",
+				slog.String("container", containerName),
+				slog.String("error", reapErr.Error()))
+		}
 		return nil, fmt.Errorf("container failed to start: %w", err)
 	}
 
@@ -724,6 +738,19 @@ func runtimeRefusal(output []byte) string {
 	default:
 		return "the runtime rejected the container; see the data-plane log for its output"
 	}
+}
+
+// containerOutput reads the tail of what a container printed. A start failure
+// reaches the caller as "the process is gone"; the reason is in the process's own
+// output, so it belongs in the data-plane log -- otherwise the only way to learn
+// that a server refused its arguments is to reproduce it by hand on the host.
+func (m *Manager) containerOutput(ctx context.Context, id string) string {
+	output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "logs", "--tail", "20", id).CombinedOutput()
+	trimmed := strings.TrimSpace(string(output))
+	if err != nil && trimmed == "" {
+		return "no output could be read: " + err.Error()
+	}
+	return trimmed
 }
 
 // containerAlreadyGone reports whether a runtime refused an operation because

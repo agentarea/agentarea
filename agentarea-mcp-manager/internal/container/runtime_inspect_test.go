@@ -1,6 +1,7 @@
 package container
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/models"
@@ -35,8 +37,19 @@ if [ "$1" = "inspect" ]; then
     *NetworkSettings.IPAddress*)
       printf '%s' "$STUB_FLAT_IP"
       exit "${STUB_FLAT_RC:-0}" ;;
+    *State.Status*)
+      printf '%s' "$STUB_STATUS"
+      exit "${STUB_STATUS_RC:-0}" ;;
   esac
   exit 1
+fi
+if [ "$1" = "run" ]; then
+  printf '%s\n' "${STUB_RUN_ID:-stub-container-id}"
+  exit "${STUB_RUN_RC:-0}"
+fi
+if [ "$1" = "logs" ]; then
+  printf '%s\n' "$STUB_LOGS"
+  exit 0
 fi
 if [ "$1" = "rm" ] || [ "$1" = "stop" ]; then
   if [ -n "$STUB_MISSING" ]; then
@@ -73,8 +86,10 @@ func stubCalls(t *testing.T, logPath string) string {
 func testConfig(runtime string) *config.Config {
 	return &config.Config{
 		Container: config.ContainerConfig{
-			Runtime: runtime,
-			Network: "agentarea-mcp",
+			Runtime:        runtime,
+			Network:        "agentarea-mcp",
+			MaxContainers:  4,
+			StartupTimeout: 20 * time.Second,
 		},
 	}
 }
@@ -123,6 +138,54 @@ func TestContainerIPReportsAnAddresslessContainer(t *testing.T) {
 
 	if _, err := NewHealthChecker(testConfig(runtime), discardLogger()).getContainerIP(context.Background(), "mcp-instance"); err == nil {
 		t.Fatal("getContainerIP() error = nil, want a failure when no network reports an address")
+	}
+}
+
+// A container that exits before it can serve is removed, and what it printed is
+// kept. Nothing else records why it stopped: the caller gets an error and no
+// handle, so an abandoned corpse would hold its name and disk for good, and the
+// reason -- here a server told to speak HTTP that fell back to stdio -- would
+// only be visible by reproducing the failure by hand on the host.
+func TestCreateContainerRemovesAContainerThatExitedAndKeepsItsOutput(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_STATUS", "exited")
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_LOGS", "Terraform MCP Server running on stdio")
+
+	var recorded bytes.Buffer
+	manager := &Manager{
+		config:     testConfig(runtime),
+		logger:     slog.New(slog.NewTextHandler(&recorded, nil)),
+		containers: map[string]*models.Container{},
+	}
+
+	if _, err := manager.CreateContainer(context.Background(), models.CreateContainerRequest{
+		ServiceName: "inst-exits",
+		Image:       "hashicorp/terraform-mcp-server:latest",
+		Port:        8080,
+	}); err == nil {
+		t.Fatal("CreateContainer() error = nil, want the start failure reported")
+	}
+
+	if _, tracked := manager.containers["inst-exits"]; tracked {
+		t.Fatal("a container that never served is still tracked as one that did")
+	}
+
+	calls := stubCalls(t, logPath)
+	started := strings.Index(calls, "run -d")
+	read := strings.Index(calls, "logs --tail")
+	removed := strings.LastIndex(calls, "rm -f")
+	if started < 0 {
+		t.Fatalf("no container was started; runtime calls:\n%s", calls)
+	}
+	if read < started {
+		t.Fatalf("the failed container was not read before removal; runtime calls:\n%s", calls)
+	}
+	if removed < read {
+		t.Fatalf("the failed container was not removed; runtime calls:\n%s", calls)
+	}
+	if !strings.Contains(recorded.String(), "running on stdio") {
+		t.Fatalf("the container output was not preserved; log:\n%s", recorded.String())
 	}
 }
 
