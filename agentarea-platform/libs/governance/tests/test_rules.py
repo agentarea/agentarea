@@ -304,3 +304,47 @@ class TestAssertEnforceable:
         )
         with pytest.raises(ValueError):
             assert_enforceable(rule)
+
+
+class TestTypedParams:
+    """The write boundary validates params through typed pydantic models, so
+    unknown keys, wrong types, and out-of-range values are rejected instead of
+    silently passing through a dict[str, Any] and compiling to a wrong cap."""
+
+    def test_rejects_unknown_param_key(self):
+        with pytest.raises(ValueError):
+            assert_enforceable(_rule("spend", PolicyEffect.CAP, amount_usd=10, bogus="x"))
+
+    def test_rejects_non_numeric_amount(self):
+        with pytest.raises(ValueError):
+            assert_enforceable(_rule("spend", PolicyEffect.CAP, amount_usd="abc"))
+
+    def test_rejects_negative_spend_amount(self):
+        with pytest.raises(ValueError):
+            assert_enforceable(_rule("spend", PolicyEffect.CAP, amount_usd=-5))
+
+    def test_rejects_zero_service_amount(self):
+        with pytest.raises(ValueError):
+            assert_enforceable(_rule("service", PolicyEffect.CAP, amount_usd=0))
+
+    def test_rejects_non_positive_token_ceiling(self):
+        with pytest.raises(ValueError):
+            assert_enforceable(_rule("tokens", PolicyEffect.CAP, max_tokens=0))
+
+    def test_rejects_non_integer_execution_ceiling(self):
+        with pytest.raises(ValueError):
+            assert_enforceable(_rule("execution", PolicyEffect.CAP, max_model_turns="lots"))
+
+    def test_accepts_string_amount_like_the_yaml_baseline(self):
+        assert_enforceable(_rule("spend", PolicyEffect.CAP, amount_usd="500.00", period="month"))
+
+    def test_rejects_bad_approver_ref(self):
+        with pytest.raises(ValueError):
+            assert_enforceable(_rule("*", PolicyEffect.APPROVAL, approvers=["alice"]))
+
+    def test_accepts_subject_ref_approver(self):
+        assert_enforceable(_rule("*", PolicyEffect.APPROVAL, approvers=["user:alice"]))
+
+    def test_error_message_names_the_offending_rule(self):
+        with pytest.raises(ValueError, match="spend"):
+            assert_enforceable(_rule("spend", PolicyEffect.CAP, amount_usd="abc"))
