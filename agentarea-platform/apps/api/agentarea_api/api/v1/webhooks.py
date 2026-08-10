@@ -26,9 +26,45 @@ async def webhook_health_check(
         return {"status": "unhealthy", "service": "webhook-manager"}
 
 
-@router.api_route(
+@router.get(
     "/{webhook_id}",
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    operation_id="handle_webhook_webhooks__webhook_id__get",
+    summary="Handle webhook requests",
+    description="Process incoming webhook requests for registered triggers",
+)
+@router.post(
+    "/{webhook_id}",
+    operation_id="handle_webhook_webhooks__webhook_id__post",
+    summary="Handle webhook requests",
+    description="Process incoming webhook requests for registered triggers",
+)
+@router.put(
+    "/{webhook_id}",
+    operation_id="handle_webhook_webhooks__webhook_id__put",
+    summary="Handle webhook requests",
+    description="Process incoming webhook requests for registered triggers",
+)
+@router.patch(
+    "/{webhook_id}",
+    operation_id="handle_webhook_webhooks__webhook_id__patch",
+    summary="Handle webhook requests",
+    description="Process incoming webhook requests for registered triggers",
+)
+@router.delete(
+    "/{webhook_id}",
+    operation_id="handle_webhook_webhooks__webhook_id__delete",
+    summary="Handle webhook requests",
+    description="Process incoming webhook requests for registered triggers",
+)
+@router.head(
+    "/{webhook_id}",
+    operation_id="handle_webhook_webhooks__webhook_id__head",
+    summary="Handle webhook requests",
+    description="Process incoming webhook requests for registered triggers",
+)
+@router.options(
+    "/{webhook_id}",
+    operation_id="handle_webhook_webhooks__webhook_id__options",
     summary="Handle webhook requests",
     description="Process incoming webhook requests for registered triggers",
 )

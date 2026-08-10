@@ -222,9 +222,25 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     )
 
 
-@oauth_as_router.api_route(
+@oauth_as_router.get(
     "/oauth2/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    operation_id="hydra_oauth2_proxy_oauth2__path__get",
+)
+@oauth_as_router.post(
+    "/oauth2/{path:path}",
+    operation_id="hydra_oauth2_proxy_oauth2__path__post",
+)
+@oauth_as_router.put(
+    "/oauth2/{path:path}",
+    operation_id="hydra_oauth2_proxy_oauth2__path__put",
+)
+@oauth_as_router.delete(
+    "/oauth2/{path:path}",
+    operation_id="hydra_oauth2_proxy_oauth2__path__delete",
+)
+@oauth_as_router.patch(
+    "/oauth2/{path:path}",
+    operation_id="hydra_oauth2_proxy_oauth2__path__patch",
 )
 async def hydra_oauth2_proxy(path: str, request: Request) -> Response:
     """Proxy all /oauth2/* requests through to Hydra (excluding /register handled above)."""
