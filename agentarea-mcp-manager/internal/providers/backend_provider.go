@@ -120,6 +120,56 @@ func (p *BackendProvider) DeleteInstance(ctx context.Context, instanceID, name s
 	return nil
 }
 
+// dockerArgv reads the invocation a docker-type spec asks for. The command
+// arrives either as a list or, exactly as a command-type spec writes it, as a
+// single string extended by args — the catalog produces both shapes, and
+// ignoring args left flag-driven servers running their default transport,
+// which for most images is stdio.
+//
+// --transport=stdio is dropped whichever field carried it: the gateway reaches
+// the container over a port, so a container talking stdio is unreachable.
+func dockerArgv(jsonSpec map[string]any) []string {
+	var argv []string
+	switch cmd := jsonSpec["command"].(type) {
+	case string:
+		if cmd != "" {
+			argv = append(argv, cmd)
+		}
+	case []any:
+		argv = append(argv, stringList(cmd)...)
+	}
+	argv = append(argv, stringList(jsonSpec["args"])...)
+
+	kept := make([]string, 0, len(argv))
+	for _, arg := range argv {
+		if arg != "--transport=stdio" {
+			kept = append(kept, arg)
+		}
+	}
+	if len(kept) == 0 {
+		return nil
+	}
+	return kept
+}
+
+// stringList reads a JSON array of strings, skipping anything else.
+func stringList(raw any) []string {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // convertToInstanceSpec converts an MCPServerInstance to a backend InstanceSpec.
 //
 // For command-type instances we wrap the stdio command in mcp-bridge (same as
@@ -143,24 +193,13 @@ func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstan
 	if specType == "command" {
 		// command-type: always wraps stdio command with mcp-bridge.
 		cmd, _ := jsonSpec["command"].(string)
-		var args []string
-		if rawArgs, ok := jsonSpec["args"].([]any); ok {
-			for _, a := range rawArgs {
-				if s, ok := a.(string); ok {
-					args = append(args, s)
-				}
-			}
-		}
 		spec.Image = sandboxImage
 		spec.Port = sandboxPort
 		// mcp-bridge's ENTRYPOINT is `python bridge.py`. The stdio command
 		// + args are appended as CLI arguments (K8s container.args).
-		spec.Command = append([]string{cmd}, args...)
+		spec.Command = append([]string{cmd}, stringList(jsonSpec["args"])...)
 	} else {
 		// docker-type: use the image directly — it must serve HTTP natively.
-		// Strip --transport=stdio: in K8s the container must bind a port
-		// directly (no traefik gateway), and stdio-capable images default to
-		// HTTP SSE when this flag is absent.
 		if image, ok := jsonSpec["image"].(string); ok {
 			spec.Image = image
 		}
@@ -169,13 +208,7 @@ func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstan
 		} else if port, ok := jsonSpec["port"].(int); ok {
 			spec.Port = port
 		}
-		if rawCmd, ok := jsonSpec["command"].([]any); ok {
-			for _, a := range rawCmd {
-				if s, ok := a.(string); ok && s != "--transport=stdio" {
-					spec.Command = append(spec.Command, s)
-				}
-			}
-		}
+		spec.Command = dockerArgv(jsonSpec)
 	}
 
 	// Extract environment variables
