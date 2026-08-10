@@ -201,6 +201,11 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		return nil, err
 	}
 
+	// A leftover container from an earlier attempt holds the name this run needs.
+	if err := m.clearContainerName(ctx, container.Name); err != nil {
+		return nil, err
+	}
+
 	// Build container run command (Traefik labels are added automatically)
 	args := m.buildContainerRunArgs(container)
 
@@ -684,6 +689,36 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 	return nil
 }
 
+// clearContainerName frees the runtime name a workload is about to take.
+//
+// A container name is derived from the instance it serves, so a leftover
+// container under that name is the same instance's corpse from an earlier
+// attempt: it can never serve traffic again, yet the runtime refuses to reuse
+// its name. That turned every retry for the instance into a permanent "name is
+// already in use" failure which hid the original start error and left the
+// instance id unusable for good. A *running* namesake is a different situation
+// -- something is actively serving under it -- so it is reported, not killed.
+func (m *Manager) clearContainerName(ctx context.Context, name string) error {
+	state, err := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", name, "--format", "{{.State.Running}}").Output()
+	if err != nil {
+		// Nothing answers to that name. This is the ordinary case.
+		return nil
+	}
+
+	if strings.TrimSpace(string(state)) == "true" {
+		return fmt.Errorf("container %s is already running", name)
+	}
+
+	if output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "rm", "-f", name).CombinedOutput(); err != nil {
+		return fmt.Errorf("removing stale container %s: %w: %s", name, err, strings.TrimSpace(string(output)))
+	}
+
+	m.logger.Info("Removed a stale container holding the name of a new workload",
+		slog.String("container", name))
+
+	return nil
+}
+
 // buildContainerRunArgs builds the arguments for the container runtime run command.
 // MCP containers intentionally have no external router labels: every request
 // must cross the manager demand gateway so lifecycle leases stay authoritative.
@@ -929,6 +964,13 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		slog.String("container", containerName),
 		slog.String("instance_id", instanceID),
 		slog.String("image", image))
+
+	// The name has to be free before the run, or the retry that follows a failed
+	// start reports a name conflict instead of the reason the start failed.
+	if err := m.clearContainerName(ctx, containerName); err != nil {
+		container.Status = models.StatusError
+		return err
+	}
 
 	// Build container run command
 	args := m.buildContainerRunArgs(container)
