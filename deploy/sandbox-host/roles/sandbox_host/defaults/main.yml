@@ -157,3 +157,53 @@ sandbox_mcp_dataplane_public_hostname: ""
 # Shared token the control plane sends. Provide out-of-band, never in a file:
 #   ansible-playbook ... -e sandbox_mcp_dataplane_auth_token="$TOKEN"
 sandbox_mcp_dataplane_auth_token: ""
+
+# Where the data plane binds. Loopback by default, because a host that publishes
+# through the TLS proxy must not answer anywhere else. A host that is only
+# reachable on a private network binds that address instead and skips the proxy
+# entirely: there is no public hop to terminate.
+sandbox_mcp_dataplane_bind_address: "127.0.0.1"
+# Publish the data plane and OpenSandbox on public hostnames through Caddy with
+# Let's Encrypt certificates. Pointless, and an attack surface, when the only
+# route to this host runs inside a private network.
+sandbox_tls_proxy_enabled: true
+
+# Resolver handed to containers.
+#
+# A host whose only route out is a private network resolves through
+# systemd-resolved, whose stub listens on 127.0.0.53 -- an address no container
+# can reach. Docker then falls back to public resolvers, which that network does
+# not carry, so every container had DNS failures while the host resolved fine.
+# The stub is published on the Docker bridge address instead, which forwards to
+# whatever upstreams the host actually uses, including IPv6-only ones.
+sandbox_container_dns:
+  - "172.17.0.1"
+sandbox_container_dns_stub_address: "172.17.0.1"
+
+# IPv4 default route for a host that lives only on the private network.
+#
+# Timeweb gives a VPC-only server no IPv4 default route at all: it reaches the
+# internet over IPv6 and nothing else, so containers -- which get no IPv6 -- had
+# no egress, and Docker Hub is IPv4-only. The VPC router already performs NAT for
+# the cluster's private nodes; this host just needs to be pointed at it. Find the
+# address the way a node reports it:
+#
+#   kubectl run hostnet --image=busybox --overrides='{"spec":{"hostNetwork":true}}' \
+#     -- ip -4 route show default
+#
+# Empty leaves routing untouched, which is correct for a host that has its own
+# public address.
+sandbox_vpc_default_gateway: ""
+sandbox_vpc_interface: "eth1"
+
+# Address sshd listens on.
+#
+# A host with no public IPv4 is still not private: Timeweb hands it a global IPv6
+# with a default route, and sshd binds [::] by default, so SSH was reachable from
+# the internet while every other check said the machine was isolated. Management
+# arrives over the private network (through the cluster), so sshd belongs on that
+# address alone -- an inbound firewall then has nothing left to get wrong.
+#
+# Break-glass if the private interface ever fails to come up: the provider console.
+# Empty leaves sshd as the image configured it.
+sandbox_ssh_listen_address: ""

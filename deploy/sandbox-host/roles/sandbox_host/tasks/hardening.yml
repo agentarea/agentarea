@@ -42,3 +42,18 @@
     enabled: true
     state: started
     daemon_reload: true
+
+- name: Bind sshd to the private address only
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/10-private-listen.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by the sandbox_host role.
+      ListenAddress {{ sandbox_ssh_listen_address }}
+  when: sandbox_ssh_listen_address | length > 0
+  notify: Restart sshd
+
+- name: Apply the sshd change
+  ansible.builtin.meta: flush_handlers

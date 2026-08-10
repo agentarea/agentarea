@@ -11,15 +11,15 @@
     that:
       - sandbox_mcp_dataplane_auth_token | length >= 32
       - sandbox_mcp_dataplane_id | length > 0
-      - sandbox_mcp_dataplane_public_hostname | length > 0
+      - not (sandbox_tls_proxy_enabled | bool) or sandbox_mcp_dataplane_public_hostname | length > 0
       - sandbox_mcp_dataplane_binary_src | length > 0
       - sandbox_runtime == "runsc"
     fail_msg: >-
       The MCP data plane requires a 32+ character shared token (the same value
       the control plane sends), an id that marks this data plane's instances as
-      its own, a TLS hostname, a binary to install, and the runsc runtime. A data
-      plane reachable without a token hands container creation on a gVisor host
-      to whoever finds the port.
+      its own, a binary to install, and the runsc runtime -- plus a TLS hostname
+      when it is published through the proxy. A data plane reachable without a
+      token hands container creation on a gVisor host to whoever finds the port.
 
 - name: Create data-plane configuration directory
   ansible.builtin.file:
@@ -87,16 +87,18 @@
     owner: root
     group: root
     mode: "0640"
+  when: sandbox_tls_proxy_enabled | bool
   notify: Restart caddy
 
 - name: Apply the proxy configuration
   ansible.builtin.meta: flush_handlers
+  when: sandbox_tls_proxy_enabled | bool
 
 # A green play that never reached the process would only prove the files were
 # written.
 - name: Wait for the data plane to answer
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ sandbox_mcp_dataplane_port }}/healthz"
+    url: "http://{{ sandbox_mcp_dataplane_bind_address }}:{{ sandbox_mcp_dataplane_port }}/healthz"
     status_code: 200
   register: _mcp_dp_health
   retries: 20
@@ -105,7 +107,7 @@
 
 - name: Verify the data plane refuses unauthenticated calls
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ sandbox_mcp_dataplane_port }}/dataplane/v1/instances"
+    url: "http://{{ sandbox_mcp_dataplane_bind_address }}:{{ sandbox_mcp_dataplane_port }}/dataplane/v1/instances"
     status_code: 401
   changed_when: false
 
@@ -123,4 +125,5 @@
   retries: 10
   delay: 6
   until: _mcp_dp_tls.rc == 0
+  when: sandbox_tls_proxy_enabled | bool
   changed_when: false

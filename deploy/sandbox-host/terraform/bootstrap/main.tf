@@ -15,9 +15,3 @@ resource "twc_s3_bucket" "tfstate" {
   # surprise is worse than failing a write, which is loud and recoverable.
   is_allow_auto_upgrade = false
 }
-
-# A dedicated S3 user, so the state credential is not the one the application
-# uses for its own buckets and can be revoked on its own.
-resource "twc_s3_user" "tfstate" {
-  name = var.s3_user_name
-}

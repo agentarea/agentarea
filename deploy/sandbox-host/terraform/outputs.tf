@@ -2,25 +2,18 @@ output "server_id" {
   value = twc_server.sandbox.id
 }
 
-# The floating address, which is what every URL and certificate is built from.
-output "public_ipv4" {
-  value = local.public_ip
-}
-
+# The only address anything is meant to use: the host has no public entry point.
 output "private_ipv4" {
-  description = "Address on the cluster VPC, null when the host is not attached to one."
-  value       = try(twc_server.sandbox.local_network[0].ip, null)
+  value = local.private_ip
 }
 
-# Feed these to the RU chart: mcpManager.dataPlane.url and sandboxRuntime.url.
+# Feed this to the RU chart as mcpManager.dataPlane.url.
 output "dataplane_url" {
   value = local.dataplane_url
 }
 
-output "opensandbox_url" {
-  value = local.sandbox_url
-}
-
+# Reaching a host with no public address goes through the cluster that is on its
+# network, so the jump is part of the contract rather than a local trick.
 output "ssh_command" {
-  value = "ssh root@${local.public_ip}"
+  value = "ssh -o ProxyCommand='kubectl -n agentarea exec -i jump -- socat - TCP:%h:%p' root@${local.private_ip}"
 }

@@ -1,0 +1,3 @@
+# Smallest hot preset in ru-1 ("Premium 1GB", 1 RUB/month). List presets with the
+# API call documented in variables.tf.
+s3_preset_id = 4611

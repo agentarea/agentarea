@@ -70,13 +70,23 @@ variable "vpc_network_id" {
   type = string
 }
 
-# Egress-only by default: the host reaches the VPC, the VPC does not reach in.
+# Left null on purpose: Timeweb answers the separate "set local network mode"
+# call with HTTP 500 for this account, and the mode it assigns on attachment is
+# already egress-only, which is what a host running untrusted code should have.
+# Set it explicitly only if that call starts working and ingress is wanted.
 variable "vpc_nat_mode" {
   type    = string
-  default = "snat"
+  default = null
 
   validation {
-    condition     = contains(["snat", "dnat_and_snat"], var.vpc_nat_mode)
-    error_message = "vpc_nat_mode must be snat or dnat_and_snat."
+    condition     = var.vpc_nat_mode == null || contains(["snat", "dnat_and_snat"], var.vpc_nat_mode)
+    error_message = "vpc_nat_mode must be snat, dnat_and_snat, or null."
   }
+}
+
+# Where the data plane listens. It binds the private address, so this port is
+# reachable from the cluster and from nowhere else.
+variable "dataplane_port" {
+  type    = number
+  default = 8090
 }
