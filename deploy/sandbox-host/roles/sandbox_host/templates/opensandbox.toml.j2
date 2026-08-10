@@ -1,5 +1,5 @@
 [server]
-host = "127.0.0.1"
+host = "{{ opensandbox_bind_address }}"
 port = {{ opensandbox_server_port }}
 max_sandbox_timeout_seconds = {{ opensandbox_max_timeout_seconds }}
 timeout_keep_alive = 30

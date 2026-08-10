@@ -32,6 +32,7 @@ services:
         max-size: 50m
         max-file: "5"
 
+{% if sandbox_tls_proxy_enabled | bool %}
   caddy:
     image: "{{ opensandbox_caddy_image }}"
     container_name: opensandbox-caddy
@@ -55,3 +56,4 @@ services:
       options:
         max-size: 20m
         max-file: "3"
+{% endif %}

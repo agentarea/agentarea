@@ -70,6 +70,7 @@
     group: root
     mode: "0640"
   notify: Restart opensandbox
+  when: sandbox_tls_proxy_enabled | bool
 
 - name: Install OpenSandbox inbound firewall script
   ansible.builtin.template:
@@ -120,7 +121,7 @@
 
 - name: Wait for authenticated OpenSandbox health
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ opensandbox_server_port }}/health"
+    url: "http://{{ opensandbox_bind_address }}:{{ opensandbox_server_port }}/health"
     headers:
       OPEN-SANDBOX-API-KEY: "{{ opensandbox_api_key }}"
     status_code: 200
@@ -149,4 +150,6 @@
   register: _opensandbox_tls
   changed_when: false
   failed_when: _opensandbox_tls.rc != 0
-  when: not ansible_check_mode
+  when:
+    - sandbox_tls_proxy_enabled | bool
+    - not ansible_check_mode

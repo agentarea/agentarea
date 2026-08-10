@@ -207,3 +207,10 @@ sandbox_vpc_interface: "eth1"
 # Break-glass if the private interface ever fails to come up: the provider console.
 # Empty leaves sshd as the image configured it.
 sandbox_ssh_listen_address: ""
+
+# Where the OpenSandbox server listens, and which port the inbound firewall
+# guards. Loopback plus 443 is the published shape: Caddy terminates TLS and the
+# server is unreachable otherwise. A host that only exists on a private network
+# binds that address and is guarded on its own port, with no proxy in between.
+opensandbox_bind_address: "127.0.0.1"
+opensandbox_inbound_port: 443

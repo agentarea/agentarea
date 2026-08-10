@@ -9,12 +9,12 @@ iptables -F "$CHAIN"
 iptables -A "$CHAIN" -s 127.0.0.0/8 -j RETURN
 
 {% for cidr in opensandbox_control_plane_cidrs %}
-iptables -A "$CHAIN" -p tcp -s {{ cidr }} --dport 443 -j RETURN
+iptables -A "$CHAIN" -p tcp -s {{ cidr }} --dport {{ opensandbox_inbound_port }} -j RETURN
 # Keep the legacy executor reachable during the controlled migration only.
 iptables -A "$CHAIN" -p tcp -s {{ cidr }} --dport {{ sandbox_executor_host_port }} -j RETURN
 {% endfor %}
 
-iptables -A "$CHAIN" -p tcp --dport 443 -j DROP
+iptables -A "$CHAIN" -p tcp --dport {{ opensandbox_inbound_port }} -j DROP
 iptables -A "$CHAIN" -p tcp --dport {{ sandbox_executor_host_port }} -j DROP
 iptables -A "$CHAIN" -j RETURN
 
