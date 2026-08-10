@@ -205,9 +205,21 @@ Three decisions worth knowing before you change them:
 - **`inventory.ini` is generated.** The playbook can then never point at a host
   Terraform no longer owns.
 
-State is local to whoever runs this root, which is the remaining gap: it holds
-the server's root and VNC passwords and there is no shared backend yet. Keep it
-somewhere backed up until a backend is configured, and never commit it.
+State lives in an S3 bucket with locking, not on whoever applied last:
+
+```bash
+cd terraform/bootstrap                  # creates the bucket and its own S3 user
+terraform init && terraform apply -var s3_preset_id=<id>
+cd .. && cp backend.tfbackend.example backend.tfbackend   # fill from the outputs
+export AWS_ACCESS_KEY_ID=$(cd bootstrap && terraform output -raw access_key)
+export AWS_SECRET_ACCESS_KEY=$(cd bootstrap && terraform output -raw secret_key)
+terraform init -backend-config=backend.tfbackend [-migrate-state]
+```
+
+`bootstrap/` is deliberately the one root with local state: a root cannot keep
+its state in the bucket it is creating. It owns two resources and is applied
+once, so a lost state there is recovered by importing them — unlike the state
+that describes a running machine, which is why that one is shared and locked.
 
 ## Note on repo placement
 

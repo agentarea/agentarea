@@ -16,3 +16,4 @@ crash.log
 # Real inputs stay on the machine that runs terraform; the example is committed.
 terraform.tfvars
 *.auto.tfvars
+backend.tfbackend
