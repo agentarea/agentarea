@@ -20,17 +20,38 @@ type ProviderSelector interface {
 	GetProvider(*models.MCPServerInstance) (providers.Provider, error)
 }
 
+// RemoteUpstream addresses MCP workloads that run on a separate data plane.
+//
+// The token is this control plane's machine credential for that host. It is
+// attached to the outgoing hop by the gateway and never travels to the caller,
+// so an agent speaking MCP to the manager cannot read or replay it.
+type RemoteUpstream struct {
+	BaseURL string
+	Token   string
+}
+
+// InstanceProxyURL is the data plane's authenticated entry point for one
+// instance. The data plane owns the container and starts it on demand behind
+// this path, so the control plane never needs a routable address of its own.
+func (u RemoteUpstream) InstanceProxyURL(instanceID string) string {
+	return strings.TrimRight(u.BaseURL, "/") + "/dataplane/v1/instances/" + instanceID + "/proxy/mcp"
+}
+
 type ProviderRuntime struct {
 	providers      ProviderSelector
 	backend        backends.Backend
 	config         *config.Config
 	imagePolicy    ImagePolicy
 	startupTimeout time.Duration
+	remote         *RemoteUpstream
 }
 
-func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backend, cfg *config.Config, imagePolicy ImagePolicy, startupTimeout time.Duration) (*ProviderRuntime, error) {
+func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backend, cfg *config.Config, imagePolicy ImagePolicy, startupTimeout time.Duration, remote *RemoteUpstream) (*ProviderRuntime, error) {
 	if providerManager == nil || backend == nil || cfg == nil || startupTimeout <= 0 {
 		return nil, fmt.Errorf("MCP provider runtime requires providers, backend, config, and positive startup timeout")
+	}
+	if remote != nil && (remote.BaseURL == "" || remote.Token == "") {
+		return nil, fmt.Errorf("a remote MCP upstream requires both a base URL and a token")
 	}
 	return &ProviderRuntime{
 		providers:      providerManager,
@@ -38,6 +59,7 @@ func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backe
 		config:         cfg,
 		imagePolicy:    imagePolicy,
 		startupTimeout: startupTimeout,
+		remote:         remote,
 	}, nil
 }
 
@@ -117,6 +139,12 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 			return "", fmt.Errorf("MCP instance port %d is outside 1-65535", parsed)
 		}
 		port = parsed
+	}
+	// A remote data plane exposes one authenticated path per instance and keeps
+	// the container unaddressable from here, so the local service URL -- which
+	// resolves nothing in this mode -- must not be consulted.
+	if r.remote != nil {
+		return r.remote.InstanceProxyURL(instance.InstanceID), nil
 	}
 	var base string
 	if r.config.Environment == "kubernetes" {

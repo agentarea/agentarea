@@ -8,16 +8,16 @@ import (
 	"github.com/agentarea/mcp-manager/internal/models"
 )
 
-func newTestKubernetesProvider() *KubernetesProvider {
+func newTestBackendProvider() *BackendProvider {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return &KubernetesProvider{backend: nil, logger: logger}
+	return &BackendProvider{backend: nil, logger: logger}
 }
 
 // command-type: image must be the sandbox bridge, port must be 8080, and
 // Command must equal [cmd, ...args] (no filtering needed since stdio is not
 // relevant to the bridge wrapper).
 func TestConvertToInstanceSpec_CommandType_UsesSandboxImageAndPort(t *testing.T) {
-	p := newTestKubernetesProvider()
+	p := newTestBackendProvider()
 
 	instance := &models.MCPServerInstance{
 		InstanceID: "inst-1",
@@ -52,7 +52,7 @@ func TestConvertToInstanceSpec_CommandType_UsesSandboxImageAndPort(t *testing.T)
 // command-type: spec.Command is built from json_spec["command"] (a string,
 // not a slice). The field maps to spec.Command directly, not spec.Entrypoint.
 func TestConvertToInstanceSpec_CommandType_CommandFieldIsString(t *testing.T) {
-	p := newTestKubernetesProvider()
+	p := newTestBackendProvider()
 
 	instance := &models.MCPServerInstance{
 		InstanceID: "inst-2",
@@ -77,7 +77,7 @@ func TestConvertToInstanceSpec_CommandType_CommandFieldIsString(t *testing.T) {
 // docker-type: --transport=stdio must be stripped from Command; all other
 // flags must be preserved unchanged.
 func TestConvertToInstanceSpec_DockerType_StripTransportStdioFlag(t *testing.T) {
-	p := newTestKubernetesProvider()
+	p := newTestBackendProvider()
 
 	instance := &models.MCPServerInstance{
 		InstanceID: "inst-3",
@@ -112,7 +112,7 @@ func TestConvertToInstanceSpec_DockerType_StripTransportStdioFlag(t *testing.T) 
 
 // docker-type without --transport=stdio: command passes through unchanged.
 func TestConvertToInstanceSpec_DockerType_NoStdioFlag_CommandUnchanged(t *testing.T) {
-	p := newTestKubernetesProvider()
+	p := newTestBackendProvider()
 
 	instance := &models.MCPServerInstance{
 		InstanceID: "inst-4",
@@ -141,7 +141,7 @@ func TestConvertToInstanceSpec_DockerType_NoStdioFlag_CommandUnchanged(t *testin
 // docker-type: image and port are taken from json_spec, not overridden with
 // the sandbox values.
 func TestConvertToInstanceSpec_DockerType_UsesImageAndPortFromSpec(t *testing.T) {
-	p := newTestKubernetesProvider()
+	p := newTestBackendProvider()
 
 	instance := &models.MCPServerInstance{
 		InstanceID: "inst-5",
@@ -169,7 +169,7 @@ func TestConvertToInstanceSpec_DockerType_UsesImageAndPortFromSpec(t *testing.T)
 // docker-type with --transport=stdio as the only command arg results in an
 // empty (nil or zero-length) Command slice.
 func TestConvertToInstanceSpec_DockerType_OnlyStdioFlag_CommandBecomesEmpty(t *testing.T) {
-	p := newTestKubernetesProvider()
+	p := newTestBackendProvider()
 
 	instance := &models.MCPServerInstance{
 		InstanceID: "inst-6",
@@ -195,7 +195,7 @@ func TestConvertToInstanceSpec_DockerType_OnlyStdioFlag_CommandBecomesEmpty(t *t
 // the instance was unreachable no matter what it ran. Leaving the field empty
 // hands the decision to the operator's DEFAULT_ISOLATION_TIER.
 func TestConvertToInstanceSpecLeavesTheIsolationTierToTheOperator(t *testing.T) {
-	p := newTestKubernetesProvider()
+	p := newTestBackendProvider()
 
 	for name, jsonSpec := range map[string]map[string]interface{}{
 		"docker":  {"type": "docker", "image": "ghcr.io/vendor/mcp:1.0", "port": 9000},

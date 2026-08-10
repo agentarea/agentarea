@@ -15,17 +15,17 @@ type Provider interface {
 
 // ProviderManager manages different types of MCP providers
 type ProviderManager struct {
-	dockerProvider     *DockerProvider
-	kubernetesProvider *KubernetesProvider
-	urlProvider        *URLProvider
+	dockerProvider  *DockerProvider
+	backendProvider *BackendProvider
+	urlProvider     *URLProvider
 }
 
 // NewProviderManager creates a new provider manager
-func NewProviderManager(dockerProvider *DockerProvider, kubernetesProvider *KubernetesProvider, urlProvider *URLProvider) *ProviderManager {
+func NewProviderManager(dockerProvider *DockerProvider, backendProvider *BackendProvider, urlProvider *URLProvider) *ProviderManager {
 	return &ProviderManager{
-		dockerProvider:     dockerProvider,
-		kubernetesProvider: kubernetesProvider,
-		urlProvider:        urlProvider,
+		dockerProvider:  dockerProvider,
+		backendProvider: backendProvider,
+		urlProvider:     urlProvider,
 	}
 }
 
@@ -42,15 +42,15 @@ func (pm *ProviderManager) GetProvider(instance *models.MCPServerInstance) (Prov
 				if pm.dockerProvider != nil {
 					return pm.dockerProvider, nil
 				}
-				if pm.kubernetesProvider != nil {
-					return pm.kubernetesProvider, nil
+				if pm.backendProvider != nil {
+					return pm.backendProvider, nil
 				}
-				return nil, fmt.Errorf("no container provider available (docker/kubernetes)")
+				return nil, fmt.Errorf("no container provider available (docker, backend)")
 			case "kubernetes":
-				if pm.kubernetesProvider != nil {
-					return pm.kubernetesProvider, nil
+				if pm.backendProvider != nil {
+					return pm.backendProvider, nil
 				}
-				return nil, fmt.Errorf("kubernetes provider not available")
+				return nil, fmt.Errorf("backend provider not available")
 			case "url":
 				if pm.urlProvider != nil {
 					return pm.urlProvider, nil
@@ -58,8 +58,8 @@ func (pm *ProviderManager) GetProvider(instance *models.MCPServerInstance) (Prov
 				return nil, fmt.Errorf("url provider not available")
 			default:
 				// Try providers in order: kubernetes, docker, url
-				if pm.kubernetesProvider != nil {
-					return pm.kubernetesProvider, nil
+				if pm.backendProvider != nil {
+					return pm.backendProvider, nil
 				}
 				if pm.dockerProvider != nil {
 					return pm.dockerProvider, nil
@@ -73,8 +73,8 @@ func (pm *ProviderManager) GetProvider(instance *models.MCPServerInstance) (Prov
 	}
 
 	// Default: try providers in order
-	if pm.kubernetesProvider != nil {
-		return pm.kubernetesProvider, nil
+	if pm.backendProvider != nil {
+		return pm.backendProvider, nil
 	}
 	if pm.dockerProvider != nil {
 		return pm.dockerProvider, nil

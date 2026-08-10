@@ -87,6 +87,7 @@ func testProviderRuntime(t *testing.T, backend backends.Backend, provider provid
 		&config.Config{Environment: "docker"},
 		testImagePolicy(t),
 		startup,
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
