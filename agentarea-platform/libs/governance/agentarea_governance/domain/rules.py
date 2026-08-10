@@ -11,6 +11,7 @@ contract is unchanged; only the storage shape changed.
 from __future__ import annotations
 
 import logging
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Any
 
@@ -122,6 +123,104 @@ def parse_target(selector: str) -> tuple[str, str | None]:
         raise ValueError(f"invalid target selector {selector!r}: unknown kind {kind!r}")
 
     return kind, value
+
+
+def assert_enforceable(rule: PolicyRule) -> None:
+    """Reject a rule the engine would silently ignore at runtime.
+
+    The compiler debug-skips unenforceable rules, so without this guard the write
+    API returns 201 for rules that never take effect (fail-open). Fail loudly at
+    the write boundary instead, mirroring the compiler's skip conditions.
+
+    Raises:
+        ValueError: with a caller-facing reason when the rule cannot be enforced.
+    """
+    if rule.subject_type == PolicySubjectType.GROUP:
+        raise ValueError(
+            "group subjects are not resolved yet (issue #198); bind the rule to a "
+            "workspace, agent, or user"
+        )
+    if rule.condition is not None:
+        raise ValueError("conditions (CEL) are not evaluated yet; omit 'condition'")
+
+    kind, value = parse_target(rule.target)  # raises ValueError on an unknown kind
+    params = rule.params or {}
+    effect = rule.effect
+
+    if effect == PolicyEffect.CAP:
+        if kind not in ("spend", "service", "tokens", "execution"):
+            raise ValueError(
+                f"cap on {rule.target!r} is not enforceable; caps apply to "
+                "spend, service, tokens, or execution"
+            )
+        if kind in ("spend", "service"):
+            amount = params.get("amount_usd")
+            if amount is None:
+                raise ValueError(f"cap on {rule.target!r} requires 'amount_usd' in params")
+            # to_money coerces garbage to Decimal('0') instead of raising, so a
+            # non-numeric amount would silently compile to a $0 cap. Parse strictly
+            # here and reject anything Decimal cannot read.
+            try:
+                Decimal(str(amount))
+            except (InvalidOperation, ValueError, TypeError) as exc:
+                raise ValueError(
+                    f"cap on {rule.target!r} has a non-numeric 'amount_usd': {amount!r}"
+                ) from exc
+            if kind == "spend":
+                period = params.get("period", "month")
+                if period not in ("month", "run"):
+                    raise ValueError(f"spend cap period must be 'month' or 'run', got {period!r}")
+        elif kind == "tokens":
+            if "max_tokens" not in params and "max_tokens_per_call" not in params:
+                raise ValueError(
+                    "token cap requires 'max_tokens' or 'max_tokens_per_call' in params"
+                )
+        elif not any(
+            f in params
+            for f in ("max_model_turns", "max_tool_calls_per_turn", "max_tool_calls_total")
+        ):
+            raise ValueError(
+                "execution cap requires 'max_model_turns', 'max_tool_calls_per_turn', or "
+                "'max_tool_calls_total' in params"
+            )
+        return
+
+    if effect in (PolicyEffect.DENY, PolicyEffect.ALLOW):
+        if kind != "tool":
+            raise ValueError(
+                f"{effect.value} is only enforceable on a tool target (tool:<name>), "
+                f"not {rule.target!r}"
+            )
+        if value in (None, "*"):
+            raise ValueError(
+                f"{effect.value} requires a specific tool (tool:<name>), not a wildcard "
+                f"{rule.target!r}"
+            )
+        return
+
+    if effect == PolicyEffect.APPROVAL:
+        if kind == "all" or (kind == "tool" and (value == "*" or value)):
+            return
+        raise ValueError(
+            f"approval is enforceable on '*' (all tools) or tool:<name>, not {rule.target!r}"
+        )
+
+    if effect == PolicyEffect.SAFETY:
+        if kind != "content":
+            raise ValueError(f"safety is only enforceable on a content target, not {rule.target!r}")
+        if "prompt_injection" not in params and "output_sanitizer" not in params:
+            raise ValueError(
+                "safety on content requires 'prompt_injection' or 'output_sanitizer' in params"
+            )
+        return
+
+    if effect == PolicyEffect.EGRESS:
+        # Accepted as opaque data — core neither validates nor enforces egress.
+        # Enforcement is the enterprise EgressEnforcer at the container network
+        # boundary; core only stores and round-trips the rows for it to consume.
+        return
+
+    raise ValueError(f"effect {effect.value!r} on {rule.target!r} is not enforceable")
 
 
 class _DocumentAccumulator:

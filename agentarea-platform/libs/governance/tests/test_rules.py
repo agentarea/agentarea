@@ -8,6 +8,7 @@ from agentarea_governance.domain.rules import (
     PolicyEffect,
     PolicyRule,
     PolicySubjectType,
+    assert_enforceable,
     egress_allowlist_from_rules,
     parse_target,
     rules_to_document,
@@ -224,3 +225,82 @@ class TestEgressRules:
             )
             == {}
         )
+
+
+class TestAssertEnforceable:
+    """assert_enforceable must mirror the compiler: accept exactly what compiles
+    to a runtime effect (plus egress as opaque data core stores for enterprise),
+    and reject everything the compiler would silently skip — so the write API can
+    never 201 a rule that then never enforces (fail-open)."""
+
+    @pytest.mark.parametrize(
+        "target,effect,params",
+        [
+            ("tool:send_email", PolicyEffect.DENY, {}),
+            ("tool:web_fetch", PolicyEffect.ALLOW, {}),
+            ("spend", PolicyEffect.CAP, {"amount_usd": 10}),
+            ("spend", PolicyEffect.CAP, {"amount_usd": 5, "period": "run"}),
+            ("service", PolicyEffect.CAP, {"amount_usd": 3}),
+            ("tokens", PolicyEffect.CAP, {"max_tokens": 1000}),
+            ("tokens", PolicyEffect.CAP, {"max_tokens_per_call": 100}),
+            ("execution", PolicyEffect.CAP, {"max_model_turns": 10}),
+            ("*", PolicyEffect.APPROVAL, {}),
+            ("tool:*", PolicyEffect.APPROVAL, {}),
+            ("tool:send_email", PolicyEffect.APPROVAL, {}),
+            ("content", PolicyEffect.SAFETY, {"prompt_injection": True}),
+            ("content", PolicyEffect.SAFETY, {"output_sanitizer": True}),
+            ("mcp:github", PolicyEffect.EGRESS, {"allowed_hosts": ["*.github.com"]}),
+            ("mcp:github", PolicyEffect.EGRESS, {}),
+        ],
+    )
+    def test_accepts_enforceable_rules(self, target, effect, params):
+        assert_enforceable(_rule(target, effect, **params))
+
+    @pytest.mark.parametrize(
+        "target,effect,params",
+        [
+            ("tool:*", PolicyEffect.DENY, {}),
+            ("tool", PolicyEffect.DENY, {}),
+            ("tool:*", PolicyEffect.ALLOW, {}),
+            ("model:gpt-4", PolicyEffect.DENY, {}),
+            ("mcp:x", PolicyEffect.DENY, {}),
+            ("skill:x", PolicyEffect.ALLOW, {}),
+            ("tool:send_email", PolicyEffect.CAP, {}),
+            ("tokens", PolicyEffect.CAP, {}),
+            ("execution", PolicyEffect.CAP, {}),
+            ("spend", PolicyEffect.CAP, {}),
+            ("spend", PolicyEffect.CAP, {"amount_usd": "abc"}),
+            ("spend", PolicyEffect.CAP, {"amount_usd": 1, "period": "week"}),
+            ("model:x", PolicyEffect.APPROVAL, {}),
+            ("content", PolicyEffect.SAFETY, {}),
+            ("tool:x", PolicyEffect.SAFETY, {}),
+        ],
+    )
+    def test_rejects_unenforceable_rules(self, target, effect, params):
+        with pytest.raises(ValueError):
+            assert_enforceable(_rule(target, effect, **params))
+
+    def test_rejects_unknown_target_kind(self):
+        with pytest.raises(ValueError):
+            assert_enforceable(_rule("bogus:x", PolicyEffect.DENY))
+
+    def test_rejects_group_subject(self):
+        rule = PolicyRule(
+            subject_type=PolicySubjectType.GROUP,
+            subject_id="grp-a",
+            target="tool:send_email",
+            effect=PolicyEffect.DENY,
+        )
+        with pytest.raises(ValueError):
+            assert_enforceable(rule)
+
+    def test_rejects_condition(self):
+        rule = PolicyRule(
+            subject_type=PolicySubjectType.WORKSPACE,
+            subject_id="ws-a",
+            target="tool:send_email",
+            effect=PolicyEffect.DENY,
+            condition="request.time < 17",
+        )
+        with pytest.raises(ValueError):
+            assert_enforceable(rule)

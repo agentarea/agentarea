@@ -83,6 +83,16 @@ async def test_resolve_workspace_budget_cap(session_factory):
         assert len(effective.source_policy_ids) == 1
 
 
+async def test_resolve_rejects_empty_workspace_id(session_factory):
+    # A missing workspace_id must fail loudly, not silently resolve to an empty
+    # (allow-all) policy — that would be fail-open.
+    async with session_factory() as session:
+        context = _context()
+        resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
+        with pytest.raises(ValueError):
+            await resolver.resolve(workspace_id="")
+
+
 async def test_resolve_merges_workspace_and_agent_tighter_wins(session_factory):
     async with session_factory() as session:
         context = _context()
