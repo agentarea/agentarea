@@ -9,3 +9,12 @@ ${private_ip} ansible_user=root ansible_ssh_common_args='-o ProxyCommand="kubect
 
 [sandbox_hosts:vars]
 sandbox_region=${region}
+
+# Every service binds this address and nothing else. The host is reachable only
+# from the cluster VPC, and the provider still hands it a global IPv6, so binding
+# anything wider publishes it. Terraform writes these because it owns the address;
+# the deployment policy that goes with them is in group_vars/sandbox_hosts.yml.
+sandbox_mcp_dataplane_bind_address=${private_ip}
+opensandbox_bind_address=${private_ip}
+sandbox_ssh_listen_address=${private_ip}
+sandbox_mcp_dataplane_id=${private_ip}

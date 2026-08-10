@@ -41,6 +41,26 @@ ansible-playbook site.yml --check --diff --tags opensandbox
 ansible-playbook site.yml --tags opensandbox
 ```
 
+The MCP data plane is the manager binary in data-plane mode, installed from a
+local build rather than pulled, so the host needs no registry credentials:
+
+```bash
+# from the repository root, into the path group_vars/sandbox_hosts.yml expects
+mkdir -p deploy/sandbox-host/dist
+(cd agentarea-mcp-manager && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+  go build -buildvcs=false -o ../deploy/sandbox-host/dist/mcp-dataplane ./cmd/mcp-manager)
+
+cd deploy/sandbox-host
+ansible-playbook -i inventory.ini site.yml --tags mcp-dataplane \
+  -e sandbox_mcp_dataplane_auth_token="$MCP_DATAPLANE_TOKEN"   # same value mcp-manager sends
+```
+
+The token is the only input a run needs: what the host runs lives in
+`group_vars/sandbox_hosts.yml`, and the addresses come from the generated
+inventory. Passing values on the command line instead is how a run ends up with
+the role's conservative defaults — services bound to localhost, unreachable from
+the cluster.
+
 Then select the OpenSandbox adapter in both `mcp-manager` and
 `mcp-sandbox-runner`:
 

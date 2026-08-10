@@ -1,0 +1,24 @@
+---
+# What this host runs. Addresses are not here: Terraform writes them into the
+# generated inventory because it owns them.
+#
+# Without this file the role's own defaults apply, and those are deliberately
+# conservative -- services bind localhost and the TLS proxy is on -- so a run
+# that relied on remembered command-line flags would quietly leave the data plane
+# unreachable from the cluster. Recording the values here is what makes a run
+# reproducible.
+
+# MCP servers and agent sandboxes share this machine and its gVisor runtime.
+sandbox_mcp_dataplane_enabled: true
+opensandbox_enabled: true
+sandbox_runtime: runsc
+
+# No proxy, no certificate, no public hostname: the cluster reaches both services
+# over the VPC. Turn this back on only for a data plane outside the VPC.
+sandbox_tls_proxy_enabled: false
+
+# Built from this repository; see README. Kept out of git as a build artifact.
+sandbox_mcp_dataplane_binary_src: "{{ playbook_dir }}/dist/mcp-dataplane"
+
+# The shared token stays out of the repository. Pass it per run:
+#   ansible-playbook ... -e sandbox_mcp_dataplane_auth_token="$TOKEN"
