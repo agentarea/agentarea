@@ -194,3 +194,22 @@ func TestRetiringAnAlreadyRemovedContainerSucceeds(t *testing.T) {
 		t.Fatalf("removal was not attempted; runtime calls:\n%s", calls)
 	}
 }
+
+// A refusal has to name a cause the caller can act on, while the runtime\x27s own
+// text -- which can carry host paths and registry hints -- stays in the log.
+func TestRuntimeRefusalNamesTheCauseWithoutEchoingTheRuntime(t *testing.T) {
+	denied := []byte("Unable to find image locally\ndocker: Error response from daemon: pull access denied for reg.example.com/team/app, repository does not exist or may require \x27docker login\x27\n")
+	got := runtimeRefusal(denied)
+	if !strings.Contains(got, "no credentials") {
+		t.Fatalf("runtimeRefusal() = %q, want the missing-credential cause", got)
+	}
+	if strings.Contains(got, "reg.example.com") || strings.Contains(got, "team/app") {
+		t.Fatalf("runtimeRefusal() = %q, want no runtime text echoed to callers", got)
+	}
+	if got := runtimeRefusal([]byte("docker: Error response from daemon: Conflict. The container name \"/mcp-x\" is already in use by container \"abc\".")); !strings.Contains(got, "name") {
+		t.Fatalf("runtimeRefusal() = %q, want the name conflict named", got)
+	}
+	if got := runtimeRefusal(nil); got != "the runtime failed without output" {
+		t.Fatalf("runtimeRefusal(nil) = %q, want a stated absence", got)
+	}
+}

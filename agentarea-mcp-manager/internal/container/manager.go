@@ -218,7 +218,7 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 			slog.String("container", containerName),
 			slog.String("error", err.Error()),
 			slog.String("output", string(output)))
-		return nil, fmt.Errorf("failed to create container: %w", err)
+		return nil, fmt.Errorf("failed to create container: %s", runtimeRefusal(output))
 	}
 
 	// Get container ID from output
@@ -694,6 +694,38 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 	return nil
 }
 
+// runtimeRefusal classifies why a runtime would not create a container.
+//
+// The reason has to cross the API, because until it did the control plane showed
+// a bare exit status and the cause was visible only to whoever could read the
+// host journal. The runtime\x27s own text does not cross: it can carry host paths
+// and registry hints, and the caller can act on the class alone. The full output
+// stays in the error log next to this call.
+func runtimeRefusal(output []byte) string {
+	lowered := strings.ToLower(string(output))
+	switch {
+	case strings.Contains(lowered, "pull access denied"),
+		strings.Contains(lowered, "requested access to the resource is denied"),
+		strings.Contains(lowered, "authentication required"),
+		strings.Contains(lowered, "unauthorized"):
+		return "the image registry refused the pull; this host has no credentials for it"
+	case strings.Contains(lowered, "manifest unknown"),
+		strings.Contains(lowered, "not found"),
+		strings.Contains(lowered, "repository does not exist"):
+		return "the image does not exist in the registry"
+	case strings.Contains(lowered, "already in use by container"):
+		return "a container already holds this instance\x27s name"
+	case strings.Contains(lowered, "no space left on device"):
+		return "the host is out of disk"
+	case strings.Contains(lowered, "no such image"):
+		return "the image is not present on this host"
+	case len(strings.TrimSpace(lowered)) == 0:
+		return "the runtime failed without output"
+	default:
+		return "the runtime rejected the container; see the data-plane log for its output"
+	}
+}
+
 // containerAlreadyGone reports whether a runtime refused an operation because
 // the container does not exist. Runtimes disagree on the exit code for that, so
 // the message is what can be relied on.
@@ -994,7 +1026,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		container.Status = models.StatusError
 
 		// Publish failed status
-		errorMsg := fmt.Sprintf("Failed to create container: %v", err)
+		errorMsg := fmt.Sprintf("Failed to create container: %s", runtimeRefusal(output))
 		if publishErr := m.eventPublisher.PublishFailed(ctx, instanceID, name, errorMsg); publishErr != nil {
 			m.logger.Warn("Failed to publish failed status",
 				slog.String("instance_id", instanceID),
