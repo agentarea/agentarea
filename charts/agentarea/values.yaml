@@ -558,6 +558,13 @@ mcpManager:
   # or none do; a partial set stops the render rather than silently falling back
   # to running containers here.
   dataPlane:
+    # Plain HTTP to the data plane, for a hop that is already private -- a VPC or
+    # a tunnel. Every call still carries the shared token; this only waives the
+    # transport requirement, and the manager refuses to start without it rather
+    # than downgrading silently. Both the manager and the sandbox runner read it,
+    # because both talk to the data plane and either one failing closed takes MCP
+    # down.
+    allowInsecure: false
     # Base URL of the data plane, e.g. https://mcp-dp.example.com. Must be https
     # unless the hop is already private, since the token travels on it.
     url: ""

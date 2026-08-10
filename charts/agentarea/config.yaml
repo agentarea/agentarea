@@ -118,6 +118,7 @@ groups:
       # Where MCP containers run when BACKEND_TYPE is dataplane. Empty otherwise,
       # which the manager reads as "no data plane declared".
       MCP_DATAPLANE_URL: '{{ .Values.mcpManager.dataPlane.url | default "" }}'
+      MCP_DATAPLANE_ALLOW_INSECURE: '{{ .Values.mcpManager.dataPlane.allowInsecure | default false }}'
       KUBERNETES_ENABLED: 'true'
       KUBERNETES_NAMESPACE: '{{ .Release.Namespace }}'
       KUBERNETES_DOMAIN: '{{ .Values.mcpManager.domain | default "mcp.local" }}'

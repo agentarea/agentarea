@@ -10,6 +10,7 @@ SERVER_HOST: "0.0.0.0"
 SERVER_PORT: "80"
 BACKEND_TYPE: "{{ include "agentarea.mcpManager.backendType" . }}"
 MCP_DATAPLANE_URL: "{{ .Values.mcpManager.dataPlane.url | default "" }}"
+MCP_DATAPLANE_ALLOW_INSECURE: "{{ .Values.mcpManager.dataPlane.allowInsecure | default false }}"
 KUBERNETES_ENABLED: "true"
 KUBERNETES_NAMESPACE: "{{ .Release.Namespace }}"
 KUBERNETES_DOMAIN: "{{ .Values.mcpManager.domain | default "mcp.local" }}"
@@ -71,6 +72,11 @@ MCP_GATEWAY_STARTUP_TIMEOUT: "{{ .Values.mcpManager.serverless.startupTimeout }}
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-mcpmanager
       key: MCP_DATAPLANE_URL
+- name: MCP_DATAPLANE_ALLOW_INSECURE
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-mcpmanager
+      key: MCP_DATAPLANE_ALLOW_INSECURE
 - name: KUBERNETES_ENABLED
   valueFrom:
     configMapKeyRef:
