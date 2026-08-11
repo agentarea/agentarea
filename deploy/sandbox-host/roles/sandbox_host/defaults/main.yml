@@ -62,6 +62,11 @@ opensandbox_max_timeout_seconds: 21600
 opensandbox_api_key: "{{ lookup('ansible.builtin.env', 'OPENSANDBOX_API_KEY') }}"
 # Only these source CIDRs may reach the OpenSandbox HTTPS API. Port 80 remains
 # available for ACME HTTP-01 renewal; it does not proxy the API in plaintext.
+# Sources allowed over IPv6. Empty on purpose: the control plane reaches this
+# host on its private IPv4 address, so every IPv6 route to a guarded port is
+# closed rather than left to whatever the provider assigns.
+opensandbox_control_plane_cidrs_v6: []
+
 opensandbox_control_plane_cidrs:
   - "194.87.187.68/32"
 

@@ -29,7 +29,7 @@ printf '%s\n' "$*" >> "$STUB_LOG"
 if [ "$1" = "inspect" ]; then
   case "$4" in
     *State.Running*)
-      if [ -n "$STUB_RUNNING" ]; then printf '%s\n' "$STUB_RUNNING"; fi
+      if [ -n "$STUB_RUNNING" ]; then printf '%s %s\n' "$STUB_RUNNING" "$STUB_OWNER"; fi
       exit "${STUB_INSPECT_RC:-0}" ;;
     *NetworkSettings.Networks*)
       printf '%s' "$STUB_NETWORK_IP"
@@ -150,6 +150,7 @@ func TestCreateContainerRemovesAContainerThatExitedAndKeepsItsOutput(t *testing.
 	runtime, logPath := stubRuntime(t)
 	t.Setenv("STUB_STATUS", "exited")
 	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "inst-exits")
 	t.Setenv("STUB_LOGS", "Terraform MCP Server running on stdio")
 
 	var recorded bytes.Buffer
@@ -220,6 +221,8 @@ func TestRunArgsPreferTheCeilingTheWorkloadAskedFor(t *testing.T) {
 // before the runtime is invoked, so one request cannot take the machine.
 func TestCreateContainerRefusesACeilingAboveTheHostMaximum(t *testing.T) {
 	runtime, logPath := stubRuntime(t)
+	// No container answers to these names: the ordinary case for a fresh create.
+	t.Setenv("STUB_INSPECT_RC", "1")
 	config := testConfig(runtime)
 	config.Container.DefaultMemoryLimit = "512m"
 	config.Container.DefaultCPULimit = "1.0"
@@ -255,15 +258,70 @@ func TestCreateContainerRefusesACeilingAboveTheHostMaximum(t *testing.T) {
 	}
 }
 
+// Runtime names come from lossy sanitization, so two services can produce one
+// name. Reclaiming a name therefore has to be bound to who owns it: a corpse
+// created for something else -- another service, or a container placed here by
+// hand -- is reported, never removed.
+func TestACorpseOwnedBySomethingElseIsNotRemoved(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "someone-else")
+
+	manager := &Manager{config: testConfig(runtime), logger: discardLogger()}
+	err := manager.clearContainerName(context.Background(), "mcp-instance", "instance-1")
+	if err == nil {
+		t.Fatal("clearContainerName() error = nil, want the foreign container left alone")
+	}
+	if calls := stubCalls(t, logPath); strings.Contains(calls, "rm -f") {
+		t.Fatalf("a container owned by something else was removed:\n%s", calls)
+	}
+}
+
+// An unlabelled container predates ownership or was made by hand; either way it
+// is not this instance's to delete.
+func TestAnUnlabelledCorpseIsNotRemoved(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "")
+
+	manager := &Manager{config: testConfig(runtime), logger: discardLogger()}
+	if err := manager.clearContainerName(context.Background(), "mcp-instance", "instance-1"); err == nil {
+		t.Fatal("clearContainerName() error = nil, want an unowned container left alone")
+	}
+	if calls := stubCalls(t, logPath); strings.Contains(calls, "rm -f") {
+		t.Fatalf("an unlabelled container was removed:\n%s", calls)
+	}
+}
+
+// A workload is handed resolved secrets, and third-party startup code prints
+// them. The diagnostic that explains a failed start must not copy them into the
+// host's logs.
+func TestFailureOutputDropsTheSecretsTheWorkloadWasGiven(t *testing.T) {
+	redacted := redactEnvironment(
+		"connecting with sk-live-6f2b91c4aa77 and short=abc",
+		map[string]string{"API_KEY": "sk-live-6f2b91c4aa77", "MODE": "abc"},
+	)
+	if strings.Contains(redacted, "sk-live-6f2b91c4aa77") {
+		t.Fatalf("the secret survived redaction: %s", redacted)
+	}
+	if !strings.Contains(redacted, "[redacted API_KEY]") {
+		t.Fatalf("redaction did not name the key it removed: %s", redacted)
+	}
+	if !strings.Contains(redacted, "short=abc") {
+		t.Fatalf("a short value was treated as a secret and shredded the message: %s", redacted)
+	}
+}
+
 // A dead container keeps its name, and the runtime refuses to reuse it. Without
 // removing it first, every later attempt for that instance fails on the name
 // rather than on whatever stopped the workload.
 func TestStaleNamesakeIsRemoved(t *testing.T) {
 	runtime, logPath := stubRuntime(t)
 	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "instance-1")
 
 	manager := &Manager{config: testConfig(runtime), logger: discardLogger()}
-	if err := manager.clearContainerName(context.Background(), "mcp-instance"); err != nil {
+	if err := manager.clearContainerName(context.Background(), "mcp-instance", "instance-1"); err != nil {
 		t.Fatalf("clearContainerName() error = %v, want the corpse removed", err)
 	}
 
@@ -275,9 +333,10 @@ func TestStaleNamesakeIsRemoved(t *testing.T) {
 func TestRunningNamesakeIsReportedNotKilled(t *testing.T) {
 	runtime, logPath := stubRuntime(t)
 	t.Setenv("STUB_RUNNING", "true")
+	t.Setenv("STUB_OWNER", "instance-1")
 
 	manager := &Manager{config: testConfig(runtime), logger: discardLogger()}
-	if err := manager.clearContainerName(context.Background(), "mcp-instance"); err == nil {
+	if err := manager.clearContainerName(context.Background(), "mcp-instance", "instance-1"); err == nil {
 		t.Fatal("clearContainerName() error = nil, want a running namesake reported")
 	}
 
@@ -291,7 +350,7 @@ func TestAbsentNameNeedsNoWork(t *testing.T) {
 	t.Setenv("STUB_INSPECT_RC", "1")
 
 	manager := &Manager{config: testConfig(runtime), logger: discardLogger()}
-	if err := manager.clearContainerName(context.Background(), "mcp-instance"); err != nil {
+	if err := manager.clearContainerName(context.Background(), "mcp-instance", "instance-1"); err != nil {
 		t.Fatalf("clearContainerName() error = %v, want a free name accepted", err)
 	}
 

@@ -22,3 +22,23 @@ iptables -A "$CHAIN" -j RETURN
 
 iptables -C INPUT -j "$CHAIN" 2>/dev/null ||
   iptables -I INPUT 1 -j "$CHAIN"
+
+# The same policy over IPv6. The provider hands these hosts a globally routable
+# IPv6 address whether or not anything is bound to it, so a v4-only chain guards
+# the front door and leaves the back one open the moment a service -- the TLS
+# proxy runs with host networking -- listens on both families.
+if command -v ip6tables >/dev/null 2>&1; then
+  ip6tables -N "$CHAIN" 2>/dev/null || true
+  ip6tables -F "$CHAIN"
+  ip6tables -A "$CHAIN" -s ::1/128 -j RETURN
+{% for port in opensandbox_guarded_ports %}
+{% for cidr in opensandbox_control_plane_cidrs_v6 %}
+  ip6tables -A "$CHAIN" -p tcp -s {{ cidr }} --dport {{ port }} -j RETURN
+{% endfor %}
+  ip6tables -A "$CHAIN" -p tcp --dport {{ port }} -j DROP
+{% endfor %}
+  ip6tables -A "$CHAIN" -j RETURN
+
+  ip6tables -C INPUT -j "$CHAIN" 2>/dev/null ||
+    ip6tables -I INPUT 1 -j "$CHAIN"
+fi

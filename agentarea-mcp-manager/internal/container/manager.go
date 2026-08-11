@@ -211,7 +211,7 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 	}
 
 	// A leftover container from an earlier attempt holds the name this run needs.
-	if err := m.clearContainerName(ctx, container.Name); err != nil {
+	if err := m.clearContainerName(ctx, container.Name, container.ServiceName); err != nil {
 		return nil, err
 	}
 
@@ -244,8 +244,8 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		m.logger.Error("Container exited before it could serve",
 			slog.String("container", containerName),
 			slog.String("id", container.ID),
-			slog.String("output", m.containerOutput(ctx, container.ID)))
-		if reapErr := m.clearContainerName(ctx, container.Name); reapErr != nil {
+			slog.String("output", m.containerOutput(ctx, container)))
+		if reapErr := m.clearContainerName(ctx, container.Name, container.ServiceName); reapErr != nil {
 			m.logger.Warn("Could not remove the container that failed to start",
 				slog.String("container", containerName),
 				slog.String("error", reapErr.Error()))
@@ -753,13 +753,32 @@ func runtimeRefusal(output []byte) string {
 // reaches the caller as "the process is gone"; the reason is in the process's own
 // output, so it belongs in the data-plane log -- otherwise the only way to learn
 // that a server refused its arguments is to reproduce it by hand on the host.
-func (m *Manager) containerOutput(ctx context.Context, id string) string {
-	output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "logs", "--tail", "20", id).CombinedOutput()
+func (m *Manager) containerOutput(ctx context.Context, container *models.Container) string {
+	output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "logs", "--tail", "20", container.ID).CombinedOutput()
 	trimmed := strings.TrimSpace(string(output))
 	if err != nil && trimmed == "" {
 		return "no output could be read: " + err.Error()
 	}
-	return trimmed
+	return redactEnvironment(trimmed, container.Environment)
+}
+
+// redactEnvironment removes the values this container was given from text about
+// to be logged. An MCP server receives resolved secrets in its environment and
+// third-party startup code prints them freely, so the diagnostic that explains a
+// failed start must not become a second copy of the secret store.
+func redactEnvironment(text string, environment map[string]string) string {
+	for key, value := range environment {
+		// Short values are words, not credentials, and replacing them would
+		// shred the message they appear in.
+		if len(value) < 8 {
+			continue
+		}
+		text = strings.ReplaceAll(text, value, "[redacted "+key+"]")
+	}
+	if len(text) > 4000 {
+		text = text[:4000] + " [truncated]"
+	}
+	return text
 }
 
 // enforceResourceCeiling rejects a workload asking for more than this host
@@ -833,6 +852,10 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+// ownerLabel records which service a container was created for, so a name can
+// only be reclaimed by the workload that owns it.
+const ownerLabel = "ai.agentarea.service"
+
 // containerAlreadyGone reports whether a runtime refused an operation because
 // the container does not exist. Runtimes disagree on the exit code for that, so
 // the message is what can be relied on.
@@ -849,15 +872,24 @@ func containerAlreadyGone(output []byte) bool {
 // already in use" failure which hid the original start error and left the
 // instance id unusable for good. A *running* namesake is a different situation
 // -- something is actively serving under it -- so it is reported, not killed.
-func (m *Manager) clearContainerName(ctx context.Context, name string) error {
-	state, err := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", name, "--format", "{{.State.Running}}").Output()
+func (m *Manager) clearContainerName(ctx context.Context, name, owner string) error {
+	format := "{{.State.Running}} {{index .Config.Labels \"" + ownerLabel + "\"}}"
+	state, err := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", name, "--format", format).Output()
 	if err != nil {
 		// Nothing answers to that name. This is the ordinary case.
 		return nil
 	}
 
-	if strings.TrimSpace(string(state)) == "true" {
+	running, found := strings.CutSuffix(strings.TrimSpace(string(state)), owner)
+	if strings.TrimSpace(running) == "true" {
 		return fmt.Errorf("container %s is already running", name)
+	}
+
+	// A corpse under this name that this instance did not create is somebody
+	// else's: a different service whose name sanitized to the same string, or a
+	// container placed here by hand. Report it rather than reclaim it.
+	if !found {
+		return fmt.Errorf("container %s exists and was not created for %s", name, owner)
 	}
 
 	if output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "rm", "-f", name).CombinedOutput(); err != nil {
@@ -886,6 +918,11 @@ func (m *Manager) buildContainerRunArgs(container *models.Container) []string {
 	for key, value := range container.Environment {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
 	}
+
+	// Who this container belongs to. Names are derived by lossy sanitization, so
+	// two services can produce one runtime name; without an owner recorded here,
+	// reclaiming a name by name alone can take a different workload's container.
+	args = append(args, "--label", fmt.Sprintf("%s=%s", ownerLabel, container.ServiceName))
 
 	// Add user-supplied labels
 	for key, value := range container.Labels {
@@ -1121,7 +1158,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 
 	// The name has to be free before the run, or the retry that follows a failed
 	// start reports a name conflict instead of the reason the start failed.
-	if err := m.clearContainerName(ctx, containerName); err != nil {
+	if err := m.clearContainerName(ctx, containerName, container.ServiceName); err != nil {
 		container.Status = models.StatusError
 		return err
 	}
