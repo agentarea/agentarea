@@ -189,6 +189,31 @@ func TestCreateContainerRemovesAContainerThatExitedAndKeepsItsOutput(t *testing.
 	}
 }
 
+// The ceiling a caller asked for is the one the runtime enforces. These values
+// were accepted at the API, carried through the backend, and then dropped when the
+// run was assembled, so every container silently ran on the host-wide default.
+func TestRunArgsPreferTheCeilingTheWorkloadAskedFor(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+	config := testConfig(runtime)
+	config.Container.DefaultMemoryLimit = "512m"
+	config.Container.DefaultCPULimit = "1.0"
+	manager := &Manager{config: config, logger: discardLogger(), containers: map[string]*models.Container{}}
+
+	asked := strings.Join(manager.buildContainerRunArgs(&models.Container{
+		Name: "asked", Image: "vendor/mcp:1.0", MemoryLimit: "2g", CPULimit: "2.0",
+	}), " ")
+	if !strings.Contains(asked, "--memory 2g") || !strings.Contains(asked, "--cpus 2.0") {
+		t.Fatalf("run args ignored the requested ceiling: %s", asked)
+	}
+
+	silent := strings.Join(manager.buildContainerRunArgs(&models.Container{
+		Name: "silent", Image: "vendor/mcp:1.0",
+	}), " ")
+	if !strings.Contains(silent, "--memory 512m") || !strings.Contains(silent, "--cpus 1.0") {
+		t.Fatalf("run args dropped the host default: %s", silent)
+	}
+}
+
 // A dead container keeps its name, and the runtime refuses to reuse it. Without
 // removing it first, every later attempt for that instance fails on the name
 // rather than on whatever stopped the workload.

@@ -150,6 +150,17 @@ sandbox_mcp_dataplane_network: "agentarea-mcp"
 # Confinement for spawned MCP instances. untrusted resolves to gVisor, which is
 # the reason this host exists.
 sandbox_mcp_dataplane_isolation_tier: "untrusted"
+
+# What one MCP instance may take, and how many may exist at once. The manager
+# applies these to every container it starts; without them stated here they live
+# only as defaults inside the binary, invisible to whoever runs this host.
+#
+# The cap is deliberately far below memory/limit arithmetic: agent sandboxes run
+# on the same machine and are the reason it exists, so MCP servers get a slice,
+# not the box. Raise it with the host, not with hope.
+sandbox_mcp_dataplane_instance_memory: "512m"
+sandbox_mcp_dataplane_instance_cpus: "1.0"
+sandbox_mcp_dataplane_max_instances: 8
 sandbox_mcp_dataplane_log_level: "INFO"
 # TLS hostname, e.g. mcp-dp.203-0-113-10.sslip.io. No default: a wrong one gets
 # a certificate for a name nobody uses.

@@ -193,6 +193,8 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		Environment: req.Environment,
 		Command:     req.Command,
 		Isolation:   req.Isolation,
+		MemoryLimit: req.MemoryLimit,
+		CPULimit:    req.CPULimit,
 	}
 
 	// Refuse rather than silently downgrade: starting third-party code without
@@ -753,6 +755,16 @@ func (m *Manager) containerOutput(ctx context.Context, id string) string {
 	return trimmed
 }
 
+// firstNonEmpty returns the first value that was actually set.
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 // containerAlreadyGone reports whether a runtime refused an operation because
 // the container does not exist. Runtimes disagree on the exit code for that, so
 // the message is what can be relied on.
@@ -817,13 +829,16 @@ func (m *Manager) buildContainerRunArgs(container *models.Container) []string {
 	// control plane.
 	args = append(args, isolationRunArgs(container.Isolation)...)
 
-	// Add default resource limits
-	if m.config.Container.DefaultMemoryLimit != "" {
-		args = append(args, "--memory", m.config.Container.DefaultMemoryLimit)
+	// What this workload may take. The request wins over the host default: the
+	// ceiling belongs to the workload, and a caller that sizes one instance
+	// differently -- a paid tier, a heavy server -- had its value accepted and
+	// then dropped here, so every container ran on the one host-wide number.
+	if memory := firstNonEmpty(container.MemoryLimit, m.config.Container.DefaultMemoryLimit); memory != "" {
+		args = append(args, "--memory", memory)
 	}
 
-	if m.config.Container.DefaultCPULimit != "" {
-		args = append(args, "--cpus", m.config.Container.DefaultCPULimit)
+	if cpus := firstNonEmpty(container.CPULimit, m.config.Container.DefaultCPULimit); cpus != "" {
+		args = append(args, "--cpus", cpus)
 	}
 
 	// Add image

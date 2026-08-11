@@ -280,6 +280,30 @@ func TestConvertToInstanceSpecCommandTypeStillCarriesArgs(t *testing.T) {
 	}
 }
 
+// A per-instance ceiling from the control plane reaches the backend. Without it
+// the host default is the only ceiling, so every workspace gets the same slice of
+// the machine no matter what its plan says.
+func TestConvertToInstanceSpecCarriesAPerInstanceCeiling(t *testing.T) {
+	p := newTestBackendProvider()
+
+	spec := p.convertToInstanceSpec(&models.MCPServerInstance{
+		InstanceID: "inst-limits",
+		Name:       "heavy",
+		JSONSpec: map[string]interface{}{
+			"type":  "docker",
+			"image": "vendor/mcp:1.0",
+			"port":  float64(8080),
+			"resources": map[string]interface{}{
+				"limits": map[string]interface{}{"memory": "2g", "cpu": "2.0"},
+			},
+		},
+	})
+
+	if spec.Resources.Limits.Memory != "2g" || spec.Resources.Limits.CPU != "2.0" {
+		t.Fatalf("limits = %q/%q, want 2g/2.0", spec.Resources.Limits.Memory, spec.Resources.Limits.CPU)
+	}
+}
+
 // The provider must not decide the isolation tier. Pinning "untrusted" here
 // asked every MCP pod for a syscall-interposing RuntimeClass; on a cluster
 // without one the pod stayed Pending, the gateway's cold start timed out, and

@@ -211,6 +211,20 @@ func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstan
 		spec.Command = dockerArgv(jsonSpec)
 	}
 
+	// A per-instance ceiling, when the control plane sets one. Without this the
+	// host default is the only ceiling there is, so every workspace and every plan
+	// gets the same slice of the machine.
+	if resources, ok := jsonSpec["resources"].(map[string]any); ok {
+		if limits, ok := resources["limits"].(map[string]any); ok {
+			if memory, ok := limits["memory"].(string); ok {
+				spec.Resources.Limits.Memory = memory
+			}
+			if cpu, ok := limits["cpu"].(string); ok {
+				spec.Resources.Limits.CPU = cpu
+			}
+		}
+	}
+
 	// Extract environment variables
 	if envInterface, exists := instance.JSONSpec["environment"]; exists {
 		if envMap, ok := envInterface.(map[string]any); ok {
