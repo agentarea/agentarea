@@ -420,6 +420,41 @@ func TestANameConflictLeavesNothingBehindToBlockTheRetry(t *testing.T) {
 	}
 }
 
+// A crash between the run and its cleanup leaves a stopped container that startup
+// discovery adopts. Refusing on that record alone answered every retry with
+// "already exists" and left the instance dead until somebody removed the container
+// by hand, so a record for something that is not running is reclaimed instead.
+func TestAStoppedRecordDoesNotStrandTheInstance(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "svc")
+	t.Setenv("STUB_STATUS", "running")
+
+	manager := &Manager{config: testConfig(runtime), logger: discardLogger(),
+		containers: map[string]*models.Container{
+			"svc": {Name: "svc", ServiceName: "svc", Status: models.StatusError},
+		}}
+
+	if _, err := manager.CreateContainer(context.Background(), models.CreateContainerRequest{
+		ServiceName: "svc", Image: "vendor/mcp:1.0", Port: 8080,
+	}); err != nil {
+		t.Fatalf("CreateContainer() error = %v, want the stopped record reclaimed", err)
+	}
+
+	if calls := stubCalls(t, logPath); !strings.Contains(calls, "rm -f") {
+		t.Fatalf("the stopped container was never removed:\n%s", calls)
+	}
+
+	// A container that is actually serving is still protected.
+	t.Setenv("STUB_RUNNING", "true")
+	manager.containers["busy"] = &models.Container{Name: "busy", ServiceName: "busy", Status: models.StatusRunning}
+	if _, err := manager.CreateContainer(context.Background(), models.CreateContainerRequest{
+		ServiceName: "busy", Image: "vendor/mcp:1.0", Port: 8080,
+	}); err == nil {
+		t.Fatal("CreateContainer() error = nil, want a running namesake protected")
+	}
+}
+
 // A dead container keeps its name, and the runtime refuses to reuse it. Without
 // removing it first, every later attempt for that instance fails on the name
 // rather than on whatever stopped the workload.

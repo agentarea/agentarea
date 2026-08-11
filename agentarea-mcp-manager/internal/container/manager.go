@@ -162,8 +162,10 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 	defer m.mutex.Unlock()
 
 	// Check if container already exists
-	if _, exists := m.containers[req.ServiceName]; exists {
-		return nil, fmt.Errorf("container %s already exists", req.ServiceName)
+	if existing, exists := m.containers[req.ServiceName]; exists {
+		if err := m.reclaimStoppedRecord(ctx, existing, req.ServiceName); err != nil {
+			return nil, err
+		}
 	}
 
 	// Generate container name using the sanitized service name
@@ -749,6 +751,33 @@ func runtimeRefusal(output []byte) string {
 	}
 }
 
+// reclaimStoppedRecord clears a record for a workload that is not running, so the
+// instance can start again.
+//
+// Discovery adopts stopped containers on startup, and a crash between the run and
+// its cleanup leaves exactly that: a stopped container this service owns, adopted
+// into the registry. Refusing on the record alone made every retry answer "already
+// exists" and left the instance dead until somebody removed the container by hand.
+// The container is only removed when it is stopped and carries this service's owner
+// label; anything else is reported.
+func (m *Manager) reclaimStoppedRecord(ctx context.Context, existing *models.Container, serviceName string) error {
+	if existing.Status == models.StatusRunning || existing.Status == models.StatusHealthy || existing.Status == models.StatusStarting {
+		return fmt.Errorf("container %s already exists in state %s", serviceName, existing.Status)
+	}
+
+	if err := m.clearContainerName(ctx, m.config.GetContainerName(serviceName), serviceName); err != nil {
+		return fmt.Errorf("container %s exists in state %s and cannot be reclaimed: %w",
+			serviceName, existing.Status, err)
+	}
+
+	m.logger.Info("Reclaimed a stopped container so its instance can start again",
+		slog.String("service", serviceName),
+		slog.String("previous_status", string(existing.Status)))
+	delete(m.containers, serviceName)
+
+	return nil
+}
+
 // enforceResourceCeiling rejects a workload asking for more than this host allows.
 // The limits travel with the instance spec, which is caller input all the way from
 // the platform API, so the data plane cannot treat them as trusted: without this,
@@ -1163,7 +1192,9 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		if existing.Status == models.StatusRunning || existing.Status == models.StatusHealthy || existing.Status == models.StatusStarting {
 			return nil
 		}
-		return fmt.Errorf("container %s already exists in state %s", name, existing.Status)
+		if err := m.reclaimStoppedRecord(ctx, existing, name); err != nil {
+			return err
+		}
 	}
 
 	// Check container limit
