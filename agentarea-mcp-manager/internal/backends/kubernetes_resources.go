@@ -110,16 +110,24 @@ func ceilingWithin(allowed, requested config.ResourceRequirements) error {
 		corev1.ResourceMemory: {requested.Memory, allowed.Memory},
 	} {
 		want, ceiling := pair[0], pair[1]
-		if want == "" || ceiling == "" {
+		if want == "" {
 			continue
 		}
 		wantQuantity, err := resource.ParseQuantity(want)
 		if err != nil {
 			return fmt.Errorf("%s %q is not a valid quantity: %w", name, want, err)
 		}
+		// A limit was asked for and the deployment cannot say what it allows. The
+		// safe reading of a missing or unusable ceiling is "not this", not
+		// "anything": otherwise one bad configuration value silently returns the
+		// decision to whoever fills in the spec.
+		if ceiling == "" {
+			return fmt.Errorf("no %s ceiling is configured, refusing the requested %s", name, want)
+		}
 		ceilingQuantity, err := resource.ParseQuantity(ceiling)
 		if err != nil {
-			continue
+			return fmt.Errorf("configured %s ceiling %q is unusable, refusing the requested %s: %w",
+				name, ceiling, want, err)
 		}
 		if wantQuantity.Cmp(ceilingQuantity) > 0 {
 			return fmt.Errorf("requested %s %s exceeds the %s this deployment allows", name, want, ceiling)
