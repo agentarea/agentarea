@@ -195,51 +195,42 @@ The legacy executor still uses one long-lived shared container and exists only
 for rollback during the migration. Do not treat it as the target isolation
 model.
 
-## Provisioning the box (Terraform)
+## Provisioning the box
 
-`terraform/` owns the machine itself; everything above owns what runs on it. The
-split is the point: a rebuilt host is a `terraform apply` plus a playbook run,
-with no hand-made state in between.
+The machine is not defined here. Cloud resources for it live with the network
+they attach to, in the infrastructure repo:
+
+```
+infrastructure/environments/production/timeweb-ru-sandbox
+```
+
+That root creates the server, puts it on the cluster VPC, and generates the
+inventory next to the `group_vars/` for that environment. This repo keeps only
+what is reusable: the role, its defaults, and the data-plane binary the role
+installs -- so a host change and the code change that needs it stay in one
+commit here, while addresses and per-environment policy stay there.
+
+Adding the machine to Terraform was a known gap in that repo, recorded in its
+`AGENTS.md`; it is now filled.
 
 ```bash
-cd deploy/sandbox-host/terraform
+# 1. the box, from the infrastructure repo
+cd infrastructure/environments/production/timeweb-ru-sandbox
 cp .envrc.example .envrc                 # TWC_TOKEN, never in tfvars
-cp terraform.tfvars.example terraform.tfvars
-terraform init && terraform apply
-cd .. && ansible-playbook -i inventory.ini site.yml ...
+terraform init && terraform apply        # writes inventory.ini here
+
+# 2. what runs on it, from this repo
+cd agentarea/deploy/sandbox-host
+ansible-playbook \
+  -i ../../../infrastructure/environments/production/timeweb-ru-sandbox/inventory.ini \
+  site.yml --tags mcp-dataplane \
+  -e sandbox_mcp_dataplane_auth_token="$MCP_DATAPLANE_TOKEN"
 ```
 
-Three decisions worth knowing before you change them:
+Ansible reads `group_vars/` relative to the inventory, so pointing `-i` at that
+file is what supplies the environment's values. A run needs one secret: the
+shared data-plane token, the same value `mcp-manager` sends.
 
-- **The public address is a `twc_floating_ip`, not the server's own IP.** Every
-  URL the control plane holds for this host is derived from the address
-  (`mcp-dp.<ip>.sslip.io`, `opensandbox.<ip>.sslip.io`) and so are both
-  certificates. A server-bound address dies with the server, which made every
-  rebuild a coordinated rename across the RU values. The floating address
-  outlives the server, so a rebuild is invisible to the control plane.
-- **The host joins the cluster VPC** (`vpc_network_id`, egress-only NAT). It
-  needs no private address to serve MCP, but being on the network is what lets
-  it pull from an in-region registry later without holding registry credentials
-  — this machine runs untrusted code, so every credential it does not have is a
-  credential that cannot leak.
-- **`inventory.ini` is generated.** The playbook can then never point at a host
-  Terraform no longer owns.
-
-State lives in an S3 bucket with locking, not on whoever applied last:
-
-```bash
-cd terraform/bootstrap                  # creates the bucket and its own S3 user
-terraform init && terraform apply -var s3_preset_id=<id>
-cd .. && cp backend.tfbackend.example backend.tfbackend   # fill from the outputs
-export AWS_ACCESS_KEY_ID=$(cd bootstrap && terraform output -raw access_key)
-export AWS_SECRET_ACCESS_KEY=$(cd bootstrap && terraform output -raw secret_key)
-terraform init -backend-config=backend.tfbackend [-migrate-state]
-```
-
-`bootstrap/` is deliberately the one root with local state: a root cannot keep
-its state in the bucket it is creating. It owns two resources and is applied
-once, so a lost state there is recovered by importing them — unlike the state
-that describes a running machine, which is why that one is shared and locked.
 
 ## Note on repo placement
 
