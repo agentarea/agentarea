@@ -245,7 +245,7 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 			slog.String("container", containerName),
 			slog.String("id", container.ID),
 			slog.String("output", m.containerOutput(ctx, container)))
-		if reapErr := m.clearContainerName(ctx, container.Name, container.ServiceName); reapErr != nil {
+		if reapErr := m.removeContainerByID(ctx, container.ID); reapErr != nil {
 			m.logger.Warn("Could not remove the container that failed to start",
 				slog.String("container", containerName),
 				slog.String("error", reapErr.Error()))
@@ -852,6 +852,17 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+// removeContainerByID force-removes one container by id. Reclaiming by name is
+// ownership-checked; by id there is nothing to confuse, because the id came from
+// the run that just failed.
+func (m *Manager) removeContainerByID(ctx context.Context, id string) error {
+	output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "rm", "-f", id).CombinedOutput()
+	if err != nil && !containerAlreadyGone(output) {
+		return fmt.Errorf("removing container %s: %w: %s", id, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
 // ownerLabel records which service a container was created for, so a name can
 // only be reclaimed by the workload that owns it.
 const ownerLabel = "ai.agentarea.service"
@@ -873,14 +884,16 @@ func containerAlreadyGone(output []byte) bool {
 // instance id unusable for good. A *running* namesake is a different situation
 // -- something is actively serving under it -- so it is reported, not killed.
 func (m *Manager) clearContainerName(ctx context.Context, name, owner string) error {
-	format := "{{.State.Running}} {{index .Config.Labels \"" + ownerLabel + "\"}}"
+	// Two fields, read apart and compared exactly. Matching a suffix would let a
+	// name that merely ends in the owner's pass for the owner's own.
+	format := "{{.State.Running}}\x1f{{index .Config.Labels \"" + ownerLabel + "\"}}"
 	state, err := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", name, "--format", format).Output()
 	if err != nil {
 		// Nothing answers to that name. This is the ordinary case.
 		return nil
 	}
 
-	running, found := strings.CutSuffix(strings.TrimSpace(string(state)), owner)
+	running, recordedOwner, _ := strings.Cut(strings.TrimSpace(string(state)), "\x1f")
 	if strings.TrimSpace(running) == "true" {
 		return fmt.Errorf("container %s is already running", name)
 	}
@@ -888,7 +901,7 @@ func (m *Manager) clearContainerName(ctx context.Context, name, owner string) er
 	// A corpse under this name that this instance did not create is somebody
 	// else's: a different service whose name sanitized to the same string, or a
 	// container placed here by hand. Report it rather than reclaim it.
-	if !found {
+	if strings.TrimSpace(recordedOwner) != owner {
 		return fmt.Errorf("container %s exists and was not created for %s", name, owner)
 	}
 
@@ -919,15 +932,20 @@ func (m *Manager) buildContainerRunArgs(container *models.Container) []string {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
 	}
 
+	// Add user-supplied labels. The owner label is reserved: a caller that could
+	// set it would be naming itself the owner of somebody else's container.
+	for key, value := range container.Labels {
+		if key == ownerLabel {
+			continue
+		}
+		args = append(args, "--label", fmt.Sprintf("%s=%s", key, value))
+	}
+
 	// Who this container belongs to. Names are derived by lossy sanitization, so
 	// two services can produce one runtime name; without an owner recorded here,
 	// reclaiming a name by name alone can take a different workload's container.
+	// Written last so it wins over any duplicate that slipped through.
 	args = append(args, "--label", fmt.Sprintf("%s=%s", ownerLabel, container.ServiceName))
-
-	// Add user-supplied labels
-	for key, value := range container.Labels {
-		args = append(args, "--label", fmt.Sprintf("%s=%s", key, value))
-	}
 
 	// Add isolation flags. MCP servers are third-party code; without these the
 	// container runs with the daemon's full default capability set next to the
@@ -1201,6 +1219,21 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 				slog.String("instance_id", instanceID),
 				slog.String("error", publishErr.Error()))
 		}
+
+		// Same reclaim as the direct path, for the same reason: the caller gets an
+		// error and no handle, so nothing else can remove this container or forget
+		// the record. Left in place, the corpse holds the name and the error record
+		// answers every retry, which made a single failed start permanent.
+		m.logger.Error("Container exited before it could serve",
+			slog.String("container", containerName),
+			slog.String("instance_id", instanceID),
+			slog.String("output", m.containerOutput(ctx, container)))
+		if reapErr := m.removeContainerByID(ctx, container.ID); reapErr != nil {
+			m.logger.Warn("Could not remove the container that failed to start",
+				slog.String("container", containerName),
+				slog.String("error", reapErr.Error()))
+		}
+		delete(m.containers, name)
 
 		return fmt.Errorf("container failed to start: %w", err)
 	}

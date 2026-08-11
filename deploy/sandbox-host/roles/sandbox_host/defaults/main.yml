@@ -231,6 +231,11 @@ sandbox_vpc_interface: "eth1"
 # Empty leaves sshd as the image configured it.
 sandbox_ssh_listen_address: ""
 
+# Keep the image's sshd listeners on purpose, including the provider's public
+# IPv6. Only for a host that is genuinely managed from the internet; the private
+# hosts this role targets set sandbox_ssh_listen_address instead.
+sandbox_public_management: false
+
 # Where the OpenSandbox server listens, and which port the inbound firewall
 # guards. Loopback plus 443 is the published shape: Caddy terminates TLS and the
 # server is unreachable otherwise. A host that only exists on a private network

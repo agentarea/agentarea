@@ -29,7 +29,7 @@ printf '%s\n' "$*" >> "$STUB_LOG"
 if [ "$1" = "inspect" ]; then
   case "$4" in
     *State.Running*)
-      if [ -n "$STUB_RUNNING" ]; then printf '%s %s\n' "$STUB_RUNNING" "$STUB_OWNER"; fi
+      if [ -n "$STUB_RUNNING" ]; then printf '%s\037%s\n' "$STUB_RUNNING" "$STUB_OWNER"; fi
       exit "${STUB_INSPECT_RC:-0}" ;;
     *NetworkSettings.Networks*)
       printf '%s' "$STUB_NETWORK_IP"

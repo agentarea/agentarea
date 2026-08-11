@@ -1,4 +1,16 @@
 ---
+- name: Require a decision about how this host is reached
+  ansible.builtin.assert:
+    that:
+      - sandbox_ssh_listen_address | length > 0 or sandbox_public_management | bool
+    fail_msg: >-
+      Neither sandbox_ssh_listen_address nor sandbox_public_management is set, so
+      sshd keeps whatever the image binds -- on these hosts that includes the
+      globally routable IPv6 the provider assigns, which is not the private
+      address the rest of this role assumes. Name the address management arrives
+      on, or declare sandbox_public_management=true to keep the image default on
+      purpose.
+
 - name: Harden kernel sysctls (defense-in-depth; gVisor is the primary wall)
   ansible.builtin.template:
     src: 99-sandbox-hardening.conf.j2
