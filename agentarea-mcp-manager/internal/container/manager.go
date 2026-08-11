@@ -203,6 +203,13 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		return nil, err
 	}
 
+	// The requested ceiling is caller input: an MCP spec reaches here from the
+	// control plane's API, so a workload could otherwise name its own limit and
+	// take the host. A request may lower its share, never raise it.
+	if err := m.enforceResourceCeiling(container); err != nil {
+		return nil, err
+	}
+
 	// A leftover container from an earlier attempt holds the name this run needs.
 	if err := m.clearContainerName(ctx, container.Name); err != nil {
 		return nil, err
@@ -753,6 +760,67 @@ func (m *Manager) containerOutput(ctx context.Context, id string) string {
 		return "no output could be read: " + err.Error()
 	}
 	return trimmed
+}
+
+// enforceResourceCeiling rejects a workload asking for more than this host
+// allows. The limits travel with the instance spec, which is caller input all the
+// way from the platform API, so the data plane cannot treat them as trusted:
+// without this, one request could name 100g and evict everything else on a box
+// that also runs agent sandboxes.
+//
+// Refusing rather than clamping keeps the outcome legible -- a silently shrunk
+// container fails later, in the workload, for reasons the caller cannot see.
+func (m *Manager) enforceResourceCeiling(container *models.Container) error {
+	if container.MemoryLimit != "" {
+		requested, err := parseMemoryLimit(container.MemoryLimit)
+		if err != nil {
+			return fmt.Errorf("memory limit %q: %w", container.MemoryLimit, err)
+		}
+		maximum, err := parseMemoryLimit(m.config.Container.MaxMemoryLimit)
+		if err == nil && requested > maximum {
+			return fmt.Errorf("requested memory %s exceeds the %s this host allows",
+				container.MemoryLimit, m.config.Container.MaxMemoryLimit)
+		}
+	}
+
+	if container.CPULimit != "" {
+		requested, err := strconv.ParseFloat(container.CPULimit, 64)
+		if err != nil || requested <= 0 {
+			return fmt.Errorf("cpu limit %q is not a positive number", container.CPULimit)
+		}
+		maximum, err := strconv.ParseFloat(m.config.Container.MaxCPULimit, 64)
+		if err == nil && requested > maximum {
+			return fmt.Errorf("requested cpu %s exceeds the %s this host allows",
+				container.CPULimit, m.config.Container.MaxCPULimit)
+		}
+	}
+
+	return nil
+}
+
+// parseMemoryLimit reads the runtime's own memory syntax: a byte count with an
+// optional b/k/m/g suffix.
+func parseMemoryLimit(value string) (int64, error) {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	if trimmed == "" {
+		return 0, fmt.Errorf("empty")
+	}
+	multiplier := int64(1)
+	switch trimmed[len(trimmed)-1] {
+	case 'b':
+		trimmed = trimmed[:len(trimmed)-1]
+	case 'k':
+		multiplier, trimmed = 1024, trimmed[:len(trimmed)-1]
+	case 'm':
+		multiplier, trimmed = 1024*1024, trimmed[:len(trimmed)-1]
+	case 'g':
+		multiplier, trimmed = 1024*1024*1024, trimmed[:len(trimmed)-1]
+	}
+	amount, err := strconv.ParseInt(strings.TrimSpace(trimmed), 10, 64)
+	if err != nil || amount <= 0 {
+		return 0, fmt.Errorf("not a positive byte count")
+	}
+	return amount * multiplier, nil
 }
 
 // firstNonEmpty returns the first value that was actually set.

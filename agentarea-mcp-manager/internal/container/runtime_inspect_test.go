@@ -214,6 +214,47 @@ func TestRunArgsPreferTheCeilingTheWorkloadAskedFor(t *testing.T) {
 	}
 }
 
+// The ceiling in a spec is caller input: it arrives from the platform API and
+// crosses into the data plane, which shares a host with agent sandboxes. A
+// workload may size itself down; asking for more than the host allows is refused
+// before the runtime is invoked, so one request cannot take the machine.
+func TestCreateContainerRefusesACeilingAboveTheHostMaximum(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	config := testConfig(runtime)
+	config.Container.DefaultMemoryLimit = "512m"
+	config.Container.DefaultCPULimit = "1.0"
+	config.Container.MaxMemoryLimit = "512m"
+	config.Container.MaxCPULimit = "1.0"
+	manager := &Manager{config: config, logger: discardLogger(), containers: map[string]*models.Container{}}
+
+	for name, req := range map[string]models.CreateContainerRequest{
+		"memory": {ServiceName: "greedy-mem", Image: "vendor/mcp:1.0", Port: 8080, MemoryLimit: "100g"},
+		"cpu":    {ServiceName: "greedy-cpu", Image: "vendor/mcp:1.0", Port: 8080, CPULimit: "64"},
+		"junk":   {ServiceName: "junk-cpu", Image: "vendor/mcp:1.0", Port: 8080, CPULimit: "all-of-it"},
+	} {
+		if _, err := manager.CreateContainer(context.Background(), req); err == nil {
+			t.Fatalf("%s: CreateContainer() error = nil, want the request refused", name)
+		}
+	}
+
+	if calls := stubCalls(t, logPath); strings.Contains(calls, "run -d") {
+		t.Fatalf("a refused request still reached the runtime:\n%s", calls)
+	}
+
+	// Under the ceiling the request is honoured, not quietly replaced.
+	t.Setenv("STUB_STATUS", "running")
+	accepted, err := manager.CreateContainer(context.Background(), models.CreateContainerRequest{
+		ServiceName: "modest", Image: "vendor/mcp:1.0", Port: 8080, MemoryLimit: "256m", CPULimit: "0.5",
+	})
+	if err != nil {
+		t.Fatalf("CreateContainer() with a smaller ceiling error = %v", err)
+	}
+	args := strings.Join(manager.buildContainerRunArgs(accepted), " ")
+	if !strings.Contains(args, "--memory 256m") || !strings.Contains(args, "--cpus 0.5") {
+		t.Fatalf("run args did not carry the requested ceiling: %s", args)
+	}
+}
+
 // A dead container keeps its name, and the runtime refuses to reuse it. Without
 // removing it first, every later attempt for that instance fails on the name
 // rather than on whatever stopped the workload.

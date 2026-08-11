@@ -161,6 +161,13 @@ sandbox_mcp_dataplane_isolation_tier: "untrusted"
 sandbox_mcp_dataplane_instance_memory: "512m"
 sandbox_mcp_dataplane_instance_cpus: "1.0"
 sandbox_mcp_dataplane_max_instances: 8
+
+# The most one instance may ask for. Limits arrive inside the instance spec,
+# which is caller input from the platform API, so the data plane refuses a
+# request above this rather than trusting it. Equal to the default above means
+# callers may size down and never up; raise it only to sell a bigger tier.
+sandbox_mcp_dataplane_instance_max_memory: "{{ sandbox_mcp_dataplane_instance_memory }}"
+sandbox_mcp_dataplane_instance_max_cpus: "{{ sandbox_mcp_dataplane_instance_cpus }}"
 sandbox_mcp_dataplane_log_level: "INFO"
 # TLS hostname, e.g. mcp-dp.203-0-113-10.sslip.io. No default: a wrong one gets
 # a certificate for a name nobody uses.

@@ -76,6 +76,58 @@ func (k *KubernetesBackend) createSecret(ctx context.Context, instanceName strin
 }
 
 // createDeployment creates a Deployment for the MCP server
+// applyQuantities parses caller-supplied resource strings into a ResourceList.
+//
+// resource.MustParse panics on malformed input, and these values ride in an
+// instance spec that crosses from the platform API: one bad string from any
+// workspace would take the manager down for every tenant on it.
+func applyQuantities(into corev1.ResourceList, cpu, memory string) error {
+	for name, value := range map[corev1.ResourceName]string{
+		corev1.ResourceCPU:    cpu,
+		corev1.ResourceMemory: memory,
+	} {
+		if value == "" {
+			continue
+		}
+		parsed, err := resource.ParseQuantity(value)
+		if err != nil {
+			return fmt.Errorf("%s %q is not a valid quantity: %w", name, value, err)
+		}
+		if parsed.Sign() <= 0 {
+			return fmt.Errorf("%s %q must be positive", name, value)
+		}
+		into[name] = parsed
+	}
+	return nil
+}
+
+// ceilingWithin refuses a workload asking for more than the operator allows. The
+// requested ceiling is caller input, so it may only lower the operator's limit,
+// never raise it.
+func ceilingWithin(allowed, requested config.ResourceRequirements) error {
+	for name, pair := range map[corev1.ResourceName][2]string{
+		corev1.ResourceCPU:    {requested.CPU, allowed.CPU},
+		corev1.ResourceMemory: {requested.Memory, allowed.Memory},
+	} {
+		want, ceiling := pair[0], pair[1]
+		if want == "" || ceiling == "" {
+			continue
+		}
+		wantQuantity, err := resource.ParseQuantity(want)
+		if err != nil {
+			return fmt.Errorf("%s %q is not a valid quantity: %w", name, want, err)
+		}
+		ceilingQuantity, err := resource.ParseQuantity(ceiling)
+		if err != nil {
+			continue
+		}
+		if wantQuantity.Cmp(ceilingQuantity) > 0 {
+			return fmt.Errorf("requested %s %s exceeds the %s this deployment allows", name, want, ceiling)
+		}
+	}
+	return nil
+}
+
 func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName string, spec *InstanceSpec) error {
 	// Operator labels first, platform labels (incl. the managed-by label the
 	// egress NetworkPolicy selects on) applied on top so they can't be clobbered.
@@ -105,17 +157,14 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 		Limits:   corev1.ResourceList{},
 	}
 
-	if requests.CPU != "" {
-		resourceRequirements.Requests[corev1.ResourceCPU] = resource.MustParse(requests.CPU)
+	if err := applyQuantities(resourceRequirements.Requests, requests.CPU, requests.Memory); err != nil {
+		return fmt.Errorf("resource requests: %w", err)
 	}
-	if requests.Memory != "" {
-		resourceRequirements.Requests[corev1.ResourceMemory] = resource.MustParse(requests.Memory)
+	if err := applyQuantities(resourceRequirements.Limits, limits.CPU, limits.Memory); err != nil {
+		return fmt.Errorf("resource limits: %w", err)
 	}
-	if limits.CPU != "" {
-		resourceRequirements.Limits[corev1.ResourceCPU] = resource.MustParse(limits.CPU)
-	}
-	if limits.Memory != "" {
-		resourceRequirements.Limits[corev1.ResourceMemory] = resource.MustParse(limits.Memory)
+	if err := ceilingWithin(k.k8sConfig.GetResourceLimits(nil), limits); err != nil {
+		return err
 	}
 
 	// Resolve the workload's isolation tier and apply it on top of the
@@ -585,17 +634,14 @@ func (k *KubernetesBackend) updateDeployment(ctx context.Context, instanceName s
 		requests := k.k8sConfig.GetResourceRequirements(configRequests, nil)
 		limits := k.k8sConfig.GetResourceLimits(configLimits)
 
-		if requests.CPU != "" {
-			container.Resources.Requests[corev1.ResourceCPU] = resource.MustParse(requests.CPU)
+		if err := applyQuantities(container.Resources.Requests, requests.CPU, requests.Memory); err != nil {
+			return fmt.Errorf("resource requests: %w", err)
 		}
-		if requests.Memory != "" {
-			container.Resources.Requests[corev1.ResourceMemory] = resource.MustParse(requests.Memory)
+		if err := applyQuantities(container.Resources.Limits, limits.CPU, limits.Memory); err != nil {
+			return fmt.Errorf("resource limits: %w", err)
 		}
-		if limits.CPU != "" {
-			container.Resources.Limits[corev1.ResourceCPU] = resource.MustParse(limits.CPU)
-		}
-		if limits.Memory != "" {
-			container.Resources.Limits[corev1.ResourceMemory] = resource.MustParse(limits.Memory)
+		if err := ceilingWithin(k.k8sConfig.GetResourceLimits(nil), limits); err != nil {
+			return err
 		}
 	}
 
