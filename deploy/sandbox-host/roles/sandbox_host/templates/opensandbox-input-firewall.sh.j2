@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Everything this host serves is reachable to whoever can route to it: the
+# OpenSandbox API fronts a Docker socket, and the data plane creates containers.
+# Both authenticate, but a port open to a whole network is one credential bug
+# away from the host, so the network is closed first and the credential second.
 CHAIN=AGENTAREA-INPUT
 iptables -N "$CHAIN" 2>/dev/null || true
 iptables -F "$CHAIN"
@@ -8,14 +12,12 @@ iptables -F "$CHAIN"
 # Local health checks and proxy traffic.
 iptables -A "$CHAIN" -s 127.0.0.0/8 -j RETURN
 
+{% for port in opensandbox_guarded_ports %}
 {% for cidr in opensandbox_control_plane_cidrs %}
-iptables -A "$CHAIN" -p tcp -s {{ cidr }} --dport {{ opensandbox_inbound_port }} -j RETURN
-# Keep the legacy executor reachable during the controlled migration only.
-iptables -A "$CHAIN" -p tcp -s {{ cidr }} --dport {{ sandbox_executor_host_port }} -j RETURN
+iptables -A "$CHAIN" -p tcp -s {{ cidr }} --dport {{ port }} -j RETURN
 {% endfor %}
-
-iptables -A "$CHAIN" -p tcp --dport {{ opensandbox_inbound_port }} -j DROP
-iptables -A "$CHAIN" -p tcp --dport {{ sandbox_executor_host_port }} -j DROP
+iptables -A "$CHAIN" -p tcp --dport {{ port }} -j DROP
+{% endfor %}
 iptables -A "$CHAIN" -j RETURN
 
 iptables -C INPUT -j "$CHAIN" 2>/dev/null ||

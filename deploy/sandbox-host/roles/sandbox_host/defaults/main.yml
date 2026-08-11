@@ -232,3 +232,13 @@ sandbox_ssh_listen_address: ""
 # binds that address and is guarded on its own port, with no proxy in between.
 opensandbox_bind_address: "127.0.0.1"
 opensandbox_inbound_port: 443
+
+# The ports the outside can actually reach, which is what the input firewall must
+# guard. With the TLS proxy in front, that is the proxy's port and the server
+# stays behind it; with the proxy off the server itself is the front door, and
+# guarding 443 then protects a port nothing listens on while the real one is open
+# to every host that can route to this machine.
+opensandbox_guarded_ports: >-
+  {{ ([opensandbox_inbound_port] if sandbox_tls_proxy_enabled | bool else [opensandbox_server_port])
+     + ([sandbox_mcp_dataplane_port] if sandbox_mcp_dataplane_enabled | bool else [])
+     + [sandbox_executor_host_port] }}
