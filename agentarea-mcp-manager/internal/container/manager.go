@@ -796,7 +796,15 @@ func (m *Manager) enforceResourceCeiling(container *models.Container) error {
 			return fmt.Errorf("memory limit %q: %w", container.MemoryLimit, err)
 		}
 		maximum, err := parseMemoryLimit(m.config.Container.MaxMemoryLimit)
-		if err == nil && requested > maximum {
+		if err != nil {
+			// A caller named a limit and this host cannot say what it allows. The
+			// safe reading of an unusable maximum is "nothing above the default",
+			// not "anything at all" -- a typo in one variable must not become a
+			// tenant's licence to take the machine.
+			return fmt.Errorf("MAX_MEMORY_LIMIT %q is unusable, refusing the requested %s: %w",
+				m.config.Container.MaxMemoryLimit, container.MemoryLimit, err)
+		}
+		if requested > maximum {
 			return fmt.Errorf("requested memory %s exceeds the %s this host allows",
 				container.MemoryLimit, m.config.Container.MaxMemoryLimit)
 		}
@@ -808,7 +816,11 @@ func (m *Manager) enforceResourceCeiling(container *models.Container) error {
 			return fmt.Errorf("cpu limit %q is not a positive number", container.CPULimit)
 		}
 		maximum, err := strconv.ParseFloat(m.config.Container.MaxCPULimit, 64)
-		if err == nil && requested > maximum {
+		if err != nil || maximum <= 0 {
+			return fmt.Errorf("MAX_CPU_LIMIT %q is unusable, refusing the requested %s",
+				m.config.Container.MaxCPULimit, container.CPULimit)
+		}
+		if requested > maximum {
 			return fmt.Errorf("requested cpu %s exceeds the %s this host allows",
 				container.CPULimit, m.config.Container.MaxCPULimit)
 		}
@@ -850,6 +862,22 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// failRegisteredContainer reports a failure that happened after the container was
+// already recorded, and forgets the record. Every exit past registration has to
+// do both: a tracked error entry makes the next create event refuse the instance
+// as existing, so one transient conflict outlives whatever caused it.
+func (m *Manager) failRegisteredContainer(ctx context.Context, container *models.Container, instanceID, name, reason string) {
+	container.Status = models.StatusError
+	if m.eventPublisher != nil {
+		if err := m.eventPublisher.PublishFailed(ctx, instanceID, name, reason); err != nil {
+			m.logger.Warn("Failed to publish failed status",
+				slog.String("instance_id", instanceID),
+				slog.String("error", err.Error()))
+		}
+	}
+	delete(m.containers, name)
 }
 
 // removeContainerByID force-removes one container by id. Reclaiming by name is
@@ -1177,7 +1205,11 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 	// The name has to be free before the run, or the retry that follows a failed
 	// start reports a name conflict instead of the reason the start failed.
 	if err := m.clearContainerName(ctx, containerName, container.ServiceName); err != nil {
-		container.Status = models.StatusError
+		// The record was inserted above. Left behind, it answers the next create
+		// event with "already exists" and the instance stays stranded even after
+		// whatever held the name is gone.
+		m.failRegisteredContainer(ctx, container, instanceID, name,
+			fmt.Sprintf("Container name unavailable: %v", err))
 		return err
 	}
 
@@ -1201,7 +1233,8 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		m.logger.Error("Failed to create container",
 			slog.String("container", containerName),
 			slog.String("error", err.Error()),
-			slog.String("output", string(output)))
+			slog.String("output", runtimeRefusal(output)))
+		delete(m.containers, name)
 		return fmt.Errorf("failed to create container: %w", err)
 	}
 

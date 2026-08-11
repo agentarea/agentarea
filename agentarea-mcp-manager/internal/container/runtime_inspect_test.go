@@ -312,6 +312,78 @@ func TestFailureOutputDropsTheSecretsTheWorkloadWasGiven(t *testing.T) {
 	}
 }
 
+// A maximum this host cannot read is not permission to ignore the ceiling. A
+// typo in one variable would otherwise hand a caller the machine, on a box that
+// also runs agent sandboxes.
+func TestAnUnusableMaximumRefusesTheRequestRatherThanAllowingIt(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+
+	for name, config := range map[string]struct{ maxMemory, maxCPU string }{
+		"empty memory":     {"", "1.0"},
+		"malformed memory": {"512 megabytes", "1.0"},
+		"empty cpu":        {"512m", ""},
+		"malformed cpu":    {"512m", "one"},
+	} {
+		manager := &Manager{config: testConfig(runtime), logger: discardLogger(),
+			containers: map[string]*models.Container{}}
+		manager.config.Container.MaxMemoryLimit = config.maxMemory
+		manager.config.Container.MaxCPULimit = config.maxCPU
+
+		err := manager.enforceResourceCeiling(&models.Container{
+			Name: "c", MemoryLimit: "256m", CPULimit: "0.5",
+		})
+		if err == nil {
+			t.Fatalf("%s: a request was accepted against a maximum the host cannot read", name)
+		}
+	}
+
+	// A readable maximum still admits a request under it.
+	manager := &Manager{config: testConfig(runtime), logger: discardLogger(),
+		containers: map[string]*models.Container{}}
+	manager.config.Container.MaxMemoryLimit = "512m"
+	manager.config.Container.MaxCPULimit = "1.0"
+	if err := manager.enforceResourceCeiling(&models.Container{
+		Name: "c", MemoryLimit: "256m", CPULimit: "0.5",
+	}); err != nil {
+		t.Fatalf("a request under the ceiling was refused: %v", err)
+	}
+}
+
+// A failure after the instance is recorded must forget the record. A tracked
+// error entry answers the next create event with "already exists", so a name
+// conflict that has since been resolved would keep the instance dead until the
+// manager restarts.
+func TestANameConflictLeavesNothingBehindToBlockTheRetry(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "someone-else")
+
+	// Built the way production builds it: this path uses the publisher and the
+	// validator, and both must be real for the test to exercise it at all.
+	config := testConfig(runtime)
+	config.Redis.URL = "redis://127.0.0.1:1"
+	manager := NewManager(config, discardLogger())
+	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
+
+	spec := map[string]interface{}{"image": "vendor/mcp:1.0", "port": float64(8080)}
+	if err := manager.HandleMCPInstanceCreated(context.Background(), "instance-1", "svc", spec); err == nil {
+		t.Fatal("HandleMCPInstanceCreated() error = nil, want the name conflict reported")
+	}
+
+	if _, tracked := manager.containers["svc"]; tracked {
+		t.Fatal("a failed start stayed in the registry, so the retry cannot get past it")
+	}
+
+	// The retry gets to try. Whatever it then fails on -- here the stub cannot
+	// vouch for the image -- must not be the leftover record.
+	t.Setenv("STUB_INSPECT_RC", "1")
+	t.Setenv("STUB_STATUS", "running")
+	err := manager.HandleMCPInstanceCreated(context.Background(), "instance-1", "svc", spec)
+	if err != nil && strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("the retry was refused by the record of the previous failure: %v", err)
+	}
+}
+
 // A dead container keeps its name, and the runtime refuses to reuse it. Without
 // removing it first, every later attempt for that instance fails on the name
 // rather than on whatever stopped the workload.
