@@ -244,7 +244,7 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		m.logger.Error("Container exited before it could serve",
 			slog.String("container", containerName),
 			slog.String("id", container.ID),
-			slog.String("output", m.containerOutput(ctx, container)))
+			slog.String("diagnostic", m.startFailureDiagnostic(ctx, container)))
 		if reapErr := m.removeContainerByID(ctx, container.ID); reapErr != nil {
 			m.logger.Warn("Could not remove the container that failed to start",
 				slog.String("container", containerName),
@@ -749,43 +749,11 @@ func runtimeRefusal(output []byte) string {
 	}
 }
 
-// containerOutput reads the tail of what a container printed. A start failure
-// reaches the caller as "the process is gone"; the reason is in the process's own
-// output, so it belongs in the data-plane log -- otherwise the only way to learn
-// that a server refused its arguments is to reproduce it by hand on the host.
-func (m *Manager) containerOutput(ctx context.Context, container *models.Container) string {
-	output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "logs", "--tail", "20", container.ID).CombinedOutput()
-	trimmed := strings.TrimSpace(string(output))
-	if err != nil && trimmed == "" {
-		return "no output could be read: " + err.Error()
-	}
-	return redactEnvironment(trimmed, container.Environment)
-}
-
-// redactEnvironment removes the values this container was given from text about
-// to be logged. An MCP server receives resolved secrets in its environment and
-// third-party startup code prints them freely, so the diagnostic that explains a
-// failed start must not become a second copy of the secret store.
-func redactEnvironment(text string, environment map[string]string) string {
-	for key, value := range environment {
-		// Short values are words, not credentials, and replacing them would
-		// shred the message they appear in.
-		if len(value) < 8 {
-			continue
-		}
-		text = strings.ReplaceAll(text, value, "[redacted "+key+"]")
-	}
-	if len(text) > 4000 {
-		text = text[:4000] + " [truncated]"
-	}
-	return text
-}
-
-// enforceResourceCeiling rejects a workload asking for more than this host
-// allows. The limits travel with the instance spec, which is caller input all the
-// way from the platform API, so the data plane cannot treat them as trusted:
-// without this, one request could name 100g and evict everything else on a box
-// that also runs agent sandboxes.
+// enforceResourceCeiling rejects a workload asking for more than this host allows.
+// The limits travel with the instance spec, which is caller input all the way from
+// the platform API, so the data plane cannot treat them as trusted: without this,
+// one request could name 100g and evict everything else on a box that also runs
+// agent sandboxes.
 //
 // Refusing rather than clamping keeps the outcome legible -- a silently shrunk
 // container fails later, in the workload, for reasons the caller cannot see.
@@ -852,6 +820,47 @@ func parseMemoryLimit(value string) (int64, error) {
 		return 0, fmt.Errorf("not a positive byte count")
 	}
 	return amount * multiplier, nil
+}
+
+// startFailureDiagnostic says why a container is gone without reprinting what it
+// said.
+//
+// Its own output is the most useful thing here and the one thing that cannot be
+// logged by default: it is third-party code that held credentials. Those arrive
+// in plain environment as often as through the secret store, and a process can
+// print a token it fetched after it started, which nothing derived from the spec
+// would recognise. The normal path therefore records identifiers and the
+// runtime's classification; an operator who needs the text turns it on for one
+// host, knowing what lands in the log.
+func (m *Manager) startFailureDiagnostic(ctx context.Context, container *models.Container) string {
+	if !m.config.Container.LogWorkloadOutput {
+		return "workload output withheld; set LOG_WORKLOAD_OUTPUT=true on this host to include it"
+	}
+
+	output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "logs", "--tail", "20", container.ID).CombinedOutput()
+	trimmed := strings.TrimSpace(string(output))
+	if err != nil && trimmed == "" {
+		return "no output could be read: " + err.Error()
+	}
+	return redactEnvironment(trimmed, container.Environment)
+}
+
+// redactEnvironment removes the values this container was given from text about
+// to be logged. A floor, not a guarantee: it cannot know a credential the process
+// obtained itself, which is why the raw text is off by default.
+func redactEnvironment(text string, environment map[string]string) string {
+	for key, value := range environment {
+		// One to three characters is not a credential worth the message it would
+		// destroy: "true", a port, a log level.
+		if len(value) < 4 {
+			continue
+		}
+		text = strings.ReplaceAll(text, value, "[redacted "+key+"]")
+	}
+	if len(text) > 4000 {
+		text = text[:4000] + " [truncated]"
+	}
+	return text
 }
 
 // firstNonEmpty returns the first value that was actually set.
@@ -1260,7 +1269,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		m.logger.Error("Container exited before it could serve",
 			slog.String("container", containerName),
 			slog.String("instance_id", instanceID),
-			slog.String("output", m.containerOutput(ctx, container)))
+			slog.String("diagnostic", m.startFailureDiagnostic(ctx, container)))
 		if reapErr := m.removeContainerByID(ctx, container.ID); reapErr != nil {
 			m.logger.Warn("Could not remove the container that failed to start",
 				slog.String("container", containerName),

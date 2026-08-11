@@ -141,17 +141,15 @@ func TestContainerIPReportsAnAddresslessContainer(t *testing.T) {
 	}
 }
 
-// A container that exits before it can serve is removed, and what it printed is
-// kept. Nothing else records why it stopped: the caller gets an error and no
-// handle, so an abandoned corpse would hold its name and disk for good, and the
-// reason -- here a server told to speak HTTP that fell back to stdio -- would
-// only be visible by reproducing the failure by hand on the host.
-func TestCreateContainerRemovesAContainerThatExitedAndKeepsItsOutput(t *testing.T) {
+// A container that exited before it could serve is removed, and the failure says
+// so. Its own output is not read on this path: that text belongs to third-party
+// code holding credentials, so it is withheld unless this host asks for it.
+func TestCreateContainerRemovesAContainerThatExitedWithoutReadingItsOutput(t *testing.T) {
 	runtime, logPath := stubRuntime(t)
 	t.Setenv("STUB_STATUS", "exited")
 	t.Setenv("STUB_RUNNING", "false")
 	t.Setenv("STUB_OWNER", "inst-exits")
-	t.Setenv("STUB_LOGS", "Terraform MCP Server running on stdio")
+	t.Setenv("STUB_LOGS", "token=sk-live-6f2b91c4aa77")
 
 	var recorded bytes.Buffer
 	manager := &Manager{
@@ -173,20 +171,58 @@ func TestCreateContainerRemovesAContainerThatExitedAndKeepsItsOutput(t *testing.
 	}
 
 	calls := stubCalls(t, logPath)
+	if strings.Contains(calls, "logs --tail") {
+		t.Fatalf("the workload output was read with logging disabled:\n%s", calls)
+	}
 	started := strings.Index(calls, "run -d")
-	read := strings.Index(calls, "logs --tail")
 	removed := strings.LastIndex(calls, "rm -f")
-	if started < 0 {
-		t.Fatalf("no container was started; runtime calls:\n%s", calls)
-	}
-	if read < started {
-		t.Fatalf("the failed container was not read before removal; runtime calls:\n%s", calls)
-	}
-	if removed < read {
+	if started < 0 || removed < started {
 		t.Fatalf("the failed container was not removed; runtime calls:\n%s", calls)
 	}
-	if !strings.Contains(recorded.String(), "running on stdio") {
-		t.Fatalf("the container output was not preserved; log:\n%s", recorded.String())
+	if strings.Contains(recorded.String(), "sk-live-6f2b91c4aa77") {
+		t.Fatalf("the workload output reached the log:\n%s", recorded.String())
+	}
+	if !strings.Contains(recorded.String(), "withheld") {
+		t.Fatalf("the log does not say the output was withheld:\n%s", recorded.String())
+	}
+}
+
+// With the switch on, the output is included -- and the values this container was
+// given are removed from it first.
+func TestFailureOutputIsRedactedWhenAHostAsksForIt(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+	t.Setenv("STUB_STATUS", "exited")
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "inst-loud")
+	t.Setenv("STUB_LOGS", "starting with token=sk-live-6f2b91c4aa77 on port 8123")
+
+	var recorded bytes.Buffer
+	config := testConfig(runtime)
+	config.Container.LogWorkloadOutput = true
+	manager := &Manager{
+		config:     config,
+		logger:     slog.New(slog.NewTextHandler(&recorded, nil)),
+		containers: map[string]*models.Container{},
+	}
+
+	if _, err := manager.CreateContainer(context.Background(), models.CreateContainerRequest{
+		ServiceName: "inst-loud",
+		Image:       "vendor/mcp:1.0",
+		Port:        8123,
+		Environment: map[string]string{"API_KEY": "sk-live-6f2b91c4aa77"},
+	}); err == nil {
+		t.Fatal("CreateContainer() error = nil, want the start failure reported")
+	}
+
+	logged := recorded.String()
+	if strings.Contains(logged, "sk-live-6f2b91c4aa77") {
+		t.Fatalf("a value the container was given survived redaction:\n%s", logged)
+	}
+	if !strings.Contains(logged, "[redacted API_KEY]") {
+		t.Fatalf("redaction did not name what it removed:\n%s", logged)
+	}
+	if !strings.Contains(logged, "on port 8123") {
+		t.Fatalf("the diagnostic lost the part that explains the failure:\n%s", logged)
 	}
 }
 

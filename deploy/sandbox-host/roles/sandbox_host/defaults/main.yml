@@ -248,6 +248,12 @@ opensandbox_inbound_port: 443
 # stays behind it; with the proxy off the server itself is the front door, and
 # guarding 443 then protects a port nothing listens on while the real one is open
 # to every host that can route to this machine.
+# Container ports published with docker -p. Those are reached through FORWARD, so
+# they are guarded in DOCKER-USER rather than INPUT: the chain that sees the packet
+# decides where the rule belongs, which is why this list is separate.
+sandbox_published_guarded_ports:
+  - 8080
+
 opensandbox_guarded_ports: >-
   {{ ([opensandbox_inbound_port] if sandbox_tls_proxy_enabled | bool else [opensandbox_server_port])
      + ([sandbox_mcp_dataplane_port] if sandbox_mcp_dataplane_enabled | bool else [])
