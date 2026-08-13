@@ -661,6 +661,11 @@
       }
     },
     "instanceDetail": {
+      "activity": {
+        "title": "Activity ({count})",
+        "loading": "Loading activity…",
+        "empty": "No changes recorded for this connection yet."
+      },
       "header": {
         "label": "Instance",
         "untitled": "Untitled instance"
