@@ -50,3 +50,39 @@ func TestFiniteCPURequestInsideTheCeilingIsStillAdmitted(t *testing.T) {
 		t.Fatalf("refused a request inside the ceiling: %v", err)
 	}
 }
+
+// The same fail-open one field over. A suffix multiplies into int64 and wraps:
+// a negative byte count is below every maximum, so the request the ceiling
+// exists to stop is the one shape that passes it.
+func TestOverflowingMemoryRequestRefusesRatherThanWrappingNegative(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+
+	for _, requested := range []string{"9223372036g", "9007199254741m", "9223372036854775807k"} {
+		manager := &Manager{config: testConfig(runtime), logger: discardLogger(),
+			containers: map[string]*models.Container{}}
+		manager.config.Container.MaxMemoryLimit = "512m"
+		manager.config.Container.MaxCPULimit = "1.0"
+
+		err := manager.enforceResourceCeiling(&models.Container{
+			Name: "c", MemoryLimit: requested, CPULimit: "0.5",
+		})
+		if err == nil {
+			t.Fatalf("a 512m host accepted %s; the byte count wrapped past the ceiling", requested)
+		}
+	}
+}
+
+func TestLargeButRepresentableMemoryRequestIsStillCompared(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+
+	manager := &Manager{config: testConfig(runtime), logger: discardLogger(),
+		containers: map[string]*models.Container{}}
+	manager.config.Container.MaxMemoryLimit = "8g"
+	manager.config.Container.MaxCPULimit = "1.0"
+
+	if err := manager.enforceResourceCeiling(&models.Container{
+		Name: "c", MemoryLimit: "4g", CPULimit: "0.5",
+	}); err != nil {
+		t.Fatalf("refused 4g against an 8g ceiling: %v", err)
+	}
+}

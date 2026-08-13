@@ -869,6 +869,12 @@ func parseMemoryLimit(value string) (int64, error) {
 	if err != nil || amount <= 0 {
 		return 0, fmt.Errorf("not a positive byte count")
 	}
+	// The suffix multiplies, and int64 wraps: "9223372036g" parses cleanly and
+	// then overflows into a negative byte count, which sits below every maximum
+	// and would walk straight through the ceiling it was supposed to hit.
+	if amount > math.MaxInt64/multiplier {
+		return 0, fmt.Errorf("byte count %s does not fit in int64", value)
+	}
 	return amount * multiplier, nil
 }
 
