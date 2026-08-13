@@ -202,7 +202,7 @@ func (p *fakeExternalProvider) OpenFile(ctx context.Context, _ *Session, path st
 		return nil, ErrFileNotFound
 	}
 	copy := append([]byte(nil), stored...)
-	var content io.ReadCloser = io.NopCloser(bytes.NewReader(copy))
+	content := io.NopCloser(bytes.NewReader(copy))
 	if p.readDelay > 0 {
 		content = &slowReadCloser{content: copy, delay: p.readDelay}
 	}
