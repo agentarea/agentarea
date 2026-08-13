@@ -206,9 +206,17 @@ def _guard_and_pin_upstream(
     return request_target, target.original_host, extensions
 
 
-@router.api_route(
+@router.get(
     "/{instance_id}/mcp",
-    methods=["GET", "POST", "DELETE"],
+    operation_id="proxy_instance_v1_mcp__instance_id__mcp_get",
+)
+@router.post(
+    "/{instance_id}/mcp",
+    operation_id="proxy_instance_v1_mcp__instance_id__mcp_post",
+)
+@router.delete(
+    "/{instance_id}/mcp",
+    operation_id="proxy_instance_v1_mcp__instance_id__mcp_delete",
 )
 async def proxy_instance(
     instance_id: UUID,

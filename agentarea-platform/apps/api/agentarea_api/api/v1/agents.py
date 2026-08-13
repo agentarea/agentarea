@@ -30,7 +30,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import agents_a2a, agents_well_known
 from ._access_control_grants import grant_resource_owner
 from ._approval_policy_sync import (
     apply_approval_targets,
@@ -394,10 +393,3 @@ async def delete_agent(
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"status": "success"}
-
-
-# Include A2A protocol subroutes
-router.include_router(agents_a2a.router, prefix="/{agent_id}", tags=["agents-a2a"])
-
-# Include agent-specific well-known subroutes
-router.include_router(agents_well_known.router, prefix="/{agent_id}", tags=["agents-well-known"])
