@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -809,12 +810,12 @@ func (m *Manager) enforceResourceCeiling(container *models.Container) error {
 	}
 
 	if container.CPULimit != "" {
-		requested, err := strconv.ParseFloat(container.CPULimit, 64)
-		if err != nil || requested <= 0 {
+		requested, err := parseCPULimit(container.CPULimit)
+		if err != nil {
 			return fmt.Errorf("cpu limit %q is not a positive number", container.CPULimit)
 		}
-		maximum, err := strconv.ParseFloat(m.config.Container.MaxCPULimit, 64)
-		if err != nil || maximum <= 0 {
+		maximum, err := parseCPULimit(m.config.Container.MaxCPULimit)
+		if err != nil {
 			return fmt.Errorf("MAX_CPU_LIMIT %q is unusable, refusing the requested %s",
 				m.config.Container.MaxCPULimit, container.CPULimit)
 		}
@@ -825,6 +826,25 @@ func (m *Manager) enforceResourceCeiling(container *models.Container) error {
 	}
 
 	return nil
+}
+
+// parseCPULimit reads a core count. Positivity alone is not enough: ParseFloat
+// accepts NaN and Inf, and neither survives being compared. A NaN maximum leaves
+// "requested > maximum" false for every request, and an Inf maximum is above
+// every finite one, so either would quietly turn the host's ceiling off. Both
+// sides of the comparison go through here so neither can.
+func parseCPULimit(value string) (float64, error) {
+	parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil {
+		return 0, err
+	}
+	if math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+		return 0, fmt.Errorf("%q is not a finite number", value)
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("%q is not a positive number", value)
+	}
+	return parsed, nil
 }
 
 // parseMemoryLimit reads the runtime's own memory syntax: a byte count with an
