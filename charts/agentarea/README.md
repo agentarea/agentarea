@@ -291,6 +291,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.serverless.sweepInterval | string | `"60s"` |  |
 | mcpManager.serverless.requestLeaseTTL | string | `"90s"` |  |
 | mcpManager.serverless.startupTimeout | string | `"5m"` |  |
+| mcpManager.dataPlane.allowInsecure | bool | `false` |  |
 | mcpManager.dataPlane.url | string | `""` |  |
 | mcpManager.dataPlane.tokenSecret | string | `""` |  |
 | mcpManager.dataPlane.tokenKey | string | `""` |  |

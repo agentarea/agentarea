@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/agentarea/mcp-manager/internal/mcpspec"
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/secrets"
 )
@@ -143,24 +144,13 @@ func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstan
 	if specType == "command" {
 		// command-type: always wraps stdio command with mcp-bridge.
 		cmd, _ := jsonSpec["command"].(string)
-		var args []string
-		if rawArgs, ok := jsonSpec["args"].([]any); ok {
-			for _, a := range rawArgs {
-				if s, ok := a.(string); ok {
-					args = append(args, s)
-				}
-			}
-		}
 		spec.Image = sandboxImage
 		spec.Port = sandboxPort
 		// mcp-bridge's ENTRYPOINT is `python bridge.py`. The stdio command
 		// + args are appended as CLI arguments (K8s container.args).
-		spec.Command = append([]string{cmd}, args...)
+		spec.Command = append([]string{cmd}, mcpspec.StringList(jsonSpec["args"])...)
 	} else {
 		// docker-type: use the image directly — it must serve HTTP natively.
-		// Strip --transport=stdio: in K8s the container must bind a port
-		// directly (no traefik gateway), and stdio-capable images default to
-		// HTTP SSE when this flag is absent.
 		if image, ok := jsonSpec["image"].(string); ok {
 			spec.Image = image
 		}
@@ -169,11 +159,19 @@ func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstan
 		} else if port, ok := jsonSpec["port"].(int); ok {
 			spec.Port = port
 		}
-		if rawCmd, ok := jsonSpec["command"].([]any); ok {
-			for _, a := range rawCmd {
-				if s, ok := a.(string); ok && s != "--transport=stdio" {
-					spec.Command = append(spec.Command, s)
-				}
+		spec.Command = mcpspec.DockerArgv(jsonSpec)
+	}
+
+	// A per-instance ceiling, when the control plane sets one. Without this the
+	// host default is the only ceiling there is, so every workspace and every plan
+	// gets the same slice of the machine.
+	if resources, ok := jsonSpec["resources"].(map[string]any); ok {
+		if limits, ok := resources["limits"].(map[string]any); ok {
+			if memory, ok := limits["memory"].(string); ok {
+				spec.Resources.Limits.Memory = memory
+			}
+			if cpu, ok := limits["cpu"].(string); ok {
+				spec.Resources.Limits.CPU = cpu
 			}
 		}
 	}

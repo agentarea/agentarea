@@ -43,10 +43,29 @@ type DockerBackend struct {
 	executorIncarnation string
 }
 
-func (d *DockerBackend) RuntimeManifest(ctx context.Context) (*runtimeinfo.Manifest, error) {
+// sharedExecutorBase resolves the endpoint of the shared sandbox executor.
+//
+// That executor is a single long-lived container serving every task, so it is
+// weak isolation and has to be asked for explicitly. The refusal used to sit in
+// Initialize, which also gated MCP container lifecycle -- the part of this
+// backend that has nothing to do with sandboxes -- so a host serving only MCP
+// refused to start at all. Sandbox callers hit it here instead, where the
+// weak-isolation decision actually applies.
+func (d *DockerBackend) sharedExecutorBase() (string, error) {
+	if os.Getenv("SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT") != "true" {
+		return "", fmt.Errorf("docker shared sandbox executor is development-only; set SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT=true explicitly")
+	}
 	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
 	if base == "" {
-		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+		return "", fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	}
+	return base, nil
+}
+
+func (d *DockerBackend) RuntimeManifest(ctx context.Context) (*runtimeinfo.Manifest, error) {
+	base, err := d.sharedExecutorBase()
+	if err != nil {
+		return nil, err
 	}
 	return warmpool.GetRuntimeManifest(ctx, base, 10*time.Second)
 }
@@ -107,9 +126,9 @@ func (d *DockerBackend) EnsureWorkspaceHydrated(
 }
 
 func (d *DockerBackend) observeExecutorIncarnation(ctx context.Context) (string, bool, error) {
-	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
-	if base == "" {
-		return "", false, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	base, err := d.sharedExecutorBase()
+	if err != nil {
+		return "", false, err
 	}
 	incarnation, err := warmpool.GetExecutorIncarnation(ctx, base, 10*time.Second)
 	if err != nil {
@@ -135,9 +154,9 @@ func (d *DockerBackend) GetManager() *container.Manager {
 // and never runs untrusted code itself — it delegates to the executor jail over
 // HTTP. Implements sandboxrunner.SandboxExecutor.
 func (d *DockerBackend) ExecuteSandbox(ctx context.Context, req warmpool.ExecuteRequest) (*warmpool.ExecuteResponse, error) {
-	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
-	if base == "" {
-		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	base, err := d.sharedExecutorBase()
+	if err != nil {
+		return nil, err
 	}
 	incarnation, changed, err := d.observeExecutorIncarnation(ctx)
 	if err != nil {
@@ -164,9 +183,9 @@ func (d *DockerBackend) ExecuteSandbox(ctx context.Context, req warmpool.Execute
 // bash will actually run in. This dev path targets the single configured
 // executor, matching ExecuteSandbox.
 func (d *DockerBackend) SandboxFilePut(ctx context.Context, req warmpool.FilePutRequest) (*warmpool.FilePutResponse, error) {
-	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
-	if base == "" {
-		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	base, err := d.sharedExecutorBase()
+	if err != nil {
+		return nil, err
 	}
 	incarnation, changed, err := d.observeExecutorIncarnation(ctx)
 	if err != nil {
@@ -185,9 +204,9 @@ func (d *DockerBackend) SandboxFilePut(ctx context.Context, req warmpool.FilePut
 }
 
 func (d *DockerBackend) SandboxFileUpload(ctx context.Context, req sandboxruntime.FileUpload, content io.Reader) (*sandboxruntime.FileWriteResult, error) {
-	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
-	if base == "" {
-		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	base, err := d.sharedExecutorBase()
+	if err != nil {
+		return nil, err
 	}
 	incarnation, changed, err := d.observeExecutorIncarnation(ctx)
 	if err != nil {
@@ -213,9 +232,9 @@ func (d *DockerBackend) SandboxFileUpload(ctx context.Context, req sandboxruntim
 
 // SandboxFileGet reads a file from a task's sandbox workspace on the executor.
 func (d *DockerBackend) SandboxFileGet(ctx context.Context, workspaceID, taskID, path string) (*warmpool.FileGetResponse, error) {
-	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
-	if base == "" {
-		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	base, err := d.sharedExecutorBase()
+	if err != nil {
+		return nil, err
 	}
 	incarnation, changed, err := d.observeExecutorIncarnation(ctx)
 	if err != nil {
@@ -234,9 +253,9 @@ func (d *DockerBackend) SandboxFileGet(ctx context.Context, workspaceID, taskID,
 }
 
 func (d *DockerBackend) SandboxFileDownload(ctx context.Context, workspaceID, taskID, path string) (*sandboxruntime.FileDownload, error) {
-	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
-	if base == "" {
-		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	base, err := d.sharedExecutorBase()
+	if err != nil {
+		return nil, err
 	}
 	incarnation, changed, err := d.observeExecutorIncarnation(ctx)
 	if err != nil {
@@ -259,9 +278,9 @@ func (d *DockerBackend) SandboxFileDownload(ctx context.Context, workspaceID, ta
 
 // SandboxFileList lists regular files under prefix in a task's sandbox workspace.
 func (d *DockerBackend) SandboxFileList(ctx context.Context, workspaceID, taskID, prefix string) (*warmpool.FileListResponse, error) {
-	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
-	if base == "" {
-		return nil, fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+	base, err := d.sharedExecutorBase()
+	if err != nil {
+		return nil, err
 	}
 	incarnation, changed, err := d.observeExecutorIncarnation(ctx)
 	if err != nil {
@@ -455,7 +474,10 @@ func (r *dockerOperationReadCloser) Close() error {
 }
 
 func (d *DockerBackend) deleteTaskWorkspace(ctx context.Context, workspaceID, taskID string) error {
-	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
+	base, err := d.sharedExecutorBase()
+	if err != nil {
+		return err
+	}
 	if err := warmpool.DeleteTaskWorkspace(ctx, base, workspaceID, taskID, 30*time.Second); err != nil {
 		return err
 	}
@@ -477,9 +499,6 @@ func dockerTaskKey(workspaceID, taskID string) string {
 // Initialize initializes the Docker backend
 func (d *DockerBackend) Initialize(ctx context.Context) error {
 	d.logger.Info("Initializing Docker backend")
-	if os.Getenv("SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT") != "true" {
-		return fmt.Errorf("docker shared sandbox executor is development-only; set SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT=true explicitly")
-	}
 	return d.manager.Initialize(ctx)
 }
 

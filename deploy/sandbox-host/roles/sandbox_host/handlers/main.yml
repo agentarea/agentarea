@@ -65,3 +65,17 @@
   ansible.builtin.command: docker restart opensandbox-caddy
   changed_when: true
   when: not ansible_check_mode
+
+- name: Restart systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted
+
+- name: Apply netplan
+  ansible.builtin.command: netplan apply
+  changed_when: true
+
+- name: Restart sshd
+  ansible.builtin.systemd:
+    name: ssh
+    state: restarted

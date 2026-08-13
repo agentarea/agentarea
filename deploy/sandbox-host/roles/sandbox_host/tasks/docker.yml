@@ -44,3 +44,44 @@
     name: docker
     enabled: true
     state: started
+
+# Must precede the Docker restart that picks up daemon.json, or containers start
+# pointed at a resolver that is not listening yet.
+# Before Docker starts pulling: without egress the first pull fails and the
+# failure looks like a broken registry rather than a missing route.
+- name: Give the private-only host an IPv4 default route
+  ansible.builtin.copy:
+    dest: /etc/netplan/99-vpc-default-route.yaml
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      # Managed by the sandbox_host role.
+      network:
+        version: 2
+        ethernets:
+          {{ sandbox_vpc_interface }}:
+            routes:
+              - to: default
+                via: {{ sandbox_vpc_default_gateway }}
+  when: sandbox_vpc_default_gateway | length > 0
+  notify: Apply netplan
+
+- name: Apply routing before anything needs the network
+  ansible.builtin.meta: flush_handlers
+
+- name: Publish the resolver stub on the Docker bridge
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/docker-bridge-stub.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by the sandbox_host role.
+      [Resolve]
+      DNSStubListenerExtra={{ sandbox_container_dns_stub_address }}
+  when: sandbox_container_dns | length > 0
+  notify: Restart systemd-resolved
+
+- name: Apply the resolver change before Docker reads its configuration
+  ansible.builtin.meta: flush_handlers

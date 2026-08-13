@@ -8,6 +8,9 @@
       "runtimeArgs": {{ runsc_args | to_json }}
     }
   },
+{% if sandbox_container_dns %}
+  "dns": {{ sandbox_container_dns | to_json }},
+{% endif %}
 {% if sandbox_registry_mirrors %}
   "registry-mirrors": {{ sandbox_registry_mirrors | to_json }},
 {% endif %}

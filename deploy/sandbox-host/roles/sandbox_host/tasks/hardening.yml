@@ -1,4 +1,16 @@
 ---
+- name: Require a decision about how this host is reached
+  ansible.builtin.assert:
+    that:
+      - sandbox_ssh_listen_address | length > 0 or sandbox_public_management | bool
+    fail_msg: >-
+      Neither sandbox_ssh_listen_address nor sandbox_public_management is set, so
+      sshd keeps whatever the image binds -- on these hosts that includes the
+      globally routable IPv6 the provider assigns, which is not the private
+      address the rest of this role assumes. Name the address management arrives
+      on, or declare sandbox_public_management=true to keep the image default on
+      purpose.
+
 - name: Harden kernel sysctls (defense-in-depth; gVisor is the primary wall)
   ansible.builtin.template:
     src: 99-sandbox-hardening.conf.j2
@@ -42,3 +54,18 @@
     enabled: true
     state: started
     daemon_reload: true
+
+- name: Bind sshd to the private address only
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/10-private-listen.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by the sandbox_host role.
+      ListenAddress {{ sandbox_ssh_listen_address }}
+  when: sandbox_ssh_listen_address | length > 0
+  notify: Restart sshd
+
+- name: Apply the sshd change
+  ansible.builtin.meta: flush_handlers

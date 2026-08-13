@@ -62,6 +62,11 @@ opensandbox_max_timeout_seconds: 21600
 opensandbox_api_key: "{{ lookup('ansible.builtin.env', 'OPENSANDBOX_API_KEY') }}"
 # Only these source CIDRs may reach the OpenSandbox HTTPS API. Port 80 remains
 # available for ACME HTTP-01 renewal; it does not proxy the API in plaintext.
+# Sources allowed over IPv6. Empty on purpose: the control plane reaches this
+# host on its private IPv4 address, so every IPv6 route to a guarded port is
+# closed rather than left to whatever the provider assigns.
+opensandbox_control_plane_cidrs_v6: []
+
 opensandbox_control_plane_cidrs:
   - "194.87.187.68/32"
 
@@ -150,6 +155,24 @@ sandbox_mcp_dataplane_network: "agentarea-mcp"
 # Confinement for spawned MCP instances. untrusted resolves to gVisor, which is
 # the reason this host exists.
 sandbox_mcp_dataplane_isolation_tier: "untrusted"
+
+# What one MCP instance may take, and how many may exist at once. The manager
+# applies these to every container it starts; without them stated here they live
+# only as defaults inside the binary, invisible to whoever runs this host.
+#
+# The cap is deliberately far below memory/limit arithmetic: agent sandboxes run
+# on the same machine and are the reason it exists, so MCP servers get a slice,
+# not the box. Raise it with the host, not with hope.
+sandbox_mcp_dataplane_instance_memory: "512m"
+sandbox_mcp_dataplane_instance_cpus: "1.0"
+sandbox_mcp_dataplane_max_instances: 8
+
+# The most one instance may ask for. Limits arrive inside the instance spec,
+# which is caller input from the platform API, so the data plane refuses a
+# request above this rather than trusting it. Equal to the default above means
+# callers may size down and never up; raise it only to sell a bigger tier.
+sandbox_mcp_dataplane_instance_max_memory: "{{ sandbox_mcp_dataplane_instance_memory }}"
+sandbox_mcp_dataplane_instance_max_cpus: "{{ sandbox_mcp_dataplane_instance_cpus }}"
 sandbox_mcp_dataplane_log_level: "INFO"
 # TLS hostname, e.g. mcp-dp.203-0-113-10.sslip.io. No default: a wrong one gets
 # a certificate for a name nobody uses.
@@ -157,3 +180,81 @@ sandbox_mcp_dataplane_public_hostname: ""
 # Shared token the control plane sends. Provide out-of-band, never in a file:
 #   ansible-playbook ... -e sandbox_mcp_dataplane_auth_token="$TOKEN"
 sandbox_mcp_dataplane_auth_token: ""
+
+# Where the data plane binds. Loopback by default, because a host that publishes
+# through the TLS proxy must not answer anywhere else. A host that is only
+# reachable on a private network binds that address instead and skips the proxy
+# entirely: there is no public hop to terminate.
+sandbox_mcp_dataplane_bind_address: "127.0.0.1"
+# Publish the data plane and OpenSandbox on public hostnames through Caddy with
+# Let's Encrypt certificates. Pointless, and an attack surface, when the only
+# route to this host runs inside a private network.
+sandbox_tls_proxy_enabled: true
+
+# Resolver handed to containers.
+#
+# A host whose only route out is a private network resolves through
+# systemd-resolved, whose stub listens on 127.0.0.53 -- an address no container
+# can reach. Docker then falls back to public resolvers, which that network does
+# not carry, so every container had DNS failures while the host resolved fine.
+# The stub is published on the Docker bridge address instead, which forwards to
+# whatever upstreams the host actually uses, including IPv6-only ones.
+sandbox_container_dns:
+  - "172.17.0.1"
+sandbox_container_dns_stub_address: "172.17.0.1"
+
+# IPv4 default route for a host that lives only on the private network.
+#
+# Timeweb gives a VPC-only server no IPv4 default route at all: it reaches the
+# internet over IPv6 and nothing else, so containers -- which get no IPv6 -- had
+# no egress, and Docker Hub is IPv4-only. The VPC router already performs NAT for
+# the cluster's private nodes; this host just needs to be pointed at it. Find the
+# address the way a node reports it:
+#
+#   kubectl run hostnet --image=busybox --overrides='{"spec":{"hostNetwork":true}}' \
+#     -- ip -4 route show default
+#
+# Empty leaves routing untouched, which is correct for a host that has its own
+# public address.
+sandbox_vpc_default_gateway: ""
+sandbox_vpc_interface: "eth1"
+
+# Address sshd listens on.
+#
+# A host with no public IPv4 is still not private: Timeweb hands it a global IPv6
+# with a default route, and sshd binds [::] by default, so SSH was reachable from
+# the internet while every other check said the machine was isolated. Management
+# arrives over the private network (through the cluster), so sshd belongs on that
+# address alone -- an inbound firewall then has nothing left to get wrong.
+#
+# Break-glass if the private interface ever fails to come up: the provider console.
+# Empty leaves sshd as the image configured it.
+sandbox_ssh_listen_address: ""
+
+# Keep the image's sshd listeners on purpose, including the provider's public
+# IPv6. Only for a host that is genuinely managed from the internet; the private
+# hosts this role targets set sandbox_ssh_listen_address instead.
+sandbox_public_management: false
+
+# Where the OpenSandbox server listens, and which port the inbound firewall
+# guards. Loopback plus 443 is the published shape: Caddy terminates TLS and the
+# server is unreachable otherwise. A host that only exists on a private network
+# binds that address and is guarded on its own port, with no proxy in between.
+opensandbox_bind_address: "127.0.0.1"
+opensandbox_inbound_port: 443
+
+# The ports the outside can actually reach, which is what the input firewall must
+# guard. With the TLS proxy in front, that is the proxy's port and the server
+# stays behind it; with the proxy off the server itself is the front door, and
+# guarding 443 then protects a port nothing listens on while the real one is open
+# to every host that can route to this machine.
+# Container ports published with docker -p. Those are reached through FORWARD, so
+# they are guarded in DOCKER-USER rather than INPUT: the chain that sees the packet
+# decides where the rule belongs, which is why this list is separate.
+sandbox_published_guarded_ports:
+  - 8080
+
+opensandbox_guarded_ports: >-
+  {{ ([opensandbox_inbound_port] if sandbox_tls_proxy_enabled | bool else [opensandbox_server_port])
+     + ([sandbox_mcp_dataplane_port] if sandbox_mcp_dataplane_enabled | bool else [])
+     + [sandbox_executor_host_port] }}

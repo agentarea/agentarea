@@ -1,0 +1,546 @@
+package container
+
+import (
+	"bytes"
+	"context"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/agentarea/mcp-manager/internal/config"
+	"github.com/agentarea/mcp-manager/internal/models"
+)
+
+// stubRuntime writes a fake container runtime whose inspect behaviour is steered
+// by environment variables, so the call sequence can be asserted without Docker.
+func stubRuntime(t *testing.T) (path string, logPath string) {
+	t.Helper()
+
+	dir := t.TempDir()
+	path = filepath.Join(dir, "runtime")
+	logPath = filepath.Join(dir, "calls.log")
+
+	script := `#!/bin/sh
+printf '%s\n' "$*" >> "$STUB_LOG"
+if [ "$1" = "inspect" ]; then
+  case "$4" in
+    *State.Running*)
+      if [ -n "$STUB_RUNNING" ]; then printf '%s\037%s\n' "$STUB_RUNNING" "$STUB_OWNER"; fi
+      exit "${STUB_INSPECT_RC:-0}" ;;
+    *NetworkSettings.Networks*)
+      printf '%s' "$STUB_NETWORK_IP"
+      exit "${STUB_NETWORK_RC:-0}" ;;
+    *NetworkSettings.IPAddress*)
+      printf '%s' "$STUB_FLAT_IP"
+      exit "${STUB_FLAT_RC:-0}" ;;
+    *State.Status*)
+      printf '%s' "$STUB_STATUS"
+      exit "${STUB_STATUS_RC:-0}" ;;
+  esac
+  exit 1
+fi
+if [ "$1" = "run" ]; then
+  printf '%s\n' "${STUB_RUN_ID:-stub-container-id}"
+  exit "${STUB_RUN_RC:-0}"
+fi
+if [ "$1" = "logs" ]; then
+  printf '%s\n' "$STUB_LOGS"
+  exit 0
+fi
+if [ "$1" = "rm" ] || [ "$1" = "stop" ]; then
+  if [ -n "$STUB_MISSING" ]; then
+    echo "Error response from daemon: No such container: $3" >&2
+    exit 1
+  fi
+  exit 0
+fi
+exit 1
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("writing stub runtime: %v", err)
+	}
+
+	t.Setenv("STUB_LOG", logPath)
+
+	return path, logPath
+}
+
+func stubCalls(t *testing.T, logPath string) string {
+	t.Helper()
+
+	calls, err := os.ReadFile(logPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ""
+		}
+		t.Fatalf("reading stub calls: %v", err)
+	}
+
+	return string(calls)
+}
+
+func testConfig(runtime string) *config.Config {
+	return &config.Config{
+		Container: config.ContainerConfig{
+			Runtime:        runtime,
+			Network:        "agentarea-mcp",
+			MaxContainers:  4,
+			StartupTimeout: 20 * time.Second,
+		},
+	}
+}
+
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+// A container attached to a user-defined network has no flat IPAddress field,
+// and current Docker releases fail the template instead of printing nothing. The
+// address still has to come back, otherwise no MCP workload is ever reachable.
+func TestContainerIPSurvivesAFailingFlatField(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+	t.Setenv("STUB_NETWORK_IP", " 172.18.0.3 ")
+	t.Setenv("STUB_FLAT_RC", "1")
+
+	ip, err := NewHealthChecker(testConfig(runtime), discardLogger()).getContainerIP(context.Background(), "mcp-instance")
+	if err != nil {
+		t.Fatalf("getContainerIP() error = %v, want an address", err)
+	}
+	if ip != "172.18.0.3" {
+		t.Fatalf("getContainerIP() = %q, want the network-scoped address", ip)
+	}
+}
+
+// The reverse runtime shape: the networks map is empty and only the flat field
+// carries the address. Both reads have to be attempted for either to work.
+func TestContainerIPFallsBackToTheFlatField(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+	t.Setenv("STUB_NETWORK_IP", "")
+	t.Setenv("STUB_FLAT_IP", "10.0.0.5\n")
+
+	ip, err := NewHealthChecker(testConfig(runtime), discardLogger()).getContainerIP(context.Background(), "mcp-instance")
+	if err != nil {
+		t.Fatalf("getContainerIP() error = %v, want an address", err)
+	}
+	if ip != "10.0.0.5" {
+		t.Fatalf("getContainerIP() = %q, want the flat address", ip)
+	}
+}
+
+func TestContainerIPReportsAnAddresslessContainer(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+	t.Setenv("STUB_NETWORK_IP", "")
+	t.Setenv("STUB_FLAT_IP", "")
+
+	if _, err := NewHealthChecker(testConfig(runtime), discardLogger()).getContainerIP(context.Background(), "mcp-instance"); err == nil {
+		t.Fatal("getContainerIP() error = nil, want a failure when no network reports an address")
+	}
+}
+
+// A container that exited before it could serve is removed, and the failure says
+// so. Its own output is not read on this path: that text belongs to third-party
+// code holding credentials, so it is withheld unless this host asks for it.
+func TestCreateContainerRemovesAContainerThatExitedWithoutReadingItsOutput(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_STATUS", "exited")
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "inst-exits")
+	t.Setenv("STUB_LOGS", "token=sk-live-6f2b91c4aa77")
+
+	var recorded bytes.Buffer
+	manager := &Manager{
+		config:     testConfig(runtime),
+		logger:     slog.New(slog.NewTextHandler(&recorded, nil)),
+		containers: map[string]*models.Container{},
+	}
+
+	if _, err := manager.CreateContainer(context.Background(), models.CreateContainerRequest{
+		ServiceName: "inst-exits",
+		Image:       "hashicorp/terraform-mcp-server:latest",
+		Port:        8080,
+	}); err == nil {
+		t.Fatal("CreateContainer() error = nil, want the start failure reported")
+	}
+
+	if _, tracked := manager.containers["inst-exits"]; tracked {
+		t.Fatal("a container that never served is still tracked as one that did")
+	}
+
+	calls := stubCalls(t, logPath)
+	if strings.Contains(calls, "logs --tail") {
+		t.Fatalf("the workload output was read with logging disabled:\n%s", calls)
+	}
+	started := strings.Index(calls, "run -d")
+	removed := strings.LastIndex(calls, "rm -f")
+	if started < 0 || removed < started {
+		t.Fatalf("the failed container was not removed; runtime calls:\n%s", calls)
+	}
+	if strings.Contains(recorded.String(), "sk-live-6f2b91c4aa77") {
+		t.Fatalf("the workload output reached the log:\n%s", recorded.String())
+	}
+	if !strings.Contains(recorded.String(), "withheld") {
+		t.Fatalf("the log does not say the output was withheld:\n%s", recorded.String())
+	}
+}
+
+// With the switch on, the output is included -- and the values this container was
+// given are removed from it first.
+func TestFailureOutputIsRedactedWhenAHostAsksForIt(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+	t.Setenv("STUB_STATUS", "exited")
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "inst-loud")
+	t.Setenv("STUB_LOGS", "starting with token=sk-live-6f2b91c4aa77 on port 8123")
+
+	var recorded bytes.Buffer
+	config := testConfig(runtime)
+	config.Container.LogWorkloadOutput = true
+	manager := &Manager{
+		config:     config,
+		logger:     slog.New(slog.NewTextHandler(&recorded, nil)),
+		containers: map[string]*models.Container{},
+	}
+
+	if _, err := manager.CreateContainer(context.Background(), models.CreateContainerRequest{
+		ServiceName: "inst-loud",
+		Image:       "vendor/mcp:1.0",
+		Port:        8123,
+		Environment: map[string]string{"API_KEY": "sk-live-6f2b91c4aa77"},
+	}); err == nil {
+		t.Fatal("CreateContainer() error = nil, want the start failure reported")
+	}
+
+	logged := recorded.String()
+	if strings.Contains(logged, "sk-live-6f2b91c4aa77") {
+		t.Fatalf("a value the container was given survived redaction:\n%s", logged)
+	}
+	if !strings.Contains(logged, "[redacted API_KEY]") {
+		t.Fatalf("redaction did not name what it removed:\n%s", logged)
+	}
+	if !strings.Contains(logged, "on port 8123") {
+		t.Fatalf("the diagnostic lost the part that explains the failure:\n%s", logged)
+	}
+}
+
+// The ceiling a caller asked for is the one the runtime enforces. These values
+// were accepted at the API, carried through the backend, and then dropped when the
+// run was assembled, so every container silently ran on the host-wide default.
+func TestRunArgsPreferTheCeilingTheWorkloadAskedFor(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+	config := testConfig(runtime)
+	config.Container.DefaultMemoryLimit = "512m"
+	config.Container.DefaultCPULimit = "1.0"
+	manager := &Manager{config: config, logger: discardLogger(), containers: map[string]*models.Container{}}
+
+	asked := strings.Join(manager.buildContainerRunArgs(&models.Container{
+		Name: "asked", Image: "vendor/mcp:1.0", MemoryLimit: "2g", CPULimit: "2.0",
+	}), " ")
+	if !strings.Contains(asked, "--memory 2g") || !strings.Contains(asked, "--cpus 2.0") {
+		t.Fatalf("run args ignored the requested ceiling: %s", asked)
+	}
+
+	silent := strings.Join(manager.buildContainerRunArgs(&models.Container{
+		Name: "silent", Image: "vendor/mcp:1.0",
+	}), " ")
+	if !strings.Contains(silent, "--memory 512m") || !strings.Contains(silent, "--cpus 1.0") {
+		t.Fatalf("run args dropped the host default: %s", silent)
+	}
+}
+
+// The ceiling in a spec is caller input: it arrives from the platform API and
+// crosses into the data plane, which shares a host with agent sandboxes. A
+// workload may size itself down; asking for more than the host allows is refused
+// before the runtime is invoked, so one request cannot take the machine.
+func TestCreateContainerRefusesACeilingAboveTheHostMaximum(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	// No container answers to these names: the ordinary case for a fresh create.
+	t.Setenv("STUB_INSPECT_RC", "1")
+	config := testConfig(runtime)
+	config.Container.DefaultMemoryLimit = "512m"
+	config.Container.DefaultCPULimit = "1.0"
+	config.Container.MaxMemoryLimit = "512m"
+	config.Container.MaxCPULimit = "1.0"
+	manager := &Manager{config: config, logger: discardLogger(), containers: map[string]*models.Container{}}
+
+	for name, req := range map[string]models.CreateContainerRequest{
+		"memory": {ServiceName: "greedy-mem", Image: "vendor/mcp:1.0", Port: 8080, MemoryLimit: "100g"},
+		"cpu":    {ServiceName: "greedy-cpu", Image: "vendor/mcp:1.0", Port: 8080, CPULimit: "64"},
+		"junk":   {ServiceName: "junk-cpu", Image: "vendor/mcp:1.0", Port: 8080, CPULimit: "all-of-it"},
+	} {
+		if _, err := manager.CreateContainer(context.Background(), req); err == nil {
+			t.Fatalf("%s: CreateContainer() error = nil, want the request refused", name)
+		}
+	}
+
+	if calls := stubCalls(t, logPath); strings.Contains(calls, "run -d") {
+		t.Fatalf("a refused request still reached the runtime:\n%s", calls)
+	}
+
+	// Under the ceiling the request is honoured, not quietly replaced.
+	t.Setenv("STUB_STATUS", "running")
+	accepted, err := manager.CreateContainer(context.Background(), models.CreateContainerRequest{
+		ServiceName: "modest", Image: "vendor/mcp:1.0", Port: 8080, MemoryLimit: "256m", CPULimit: "0.5",
+	})
+	if err != nil {
+		t.Fatalf("CreateContainer() with a smaller ceiling error = %v", err)
+	}
+	args := strings.Join(manager.buildContainerRunArgs(accepted), " ")
+	if !strings.Contains(args, "--memory 256m") || !strings.Contains(args, "--cpus 0.5") {
+		t.Fatalf("run args did not carry the requested ceiling: %s", args)
+	}
+}
+
+// Runtime names come from lossy sanitization, so two services can produce one
+// name. Reclaiming a name therefore has to be bound to who owns it: a corpse
+// created for something else -- another service, or a container placed here by
+// hand -- is reported, never removed.
+func TestACorpseOwnedBySomethingElseIsNotRemoved(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "someone-else")
+
+	manager := &Manager{config: testConfig(runtime), logger: discardLogger()}
+	err := manager.clearContainerName(context.Background(), "mcp-instance", "instance-1")
+	if err == nil {
+		t.Fatal("clearContainerName() error = nil, want the foreign container left alone")
+	}
+	if calls := stubCalls(t, logPath); strings.Contains(calls, "rm -f") {
+		t.Fatalf("a container owned by something else was removed:\n%s", calls)
+	}
+}
+
+// An unlabelled container predates ownership or was made by hand; either way it
+// is not this instance's to delete.
+func TestAnUnlabelledCorpseIsNotRemoved(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "")
+
+	manager := &Manager{config: testConfig(runtime), logger: discardLogger()}
+	if err := manager.clearContainerName(context.Background(), "mcp-instance", "instance-1"); err == nil {
+		t.Fatal("clearContainerName() error = nil, want an unowned container left alone")
+	}
+	if calls := stubCalls(t, logPath); strings.Contains(calls, "rm -f") {
+		t.Fatalf("an unlabelled container was removed:\n%s", calls)
+	}
+}
+
+// A workload is handed resolved secrets, and third-party startup code prints
+// them. The diagnostic that explains a failed start must not copy them into the
+// host's logs.
+func TestFailureOutputDropsTheSecretsTheWorkloadWasGiven(t *testing.T) {
+	redacted := redactEnvironment(
+		"connecting with sk-live-6f2b91c4aa77 and short=abc",
+		map[string]string{"API_KEY": "sk-live-6f2b91c4aa77", "MODE": "abc"},
+	)
+	if strings.Contains(redacted, "sk-live-6f2b91c4aa77") {
+		t.Fatalf("the secret survived redaction: %s", redacted)
+	}
+	if !strings.Contains(redacted, "[redacted API_KEY]") {
+		t.Fatalf("redaction did not name the key it removed: %s", redacted)
+	}
+	if !strings.Contains(redacted, "short=abc") {
+		t.Fatalf("a short value was treated as a secret and shredded the message: %s", redacted)
+	}
+}
+
+// A maximum this host cannot read is not permission to ignore the ceiling. A
+// typo in one variable would otherwise hand a caller the machine, on a box that
+// also runs agent sandboxes.
+func TestAnUnusableMaximumRefusesTheRequestRatherThanAllowingIt(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+
+	for name, config := range map[string]struct{ maxMemory, maxCPU string }{
+		"empty memory":     {"", "1.0"},
+		"malformed memory": {"512 megabytes", "1.0"},
+		"empty cpu":        {"512m", ""},
+		"malformed cpu":    {"512m", "one"},
+	} {
+		manager := &Manager{config: testConfig(runtime), logger: discardLogger(),
+			containers: map[string]*models.Container{}}
+		manager.config.Container.MaxMemoryLimit = config.maxMemory
+		manager.config.Container.MaxCPULimit = config.maxCPU
+
+		err := manager.enforceResourceCeiling(&models.Container{
+			Name: "c", MemoryLimit: "256m", CPULimit: "0.5",
+		})
+		if err == nil {
+			t.Fatalf("%s: a request was accepted against a maximum the host cannot read", name)
+		}
+	}
+
+	// A readable maximum still admits a request under it.
+	manager := &Manager{config: testConfig(runtime), logger: discardLogger(),
+		containers: map[string]*models.Container{}}
+	manager.config.Container.MaxMemoryLimit = "512m"
+	manager.config.Container.MaxCPULimit = "1.0"
+	if err := manager.enforceResourceCeiling(&models.Container{
+		Name: "c", MemoryLimit: "256m", CPULimit: "0.5",
+	}); err != nil {
+		t.Fatalf("a request under the ceiling was refused: %v", err)
+	}
+}
+
+// A failure after the instance is recorded must forget the record. A tracked
+// error entry answers the next create event with "already exists", so a name
+// conflict that has since been resolved would keep the instance dead until the
+// manager restarts.
+func TestANameConflictLeavesNothingBehindToBlockTheRetry(t *testing.T) {
+	runtime, _ := stubRuntime(t)
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "someone-else")
+
+	// Built the way production builds it: this path uses the publisher and the
+	// validator, and both must be real for the test to exercise it at all.
+	config := testConfig(runtime)
+	config.Redis.URL = "redis://127.0.0.1:1"
+	manager := NewManager(config, discardLogger())
+	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
+
+	spec := map[string]interface{}{"image": "vendor/mcp:1.0", "port": float64(8080)}
+	if err := manager.HandleMCPInstanceCreated(context.Background(), "instance-1", "svc", spec); err == nil {
+		t.Fatal("HandleMCPInstanceCreated() error = nil, want the name conflict reported")
+	}
+
+	if _, tracked := manager.containers["svc"]; tracked {
+		t.Fatal("a failed start stayed in the registry, so the retry cannot get past it")
+	}
+
+	// The retry gets to try. Whatever it then fails on -- here the stub cannot
+	// vouch for the image -- must not be the leftover record.
+	t.Setenv("STUB_INSPECT_RC", "1")
+	t.Setenv("STUB_STATUS", "running")
+	err := manager.HandleMCPInstanceCreated(context.Background(), "instance-1", "svc", spec)
+	if err != nil && strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("the retry was refused by the record of the previous failure: %v", err)
+	}
+}
+
+// A crash between the run and its cleanup leaves a stopped container that startup
+// discovery adopts. Refusing on that record alone answered every retry with
+// "already exists" and left the instance dead until somebody removed the container
+// by hand, so a record for something that is not running is reclaimed instead.
+func TestAStoppedRecordDoesNotStrandTheInstance(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "svc")
+	t.Setenv("STUB_STATUS", "running")
+
+	manager := &Manager{config: testConfig(runtime), logger: discardLogger(),
+		containers: map[string]*models.Container{
+			"svc": {Name: "svc", ServiceName: "svc", Status: models.StatusError},
+		}}
+
+	if _, err := manager.CreateContainer(context.Background(), models.CreateContainerRequest{
+		ServiceName: "svc", Image: "vendor/mcp:1.0", Port: 8080,
+	}); err != nil {
+		t.Fatalf("CreateContainer() error = %v, want the stopped record reclaimed", err)
+	}
+
+	if calls := stubCalls(t, logPath); !strings.Contains(calls, "rm -f") {
+		t.Fatalf("the stopped container was never removed:\n%s", calls)
+	}
+
+	// A container that is actually serving is still protected.
+	t.Setenv("STUB_RUNNING", "true")
+	manager.containers["busy"] = &models.Container{Name: "busy", ServiceName: "busy", Status: models.StatusRunning}
+	if _, err := manager.CreateContainer(context.Background(), models.CreateContainerRequest{
+		ServiceName: "busy", Image: "vendor/mcp:1.0", Port: 8080,
+	}); err == nil {
+		t.Fatal("CreateContainer() error = nil, want a running namesake protected")
+	}
+}
+
+// A dead container keeps its name, and the runtime refuses to reuse it. Without
+// removing it first, every later attempt for that instance fails on the name
+// rather than on whatever stopped the workload.
+func TestStaleNamesakeIsRemoved(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_RUNNING", "false")
+	t.Setenv("STUB_OWNER", "instance-1")
+
+	manager := &Manager{config: testConfig(runtime), logger: discardLogger()}
+	if err := manager.clearContainerName(context.Background(), "mcp-instance", "instance-1"); err != nil {
+		t.Fatalf("clearContainerName() error = %v, want the corpse removed", err)
+	}
+
+	if calls := stubCalls(t, logPath); !strings.Contains(calls, "rm -f mcp-instance") {
+		t.Fatalf("stale container was not removed; runtime calls:\n%s", calls)
+	}
+}
+
+func TestRunningNamesakeIsReportedNotKilled(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_RUNNING", "true")
+	t.Setenv("STUB_OWNER", "instance-1")
+
+	manager := &Manager{config: testConfig(runtime), logger: discardLogger()}
+	if err := manager.clearContainerName(context.Background(), "mcp-instance", "instance-1"); err == nil {
+		t.Fatal("clearContainerName() error = nil, want a running namesake reported")
+	}
+
+	if calls := stubCalls(t, logPath); strings.Contains(calls, "rm -f") {
+		t.Fatalf("a running container was removed; runtime calls:\n%s", calls)
+	}
+}
+
+func TestAbsentNameNeedsNoWork(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_INSPECT_RC", "1")
+
+	manager := &Manager{config: testConfig(runtime), logger: discardLogger()}
+	if err := manager.clearContainerName(context.Background(), "mcp-instance", "instance-1"); err != nil {
+		t.Fatalf("clearContainerName() error = %v, want a free name accepted", err)
+	}
+
+	if calls := stubCalls(t, logPath); strings.Contains(calls, "rm -f") {
+		t.Fatalf("removal ran for a name nothing holds; runtime calls:\n%s", calls)
+	}
+}
+
+// Retirement has to survive a container that is already gone: the host reaps
+// one, a runtime restart loses it, an operator removes it by hand. Reporting
+// that as a failure left the control-plane record permanently undeletable.
+func TestRetiringAnAlreadyRemovedContainerSucceeds(t *testing.T) {
+	runtime, logPath := stubRuntime(t)
+	t.Setenv("STUB_MISSING", "1")
+
+	manager := &Manager{
+		config:     testConfig(runtime),
+		logger:     discardLogger(),
+		containers: map[string]*models.Container{"weather": {ID: "container-1", Name: "mcp-weather"}},
+	}
+
+	if err := manager.DeleteContainer(context.Background(), "weather"); err != nil {
+		t.Fatalf("DeleteContainer() error = %v, want a container that is already gone accepted", err)
+	}
+	if _, still := manager.containers["weather"]; still {
+		t.Fatal("the record survived retirement, so the instance can never be recreated")
+	}
+	if calls := stubCalls(t, logPath); !strings.Contains(calls, "rm -f container-1") {
+		t.Fatalf("removal was not attempted; runtime calls:\n%s", calls)
+	}
+}
+
+// A refusal has to name a cause the caller can act on, while the runtime\x27s own
+// text -- which can carry host paths and registry hints -- stays in the log.
+func TestRuntimeRefusalNamesTheCauseWithoutEchoingTheRuntime(t *testing.T) {
+	denied := []byte("Unable to find image locally\ndocker: Error response from daemon: pull access denied for reg.example.com/team/app, repository does not exist or may require \x27docker login\x27\n")
+	got := runtimeRefusal(denied)
+	if !strings.Contains(got, "no credentials") {
+		t.Fatalf("runtimeRefusal() = %q, want the missing-credential cause", got)
+	}
+	if strings.Contains(got, "reg.example.com") || strings.Contains(got, "team/app") {
+		t.Fatalf("runtimeRefusal() = %q, want no runtime text echoed to callers", got)
+	}
+	if got := runtimeRefusal([]byte("docker: Error response from daemon: Conflict. The container name \"/mcp-x\" is already in use by container \"abc\".")); !strings.Contains(got, "name") {
+		t.Fatalf("runtimeRefusal() = %q, want the name conflict named", got)
+	}
+	if got := runtimeRefusal(nil); got != "the runtime failed without output" {
+		t.Fatalf("runtimeRefusal(nil) = %q, want a stated absence", got)
+	}
+}

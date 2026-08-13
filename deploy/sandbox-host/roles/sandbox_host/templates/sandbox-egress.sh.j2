@@ -40,6 +40,18 @@ for IFACE in docker0 'br+'; do
 {% endfor %}
 done
 
+# Inbound traffic to a published container port never reaches the INPUT chain:
+# Docker DNATs it and it traverses FORWARD, so the guard for those ports has to
+# live here, in the chain Docker gives us -- and in this file, because this script
+# flushes DOCKER-USER on every run.
+#
+# Only new connections are judged; established ones already passed.
+{% for port in sandbox_published_guarded_ports %}
+{% for cidr in opensandbox_control_plane_cidrs %}
+iptables -A DOCKER-USER -m conntrack --ctstate NEW -s {{ cidr }} -p tcp --dport {{ port }} -j RETURN
+{% endfor %}
+iptables -A DOCKER-USER -m conntrack --ctstate NEW -p tcp --dport {{ port }} -j DROP
+{% endfor %}
 iptables -A DOCKER-USER -j RETURN
 
 # IPv6: symmetric drops, but ONLY if Docker actually manages a v6 DOCKER-USER
@@ -54,5 +66,8 @@ if command -v ip6tables >/dev/null 2>&1 && ip6tables -S DOCKER-USER >/dev/null 2
       ip6tables -A DOCKER-USER -i "$IFACE" -d "$CIDR" -j DROP
     done
   done
+{% for port in sandbox_published_guarded_ports %}
+  ip6tables -A DOCKER-USER -m conntrack --ctstate NEW -p tcp --dport {{ port }} -j DROP
+{% endfor %}
   ip6tables -A DOCKER-USER -j RETURN
 fi

@@ -1,4 +1,14 @@
 ---
+- name: Require the sources allowed past the input firewall
+  ansible.builtin.assert:
+    that:
+      - opensandbox_control_plane_cidrs | length > 0
+    fail_msg: >-
+      opensandbox_control_plane_cidrs is empty, so the input firewall would drop
+      the control plane along with everyone else. Name the networks the control
+      plane reaches this host from -- with a private data plane those are the
+      cluster's addresses, not its public egress IP.
+
 - name: Ensure OpenSandbox directories
   ansible.builtin.file:
     path: "{{ item.path }}"
@@ -70,6 +80,7 @@
     group: root
     mode: "0640"
   notify: Restart opensandbox
+  when: sandbox_tls_proxy_enabled | bool
 
 - name: Install OpenSandbox inbound firewall script
   ansible.builtin.template:
@@ -120,7 +131,7 @@
 
 - name: Wait for authenticated OpenSandbox health
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ opensandbox_server_port }}/health"
+    url: "http://{{ opensandbox_bind_address }}:{{ opensandbox_server_port }}/health"
     headers:
       OPEN-SANDBOX-API-KEY: "{{ opensandbox_api_key }}"
     status_code: 200
@@ -149,4 +160,6 @@
   register: _opensandbox_tls
   changed_when: false
   failed_when: _opensandbox_tls.rc != 0
-  when: not ansible_check_mode
+  when:
+    - sandbox_tls_proxy_enabled | bool
+    - not ansible_check_mode
