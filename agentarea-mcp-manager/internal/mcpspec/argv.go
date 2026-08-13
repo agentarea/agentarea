@@ -6,21 +6,32 @@
 // the bypass.
 package mcpspec
 
-// DockerArgv reads the invocation a docker-type spec asks for. The command
-// arrives either as a list or, exactly as a command-type spec writes it, as a
-// single string extended by args -- the catalog produces both shapes.
+// DockerArgv reads the invocation a docker-type spec asks for.
+//
+// Three shapes reach it, all in use: a list, a single string extended by args the
+// way a command-type spec writes it, and the older "cmd" key. Whichever arrives,
+// this is the argv the container starts with, so it is also the argv admission
+// must judge.
 //
 // --transport=stdio is dropped whichever field carried it: the gateway reaches
 // the container over a port, so a container talking stdio is unreachable.
 func DockerArgv(jsonSpec map[string]any) []string {
 	var argv []string
-	switch command := jsonSpec["command"].(type) {
-	case string:
-		if command != "" {
-			argv = append(argv, command)
+	// "cmd" is the older name for the same thing and the runtime prefers it, so
+	// the gate has to read it the same way round: judging "command" while the
+	// host runs "cmd" approves one program and starts another.
+	for _, key := range []string{"cmd", "command"} {
+		switch value := jsonSpec[key].(type) {
+		case string:
+			if value != "" {
+				argv = append(argv, value)
+			}
+		case []any:
+			argv = append(argv, StringList(value)...)
+		default:
+			continue
 		}
-	case []any:
-		argv = append(argv, StringList(command)...)
+		break
 	}
 	argv = append(argv, StringList(jsonSpec["args"])...)
 

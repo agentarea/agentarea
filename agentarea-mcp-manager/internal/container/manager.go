@@ -18,6 +18,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/database"
 	"github.com/agentarea/mcp-manager/internal/events"
+	"github.com/agentarea/mcp-manager/internal/mcpspec"
 	"github.com/agentarea/mcp-manager/internal/models"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -1429,20 +1430,11 @@ func ResolveContainerSpec(jsonSpec map[string]interface{}) (image string, port i
 		port = 8000
 	}
 
-	// Optional command override (supports both "cmd" and "command" keys)
-	cmdInterface, ok := jsonSpec["cmd"]
-	if !ok {
-		cmdInterface, ok = jsonSpec["command"]
-	}
-	if ok {
-		if cmdSlice, ok := cmdInterface.([]interface{}); ok {
-			for _, cmdItem := range cmdSlice {
-				if cmdStr, ok := cmdItem.(string); ok {
-					command = append(command, cmdStr)
-				}
-			}
-		}
-	}
+	// The invocation, read by the same function the admission gate uses. Two
+	// readers meant two answers: this one took "cmd" and ignored "args", the gate
+	// took "command" and ignored "cmd", and a spec could satisfy the gate with one
+	// field while the runtime obeyed another.
+	command = mcpspec.DockerArgv(jsonSpec)
 	return
 }
 
