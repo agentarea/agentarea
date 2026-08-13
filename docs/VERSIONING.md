@@ -40,7 +40,7 @@ Chart.yaml version (0.0.1) — independent chart version
 
 ### What gets pushed when
 
-| Event | Workflow | Tags pushed for each of 7 components |
+| Event | Workflow | Tags pushed for each of 8 components |
 |---|---|---|
 | Merge to `main` | `ci.yml` → `docker-build-push.yml` | `<version>-<sha>` (e.g. `0.0.8-a8eaf7b`) — immutable |
 | Git tag push `vX.Y.Z` | `release-publish.yaml` | `<version>`, `<maj.min>`, `<maj>`, `latest` — all pointing to the **same digest** as `<version>-<sha>` (retag, no rebuild) |
@@ -64,9 +64,9 @@ Chart.yaml version (0.0.1) — independent chart version
 
 ### Components
 
-Seven Docker images are published:
+Eight Docker images are published:
 
-`api`, `worker`, `frontend`, `bootstrap`, `mcp-manager`, `mcp-runner`, `events`
+`api`, `worker`, `frontend`, `operator`, `mcp-manager`, `mcp-runner`, `mcp-runner-locked`, `events`
 
 ### Registry
 
@@ -92,7 +92,7 @@ The `release-prepare.yaml` workflow:
 
 - Verify all version files updated.
 - Add release notes to `CHANGELOG.md` if you keep one.
-- Merge. The merge to `main` triggers `ci.yml`, which builds and pushes `0.0.9-<sha>` for all 7 components.
+- Merge. The merge to `main` triggers `ci.yml`, which builds and pushes `0.0.9-<sha>` for all 8 components.
 
 **Merging the PR does not publish the release.** It only bumps versions and builds images.
 
@@ -114,7 +114,7 @@ The script performs these checks before creating the tag:
 4. `VERSION` contains a valid semver; tag `v<version>` doesn't already exist locally or on origin.
 5. `scripts/verify-version-sync.sh` passes (all version files agree).
 6. `ci.yml` is green on HEAD (via `gh` CLI).
-7. All 7 `agentarea-<component>:<version>-<sha>` images exist on Docker Hub.
+7. All 8 `agentarea-<component>:<version>-<sha>` images exist on Docker Hub.
 8. Shows a summary with commit list since the previous tag.
 9. Asks `y/N` confirmation.
 10. Creates an annotated tag `v<version>` and pushes it to origin.
@@ -133,7 +133,7 @@ The tag push triggers two workflows in parallel:
 
 **`release-publish.yaml`:**
 1. Validates tag matches VERSION on the tagged commit.
-2. For each of 7 components, waits for `<version>-<sha>` to appear in Docker Hub (retries up to 15 min if `ci.yml` is still running).
+2. For each of 8 components, waits for `<version>-<sha>` to appear in Docker Hub (retries up to 15 min if `ci.yml` is still running).
 3. Uses `docker buildx imagetools create` to add tags `<version>`, `<maj.min>`, `<maj>`, `latest` to the existing image. **No rebuild.** Same digest.
 4. Creates a GitHub Release with auto-generated notes from `git log <prev-tag>..HEAD`.
 
