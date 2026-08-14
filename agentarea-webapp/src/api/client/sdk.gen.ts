@@ -4040,7 +4040,17 @@ export const checkMcpServerInstanceConfigurationV1McpServerInstancesCheckPost =
 /**
  * Get Containers Health
  *
- * Get health status of all MCP containers by proxying to the Go manager.
+ * Health of this workspace's MCP workloads.
+ *
+ * The manager also has a route that answers for every workload it runs, which is
+ * the wrong thing to hand a caller: its rows carry service names and container
+ * ids belonging to other workspaces. The instance list comes from the
+ * workspace-scoped service instead, and only those ids are asked about, so the
+ * answer cannot name a workload the caller is not entitled to see.
+ *
+ * A workload the manager reports as unhealthy, has never heard of, or cannot be
+ * reached about is a fact about that instance, not a failure of the request: each
+ * is reported per instance and the endpoint still answers 200.
  */
 export const getContainersHealthV1McpServerInstancesHealthContainersGet = <
   ThrowOnError extends boolean = false,
