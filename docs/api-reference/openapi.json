@@ -13026,15 +13026,13 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "bearer": []
           }
         ],
         "summary": "Get Agent Well Known Index",
         "tags": [
           "v1",
-          "protected",
-          "agents",
-          "agents-well-known"
+          "public"
         ]
       }
     },
@@ -13080,15 +13078,13 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "bearer": []
           }
         ],
         "summary": "Get Agent A2A Info",
         "tags": [
           "v1",
-          "protected",
-          "agents",
-          "agents-well-known"
+          "public"
         ]
       }
     },
@@ -13132,15 +13128,13 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "bearer": []
           }
         ],
         "summary": "Get Agent Well Known Card",
         "tags": [
           "v1",
-          "protected",
-          "agents",
-          "agents-well-known"
+          "public"
         ]
       }
     },
@@ -17324,7 +17318,7 @@
     },
     "/v1/mcp-server-instances/health/containers": {
       "get": {
-        "description": "Get health status of all MCP containers by proxying to the Go manager.",
+        "description": "Health of this workspace's MCP workloads.\n\nThe manager also has a route that answers for every workload it runs, which is\nthe wrong thing to hand a caller: its rows carry service names and container\nids belonging to other workspaces. The instance list comes from the\nworkspace-scoped service instead, and only those ids are asked about, so the\nanswer cannot name a workload the caller is not entitled to see.\n\nA workload the manager reports as unhealthy, has never heard of, or cannot be\nreached about is a fact about that instance, not a failure of the request: each\nis reported per instance and the endpoint still answers 200.",
         "operationId": "get_containers_health_v1_mcp_server_instances_health_containers_get",
         "responses": {
           "200": {
