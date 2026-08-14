@@ -1611,7 +1611,7 @@ export const getAgentWellKnownIndexV1AgentsAgentIdWellKnownGet = <
   >({
     security: [
       {
-        key: "HTTPBearer",
+        key: "bearer",
         scheme: "bearer",
         type: "http",
       },
@@ -1646,7 +1646,7 @@ export const getAgentA2aInfoV1AgentsAgentIdWellKnownA2aInfoJsonGet = <
   >({
     security: [
       {
-        key: "HTTPBearer",
+        key: "bearer",
         scheme: "bearer",
         type: "http",
       },
@@ -1686,7 +1686,7 @@ export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGet = <
   >({
     security: [
       {
-        key: "HTTPBearer",
+        key: "bearer",
         scheme: "bearer",
         type: "http",
       },

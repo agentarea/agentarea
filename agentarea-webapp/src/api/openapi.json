@@ -13026,15 +13026,13 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "bearer": []
           }
         ],
         "summary": "Get Agent Well Known Index",
         "tags": [
           "v1",
-          "protected",
-          "agents",
-          "agents-well-known"
+          "public"
         ]
       }
     },
@@ -13080,15 +13078,13 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "bearer": []
           }
         ],
         "summary": "Get Agent A2A Info",
         "tags": [
           "v1",
-          "protected",
-          "agents",
-          "agents-well-known"
+          "public"
         ]
       }
     },
@@ -13132,15 +13128,13 @@
         },
         "security": [
           {
-            "HTTPBearer": []
+            "bearer": []
           }
         ],
         "summary": "Get Agent Well Known Card",
         "tags": [
           "v1",
-          "protected",
-          "agents",
-          "agents-well-known"
+          "public"
         ]
       }
     },
