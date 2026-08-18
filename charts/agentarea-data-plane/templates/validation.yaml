@@ -1,0 +1,36 @@
+{{- if ne (toString .Values.replicaCount) "1" }}
+{{- fail "replicaCount must be exactly 1: the persistent connector identity cannot be shared by replicas" }}
+{{- end }}
+{{- if not (trim .Values.controlPlaneURL) }}
+{{- fail "controlPlaneURL is required" }}
+{{- end }}
+{{- $controlPlaneURL := lower (trim .Values.controlPlaneURL) }}
+{{- if and (not (hasPrefix "https://" $controlPlaneURL)) (not (and .Values.allowInsecureDevelopment (hasPrefix "http://" $controlPlaneURL))) }}
+{{- fail "controlPlaneURL must use HTTPS; HTTP requires allowInsecureDevelopment=true" }}
+{{- end }}
+{{- if not (trim .Values.enrollment.existingSecret.name) }}
+{{- fail "enrollment.existingSecret.name is required and must refer to a pre-created Secret" }}
+{{- end }}
+{{- if not (trim .Values.enrollment.existingSecret.key) }}
+{{- fail "enrollment.existingSecret.key is required" }}
+{{- end }}
+{{- if not (trim .Values.image.repository) }}
+{{- fail "image.repository is required" }}
+{{- end }}
+{{- if and (not (trim .Values.image.tag)) (not (trim .Values.image.digest)) }}
+{{- fail "set image.tag or image.digest" }}
+{{- end }}
+{{- if and (not .Values.identity.existingClaim) (not (trim .Values.identity.size)) }}
+{{- fail "identity.size is required when identity.existingClaim is empty" }}
+{{- end }}
+{{- if and (not .Values.serviceAccount.create) (not (trim .Values.serviceAccount.name)) }}
+{{- fail "serviceAccount.name is required when serviceAccount.create=false" }}
+{{- end }}
+{{- range .Values.networkPolicy.additionalEgress }}
+{{- if not (trim .cidr) }}
+{{- fail "networkPolicy.additionalEgress[].cidr is required" }}
+{{- end }}
+{{- if not .ports }}
+{{- fail "networkPolicy.additionalEgress[].ports must list one or more explicit ports" }}
+{{- end }}
+{{- end }}

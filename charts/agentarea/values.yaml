@@ -686,10 +686,9 @@ mcpManager:
       - uvx mcp-server-fetch
       - uvx mcp-server-time
   # The cluster MCP instances and agent sandboxes are created in, when that is
-  # not the cluster the control plane itself runs in. Runtime class confines
-  # untrusted code to its own kernel; this moves it onto other machines
-  # entirely. `deploy/sandbox-host` provisions such a cluster and leaves a
-  # kubeconfig behind.
+  # an existing, operator-managed Kubernetes execution cluster rather than the
+  # cluster the control plane itself runs in. Runtime class confines untrusted
+  # code to its own kernel; this moves it onto other machines entirely.
   #
   # Leaving kubeconfigSecret empty means "create workloads in the cluster I am
   # in". That is discovery, not a fallback: nothing was declared to fall back
@@ -702,12 +701,12 @@ mcpManager:
   # cluster that was never configured — the chart would render in-cluster mode
   # while the operator believed otherwise. Half-configured renders are refused.
   executionCluster:
-    # Name of an existing Secret in the release namespace holding the execution
-    # cluster's kubeconfig. Create it out of band: cluster credentials passed
-    # through values would be kept in plaintext release history.
+    # Name of an existing Secret in the release namespace holding the
+    # operator-managed execution cluster's kubeconfig. Create it out of band:
+    # cluster credentials passed through values would be kept in plaintext
+    # release history.
     kubeconfigSecret: ""
-    # Key within that Secret. Projected read-only at /etc/agentarea/exec/<key>,
-    # the same path the dev compose stack mounts it at.
+    # Key within that Secret. Projected read-only at /etc/agentarea/exec/<key>.
     kubeconfigKey: ""
 
   # Untrusted MCP runtime and sandbox task pods use this zero-RBAC

@@ -1,7 +1,0 @@
-.envrc
-.terraform/
-*.tfstate
-*.tfstate.*
-crash.log
-*.out
-tfplan*

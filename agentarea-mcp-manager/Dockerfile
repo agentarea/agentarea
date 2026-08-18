@@ -62,7 +62,7 @@ COPY --from=builder /app/bin/sandbox-runner /app/sandbox-runner
 RUN mkdir -p /app/templates
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD /app/mcp-manager --health || exit 1
+    CMD wget -q -O /dev/null "http://127.0.0.1:${SERVER_PORT:-80}/health" || exit 1
 
 # 8000: mcp-manager API, 80: internal proxy
 EXPOSE 8000 80

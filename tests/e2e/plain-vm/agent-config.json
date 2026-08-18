@@ -1,0 +1,15 @@
+{
+  "control_plane_url": "http://127.0.0.1:28000",
+  "connector_gateway_url": "http://127.0.0.1:27999",
+  "data_plane_id": "11111111-1111-4111-8111-111111111111",
+  "identity_file": "/home/worker/.local/state/agentarea-plain-vm-e2e/identity.json",
+  "enrollment_token_file": "/home/worker/.local/state/agentarea-plain-vm-e2e/enrollment-token",
+  "allow_insecure_development": true,
+  "heartbeat_interval": "5s",
+  "mcp_provider": "docker",
+  "sandbox_provider": "disabled",
+  "docker_runtime": "docker",
+  "docker_network": "bridge",
+  "docker_name_prefix": "agentarea-e2e-mcp-",
+  "docker_max_containers": 5
+}

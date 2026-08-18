@@ -1,0 +1,98 @@
+# This chart deploys only the outbound data-plane-agent connector. It does not
+# install an execution provider or expose an inbound Service.
+replicaCount: 1
+
+image:
+  # Published by .github/workflows/release-publish.yaml.
+  repository: agentarea/agentarea-data-plane-agent
+  tag: "0.1.0"
+  # When set, the digest takes precedence over tag (for example sha256:...).
+  digest: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+controlPlaneURL: ""
+# Optional assertion. When supplied, enrollment must resolve to this data-plane ID.
+dataPlaneID: ""
+allowInsecureDevelopment: false
+
+capabilities:
+  # Advertise only capabilities backed by a separately configured runtime.
+  # The connector itself does not install a provider.
+  mcp: false
+  sandbox: false
+
+agent:
+  httpTimeout: 10s
+  heartbeatInterval: 30s
+  terminationGracePeriodSeconds: 30
+
+enrollment:
+  # Pre-create this Secret; the chart never creates or stores an enrollment token.
+  existingSecret:
+    name: ""
+    key: ""
+
+identity:
+  # Set existingClaim to reuse a pre-provisioned PVC; otherwise this chart creates one.
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 10001
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  capabilities:
+    drop:
+      - ALL
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+probes:
+  enabled: true
+  readiness:
+    initialDelaySeconds: 10
+    periodSeconds: 60
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 120
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+networkPolicy:
+  enabled: true
+  # HTTPS is required because the control-plane address is configured by URL and
+  # Kubernetes NetworkPolicy has no portable FQDN selector. Extra provider egress
+  # is deny-by-default: explicitly list only the CIDRs and ports it needs.
+  additionalEgress: []
+  # - cidr: 198.51.100.0/24
+  #   ports:
+  #     - 8443

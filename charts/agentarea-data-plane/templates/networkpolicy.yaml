@@ -1,0 +1,37 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentarea-data-plane.fullname" . }}
+  labels:
+    {{- include "agentarea-data-plane.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentarea-data-plane.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    # DNS resolution for the configured control-plane hostname.
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The agent is outbound-only and communicates with its HTTPS control plane.
+    - ports:
+        - protocol: TCP
+          port: 443
+    {{- range .Values.networkPolicy.additionalEgress }}
+    - to:
+        - ipBlock:
+            cidr: {{ required "networkPolicy.additionalEgress[].cidr is required" .cidr | quote }}
+      ports:
+        {{- range .ports }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    {{- end }}
+{{- end }}

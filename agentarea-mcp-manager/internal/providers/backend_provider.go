@@ -44,14 +44,14 @@ type BackendInstanceResult struct {
 	Status string
 }
 
-// Backend defines the interface that Kubernetes backend must satisfy
+// Backend defines the provider-neutral MCP lifecycle surface.
 type Backend interface {
 	CreateInstance(ctx context.Context, spec *BackendInstanceSpec) (*BackendInstanceResult, error)
 	DeleteInstance(ctx context.Context, instanceID string) error
 }
 
-// BackendProvider drives MCP workloads through a Backend: an in-cluster
-// Kubernetes API, or a remote data plane reached over HTTP.
+// BackendProvider drives MCP workloads through a Backend: local Docker,
+// in-cluster Kubernetes, or an outbound connector data plane.
 type BackendProvider struct {
 	backend Backend
 	logger  *slog.Logger
@@ -67,9 +67,9 @@ func NewBackendProvider(backend Backend, secretResolver secrets.SecretResolver, 
 	}
 }
 
-// CreateInstance creates a new Kubernetes deployment/service for the MCP server
+// CreateInstance creates an MCP runtime through the selected backend.
 func (p *BackendProvider) CreateInstance(ctx context.Context, instance *models.MCPServerInstance) error {
-	p.logger.Info("Creating Kubernetes instance via backend",
+	p.logger.Info("Creating MCP instance via backend",
 		slog.String("instance_id", instance.InstanceID),
 		slog.String("name", instance.Name))
 
@@ -85,13 +85,13 @@ func (p *BackendProvider) CreateInstance(ctx context.Context, instance *models.M
 	// Use the backend to create the instance
 	result, err := p.backend.CreateInstance(ctx, spec)
 	if err != nil {
-		p.logger.Error("Failed to create Kubernetes instance via backend",
+		p.logger.Error("Failed to create MCP instance via backend",
 			slog.String("instance_id", instance.InstanceID),
 			slog.String("error", err.Error()))
-		return fmt.Errorf("failed to create Kubernetes instance: %w", err)
+		return fmt.Errorf("failed to create MCP instance: %w", err)
 	}
 
-	p.logger.Info("Successfully created Kubernetes instance via backend",
+	p.logger.Info("Successfully created MCP instance via backend",
 		slog.String("instance_id", instance.InstanceID),
 		slog.String("name", instance.Name),
 		slog.String("url", result.URL))
@@ -99,21 +99,21 @@ func (p *BackendProvider) CreateInstance(ctx context.Context, instance *models.M
 	return nil
 }
 
-// DeleteInstance removes the Kubernetes resources for an MCP server
+// DeleteInstance removes the MCP runtime through the selected backend.
 func (p *BackendProvider) DeleteInstance(ctx context.Context, instanceID, name string) error {
-	p.logger.Info("Deleting Kubernetes instance via backend",
+	p.logger.Info("Deleting MCP instance via backend",
 		slog.String("instance_id", instanceID),
 		slog.String("name", name))
 
 	// Use the backend to delete the instance
 	if err := p.backend.DeleteInstance(ctx, instanceID); err != nil {
-		p.logger.Error("Failed to delete Kubernetes instance via backend",
+		p.logger.Error("Failed to delete MCP instance via backend",
 			slog.String("instance_id", instanceID),
 			slog.String("error", err.Error()))
-		return fmt.Errorf("failed to delete Kubernetes instance: %w", err)
+		return fmt.Errorf("failed to delete MCP instance: %w", err)
 	}
 
-	p.logger.Info("Successfully deleted Kubernetes instance via backend",
+	p.logger.Info("Successfully deleted MCP instance via backend",
 		slog.String("instance_id", instanceID),
 		slog.String("name", name))
 

@@ -263,17 +263,16 @@ services:
     container_name: mcp-manager
     restart: unless-stopped
     ports:
-      - "7999:80" # API server
+      # This one service exposes the ordinary manager API and the outbound
+      # ConnectRPC gateway. A plain-VM agent dials this host port; Compose
+      # never publishes a data-plane listener.
+      - "7999:80"
     tmpfs:
       - /tmp
       - /run
     volumes:
       - ./agentarea-mcp-manager:/app:rw # Mount source code for live reload
       - /var/run/docker.sock:/var/run/docker.sock # Docker socket for container management
-      # Where `deploy/sandbox-host` writes the execution cluster's kubeconfig.
-      # Mounted read-only and unused unless MCP_BACKEND_TYPE selects kubernetes;
-      # see the environment block below.
-      - ./deploy/sandbox-host:/etc/agentarea/exec:ro
     networks:
       - mcp-network
       - default
@@ -293,23 +292,30 @@ services:
       SKIP_INSTANCE_SYNC: "true"
       REDIS_URL: redis://valkey:6379
       CORE_API_URL: http://agentarea-backend:8000
+      # The platform enrollment/heartbeat API is published by app on :8000.
+      # HTTP is explicitly a local-development exception; production defaults
+      # to HTTPS and must opt in before accepting an insecure endpoint.
+      MCP_CONNECTOR_PLATFORM_API_URL: http://app:8000
+      MCP_CONNECTOR_ALLOW_INSECURE_DEVELOPMENT: "true"
+      # Select `MCP_BACKEND_TYPE=connector` with a logical UUID to route MCP
+      # lifecycle, proxy streams, and sandbox execution only through a live
+      # outbound agent session. There is no URL/token fallback to a host.
+      MCP_CONNECTOR_DATA_PLANE_ID: ${MCP_CONNECTOR_DATA_PLANE_ID:-}
       CONTAINER_RUNTIME: docker
       # Where MCP servers and agent sandboxes run.
       #
       #   docker      (default) — on this host's Docker daemon, i.e. beside the
       #                control plane, on its kernel. Fine for development.
       #   kubernetes  — on the cluster named by KUBERNETES_KUBECONFIG, under the
-      #                runtime class below. This is how you point the stack at
-      #                the gVisor host provisioned by deploy/sandbox-host with
-      #                sandbox_k3s_enabled=true:
-      #
-      #     MCP_BACKEND_TYPE=kubernetes
-      #     MCP_EXECUTION_KUBECONFIG=/etc/agentarea/exec/execution-cluster.kubeconfig
-      #     MCP_RUNTIME_CLASS=gvisor
+      #                runtime class below.
+      #   connector   — through the logical data plane named above. The agent
+      #                dials http://localhost:7999 with its enrollment-derived
+      #                node credential; an offline or draining agent is denied.
       #
       # An unrecognised value is refused at startup rather than quietly
       # auto-detected, so a typo cannot land untrusted workloads here.
       BACKEND_TYPE: ${MCP_BACKEND_TYPE:-docker}
+      # An external kubeconfig requires an explicit local Compose override/mount.
       KUBERNETES_KUBECONFIG: ${MCP_EXECUTION_KUBECONFIG:-}
       KUBERNETES_RUNTIME_CLASS: ${MCP_RUNTIME_CLASS:-}
       # Cold start of git/uvx-based MCP servers (clone + install ~90s) needs more

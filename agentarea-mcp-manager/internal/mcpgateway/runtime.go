@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -30,6 +31,20 @@ type RemoteUpstream struct {
 	Token   string
 }
 
+// ConnectorUpstream is an address-free MCP route. The placeholder endpoint is
+// local to the gateway implementation; ConnectorTransport ignores its host
+// and sends bytes only through the selected outbound connector.
+type ConnectorUpstream struct {
+	DataPlaneID        string
+	ConnectorTransport http.RoundTripper
+}
+
+func (u *ConnectorUpstream) valid() bool {
+	return u != nil && strings.TrimSpace(u.DataPlaneID) != "" && u.ConnectorTransport != nil
+}
+
+func (u *ConnectorUpstream) InstanceProxyURL(string) string { return "http://connector.invalid/mcp" }
+
 // InstanceProxyURL is the data plane's authenticated entry point for one
 // instance. The data plane owns the container and starts it on demand behind
 // this path, so the control plane never needs a routable address of its own.
@@ -44,14 +59,28 @@ type ProviderRuntime struct {
 	imagePolicy    ImagePolicy
 	startupTimeout time.Duration
 	remote         *RemoteUpstream
+	connector      *ConnectorUpstream
 }
 
-func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backend, cfg *config.Config, imagePolicy ImagePolicy, startupTimeout time.Duration, remote *RemoteUpstream) (*ProviderRuntime, error) {
+func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backend, cfg *config.Config, imagePolicy ImagePolicy, startupTimeout time.Duration, remote *RemoteUpstream, connector ...*ConnectorUpstream) (*ProviderRuntime, error) {
 	if providerManager == nil || backend == nil || cfg == nil || startupTimeout <= 0 {
 		return nil, fmt.Errorf("MCP provider runtime requires providers, backend, config, and positive startup timeout")
 	}
 	if remote != nil && (remote.BaseURL == "" || remote.Token == "") {
 		return nil, fmt.Errorf("a remote MCP upstream requires both a base URL and a token")
+	}
+	if len(connector) > 1 {
+		return nil, fmt.Errorf("at most one connector MCP upstream is allowed")
+	}
+	var connectorUpstream *ConnectorUpstream
+	if len(connector) == 1 {
+		connectorUpstream = connector[0]
+		if !connectorUpstream.valid() {
+			return nil, fmt.Errorf("connector MCP upstream requires a logical data plane ID and transport")
+		}
+	}
+	if remote != nil && connectorUpstream != nil {
+		return nil, fmt.Errorf("remote and connector MCP upstreams are mutually exclusive")
 	}
 	return &ProviderRuntime{
 		providers:      providerManager,
@@ -60,6 +89,7 @@ func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backe
 		imagePolicy:    imagePolicy,
 		startupTimeout: startupTimeout,
 		remote:         remote,
+		connector:      connectorUpstream,
 	}, nil
 }
 
@@ -125,6 +155,9 @@ func (r *ProviderRuntime) upstreamURL(instance *models.MCPServerInstance, instan
 	// the spec is the data plane's business rather than ours.
 	if r.remote != nil {
 		return r.remote.InstanceProxyURL(instance.InstanceID), nil
+	}
+	if r.connector != nil {
+		return r.connector.InstanceProxyURL(instance.InstanceID), nil
 	}
 	port, err := instancePort(instance, instanceType)
 	if err != nil {

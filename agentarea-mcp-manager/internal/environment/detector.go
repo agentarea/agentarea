@@ -19,6 +19,10 @@ const (
 	// host. It is never auto-detected: nothing about a machine indicates that
 	// workloads belong somewhere else, so it has to be declared.
 	EnvironmentDataplane Environment = "dataplane"
+	// EnvironmentConnector sends lifecycle and MCP proxy traffic through an
+	// authenticated outbound connector. It is explicit for the same reason as
+	// dataplane: a control plane must never guess where untrusted workloads go.
+	EnvironmentConnector Environment = "connector"
 )
 
 // Detector handles environment detection logic
@@ -158,13 +162,16 @@ func (d *Detector) ForceEnvironment(env string) (Environment, error) {
 	case "dataplane":
 		d.logger.Info("Forced remote data-plane environment via configuration")
 		return EnvironmentDataplane, nil
+	case "connector":
+		d.logger.Info("Forced outbound connector environment via configuration")
+		return EnvironmentConnector, nil
 	default:
 		// Auto-detecting past an unrecognised value is the wrong recovery: the
 		// operator said where workloads should run, and a typo like
 		// "kubernets" would otherwise start the docker backend, quietly
 		// creating untrusted workloads on the control plane's own host.
 		return "", fmt.Errorf(
-			"unknown backend environment %q (expected one of: kubernetes, k8s, docker, podman, dataplane)", env)
+			"unknown backend environment %q (expected one of: kubernetes, k8s, docker, podman, dataplane, connector)", env)
 	}
 }
 

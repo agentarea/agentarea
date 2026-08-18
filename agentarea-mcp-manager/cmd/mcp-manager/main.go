@@ -13,11 +13,17 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 
 	"github.com/agentarea/mcp-manager/internal/api"
 	"github.com/agentarea/mcp-manager/internal/artifactstore"
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/config"
+	"github.com/agentarea/mcp-manager/internal/connectorauth"
+	"github.com/agentarea/mcp-manager/internal/connectorbackend"
+	"github.com/agentarea/mcp-manager/internal/connectorhub"
+	"github.com/agentarea/mcp-manager/internal/connectortransport"
 	"github.com/agentarea/mcp-manager/internal/container"
 	"github.com/agentarea/mcp-manager/internal/database"
 	"github.com/agentarea/mcp-manager/internal/dataplane"
@@ -88,7 +94,8 @@ func initBackend(
 	cfg *config.Config,
 	logger *slog.Logger,
 	taskLeaseTTL time.Duration,
-) (string, backends.Backend, *container.Manager, *mcpgateway.RemoteUpstream) {
+	connectorHub *connectorhub.Hub,
+) (string, backends.Backend, *container.Manager, *mcpgateway.RemoteUpstream, *mcpgateway.ConnectorUpstream) {
 	if cfg.Environment != "" {
 		logger.Info("Using forced environment", slog.String("environment", cfg.Environment))
 	}
@@ -104,6 +111,7 @@ func initBackend(
 	var containerManager *container.Manager
 	// Non-nil only when MCP workloads live on a separate data plane.
 	var remoteUpstream *mcpgateway.RemoteUpstream
+	var connectorUpstream *mcpgateway.ConnectorUpstream
 
 	switch envType {
 	case "kubernetes":
@@ -136,6 +144,25 @@ func initBackend(
 		remoteUpstream = &mcpgateway.RemoteUpstream{BaseURL: agentCfg.BaseURL, Token: agentCfg.Token}
 		logger.Info("Remote data-plane backend configured", slog.String("url", agentCfg.BaseURL))
 
+	case "connector":
+		if connectorHub == nil {
+			logger.Error("Connector backend requires a connector hub")
+			os.Exit(1)
+		}
+		connectorBackend, err := connectorbackend.NewBackend(connectorHub, cfg.Connector.DataPlaneID)
+		if err != nil {
+			logger.Error("Failed to configure connector backend", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		transport, err := connectorbackend.NewRoundTripper(connectorHub, cfg.Connector.DataPlaneID)
+		if err != nil {
+			logger.Error("Failed to configure connector MCP proxy", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		backend = connectorBackend
+		connectorUpstream = &mcpgateway.ConnectorUpstream{DataPlaneID: cfg.Connector.DataPlaneID, ConnectorTransport: transport}
+		logger.Info("Outbound connector backend configured", slog.String("data_plane_id", cfg.Connector.DataPlaneID))
+
 	default:
 		logger.Error("Unsupported environment type", slog.String("type", envType))
 		os.Exit(1)
@@ -143,11 +170,16 @@ func initBackend(
 
 	// Reachability and the token are proven here rather than on the first tool
 	// call, where the failure would reach a user as a broken tool.
-	if err := backend.Initialize(ctx); err != nil {
-		logger.Error("Failed to initialize backend", slog.String("environment", envType), slog.String("error", err.Error()))
-		os.Exit(1)
+	// A connector manager must start before its outbound agent can connect. Its
+	// operations and proxy transport atomically reject offline/draining sessions
+	// at request time; probing here would create a startup deadlock.
+	if envType != "connector" {
+		if err := backend.Initialize(ctx); err != nil {
+			logger.Error("Failed to initialize backend", slog.String("environment", envType), slog.String("error", err.Error()))
+			os.Exit(1)
+		}
 	}
-	return envType, backend, containerManager, remoteUpstream
+	return envType, backend, containerManager, remoteUpstream, connectorUpstream
 }
 
 func initProviderManager(
@@ -162,7 +194,7 @@ func initProviderManager(
 	case envType == "docker" && containerManager != nil:
 		dockerProvider := providers.NewDockerProvider(secretResolver, containerManager, logger)
 		return providers.NewProviderManager(dockerProvider, nil, urlProvider)
-	case envType == "kubernetes" || envType == "dataplane":
+	case envType == "kubernetes" || envType == "dataplane" || envType == "connector":
 		// Both drive workloads through a Backend rather than a local container
 		// runtime: the Kubernetes API in-cluster, the remote data plane's HTTP
 		// API otherwise. Without this case a data-plane deployment fell through
@@ -205,22 +237,33 @@ func main() {
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	sandboxPolicy, err := sandboxruntime.LoadControlPolicyFromEnv()
-	if err != nil {
-		logger.Error("Failed to configure sandbox control policy", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	workspaceConfig, err := workspace.LoadConfigFromEnv()
-	if err != nil {
-		logger.Error("Failed to configure sandbox workspace policy", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	workspaceLimits := sandboxruntime.WorkspaceLimits{
-		MaxFiles: workspaceConfig.MaxFiles, MaxFileBytes: workspaceConfig.MaxFileBytes, MaxBytes: workspaceConfig.MaxBytes,
+	// Kubernetes uses this value to fence its own file operations even when the
+	// control-plane sandbox API is disabled. The complete sandbox policy remains
+	// opt-in below, so an MCP-only manager has no Redis or S3 dependency.
+	taskLeaseTTL := 15 * time.Minute
+	var sandboxPolicy sandboxruntime.ControlPolicy
+	var workspaceConfig workspace.RepositoryConfig
+	if cfg.SandboxEnabled {
+		var err error
+		sandboxPolicy, err = sandboxruntime.LoadControlPolicyFromEnv()
+		if err != nil {
+			logger.Error("Failed to configure sandbox control policy", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		workspaceConfig, err = workspace.LoadConfigFromEnv()
+		if err != nil {
+			logger.Error("Failed to configure sandbox workspace policy", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		taskLeaseTTL = sandboxPolicy.TaskLeaseTTL
 	}
 
-	// Detect environment and initialize appropriate backend
-	envType, backend, containerManager, remoteUpstream := initBackend(ctx, cfg, logger, sandboxPolicy.TaskLeaseTTL)
+	// A single shared hub is both the ConnectRPC handler's session authority and
+	// the connector backend's only route to a logical data plane.
+	connectorHub := connectorhub.NewHub(connectorhub.Config{})
+
+	// Detect environment and initialize appropriate backend.
+	envType, backend, containerManager, remoteUpstream, connectorUpstream := initBackend(ctx, cfg, logger, taskLeaseTTL, connectorHub)
 
 	// Data-plane mode stops here: this process is a data plane, and everything
 	// below — secrets, Redis, the event bus, the sandbox runtime — is
@@ -228,6 +271,24 @@ func main() {
 	// containers. The check lives inside the call so main does not grow another
 	// branch; it returns immediately unless data-plane mode was requested.
 	serveDataPlaneAndExit(ctx, cfg, backend, logger)
+
+	connectorAuthenticator, err := connectorauth.NewClient(connectorauth.Config{
+		PlatformAPIURL:           cfg.Connector.PlatformAPIURL,
+		AllowInsecureDevelopment: cfg.Connector.AllowInsecureDevelopment,
+		Timeout:                  cfg.Connector.AuthTimeout,
+	}, nil)
+	if err != nil {
+		logger.Error("Failed to configure connector authentication", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	connectorServer, err := connectortransport.NewServer(connectortransport.ServerConfig{
+		Authenticator: connectorAuthenticator, Hub: connectorHub,
+		HeartbeatInterval: 30 * time.Second, MaxQueuedMessages: 64,
+	})
+	if err != nil {
+		logger.Error("Failed to configure connector transport", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 
 	// Initialize secret resolver with Infisical SDK
 	secretResolver, err := secrets.NewSecretResolver(logger)
@@ -263,109 +324,139 @@ func main() {
 		os.Exit(1)
 	}
 	defer gatewayRepository.Close()
-	gatewayRuntime, err := mcpgateway.NewProviderRuntime(providerManager, backend, cfg, imagePolicy, gatewayPolicy.StartupTimeout, remoteUpstream)
+	gatewayRuntime, err := mcpgateway.NewProviderRuntime(providerManager, backend, cfg, imagePolicy, gatewayPolicy.StartupTimeout, remoteUpstream, connectorUpstream)
 	if err != nil {
 		logger.Error("Failed to initialize MCP demand runtime", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	mcpGateway, err := mcpgateway.New(gatewayRepository, gatewayRuntime, gatewayPolicy, logger, remoteUpstream)
+	mcpGateway, err := mcpgateway.New(gatewayRepository, gatewayRuntime, gatewayPolicy, logger, remoteUpstream, connectorUpstream)
 	if err != nil {
 		logger.Error("Failed to initialize MCP demand gateway", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
-	// The MCP backend and sandbox data plane are independent. A built-in
-	// sandbox provider needs the backend runtime; external providers do not.
-	builtinSandboxRuntime, _ := backend.(sandboxruntime.ManagedRuntime)
-	sandboxControlConfig, err := sandboxcontrol.LoadConfigFromEnv(cfg.Redis.URL)
-	if err != nil {
-		logger.Error("Failed to configure sandbox control plane", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	sandboxStore, err := sandboxcontrol.NewRedisStoreFromConfig(sandboxControlConfig)
-	if err != nil {
-		logger.Error("Failed to initialize sandbox provider state", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	defer sandboxStore.Close()
-	baseSandboxRuntime, sandboxProviderName, err := sandboxruntime.NewFromEnv(
-		ctx,
-		builtinSandboxRuntime,
-		sandboxStore.RedisClient(),
-		envType,
-		sandboxPolicy,
-		workspaceLimits,
-	)
-	if err != nil {
-		logger.Error("Failed to configure sandbox runtime", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	workspaceProvider, err := sandboxruntime.LoadWorkspaceProviderFromEnv()
-	if err != nil {
-		logger.Error("Failed to resolve sandbox workspace provider", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	sandboxRuntime, err := sandboxruntime.NewWorkspaceRuntimeForProvider(
-		ctx,
-		baseSandboxRuntime,
-		workspaceProvider,
-		workspaceConfig,
-	)
-	if err != nil {
-		logger.Error("Failed to configure sandbox workspace provider", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	logger.Info("Sandbox runtime configured", slog.String("provider", sandboxProviderName))
-
 	// Setup HTTP router
 	router := setupRouter(cfg, logger)
-	handler, err := api.NewHandler(backend, containerManager, logger, version, api.SandboxPolicy{
-		TaskIdleTTL:      sandboxPolicy.TaskIdleTTL,
-		MaxFileBytes:     workspaceConfig.MaxFileBytes,
-		MCPIsolationTier: cfg.Container.DefaultIsolationTier,
-	}, sandboxControlConfig, sandboxRuntime)
-	if err != nil {
-		logger.Error("Failed to initialize API handler", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	artifactRepository, err := artifactstore.NewFromConfig(ctx, artifactstore.ConfigFromWorkspace(workspaceConfig))
-	if err != nil {
-		logger.Error("Failed to configure sandbox artifact store", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	handler.SetSandboxArtifactStore(artifactRepository)
-	handler.SetupRoutes(router)
+	connectorPath, connectorHandler := connectorServer.Handler()
+	// Connect generators return a service prefix while clients call a concrete
+	// procedure below it (for example, .../OutboundConnector/Connect). Gin route
+	// matching is exact unless the prefix is mounted with a wildcard.
+	router.Any(connectorPath+"*procedure", gin.WrapH(connectorHandler))
 	router.Any("/mcp/:instance_id/mcp", gin.WrapH(mcpGateway))
 	router.DELETE("/mcp/:instance_id", gin.WrapF(mcpGateway.RetireHTTP))
+	if cfg.SandboxEnabled {
+		workspaceLimits := sandboxruntime.WorkspaceLimits{
+			MaxFiles: workspaceConfig.MaxFiles, MaxFileBytes: workspaceConfig.MaxFileBytes, MaxBytes: workspaceConfig.MaxBytes,
+		}
+		sandboxControlConfig, err := sandboxcontrol.LoadConfigFromEnv(cfg.Redis.URL)
+		if err != nil {
+			logger.Error("Failed to configure sandbox control plane", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		sandboxStore, err := sandboxcontrol.NewRedisStoreFromConfig(sandboxControlConfig)
+		if err != nil {
+			logger.Error("Failed to initialize sandbox provider state", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		defer sandboxStore.Close()
+		var sandboxRuntime sandboxruntime.ControlRuntime
+		var sandboxExecutor sandboxplacement.Executor
+		sandboxProviderName := envType
+		if envType == "connector" {
+			controlRuntime, controlErr := connectorbackend.NewControlRuntime(connectorHub, cfg.Connector.DataPlaneID)
+			if controlErr != nil {
+				logger.Error("Failed to configure connector sandbox control runtime", slog.String("error", controlErr.Error()))
+				os.Exit(1)
+			}
+			executor, executorErr := connectorbackend.NewSandboxExecutor(connectorHub, cfg.Connector.DataPlaneID)
+			if executorErr != nil {
+				logger.Error("Failed to configure connector sandbox executor", slog.String("error", executorErr.Error()))
+				os.Exit(1)
+			}
+			sandboxRuntime, sandboxExecutor, sandboxProviderName = controlRuntime, executor, "connector"
+		} else {
+			// The MCP backend and sandbox data plane are independent. A built-in
+			// sandbox provider needs the backend runtime; external providers do not.
+			builtinSandboxRuntime, _ := backend.(sandboxruntime.ManagedRuntime)
+			baseSandboxRuntime, providerName, runtimeErr := sandboxruntime.NewFromEnv(
+				ctx, builtinSandboxRuntime, sandboxStore.RedisClient(), envType, sandboxPolicy, workspaceLimits,
+			)
+			if runtimeErr != nil {
+				logger.Error("Failed to configure sandbox runtime", slog.String("error", runtimeErr.Error()))
+				os.Exit(1)
+			}
+			workspaceProvider, providerErr := sandboxruntime.LoadWorkspaceProviderFromEnv()
+			if providerErr != nil {
+				logger.Error("Failed to resolve sandbox workspace provider", slog.String("error", providerErr.Error()))
+				os.Exit(1)
+			}
+			workspaceRuntime, workspaceErr := sandboxruntime.NewWorkspaceRuntimeForProvider(ctx, baseSandboxRuntime, workspaceProvider, workspaceConfig)
+			if workspaceErr != nil {
+				logger.Error("Failed to configure sandbox workspace provider", slog.String("error", workspaceErr.Error()))
+				os.Exit(1)
+			}
+			sandboxRuntime, sandboxExecutor, sandboxProviderName = workspaceRuntime, workspaceRuntime, providerName
+		}
+		logger.Info("Sandbox runtime configured", slog.String("provider", sandboxProviderName))
 
-	if features.IsEnabled(features.WarmPool) {
-		if k8sBackend, ok := backend.(*backends.KubernetesBackend); ok {
-			if wpClient := k8sBackend.GetWarmPoolClient(); wpClient != nil {
-				if err := startSandboxTaskGC(ctx, logger, wpClient); err != nil {
-					logger.Error("Failed to configure sandbox task GC", slog.String("error", err.Error()))
-					os.Exit(1)
+		handler, handlerErr := api.NewHandler(backend, containerManager, logger, version, api.SandboxPolicy{
+			TaskIdleTTL:      sandboxPolicy.TaskIdleTTL,
+			MaxFileBytes:     workspaceConfig.MaxFileBytes,
+			MCPIsolationTier: cfg.Container.DefaultIsolationTier,
+		}, sandboxControlConfig, sandboxRuntime)
+		if handlerErr != nil {
+			logger.Error("Failed to initialize API handler", slog.String("error", handlerErr.Error()))
+			os.Exit(1)
+		}
+		artifactRepository, artifactErr := artifactstore.NewFromConfig(ctx, artifactstore.ConfigFromWorkspace(workspaceConfig))
+		if artifactErr != nil {
+			logger.Error("Failed to configure sandbox artifact store", slog.String("error", artifactErr.Error()))
+			os.Exit(1)
+		}
+		handler.SetSandboxArtifactStore(artifactRepository)
+		handler.SetupRoutes(router)
+
+		if features.IsEnabled(features.WarmPool) {
+			if k8sBackend, ok := backend.(*backends.KubernetesBackend); ok {
+				if wpClient := k8sBackend.GetWarmPoolClient(); wpClient != nil {
+					if err := startSandboxTaskGC(ctx, logger, wpClient); err != nil {
+						logger.Error("Failed to configure sandbox task GC", slog.String("error", err.Error()))
+						os.Exit(1)
+					}
 				}
 			}
 		}
-	}
 
-	// Run the sandbox execution consumer in-process (opt-in) so code execution
-	// works without a standalone runner — used by docker-compose. Off by default
-	// so Kubernetes, which runs a dedicated agentarea-sandbox-runner, keeps all
-	// execution work out of the (more privileged) control plane.
-	if err := startEmbeddedSandboxRunner(ctx, cfg, sandboxRuntime, sandboxProviderName, workspaceConfig, logger); err != nil {
-		logger.Error("Failed to configure embedded sandbox runner", slog.String("error", err.Error()))
-		os.Exit(1)
+		// Run the sandbox execution consumer in-process only when the sandbox API
+		// itself is enabled. MCP-only control planes do not initialize a runner.
+		if err := startEmbeddedSandboxRunner(ctx, cfg, sandboxExecutor, sandboxProviderName, workspaceConfig, logger); err != nil {
+			logger.Error("Failed to configure embedded sandbox runner", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+	} else {
+		router.GET("/health", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"status": "healthy", "version": version, "sandbox_enabled": false})
+		})
+		logger.Info("Sandbox API disabled; starting MCP and connector services only")
 	}
 
 	go mcpGateway.StartReaper(ctx)
 
 	// Start HTTP server
 	server := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
-		Handler:      router,
-		ReadTimeout:  cfg.Server.ReadTimeout,
-		WriteTimeout: cfg.Server.WriteTimeout,
+		Addr: fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
+		// h2c keeps ordinary HTTP/1.1 routes working while enabling the
+		// bidirectional connector stream behind a local Compose port or a TLS
+		// terminating ingress. Agents still reject remote clear-text URLs.
+		Handler: h2c.NewHandler(router, &http2.Server{}),
+		// A connector request is a deliberately long-lived bidirectional body.
+		// ReadTimeout/WriteTimeout apply to the whole request and would sever a
+		// healthy stream during a slow image pull or after a fixed wall-clock
+		// lifetime. Bound only header delivery here. IdleTimeout must remain zero:
+		// setting it to the connector heartbeat interval creates a timer race that
+		// drops an otherwise healthy stream just before its first heartbeat.
+		// Operations and proxy calls carry their own protocol deadlines.
+		ReadHeaderTimeout: cfg.Server.ReadTimeout,
 	}
 
 	// Start server in a goroutine
@@ -594,7 +685,7 @@ func startSandboxTaskGC(ctx context.Context, logger *slog.Logger, client *warmpo
 // standalone sandbox-runner. Opt-in via SANDBOX_EMBEDDED_RUNNER=true; off by
 // default so Kubernetes (which runs a dedicated agentarea-sandbox-runner) keeps
 // execution work out of the more-privileged control plane.
-func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, runtime sandboxruntime.Runtime, providerName string, workspaceConfig workspace.RepositoryConfig, logger *slog.Logger) error {
+func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, runtime sandboxplacement.Executor, providerName string, workspaceConfig workspace.RepositoryConfig, logger *slog.Logger) error {
 	rawEnabled := os.Getenv("SANDBOX_EMBEDDED_RUNNER")
 	enabled := false
 	if rawEnabled != "" {

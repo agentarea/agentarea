@@ -1,9 +1,9 @@
 name: Publish Release
 
 # Triggered by push of a semver tag `vX.Y.Z`.
-# Does NOT rebuild images. Retags existing `<version>-<sha>` artifacts (pushed by
-# ci.yml on merge to main) with immutable semver tags `<version>`, `<maj.min>`,
-# `<maj>`, and the mutable `latest`. Then creates a GitHub Release.
+# Retags the existing platform images produced by ci.yml. The standalone
+# data-plane agent is the exception: this workflow builds its release binaries
+# and multi-architecture image from the tagged source, then creates the release.
 #
 # Preconditions (enforced by scripts/release.sh and re-checked here):
 #   - Tag name is `vX.Y.Z` (semver)
@@ -27,7 +27,7 @@ jobs:
       major_minor: ${{ steps.parse.outputs.major_minor }}
       short_sha: ${{ steps.parse.outputs.short_sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
@@ -126,15 +126,178 @@ jobs:
 
           echo "Retagged ${IMAGE}:${SRC_TAG} -> ${VERSION}, ${MAJOR_MINOR}, ${MAJOR}, latest"
 
+  # The data-plane agent is intentionally built from the tagged source rather
+  # than promoted from ci.yml. It is released as portable binaries as well as
+  # an OCI image, while the existing eight-component promotion matrix remains
+  # build-once/promote-on-tag.
+  data-plane-agent-binaries:
+    runs-on: ${{ matrix.runner }}
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            runner: ubuntu-latest
+          - goarch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab # v5.5.0
+        with:
+          go-version-file: agentarea-mcp-manager/go.mod
+          cache-dependency-path: agentarea-mcp-manager/go.sum
+
+      - name: Build release binary
+        working-directory: agentarea-mcp-manager
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
+            -o "dist/data-plane-agent_linux_${GOARCH}" ./cmd/data-plane-agent
+
+      - name: Upload release binary
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: data-plane-agent-linux-${{ matrix.goarch }}
+          path: agentarea-mcp-manager/dist/data-plane-agent_linux_${{ matrix.goarch }}
+          if-no-files-found: error
+          retention-days: 1
+
+  data-plane-agent-image-build:
+    runs-on: ${{ matrix.runner }}
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Build and push image by digest
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: agentarea-mcp-manager
+          file: agentarea-mcp-manager/Dockerfile.data-plane-agent
+          platforms: ${{ matrix.platform }}
+          cache-from: type=gha,scope=data-plane-agent-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=data-plane-agent-${{ matrix.arch }}
+          build-args: |
+            VERSION=${{ needs.verify.outputs.version }}
+          outputs: type=image,name=agentarea/agentarea-data-plane-agent,push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+
+      - name: Export digest
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload image digest
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: data-plane-agent-digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  data-plane-agent-image-publish:
+    runs-on: ubuntu-latest
+    needs: [verify, data-plane-agent-image-build]
+    permissions:
+      contents: read
+    steps:
+      - name: Download image digests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: data-plane-agent-digest-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Publish multi-architecture release tags
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          IMAGE: agentarea/agentarea-data-plane-agent
+          VERSION: ${{ needs.verify.outputs.version }}
+          MAJOR_MINOR: ${{ needs.verify.outputs.major_minor }}
+          MAJOR: ${{ needs.verify.outputs.major }}
+        run: |
+          set -euo pipefail
+          digests=(*)
+          if [ "${#digests[@]}" -ne 2 ]; then
+            echo "::error::Expected amd64 and arm64 image digests, found ${#digests[@]}"
+            exit 1
+          fi
+          sources=()
+          for digest in "${digests[@]}"; do
+            sources+=("${IMAGE}@sha256:${digest}")
+          done
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${VERSION}" \
+            --tag "${IMAGE}:${MAJOR_MINOR}" \
+            --tag "${IMAGE}:${MAJOR}" \
+            --tag "${IMAGE}:latest" \
+            "${sources[@]}"
+          docker buildx imagetools inspect "${IMAGE}:${VERSION}"
+
   release:
     runs-on: ubuntu-latest
-    needs: [verify, retag]
+    needs: [verify, retag, data-plane-agent-binaries, data-plane-agent-image-publish]
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+
+      - name: Download data-plane agent binaries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: release-assets
+          pattern: data-plane-agent-linux-*
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        working-directory: release-assets
+        run: |
+          set -euo pipefail
+          sha256sum data-plane-agent_linux_amd64 data-plane-agent_linux_arm64 > SHA256SUMS
+          sha256sum --check SHA256SUMS
 
       - name: Create GitHub Release
         env:
@@ -161,4 +324,7 @@ jobs:
 
           gh release create "$TAG" \
             --title "Release $TAG" \
-            --notes-file "$NOTES_FILE"
+            --notes-file "$NOTES_FILE" \
+            release-assets/data-plane-agent_linux_amd64 \
+            release-assets/data-plane-agent_linux_arm64 \
+            release-assets/SHA256SUMS

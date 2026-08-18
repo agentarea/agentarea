@@ -156,6 +156,29 @@ func (m *Manager) Initialize(ctx context.Context) error {
 	return nil
 }
 
+// InitializeHostMCP initializes a standalone data-plane host. It validates
+// that the selected local container runtime is usable and discovers only
+// containers stamped as managed by this process; it deliberately performs no
+// database/Core API synchronization.
+func (m *Manager) InitializeHostMCP(ctx context.Context) error {
+	m.logger.Info("Initializing standalone MCP container manager")
+	if err := m.RefreshHostMCP(ctx); err != nil {
+		return err
+	}
+	go m.startHealthMonitoring()
+	return nil
+}
+
+// RefreshHostMCP reconciles the process cache from the already-installed
+// runtime. It is safe to call after an ambiguous create or connector restart:
+// discovery adopts only containers stamped with MCP_INSTANCE_ID and preserves
+// their provider ownership labels.
+func (m *Manager) RefreshHostMCP(ctx context.Context) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.discoverContainers(ctx)
+}
+
 // CreateContainer creates a new container from a template
 func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContainerRequest) (*models.Container, error) {
 	m.mutex.Lock()

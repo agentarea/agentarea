@@ -1,0 +1,46 @@
+[server]
+host = "127.0.0.1"
+port = 28081
+api_key = "agentarea-e2e-opensandbox-key-000000000000"
+max_sandbox_timeout_seconds = 3600
+timeout_keep_alive = 30
+timeout_graceful_shutdown = 15
+limit_concurrency = 32
+
+[log]
+level = "INFO"
+file_enabled = false
+
+[runtime]
+type = "docker"
+execd_image = "opensandbox/execd@sha256:1dc98c7de10b9a73450ac75aa0f200ad7972f2c40f5225f6a8998e166b45d6dd"
+
+[storage]
+allowed_host_paths = []
+volume_default_size = "1Gi"
+
+[store]
+type = "sqlite"
+path = "/var/lib/opensandbox/opensandbox.db"
+
+[docker]
+network_mode = "bridge"
+api_timeout = 180
+host_ip = "127.0.0.1"
+port_range_min = 41000
+port_range_max = 41599
+drop_capabilities = ["AUDIT_WRITE", "MKNOD", "NET_ADMIN", "NET_RAW", "SYS_ADMIN", "SYS_MODULE", "SYS_PTRACE", "SYS_TIME", "SYS_TTY_CONFIG"]
+no_new_privileges = true
+apparmor_profile = ""
+pids_limit = 1024
+seccomp_profile = ""
+
+[ingress]
+mode = "direct"
+
+[renew_intent]
+enabled = false
+min_interval_seconds = 60
+
+[otel]
+enabled = false

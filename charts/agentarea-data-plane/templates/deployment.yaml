@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentarea-data-plane.fullname" . }}
+  labels:
+    {{- include "agentarea-data-plane.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "agentarea-data-plane.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea-data-plane.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
+      serviceAccountName: {{ include "agentarea-data-plane.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.agent.terminationGracePeriodSeconds }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: enroll
+          image: {{ include "agentarea-data-plane.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              identity=/var/lib/agentarea/identity/data-plane-agent.identity.json
+              if [ ! -s "$identity" ]; then
+                exec /usr/local/bin/data-plane-agent join --config /etc/agentarea/config/config.json
+              fi
+              echo "Persistent identity exists; skipping enrollment."
+          volumeMounts:
+            - name: identity
+              # Mount the PVC one level above the protected identity directory.
+              # Kubernetes owns the volume root; the non-root agent can then
+              # create and chmod /var/lib/agentarea/identity itself.
+              mountPath: /var/lib/agentarea
+            - name: config
+              mountPath: /etc/agentarea/config
+              readOnly: true
+            - name: enrollment-token
+              mountPath: /var/run/agentarea/enrollment
+              readOnly: true
+      containers:
+        - name: data-plane-agent
+          image: {{ include "agentarea-data-plane.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["run", "--config", "/etc/agentarea/config/config.json"]
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.probes.enabled }}
+          readinessProbe:
+            exec:
+              command: ["/usr/local/bin/data-plane-agent", "doctor", "--config", "/etc/agentarea/config/config.json"]
+            {{- toYaml .Values.probes.readiness | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: ["/usr/local/bin/data-plane-agent", "doctor", "--config", "/etc/agentarea/config/config.json"]
+            {{- toYaml .Values.probes.liveness | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: identity
+              mountPath: /var/lib/agentarea
+            - name: config
+              mountPath: /etc/agentarea/config
+              readOnly: true
+      volumes:
+        - name: identity
+          persistentVolumeClaim:
+            claimName: {{ include "agentarea-data-plane.identityClaimName" . }}
+        - name: config
+          configMap:
+            name: {{ include "agentarea-data-plane.fullname" . }}
+        - name: enrollment-token
+          secret:
+            secretName: {{ .Values.enrollment.existingSecret.name | quote }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.enrollment.existingSecret.key | quote }}
+                path: token

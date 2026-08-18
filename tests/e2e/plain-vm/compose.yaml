@@ -1,0 +1,189 @@
+name: agentarea-plain-vm-e2e
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: agentarea
+      POSTGRES_PASSWORD: agentarea-e2e-password
+      POSTGRES_DB: agentarea
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentarea -d agentarea"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  valkey:
+    image: valkey/valkey:8
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    ports:
+      - "127.0.0.1:16379:6379"
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    command: ["/data", "--console-enable"]
+    environment:
+      RUSTFS_ACCESS_KEY: agentarea-e2e-access
+      RUSTFS_SECRET_KEY: agentarea-e2e-secret-000000000000000000000000
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+    volumes:
+      - rustfs-data:/data
+
+  bucket-init:
+    image: rclone/rclone:latest
+    environment:
+      RCLONE_CONFIG_E2E_TYPE: s3
+      RCLONE_CONFIG_E2E_PROVIDER: Other
+      RCLONE_CONFIG_E2E_ACCESS_KEY_ID: agentarea-e2e-access
+      RCLONE_CONFIG_E2E_SECRET_ACCESS_KEY: agentarea-e2e-secret-000000000000000000000000
+      RCLONE_CONFIG_E2E_ENDPOINT: http://rustfs:9000
+      RCLONE_CONFIG_E2E_ACL: private
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["rclone mkdir e2e:artifacts"]
+
+  migrate:
+    image: agentarea/agentarea-api:plain-vm-e2e
+    build:
+      context: ../../../agentarea-platform
+      dockerfile: apps/api/Dockerfile
+    environment: &database-environment
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: agentarea
+      POSTGRES_PASSWORD: agentarea-e2e-password
+      POSTGRES_DB: agentarea
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["agentarea-api", "migrate"]
+
+  seed:
+    image: postgres:15-alpine
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: agentarea
+      PGPASSWORD: agentarea-e2e-password
+      PGDATABASE: agentarea
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ./seed.sql:/seed.sql:ro
+    command: ["psql", "-v", "ON_ERROR_STOP=1", "-f", "/seed.sql"]
+
+  api:
+    image: agentarea/agentarea-api:plain-vm-e2e
+    build:
+      context: ../../../agentarea-platform
+      dockerfile: apps/api/Dockerfile
+    environment:
+      <<: *database-environment
+      REDIS_URL: redis://valkey:6379
+      BROKER_TYPE: redis
+      ACCESS_CONTROL_BACKEND: disabled
+      WORKFLOW__EXECUTION_ENGINE: direct
+      RELOAD: "false"
+      AUTH_PROVIDER: kratos
+      KRATOS_JWKS_B64: eyJrZXlzIjpbXX0=
+      KRATOS_ISSUER: http://localhost.invalid
+      KRATOS_AUDIENCE: agentarea-api
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    command: ["agentarea-api", "serve", "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]
+    ports:
+      - "127.0.0.1:18000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+
+  manager:
+    image: agentarea/agentarea-mcp-manager:plain-vm-e2e
+    build:
+      context: ../../../agentarea-mcp-manager
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "80"
+      LOG_LEVEL: INFO
+      BACKEND_TYPE: connector
+      SANDBOX_ENABLED: "true"
+      SANDBOX_EMBEDDED_RUNNER: "false"
+      SANDBOX_TASK_LEASE_TTL: 15m
+      SANDBOX_TASK_IDLE_TTL: 5m
+      SANDBOX_PROVIDER_PROVISIONING_TIMEOUT: 2m
+      SANDBOX_PROVIDER_SESSION_TTL: 24h
+      SANDBOX_EXECUTION_RECORD_TTL: 24h
+      SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS: "300"
+      SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS: "60"
+      SANDBOX_EXECUTION_QUEUE_TIMEOUT: 5m
+      SANDBOX_EXECUTION_COMPLETION_GRACE: 2m
+      SANDBOX_CONTROL_REDIS_PREFIX: agentarea:e2e:control
+      SANDBOX_EXECUTION_REQUEST_STREAM: agentarea:e2e:sandbox:requests
+      SANDBOX_EXECUTION_EVENT_STREAM: agentarea:e2e:sandbox:events
+      SANDBOX_CONTROL_AUTH_SECRET: agentarea-e2e-sandbox-control-secret-000000000000
+      SANDBOX_FILE_AUTH_SECRET: agentarea-e2e-sandbox-file-secret-000000000000000
+      SANDBOX_CLEANUP_AUTH_SECRET: agentarea-e2e-sandbox-cleanup-secret-000000000000
+      SANDBOX_WORKSPACE_PROVIDER: s3
+      SANDBOX_WORKSPACE_MAX_FILES: "1000"
+      SANDBOX_WORKSPACE_MAX_FILE_BYTES: "16777216"
+      SANDBOX_WORKSPACE_MAX_BYTES: "67108864"
+      SANDBOX_WORKSPACE_SIGNED_URL_TTL: 1h
+      SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE: "true"
+      SANDBOX_WORKSPACE_S3_BUCKET: artifacts
+      AWS_ACCESS_KEY_ID: agentarea-e2e-access
+      AWS_SECRET_ACCESS_KEY: agentarea-e2e-secret-000000000000000000000000
+      AWS_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://rustfs:9000
+      ARTIFACTS_BUCKET_NAME: artifacts
+      MCP_CONNECTOR_DATA_PLANE_ID: 11111111-1111-4111-8111-111111111111
+      MCP_CONNECTOR_PLATFORM_API_URL: http://api:8000
+      MCP_CONNECTOR_ALLOW_INSECURE_DEVELOPMENT: "true"
+      MCP_GATEWAY_AUTH_SECRET: agentarea-e2e-manager-auth-secret-000000000000
+      MCP_REQUEST_LEASE_TTL: 90s
+      MCP_GATEWAY_STARTUP_TIMEOUT: 2m
+      MCP_IDLE_TIMEOUT: "0"
+      MCP_IDLE_SWEEP_INTERVAL: 30s
+      MCP_ALLOWED_IMAGE_REPOSITORIES: traefik/whoami,agentarea/weather-mcp
+      MCP_ALLOWED_COMMAND_PACKAGES: ""
+      SECRET_MANAGER_TYPE: database
+      SECRET_MANAGER_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: agentarea
+      POSTGRES_PASSWORD: agentarea-e2e-password
+      POSTGRES_DB: agentarea
+    depends_on:
+      api:
+        condition: service_healthy
+      bucket-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:17999:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+
+volumes:
+  db-data:
+  rustfs-data:

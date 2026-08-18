@@ -1,0 +1,17 @@
+{{- if not .Values.identity.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "agentarea-data-plane.identityClaimName" . }}
+  labels:
+    {{- include "agentarea-data-plane.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.identity.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.identity.size | quote }}
+  {{- with .Values.identity.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}

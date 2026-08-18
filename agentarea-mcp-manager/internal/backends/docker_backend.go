@@ -483,6 +483,14 @@ func (d *DockerBackend) Initialize(ctx context.Context) error {
 	return d.manager.Initialize(ctx)
 }
 
+// InitializeMCPHost verifies an already-installed local Docker/Podman runtime
+// for an MCP-only data-plane agent. It intentionally does not enable the
+// development sandbox executor or install any provider components.
+func (d *DockerBackend) InitializeMCPHost(ctx context.Context) error {
+	d.logger.Info("Initializing Docker MCP host backend")
+	return d.manager.InitializeHostMCP(ctx)
+}
+
 // CreateInstance creates a new MCP server instance using the existing container manager
 func (d *DockerBackend) CreateInstance(ctx context.Context, spec *InstanceSpec) (*InstanceResult, error) {
 	d.logger.Info("Creating instance with Docker backend",
@@ -576,7 +584,17 @@ func (d *DockerBackend) StartInstance(ctx context.Context, instanceID string) er
 func (d *DockerBackend) GetInstanceStatus(ctx context.Context, instanceID string) (*InstanceStatus, error) {
 	serviceName := d.findServiceNameByID(instanceID)
 	if serviceName == "" {
-		return nil, fmt.Errorf("%w: %s", ErrInstanceNotFound, instanceID)
+		// A provider command can succeed after its connector context is lost.
+		// Re-read provider state once before declaring the instance absent so a
+		// subsequent idempotent create adopts that container instead of colliding
+		// with its Docker name.
+		if err := d.manager.RefreshHostMCP(ctx); err != nil {
+			return nil, fmt.Errorf("refresh Docker MCP instances: %w", err)
+		}
+		serviceName = d.findServiceNameByID(instanceID)
+		if serviceName == "" {
+			return nil, fmt.Errorf("%w: %s", ErrInstanceNotFound, instanceID)
+		}
 	}
 
 	container, err := d.manager.GetContainer(serviceName)

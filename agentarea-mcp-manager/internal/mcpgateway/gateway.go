@@ -111,9 +111,10 @@ type Gateway struct {
 	policy     Policy
 	logger     *slog.Logger
 	remote     *RemoteUpstream
+	connector  *ConnectorUpstream
 }
 
-func New(repository LifecycleRepository, runtime InstanceRuntime, policy Policy, logger *slog.Logger, remote *RemoteUpstream) (*Gateway, error) {
+func New(repository LifecycleRepository, runtime InstanceRuntime, policy Policy, logger *slog.Logger, remote *RemoteUpstream, connector ...*ConnectorUpstream) (*Gateway, error) {
 	if repository == nil || runtime == nil || logger == nil {
 		return nil, fmt.Errorf("MCP gateway repository, runtime, and logger are required")
 	}
@@ -123,7 +124,20 @@ func New(repository LifecycleRepository, runtime InstanceRuntime, policy Policy,
 	if remote != nil && (remote.BaseURL == "" || remote.Token == "") {
 		return nil, fmt.Errorf("a remote MCP upstream requires both a base URL and a token")
 	}
-	return &Gateway{repository: repository, runtime: runtime, policy: policy, logger: logger, remote: remote}, nil
+	if len(connector) > 1 {
+		return nil, fmt.Errorf("at most one connector MCP upstream is allowed")
+	}
+	var connectorUpstream *ConnectorUpstream
+	if len(connector) == 1 {
+		connectorUpstream = connector[0]
+		if !connectorUpstream.valid() {
+			return nil, fmt.Errorf("connector MCP upstream requires a logical data plane ID and transport")
+		}
+	}
+	if remote != nil && connectorUpstream != nil {
+		return nil, fmt.Errorf("remote and connector MCP upstreams are mutually exclusive")
+	}
+	return &Gateway{repository: repository, runtime: runtime, policy: policy, logger: logger, remote: remote, connector: connectorUpstream}, nil
 }
 
 // isRemoteUpstream reports whether this upstream is the configured data plane,
@@ -229,12 +243,20 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.FlushInterval = -1
+	if g.connector != nil {
+		proxy.Transport = g.connector.ConnectorTransport
+	}
 	originalDirector := proxy.Director
 	proxy.Director = func(outbound *http.Request) {
 		originalDirector(outbound)
 		outbound.URL.Path = target.Path
 		outbound.URL.RawPath = ""
 		outbound.Host = target.Host
+		if g.connector != nil {
+			// The connector agent needs the selected instance, but the caller
+			// never controls this routing header.
+			outbound.Header.Set("X-Agentarea-Instance-Id", instanceID)
+		}
 		if remoteHop {
 			// Set, never add: whatever the caller sent is replaced, so a client
 			// can neither read this credential nor smuggle its own to the data

@@ -1,0 +1,38 @@
+name: agentarea-plain-vm-opensandbox-e2e
+
+services:
+  sandbox-state:
+    image: valkey/valkey:8
+    command: ["valkey-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:26379:6379"
+    volumes:
+      - sandbox-state:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  opensandbox:
+    image: opensandbox/server@sha256:8f8762af7565ed9c6f9dbcf009dd56727aa1fef8ce58a17f2b007b88cfe542bb
+    network_mode: host
+    user: "0:0"
+    environment:
+      HOME: /var/lib/opensandbox
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config.toml:/etc/opensandbox/config.toml:ro
+      - opensandbox-data:/var/lib/opensandbox
+    depends_on:
+      sandbox-state:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--header", "OPEN-SANDBOX-API-KEY: agentarea-e2e-opensandbox-key-000000000000", "-O", "-", "http://127.0.0.1:28081/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+
+volumes:
+  sandbox-state:
+  opensandbox-data:

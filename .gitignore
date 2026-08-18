@@ -58,6 +58,14 @@ htmlcov/
 .env.development.local
 .env.test.local
 .env.production.local
+inventory.ini
+*.retry
+*.kubeconfig
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan*
+.envrc
 
 # Telegram smoke-test credentials + scratch scripts (hold raw API
 # keys / session files — must never be committed).

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: agentarea-data-plane
+description: Outbound-only AgentArea data-plane connector
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.25.0-0"
+home: https://github.com/agentarea/agentarea
+sources:
+  - https://github.com/agentarea/agentarea

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentarea-data-plane.fullname" . }}
+  labels:
+    {{- include "agentarea-data-plane.labels" . | nindent 4 }}
+data:
+  config.json: |
+    {{- dict
+      "control_plane_url" .Values.controlPlaneURL
+      "data_plane_id" .Values.dataPlaneID
+      "identity_file" "/var/lib/agentarea/identity/data-plane-agent.identity.json"
+      "enrollment_token_file" "/var/run/agentarea/enrollment/token"
+      "allow_insecure_development" .Values.allowInsecureDevelopment
+      "http_timeout" .Values.agent.httpTimeout
+      "heartbeat_interval" .Values.agent.heartbeatInterval
+      "capabilities" .Values.capabilities
+      | toPrettyJson | nindent 4 }}

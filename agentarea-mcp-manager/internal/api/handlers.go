@@ -141,22 +141,16 @@ func (h *Handler) runtimeManifest(c *gin.Context) {
 
 // healthCheck returns the health status of the service
 func (h *Handler) healthCheck(c *gin.Context) {
-	// Get instance count from backend
-	instancesRunning := 0
-	if instances, err := h.backend.ListInstances(c.Request.Context()); err == nil {
-		for _, instance := range instances {
-			if instance.Status == "running" {
-				instancesRunning++
-			}
-		}
-	}
-
 	uptime := time.Since(h.startTime).String()
 
 	response := models.HealthResponse{
-		Status:            "healthy",
-		Version:           h.version,
-		ContainersRunning: instancesRunning, // Keep field name for backward compatibility
+		Status:  "healthy",
+		Version: h.version,
+		// Keep the compatibility field without turning process liveness into a
+		// remote workload inventory scan. Connector and external data planes can
+		// be slow or temporarily unavailable; probing them on every container
+		// healthcheck creates an outage-amplifying request storm.
+		ContainersRunning: 0,
 		Timestamp:         time.Now(),
 		Uptime:            uptime,
 	}

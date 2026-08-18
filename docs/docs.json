@@ -138,7 +138,7 @@
           "self-host/configuration",
           "self-host/docker-compose",
           "self-host/kubernetes",
-          "self-host/mcp-data-plane",
+          "self-host/data-plane-agent",
           "self-host/networking",
           "self-host/secrets-backends",
           "self-host/database-and-migrations",

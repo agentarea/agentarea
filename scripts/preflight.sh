@@ -28,6 +28,13 @@ fail() { printf '\033[31m✗ %s\033[0m\n' "$1"; exit 1; }
 # Track tool availability
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# ── 0. Public hosted-sandbox boundary ───────────────────────────────────────
+if ! should_skip hosted-sandbox-infra; then
+  step "Hosted sandbox infrastructure boundary"
+  scripts/check-no-hosted-sandbox-infra.sh || fail "hosted sandbox infrastructure is still present in public surfaces"
+  ok "Hosted sandbox infrastructure boundary"
+fi
+
 # ── 1. Python lint + tests (agentarea-platform) ─────────────────────────────
 # Matches CI: `ruff check` + `ruff format --check` + pytest. Pyright is
 # declared in pyproject but NOT enforced by CI; it lights up 400+ pre-existing

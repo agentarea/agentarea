@@ -54,10 +54,16 @@ type ErrorEvent struct {
 type EventPublisher struct {
 	redisClient *redis.Client
 	logger      *slog.Logger
+	disabled    bool
 }
 
 // NewEventPublisher creates a new event publisher
 func NewEventPublisher(redisURL string, logger *slog.Logger) *EventPublisher {
+	// A data-plane host has no Redis credential or network dependency. Its
+	// lifecycle is reported through the outbound connector instead.
+	if strings.TrimSpace(redisURL) == "" {
+		return &EventPublisher{logger: logger, disabled: true}
+	}
 	var opts *redis.Options
 	if parsed, err := redis.ParseURL(redisURL); err == nil {
 		opts = parsed
@@ -104,6 +110,9 @@ func buildEventFields(eventType, subject string, data any) (map[string]any, erro
 
 // publish XADDs the event to the stream for its type.
 func (p *EventPublisher) publish(ctx context.Context, eventType, subject string, data any) error {
+	if p.disabled {
+		return nil
+	}
 	fields, err := buildEventFields(eventType, subject, data)
 	if err != nil {
 		return err

@@ -35,12 +35,33 @@ type Config struct {
 
 	// Feature flags configuration
 	Features FeaturesConfig `json:"features"`
+
+	// Connector contains the outbound-control-plane selection. It is kept
+	// separate from CoreAPIURL because connector authentication defaults to TLS
+	// and must never silently inherit an unrelated HTTP development endpoint.
+	Connector ConnectorConfig `json:"connector"`
+
+	// SandboxEnabled controls only the control-plane sandbox API and its
+	// storage/runner dependencies. MCP lifecycle and the outbound connector do
+	// not require Redis, S3, or a sandbox provider when this is false.
+	SandboxEnabled bool `json:"sandbox_enabled"`
 }
 
 // FeaturesConfig holds feature flag configuration
 type FeaturesConfig struct {
 	Enabled  []string                     `json:"enabled"`
 	Variants map[string]map[string]string `json:"variants"`
+}
+
+// ConnectorConfig identifies the one logical data plane driven by the
+// outbound connector backend and the platform endpoint that authenticates
+// inbound connector sessions. It intentionally contains no data-plane URL or
+// shared credential.
+type ConnectorConfig struct {
+	DataPlaneID              string        `json:"data_plane_id"`
+	PlatformAPIURL           string        `json:"platform_api_url"`
+	AllowInsecureDevelopment bool          `json:"allow_insecure_development"`
+	AuthTimeout              time.Duration `json:"auth_timeout"`
 }
 
 // ServerConfig holds HTTP server configuration
@@ -142,6 +163,13 @@ func Load() *Config {
 		Kubernetes:  loadKubernetesConfig(),
 		Environment: backendEnvironment(),
 		Features:    loadFeaturesConfig(),
+		Connector: ConnectorConfig{
+			DataPlaneID:              getEnv("MCP_CONNECTOR_DATA_PLANE_ID", ""),
+			PlatformAPIURL:           getEnv("MCP_CONNECTOR_PLATFORM_API_URL", ""),
+			AllowInsecureDevelopment: getEnvBool("MCP_CONNECTOR_ALLOW_INSECURE_DEVELOPMENT", false),
+			AuthTimeout:              getEnvDuration("MCP_CONNECTOR_AUTH_TIMEOUT", 10*time.Second),
+		},
+		SandboxEnabled: getEnvBool("SANDBOX_ENABLED", true),
 	}
 	if config.Server.Port <= 0 || config.Server.ReadTimeout <= 0 || config.Server.WriteTimeout <= 0 {
 		panic("server port and timeouts must be positive")

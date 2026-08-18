@@ -1,0 +1,14 @@
+AgentArea data-plane connector installation
+
+1. In AgentArea, create a data plane and issue its one-time enrollment token.
+2. Create a Kubernetes Secret outside this chart. For example:
+   kubectl -n {{ .Release.Namespace }} create secret generic <enrollment-secret> --from-literal=<key>=<token>
+3. Install this chart with the HTTPS control-plane URL and the Secret reference:
+   helm upgrade --install {{ .Release.Name }} . -n {{ .Release.Namespace }} \
+     --set controlPlaneURL=https://control-plane.example \
+     --set enrollment.existingSecret.name=<enrollment-secret> \
+     --set enrollment.existingSecret.key=<key>
+
+The enrollment token is mounted only into the enrollment init container. Its resulting
+identity is persisted on the PVC; later Pod restarts do not enroll again. This chart
+does not install a runtime, provider, inbound Service, or Kubernetes RBAC permissions.

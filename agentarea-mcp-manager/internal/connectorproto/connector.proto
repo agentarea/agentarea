@@ -1,0 +1,260 @@
+// SPDX-License-Identifier: Apache-2.0
+// Version 1 wire contract for an outbound data-plane connector.
+//
+// Connector authentication is carried exclusively in the transport
+// Authorization header. No connector credential belongs in a message body.
+syntax = "proto3";
+
+package agentarea.connector.v1;
+
+option go_package = "github.com/agentarea/mcp-manager/internal/connectorproto;connectorproto";
+
+// OutboundConnector is a single, bidirectional control stream. A connector
+// sends ConnectorToControl messages and the control plane sends
+// ControlToConnector messages. The protocol_version must be 1 for every
+// envelope in this version of the protocol.
+service OutboundConnector {
+  rpc Connect(stream ConnectorToControl) returns (stream ControlToConnector);
+}
+
+// DataPlaneID, ConnectorInstanceID, OperationID, and RequestID deliberately
+// have distinct message types so that their roles cannot be interchanged by
+// generated clients accidentally. Their value is a stable caller-assigned ID.
+message DataPlaneID {
+  string value = 1;
+}
+
+message ConnectorInstanceID {
+  string value = 1;
+}
+
+message OperationID {
+  string value = 1;
+}
+
+message RequestID {
+  string value = 1;
+}
+
+enum OperationKind {
+  OPERATION_KIND_UNSPECIFIED = 0;
+  OPERATION_KIND_MCP_CREATE = 1;
+  OPERATION_KIND_MCP_DELETE = 2;
+  OPERATION_KIND_MCP_GET = 3;
+  OPERATION_KIND_MCP_LIST = 4;
+  OPERATION_KIND_MCP_HEALTH = 5;
+  OPERATION_KIND_SANDBOX_EXECUTE = 6;
+  OPERATION_KIND_SANDBOX_WORKSPACE_ENSURE = 7;
+  OPERATION_KIND_SANDBOX_WORKSPACE_HYDRATE = 8;
+  OPERATION_KIND_SANDBOX_FILE_PUT = 9;
+  OPERATION_KIND_SANDBOX_FILE_GET = 10;
+  OPERATION_KIND_SANDBOX_FILE_LIST = 11;
+  OPERATION_KIND_SANDBOX_TASK_RETIRE = 12;
+}
+
+enum OperationResultStatus {
+  OPERATION_RESULT_STATUS_UNSPECIFIED = 0;
+  OPERATION_RESULT_STATUS_SUCCEEDED = 1;
+  OPERATION_RESULT_STATUS_FAILED = 2;
+  OPERATION_RESULT_STATUS_CANCELLED = 3;
+  OPERATION_RESULT_STATUS_DEADLINE_EXCEEDED = 4;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_INVALID_ARGUMENT = 1;
+  ERROR_CODE_UNSUPPORTED = 2;
+  ERROR_CODE_UNAVAILABLE = 3;
+  ERROR_CODE_INTERNAL = 4;
+  ERROR_CODE_CANCELLED = 5;
+  ERROR_CODE_DEADLINE_EXCEEDED = 6;
+  ERROR_CODE_NOT_FOUND = 7;
+  ERROR_CODE_PERMISSION_DENIED = 8;
+}
+
+enum DrainReason {
+  DRAIN_REASON_UNSPECIFIED = 0;
+  DRAIN_REASON_MAINTENANCE = 1;
+  DRAIN_REASON_SHUTDOWN = 2;
+  DRAIN_REASON_CAPACITY = 3;
+}
+
+enum Capability {
+  CAPABILITY_UNSPECIFIED = 0;
+  CAPABILITY_OPERATIONS = 1;
+  CAPABILITY_PROXY = 2;
+  CAPABILITY_DRAIN = 3;
+  // Workload capabilities are separate from transport mechanics. A connected
+  // plain VM may advertise neither; placement must not infer them merely from
+  // the existence of a stream.
+  CAPABILITY_MCP = 4;
+  CAPABILITY_SANDBOX = 5;
+}
+
+enum ProxyEndReason {
+  PROXY_END_REASON_UNSPECIFIED = 0;
+  PROXY_END_REASON_COMPLETE = 1;
+  PROXY_END_REASON_CANCELLED = 2;
+  PROXY_END_REASON_DEADLINE_EXCEEDED = 3;
+  PROXY_END_REASON_ERROR = 4;
+}
+
+// ConnectorToControl carries messages sent by the outbound connector.
+message ConnectorToControl {
+  uint32 protocol_version = 1;
+  DataPlaneID data_plane_id = 2;
+  ConnectorInstanceID connector_instance_id = 3;
+
+  oneof message {
+    Hello hello = 10;
+    Heartbeat heartbeat = 11;
+    CapabilityReport capability_report = 12;
+    Drain drain = 13;
+    Error error = 14;
+    OperationAck operation_ack = 15;
+    OperationResult operation_result = 16;
+    ProxyResponseHeaders proxy_response_headers = 18;
+    ProxyResponseChunk proxy_response_chunk = 19;
+    ProxyEnd proxy_end = 20;
+  }
+
+  reserved 17;
+}
+
+// ControlToConnector carries messages sent by the control plane.
+message ControlToConnector {
+  uint32 protocol_version = 1;
+  DataPlaneID data_plane_id = 2;
+  ConnectorInstanceID connector_instance_id = 3;
+
+  oneof message {
+    HelloAccepted hello_accepted = 10;
+    Heartbeat heartbeat = 11;
+    Drain drain = 12;
+    Error error = 13;
+    OperationStart operation_start = 14;
+    OperationCancel operation_cancel = 15;
+    ProxyStart proxy_start = 16;
+    ProxyRequestChunk proxy_request_chunk = 17;
+    ProxyRequestEnd proxy_request_end = 18;
+  }
+}
+
+message Hello {
+  string connector_version = 1;
+  repeated Capability capabilities = 2;
+  uint32 max_concurrent_operations = 3;
+}
+
+message HelloAccepted {
+  uint32 selected_protocol_version = 1;
+  uint32 heartbeat_interval_millis = 2;
+}
+
+message Heartbeat {
+  int64 sent_at_unix_millis = 1;
+}
+
+message CapabilityReport {
+  repeated Capability capabilities = 1;
+  uint32 max_concurrent_operations = 2;
+}
+
+message Drain {
+  DrainReason reason = 1;
+  int64 deadline_unix_millis = 2;
+}
+
+message Error {
+  ErrorCode code = 1;
+  string message = 2;
+  bool retryable = 3;
+}
+
+// OperationStart has an absolute deadline. A receiver must stop work when the
+// deadline passes and emit an OperationResult with DEADLINE_EXCEEDED. A later
+// OperationCancel for the same stable ID is idempotent.
+message OperationStart {
+  OperationID operation_id = 1;
+  OperationKind kind = 2;
+  int64 deadline_unix_millis = 3;
+  // JSON request data for the concrete operation kind. This must not contain
+  // credentials; connector authentication stays in transport Authorization.
+  bytes request_payload = 4;
+  string content_type = 5;
+}
+
+message OperationAck {
+  OperationID operation_id = 1;
+  bool accepted = 2;
+  Error rejection = 3;
+}
+
+message OperationResult {
+  OperationID operation_id = 1;
+  OperationResultStatus status = 2;
+  Error error = 3;
+  // JSON response data for the concrete operation kind, with the same
+  // credential restriction as OperationStart.request_payload.
+  bytes response_payload = 4;
+  string content_type = 5;
+}
+
+message OperationCancel {
+  OperationID operation_id = 1;
+  string reason = 2;
+}
+
+// Header represents proxy headers only. Authentication and credential-like
+// headers are rejected by the v1 validators; connector credentials remain a
+// transport concern.
+message Header {
+  string name = 1;
+  string value = 2;
+}
+
+// ProxyStart opens an ordered proxy request. target_path is an origin-form
+// path (including an optional query), never a URL with user info. The absolute
+// deadline applies to the complete request/response exchange.
+message ProxyStart {
+  RequestID request_id = 1;
+  string method = 2;
+  string target_path = 3;
+  repeated Header headers = 4;
+  int64 deadline_unix_millis = 5;
+}
+
+message ProxyRequestChunk {
+  RequestID request_id = 1;
+  uint64 sequence = 2;
+  bytes data = 3;
+}
+
+// ProxyRequestEnd closes the request half before the connector begins the
+// response half. A cancellation or deadline is terminal for that request.
+message ProxyRequestEnd {
+  RequestID request_id = 1;
+  ProxyEndReason reason = 2;
+  Error error = 3;
+}
+
+message ProxyResponseHeaders {
+  RequestID request_id = 1;
+  uint32 status_code = 2;
+  repeated Header headers = 3;
+}
+
+message ProxyResponseChunk {
+  RequestID request_id = 1;
+  uint64 sequence = 2;
+  bytes data = 3;
+}
+
+// ProxyEnd closes an ordered proxy exchange. CANCELLED and DEADLINE_EXCEEDED
+// are terminal cancellation outcomes; receivers must treat duplicate ends as
+// idempotent for the same request ID.
+message ProxyEnd {
+  RequestID request_id = 1;
+  ProxyEndReason reason = 2;
+  Error error = 3;
+}

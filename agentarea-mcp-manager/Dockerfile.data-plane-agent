@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+
+# Build the agent for the platform selected by buildx. CGO is disabled so the
+# executable can run in the small, non-root Alpine runtime below.
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+ARG TARGETOS=linux
+ARG TARGETARCH
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
+      -o /out/data-plane-agent ./cmd/data-plane-agent
+
+# The runtime contains only the TLS roots needed by the agent and its binary.
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates \
+    && addgroup -S agentarea \
+    && adduser -S -D -H -G agentarea agentarea
+
+COPY --from=builder /out/data-plane-agent /usr/local/bin/data-plane-agent
+
+USER agentarea:agentarea
+
+ENTRYPOINT ["/usr/local/bin/data-plane-agent"]

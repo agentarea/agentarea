@@ -48,84 +48,12 @@ worker (which create instances and dispatch tool calls) and the MCP manager
 idle timeout without lazy start reclaims nothing, and lazy start without a
 timeout brings instances up on demand and then leaves them up forever.
 
-## Bring-up from nothing
+## Prerequisite
 
-The order below is deliberate: each step is independently useful, and the one
-genuinely unvalidated question is settled before anything is migrated.
-
-**0. Do your MCP images run under gVisor?** (half an hour, no new infrastructure)
-
-This is the only real unknown. Agent `bash()` under gVisor is already proven by
-whatever you run today; your MCP images are not. On any Linux host with `runsc`
-installed:
-
-```bash
-docker run --rm --runtime=runsc  <your-mcp-image> --help
-docker run --rm --runtime=runc   <your-mcp-image> --help   # control
-```
-
-Watch for `io_uring`, iptables/nftables, block-device mounts and arbitrary
-device files — those are where gVisor's syscall coverage stops. An image that
-fails here needs an escape hatch, and it is much cheaper to learn that now.
-
-**1. An execution cluster.** gVisor needs no KVM or nested virtualization, so
-any ordinary VM will do — you do not need bare metal or a special instance
-family. One box is enough to start:
-
-```bash
-cd deploy/sandbox-host
-cp inventory.example.ini inventory.ini      # put the host's address in
-ansible-playbook -i inventory.ini site.yml \
-  -e sandbox_k3s_enabled=true \
-  -e sandbox_activation_auth_secret="$SANDBOX_ACTIVATION_AUTH_SECRET"
-```
-
-This installs k3s, registers `runsc` with containerd, and creates the `gvisor`
-RuntimeClass. It refuses to finish unless a pod really ran under gVisor, so a
-green run means the substrate works. It leaves a kubeconfig at
-`./execution-cluster.kubeconfig` with the API address rewritten to something
-reachable.
-
-**2. Point the control plane at it.**
-
-```
-BACKEND_TYPE=kubernetes
-KUBERNETES_KUBECONFIG=/path/to/execution-cluster.kubeconfig
-KUBERNETES_RUNTIME_CLASS=gvisor
-```
-
-`KUBERNETES_KUBECONFIG` beats in-cluster credentials, so a control plane running
-inside its own cluster still schedules onto this one. An unloadable file, or an
-unrecognised `BACKEND_TYPE`, stops the manager rather than silently using
-whatever is nearest.
-
-On Helm, put the kubeconfig in a Secret and name it. The chart mounts it into
-every process that creates workloads and sets `KUBERNETES_KUBECONFIG` to the
-mounted path:
-
-```bash
-kubectl create secret generic exec-kubeconfig \
-  --from-file=kubeconfig=./execution-cluster.kubeconfig
-```
-
-```yaml
-mcpManager:
-  runtimeClass: gvisor
-  executionCluster:
-    kubeconfigSecret: exec-kubeconfig
-    kubeconfigKey: kubeconfig
-```
-
-Name both fields or neither. Naming one alone stops the render, because a
-half-configured execution cluster would otherwise deploy as in-cluster mode —
-untrusted workloads back on the control plane's nodes, with nothing to say so.
-
-**3. Turn serverless on** with the values above, and confirm with the checks
-under *Verifying it works*.
-
-MCP servers can move first and independently — they are plain Deployments.
-Agent sandboxes depend on the file API, which now works on Kubernetes but is
-worth exercising on a real task before you retire the old executor.
+Container-backed MCP workloads must already have a supported runtime and backend.
+Provisioning that infrastructure is outside the serverless feature; once it is
+available, enable serverless with the values above and verify it as described
+below.
 
 ## Which instances are affected
 

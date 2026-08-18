@@ -63,3 +63,23 @@ func TestInvalidConfiguredDurationFailsClosed(t *testing.T) {
 	}()
 	_ = Load()
 }
+
+func TestLoadConnectorConfiguration(t *testing.T) {
+	t.Setenv("MCP_CONNECTOR_DATA_PLANE_ID", "65f5a680-3e6c-4f4a-920a-f8e2b31d7d53")
+	t.Setenv("MCP_CONNECTOR_PLATFORM_API_URL", "https://platform.example")
+	t.Setenv("MCP_CONNECTOR_AUTH_TIMEOUT", "7s")
+
+	cfg := Load()
+	if cfg.Connector.DataPlaneID != "65f5a680-3e6c-4f4a-920a-f8e2b31d7d53" || cfg.Connector.PlatformAPIURL != "https://platform.example" || cfg.Connector.AuthTimeout.String() != "7s" {
+		t.Fatalf("connector config = %#v", cfg.Connector)
+	}
+}
+
+func TestSandboxCanBeExplicitlyDisabled(t *testing.T) {
+	t.Setenv("SANDBOX_ENABLED", "false")
+
+	cfg := Load()
+	if cfg.SandboxEnabled {
+		t.Fatal("SandboxEnabled = true, want false")
+	}
+}
