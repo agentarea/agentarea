@@ -3034,6 +3034,11 @@ export const zAgentareaApiApiV1RegistriesSyncResponse = z.object({
   updates_flagged: z.number().int(),
 });
 
+export const zOauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetPath =
+  z.object({
+    resource_path: z.string(),
+  });
+
 export const zHydraOauth2ProxyOauth2PathDeletePath = z.object({
   path: z.string(),
 });
