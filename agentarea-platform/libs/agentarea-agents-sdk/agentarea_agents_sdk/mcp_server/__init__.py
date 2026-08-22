@@ -31,6 +31,10 @@ def create_mcp_server(
     """
     # streamable_http_path="/" so the route lives at the mount root.
     # When FastAPI mounts this at /mcp, the endpoint is /mcp (not /mcp/mcp).
+    # stateless_http=True because the API runs as several replicas behind an
+    # ingress with no session affinity: a session held in one replica's memory
+    # is gone the moment the next request lands elsewhere, and the client sees
+    # "Session not found" before it can list a single tool.
     # transport_security disabled: FastMCP auto-enables DNS rebinding protection
     # when host is the default 127.0.0.1, but we mount under FastAPI behind a
     # reverse proxy where Host validation should be handled at the ingress layer.
@@ -38,6 +42,7 @@ def create_mcp_server(
         name=name,
         instructions=description,
         streamable_http_path="/",
+        stateless_http=True,
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
     adapter = MCPToolAdapter(server)
