@@ -7,8 +7,11 @@ to traverse out of /oauth2/ on that host (partial-SSRF / path-traversal hardenin
 
 import json
 
+import pytest
 from agentarea_api.api.v1 import mcp_oauth_as
 from agentarea_api.api.v1.mcp_oauth_as import _is_safe_oauth2_subpath
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 API_BASE = "https://api.example.com"
 
@@ -86,3 +89,50 @@ class TestProtectedResourceMetadata:
         self._patch(monkeypatch, None)
 
         assert (await self._metadata())["authorization_servers"] == [API_BASE]
+
+
+class TestProtectedResourceMetadataLocations:
+    """Where the document is retrievable from (RFC 9728 §3.1).
+
+    The resource identifier is path-scoped (``<API>/mcp``), so the metadata URL
+    a client derives from it carries that path as a suffix. Serving only the
+    root location breaks any client that derives the URL instead of following
+    the one in ``WWW-Authenticate``.
+    """
+
+    @pytest.fixture
+    def client(self, monkeypatch):
+        monkeypatch.setattr(mcp_oauth_as, "get_settings", lambda: _Settings())
+
+        async def _discovery():
+            return None
+
+        monkeypatch.setattr(mcp_oauth_as, "_hydra_discovery", _discovery)
+
+        app = FastAPI()
+        app.include_router(mcp_oauth_as.oauth_as_router)
+        return TestClient(app)
+
+    def test_served_at_the_root_location(self, client):
+        response = client.get("/.well-known/oauth-protected-resource")
+
+        assert response.status_code == 200
+        assert response.json()["resource"] == f"{API_BASE}/mcp"
+
+    def test_served_at_the_path_suffixed_location(self, client):
+        response = client.get("/.well-known/oauth-protected-resource/mcp")
+
+        assert response.status_code == 200
+        assert response.json()["resource"] == f"{API_BASE}/mcp"
+
+    def test_client_mcp_advertises_its_own_resource(self, client):
+        # A separate protected resource: same authorization server, different
+        # canonical URI, so it must not claim to be /mcp.
+        response = client.get("/.well-known/oauth-protected-resource/client-mcp")
+
+        assert response.status_code == 200
+        assert response.json()["resource"] == f"{API_BASE}/client-mcp"
+
+    def test_unknown_resource_path_is_not_served(self, client):
+        # A catch-all would answer for resources this API does not protect.
+        assert client.get("/.well-known/oauth-protected-resource/nope").status_code == 404

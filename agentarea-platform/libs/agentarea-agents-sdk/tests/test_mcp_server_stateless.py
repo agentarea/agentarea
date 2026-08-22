@@ -10,8 +10,9 @@ import json
 
 import httpx
 import pytest
+from fastapi import FastAPI
 
-from agentarea_agents_sdk.mcp_server import create_mcp_server
+from agentarea_agents_sdk.mcp_server import create_mcp_server, mount_mcp_app
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 
 _HEADERS = {
@@ -71,3 +72,27 @@ async def test_tools_list_does_not_need_the_initialize_session():
     names = [tool["name"] for tool in payload["result"]["tools"]]
     assert len(names) == 1
     assert names[0].endswith("echo")
+
+
+@pytest.mark.asyncio
+async def test_mount_root_is_served_without_a_redirect():
+    """POST to the mount root must be answered, not redirected.
+
+    ``app.mount("/mcp", …)`` alone makes Starlette 307 ``/mcp`` to ``/mcp/``.
+    The advertised resource identifier has no trailing slash, so a client that
+    binds its token to the URL it ends up posting to and a server that checks
+    the audience against the advertised one disagree by one character.
+    """
+    server = create_mcp_server(toolsets=[_EchoToolset()], name="Test")
+    app = FastAPI()
+    mount_mcp_app(app, "/mcp", server.streamable_http_app())
+
+    async with server.session_manager.run():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            without_slash = await client.post("/mcp", json=_INITIALIZE, headers=_HEADERS)
+            with_slash = await client.post("/mcp/", json=_INITIALIZE, headers=_HEADERS)
+
+    assert without_slash.status_code == 200
+    assert with_slash.status_code == 200
