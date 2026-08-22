@@ -225,7 +225,7 @@ def create_app() -> FastAPI:
     # Create MCP server — stateless_http=True means no session tracking
     # between requests, but the task group still needs to be initialised
     # via session_manager.run() in the lifespan.
-    from agentarea_agents_sdk.mcp_server import create_mcp_server
+    from agentarea_agents_sdk.mcp_server import create_mcp_server, mount_mcp_app
     from agentarea_agents_sdk.mcp_server.auth import MCPAuthMiddleware
     from agentarea_agents_sdk.tools.base_tool import BaseTool
     from agentarea_agents_sdk.tools.decorator_tool import Toolset
@@ -339,8 +339,10 @@ def create_app() -> FastAPI:
     # Auth: Hydra OAuth tokens (Cursor/Claude Desktop), API keys, Kratos JWT.
     # Session manager lifespan is run in _lifespan (above) so the task group
     # is guaranteed to be initialised before any request reaches the handler.
-    app.mount("/mcp", _mcp_app)
-    app.mount("/client-mcp", _client_mcp_app)
+    # mount_mcp_app, not app.mount: the bare /mcp form is the resource identifier
+    # we advertise, so it has to be served rather than redirected to /mcp/.
+    mount_mcp_app(app, "/mcp", _mcp_app)
+    mount_mcp_app(app, "/client-mcp", _client_mcp_app)
 
     from agentarea_api.tools import get_platform_tools
 

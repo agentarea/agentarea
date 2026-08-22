@@ -7041,6 +7041,34 @@ export type OauthProtectedResourceMetadataWellKnownOauthProtectedResourceGetResp
     200: unknown;
 };
 
+export type OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetData = {
+    body?: never;
+    path: {
+        /**
+         * Resource Path
+         */
+        resource_path: string;
+    };
+    query?: never;
+    url: '/.well-known/oauth-protected-resource/{resource_path}';
+};
+
+export type OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetError = OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetErrors[keyof OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetErrors];
+
+export type OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
 export type HealthHealthGetData = {
     body?: never;
     path?: never;

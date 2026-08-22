@@ -12,6 +12,8 @@ Usage:
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.applications import Starlette
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ..tools.base_tool import BaseTool
 from ..tools.decorator_tool import Toolset
@@ -31,6 +33,10 @@ def create_mcp_server(
     """
     # streamable_http_path="/" so the route lives at the mount root.
     # When FastAPI mounts this at /mcp, the endpoint is /mcp (not /mcp/mcp).
+    # stateless_http=True because the API runs as several replicas behind an
+    # ingress with no session affinity: a session held in one replica's memory
+    # is gone the moment the next request lands elsewhere, and the client sees
+    # "Session not found" before it can list a single tool.
     # transport_security disabled: FastMCP auto-enables DNS rebinding protection
     # when host is the default 127.0.0.1, but we mount under FastAPI behind a
     # reverse proxy where Host validation should be handled at the ingress layer.
@@ -38,6 +44,7 @@ def create_mcp_server(
         name=name,
         instructions=description,
         streamable_http_path="/",
+        stateless_http=True,
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
     adapter = MCPToolAdapter(server)
@@ -51,3 +58,33 @@ def create_mcp_server(
             raise TypeError(f"Expected Toolset or BaseTool, got {type(tool).__name__}")
 
     return server
+
+
+class _MountRootSlashMiddleware:
+    """Serve the mount root itself instead of redirecting to its slash form.
+
+    ``app.mount("/mcp", …)`` does not match a request for ``/mcp``; Starlette
+    falls through to its redirect_slashes handling and answers 307 ``/mcp/``.
+    The resource identifier we advertise carries no trailing slash, so a client
+    that binds its token to the URL it ends up posting to and a server that
+    validates the audience against the advertised identifier disagree by one
+    character. Rewriting before routing removes the hop entirely.
+    """
+
+    def __init__(self, app: ASGIApp, mount_path: str) -> None:
+        self.app = app
+        self._mount_path = mount_path
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope["path"] == self._mount_path:
+            scope = dict(scope)
+            scope["path"] = f"{self._mount_path}/"
+            if scope.get("raw_path") is not None:
+                scope["raw_path"] = scope["raw_path"] + b"/"
+        await self.app(scope, receive, send)
+
+
+def mount_mcp_app(app: Starlette, path: str, mcp_app: ASGIApp) -> None:
+    """Mount an MCP ASGI app so that both ``{path}`` and ``{path}/`` are served."""
+    app.mount(path, mcp_app)
+    app.add_middleware(_MountRootSlashMiddleware, mount_path=path)

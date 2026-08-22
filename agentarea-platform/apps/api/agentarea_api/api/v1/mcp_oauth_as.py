@@ -24,7 +24,7 @@ import re
 
 import httpx
 from agentarea_common.config import get_settings
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 oauth_as_router = APIRouter(tags=["oauth-as"])
@@ -69,8 +69,14 @@ async def _hydra_discovery() -> dict | None:
     return _hydra_discovery_cache
 
 
-@oauth_as_router.get("/.well-known/oauth-protected-resource")
-async def oauth_protected_resource_metadata() -> JSONResponse:
+# The MCP endpoints this API protects. Each is its own protected resource with
+# its own canonical URI, and RFC 9728 §3.1 derives the metadata URL from that
+# URI by inserting the well-known segment before the path — so the document has
+# to be reachable at the path-suffixed location as well as at the root one.
+_PROTECTED_RESOURCE_PATHS = ("mcp", "client-mcp")
+
+
+async def _protected_resource_metadata(resource_path: str) -> JSONResponse:
     """RFC 9728: advertise the authorization server that actually issues tokens."""
     settings = get_settings()
     api_base = settings.app.API_BASE_URL.rstrip("/")
@@ -93,11 +99,29 @@ async def oauth_protected_resource_metadata() -> JSONResponse:
     return JSONResponse(
         content={
             # MCP spec: canonical URI of the MCP server endpoint, not the API root.
-            "resource": f"{api_base}/mcp",
+            "resource": f"{api_base}/{resource_path}",
             "authorization_servers": [as_url],
             "bearer_methods_supported": ["header"],
         }
     )
+
+
+@oauth_as_router.get("/.well-known/oauth-protected-resource")
+async def oauth_protected_resource_metadata() -> JSONResponse:
+    """The root location, which is what our own ``WWW-Authenticate`` points at."""
+    return await _protected_resource_metadata("mcp")
+
+
+@oauth_as_router.get("/.well-known/oauth-protected-resource/{resource_path}")
+async def oauth_protected_resource_metadata_by_path(resource_path: str) -> JSONResponse:
+    """The RFC 9728 §3.1 location, which strict clients derive from the resource URI.
+
+    Restricted to the endpoints we actually protect: a catch-all would answer
+    for any path and claim this API protects resources it does not serve.
+    """
+    if resource_path not in _PROTECTED_RESOURCE_PATHS:
+        raise HTTPException(status_code=404, detail="Unknown protected resource")
+    return await _protected_resource_metadata(resource_path)
 
 
 @oauth_as_router.get("/.well-known/oauth-authorization-server")

@@ -555,6 +555,9 @@ import type {
   OauthCallbackV1McpOauthCallbackGetData,
   OauthCallbackV1McpOauthCallbackGetErrors,
   OauthCallbackV1McpOauthCallbackGetResponses,
+  OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetData,
+  OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetErrors,
+  OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetResponses,
   OauthProtectedResourceMetadataWellKnownOauthProtectedResourceGetData,
   OauthProtectedResourceMetadataWellKnownOauthProtectedResourceGetResponses,
   PatchProviderConfigV1ProviderConfigsConfigIdPatchData,
@@ -832,7 +835,7 @@ export const oauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGe
 /**
  * Oauth Protected Resource Metadata
  *
- * RFC 9728: advertise the authorization server that actually issues tokens.
+ * The root location, which is what our own ``WWW-Authenticate`` points at.
  */
 export const oauthProtectedResourceMetadataWellKnownOauthProtectedResourceGet =
   <ThrowOnError extends boolean = false>(
@@ -858,6 +861,41 @@ export const oauthProtectedResourceMetadataWellKnownOauthProtectedResourceGet =
         },
       ],
       url: "/.well-known/oauth-protected-resource",
+      ...options,
+    });
+
+/**
+ * Oauth Protected Resource Metadata By Path
+ *
+ * The RFC 9728 §3.1 location, which strict clients derive from the resource URI.
+ *
+ * Restricted to the endpoints we actually protect: a catch-all would answer
+ * for any path and claim this API protects resources it does not serve.
+ */
+export const oauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetResponses,
+    OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetResponses,
+      OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "bearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/.well-known/oauth-protected-resource/{resource_path}",
       ...options,
     });
 
