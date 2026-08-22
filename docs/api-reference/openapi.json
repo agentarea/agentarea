@@ -12022,7 +12022,7 @@
     },
     "/.well-known/oauth-protected-resource": {
       "get": {
-        "description": "RFC 9728: advertise the authorization server that actually issues tokens.",
+        "description": "The root location, which is what our own ``WWW-Authenticate`` points at.",
         "operationId": "oauth_protected_resource_metadata__well_known_oauth_protected_resource_get",
         "responses": {
           "200": {
@@ -12040,6 +12040,52 @@
           }
         ],
         "summary": "Oauth Protected Resource Metadata",
+        "tags": [
+          "oauth-as"
+        ]
+      }
+    },
+    "/.well-known/oauth-protected-resource/{resource_path}": {
+      "get": {
+        "description": "The RFC 9728 \u00a73.1 location, which strict clients derive from the resource URI.\n\nRestricted to the endpoints we actually protect: a catch-all would answer\nfor any path and claim this API protects resources it does not serve.",
+        "operationId": "oauth_protected_resource_metadata_by_path__well_known_oauth_protected_resource__resource_path__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_path",
+            "required": true,
+            "schema": {
+              "title": "Resource Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Oauth Protected Resource Metadata By Path",
         "tags": [
           "oauth-as"
         ]
