@@ -132,6 +132,7 @@ export const hydraAuthRedirectOauth2AuthGet = <ThrowOnError extends boolean = fa
  * We inject server-side defaults:
  * - skip_consent: true — MCP clients accessing their own workspace don't need consent
  * - audience: [API_BASE_URL] — ensures issued JWTs have the correct audience for validation
+ * - grant_types / scope — so the client can refresh instead of re-authorizing
  */
 export const hydraDcrProxyOauth2RegisterPost = <ThrowOnError extends boolean = false>(options?: Options<HydraDcrProxyOauth2RegisterPostData, ThrowOnError>): RequestResult<HydraDcrProxyOauth2RegisterPostResponses, unknown, ThrowOnError> => (options?.client ?? client).post<HydraDcrProxyOauth2RegisterPostResponses, unknown, ThrowOnError>({
     security: [{
