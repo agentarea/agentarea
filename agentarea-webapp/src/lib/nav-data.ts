@@ -35,14 +35,6 @@ export type NavSection = {
 };
 
 export const navData = {
-  workspaces: [
-    {
-      name: "AgentArea",
-      logo: GalleryVerticalEnd,
-      plan: "Base workspace",
-      logoFile: "/Icon.svg",
-    },
-  ],
   navSections: [
     {
       label: "Work",

@@ -1436,6 +1436,16 @@ export const importWorkspace = async (body: {
   return { data, error };
 };
 
+// Listing workspaces deliberately lives outside this client — see
+// getWorkspaceContext(), which must not send X-Workspace-Slug.
+export const createWorkspace = async (name: string) => {
+  const { data, error } = await sdk.createWorkspaceV1WorkspacesPost({
+    client: serverClient,
+    body: { name },
+  });
+  return { data, error };
+};
+
 export const listWorkspaceMembers = async (workspaceId: string) => {
   const { data, error } =
     await sdk.listMembersV1WorkspacesWorkspaceIdMembersGet({

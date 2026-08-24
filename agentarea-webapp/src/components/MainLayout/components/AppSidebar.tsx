@@ -16,6 +16,7 @@ import {
 import { QUICK_TASK_OPEN_EVENT } from "@/components/QuickTask/QuickTaskDialog";
 import { APP_VERSION } from "@/lib/app-version";
 import { cn } from "@/lib/utils";
+import type { Workspace } from "@/lib/workspaces";
 import { NavMain } from "./NavMain";
 import { NavUser } from "./NavUser";
 import { SidebarNavScroll } from "./SidebarNavScroll";
@@ -56,11 +57,18 @@ function SocialLinks({ iconClass }: { iconClass: string }) {
 }
 
 interface AppSidebarData {
-  workspaces: React.ComponentProps<typeof TeamSwitcher>["teams"];
   navSections: React.ComponentProps<typeof NavMain>["sections"];
 }
 
-export function AppSidebarContent({ data }: { data: AppSidebarData }) {
+export function AppSidebarContent({
+  data,
+  workspaces,
+  activeWorkspaceSlug,
+}: {
+  data: AppSidebarData;
+  workspaces: Workspace[];
+  activeWorkspaceSlug: string | null;
+}) {
   const { open } = useSidebar();
 
   const openQuickTask = React.useCallback(() => {
@@ -71,7 +79,10 @@ export function AppSidebarContent({ data }: { data: AppSidebarData }) {
   return (
     <>
       <SidebarHeader>
-        <TeamSwitcher teams={data.workspaces} />
+        <TeamSwitcher
+          workspaces={workspaces}
+          activeSlug={activeWorkspaceSlug}
+        />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
+import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
 
 export async function POST(
   request: NextRequest,
@@ -22,12 +23,7 @@ export async function POST(
       backendHeaders["Authorization"] = `Bearer ${token}`;
     }
 
-    let workspaceSlug = request.headers.get("x-workspace-slug");
-    if (!workspaceSlug) {
-      const referer = request.headers.get("referer");
-      const match = referer?.match(/\/w\/([^/?#]+)/);
-      if (match) workspaceSlug = decodeURIComponent(match[1]);
-    }
+    const workspaceSlug = await resolveRequestWorkspaceSlug(request);
     if (workspaceSlug) {
       backendHeaders["X-Workspace-Slug"] = workspaceSlug;
     }

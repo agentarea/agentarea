@@ -9,10 +9,13 @@ import { SettingsSidebarContent } from "@/components/SettingsLayout/SettingsSide
 import { Sidebar, SidebarProvider, SidebarRail } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { navData } from "@/lib/nav-data";
+import type { Workspace } from "@/lib/workspaces";
 
 interface ConditionalLayoutProps {
   children: React.ReactNode;
   sidebarDefaultOpen?: boolean;
+  workspaces: Workspace[];
+  activeWorkspaceSlug: string | null;
 }
 
 // Routes that render their own full-page chrome (landing, auth, error) and
@@ -24,6 +27,8 @@ const SETTINGS_ROUTES = ["/settings", "/admin/api-keys", "/admin/workspace"];
 export default function ConditionalLayout({
   children,
   sidebarDefaultOpen,
+  workspaces,
+  activeWorkspaceSlug,
 }: ConditionalLayoutProps) {
   const pathname = usePathname();
 
@@ -67,7 +72,11 @@ export default function ConditionalLayout({
                 {isSettings ? (
                   <SettingsSidebarContent />
                 ) : (
-                  <AppSidebarContent data={navData} />
+                  <AppSidebarContent
+                    data={navData}
+                    workspaces={workspaces}
+                    activeWorkspaceSlug={activeWorkspaceSlug}
+                  />
                 )}
               </motion.div>
             </AnimatePresence>
