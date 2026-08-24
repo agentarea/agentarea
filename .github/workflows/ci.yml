@@ -791,7 +791,7 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Check MCP gateway lifecycle SQL against the migrated schema
+      - name: Check MCP gateway and secret-resolver SQL against the migrated schema
         working-directory: agentarea-mcp-manager
         env:
           MCP_GATEWAY_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agentarea_test?sslmode=disable
@@ -801,7 +801,10 @@ jobs:
           MCP_GATEWAY_REQUIRE_DB: "1"
         # -v so the log names the tests that ran, rather than a bare "ok" that
         # looks identical whether they executed or skipped.
-        run: go test -v -count=1 ./internal/mcpgateway/...
+        # internal/secrets joins encrypted_secrets to mcp_server_instances to
+        # keep one workspace's secrets out of another's containers — a rule that
+        # only a real schema can check.
+        run: go test -v -count=1 ./internal/mcpgateway/... ./internal/secrets/...
 
   # Single required status check for branch protection. Monorepo path filters
   # skip irrelevant jobs (they report "skipped", not "failure"), so a per-job

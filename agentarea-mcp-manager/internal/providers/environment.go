@@ -2,7 +2,6 @@ package providers
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/agentarea/mcp-manager/internal/secrets"
 )
@@ -37,19 +36,14 @@ func resolveInstanceSpecSecrets(resolver secrets.SecretResolver, instanceID stri
 		secretNames = append(secretNames, values...)
 	}
 
-	needsResolver := len(secretNames) > 0
 	stringEnvironment := make(map[string]string, len(environment))
 	for key, value := range environment {
-		stringValue := fmt.Sprint(value)
-		stringEnvironment[key] = stringValue
-		if strings.HasPrefix(stringValue, "secret_ref:") {
-			needsResolver = true
-		}
-	}
-	if needsResolver && resolver == nil {
-		return nil, fmt.Errorf("secret resolver is required for MCP instance %s", instanceID)
+		stringEnvironment[key] = fmt.Sprint(value)
 	}
 	if len(secretNames) > 0 {
+		if resolver == nil {
+			return nil, fmt.Errorf("secret resolver is required for MCP instance %s", instanceID)
+		}
 		values, err := resolver.ResolveInstanceEnvVars(instanceID, secretNames)
 		if err != nil {
 			return nil, fmt.Errorf("resolve MCP secret environment: %w", err)
@@ -61,13 +55,6 @@ func resolveInstanceSpecSecrets(resolver secrets.SecretResolver, instanceID stri
 			}
 			stringEnvironment[name] = value
 		}
-	}
-	if needsResolver {
-		values, err := resolver.ResolveSecrets(instanceID, stringEnvironment)
-		if err != nil {
-			return nil, fmt.Errorf("resolve MCP environment references: %w", err)
-		}
-		stringEnvironment = values
 	}
 	if len(stringEnvironment) > 0 {
 		resolvedEnvironment := make(map[string]any, len(stringEnvironment))

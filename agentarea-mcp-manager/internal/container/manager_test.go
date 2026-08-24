@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -78,16 +79,20 @@ func TestGetRunningCount(t *testing.T) {
 }
 
 // stubSecretResolver records the names it was asked to resolve and returns a
-// fixed decrypted value per name.
+// fixed decrypted value per name, or err when set.
 type stubSecretResolver struct {
 	gotInstanceID string
 	gotNames      []string
 	values        map[string]string
+	err           error
 }
 
 func (s *stubSecretResolver) ResolveInstanceEnvVars(instanceID string, names []string) (map[string]string, error) {
 	s.gotInstanceID = instanceID
 	s.gotNames = names
+	if s.err != nil {
+		return nil, s.err
+	}
 	out := make(map[string]string)
 	for _, n := range names {
 		if v, ok := s.values[n]; ok {
@@ -120,7 +125,10 @@ func TestResolveSecretEnvVars_DecryptsNamedSecrets(t *testing.T) {
 		"env_vars":    []interface{}{"TELEGRAM_API_ID", "TELEGRAM_API_HASH"},
 	}
 
-	got := manager.ResolveSecretEnvVars("inst-1", jsonSpec)
+	got, err := manager.ResolveSecretEnvVars("inst-1", jsonSpec)
+	if err != nil {
+		t.Fatalf("ResolveSecretEnvVars() error = %v, want nil", err)
+	}
 
 	if stub.gotInstanceID != "inst-1" {
 		t.Errorf("expected resolver called with instance inst-1, got %q", stub.gotInstanceID)
@@ -132,9 +140,12 @@ func TestResolveSecretEnvVars_DecryptsNamedSecrets(t *testing.T) {
 
 func TestResolveSecretEnvVars_NoResolverIsNoop(t *testing.T) {
 	manager := newTestManager(t) // no SetSecretResolver
-	got := manager.ResolveSecretEnvVars("inst-1", map[string]interface{}{
+	got, err := manager.ResolveSecretEnvVars("inst-1", map[string]interface{}{
 		"env_vars": []interface{}{"TELEGRAM_API_ID"},
 	})
+	if err != nil {
+		t.Fatalf("ResolveSecretEnvVars() error = %v, want nil", err)
+	}
 	if len(got) != 0 {
 		t.Errorf("expected empty map without a resolver, got %v", got)
 	}
@@ -143,11 +154,32 @@ func TestResolveSecretEnvVars_NoResolverIsNoop(t *testing.T) {
 func TestResolveSecretEnvVars_NoEnvVarsIsNoop(t *testing.T) {
 	manager := newTestManager(t)
 	manager.SetSecretResolver(&stubSecretResolver{values: map[string]string{"X": "y"}})
-	got := manager.ResolveSecretEnvVars("inst-1", map[string]interface{}{
+	got, err := manager.ResolveSecretEnvVars("inst-1", map[string]interface{}{
 		"environment": map[string]interface{}{"LOG_LEVEL": "info"},
 	})
+	if err != nil {
+		t.Fatalf("ResolveSecretEnvVars() error = %v, want nil", err)
+	}
 	if len(got) != 0 {
 		t.Errorf("expected empty map when json_spec has no env_vars, got %v", got)
+	}
+}
+
+// A container that starts without the secrets its spec asked for looks healthy
+// and fails somewhere downstream, against whatever the missing credential was
+// guarding. Reporting the failure is what lets the caller skip the container.
+func TestResolveSecretEnvVars_ResolverFailureIsReported(t *testing.T) {
+	manager := newTestManager(t)
+	manager.SetSecretResolver(&stubSecretResolver{err: errors.New("secret lookup failed")})
+
+	got, err := manager.ResolveSecretEnvVars("inst-1", map[string]interface{}{
+		"env_vars": []interface{}{"TELEGRAM_API_ID"},
+	})
+	if err == nil {
+		t.Fatalf("ResolveSecretEnvVars() error = nil, want the resolver failure; got env %v", got)
+	}
+	if got != nil {
+		t.Errorf("ResolveSecretEnvVars() env = %v, want nil alongside an error", got)
 	}
 }
 
