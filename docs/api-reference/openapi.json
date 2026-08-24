@@ -12140,7 +12140,7 @@
     },
     "/oauth2/register": {
       "post": {
-        "description": "Dynamic Client Registration (RFC 7591) \u2014 proxy to Hydra admin API.\n\nHydra v2 doesn't expose public DCR; we proxy POST /oauth2/register to\nHydra's admin endpoint so Cursor / Claude Desktop can self-register.\n\nWe inject server-side defaults:\n  - skip_consent: true \u2014 MCP clients accessing their own workspace don't need consent\n  - audience: [API_BASE_URL] \u2014 ensures issued JWTs have the correct audience for validation",
+        "description": "Dynamic Client Registration (RFC 7591) \u2014 proxy to Hydra admin API.\n\nHydra v2 doesn't expose public DCR; we proxy POST /oauth2/register to\nHydra's admin endpoint so Cursor / Claude Desktop can self-register.\n\nWe inject server-side defaults:\n  - skip_consent: true \u2014 MCP clients accessing their own workspace don't need consent\n  - audience: [API_BASE_URL] \u2014 ensures issued JWTs have the correct audience for validation\n  - grant_types / scope \u2014 so the client can refresh instead of re-authorizing",
         "operationId": "hydra_dcr_proxy_oauth2_register_post",
         "responses": {
           "200": {
