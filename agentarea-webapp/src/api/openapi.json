@@ -4658,6 +4658,32 @@
         "title": "MCPAuthConfigUpdateRequest",
         "type": "object"
       },
+      "MCPContainersHealthResponse": {
+        "properties": {
+          "healthy": {
+            "title": "Healthy",
+            "type": "integer"
+          },
+          "instances": {
+            "items": {
+              "$ref": "#/components/schemas/MCPInstanceHealthResponse"
+            },
+            "title": "Instances",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "instances",
+          "total",
+          "healthy"
+        ],
+        "title": "MCPContainersHealthResponse",
+        "type": "object"
+      },
       "MCPInstanceConsumer": {
         "description": "An agent that has this MCP instance attached, and which of its tools it enabled.",
         "properties": {
@@ -4708,6 +4734,53 @@
           "agent_name"
         ],
         "title": "MCPInstanceConsumer",
+        "type": "object"
+      },
+      "MCPInstanceHealthResponse": {
+        "description": "One workload's health, as the calling workspace is entitled to see it.",
+        "properties": {
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "healthy": {
+            "title": "Healthy",
+            "type": "boolean"
+          },
+          "instance_id": {
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id",
+          "healthy",
+          "status"
+        ],
+        "title": "MCPInstanceHealthResponse",
         "type": "object"
       },
       "MCPServerConnectionCreateRequest": {
@@ -17370,7 +17443,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MCPContainersHealthResponse"
+                }
               }
             },
             "description": "Successful Response"

@@ -1029,6 +1029,28 @@ export const zMcpInstanceConsumer = z.object({
 });
 
 /**
+ * MCPInstanceHealthResponse
+ *
+ * One workload's health, as the calling workspace is entitled to see it.
+ */
+export const zMcpInstanceHealthResponse = z.object({
+  details: z.record(z.unknown()).nullish(),
+  healthy: z.boolean(),
+  instance_id: z.string(),
+  name: z.string().nullish(),
+  status: z.string(),
+});
+
+/**
+ * MCPContainersHealthResponse
+ */
+export const zMcpContainersHealthResponse = z.object({
+  healthy: z.number().int(),
+  instances: z.array(zMcpInstanceHealthResponse),
+  total: z.number().int(),
+});
+
+/**
  * MCPServerCreate
  *
  * Payload for creating an MCP server spec (catalog template).
@@ -3903,6 +3925,12 @@ export const zCreateMcpServerInstanceV1McpServerInstancesPostResponse =
  */
 export const zCheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostBody =
   z.record(z.unknown());
+
+/**
+ * Successful Response
+ */
+export const zGetContainersHealthV1McpServerInstancesHealthContainersGetResponse =
+  zMcpContainersHealthResponse;
 
 export const zValidateInstanceSpecV1McpServerInstancesValidatePostBody =
   zValidateRequest;

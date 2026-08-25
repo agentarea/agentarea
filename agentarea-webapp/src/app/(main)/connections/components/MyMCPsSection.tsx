@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -10,23 +9,17 @@ import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
-import { getMCPHealthStatusAction as getMCPHealthStatus } from "@/lib/server-actions";
 import {
-  getMcpHealthStatusPresentation,
+  getMcpVerificationStatusPresentation,
   getOpenApiConnectionDisplayStatus,
+  getOpenApiConnectionStatusPresentation,
+  type StatusPresentation,
 } from "@/lib/status";
-import {
-  HealthCheck,
-  HealthStatus,
-  MCPInstance,
-  MCPServer,
-  OpenAPIConnection,
-} from "../types";
+import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 import {
   getEffectiveMCPVerificationStatus,
   getMCPConnectionIconSrc,
   getMCPInstanceToolCount,
-  MCP_CONSTANTS,
 } from "../utils";
 import {
   MCPInstanceCard,
@@ -72,101 +65,9 @@ export function MyMCPsSection({
 }: MyMCPsSectionProps) {
   const t = useTranslations("MCPServersPage");
   const router = useRouter();
-  const [healthChecks, setHealthChecks] = useState<HealthCheck[]>([]);
-  const [healthLoading, setHealthLoading] = useState(true);
-
-  // Health status polling
-  useEffect(() => {
-    const fetchHealthStatus = async () => {
-      try {
-        const healthData = await getMCPHealthStatus();
-        setHealthChecks(healthData.health_checks);
-      } catch (error) {
-        console.error("Failed to fetch health status:", error);
-      } finally {
-        setHealthLoading(false);
-      }
-    };
-
-    fetchHealthStatus();
-    const interval = setInterval(
-      fetchHealthStatus,
-      MCP_CONSTANTS.HEALTH_CHECK_INTERVAL_MS
-    );
-    return () => clearInterval(interval);
-  }, []);
-
-  // Get health check for instance
-  const getHealthCheck = (instanceName: string): HealthCheck | undefined => {
-    let healthCheck = healthChecks.find(
-      (check) => check.service_name === instanceName
-    );
-
-    if (!healthCheck) {
-      const normalizedInstanceName = instanceName
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9-]/g, "");
-
-      healthCheck = healthChecks.find(
-        (check) =>
-          check.service_name === normalizedInstanceName ||
-          check.service_name.includes(normalizedInstanceName) ||
-          normalizedInstanceName.includes(check.service_name)
-      );
-    }
-
-    return healthCheck;
-  };
-
-  const STATUS_TO_HEALTH: Record<string, HealthStatus> = {
-    connected: "connected",
-    succeeded: "connected",
-    running: "healthy",
-    failed: "unhealthy",
-    stopped: "unknown",
-    pending: "starting",
-    starting: "starting",
-  };
-
-  // Get health status for instance
-  const getHealthStatus = (instance: MCPInstance): HealthStatus => {
-    const instanceType = (instance.json_spec?.type as string) || "docker";
-    const vStatus = getEffectiveMCPVerificationStatus(instance);
-
-    // URL-type and bundle have no container health checks — map verification status directly
-    if (instanceType === "url" || instanceType === "bundle") {
-      const vToHealth: Record<string, HealthStatus> = {
-        succeeded: "connected",
-        in_progress: "starting",
-        failed: "unhealthy",
-        never_attempted: "unknown",
-      };
-      return vToHealth[vStatus] ?? "unknown";
-    }
-
-    const healthCheck = getHealthCheck(instance.name);
-
-    if (healthLoading) return "unknown";
-    if (!healthCheck) return "unknown";
-    if (healthCheck.healthy && healthCheck.http_reachable) return "healthy";
-    if (!healthCheck.http_reachable) return "starting";
-    return "unhealthy";
-  };
-
-  const getOpenAPIHealthStatus = (
-    connection: OpenAPIConnection
-  ): HealthStatus => {
-    const displayStatus = getOpenApiConnectionDisplayStatus(
-      connection.status,
-      connection.available_tools.length
-    );
-    return STATUS_TO_HEALTH[displayStatus] ?? "unknown";
-  };
 
   // Shared status presentation: a coloured dot + label, matching the table design.
-  const getStatusIndicator = (status: string) => {
-    const presentation = getMcpHealthStatusPresentation(status);
+  const getStatusIndicator = (presentation: StatusPresentation) => {
     const label = presentation.labelKey
       ? t(`status.${presentation.labelKey}`)
       : presentation.label;
@@ -286,14 +187,26 @@ export function MyMCPsSection({
     {
       accessor: "status",
       header: t("table.status"),
+      // Whether the connection works — the same verdict the cards show. Not
+      // whether a container is warm: workloads start on demand and are reaped
+      // when idle, so liveness is the data plane's business, not a column here.
       render: (_: string, item: TableRow) => {
-        const healthStatus =
-          item._type === "openapi" && item._connection
-            ? getOpenAPIHealthStatus(item._connection)
-            : item._instance
-              ? getHealthStatus(item._instance)
-              : "unknown";
-        return getStatusIndicator(healthStatus);
+        if (item._type === "openapi" && item._connection) {
+          return getStatusIndicator(
+            getOpenApiConnectionStatusPresentation(
+              getOpenApiConnectionDisplayStatus(
+                item._connection.status,
+                item._connection.available_tools.length
+              )
+            )
+          );
+        }
+        if (!item._instance) return null;
+        return getStatusIndicator(
+          getMcpVerificationStatusPresentation(
+            getEffectiveMCPVerificationStatus(item._instance)
+          )
+        );
       },
     },
   ];

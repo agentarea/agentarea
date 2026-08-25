@@ -2632,6 +2632,23 @@ export type McpAuthConfigUpdateRequest = {
     name?: string | null;
 };
 /**
+ * MCPContainersHealthResponse
+ */
+export type McpContainersHealthResponse = {
+    /**
+     * Healthy
+     */
+    healthy: number;
+    /**
+     * Instances
+     */
+    instances: Array<McpInstanceHealthResponse>;
+    /**
+     * Total
+     */
+    total: number;
+};
+/**
  * MCPInstanceConsumer
  *
  * An agent that has this MCP instance attached, and which of its tools it enabled.
@@ -2657,6 +2674,35 @@ export type McpInstanceConsumer = {
      * Enabled Tools
      */
     enabled_tools?: Array<string> | null;
+};
+/**
+ * MCPInstanceHealthResponse
+ *
+ * One workload's health, as the calling workspace is entitled to see it.
+ */
+export type McpInstanceHealthResponse = {
+    /**
+     * Details
+     */
+    details?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Healthy
+     */
+    healthy: boolean;
+    /**
+     * Instance Id
+     */
+    instance_id: string;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Status
+     */
+    status: string;
 };
 /**
  * MCPServerConnectionCreateRequest
@@ -9279,8 +9325,9 @@ export type GetContainersHealthV1McpServerInstancesHealthContainersGetResponses 
     /**
      * Successful Response
      */
-    200: unknown;
+    200: McpContainersHealthResponse;
 };
+export type GetContainersHealthV1McpServerInstancesHealthContainersGetResponse = GetContainersHealthV1McpServerInstancesHealthContainersGetResponses[keyof GetContainersHealthV1McpServerInstancesHealthContainersGetResponses];
 export type ValidateInstanceSpecV1McpServerInstancesValidatePostData = {
     body: ValidateRequest;
     path?: never;
