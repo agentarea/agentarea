@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { env } from "@/env";
+import { formatApiError } from "@/lib/api-errors";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
 
@@ -90,6 +91,8 @@ export async function POST(
     });
   } catch (error) {
     console.error("Task creation proxy error:", error);
-    return new Response(`Task creation proxy error: ${error}`, { status: 500 });
+    return new Response(`Task creation proxy error: ${formatApiError(error)}`, {
+      status: 500,
+    });
   }
 }

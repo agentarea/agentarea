@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { formatApiError } from "@/lib/api-errors";
 import { getMcpVerificationStatusPresentation } from "@/lib/status";
 import {
   discoverMCPInstanceToolsAction as discoverMCPInstanceTools,
@@ -185,12 +186,7 @@ export default function MCPInstanceDetail({
     setIsRefreshingTools(true);
     try {
       const { data, error } = await discoverMCPInstanceTools(instance.id);
-      if (error)
-        throw new Error(
-          typeof error === "object" && "detail" in error
-            ? String(error.detail)
-            : "Failed to refresh tools"
-        );
+      if (error) throw new Error(formatApiError(error));
       // The endpoint returns 200 with {tools, verification} even when verification
       // failed — so report based on the actual result, not the HTTP status.
       const result = data as

@@ -58,6 +58,7 @@ import type {
   UpdateWalletRequest,
   ValidateRequest,
 } from "@/api/client/types.gen";
+import { apiErrorMessage } from "@/lib/api-errors";
 
 type RawRequestOptions = {
   body?: unknown;
@@ -96,52 +97,6 @@ function withStatus<TData, TError>(result: {
   };
 }
 
-// Extract a human-readable message from an API error. The backend returns
-// RFC 9457 problem+json ({ type, title, status, code, detail, ... }); validation
-// failures carry field errors under `errors`. We also keep the legacy FastAPI
-// shape (detail-as-array of {msg}) for backward compatibility.
-function formatErrorDetail(error: unknown) {
-  if (!error) return "No response data";
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object") {
-    const obj = error as {
-      detail?: unknown;
-      errors?: unknown;
-      title?: unknown;
-    };
-
-    // problem+json validation errors: surface field-level messages.
-    if (Array.isArray(obj.errors) && obj.errors.length > 0) {
-      const msgs = obj.errors
-        .map((item) =>
-          typeof item === "object" && item && "msg" in item
-            ? String((item as { msg: unknown }).msg)
-            : String(item)
-        )
-        .filter(Boolean);
-      if (msgs.length > 0) return msgs.join(", ");
-    }
-
-    const detail = obj.detail;
-    if (typeof detail === "string") return detail;
-    if (Array.isArray(detail)) {
-      // Legacy FastAPI validation shape.
-      return detail
-        .map((item) =>
-          typeof item === "object" && item && "msg" in item
-            ? String((item as { msg: unknown }).msg)
-            : String(item)
-        )
-        .join(", ");
-    }
-
-    // problem+json without a usable detail: fall back to the title.
-    if (typeof obj.title === "string") return obj.title;
-  }
-  return JSON.stringify(error);
-}
-
 export const listAgents = async () => {
   const { data, error } = await sdk.listAgentsV1AgentsGet({
     client: serverClient,
@@ -150,10 +105,13 @@ export const listAgents = async () => {
 };
 
 export const listSandboxes = async () => {
-  const { data, error } = await sdk.listSandboxesV1SandboxesGet({
+  const result = await sdk.listSandboxesV1SandboxesGet({
     client: serverClient,
   });
-  return { data: data as SandboxListResponse | undefined, error };
+  return {
+    ...withStatus(result),
+    data: result.data as SandboxListResponse | undefined,
+  };
 };
 
 export const createAgent = async (agent: AgentCreate) => {
@@ -465,17 +423,16 @@ export const getAgentTaskEvents = async (
     event_type?: string;
   } = {}
 ) => {
-  const { data, error } =
-    await sdk.getTaskEventsV1AgentsAgentIdTasksTaskIdEventsGet({
-      client: serverClient,
-      path: { agent_id: agentId, task_id: taskId },
-      query: {
-        page: options.page || 1,
-        page_size: options.page_size || 50,
-        ...(options.event_type && { event_type: options.event_type }),
-      },
-    });
-  return { data, error };
+  const result = await sdk.getTaskEventsV1AgentsAgentIdTasksTaskIdEventsGet({
+    client: serverClient,
+    path: { agent_id: agentId, task_id: taskId },
+    query: {
+      page: options.page || 1,
+      page_size: options.page_size || 50,
+      ...(options.event_type && { event_type: options.event_type }),
+    },
+  });
+  return withStatus(result);
 };
 
 export const sendMessage = async (message: {
@@ -729,7 +686,7 @@ export const getProviderConfig = async (
 
   if (!response.data) {
     const error = new Error(
-      `Failed to load provider config (${response.response?.status ?? "unknown"}): ${formatErrorDetail(response.error)}`
+      apiErrorMessage(withStatus(response), "Failed to load provider config")
     );
     (error as Error & { status?: number }).status = response.response?.status;
     throw error;
@@ -1399,12 +1356,13 @@ export const removeWorkspaceMember = async (
   workspaceId: string,
   userId: string
 ) => {
-  const { data, error } =
-    await sdk.removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete({
+  const result = await sdk.removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete(
+    {
       client: serverClient,
       path: { workspace_id: workspaceId, user_id: userId },
-    });
-  return { data, error };
+    }
+  );
+  return withStatus(result);
 };
 
 export const listWorkspaceInvitations = async (workspaceId: string) => {
@@ -1420,35 +1378,36 @@ export const createWorkspaceInvitation = async (
   workspaceId: string,
   body: CreateInvitationBody
 ) => {
-  const { data, error } =
-    await sdk.createInvitationV1WorkspacesWorkspaceIdInvitationsPost({
+  const result = await sdk.createInvitationV1WorkspacesWorkspaceIdInvitationsPost(
+    {
       client: serverClient,
       path: { workspace_id: workspaceId },
       body,
-    });
-  return { data, error };
+    }
+  );
+  return withStatus(result);
 };
 
 export const revokeWorkspaceInvitation = async (
   workspaceId: string,
   invitationId: string
 ) => {
-  const { data, error } =
+  const result =
     await sdk.revokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDelete(
       {
         client: serverClient,
         path: { workspace_id: workspaceId, invitation_id: invitationId },
       }
     );
-  return { data, error };
+  return withStatus(result);
 };
 
 export const acceptWorkspaceInvitation = async (token: string) => {
-  const { data, error } = await sdk.acceptInvitationV1InvitationsAcceptPost({
+  const result = await sdk.acceptInvitationV1InvitationsAcceptPost({
     client: serverClient,
     body: { token },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const discoverMCPInstanceTools = async (instanceId: string) => {
@@ -2356,7 +2315,9 @@ export type ConversationResponse = unknown;
 export type TaskResponse = ApiTaskResponse;
 export type AgentCard = ApiAgentCard;
 export type TaskWithAgent = ApiTaskResponse & {
-  agent_name?: string;
+  // null when the task's agent no longer resolves — the API does not
+  // substitute a placeholder name.
+  agent_name?: string | null;
   agent_description?: string | null;
   // Set by the /v1/inbox endpoint for waiting_for_approval tasks so the inbox can
   // approve/reject the pending escalation inline.

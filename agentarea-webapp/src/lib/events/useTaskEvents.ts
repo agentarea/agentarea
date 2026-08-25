@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getTaskEvents } from "@/hooks/actions";
+import { apiErrorMessage } from "@/lib/api-errors";
 import { useSSE } from "@/hooks/useSSE";
 import type {
   DisplayEvent,
@@ -243,12 +244,13 @@ export function useTaskEvents(
 
     void (async () => {
       try {
-        const { data, error: apiError } = await getTaskEvents(agentId, taskId, {
+        const result = await getTaskEvents(agentId, taskId, {
           page: 1,
           page_size: 100,
         });
-        if (apiError || !data) {
-          throw new Error(apiError?.toString() || "Failed to load events");
+        const data = result.data;
+        if (result.error || !data) {
+          throw new Error(apiErrorMessage(result, "Failed to load events"));
         }
         if (cancelled) return;
 

@@ -221,7 +221,7 @@ export default function TaskEventsPage() {
                     colSpan={6}
                     className="py-8 text-center text-muted-foreground text-xs"
                   >
-                    No events found.
+                    {eventsError ? "Could not load events." : "No events found."}
                   </td>
                 </tr>
               ) : (

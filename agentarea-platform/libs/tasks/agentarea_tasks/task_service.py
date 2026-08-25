@@ -277,13 +277,15 @@ class TaskService(BaseTaskService):
         agent = await self._validate_agent_exists(agent_id)
         if require_model:
             self._require_agent_model(agent, agent_id, parameters)
-        agent_name = getattr(agent, "name", "unknown") if agent else "unknown"
-
         metadata: dict[str, Any] = {}
         if metadata_overrides:
             metadata.update(metadata_overrides)
         metadata.setdefault("created_via", "api")
-        metadata["agent_name"] = agent_name
+        # Only stamp a name we actually loaded. `agent` is None only in
+        # test/standalone mode (no agent_repository wired) — recording
+        # "unknown" there would be indistinguishable from a real agent name.
+        if agent is not None:
+            metadata["agent_name"] = agent.name
         metadata["requires_human_approval"] = requires_human_approval
         requested_execution = (
             task_policy.execution.model_dump(exclude_none=True)
