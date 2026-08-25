@@ -171,7 +171,7 @@ export default function TaskEventsPage() {
             disabled={eventsLoading}
           >
             <RefreshCw
-              className={`h-3 w-3 mr-1 ${eventsLoading ? "animate-spin" : ""}`}
+              className={`mr-1 ${eventsLoading ? "animate-spin" : ""}`}
             />
             Refresh
           </Button>

@@ -108,7 +108,7 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
                 onClick={handleApprove}
                 className="bg-green-600 hover:bg-green-700"
               >
-                <Check className="mr-1 h-3 w-3" />
+                <Check className="mr-1" />
                 {t("approve")}
               </Button>
 
@@ -119,7 +119,7 @@ const ApprovalRequestMessage: React.FC<Props> = ({ data }) => {
                   onClick={() => setShowDenyForm(true)}
                   className="border-red-300 text-red-600 hover:bg-red-50"
                 >
-                  <X className="mr-1 h-3 w-3" />
+                  <X className="mr-1" />
                   {t("deny")}
                 </Button>
               ) : (

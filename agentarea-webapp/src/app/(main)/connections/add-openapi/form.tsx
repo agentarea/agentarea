@@ -436,7 +436,7 @@ export function AddOpenAPIForm() {
                 size="xs"
                 onClick={addHeader}
               >
-                <Plus className="mr-1 h-3 w-3" />
+                <Plus className="mr-1" />
                 {t("addHeader")}
               </Button>
             </div>
@@ -477,7 +477,7 @@ export function AddOpenAPIForm() {
                     size="xs"
                     onClick={() => removeHeader(i)}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 />
                   </Button>
                 </div>
               );

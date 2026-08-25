@@ -8,7 +8,7 @@ export default function PoliciesHeaderControls() {
   return (
     <Button size="sm" className="shrink-0 gap-2" asChild>
       <Link href="/policies/new">
-        <Plus className="h-4 w-4" />
+        <Plus />
         New policy
       </Link>
     </Button>

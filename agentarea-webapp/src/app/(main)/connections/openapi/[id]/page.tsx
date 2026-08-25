@@ -185,7 +185,7 @@ export default function OpenAPIConnectionDetailPage() {
                 disabled={discovering}
               >
                 <RefreshCw
-                  className={`mr-1 h-3.5 w-3.5 ${discovering ? "animate-spin" : ""}`}
+                  className={`mr-1 ${discovering ? "animate-spin" : ""}`}
                 />
                 {discovering ? "Refreshing..." : "Refresh from Spec URL"}
               </Button>
@@ -196,7 +196,7 @@ export default function OpenAPIConnectionDetailPage() {
               onClick={handleDelete}
               disabled={deleting}
             >
-              <Trash2 className="mr-1 h-3.5 w-3.5" />
+              <Trash2 className="mr-1" />
               {deleting ? "Deleting..." : "Delete"}
             </Button>
           </div>
@@ -271,7 +271,7 @@ export default function OpenAPIConnectionDetailPage() {
                   variant="outline"
                   onClick={() => setEditingHeaders(true)}
                 >
-                  <Pencil className="mr-1 h-3 w-3" />
+                  <Pencil className="mr-1" />
                   {connection.custom_headers &&
                   connection.custom_headers.length > 0
                     ? "Edit"

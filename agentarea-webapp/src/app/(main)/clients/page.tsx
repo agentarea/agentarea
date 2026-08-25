@@ -181,8 +181,8 @@ export default function ClientsPage() {
         breadcrumb: [{ label: "Clients" }],
         description: "Agent-proxies: scoped MCP + skill bundles for external harnesses (codex, claude-code)",
         controls: (
-          <Button className="shrink-0 gap-2" size="xs" onClick={() => setShowCreate(true)}>
-            <Plus className="h-5 w-5" />
+          <Button className="shrink-0" size="xs" onClick={() => setShowCreate(true)}>
+            <Plus />
             New Client
           </Button>
         ),
@@ -276,7 +276,7 @@ export default function ClientsPage() {
               Cancel
             </Button>
             <Button onClick={handleCreate} disabled={!name.trim() || creating}>
-              {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {creating ? <Loader2 className="mr-2 animate-spin" /> : null}
               Create
             </Button>
           </DialogFooter>

@@ -86,9 +86,9 @@ export default function SkillsSection({
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2">
-              <Plus className="h-4 w-4" />
+              <Plus />
               {t("addSkill")}
-              <ChevronsUpDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />
+              <ChevronsUpDown className="ml-1 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-[300px] p-0" align="end">
@@ -172,7 +172,7 @@ export default function SkillsSection({
                 className="h-5 w-5 hover:bg-transparent"
                 onClick={() => handleRemove(skill.id)}
               >
-                <X className="h-3 w-3" />
+                <X />
               </Button>
             </Badge>
           ))}

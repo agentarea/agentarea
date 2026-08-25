@@ -87,9 +87,9 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
       aria-label={`Copy ${label ?? "value"}`}
     >
       {copied ? (
-        <Check className="h-4 w-4 text-green-500" />
+        <Check className="text-green-500" />
       ) : (
-        <Copy className="h-4 w-4" />
+        <Copy />
       )}
     </Button>
   );
@@ -164,7 +164,7 @@ function ScopeSection({
           </span>
         </div>
         <Button size="xs" variant="outline" onClick={() => setShowAdd(true)}>
-          <Plus className="mr-1 h-3.5 w-3.5" />
+          <Plus className="mr-1" />
           {addLabel}
         </Button>
       </div>
@@ -188,9 +188,9 @@ function ScopeSection({
                 disabled={removingId === String(item.id)}
               >
                 {removingId === String(item.id) ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="animate-spin" />
                 ) : (
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 />
                 )}
               </Button>
             </li>
@@ -230,7 +230,7 @@ function ScopeSection({
               onClick={handleAdd}
               disabled={!selectedId || adding || available.length === 0}
             >
-              {adding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {adding ? <Loader2 className="mr-2 animate-spin" /> : null}
               Add
             </Button>
           </DialogFooter>
@@ -402,7 +402,7 @@ export default function ClientDetailPage() {
         controls: (
           <div className="flex items-center gap-1.5">
             <Button size="xs" variant="outline" onClick={openEdit}>
-              <Pencil className="mr-1 h-3.5 w-3.5" />
+              <Pencil className="mr-1" />
               Edit
             </Button>
             <Button
@@ -412,7 +412,7 @@ export default function ClientDetailPage() {
               onClick={() => setShowDelete(true)}
               aria-label="Delete client"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 />
             </Button>
           </div>
         ),
@@ -556,7 +556,7 @@ export default function ClientDetailPage() {
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={!editName.trim() || saving}>
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {saving ? <Loader2 className="mr-2 animate-spin" /> : null}
               Save
             </Button>
           </DialogFooter>
@@ -584,7 +584,7 @@ export default function ClientDetailPage() {
               disabled={deleting}
             >
               {deleting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 animate-spin" />
               ) : null}
               Delete
             </Button>

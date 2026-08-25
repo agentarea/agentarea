@@ -340,7 +340,7 @@ export function WalletConfigPanel({ agentId }: WalletConfigPanelProps) {
       <div className="flex justify-between">
         {wallet && (
           <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-            <Trash2 className="h-4 w-4 mr-2" />
+            <Trash2 className="mr-2" />
             {deleting ? "Removing..." : "Remove Wallet"}
           </Button>
         )}

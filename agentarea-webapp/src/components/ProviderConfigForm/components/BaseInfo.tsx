@@ -103,7 +103,7 @@ export default function BaseInfo<T extends FieldValues = FieldValues>({
                   disabled={(!apiKeyValue?.trim() && !endpointUrlValue?.trim()) || isDiscovering}
                 >
                   <RefreshCw
-                    className={`mr-1.5 h-3 w-3 ${isDiscovering ? "animate-spin" : ""}`}
+                    className={`mr-1.5 ${isDiscovering ? "animate-spin" : ""}`}
                   />
                   {isDiscovering ? "Discovering..." : "Test & Discover"}
                 </Button>

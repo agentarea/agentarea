@@ -1635,7 +1635,7 @@ export default function PolicyEditor({
                   onClick={addSelectedAgent}
                   aria-label="Add agent"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus />
                 </Button>
               </div>
 
@@ -1658,7 +1658,7 @@ export default function PolicyEditor({
                         onClick={() => removeSelectedAgent(agent.id)}
                         aria-label={`Remove ${agent.name}`}
                       >
-                        <X className="h-4 w-4" />
+                        <X />
                       </Button>
                     </div>
                   ))
@@ -1730,7 +1730,7 @@ export default function PolicyEditor({
                             }}
                             aria-label={`Remove rule ${index + 1}`}
                           >
-                            <X className="h-4 w-4" />
+                            <X />
                           </Button>
                         )}
                       </div>
@@ -1746,7 +1746,7 @@ export default function PolicyEditor({
                   size="sm"
                   onClick={addDraft}
                 >
-                  <Plus className="mr-1.5 h-4 w-4" />
+                  <Plus className="mr-1.5" />
                   Add rule
                 </Button>
               )}

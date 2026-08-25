@@ -545,7 +545,7 @@ export function CreateSkillForm() {
               size="sm"
               onClick={useTemplate}
             >
-              <FilePlus className="h-3.5 w-3.5" />
+              <FilePlus />
               {tCreate("useTemplate")}
             </Button>
             <SegPill<ViewMode>
@@ -658,7 +658,7 @@ export function CreateSkillForm() {
               autoComplete="off"
             />
             <Button type="submit" variant="outline" size="sm" className="h-10">
-              <Search className="h-3.5 w-3.5" />
+              <Search />
               {tCreate("browseRepo")}
             </Button>
           </div>

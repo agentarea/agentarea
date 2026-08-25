@@ -222,7 +222,7 @@ export default function ProjectOverviewPage() {
                 >
                   <Link href={`/projects/${projectId}/settings`}>
                     Edit
-                    <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+                    <ArrowUpRight className="ml-1" />
                   </Link>
                 </Button>
               </div>

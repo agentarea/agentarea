@@ -21,7 +21,7 @@ export default function CreateSkillPage() {
               <Link href="/skills">{t("cancel")}</Link>
             </Button>
             <Button size="xs" type="submit" form="create-skill-form">
-              <Plus className="h-3.5 w-3.5" />
+              <Plus />
               {t("createSkill")}
             </Button>
           </div>

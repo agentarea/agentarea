@@ -253,7 +253,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
                     variant="outline"
                     onClick={() => handleTaskAction("pause")}
                   >
-                    <Pause className="mr-2 h-4 w-4" />
+                    <Pause className="mr-2" />
                     Pause
                   </Button>
                 )}
@@ -264,7 +264,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
                     variant="outline"
                     onClick={() => handleTaskAction("resume")}
                   >
-                    <Play className="mr-2 h-4 w-4" />
+                    <Play className="mr-2" />
                     Resume
                   </Button>
                 )}
@@ -273,7 +273,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
                   variant="destructive"
                   onClick={() => handleTaskAction("cancel")}
                 >
-                  <Square className="mr-2 h-4 w-4" />
+                  <Square className="mr-2" />
                   Cancel
                 </Button>
               </div>
@@ -320,7 +320,7 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
                 />
               </label>
               <Button size="sm" onClick={handleContinue} disabled={continuing}>
-                <Play className="mr-2 h-4 w-4" />
+                <Play className="mr-2" />
                 {continuing ? "Continuing…" : "Continue task"}
               </Button>
             </div>

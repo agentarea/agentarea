@@ -81,7 +81,7 @@ export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
             <Button asChild variant="ghost" size="xs" className="text-muted-foreground">
               <Link href="/agents">
                 {t("viewAllAgents")}
-                <ArrowUpRight className="h-3.5 w-3.5" />
+                <ArrowUpRight />
               </Link>
             </Button>
           }

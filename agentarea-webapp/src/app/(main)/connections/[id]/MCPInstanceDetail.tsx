@@ -86,9 +86,9 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   return (
     <Button variant="outline" size="xs" onClick={handleCopy}>
       {copied ? (
-        <Check className="h-4 w-4 text-green-500" />
+        <Check className="text-green-500" />
       ) : (
-        <Copy className="h-4 w-4" />
+        <Copy />
       )}
     </Button>
   );
@@ -534,7 +534,7 @@ export default function MCPInstanceDetail({
                         size="xs"
                         onClick={() => setIsEditingConfig(true)}
                       >
-                        <Pencil className="h-3 w-3 mr-1" /> Edit
+                        <Pencil className="mr-1" /> Edit
                       </Button>
                     )}
                   </div>
@@ -659,7 +659,7 @@ export default function MCPInstanceDetail({
                     disabled={isRefreshingTools}
                   >
                     <RefreshCw
-                      className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`}
+                      className={`mr-1.5 ${isRefreshingTools ? "animate-spin" : ""}`}
                     />
                     Refresh
                   </Button>
@@ -680,7 +680,7 @@ export default function MCPInstanceDetail({
                   disabled={isRefreshingTools}
                 >
                   <RefreshCw
-                    className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`}
+                    className={`mr-1.5 ${isRefreshingTools ? "animate-spin" : ""}`}
                   />
                   Discover Tools
                 </Button>

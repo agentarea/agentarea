@@ -189,7 +189,7 @@ export default function AgentChat({
             size="sm"
             className="h-8 w-8 rounded-full bg-white text-text shadow-lg hover:text-white dark:bg-zinc-900 dark:text-zinc-200"
           >
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDown />
           </Button>
         </div>
       </CardContent>
