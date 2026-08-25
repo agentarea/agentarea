@@ -67,7 +67,6 @@ import {
   getAgentWalletPayments,
   getAllTasks,
   getClient,
-  getMCPHealthStatus,
   getMCPServerInstance,
   getModelSpec,
   getNetworkTopology,
@@ -273,10 +272,6 @@ export async function uploadSkillAction(formData: FormData) {
 
   const data = await response.json();
   return { data, error: null };
-}
-
-export async function getMCPHealthStatusAction() {
-  return await getMCPHealthStatus();
 }
 
 export async function checkMCPServerInstanceConfigurationAction(checkRequest: {

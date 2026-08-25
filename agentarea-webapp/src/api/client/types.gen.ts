@@ -2753,6 +2753,24 @@ export type McpAuthConfigUpdateRequest = {
 };
 
 /**
+ * MCPContainersHealthResponse
+ */
+export type McpContainersHealthResponse = {
+  /**
+   * Healthy
+   */
+  healthy: number;
+  /**
+   * Instances
+   */
+  instances: Array<McpInstanceHealthResponse>;
+  /**
+   * Total
+   */
+  total: number;
+};
+
+/**
  * MCPInstanceConsumer
  *
  * An agent that has this MCP instance attached, and which of its tools it enabled.
@@ -2778,6 +2796,36 @@ export type McpInstanceConsumer = {
    * Enabled Tools
    */
   enabled_tools?: Array<string> | null;
+};
+
+/**
+ * MCPInstanceHealthResponse
+ *
+ * One workload's health, as the calling workspace is entitled to see it.
+ *
+ * Deliberately just the verdict and its reason. The manager's own health body
+ * is richer — container id, image, ports, the gateway path it serves the
+ * workload on — and none of that is something a caller needs in order to learn
+ * that a workload is up. It is dropped here rather than passed through, so the
+ * endpoint cannot become a way to enumerate the data plane.
+ */
+export type McpInstanceHealthResponse = {
+  /**
+   * Healthy
+   */
+  healthy: boolean;
+  /**
+   * Instance Id
+   */
+  instance_id: string;
+  /**
+   * Name
+   */
+  name?: string | null;
+  /**
+   * Status
+   */
+  status: string;
 };
 
 /**
@@ -10187,8 +10235,11 @@ export type GetContainersHealthV1McpServerInstancesHealthContainersGetResponses 
     /**
      * Successful Response
      */
-    200: unknown;
+    200: McpContainersHealthResponse;
   };
+
+export type GetContainersHealthV1McpServerInstancesHealthContainersGetResponse =
+  GetContainersHealthV1McpServerInstancesHealthContainersGetResponses[keyof GetContainersHealthV1McpServerInstancesHealthContainersGetResponses];
 
 export type ValidateInstanceSpecV1McpServerInstancesValidatePostData = {
   body: ValidateRequest;

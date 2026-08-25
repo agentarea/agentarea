@@ -655,20 +655,8 @@
         "externalUrl": "Внешний URL",
         "command": "Команда"
       },
-      "connection": {
-        "title": "Подключение",
-        "loading": "Загрузка параметров подключения...",
-        "externalEndpoint": "Внешний эндпоинт",
-        "mcpEndpoint": "MCP точка подключения",
-        "mcpEndpointNote": "Поделитесь этим URL для подключения клиентов",
-        "sseEndpoint": "SSE эндпоинт (для MCP клиентов)",
-        "note": "Используйте эти URL, чтобы подключить MCP клиент к этому инстансу.",
-        "noteExternal": "Этот MCP сервер размещён внешне по указанному URL.",
-        "notAvailable": "URL подключения недоступен. Инстанс может ещё инициализироваться."
-      },
       "labels": {
         "connectionUrl": "URL подключения",
-        "sseUrl": "SSE URL",
         "value": "Значение"
       },
       "serverSpec": {

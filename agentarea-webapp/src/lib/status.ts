@@ -85,19 +85,6 @@ export function getMcpHealthStatusPresentation(
   }
 }
 
-export function getMcpRuntimeHealthStatusPresentation(
-  status: string
-): StatusPresentation {
-  switch (normalizeStatus(status)) {
-    case "healthy":
-      return { label: "Healthy", tone: "success" };
-    case "unhealthy":
-      return { label: "Unhealthy", tone: "danger" };
-    default:
-      return fallbackStatusPresentation(status);
-  }
-}
-
 export function getOpenApiConnectionStatusPresentation(
   status: string
 ): StatusPresentation {

@@ -690,20 +690,8 @@
         "externalUrl": "External URL",
         "command": "Command"
       },
-      "connection": {
-        "title": "Connection",
-        "loading": "Loading connection details...",
-        "externalEndpoint": "External Endpoint",
-        "mcpEndpoint": "MCP Endpoint",
-        "mcpEndpointNote": "Share this URL with clients to connect",
-        "sseEndpoint": "SSE Endpoint (for MCP clients)",
-        "note": "Use these URLs to connect your MCP client to this server instance.",
-        "noteExternal": "This MCP server is hosted externally at the URL above.",
-        "notAvailable": "Connection URL not available. The instance may still be initializing."
-      },
       "labels": {
         "connectionUrl": "Connection URL",
-        "sseUrl": "SSE URL",
         "value": "Value"
       },
       "serverSpec": {

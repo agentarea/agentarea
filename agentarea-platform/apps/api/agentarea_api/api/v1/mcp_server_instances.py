@@ -511,7 +511,29 @@ async def discover_mcp_server_instance_tools(
         ) from e
 
 
-@router.get("/health/containers")
+class MCPInstanceHealthResponse(BaseModel):
+    """One workload's health, as the calling workspace is entitled to see it.
+
+    Deliberately just the verdict and its reason. The manager's own health body
+    is richer — container id, image, ports, the gateway path it serves the
+    workload on — and none of that is something a caller needs in order to learn
+    that a workload is up. It is dropped here rather than passed through, so the
+    endpoint cannot become a way to enumerate the data plane.
+    """
+
+    instance_id: str
+    name: str | None = None
+    healthy: bool
+    status: str
+
+
+class MCPContainersHealthResponse(BaseModel):
+    instances: list[MCPInstanceHealthResponse]
+    total: int
+    healthy: int
+
+
+@router.get("/health/containers", response_model=MCPContainersHealthResponse)
 async def get_containers_health(
     user_context: UserContextDep,
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
@@ -558,7 +580,6 @@ async def get_containers_health(
                 **row,
                 "healthy": bool(body.get("healthy")),
                 "status": body.get("status") or ("healthy" if body.get("healthy") else "unhealthy"),
-                "details": body,
             }
 
         if response.status_code == 404:

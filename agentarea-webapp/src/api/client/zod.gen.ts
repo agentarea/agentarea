@@ -1029,6 +1029,33 @@ export const zMcpInstanceConsumer = z.object({
 });
 
 /**
+ * MCPInstanceHealthResponse
+ *
+ * One workload's health, as the calling workspace is entitled to see it.
+ *
+ * Deliberately just the verdict and its reason. The manager's own health body
+ * is richer — container id, image, ports, the gateway path it serves the
+ * workload on — and none of that is something a caller needs in order to learn
+ * that a workload is up. It is dropped here rather than passed through, so the
+ * endpoint cannot become a way to enumerate the data plane.
+ */
+export const zMcpInstanceHealthResponse = z.object({
+  healthy: z.boolean(),
+  instance_id: z.string(),
+  name: z.string().nullish(),
+  status: z.string(),
+});
+
+/**
+ * MCPContainersHealthResponse
+ */
+export const zMcpContainersHealthResponse = z.object({
+  healthy: z.number().int(),
+  instances: z.array(zMcpInstanceHealthResponse),
+  total: z.number().int(),
+});
+
+/**
  * MCPServerCreate
  *
  * Payload for creating an MCP server spec (catalog template).
@@ -3903,6 +3930,12 @@ export const zCreateMcpServerInstanceV1McpServerInstancesPostResponse =
  */
 export const zCheckMcpServerInstanceConfigurationV1McpServerInstancesCheckPostBody =
   z.record(z.unknown());
+
+/**
+ * Successful Response
+ */
+export const zGetContainersHealthV1McpServerInstancesHealthContainersGetResponse =
+  zMcpContainersHealthResponse;
 
 export const zValidateInstanceSpecV1McpServerInstancesValidatePostBody =
   zValidateRequest;

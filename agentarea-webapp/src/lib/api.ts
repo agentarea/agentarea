@@ -84,23 +84,6 @@ function requestJson<TData = unknown, TError = unknown>(
   });
 }
 
-interface McpContainerHealthCheck {
-  service_name: string;
-  slug: string;
-  url: string;
-  healthy: boolean;
-  http_reachable: boolean;
-  response_time_ms: number;
-  error?: string;
-  timestamp: string;
-  container_status: string;
-  details?: {
-    proxy_url?: string;
-    container_port?: number;
-    container_image?: string;
-  };
-}
-
 function withStatus<TData, TError>(result: {
   data?: TData;
   error?: TError;
@@ -969,49 +952,6 @@ export const listAllTools = async (options?: {
     },
   });
   return { data, error };
-};
-
-export const getMCPHealthStatus = async (): Promise<{
-  health_checks: McpContainerHealthCheck[];
-  total: number;
-}> => {
-  try {
-    const { data, error } =
-      await sdk.getContainersHealthV1McpServerInstancesHealthContainersGet({
-        client: serverClient,
-      });
-    if (error || !data) {
-      return { health_checks: [], total: 0 };
-    }
-    return data as { health_checks: McpContainerHealthCheck[]; total: number };
-  } catch (error) {
-    console.warn("Failed to fetch MCP health status:", error);
-    return { health_checks: [], total: 0 };
-  }
-};
-
-export const getMCPInstanceHealth = async (
-  managerServiceName: string
-): Promise<{
-  health_check: McpContainerHealthCheck | null;
-}> => {
-  try {
-    const { data, error } =
-      await sdk.getContainersHealthV1McpServerInstancesHealthContainersGet({
-        client: serverClient,
-      });
-    if (error || !data) {
-      return { health_check: null };
-    }
-    const healthData = data as { health_checks?: McpContainerHealthCheck[] };
-    const healthCheck = healthData.health_checks?.find(
-      (check) => check.service_name === managerServiceName
-    );
-    return { health_check: healthCheck || null };
-  } catch (error) {
-    console.warn("Failed to fetch MCP instance health:", error);
-    return { health_check: null };
-  }
 };
 
 export type MCPInstanceConsumer = McpInstanceConsumer;
