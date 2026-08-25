@@ -59,7 +59,7 @@ export default function Table<T>({
               {column.header}
               {column.sortable && (
                 <Button variant="ghost" size="icon" className="ml-2">
-                  <ArrowUpIcon className="h-4 w-4" />
+                  <ArrowUpIcon />
                 </Button>
               )}
             </TableHead>

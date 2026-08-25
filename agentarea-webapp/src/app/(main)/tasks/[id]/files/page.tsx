@@ -100,7 +100,7 @@ export default function TaskFilesPage() {
           </p>
         </div>
         <Button size="xs" variant="outline" onClick={() => void loadFiles()}>
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          <RefreshCw className="mr-1.5" />
           Refresh
         </Button>
       </div>

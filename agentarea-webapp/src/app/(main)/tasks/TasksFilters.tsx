@@ -133,7 +133,7 @@ export function TasksFilters({
               onClick={clearFilters}
               className="h-12 gap-2 rounded-xl border-gray-200 px-4 transition-colors duration-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
             >
-              <X className="h-4 w-4" />
+              <X />
               <span className="hidden sm:inline">{t("clearFilters")}</span>
             </Button>
           )}

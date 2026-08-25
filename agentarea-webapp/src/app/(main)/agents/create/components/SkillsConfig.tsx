@@ -159,7 +159,7 @@ const SkillsConfig = ({
                         className="h-4 w-4 flex-shrink-0 text-muted-foreground/60 hover:bg-transparent hover:text-red-500"
                         aria-label="Remove Skill"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 />
                       </Button>
                     </div>
                   }

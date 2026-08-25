@@ -42,9 +42,9 @@ export default function ApiKeyEditInput({ field }: { field: FieldValues }) {
               }}
             >
               {editApiKey ? (
-                <X className="h-4 w-4" />
+                <X />
               ) : (
-                <Edit className="h-4 w-4" />
+                <Edit />
               )}
             </Button>
           </TooltipTrigger>

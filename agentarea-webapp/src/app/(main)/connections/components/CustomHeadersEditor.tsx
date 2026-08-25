@@ -71,7 +71,7 @@ export function CustomHeadersEditor({
       <div className="flex items-center justify-between">
         <Label>{t("editHeaders")}</Label>
         <Button type="button" variant="outline" size="xs" onClick={addRow}>
-          <Plus className="mr-1 h-3 w-3" />
+          <Plus className="mr-1" />
           {t("addHeader")}
         </Button>
       </div>
@@ -103,7 +103,7 @@ export function CustomHeadersEditor({
               </div>
             </div>
             <Button type="button" variant="ghost" size="xs" onClick={() => removeRow(i)}>
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 />
             </Button>
           </div>
         );

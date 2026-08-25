@@ -96,9 +96,9 @@ export default function WorkspaceFilesPage() {
               disabled={uploading}
             >
               {uploading ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="mr-1.5 animate-spin" />
               ) : (
-                <Upload className="mr-1.5 h-3.5 w-3.5" />
+                <Upload className="mr-1.5" />
               )}
               Upload File
             </Button>

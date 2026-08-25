@@ -65,7 +65,7 @@ export default function InviteClient({ token }: { token: string | null }) {
                 onClick={handleAccept}
                 disabled={isPending}
               >
-                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isPending && <Loader2 className="mr-2 animate-spin" />}
                 {t("acceptButton")}
               </Button>
             </>

@@ -94,7 +94,7 @@ export function AppSidebarContent({
               )}
               onClick={openQuickTask}
             >
-              <SquarePen className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80 group-hover:text-foreground" />
+              <SquarePen className="shrink-0 text-muted-foreground/80 group-hover:text-foreground" />
               {open && (
                 <>
                   <span className="flex-1 truncate text-left">New task</span>

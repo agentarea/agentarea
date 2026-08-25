@@ -121,7 +121,7 @@ export function AssociationSection({
         className="mt-4 w-full border-dashed bg-muted/20 hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
         onClick={() => setShowAddDialog(true)}
       >
-        <Plus className="mr-1.5 h-3.5 w-3.5" />
+        <Plus className="mr-1.5" />
         {addLabel}
       </Button>
 
@@ -148,9 +148,9 @@ export function AssociationSection({
                 disabled={removingId === item.id}
               >
                 {removingId === item.id ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="animate-spin" />
                 ) : (
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 />
                 )}
               </Button>
             </li>
@@ -192,7 +192,7 @@ export function AssociationSection({
               disabled={!selectedId || isAdding || available.length === 0}
             >
               {isAdding ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 animate-spin" />
               ) : null}
               Add
             </Button>
