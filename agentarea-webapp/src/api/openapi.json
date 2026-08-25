@@ -4737,20 +4737,8 @@
         "type": "object"
       },
       "MCPInstanceHealthResponse": {
-        "description": "One workload's health, as the calling workspace is entitled to see it.",
+        "description": "One workload's health, as the calling workspace is entitled to see it.\n\nDeliberately just the verdict and its reason. The manager's own health body\nis richer \u2014 container id, image, ports, the gateway path it serves the\nworkload on \u2014 and none of that is something a caller needs in order to learn\nthat a workload is up. It is dropped here rather than passed through, so the\nendpoint cannot become a way to enumerate the data plane.",
         "properties": {
-          "details": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Details"
-          },
           "healthy": {
             "title": "Healthy",
             "type": "boolean"

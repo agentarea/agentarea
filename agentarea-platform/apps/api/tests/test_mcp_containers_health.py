@@ -194,7 +194,6 @@ def test_declared_shape_carries_every_reported_field():
             "name": "telegram",
             "healthy": False,
             "status": "not_running",
-            "details": {"http_reachable": False},
         }
     )
 
@@ -203,8 +202,41 @@ def test_declared_shape_carries_every_reported_field():
         "name": "telegram",
         "healthy": False,
         "status": "not_running",
-        "details": {"http_reachable": False},
     }
+
+
+def test_the_managers_own_health_body_is_not_passed_through(monkeypatch):
+    """The verdict is the answer; the data plane's internals are not.
+
+    The manager reports container ids, images, ports and the gateway path it
+    serves a workload on. Echoing that to a caller would turn a health check into
+    a way to enumerate the data plane, so the row must carry none of it.
+    """
+    iid = uuid4()
+    answers = {
+        _health_url(iid): _Response(
+            200,
+            {
+                "healthy": True,
+                "status": "running",
+                "container_id": "9f2c1e",
+                "container_image": "ghcr.io/example/mcp:1",
+                "proxy_url": "/mcp/telegram",
+            },
+        )
+    }
+    _install(monkeypatch, answers, [])
+
+    result = asyncio.run(
+        module.get_containers_health(
+            user_context=_context(),
+            service=_service([SimpleNamespace(id=iid, name="telegram")]),
+        )
+    )
+
+    assert set(result["instances"][0]) == {"instance_id", "name", "healthy", "status"}
+    for leaked in ("9f2c1e", "ghcr.io/example/mcp:1", "/mcp/telegram"):
+        assert leaked not in str(result)
 
 
 def test_every_answer_the_endpoint_can_give_validates_against_the_contract(monkeypatch):

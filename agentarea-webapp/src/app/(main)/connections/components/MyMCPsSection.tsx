@@ -10,9 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import {
+  getMcpHealthStatusPresentation,
   getMcpVerificationStatusPresentation,
   getOpenApiConnectionDisplayStatus,
-  getOpenApiConnectionStatusPresentation,
   type StatusPresentation,
 } from "@/lib/status";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
@@ -45,6 +45,19 @@ function hostOf(url?: string | null): string {
     return url.replace(/^https?:\/\//, "").split("/")[0];
   }
 }
+
+// An OpenAPI connection's own status, in the vocabulary the shared status
+// presenter speaks. Unlike MCP workloads there is nothing to start on demand
+// here — the connection either reaches its upstream spec or it does not.
+const OPENAPI_STATUS_TO_HEALTH: Record<string, string> = {
+  connected: "connected",
+  succeeded: "connected",
+  running: "healthy",
+  failed: "unhealthy",
+  stopped: "unknown",
+  pending: "starting",
+  starting: "starting",
+};
 
 interface MyMCPsSectionProps {
   mcpInstances: MCPInstance[];
@@ -192,12 +205,13 @@ export function MyMCPsSection({
       // when idle, so liveness is the data plane's business, not a column here.
       render: (_: string, item: TableRow) => {
         if (item._type === "openapi" && item._connection) {
+          const displayStatus = getOpenApiConnectionDisplayStatus(
+            item._connection.status,
+            item._connection.available_tools.length
+          );
           return getStatusIndicator(
-            getOpenApiConnectionStatusPresentation(
-              getOpenApiConnectionDisplayStatus(
-                item._connection.status,
-                item._connection.available_tools.length
-              )
+            getMcpHealthStatusPresentation(
+              OPENAPI_STATUS_TO_HEALTH[displayStatus] ?? "unknown"
             )
           );
         }

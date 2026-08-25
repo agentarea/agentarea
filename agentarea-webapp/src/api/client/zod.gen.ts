@@ -1032,9 +1032,14 @@ export const zMcpInstanceConsumer = z.object({
  * MCPInstanceHealthResponse
  *
  * One workload's health, as the calling workspace is entitled to see it.
+ *
+ * Deliberately just the verdict and its reason. The manager's own health body
+ * is richer — container id, image, ports, the gateway path it serves the
+ * workload on — and none of that is something a caller needs in order to learn
+ * that a workload is up. It is dropped here rather than passed through, so the
+ * endpoint cannot become a way to enumerate the data plane.
  */
 export const zMcpInstanceHealthResponse = z.object({
-  details: z.record(z.unknown()).nullish(),
   healthy: z.boolean(),
   instance_id: z.string(),
   name: z.string().nullish(),
