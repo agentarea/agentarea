@@ -1865,6 +1865,7 @@ export const zProjectUpdate = z.object({
  */
 export const zProviderConfigCreate = z.object({
   api_key: z.string().nullish(),
+  api_key_secret_id: z.string().uuid().nullish(),
   description: z.string().max(1000).nullish(),
   endpoint_url: z.string().nullish(),
   is_public: z.boolean().optional().default(false),
@@ -1898,6 +1899,7 @@ export const zProviderConfigResponse = z.object({
  */
 export const zProviderConfigUpdate = z.object({
   api_key: z.string().nullish(),
+  api_key_secret_id: z.string().uuid().nullish(),
   description: z.string().max(1000).nullish(),
   endpoint_url: z.string().nullish(),
   is_active: z.boolean().nullish(),
@@ -2095,6 +2097,52 @@ export const zSandboxSummary = z.object({
 export const zSandboxListResponse = z.object({
   items: z.array(zSandboxSummary),
   total: z.number().int(),
+});
+
+/**
+ * SecretConsumer
+ */
+export const zSecretConsumer = z.object({
+  consumer_id: z.string(),
+  consumer_type: z.string(),
+  field: z.string(),
+});
+
+/**
+ * SecretCreate
+ */
+export const zSecretCreate = z.object({
+  description: z.string().max(1000).nullish(),
+  name: z.string(),
+  value: z.string().min(1),
+});
+
+/**
+ * SecretDescriptionUpdate
+ */
+export const zSecretDescriptionUpdate = z.object({
+  description: z.string().max(1000).nullish(),
+});
+
+/**
+ * SecretResponse
+ *
+ * A secret's metadata. The value is never part of this.
+ */
+export const zSecretResponse = z.object({
+  created_at: z.string().nullish(),
+  description: z.string().nullish(),
+  id: z.string().uuid(),
+  name: z.string(),
+  updated_at: z.string().nullish(),
+  used_by: z.array(zSecretConsumer).optional(),
+});
+
+/**
+ * SecretValueUpdate
+ */
+export const zSecretValueUpdate = z.object({
+  value: z.string().min(1),
 });
 
 /**
@@ -4823,6 +4871,62 @@ export const zUpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponse =
  * Successful Response
  */
 export const zListSandboxesV1SandboxesGetResponse = zSandboxListResponse;
+
+/**
+ * Response List Secrets V1 Secrets Get
+ *
+ * Successful Response
+ */
+export const zListSecretsV1SecretsGetResponse = z.array(zSecretResponse);
+
+export const zCreateSecretV1SecretsPostBody = zSecretCreate;
+
+/**
+ * Successful Response
+ */
+export const zCreateSecretV1SecretsPostResponse = zSecretResponse;
+
+export const zDeleteSecretV1SecretsSecretIdDeletePath = z.object({
+  secret_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zDeleteSecretV1SecretsSecretIdDeleteResponse = z.void();
+
+export const zGetSecretV1SecretsSecretIdGetPath = z.object({
+  secret_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zGetSecretV1SecretsSecretIdGetResponse = zSecretResponse;
+
+export const zUpdateSecretDescriptionV1SecretsSecretIdPatchBody =
+  zSecretDescriptionUpdate;
+
+export const zUpdateSecretDescriptionV1SecretsSecretIdPatchPath = z.object({
+  secret_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zUpdateSecretDescriptionV1SecretsSecretIdPatchResponse =
+  zSecretResponse;
+
+export const zRotateSecretV1SecretsSecretIdValuePutBody = zSecretValueUpdate;
+
+export const zRotateSecretV1SecretsSecretIdValuePutPath = z.object({
+  secret_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zRotateSecretV1SecretsSecretIdValuePutResponse = zSecretResponse;
 
 /**
  * Response List Collections V1 Skill Collections  Get

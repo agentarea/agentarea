@@ -2374,3 +2374,43 @@ export type Project = ProjectResponse;
 export type WorkspaceMember = MemberResponse;
 export type WorkspaceInvitation = InvitationResponse;
 export type WorkspaceInvitationCreated = InvitationCreatedResponse;
+
+// --- Workspace secrets -----------------------------------------------------
+// Values only ever travel inwards: no endpoint here returns one, so nothing
+// below can read a secret back out.
+
+export const listSecrets = async () => {
+  const { data, error } = await sdk.listSecretsV1SecretsGet({
+    client: serverClient,
+  });
+  return { data, error };
+};
+
+export const createSecret = async (body: {
+  name: string;
+  value: string;
+  description?: string | null;
+}) => {
+  const { data, error } = await sdk.createSecretV1SecretsPost({
+    client: serverClient,
+    body,
+  });
+  return { data, error };
+};
+
+export const rotateSecret = async (secretId: string, value: string) => {
+  const { data, error } = await sdk.rotateSecretV1SecretsSecretIdValuePut({
+    client: serverClient,
+    path: { secret_id: secretId },
+    body: { value },
+  });
+  return { data, error };
+};
+
+export const deleteSecret = async (secretId: string) => {
+  const { data, error } = await sdk.deleteSecretV1SecretsSecretIdDelete({
+    client: serverClient,
+    path: { secret_id: secretId },
+  });
+  return { data, error };
+};

@@ -74,7 +74,11 @@ export default function Table<T>({
               key={row.id as React.Key}
               onClick={() => onRowClick?.(item)}
               className={cn(
-                "group cursor-pointer border-b border-zinc-100 transition-colors duration-200 hover:bg-primary/5 dark:border-zinc-800 dark:hover:bg-primary/10",
+                "group border-b border-zinc-100 transition-colors duration-200 dark:border-zinc-800",
+                // Only a table that actually handles the click should look
+                // clickable; without this every row invites one that does nothing.
+                onRowClick &&
+                  "cursor-pointer hover:bg-primary/5 dark:hover:bg-primary/10",
                 row.className as string | undefined
               )}
             >

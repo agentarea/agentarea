@@ -4551,6 +4551,12 @@ export type ProviderConfigCreate = {
    */
   api_key?: string | null;
   /**
+   * Api Key Secret Id
+   *
+   * Use an existing workspace secret as the API key instead of supplying one here. Mutually exclusive with api_key. The secret keeps its own lifecycle: several configurations may share it, and it cannot be deleted while any of them still points at it.
+   */
+  api_key_secret_id?: string | null;
+  /**
    * Description
    *
    * Optional human-readable description of this configuration.
@@ -4652,6 +4658,12 @@ export type ProviderConfigUpdate = {
    * New API key. Replaces the previously stored secret. Send an empty string to clear the key for keyless custom endpoints.
    */
   api_key?: string | null;
+  /**
+   * Api Key Secret Id
+   *
+   * Point this configuration at an existing workspace secret instead. Mutually exclusive with api_key.
+   */
+  api_key_secret_id?: string | null;
   /**
    * Description
    *
@@ -5222,6 +5234,108 @@ export type SandboxSummary = {
    * Task Id
    */
   task_id: string;
+};
+
+/**
+ * SecretConsumer
+ */
+export type SecretConsumer = {
+  /**
+   * Consumer Id
+   *
+   * Id of the using entity.
+   */
+  consumer_id: string;
+  /**
+   * Consumer Type
+   *
+   * Kind of thing using the secret, e.g. provider_config.
+   */
+  consumer_type: string;
+  /**
+   * Field
+   *
+   * Which slot on that entity — a header name, an env var.
+   */
+  field: string;
+};
+
+/**
+ * SecretCreate
+ */
+export type SecretCreate = {
+  /**
+   * Description
+   */
+  description?: string | null;
+  /**
+   * Name
+   *
+   * 2-64 characters: lowercase letters, digits, '-' and '_', starting and ending with a letter or digit. Prefixes the platform uses for its own secrets are rejected.
+   */
+  name: string;
+  /**
+   * Value
+   *
+   * Stored encrypted; never returned.
+   */
+  value: string;
+};
+
+/**
+ * SecretDescriptionUpdate
+ */
+export type SecretDescriptionUpdate = {
+  /**
+   * Description
+   */
+  description?: string | null;
+};
+
+/**
+ * SecretResponse
+ *
+ * A secret's metadata. The value is never part of this.
+ */
+export type SecretResponse = {
+  /**
+   * Created At
+   */
+  created_at?: string | null;
+  /**
+   * Description
+   */
+  description?: string | null;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Name
+   *
+   * Unique within the workspace.
+   */
+  name: string;
+  /**
+   * Updated At
+   */
+  updated_at?: string | null;
+  /**
+   * Used By
+   */
+  used_by?: Array<SecretConsumer>;
+};
+
+/**
+ * SecretValueUpdate
+ */
+export type SecretValueUpdate = {
+  /**
+   * Value
+   *
+   * Replaces the stored value.
+   */
+  value: string;
 };
 
 /**
@@ -13223,6 +13337,180 @@ export type ListSandboxesV1SandboxesGetResponses = {
 
 export type ListSandboxesV1SandboxesGetResponse =
   ListSandboxesV1SandboxesGetResponses[keyof ListSandboxesV1SandboxesGetResponses];
+
+export type ListSecretsV1SecretsGetData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/v1/secrets";
+};
+
+export type ListSecretsV1SecretsGetResponses = {
+  /**
+   * Response List Secrets V1 Secrets Get
+   *
+   * Successful Response
+   */
+  200: Array<SecretResponse>;
+};
+
+export type ListSecretsV1SecretsGetResponse =
+  ListSecretsV1SecretsGetResponses[keyof ListSecretsV1SecretsGetResponses];
+
+export type CreateSecretV1SecretsPostData = {
+  body: SecretCreate;
+  path?: never;
+  query?: never;
+  url: "/v1/secrets";
+};
+
+export type CreateSecretV1SecretsPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreateSecretV1SecretsPostError =
+  CreateSecretV1SecretsPostErrors[keyof CreateSecretV1SecretsPostErrors];
+
+export type CreateSecretV1SecretsPostResponses = {
+  /**
+   * Successful Response
+   */
+  201: SecretResponse;
+};
+
+export type CreateSecretV1SecretsPostResponse =
+  CreateSecretV1SecretsPostResponses[keyof CreateSecretV1SecretsPostResponses];
+
+export type DeleteSecretV1SecretsSecretIdDeleteData = {
+  body?: never;
+  path: {
+    /**
+     * Secret Id
+     */
+    secret_id: string;
+  };
+  query?: never;
+  url: "/v1/secrets/{secret_id}";
+};
+
+export type DeleteSecretV1SecretsSecretIdDeleteErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteSecretV1SecretsSecretIdDeleteError =
+  DeleteSecretV1SecretsSecretIdDeleteErrors[keyof DeleteSecretV1SecretsSecretIdDeleteErrors];
+
+export type DeleteSecretV1SecretsSecretIdDeleteResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteSecretV1SecretsSecretIdDeleteResponse =
+  DeleteSecretV1SecretsSecretIdDeleteResponses[keyof DeleteSecretV1SecretsSecretIdDeleteResponses];
+
+export type GetSecretV1SecretsSecretIdGetData = {
+  body?: never;
+  path: {
+    /**
+     * Secret Id
+     */
+    secret_id: string;
+  };
+  query?: never;
+  url: "/v1/secrets/{secret_id}";
+};
+
+export type GetSecretV1SecretsSecretIdGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetSecretV1SecretsSecretIdGetError =
+  GetSecretV1SecretsSecretIdGetErrors[keyof GetSecretV1SecretsSecretIdGetErrors];
+
+export type GetSecretV1SecretsSecretIdGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: SecretResponse;
+};
+
+export type GetSecretV1SecretsSecretIdGetResponse =
+  GetSecretV1SecretsSecretIdGetResponses[keyof GetSecretV1SecretsSecretIdGetResponses];
+
+export type UpdateSecretDescriptionV1SecretsSecretIdPatchData = {
+  body: SecretDescriptionUpdate;
+  path: {
+    /**
+     * Secret Id
+     */
+    secret_id: string;
+  };
+  query?: never;
+  url: "/v1/secrets/{secret_id}";
+};
+
+export type UpdateSecretDescriptionV1SecretsSecretIdPatchErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateSecretDescriptionV1SecretsSecretIdPatchError =
+  UpdateSecretDescriptionV1SecretsSecretIdPatchErrors[keyof UpdateSecretDescriptionV1SecretsSecretIdPatchErrors];
+
+export type UpdateSecretDescriptionV1SecretsSecretIdPatchResponses = {
+  /**
+   * Successful Response
+   */
+  200: SecretResponse;
+};
+
+export type UpdateSecretDescriptionV1SecretsSecretIdPatchResponse =
+  UpdateSecretDescriptionV1SecretsSecretIdPatchResponses[keyof UpdateSecretDescriptionV1SecretsSecretIdPatchResponses];
+
+export type RotateSecretV1SecretsSecretIdValuePutData = {
+  body: SecretValueUpdate;
+  path: {
+    /**
+     * Secret Id
+     */
+    secret_id: string;
+  };
+  query?: never;
+  url: "/v1/secrets/{secret_id}/value";
+};
+
+export type RotateSecretV1SecretsSecretIdValuePutErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RotateSecretV1SecretsSecretIdValuePutError =
+  RotateSecretV1SecretsSecretIdValuePutErrors[keyof RotateSecretV1SecretsSecretIdValuePutErrors];
+
+export type RotateSecretV1SecretsSecretIdValuePutResponses = {
+  /**
+   * Successful Response
+   */
+  200: SecretResponse;
+};
+
+export type RotateSecretV1SecretsSecretIdValuePutResponse =
+  RotateSecretV1SecretsSecretIdValuePutResponses[keyof RotateSecretV1SecretsSecretIdValuePutResponses];
 
 export type ListCollectionsV1SkillCollectionsGetData = {
   body?: never;
