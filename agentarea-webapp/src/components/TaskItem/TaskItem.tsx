@@ -12,7 +12,7 @@ export interface TaskItemData {
   description: string;
   status: string;
   created_at: string;
-  agent_name?: string;
+  agent_name?: string | null;
   agent_id?: string;
   parameters?: Record<string, unknown>;
 }

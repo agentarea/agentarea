@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { env } from "@/env";
+import { formatApiError } from "@/lib/api-errors";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
 
@@ -38,6 +39,8 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Upload-url proxy error:", error);
-    return new Response(`Upload-url proxy error: ${error}`, { status: 500 });
+    return new Response(`Upload-url proxy error: ${formatApiError(error)}`, {
+      status: 500,
+    });
   }
 }

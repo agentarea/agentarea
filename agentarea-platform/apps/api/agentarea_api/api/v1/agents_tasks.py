@@ -361,7 +361,10 @@ class TaskWithAgent(BaseModel):
 
     id: UUID
     agent_id: UUID
-    agent_name: str
+    # None when the task's agent no longer resolves. Never substitute a
+    # placeholder name: a fabricated "Unknown" is indistinguishable from an
+    # agent actually called that, and it hides the missing agent from the UI.
+    agent_name: str | None = None
     description: str
     parameters: dict[str, Any]
     status: str
@@ -377,7 +380,7 @@ class TaskWithAgent(BaseModel):
     escalation_tool_name: str | None = None
 
     @classmethod
-    def from_task_response(cls, task: TaskResponse, agent_name: str) -> "TaskWithAgent":
+    def from_task_response(cls, task: TaskResponse, agent_name: str | None) -> "TaskWithAgent":
         """Create TaskWithAgent from TaskResponse and agent name."""
         return cls(
             id=task.id,
@@ -430,7 +433,7 @@ async def get_all_tasks(
                 TaskWithAgent(
                     id=task.id,
                     agent_id=task.agent_id,
-                    agent_name=agent_map.get(str(task.agent_id), "Unknown"),
+                    agent_name=agent_map.get(str(task.agent_id)),
                     description=task.description,
                     parameters=task.parameters,
                     status=task.status,
@@ -483,7 +486,7 @@ async def get_task_by_id(
         return TaskWithAgent(
             id=task.id,
             agent_id=task.agent_id,
-            agent_name=agent.name if agent else "Unknown",
+            agent_name=agent.name if agent else None,
             description=task.description,
             parameters=task.parameters,
             status=task.status,
@@ -507,7 +510,9 @@ class TaskEvent(BaseModel):
     id: str
     task_id: str
     agent_id: str
-    execution_id: str
+    # None for events recorded outside a workflow execution. "unknown" was a
+    # fabricated id that callers could not tell apart from a real one.
+    execution_id: str | None = None
     timestamp: UtcDatetime
     event_type: str
     message: str
@@ -1864,8 +1869,7 @@ async def get_task_events(
                 id=str(record.id),
                 task_id=str(record.task_id),
                 agent_id=str(agent_id),
-                execution_id=record.data.get("execution_id")
-                or record.metadata.get("execution_id", "unknown"),
+                execution_id=record.data.get("execution_id") or record.metadata.get("execution_id"),
                 timestamp=record.timestamp,
                 event_type=record.event_type,
                 message=record.data.get("message", f"Event: {record.event_type}"),

@@ -5522,7 +5522,7 @@ export type TaskEvent = {
     /**
      * Execution Id
      */
-    execution_id: string;
+    execution_id?: string | null;
     /**
      * Id
      */
@@ -5747,7 +5747,7 @@ export type TaskWithAgent = {
     /**
      * Agent Name
      */
-    agent_name: string;
+    agent_name?: string | null;
     /**
      * Created At
      */

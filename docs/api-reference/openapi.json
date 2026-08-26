@@ -9785,8 +9785,15 @@
             "type": "string"
           },
           "execution_id": {
-            "title": "Execution Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Id"
           },
           "id": {
             "title": "Id",
@@ -9815,7 +9822,6 @@
           "id",
           "task_id",
           "agent_id",
-          "execution_id",
           "timestamp",
           "event_type",
           "message"
@@ -10136,8 +10142,15 @@
             "type": "string"
           },
           "agent_name": {
-            "title": "Agent Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
           },
           "created_at": {
             "title": "Created At",
@@ -10246,7 +10259,6 @@
         "required": [
           "id",
           "agent_id",
-          "agent_name",
           "description",
           "parameters",
           "status",

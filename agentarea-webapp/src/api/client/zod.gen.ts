@@ -2418,7 +2418,7 @@ export const zTaskCommandPayload = z.object({
 export const zTaskEvent = z.object({
   agent_id: z.string(),
   event_type: z.string(),
-  execution_id: z.string(),
+  execution_id: z.string().nullish(),
   id: z.string(),
   message: z.string(),
   metadata: z.record(z.unknown()).optional().default({}),
@@ -2506,7 +2506,7 @@ export const zTaskSummary = z.object({
  */
 export const zTaskWithAgent = z.object({
   agent_id: z.string().uuid(),
-  agent_name: z.string(),
+  agent_name: z.string().nullish(),
   created_at: z.string(),
   description: z.string(),
   error: z.string().nullish(),
