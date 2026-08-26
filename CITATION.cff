@@ -5,7 +5,7 @@ version: 0.1.0
 date-released: 2025-01-01
 url: "https://github.com/agentarea/agentarea"
 repository-code: "https://github.com/agentarea/agentarea"
-license: MIT
+license: Apache-2.0
 authors:
   - family-names: "AgentArea"
     given-names: "Contributors"

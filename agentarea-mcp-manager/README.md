@@ -103,4 +103,4 @@ curl -X POST http://localhost:80/instances \
 
 ## License
 
-MIT
+Licensed under the Apache License 2.0 — see [LICENSE.md](../LICENSE.md) for details.

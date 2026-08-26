@@ -219,7 +219,7 @@ npm rebuild
 
 ## License
 
-MIT
+Licensed under the Apache License 2.0 — see [LICENSE.md](../LICENSE.md) for details.
 
 ## See Also
 
