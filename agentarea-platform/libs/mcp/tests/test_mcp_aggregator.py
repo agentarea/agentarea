@@ -90,9 +90,9 @@ async def test_call_namespaced_tool_unknown_raises():
 def test_streamable_candidates_honor_a_declared_transport():
     # A declared transport is authoritative: probing a second candidate costs a
     # full connect timeout per discovery, and discovery runs on every tools/list.
-    assert MCPAggregatorProxy._streamable_candidates(
-        "http://mcp-x:8000", "streamable-http"
-    ) == ["http://mcp-x:8000"]
+    assert MCPAggregatorProxy._streamable_candidates("http://mcp-x:8000", "streamable-http") == [
+        "http://mcp-x:8000"
+    ]
 
 
 def test_declared_transport_reaches_the_candidate_resolver():
@@ -133,3 +133,34 @@ async def test_members_are_discovered_concurrently(monkeypatch):
 
     assert [t["name"] for t in tools] == ["n0__t", "n1__t", "n2__t"]
     assert elapsed < 0.6, f"members were serialised: {elapsed:.2f}s for 3 x 0.3s"
+
+
+async def test_stored_tools_are_used_without_touching_the_upstream(monkeypatch):
+    # Verification already lists an instance's tools and persists them on the
+    # row. Re-listing them upstream on every tools/list is what made a bundle
+    # cost ~15s per session start.
+    member = AggregatedMember(
+        mcp_instance_id="1",
+        namespace_prefix="tg",
+        tools=[{"name": "list_accounts", "description": "d", "inputSchema": {"type": "object"}}],
+    )
+    proxy = _proxy([member])
+
+    async def explode(*_args, **_kwargs):
+        raise AssertionError("upstream must not be dialed when tools are stored")
+
+    monkeypatch.setattr(proxy, "_discover_member_tools_upstream", explode)
+
+    assert [t["name"] for t in await proxy.list_namespaced_tools()] == ["tg__list_accounts"]
+
+
+async def test_falls_back_to_upstream_when_nothing_is_stored(monkeypatch):
+    member = AggregatedMember(mcp_instance_id="1", namespace_prefix="tg", tools=None)
+    proxy = _proxy([member])
+
+    async def upstream(_member):
+        return [{"name": "live", "description": "", "inputSchema": {}}]
+
+    monkeypatch.setattr(proxy, "_discover_member_tools_upstream", upstream)
+
+    assert [t["name"] for t in await proxy.list_namespaced_tools()] == ["tg__live"]

@@ -133,6 +133,7 @@ async def _resolve_client_scope(
                     order=order,
                     namespace_prefix=namespaces.get(iid),
                     transport=instance_transports[iid],
+                    tools=full.tools,
                 )
             )
         proxy = MCPAggregatorProxy(
