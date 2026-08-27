@@ -16,6 +16,7 @@ from contextvars import ContextVar
 from agentarea_agents_sdk.mcp_server.auth import PROTECTED_RESOURCE_SCOPE_KEY
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import TextContent, Tool
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -50,6 +51,12 @@ client_mcp_server = FastMCP(
     instructions="Scoped tool bundle for a registered client (agent-proxy).",
     streamable_http_path="/",
     stateless_http=True,
+    # Same opt-out as the platform ``/mcp`` mount (see ``create_mcp_server``):
+    # FastMCP enables DNS-rebinding protection by default with an empty
+    # ``allowed_hosts``, so every Host header is answered with 421. We run behind
+    # an ingress that owns Host validation, and without this an authenticated
+    # harness gets 421 on every call after finishing its OAuth flow.
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
 
 
