@@ -17,8 +17,16 @@ export function isApiNotFound(value: unknown) {
 }
 
 function itemMessage(item: unknown) {
-  if (item && typeof item === "object" && "msg" in item) {
-    return String((item as { msg: unknown }).msg);
+  if (item && typeof item === "object") {
+    const record = item as Record<string, unknown>;
+    if (typeof record.msg === "string") return record.msg;
+    // Any other object shape: `String(item)` here would put the very
+    // "[object Object]" this module exists to prevent into the message.
+    try {
+      return JSON.stringify(item);
+    } catch {
+      return "";
+    }
   }
   return String(item);
 }

@@ -793,7 +793,7 @@ export const zExecutionTimelineResponse = z.object({
  */
 export const zFailedTaskBlocker = z.object({
   agent_id: z.string().uuid(),
-  agent_name: z.string(),
+  agent_name: z.string().nullish(),
   error: z.string().nullable(),
   occurred_at: z.string(),
   task_id: z.string().uuid(),
@@ -875,7 +875,7 @@ export const zHeaderOutput = z.object({
  */
 export const zHitlBlocker = z.object({
   agent_id: z.string().uuid(),
-  agent_name: z.string(),
+  agent_name: z.string().nullish(),
   created_at: z.string(),
   description: z.string(),
   task_id: z.string().uuid(),
@@ -2851,7 +2851,7 @@ export const zWalletCredentialsSchema = z.object({
  */
 export const zWalletExhaustedBlocker = z.object({
   agent_id: z.string().uuid(),
-  agent_name: z.string(),
+  agent_name: z.string().nullish(),
   budget_usd: z.number(),
   period: z.string(),
 });

@@ -3781,8 +3781,15 @@
             "type": "string"
           },
           "agent_name": {
-            "title": "Agent Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
           },
           "error": {
             "anyOf": [
@@ -3808,7 +3815,6 @@
         "required": [
           "task_id",
           "agent_id",
-          "agent_name",
           "error",
           "occurred_at"
         ],
@@ -4035,8 +4041,15 @@
             "type": "string"
           },
           "agent_name": {
-            "title": "Agent Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
           },
           "created_at": {
             "title": "Created At",
@@ -4055,7 +4068,6 @@
         "required": [
           "task_id",
           "agent_id",
-          "agent_name",
           "description",
           "created_at"
         ],
@@ -11398,8 +11410,15 @@
             "type": "string"
           },
           "agent_name": {
-            "title": "Agent Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
           },
           "budget_usd": {
             "title": "Budget Usd",
@@ -11412,7 +11431,6 @@
         },
         "required": [
           "agent_id",
-          "agent_name",
           "budget_usd",
           "period"
         ],

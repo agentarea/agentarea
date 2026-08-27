@@ -32,6 +32,17 @@ describe("apiErrorMessage", () => {
     );
   });
 
+  it("never emits [object Object] for a validation item with no msg field", () => {
+    const message = apiErrorMessage(
+      { error: { errors: [{ field: "page_size", reason: "too large" }] }, status: 422 },
+      "Failed"
+    );
+
+    expect(message).not.toContain("[object Object]");
+    expect(message).toContain("page_size");
+    expect(message).toContain("too large");
+  });
+
   it("keeps the status when the body carries no readable message", () => {
     const message = apiErrorMessage({ error: {}, status: 500 }, "Failed");
 
