@@ -12,6 +12,10 @@ export interface AuthToken {
 	refreshToken?: string;
 	expiresAt?: Date;
 	tokenType: string;
+	// Set by the OAuth login flow: the dynamically registered client and the API
+	// it was registered against, so a refresh can be replayed without a browser.
+	clientId?: string;
+	apiUrl?: string;
 }
 
 export interface Credentials {

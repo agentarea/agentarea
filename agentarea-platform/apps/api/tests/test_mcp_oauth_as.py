@@ -208,6 +208,32 @@ class TestProtectedResourceMetadataLocations:
         assert response.status_code == 200
         assert response.json()["resource"] == f"{API_BASE}/client-mcp"
 
+    def test_client_mcp_instance_advertises_its_own_resource(self, client):
+        # Each client's endpoint is its own resource. A harness that follows
+        # RFC 9728 rejects a document whose `resource` disagrees with the URL it
+        # is talking to, so /client-mcp/<id> cannot be answered with /client-mcp
+        # (let alone /mcp) — that mismatch is what broke `codex mcp login`.
+        client_id = "74dfa41a-1736-4ab1-a470-2e2d4c4e56c8"
+
+        response = client.get(f"/.well-known/oauth-protected-resource/client-mcp/{client_id}")
+
+        assert response.status_code == 200
+        assert response.json()["resource"] == f"{API_BASE}/client-mcp/{client_id}"
+
+    def test_client_mcp_subpath_must_name_an_instance(self, client):
+        # Still no catch-all: only a client id is a resource under /client-mcp.
+        assert (
+            client.get("/.well-known/oauth-protected-resource/client-mcp/not-a-uuid").status_code
+            == 404
+        )
+        assert (
+            client.get(
+                "/.well-known/oauth-protected-resource/client-mcp/"
+                "74dfa41a-1736-4ab1-a470-2e2d4c4e56c8/extra"
+            ).status_code
+            == 404
+        )
+
     def test_unknown_resource_path_is_not_served(self, client):
         # A catch-all would answer for resources this API does not protect.
         assert client.get("/.well-known/oauth-protected-resource/nope").status_code == 404
