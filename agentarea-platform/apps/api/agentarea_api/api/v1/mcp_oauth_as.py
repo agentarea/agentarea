@@ -87,6 +87,21 @@ async def _hydra_discovery() -> dict | None:
 # to be reachable at the path-suffixed location as well as at the root one.
 _PROTECTED_RESOURCE_PATHS = ("mcp", "client-mcp")
 
+# ``/client-mcp/{client_id}`` is a protected resource in its own right: the
+# bundle a harness talks to is per client, and RFC 9728 §3.3 makes the client
+# verify that the document's ``resource`` matches the URL it is calling. Serving
+# only the bare ``client-mcp`` prefix fails that check.
+_CLIENT_MCP_INSTANCE = re.compile(
+    r"^client-mcp/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def _is_protected_resource(resource_path: str) -> bool:
+    return resource_path in _PROTECTED_RESOURCE_PATHS or bool(
+        _CLIENT_MCP_INSTANCE.match(resource_path)
+    )
+
 
 async def _protected_resource_metadata(resource_path: str) -> JSONResponse:
     """RFC 9728: advertise the authorization server that actually issues tokens."""
@@ -124,14 +139,14 @@ async def oauth_protected_resource_metadata() -> JSONResponse:
     return await _protected_resource_metadata("mcp")
 
 
-@oauth_as_router.get("/.well-known/oauth-protected-resource/{resource_path}")
+@oauth_as_router.get("/.well-known/oauth-protected-resource/{resource_path:path}")
 async def oauth_protected_resource_metadata_by_path(resource_path: str) -> JSONResponse:
     """The RFC 9728 §3.1 location, which strict clients derive from the resource URI.
 
     Restricted to the endpoints we actually protect: a catch-all would answer
     for any path and claim this API protects resources it does not serve.
     """
-    if resource_path not in _PROTECTED_RESOURCE_PATHS:
+    if not _is_protected_resource(resource_path):
         raise HTTPException(status_code=404, detail="Unknown protected resource")
     return await _protected_resource_metadata(resource_path)
 

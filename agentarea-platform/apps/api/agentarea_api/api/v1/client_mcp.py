@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from contextvars import ContextVar
 
+from agentarea_agents_sdk.mcp_server.auth import PROTECTED_RESOURCE_SCOPE_KEY
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 from mcp.server.fastmcp import FastMCP
 from mcp.types import TextContent, Tool
@@ -217,6 +218,11 @@ class ClientMCPScopeMiddleware:
             client_id = client_id or None
             scope = dict(scope)
             scope["path"] = f"/{tail}" if tail else "/"
+            if client_id:
+                # Name the resource for the auth middleware's 401: each client's
+                # endpoint is its own RFC 9728 resource, and a harness rejects
+                # metadata whose `resource` does not match the URL it called.
+                scope[PROTECTED_RESOURCE_SCOPE_KEY] = f"client-mcp/{client_id}"
         token = _client_id_var.set(client_id)
         try:
             await self.app(scope, receive, send)

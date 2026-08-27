@@ -1,9 +1,9 @@
 import {apiClient} from './services/apiClient.js';
 import {initApiClient, setRuntimeToken} from './services/apiRuntime.js';
-import {tokenStorage} from './utils/storage.js';
 import {configManager} from './utils/config.js';
 import {logger} from './utils/logger.js';
 import {connectClient} from './commands/connect.js';
+import {loadAccessToken, runLogin, runLogout} from './commands/login.js';
 import {
 	printOperationList,
 	runApiPassthrough,
@@ -23,6 +23,9 @@ interface CliOptions {
 	apiUrl?: string;
 	scope?: string;
 	name?: string;
+	alias?: string;
+	mcp?: string;
+	login?: boolean;
 	client?: string;
 	target?: string;
 	data?: string;
@@ -48,16 +51,25 @@ export async function handleCliCommand(
 	// Configure the shared API client (base URL + lazy token provider).
 	initApiClient();
 
-	// Load token from CLI flag, environment, or keychain (optional).
+	const apiUrl = options.apiUrl || 'http://localhost:8000';
+
+	// Browser sign-in has to run before any token is required.
+	if (command === 'login') {
+		return runLogin({apiUrl});
+	}
+
+	if (command === 'logout') {
+		return runLogout();
+	}
+
+	// Load token from CLI flag, environment, or the stored OAuth session
+	// (refreshed on the spot when it is about to expire).
 	let loadedToken = options.token || process.env['AGENTAREA_TOKEN'];
 	if (!loadedToken) {
 		try {
-			const storedToken = await tokenStorage.getToken();
-			if (storedToken) {
-				loadedToken = storedToken.accessToken;
-			}
-		} catch {
-			logger.warn('Failed to load stored token');
+			loadedToken = (await loadAccessToken(apiUrl)) ?? undefined;
+		} catch (error) {
+			logger.warn(`Failed to load stored token: ${String(error)}`);
 		}
 	}
 
@@ -106,44 +118,24 @@ export async function handleCliCommand(
 		await flushAndExit(await runTasksWatch(pathArgs[0], pathArgs[1]));
 	}
 
-	if (command === 'connect') {
-		return connectClient(subcommand, {
-			apiUrl: options.apiUrl || 'http://localhost:8000',
-			token: authToken,
-			scope: options.scope,
-			name: options.name,
-		});
-	}
-
-	if (command === 'mcp' && subcommand === 'sync') {
-		if (!options.client) {
+	if (command === 'connect' || (command === 'mcp' && subcommand === 'sync')) {
+		if (!loadedToken) {
 			console.error(
-				'Usage: agentarea-cli mcp sync --client=<id> [--target=codex|claude]',
+				'Not signed in. Run `agentarea login --api-url=<api>` first (or pass --token).',
 			);
 			return false;
 		}
 
-		const target = options.target || 'claude';
-		const apiUrl = options.apiUrl || 'http://localhost:8000';
-		// Record which harness this client was synced for so the UI reflects it.
-		try {
-			await fetch(`${apiUrl}/v1/clients/${options.client}`, {
-				method: 'PATCH',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${authToken.accessToken}`,
-				},
-				body: JSON.stringify({kind: target}),
-			});
-		} catch {
-			// Non-fatal: the connection still works without the kind label.
-		}
+		const harness =
+			command === 'connect' ? subcommand : options.target || 'codex';
 
-		return connectClient(target, {
+		return connectClient(harness, {
 			apiUrl,
-			token: authToken,
 			scope: options.scope,
 			name: options.name,
+			alias: options.alias,
+			mcp: options.mcp,
+			login: options.login,
 			clientId: options.client,
 		});
 	}
