@@ -4,6 +4,8 @@ import path from 'node:path';
 import * as sdk from '@agentarea/api-client';
 import {
 	attachMcpInstance,
+	codexProjectConfigPath,
+	codexSeesServer,
 	defaultClientName,
 	harnessAddArgs,
 	harnessLoginArgs,
@@ -11,6 +13,7 @@ import {
 	resolveMcpInstanceId,
 	resolveOrCreateClient,
 	runHarnessCommand,
+	upsertCodexServer,
 	type ClientApi,
 	type ClientRecord,
 	type ClientRef,
@@ -239,11 +242,41 @@ export async function connectClient(
 	}
 
 	const alias = options.alias ?? mcpAlias('default');
-	await runHarnessCommand(
-		harness,
-		harnessAddArgs(harness, {alias, url: mcpUrl, scope}),
-	);
-	console.log(`Registered MCP server "${alias}" with ${harness}`);
+	if (harness === 'codex' && scope === 'project') {
+		// `codex mcp add` only ever writes the user-wide config, so a project
+		// scope has to be written as the file codex itself resolves: it walks up
+		// from the working directory and the closest .codex/config.toml wins.
+		const configPath = codexProjectConfigPath(process.cwd());
+		let existing = '';
+		try {
+			existing = await fs.readFile(configPath, 'utf8');
+		} catch (error: unknown) {
+			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+				throw error;
+			}
+		}
+
+		await fs.mkdir(path.dirname(configPath), {recursive: true});
+		await fs.writeFile(
+			configPath,
+			upsertCodexServer(existing, alias, mcpUrl),
+			'utf8',
+		);
+		console.log(`Wrote ${configPath}`);
+
+		if (!(await codexSeesServer(alias))) {
+			console.error(
+				`codex does not resolve "${alias}" from ${process.cwd()} — a project-scoped config is only read for a trusted project. Trust this directory in codex (or use --scope=user) and run this again.`,
+			);
+			return false;
+		}
+	} else {
+		await runHarnessCommand(
+			harness,
+			harnessAddArgs(harness, {alias, url: mcpUrl, scope}),
+		);
+		console.log(`Registered MCP server "${alias}" with ${harness}`);
+	}
 
 	const loginArgs = harnessLoginArgs(harness, alias);
 	if (loginArgs && options.login !== false) {

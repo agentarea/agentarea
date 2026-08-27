@@ -35,7 +35,9 @@ const cli = meow(
 	  --alias         Local MCP server name in the harness (default: agentarea)
 	  --mcp           MCP instance (name or id) to attach to the client
 	  --no-login      Skip the harness's own OAuth step after wiring it up
-	  --scope         Connection scope: project or user (default: project)
+	  --scope         project = write ./.codex/config.toml (codex) or the
+	                  project scope (claude); user = the harness's own global
+	                  config (default: project)
 	  --client        Existing client id for 'mcp sync'
 	  --target        Harness for 'mcp sync': codex or claude (default: codex)
 	  --data          JSON request body (api / tasks submit)
