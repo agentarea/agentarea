@@ -112,17 +112,19 @@ async def _resolve_client_scope(
         instance_urls: dict[str, str] = {}
         instance_names: dict[str, str] = {}
         instance_headers: dict[str, dict[str, str]] = {}
+        instance_transports: dict[str, str | None] = {}
         for order, (iid, inst) in enumerate(instances.items()):
             full = await instance_service.repository.get_by_id(inst.id)
             if full is None:
                 continue
             try:
-                url, headers, _transport = await instance_service._resolve_mcp_url_and_headers(full)
+                url, headers, transport = await instance_service._resolve_mcp_url_and_headers(full)
             except Exception:
                 logger.exception("Failed to resolve MCP url for instance %s", iid)
                 continue
             instance_urls[iid] = url
             instance_names[iid] = full.name
+            instance_transports[iid] = transport
             if headers:
                 instance_headers[iid] = headers
             members.append(
@@ -130,6 +132,7 @@ async def _resolve_client_scope(
                     mcp_instance_id=iid,
                     order=order,
                     namespace_prefix=namespaces.get(iid),
+                    transport=instance_transports[iid],
                 )
             )
         proxy = MCPAggregatorProxy(
