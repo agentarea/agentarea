@@ -2173,7 +2173,7 @@ export type FailedTaskBlocker = {
   /**
    * Agent Name
    */
-  agent_name: string;
+  agent_name?: string | null;
   /**
    * Error
    */
@@ -2349,7 +2349,7 @@ export type HitlBlocker = {
   /**
    * Agent Name
    */
-  agent_name: string;
+  agent_name?: string | null;
   /**
    * Created At
    */
@@ -6717,7 +6717,7 @@ export type WalletExhaustedBlocker = {
   /**
    * Agent Name
    */
-  agent_name: string;
+  agent_name?: string | null;
   /**
    * Budget Usd
    */

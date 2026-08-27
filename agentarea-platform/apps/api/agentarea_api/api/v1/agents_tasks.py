@@ -1838,13 +1838,14 @@ async def get_task_events(
     task_service: TaskService = Depends(get_read_task_service),
 ):
     """Get paginated task execution events for the specified task from database."""
-    # Gate on the task, not the agent. `agent_id` is a route parameter that is
-    # never tied to the task, so requiring it to resolve gated a task's history
-    # on its agent still existing — deleting an agent silently took the Events
-    # tab of every task it ever ran down with it. The workspace filter inside
-    # the repositories is the actual authorization boundary.
+    # Gate on the task, not the agent. Requiring `agent_id` to still resolve
+    # gated a task's history on its agent existing — deleting an agent silently
+    # took the Events tab of every task it ever ran down with it. The workspace
+    # filter inside the repositories is the actual authorization boundary; the
+    # ownership check matches the sibling task endpoints and keeps the caller
+    # from stamping an arbitrary `agent_id` onto this task's events below.
     task = await task_service.get_task(task_id)
-    if not task:
+    if not task or str(task.agent_id) != str(agent_id):
         raise HTTPException(status_code=404, detail="Task not found")
 
     try:
@@ -1895,10 +1896,12 @@ async def stream_task_events(
 ):
     """Stream real-time task execution events via Server-Sent Events."""
     try:
-        # Gated on the task alone — see get_task_events. An agent that no longer
-        # resolves must not take the live stream of its past tasks down with it.
+        # Gated on the task, not the agent — see get_task_events. An agent that
+        # no longer resolves must not take the live stream of its past tasks
+        # down with it, but `agent_id` still has to own the task: it is echoed
+        # into every frame this stream emits.
         task = await task_service.get_task(task_id)
-        if not task:
+        if not task or str(task.agent_id) != str(agent_id):
             raise HTTPException(status_code=404, detail="Task not found")
 
         # Create SSE stream by tailing the task_events table (single source of

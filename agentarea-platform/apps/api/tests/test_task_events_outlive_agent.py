@@ -164,6 +164,34 @@ async def test_a_task_belonging_to_another_agent_is_still_a_404(async_client, ta
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("suffix", ["/events", "/events/stream"])
+async def test_events_reject_an_agent_id_that_does_not_own_the_task(
+    async_client, task_service, suffix
+):
+    """`agent_id` is echoed into every event, so it has to own the task.
+
+    Without this the caller picks the `agent_id` stamped onto another agent's
+    event history — the same fabricated-identifier defect this series removes.
+    """
+    task_service.get_task.return_value = AgentTask(
+        id=TASK_ID,
+        title="task",
+        description="someone else's task",
+        query="q",
+        user_id="test_user",
+        workspace_id="test_workspace",
+        agent_id=uuid4(),
+        status="completed",
+        execution_id="exec-9",
+    )
+
+    response = await async_client.get(f"/v1/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}{suffix}")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Task not found"
+
+
+@pytest.mark.asyncio
 async def test_a_task_that_does_not_exist_is_still_a_404(async_client, task_service):
     task_service.get_task.return_value = None
 
