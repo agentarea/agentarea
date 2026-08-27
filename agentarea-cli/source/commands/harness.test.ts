@@ -1,12 +1,14 @@
 import test from 'ava';
 import {
 	attachMcpInstance,
+	codexProjectConfigPath,
 	defaultClientName,
 	harnessAddArgs,
 	harnessLoginArgs,
 	mcpAlias,
 	resolveMcpInstanceId,
 	resolveOrCreateClient,
+	upsertCodexServer,
 	type ClientApi,
 	type ClientRecord,
 } from './harness.js';
@@ -190,4 +192,59 @@ test('attachMcpInstance is idempotent against what the client already has', asyn
 		'attached',
 	);
 	t.is(calls, 1);
+});
+
+const PROJECT_URL = 'https://api.example.test/client-mcp/abc';
+
+test('codexProjectConfigPath points at the project-scoped file codex reads', t => {
+	t.is(codexProjectConfigPath('/repo'), '/repo/.codex/config.toml');
+});
+
+test('upsertCodexServer writes a managed block into an empty file', t => {
+	const written = upsertCodexServer('', 'agentarea_tg', PROJECT_URL);
+
+	t.is(
+		written,
+		[
+			'# >>> agentarea-cli managed: agentarea_tg',
+			'[mcp_servers.agentarea_tg]',
+			`url = "${PROJECT_URL}"`,
+			'# <<< agentarea-cli managed: agentarea_tg',
+			'',
+		].join('\n'),
+	);
+});
+
+test('upsertCodexServer keeps unrelated config intact', t => {
+	const existing = '[mcp_servers.other]\nurl = "https://other.test/mcp"\n';
+
+	const written = upsertCodexServer(existing, 'agentarea_tg', PROJECT_URL);
+
+	t.true(written.startsWith(existing.trimEnd()));
+	t.true(written.includes('[mcp_servers.agentarea_tg]'));
+	t.true(written.includes('[mcp_servers.other]'));
+});
+
+test('upsertCodexServer is idempotent and refreshes the url in place', t => {
+	const once = upsertCodexServer('', 'agentarea_tg', PROJECT_URL);
+
+	t.is(upsertCodexServer(once, 'agentarea_tg', PROJECT_URL), once);
+
+	const moved = upsertCodexServer(
+		once,
+		'agentarea_tg',
+		'https://api.example.test/client-mcp/xyz',
+	);
+	t.true(moved.includes('client-mcp/xyz'));
+	t.false(moved.includes('client-mcp/abc'));
+	t.is(moved.match(/\[mcp_servers\.agentarea_tg]/g)?.length, 1);
+});
+
+test('upsertCodexServer refuses to clobber a hand-written entry', t => {
+	const existing =
+		'[mcp_servers.agentarea_tg]\nurl = "https://hand.written/mcp"\n';
+
+	t.throws(() => upsertCodexServer(existing, 'agentarea_tg', PROJECT_URL), {
+		message: /unmanaged/i,
+	});
 });

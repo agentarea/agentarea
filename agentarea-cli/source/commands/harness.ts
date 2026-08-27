@@ -1,3 +1,4 @@
+import path from 'node:path';
 import {spawn} from 'node:child_process';
 
 /**
@@ -176,6 +177,84 @@ export async function runHarnessCommand(
 			reject(
 				new Error(`\`${bin} ${args.join(' ')}\` exited with code ${code}`),
 			);
+		});
+	});
+}
+
+function escapeForRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function managedStart(alias: string): string {
+	return `# >>> agentarea-cli managed: ${alias}`;
+}
+
+function managedEnd(alias: string): string {
+	return `# <<< agentarea-cli managed: ${alias}`;
+}
+
+/**
+ * Where codex reads a project-scoped server from. Codex walks up from the
+ * working directory to the project root and the closest file wins, so a repo
+ * can carry its own bundle without touching the user-wide config — which is
+ * also the config other tools rewrite.
+ */
+export function codexProjectConfigPath(projectRoot: string): string {
+	return path.join(projectRoot, '.codex', 'config.toml');
+}
+
+/**
+ * Merge one server into a project `config.toml`, leaving everything else alone.
+ * `codex mcp add` cannot do this — it only ever writes the user-wide config —
+ * so this is the one place we edit a harness's file, and only inside markers we
+ * own. An entry of the same name that we did not write is left untouched.
+ */
+export function upsertCodexServer(
+	existing: string,
+	alias: string,
+	url: string,
+): string {
+	const block = [
+		managedStart(alias),
+		`[mcp_servers.${alias}]`,
+		`url = "${url}"`,
+		managedEnd(alias),
+		'',
+	].join('\n');
+
+	const managed = new RegExp(
+		`${escapeForRegExp(managedStart(alias))}[\\s\\S]*?${escapeForRegExp(
+			managedEnd(alias),
+		)}\n?`,
+		'm',
+	);
+	if (managed.test(existing)) {
+		return existing.replace(managed, block);
+	}
+
+	const table = new RegExp(`^\\[mcp_servers\\.${escapeForRegExp(alias)}]`, 'm');
+	if (table.test(existing)) {
+		throw new Error(
+			`Refusing to overwrite the unmanaged codex MCP entry "${alias}"; rename it or pass a different --alias`,
+		);
+	}
+
+	return existing.trim() ? `${existing.trimEnd()}\n\n${block}` : block;
+}
+
+/**
+ * Ask codex whether it actually resolves *alias* from the current directory.
+ * A project-scoped file is ignored for an untrusted project, and codex says so
+ * nowhere on write — only a later `mcp login` fails with "No MCP server named".
+ */
+export async function codexSeesServer(alias: string): Promise<boolean> {
+	return new Promise<boolean>(resolve => {
+		const child = spawn('codex', ['mcp', 'get', alias], {stdio: 'ignore'});
+		child.on('error', () => {
+			resolve(false);
+		});
+		child.on('close', code => {
+			resolve(code === 0);
 		});
 	});
 }
