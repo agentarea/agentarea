@@ -49,6 +49,10 @@ class AggregatedMember:
     # re-probes by URL suffix, and a wrong first candidate costs a full connect
     # timeout — on every tools/list, not once.
     transport: str | None = None
+    # Tools verification already discovered and persisted on the instance row.
+    # None means "nothing stored yet" (never verified) and falls back to a live
+    # listing; an empty list is a real answer and is honoured as one.
+    tools: list[dict[str, Any]] | None = None
 
 
 class MCPAggregatorProxy:
@@ -97,6 +101,28 @@ class MCPAggregatorProxy:
         return self._streamable_candidates(url, member.transport)
 
     async def _discover_member_tools(self, member: AggregatedMember) -> list[dict[str, Any]]:
+        """Tools for a member, preferring what verification already stored.
+
+        Listing upstream is a full session per member per call — ~15s against
+        prod for one member — and it re-derives what the instance row already
+        holds. The stored copy moves when the instance is verified or refreshed,
+        which is also what the instance page shows.
+        """
+        if member.tools is not None:
+            return [
+                {
+                    "name": tool.get("name", ""),
+                    "description": tool.get("description", "") or "",
+                    "inputSchema": tool.get("inputSchema") or {"type": "object"},
+                }
+                for tool in member.tools
+                if tool.get("name")
+            ]
+        return await self._discover_member_tools_upstream(member)
+
+    async def _discover_member_tools_upstream(
+        self, member: AggregatedMember
+    ) -> list[dict[str, Any]]:
         instance_id = str(member.mcp_instance_id)
         mcp_url = self.instance_urls.get(instance_id)
         if not mcp_url:
