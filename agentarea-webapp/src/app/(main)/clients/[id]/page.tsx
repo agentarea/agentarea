@@ -444,6 +444,14 @@ export default function ClientDetailPage() {
                 {client.description ||
                   "A governed, scoped tool bundle an external harness can connect to over MCP."}
               </p>
+              {client.created_by && (
+                <p className="text-xs text-muted-foreground">
+                  Registered by{" "}
+                  <span className="font-medium text-foreground">
+                    {client.created_by}
+                  </span>
+                </p>
+              )}
             </div>
           </div>
 

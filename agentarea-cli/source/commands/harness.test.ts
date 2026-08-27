@@ -209,6 +209,8 @@ test('upsertCodexServer writes a managed block into an empty file', t => {
 			'# >>> agentarea-cli managed: agentarea_tg',
 			'[mcp_servers.agentarea_tg]',
 			`url = "${PROJECT_URL}"`,
+			'startup_timeout_sec = 60',
+			'tool_timeout_sec = 120',
 			'# <<< agentarea-cli managed: agentarea_tg',
 			'',
 		].join('\n'),
@@ -247,4 +249,13 @@ test('upsertCodexServer refuses to clobber a hand-written entry', t => {
 	t.throws(() => upsertCodexServer(existing, 'agentarea_tg', PROJECT_URL), {
 		message: /unmanaged/i,
 	});
+});
+
+test('upsertCodexServer budgets for a bundle that aggregates its members', t => {
+	// Codex drops a server that misses its 10s startup budget, silently: no
+	// tools, no error. A bundle's tools/list fans out to every member MCP.
+	const written = upsertCodexServer('', 'agentarea_tg', PROJECT_URL);
+
+	t.true(written.includes('startup_timeout_sec = 60'));
+	t.true(written.includes('tool_timeout_sec = 120'));
 });

@@ -9,6 +9,9 @@ import {spawn} from 'node:child_process';
  * its OAuth tokens in a store only it can read.
  */
 
+const STARTUP_TIMEOUT_SEC = 60;
+const TOOL_TIMEOUT_SEC = 120;
+
 export type Harness = 'codex' | 'claude';
 export type Scope = 'project' | 'user';
 
@@ -218,6 +221,12 @@ export function upsertCodexServer(
 		managedStart(alias),
 		`[mcp_servers.${alias}]`,
 		`url = "${url}"`,
+		// Codex defaults to a 10s startup budget, and it drops a server that
+		// misses it without a word in the log. A bundle aggregates every member
+		// MCP's tools on `tools/list`, which measured ~15s for a single member
+		// against prod, so the default is not survivable here.
+		`startup_timeout_sec = ${STARTUP_TIMEOUT_SEC}`,
+		`tool_timeout_sec = ${TOOL_TIMEOUT_SEC}`,
 		managedEnd(alias),
 		'',
 	].join('\n');
