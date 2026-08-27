@@ -918,16 +918,13 @@ async def get_agent_task(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Get a specific task for the specified agent."""
-    # Verify agent exists
-    agent = await agent_service.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
+    # No agent-existence gate: the task lookup below already proves the task is
+    # in the caller's workspace and belongs to `agent_id`. Requiring the agent
+    # to still exist only hid the tasks of deleted agents. See get_task_events.
     try:
         task = await task_service.get_task_with_workflow_status(task_id)
         if task:
@@ -969,16 +966,11 @@ async def get_agent_task_status(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Get the execution status of a specific task workflow."""
-    # Verify agent exists
-    agent = await agent_service.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
+    # No agent-existence gate — see get_agent_task.
     try:
         # DB is the source of truth for the task lifecycle; Temporal only
         # upgrades to a terminal state. The workflow may stay alive in
@@ -1843,19 +1835,19 @@ async def get_task_events(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of events per page"),
     event_type: str | None = Query(None, description="Filter by event type"),
-    agent_service: AgentService = Depends(get_read_agent_service),
+    task_service: TaskService = Depends(get_read_task_service),
 ):
     """Get paginated task execution events for the specified task from database."""
-    # Verify agent exists
-    agent = await agent_service.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    # Gate on the task, not the agent. `agent_id` is a route parameter that is
+    # never tied to the task, so requiring it to resolve gated a task's history
+    # on its agent still existing — deleting an agent silently took the Events
+    # tab of every task it ever ran down with it. The workspace filter inside
+    # the repositories is the actual authorization boundary.
+    task = await task_service.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
 
     try:
-        # Read through the workspace-scoped repository. The check above only
-        # proves the caller owns an agent with this id — `agent_id` is a route
-        # parameter and is never tied to the task — so the workspace filter
-        # inside the repository is the actual authorization boundary here.
         event_repository = repository_factory.create_repository(TaskEventRepository)
         records, total_events = await event_repository.list_for_task(
             task_id,
@@ -1899,17 +1891,12 @@ async def stream_task_events(
     include_chunks: bool = Query(
         True, description="Include incremental llm.call.chunk token events in the stream"
     ),
-    agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
 ):
     """Stream real-time task execution events via Server-Sent Events."""
-    # Verify agent exists
-    agent = await agent_service.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
     try:
-        # Verify task exists
+        # Gated on the task alone — see get_task_events. An agent that no longer
+        # resolves must not take the live stream of its past tasks down with it.
         task = await task_service.get_task(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
