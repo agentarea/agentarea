@@ -15,6 +15,7 @@ from contextvars import ContextVar
 
 from agentarea_agents_sdk.mcp_server.auth import PROTECTED_RESOURCE_SCOPE_KEY
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
+from agentarea_mcp.application.tool_list_cache import RedisToolListCache
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import TextContent, Tool
@@ -58,6 +59,19 @@ client_mcp_server = FastMCP(
     # harness gets 421 on every call after finishing its OAuth flow.
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
+
+
+_tool_list_cache: RedisToolListCache | None = None
+
+
+def _tool_cache() -> RedisToolListCache:
+    """Process-wide cache handle (the client itself pools connections)."""
+    global _tool_list_cache
+    if _tool_list_cache is None:
+        from agentarea_common.config import get_settings
+
+        _tool_list_cache = RedisToolListCache(get_settings().broker.REDIS_URL)
+    return _tool_list_cache
 
 
 async def _resolve_client_scope(
@@ -133,7 +147,6 @@ async def _resolve_client_scope(
                     order=order,
                     namespace_prefix=namespaces.get(iid),
                     transport=instance_transports[iid],
-                    tools=full.tools,
                 )
             )
         proxy = MCPAggregatorProxy(
@@ -143,6 +156,7 @@ async def _resolve_client_scope(
             instance_urls,
             instance_names,
             instance_headers,
+            tool_cache=_tool_cache(),
         )
         return proxy, skill_registry
 
