@@ -74,6 +74,35 @@ Setting `url` switches the backend; you do not set `BACKEND_TYPE` yourself. All
 three fields go together — a partial set stops the render rather than quietly
 running containers in the cluster after you asked for them elsewhere.
 
+The hostname above is an example. `203.0.113.10` is a documentation address from
+RFC 5737 and resolves nowhere — substitute your host's own name or address.
+
+### When the hop is already private
+
+The public TLS name exists because the token travels on the wire. If the control
+plane reaches the host over a network that is already private — a cloud provider's
+internal network, WireGuard, an SSH tunnel — there is no public name to certify,
+and the data plane is addressed directly:
+
+```yaml
+mcpManager:
+  dataPlane:
+    url: "http://10.0.0.10:8090"
+```
+
+The manager refuses a plain-`http` data plane unless you also say the hop is
+private, so this arrangement cannot happen by accident:
+
+```
+MCP_DATAPLANE_ALLOW_INSECURE=true
+```
+
+Both topologies are supported, and which one a deployment uses is not visible
+from the outside: **a private deployment has no public data-plane hostname at
+all**, so probing one tells you nothing. Check `MCP_DATAPLANE_URL` on the manager
+for the address actually in use, and reach it from inside the network the manager
+sits in — see [Verifying it](#verifying-it).
+
 The manager proves the host is reachable and the token accepted at startup, so a
 wrong value fails the rollout instead of surfacing later as a broken tool call.
 
@@ -108,6 +137,23 @@ Any client that speaks MCP Streamable HTTP and can send a bearer token works the
 same way.
 
 ## Verifying it
+
+Run these from where the control plane runs, not from your workstation. A data
+plane on a private hop is unreachable from anywhere else by design, and a host
+firewalled to one region refuses everyone outside it — in both cases a probe from
+a laptop times out on a healthy host. From a control-plane cluster:
+
+```bash
+kubectl -n agentarea exec deploy/agentarea-app-backend -- \
+  curl -s "$MCP_DATAPLANE_URL/healthz"
+```
+
+`/healthz` is the one unauthenticated route; it answers `{"agent_id":"…","status":"ok"}`
+and settles whether the process is up before you look at anything else. Take
+`$MCP_DATAPLANE_URL` from the manager's own environment rather than from this
+page — the address here is an example.
+
+Then exercise the authenticated path:
 
 ```bash
 curl -sN -X POST \

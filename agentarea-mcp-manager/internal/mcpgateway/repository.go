@@ -15,10 +15,31 @@ import (
 var ErrInstanceNotFound = errors.New("MCP instance not found")
 var ErrInstanceBusy = errors.New("MCP instance has active requests")
 
+// ErrStartInProgress reports that another caller holds the instance lifecycle
+// and this one declined to queue behind it. It is a retry signal, not a
+// failure: the start it stepped aside for is the one this caller wanted.
+var ErrStartInProgress = errors.New("MCP instance start already in progress")
+
 const (
 	maxGatewayDatabaseConns     = 16
 	maxGatewayIdleDatabaseConns = 4
 	gatewayDatabaseConnLifetime = 30 * time.Minute
+
+	// A caller that cannot take the lifecycle lock inside this budget hands its
+	// pooled connection back instead of camping on it until the startup timeout.
+	//
+	// Waiting callers used to hold one connection each for the whole cold start.
+	// A client retrying a slow start faster than the start could finish then
+	// filled the pool with waiters, and the one caller actually holding the lock
+	// could no longer obtain the second connection its critical section needs —
+	// so it timed out and handed the lock to a waiter whose budget was already
+	// spent. Bounding the wait keeps a connection parked for two seconds rather
+	// than five minutes, which is what makes that pile-up impossible.
+	//
+	// The budget is long enough that the warm path, where the section is a few
+	// milliseconds of bookkeeping, never trips it.
+	instanceLockWait         = 2 * time.Second
+	instanceLockPollInterval = 25 * time.Millisecond
 )
 
 type SQLRepository struct {
@@ -65,13 +86,45 @@ func (r *SQLRepository) WithInstanceLock(ctx context.Context, instanceID string,
 		return err
 	}
 	defer conn.Close()
-	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, instanceID); err != nil {
+	acquired, err := acquireInstanceLock(ctx, conn, instanceID)
+	if err != nil {
 		return fmt.Errorf("lock MCP instance lifecycle: %w", err)
+	}
+	if !acquired {
+		return ErrStartInProgress
 	}
 	defer func() {
 		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, instanceID)
 	}()
 	return callback(ctx)
+}
+
+// acquireInstanceLock polls pg_try_advisory_lock rather than blocking in
+// pg_advisory_lock, so the wait is bounded by instanceLockWait instead of by the
+// caller's context. Reporting "someone else is starting this" costs one
+// connection for two seconds; blocking cost one for the whole cold start.
+func acquireInstanceLock(ctx context.Context, conn *sql.Conn, instanceID string) (bool, error) {
+	deadline := time.Now().Add(instanceLockWait)
+	for {
+		var acquired bool
+		if err := conn.QueryRowContext(ctx,
+			`SELECT pg_try_advisory_lock(hashtextextended($1, 0))`, instanceID).Scan(&acquired); err != nil {
+			return false, err
+		}
+		if acquired {
+			return true, nil
+		}
+		if !time.Now().Before(deadline) {
+			return false, nil
+		}
+		timer := time.NewTimer(instanceLockPollInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return false, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 func (r *SQLRepository) LoadInstance(ctx context.Context, instanceID string) (*models.MCPServerInstance, error) {

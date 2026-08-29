@@ -20,7 +20,16 @@ than defects to work around.
 **The first call after an idle period pays a cold start.** How long depends
 entirely on the server: a small published image starts in a second or two, while
 a `uvx`/`npx` server that clones and installs on boot can take a minute or more.
-The call waits for provisioning rather than failing.
+That call waits for provisioning rather than failing.
+
+Calls that arrive while a start is already under way do not queue behind it.
+They are answered `503` with a `Retry-After`, and the retry lands on the
+workload the first call is bringing up. Queueing them instead would hold a
+database connection each for the whole cold start, so a client retrying faster
+than a slow start could finish would fill the manager's connection pool — taking
+the connection the start itself still needs and stalling every instance, not
+just the one being started. A client that honours `Retry-After` sees a slower
+first call; one that treats `503` as fatal needs its own retry.
 
 **Creating a connection no longer verifies it immediately.** Verification is
 what starts the container and lists its tools, so deferring the start defers the
@@ -157,7 +166,9 @@ first time.
 Sweeping is serialised with a Postgres advisory lock, so running more than one
 manager replica does not mean more than one sweeper. If a manager dies
 mid-sweep, its lock is released with its connection — there is nothing to clear
-by hand.
+by hand. An instance that began starting between being listed as idle and being
+reclaimed holds that lock, so the sweep leaves it and moves on; the next sweep
+sees it as it now is.
 
 ## Verifying it works
 

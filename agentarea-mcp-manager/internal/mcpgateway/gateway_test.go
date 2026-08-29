@@ -1,6 +1,7 @@
 package mcpgateway
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -20,17 +21,22 @@ const testGatewaySecret = "0123456789abcdef0123456789abcdef"
 type gatewayRepositoryStub struct {
 	mu            sync.Mutex
 	instance      *models.MCPServerInstance
+	lockErr       error
 	starting      int
 	failed        int
 	started       int
 	finished      int
 	idle          []string
+	reapErr       error
 	reapCallbacks int
 	retireErr     error
 	retired       int
 }
 
 func (r *gatewayRepositoryStub) WithInstanceLock(ctx context.Context, _ string, fn func(context.Context) error) error {
+	if r.lockErr != nil {
+		return r.lockErr
+	}
 	return fn(ctx)
 }
 func (r *gatewayRepositoryStub) LoadInstance(context.Context, string) (*models.MCPServerInstance, error) {
@@ -67,6 +73,9 @@ func (r *gatewayRepositoryStub) IdleCandidates(context.Context, time.Duration) (
 	return r.idle, nil
 }
 func (r *gatewayRepositoryStub) ReapIfIdle(ctx context.Context, _ string, _ time.Duration, remove func(context.Context, *models.MCPServerInstance) error) (bool, error) {
+	if r.reapErr != nil {
+		return false, r.reapErr
+	}
 	r.reapCallbacks++
 	return true, remove(ctx, r.instance)
 }
@@ -167,6 +176,96 @@ func TestGatewayRecordsFailedColdStart(t *testing.T) {
 
 	if recorder.Code != http.StatusBadGateway || repository.failed != 1 || repository.started != 0 {
 		t.Fatalf("failed start response=%d failed=%d started=%d", recorder.Code, repository.failed, repository.started)
+	}
+}
+
+// A caller that stepped aside for someone else's cold start has not met a
+// failure, and saying 502 tells it the instance is broken when the truth is
+// that the workload it wants is on its way. The client's own retry is the
+// mechanism that finishes the job, so the answer has to invite one.
+func TestGatewayAnswersAConcurrentStartAsRetryable(t *testing.T) {
+	instanceID := "8ca9f331-9cc9-4a51-9933-27d7bb73860b"
+	repository := &gatewayRepositoryStub{
+		instance: &models.MCPServerInstance{InstanceID: instanceID},
+		lockErr:  ErrStartInProgress,
+	}
+	runtime := &runtimeStub{}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mcp/"+instanceID+"/mcp", nil)
+	request.Header.Set("X-AgentArea-Manager-Authorization", "Bearer "+testGatewaySecret)
+
+	testGateway(t, repository, runtime).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("response = %d, want %d for a start already under way", recorder.Code, http.StatusServiceUnavailable)
+	}
+	if recorder.Header().Get("Retry-After") == "" {
+		t.Error("no Retry-After: the caller is being asked to retry without being told when")
+	}
+	// The other caller owns this start; touching the runtime or the failure
+	// counter here would report a cold start that never happened.
+	if runtime.ensured != 0 || repository.failed != 0 {
+		t.Fatalf("stepped-aside caller acted on the workload: ensured=%d failed=%d", runtime.ensured, repository.failed)
+	}
+}
+
+// Retirement contends for the same lifecycle lock as a cold start, so it can now
+// be told to stand down. That is a conflict the caller should retry, not the
+// hard failure the default branch reports — and logging it as an error would
+// page someone over an instance that was merely busy.
+func TestGatewayRetirementAsksToRetryWhenAStartHoldsTheInstance(t *testing.T) {
+	instanceID := "8ca9f331-9cc9-4a51-9933-27d7bb73860b"
+	repository := &gatewayRepositoryStub{
+		instance:  &models.MCPServerInstance{InstanceID: instanceID},
+		retireErr: ErrStartInProgress,
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodDelete, "/mcp/"+instanceID, nil)
+	request.Header.Set("X-AgentArea-Manager-Authorization", "Bearer "+testGatewaySecret)
+
+	testGateway(t, repository, &runtimeStub{}).RetireHTTP(recorder, request)
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("response = %d, want %d while a start holds the instance", recorder.Code, http.StatusConflict)
+	}
+	if recorder.Header().Get("Retry-After") == "" {
+		t.Error("no Retry-After on a conflict the caller is expected to retry")
+	}
+}
+
+// An instance whose cold start is under way is not idle, so declining to reap
+// it is the sweep working, not the sweep failing. Reporting it as a failure
+// would put a recurring warning in front of an operator for a workload that is
+// behaving exactly as intended.
+func TestReaperTreatsAConcurrentStartAsASkipNotAFailure(t *testing.T) {
+	instanceID := "8ca9f331-9cc9-4a51-9933-27d7bb73860b"
+	repository := &gatewayRepositoryStub{
+		instance: &models.MCPServerInstance{InstanceID: instanceID},
+		idle:     []string{instanceID},
+		reapErr:  ErrStartInProgress,
+	}
+	logs := &bytes.Buffer{}
+	gateway, err := New(repository, &runtimeStub{}, Policy{
+		RequestLeaseTTL: 3 * time.Second,
+		StartupTimeout:  time.Second,
+		IdleTimeout:     time.Minute,
+		SweepInterval:   time.Second,
+		AuthSecret:      testGatewaySecret,
+	}, slog.New(slog.NewTextHandler(logs, nil)), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reaped, err := gateway.Reap(context.Background())
+
+	if err != nil {
+		t.Fatalf("Reap() = %v, want the sweep to carry on past a busy instance", err)
+	}
+	if reaped != 0 {
+		t.Fatalf("reaped = %d, want 0: the instance was starting", reaped)
+	}
+	if strings.Contains(logs.String(), "Failed to reap") {
+		t.Errorf("a start in progress was logged as a reap failure: %s", logs.String())
 	}
 }
 
