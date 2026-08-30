@@ -32,6 +32,7 @@ from agentarea_common.money import ZERO, Money, serialize_money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_secrets.naming import has_reserved_prefix
 from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
 from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig
@@ -1625,11 +1626,28 @@ async def submit_task_input(
 
         secret_refs: dict[str, dict[str, str]] = {}
         for field_name, raw_secret in submission.secrets.items():
-            if isinstance(raw_secret, InputSecretValue):
+            if isinstance(raw_secret, InputSecretValue) and raw_secret.secret_name:
+                # set_secret upserts on (workspace_id, name), so a caller-chosen
+                # name that lands on a platform prefix either overwrites the
+                # credential a connection resolves, or mints a row that renders
+                # on the secrets page as a connection's credential which does
+                # not exist. Only the prefixes are refused: the slug shape that
+                # POST /v1/secrets enforces is a house style for names it
+                # creates, and applying it here would break namespaced input
+                # names like `service/api_token` that already work.
+                if has_reserved_prefix(raw_secret.secret_name):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            f"Secret name '{raw_secret.secret_name}' uses a prefix reserved "
+                            "for secrets the platform manages on behalf of a connection."
+                        ),
+                    )
                 secret_value = raw_secret.value
-                secret_name = raw_secret.secret_name or _default_input_secret_name(
-                    task_id, field_name
-                )
+                secret_name = raw_secret.secret_name
+            elif isinstance(raw_secret, InputSecretValue):
+                secret_value = raw_secret.value
+                secret_name = _default_input_secret_name(task_id, field_name)
             else:
                 secret_value = str(raw_secret)
                 secret_name = _default_input_secret_name(task_id, field_name)

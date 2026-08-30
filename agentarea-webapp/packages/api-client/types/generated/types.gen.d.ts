@@ -5126,6 +5126,37 @@ export type SecretDescriptionUpdate = {
     description?: string | null;
 };
 /**
+ * SecretOwner
+ *
+ * The connection a managed secret belongs to.
+ */
+export type SecretOwner = {
+    /**
+     * Field
+     *
+     * Which slot on the owner this fills — an env var, a header name.
+     */
+    field?: string | null;
+    /**
+     * Id
+     *
+     * Its id, for deep-linking to it.
+     */
+    id: string;
+    /**
+     * Name
+     *
+     * Its display name, or null when the owner no longer exists.
+     */
+    name?: string | null;
+    /**
+     * Type
+     *
+     * Kind of owner, e.g. mcp_instance or provider_config.
+     */
+    type: string;
+};
+/**
  * SecretResponse
  *
  * A secret's metadata. The value is never part of this.
@@ -5149,6 +5180,10 @@ export type SecretResponse = {
      * Unique within the workspace.
      */
     name: string;
+    /**
+     * Set when a connection holds this secret on the user's behalf. Such a secret is read-only here and is changed through its owner.
+     */
+    owner?: SecretOwner | null;
     /**
      * Updated At
      */

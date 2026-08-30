@@ -7184,7 +7184,10 @@ export const listSandboxesV1SandboxesGet = <
 /**
  * List Secrets
  *
- * List the workspace's own secrets. Values are not included.
+ * Every credential in the workspace the user would recognise as theirs.
+ *
+ * Their own, plus the ones connections hold for them — the latter read-only.
+ * Values are not included, here or anywhere.
  */
 export const listSecretsV1SecretsGet = <ThrowOnError extends boolean = false>(
   options?: Options<ListSecretsV1SecretsGetData, ThrowOnError>
@@ -7265,6 +7268,12 @@ export const deleteSecretV1SecretsSecretIdDelete = <
 
 /**
  * Get Secret
+ *
+ * Read one secret's metadata, whether the user owns it or a connection does.
+ *
+ * Managed secrets are readable because the list shows them; hiding them here
+ * would 404 every row the page invites you to click. They stay unwritable —
+ * the write routes below still refuse them.
  */
 export const getSecretV1SecretsSecretIdGet = <
   ThrowOnError extends boolean = false,

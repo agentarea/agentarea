@@ -36,9 +36,10 @@ export async function SecretsData() {
         <div>
           <h2 className="text-sm font-medium">Workspace secrets</h2>
           <p className="text-sm text-muted-foreground">
-            Values are encrypted and never shown again after you save them. A
-            secret can be reused by several connections, and rotating it updates
-            all of them at once.
+            Every credential this workspace holds. Values are encrypted and
+            never shown again once saved. The ones marked managed belong to a
+            connection and are changed there; your own can be reused across
+            several connections, and rotating one updates all of them at once.
           </p>
         </div>
         <CreateSecretDialog />
@@ -47,7 +48,7 @@ export async function SecretsData() {
       {secrets.length === 0 ? (
         <EmptyState
           title="No secrets yet"
-          description="Create a secret here to reuse it across LLM providers and API connections, instead of pasting the same key into each one."
+          description="Nothing here holds a credential. Create a secret to reuse it across LLM providers and API connections, instead of pasting the same key into each one."
           iconsType="mcp"
         />
       ) : (

@@ -15,6 +15,7 @@ from agentarea_common.auth import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_secrets.catalog_service import (
+    SURFACED_OWNER_TYPES,
     DuplicateSecretNameError,
     ManagedSecretError,
     SecretCatalogService,
@@ -129,6 +130,90 @@ class TestManagedSecretsAreOffLimits:
         catalog = _catalog(session)
         with pytest.raises(ManagedSecretError):
             await catalog.rotate_user_secret(secret.id, "attacker-chosen")
+
+
+class TestVisibleSecrets:
+    """What the /secrets page shows.
+
+    Listing only user-created rows told a workspace with a configured MCP
+    server it had no secrets at all, while its credentials sat in the same
+    table under the connection's ownership.
+    """
+
+    async def _owned(self, session: AsyncSession, owner_type: str, name: str) -> EncryptedSecret:
+        secret = EncryptedSecret(
+            id=uuid.uuid4(),
+            workspace_id=WORKSPACE,
+            secret_name=name,
+            encrypted_value="ciphertext",
+            owner_type=owner_type,
+            owner_id=str(uuid.uuid4()),
+            created_by="platform",
+        )
+        session.add(secret)
+        await session.commit()
+        return secret
+
+    async def test_shows_credentials_a_connection_holds(self, session: AsyncSession) -> None:
+        catalog = _catalog(session)
+        await self._owned(session, "mcp_instance", f"mcp_instance_{uuid.uuid4()}_API_KEY")
+        await catalog.create_user_secret("my-own-key", "sk-value-here-1234", None)
+
+        names = {s.secret_name for s in await catalog.list_visible_secrets()}
+
+        assert "my-own-key" in names
+        assert any(n.startswith("mcp_instance_") for n in names)
+
+    @pytest.mark.parametrize("owner_type", SURFACED_OWNER_TYPES)
+    def test_every_surfaced_owner_is_a_real_producer(self, owner_type: str) -> None:
+        # Guards the pairing with naming.py: a type listed here that no producer
+        # ever writes would be dead config, and one renamed there would silently
+        # vanish from the page.
+        produced = {
+            "provider_config",
+            "mcp_instance",
+            "mcp_auth_config",
+            "trigger",
+            "agent",
+            "openapi_connection",
+            "task",
+        }
+        assert owner_type in produced
+
+    async def test_wallet_credentials_are_shown(self, session: AsyncSession) -> None:
+        # The user pasted these into the wallet form, same as any other
+        # credential — hiding them reproduces the bug this class exists for.
+        catalog = _catalog(session)
+        await self._owned(session, "agent", f"wallet_creds_{uuid.uuid4()}")
+        assert len(await catalog.list_visible_secrets()) == 1
+
+    @pytest.mark.parametrize(
+        "owner_type,name",
+        [
+            ("task", f"task-input/{uuid.uuid4()}/api_token"),
+            ("task", f"a2a_push_token:{uuid.uuid4()}:cfg"),
+        ],
+    )
+    async def test_machine_generated_owners_stay_hidden(
+        self, session: AsyncSession, owner_type: str, name: str
+    ) -> None:
+        # These scale with tasks, not with configuration, and would bury
+        # everything a user actually set up.
+        await self._owned(session, owner_type, name)
+        assert await _catalog(session).list_visible_secrets() == []
+
+    async def test_the_write_surface_is_unchanged(self, session: AsyncSession) -> None:
+        # Visibility is not permission: surfacing a managed row must not make it
+        # editable, or the connection owning it loses its credential from here.
+        catalog = _catalog(session)
+        secret = await self._owned(session, "mcp_instance", f"mcp_instance_{uuid.uuid4()}_KEY")
+
+        assert secret.secret_name in {s.secret_name for s in await catalog.list_visible_secrets()}
+        assert await catalog.list_user_secrets() == []
+        with pytest.raises(ManagedSecretError):
+            await catalog.rotate_user_secret(secret.id, "attacker-chosen")
+        with pytest.raises(ManagedSecretError):
+            await catalog.delete_user_secret(secret.id)
 
 
 class TestWorkspaceIsolation:
