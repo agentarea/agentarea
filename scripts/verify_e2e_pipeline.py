@@ -32,9 +32,12 @@ Note:
 """
 
 import asyncio
+import base64
+import json
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 
@@ -47,19 +50,39 @@ TEST_WORKSPACE = os.getenv("TEST_WORKSPACE", "e2e-test-workspace")
 CUSTOM_TOKEN = os.getenv("AGENTAREA_API_TOKEN")
 
 
+JWKS_PATH = Path(
+    os.getenv("KRATOS_JWKS_PATH", Path(__file__).resolve().parent.parent / "config/auth/kratos/jwks.json")
+)
+
+
 def generate_test_token() -> str:
-    """Generate test JWT token."""
+    """Sign a short-lived test JWT with this installation's Kratos signing key.
+
+    The key is read from the per-install JWKS rather than embedded here: a private
+    key committed to the repository is one anybody can use to mint a token the API
+    accepts. Run ./scripts/gen-dev-secrets.sh to create it, or set
+    AGENTAREA_API_TOKEN to skip signing entirely.
+    """
     import jwt
-    from cryptography.hazmat.primitives import serialization
-    
-    private_key_pem = """-----BEGIN EC PRIVATE KEY-----
-MHcCAQEEIPO9DAeoH7kyeB7VJ1L2DMiaa+XlGTT+AZON21XY93gBoAoGCCqGSM49
-AwEHoUQDQgAEMKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D7gS2XpJFbZ
-iItSs3m9+9Ue6GnvHw/GW2ZZaVtszggXIw==
------END EC PRIVATE KEY-----"""
-    
-    private_key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
-    
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    if not JWKS_PATH.is_file():
+        raise SystemExit(
+            f"No signing key at {JWKS_PATH}.\n"
+            "Run ./scripts/gen-dev-secrets.sh, or set AGENTAREA_API_TOKEN to an existing token."
+        )
+
+    jwks = json.loads(JWKS_PATH.read_text())
+    key_data = next((k for k in jwks.get("keys", []) if "d" in k), None)
+    if key_data is None:
+        raise SystemExit(f"{JWKS_PATH} holds no private key (no 'd' component); cannot sign a test token.")
+
+    def b64u_int(value: str) -> int:
+        return int.from_bytes(base64.urlsafe_b64decode(value + "=" * (-len(value) % 4)), "big")
+
+    private_key = ec.derive_private_key(b64u_int(key_data["d"]), ec.SECP256R1())
+    kid = key_data.get("kid", "agentarea-jwt-key-1")
+
     payload = {
         "sub": "e2e-test-user",
         "workspace_id": TEST_WORKSPACE,
@@ -69,7 +92,7 @@ iItSs3m9+9Ue6GnvHw/GW2ZZaVtszggXIw==
         "exp": datetime.now(UTC) + timedelta(minutes=60),
     }
     
-    return jwt.encode(payload, private_key, algorithm="ES256", headers={"kid": "agentarea-jwt-key-1"})
+    return jwt.encode(payload, private_key, algorithm="ES256", headers={"kid": kid})
 
 
 async def main():
