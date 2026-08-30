@@ -25,8 +25,10 @@ class MCPSettings(BaseAppSettings):
     HYDRA_BROWSER_URL: str = "http://localhost:4444"
     # Expected audience for Hydra-issued OAuth tokens. When set, the API
     # enforces the `aud` claim (rejecting tokens minted for other clients).
-    # Unset = audience not verified (back-compat); set to this API's resource
-    # identifier to harden the MCP OAuth path.
+    # Required to accept Hydra-issued tokens at all. Unset does NOT mean
+    # "verify without an audience" any more — it means Hydra bearer tokens are
+    # refused outright, so a deployment that does not run Hydra is unaffected
+    # while one that does must declare which audience it accepts.
     HYDRA_AUDIENCE: str | None = None
     MCP_OAUTH_SCOPES: str = "openid offline_access"
     # Allow OpenAPI connections to reach localhost/private IPs (self-hosted deployments)

@@ -259,15 +259,30 @@ async def _try_hydra_token(token: str, request: Request) -> UserContext | None:
         jwks_client = _get_hydra_jwks()
         signing_key = jwks_client.get_signing_key_from_jwt(token)
 
-        # Enforce audience when configured (HYDRA_AUDIENCE); otherwise stay
-        # back-compatible and skip aud verification.
+        # Audience verification is mandatory. It used to be toggled by whether
+        # HYDRA_AUDIENCE happened to be set, and it was set in no chart, compose
+        # file or env template — so `aud` was never checked anywhere, and any
+        # token Hydra had ever signed was accepted on every protected route.
+        #
+        # An unset HYDRA_AUDIENCE now DISABLES this auth path rather than
+        # weakening it: deployments that do not run Hydra (the prod compose does
+        # not) keep working, and deployments that do must say which audience they
+        # accept.
         hydra_audience = get_settings().mcp.HYDRA_AUDIENCE
+        if not hydra_audience:
+            logger.warning(
+                "Hydra bearer token presented but HYDRA_AUDIENCE is not configured; "
+                "refusing the token. Set HYDRA_AUDIENCE to this API's resource "
+                "identifier to enable MCP OAuth."
+            )
+            return None
+
         payload = pyjwt.decode(
             token,
             signing_key.key,
             algorithms=["RS256"],
-            audience=hydra_audience or None,
-            options={"verify_aud": bool(hydra_audience)},
+            audience=hydra_audience,
+            options={"verify_aud": True},
         )
 
         subject = payload.get("sub", "")
