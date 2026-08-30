@@ -24,6 +24,11 @@ from agentarea_openapi.schemas.dto import (
 
 logger = logging.getLogger(__name__)
 
+
+class MissingHeaderSecretError(RuntimeError):
+    """A secret header on this connection has no stored value to send."""
+
+
 # Headers that are never sensitive — stored as plaintext.
 _SAFE_HEADERS = frozenset(
     h.lower()
@@ -199,17 +204,21 @@ class OpenAPIConnectionService:
                 continue
 
             is_secret = not _is_safe_header(header_name)
-            entry: dict[str, Any] = {"name": header_name, "secret": is_secret}
 
             if is_secret:
-                if header_value:
-                    key = _secret_key(connection_id, header_name)
-                    await self._secret_manager.set_secret(key, header_value)
+                if not header_value:
+                    # A secret header with nothing behind it is not a header.
+                    # Recording it would leave a `secret: true` entry with no
+                    # stored value, and resolving that connection then fails on
+                    # a credential the user never entered.
+                    continue
+                await self._secret_manager.set_secret(
+                    _secret_key(connection_id, header_name), header_value
+                )
                 # Don't store secret value in DB
+                processed.append({"name": header_name, "secret": True})
             else:
-                entry["value"] = header_value
-
-            processed.append(entry)
+                processed.append({"name": header_name, "secret": False, "value": header_value})
         return processed
 
     async def update_headers(
@@ -235,10 +244,9 @@ class OpenAPIConnectionService:
         for h in conn.custom_headers:
             if h.get("secret"):
                 key = _secret_key(conn.id, h["name"])
-                try:
-                    await self._secret_manager.delete_secret(key)
-                except Exception:
-                    logger.warning(f"Failed to delete secret for header {h['name']}")
+                # Swallowing this leaves the credential in the store with
+                # nothing referring to it — invisible, and never cleaned up.
+                await self._secret_manager.delete_secret(key)
 
     async def resolve_headers(self, conn: OpenAPIConnection) -> dict[str, str]:
         """Build the actual HTTP headers dict by resolving secrets."""
@@ -249,10 +257,21 @@ class OpenAPIConnectionService:
         for h in conn.custom_headers:
             name = h["name"]
             if h.get("secret"):
-                if self._secret_manager:
-                    value = await self._secret_manager.get_secret(_secret_key(conn.id, name))
-                    if value:
-                        headers[name] = value
+                if self._secret_manager is None:
+                    raise MissingHeaderSecretError(
+                        f"Connection {conn.id} has secret headers but no secret manager "
+                        "is configured to resolve them."
+                    )
+                value = await self._secret_manager.get_secret(_secret_key(conn.id, name))
+                if not value:
+                    # Dropping the header sends the request unauthenticated, and
+                    # the 401 that comes back names the remote API rather than
+                    # the credential that went missing here.
+                    raise MissingHeaderSecretError(
+                        f"Connection {conn.id} has no stored value for header '{name}'. "
+                        "Re-enter it."
+                    )
+                headers[name] = value
             else:
                 value = h.get("value", "")
                 if value:

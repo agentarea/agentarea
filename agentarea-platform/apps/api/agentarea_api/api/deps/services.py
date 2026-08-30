@@ -33,6 +33,7 @@ from agentarea_registry.infrastructure.repository import (
     RegistryItemRepository,
     RegistryRepository,
 )
+from agentarea_secrets.catalog_service import SecretCatalogService
 from agentarea_secrets.secret_manager_factory import get_real_secret_manager
 from agentarea_tasks.domain.interfaces import BaseTaskManager
 from agentarea_tasks.infrastructure.repository import TaskRepository
@@ -87,6 +88,22 @@ async def get_secret_manager(
 
 
 BaseSecretManagerDep = Annotated[BaseSecretManager, Depends(get_secret_manager)]
+
+
+async def get_secret_catalog_service(
+    db_session: DatabaseSessionDep,
+    user_context: UserContextDep,
+    secret_manager: BaseSecretManagerDep,
+) -> SecretCatalogService:
+    """Catalog operations on top of whichever secret backend is configured."""
+    return SecretCatalogService(
+        session=db_session,
+        user_context=user_context,
+        secret_manager=secret_manager,
+    )
+
+
+SecretCatalogServiceDep = Annotated[SecretCatalogService, Depends(get_secret_catalog_service)]
 
 
 # Audit Service dependencies

@@ -779,6 +779,24 @@ jobs:
           uv run alembic downgrade -1
           uv run alembic upgrade head
 
+      # The catalog's rules are enforced by SQL — a unique constraint decides
+      # what "create" means, a RESTRICT foreign key decides what "delete" means
+      # — so they can only be checked against the real schema. Without a
+      # database these skip, which is why they run here rather than in the
+      # unit-test job.
+      - name: Check secret catalog rules against the migrated schema
+        working-directory: agentarea-platform
+        env:
+          SECRETS_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/agentarea_test
+        # The provider-config suite belongs here for the same reason: it checks
+        # an ordering constraint that only real RESTRICT foreign keys can
+        # enforce, and the mocked-session unit tests next to it passed while
+        # deleting a provider config returned 500.
+        run: |
+          uv run python -m pytest -v \
+            libs/secrets/tests/test_catalog_service.py \
+            libs/llm/tests/test_provider_secret_lifecycle_db.py
+
       # The MCP demand gateway's lifecycle rules run against this schema in
       # production, but they live in Go SQL and no other job has a migrated
       # database to check them against. That gap is why the predecessor reaper

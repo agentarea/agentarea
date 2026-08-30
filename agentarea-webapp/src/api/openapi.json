@@ -7814,6 +7814,19 @@
             "description": "Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic \u2014 the backend suppresses the Authorization header when this is empty.",
             "title": "Api Key"
           },
+          "api_key_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Use an existing workspace secret as the API key instead of supplying one here. Mutually exclusive with api_key. The secret keeps its own lifecycle: several configurations may share it, and it cannot be deleted while any of them still points at it.",
+            "title": "Api Key Secret Id"
+          },
           "description": {
             "anyOf": [
               {
@@ -7976,6 +7989,19 @@
             ],
             "description": "New API key. Replaces the previously stored secret. Send an empty string to clear the key for keyless custom endpoints.",
             "title": "Api Key"
+          },
+          "api_key_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Point this configuration at an existing workspace secret instead. Mutually exclusive with api_key.",
+            "title": "Api Key Secret Id"
           },
           "description": {
             "anyOf": [
@@ -8923,6 +8949,162 @@
           "isolation"
         ],
         "title": "SandboxSummary",
+        "type": "object"
+      },
+      "SecretConsumer": {
+        "properties": {
+          "consumer_id": {
+            "description": "Id of the using entity.",
+            "title": "Consumer Id",
+            "type": "string"
+          },
+          "consumer_type": {
+            "description": "Kind of thing using the secret, e.g. provider_config.",
+            "title": "Consumer Type",
+            "type": "string"
+          },
+          "field": {
+            "description": "Which slot on that entity \u2014 a header name, an env var.",
+            "title": "Field",
+            "type": "string"
+          }
+        },
+        "required": [
+          "consumer_type",
+          "consumer_id",
+          "field"
+        ],
+        "title": "SecretConsumer",
+        "type": "object"
+      },
+      "SecretCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "description": "2-64 characters: lowercase letters, digits, '-' and '_', starting and ending with a letter or digit. Prefixes the platform uses for its own secrets are rejected.",
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "description": "Stored encrypted; never returned.",
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "SecretCreate",
+        "type": "object"
+      },
+      "SecretDescriptionUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "title": "SecretDescriptionUpdate",
+        "type": "object"
+      },
+      "SecretResponse": {
+        "description": "A secret's metadata. The value is never part of this.",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "description": "Unique within the workspace.",
+            "title": "Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "used_by": {
+            "items": {
+              "$ref": "#/components/schemas/SecretConsumer"
+            },
+            "title": "Used By",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "SecretResponse",
+        "type": "object"
+      },
+      "SecretValueUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "description": "Replaces the stored value.",
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "SecretValueUpdate",
         "type": "object"
       },
       "SetupField": {
@@ -22588,6 +22770,295 @@
           "v1",
           "protected",
           "sandboxes"
+        ]
+      }
+    },
+    "/v1/secrets": {
+      "get": {
+        "description": "List the workspace's own secrets. Values are not included.",
+        "operationId": "list_secrets_v1_secrets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SecretResponse"
+                  },
+                  "title": "Response List Secrets V1 Secrets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Secrets",
+        "tags": [
+          "v1",
+          "protected",
+          "secrets"
+        ]
+      },
+      "post": {
+        "operationId": "create_secret_v1_secrets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Secret",
+        "tags": [
+          "v1",
+          "protected",
+          "secrets"
+        ]
+      }
+    },
+    "/v1/secrets/{secret_id}": {
+      "delete": {
+        "operationId": "delete_secret_v1_secrets__secret_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "secret_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Secret Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Secret",
+        "tags": [
+          "v1",
+          "protected",
+          "secrets"
+        ]
+      },
+      "get": {
+        "operationId": "get_secret_v1_secrets__secret_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "secret_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Secret Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Secret",
+        "tags": [
+          "v1",
+          "protected",
+          "secrets"
+        ]
+      },
+      "patch": {
+        "operationId": "update_secret_description_v1_secrets__secret_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "secret_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Secret Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretDescriptionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Secret Description",
+        "tags": [
+          "v1",
+          "protected",
+          "secrets"
+        ]
+      }
+    },
+    "/v1/secrets/{secret_id}/value": {
+      "put": {
+        "description": "Replace the stored value. Everything pointing at this secret picks up the new one.",
+        "operationId": "rotate_secret_v1_secrets__secret_id__value_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "secret_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Secret Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretValueUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate Secret",
+        "tags": [
+          "v1",
+          "protected",
+          "secrets"
         ]
       }
     },
