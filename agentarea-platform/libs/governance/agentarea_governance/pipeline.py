@@ -44,13 +44,26 @@ class InterceptorPipeline:
 
             try:
                 result = await interceptor.execute(context)
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "Interceptor %s raised exception on phase %s",
                     interceptor.name,
                     phase.value,
                 )
-                continue
+                # GATE and FILTER interceptors are security-relevant (both can DENY
+                # on success — see e.g. PromptInjectionDetector). An exception must
+                # fail closed rather than silently fall through to ALLOW.
+                deny_result = InterceptorResult(
+                    action=InterceptorAction.DENY,
+                    interceptor_name=interceptor.name,
+                    reason=(
+                        f"{category.value} interceptor '{interceptor.name}' raised "
+                        f"{exc.__class__.__name__} during execution; failing closed "
+                        "(this is an error, not a policy decision)"
+                    ),
+                )
+                await self._fire_callback(registration.on_deny, deny_result, context)
+                return deny_result
 
             if category == InterceptorCategory.GATE:
                 if result.action == InterceptorAction.DENY:

@@ -166,6 +166,65 @@ class TestPipelineObservers:
         assert obs.call_count == 1
 
 
+class TestPipelineFailClosed:
+    @pytest.mark.asyncio
+    async def test_gate_exception_denies(self):
+        registry = InterceptorRegistry()
+        gate = _MockInterceptor("g1", InterceptorCategory.GATE, should_raise=True)
+        registry.register(gate, Phase.PRE_TOOL_CALL, priority=100)
+        pipeline = InterceptorPipeline(registry)
+        result = await pipeline.run(Phase.PRE_TOOL_CALL, _make_context())
+        assert result.action == InterceptorAction.DENY
+        assert result.interceptor_name == "g1"
+
+    @pytest.mark.asyncio
+    async def test_gate_exception_short_circuits_and_denies_downstream_allow(self):
+        registry = InterceptorRegistry()
+        gate1 = _MockInterceptor("g1", InterceptorCategory.GATE, should_raise=True)
+        gate2 = _MockInterceptor("g2", InterceptorCategory.GATE, InterceptorAction.ALLOW)
+        registry.register(gate1, Phase.PRE_TOOL_CALL, priority=100)
+        registry.register(gate2, Phase.PRE_TOOL_CALL, priority=200)
+        pipeline = InterceptorPipeline(registry)
+        result = await pipeline.run(Phase.PRE_TOOL_CALL, _make_context())
+        assert result.action == InterceptorAction.DENY
+        assert gate2.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_gate_exception_fires_on_deny_callback(self):
+        registry = InterceptorRegistry()
+        gate = _MockInterceptor("g1", InterceptorCategory.GATE, should_raise=True)
+        callback_results = []
+        registry.register(
+            gate, Phase.PRE_TOOL_CALL, priority=100,
+            on_deny=lambda r, c: callback_results.append(r.interceptor_name),
+        )
+        pipeline = InterceptorPipeline(registry)
+        await pipeline.run(Phase.PRE_TOOL_CALL, _make_context())
+        assert callback_results == ["g1"]
+
+    @pytest.mark.asyncio
+    async def test_filter_exception_denies(self):
+        registry = InterceptorRegistry()
+        filt = _MockInterceptor("f1", InterceptorCategory.FILTER, should_raise=True)
+        registry.register(filt, Phase.POST_LLM_CALL, priority=100)
+        pipeline = InterceptorPipeline(registry)
+        result = await pipeline.run(
+            Phase.POST_LLM_CALL, _make_context(phase=Phase.POST_LLM_CALL)
+        )
+        assert result.action == InterceptorAction.DENY
+        assert result.interceptor_name == "f1"
+
+    @pytest.mark.asyncio
+    async def test_observer_exception_still_allows(self):
+        """Observers must keep the OBSERVER-swallows-exceptions behavior."""
+        registry = InterceptorRegistry()
+        obs = _MockInterceptor("obs", InterceptorCategory.OBSERVER, should_raise=True)
+        registry.register(obs, Phase.PRE_TOOL_CALL, priority=100)
+        pipeline = InterceptorPipeline(registry)
+        result = await pipeline.run(Phase.PRE_TOOL_CALL, _make_context())
+        assert result.action == InterceptorAction.ALLOW
+
+
 class TestPipelineMixed:
     @pytest.mark.asyncio
     async def test_mixed_categories_priority_order(self):
