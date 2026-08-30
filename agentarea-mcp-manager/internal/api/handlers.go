@@ -179,9 +179,14 @@ func (h *Handler) listInstances(c *gin.Context) {
 		return
 	}
 
+	public := make([]*backends.InstanceStatus, 0, len(instances))
+	for _, instance := range instances {
+		public = append(public, withoutEnvironment(instance))
+	}
+
 	response := gin.H{
-		"instances": instances,
-		"total":     len(instances),
+		"instances": public,
+		"total":     len(public),
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -202,7 +207,26 @@ func (h *Handler) getInstance(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, instance)
+	c.JSON(http.StatusOK, withoutEnvironment(instance))
+}
+
+// withoutEnvironment copies a status with the workload's resolved environment
+// stripped. These inspection routes carry no authentication, and the
+// environment is exactly where the secret resolver's output lands — API keys,
+// tokens, session strings that are themselves full account access. Returning it
+// would hand every instance's credentials to anything that can reach this
+// service, which is the whole of the secret manager's job undone.
+//
+// It copies rather than blanking in place: the status can be state the backend
+// owns and reuses, and clearing that would take the environment away from the
+// workload itself.
+func withoutEnvironment(status *backends.InstanceStatus) *backends.InstanceStatus {
+	if status == nil {
+		return nil
+	}
+	redacted := *status
+	redacted.Environment = nil
+	return &redacted
 }
 
 // validateInstance validates an instance configuration without creating it

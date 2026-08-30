@@ -229,6 +229,35 @@ func TestColdStartAbandonedByTheGatewayCleansUpTheWorkload(t *testing.T) {
 	}
 }
 
+// The gateway gives a cold start exactly StartupTimeout, and the runtime uses
+// the same value for its readiness deadline, so in production the context
+// almost always expires first. That branch used to return a bare
+// "context deadline exceeded" and throw away the one fact worth having: what
+// the workload was doing when time ran out. An operator reading the log then
+// cannot tell a workload still pulling its image from one that came up and
+// died, and has to go to the host to find out.
+func TestAbandonedColdStartReportsTheStateTheWorkloadWasLeftIn(t *testing.T) {
+	backend := &runtimeBackendStub{statuses: []statusReply{
+		{err: backends.ErrInstanceNotFound},
+		{status: "pending"},
+	}}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
+	defer cancel()
+
+	_, err := testProviderRuntime(t, backend, &runtimeProviderStub{}, time.Minute).
+		EnsureReady(ctx, dockerInstance())
+
+	if err == nil {
+		t.Fatal("an abandoned activation reported success")
+	}
+	if !strings.Contains(err.Error(), "pending") {
+		t.Errorf("error = %q, want it to name the last state the workload reached", err.Error())
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("error = %q, want it to still identify itself as the deadline expiring", err.Error())
+	}
+}
+
 // TestStatusErrorDuringStartCleansUpTheWorkload covers the other half of the
 // leak: the failure arrives as an unreadable status rather than a timeout.
 func TestStatusErrorDuringStartCleansUpTheWorkload(t *testing.T) {
