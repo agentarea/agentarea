@@ -2394,6 +2394,54 @@
         "title": "BundleSkill",
         "type": "object"
       },
+      "CatalogBrowseResponse": {
+        "description": "One page of a type's catalog plus the context needed to browse it.\n\n``total`` and ``categories`` cover the whole filtered catalog, not the page:\nwithout them a page that happens to contain no visible matches is\nindistinguishable from the end of the catalog, and facet counts drift as\nmore pages load.",
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryFacet"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RegistryItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "categories"
+        ],
+        "title": "CatalogBrowseResponse",
+        "type": "object"
+      },
+      "CategoryFacet": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ],
+        "title": "CategoryFacet",
+        "type": "object"
+      },
       "CheckRequest": {
         "properties": {
           "namespace": {
@@ -8287,6 +8335,17 @@
       },
       "RegistryItemResponse": {
         "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -8305,6 +8364,11 @@
           "external_id": {
             "title": "External Id",
             "type": "string"
+          },
+          "featured": {
+            "default": false,
+            "title": "Featured",
+            "type": "boolean"
           },
           "id": {
             "format": "uuid",
@@ -22187,6 +22251,135 @@
           }
         ],
         "summary": "Create Registry",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      }
+    },
+    "/v1/registries/catalog/browse": {
+      "get": {
+        "description": "Browse one catalog type: filtered, sorted and paged server-side.\n\nPaging every registry of a type separately and merging client-side cannot\nbe made correct -- a single offset has no meaning over the concatenation --\nso the whole type is paged as one ordered result here instead.",
+        "operationId": "browse_catalog_v1_registries_catalog_browse_get",
+        "parameters": [
+          {
+            "description": "Catalog type to browse",
+            "in": "query",
+            "name": "registry_type",
+            "required": true,
+            "schema": {
+              "description": "Catalog type to browse",
+              "title": "Registry Type",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Free-text filter over name and description",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Free-text filter over name and description",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Restrict to one category facet",
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict to one category facet",
+              "title": "Category"
+            }
+          },
+          {
+            "description": "'featured' (default) or 'name'",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "'featured' (default) or 'name'",
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogBrowseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Browse Catalog",
         "tags": [
           "v1",
           "protected",
