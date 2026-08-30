@@ -122,6 +122,34 @@ _PARSERS = (
 )
 
 
+def managed_field(name: str) -> str | None:
+    """Which slot on the owner this secret fills, if the name carries one.
+
+    `mcp_instance_{uuid}_API_KEY` fills the API_KEY env var,
+    `openapi:{id}:header:Authorization` fills that header. Others — a provider's
+    API key, a wallet's credentials — are the owner's single secret and have no
+    slot to name. Lives here so the display logic cannot drift from the parsers
+    that define these shapes.
+    """
+    if name.startswith("mcp_instance_"):
+        rest = name[len("mcp_instance_") :]
+        if _uuid_at_start(rest) and rest[_UUID_LEN:].startswith("_"):
+            return rest[_UUID_LEN + 1 :] or None
+        return None
+    if name.startswith("openapi:"):
+        rest = name[len("openapi:") :]
+        if _uuid_at_start(rest) and rest[_UUID_LEN:].startswith(":header:"):
+            return rest[_UUID_LEN + len(":header:") :] or None
+        return None
+    if name.startswith("channel_cred:"):
+        channel_type, separator, _ = name[len("channel_cred:") :].partition(":")
+        return channel_type if separator and channel_type else None
+    if name.startswith("task-input/"):
+        _, separator, field = name[len("task-input/") :].partition("/")
+        return field if separator and field else None
+    return None
+
+
 def has_reserved_prefix(name: str) -> bool:
     """Whether the name claims to belong to a platform producer."""
     return name.startswith(RESERVED_PREFIXES)

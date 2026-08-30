@@ -9094,6 +9094,51 @@
         "title": "SecretDescriptionUpdate",
         "type": "object"
       },
+      "SecretOwner": {
+        "description": "The connection a managed secret belongs to.",
+        "properties": {
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which slot on the owner this fills \u2014 an env var, a header name.",
+            "title": "Field"
+          },
+          "id": {
+            "description": "Its id, for deep-linking to it.",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its display name, or null when the owner no longer exists.",
+            "title": "Name"
+          },
+          "type": {
+            "description": "Kind of owner, e.g. mcp_instance or provider_config.",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ],
+        "title": "SecretOwner",
+        "type": "object"
+      },
       "SecretResponse": {
         "description": "A secret's metadata. The value is never part of this.",
         "properties": {
@@ -9128,6 +9173,17 @@
             "description": "Unique within the workspace.",
             "title": "Name",
             "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SecretOwner"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when a connection holds this secret on the user's behalf. Such a secret is read-only here and is changed through its owner."
           },
           "updated_at": {
             "anyOf": [
@@ -22968,7 +23024,7 @@
     },
     "/v1/secrets": {
       "get": {
-        "description": "List the workspace's own secrets. Values are not included.",
+        "description": "Every credential in the workspace the user would recognise as theirs.\n\nTheir own, plus the ones connections hold for them \u2014 the latter read-only.\nValues are not included, here or anywhere.",
         "operationId": "list_secrets_v1_secrets_get",
         "responses": {
           "200": {
@@ -23088,6 +23144,7 @@
         ]
       },
       "get": {
+        "description": "Read one secret's metadata, whether the user owns it or a connection does.\n\nManaged secrets are readable because the list shows them; hiding them here\nwould 404 every row the page invites you to click. They stay unwritable \u2014\nthe write routes below still refuse them.",
         "operationId": "get_secret_v1_secrets__secret_id__get",
         "parameters": [
           {

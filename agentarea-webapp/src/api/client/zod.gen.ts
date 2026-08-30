@@ -2151,6 +2151,18 @@ export const zSecretDescriptionUpdate = z.object({
 });
 
 /**
+ * SecretOwner
+ *
+ * The connection a managed secret belongs to.
+ */
+export const zSecretOwner = z.object({
+  field: z.string().nullish(),
+  id: z.string(),
+  name: z.string().nullish(),
+  type: z.string(),
+});
+
+/**
  * SecretResponse
  *
  * A secret's metadata. The value is never part of this.
@@ -2160,6 +2172,7 @@ export const zSecretResponse = z.object({
   description: z.string().nullish(),
   id: z.string().uuid(),
   name: z.string(),
+  owner: zSecretOwner.nullish(),
   updated_at: z.string().nullish(),
   used_by: z.array(zSecretConsumer).optional(),
 });

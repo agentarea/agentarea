@@ -1258,7 +1258,10 @@ export declare const listSandboxesV1SandboxesGet: <ThrowOnError extends boolean 
 /**
  * List Secrets
  *
- * List the workspace's own secrets. Values are not included.
+ * Every credential in the workspace the user would recognise as theirs.
+ *
+ * Their own, plus the ones connections hold for them — the latter read-only.
+ * Values are not included, here or anywhere.
  */
 export declare const listSecretsV1SecretsGet: <ThrowOnError extends boolean = false>(options?: Options<ListSecretsV1SecretsGetData, ThrowOnError>) => RequestResult<ListSecretsV1SecretsGetResponses, unknown, ThrowOnError>;
 /**
@@ -1271,6 +1274,12 @@ export declare const createSecretV1SecretsPost: <ThrowOnError extends boolean = 
 export declare const deleteSecretV1SecretsSecretIdDelete: <ThrowOnError extends boolean = false>(options: Options<DeleteSecretV1SecretsSecretIdDeleteData, ThrowOnError>) => RequestResult<DeleteSecretV1SecretsSecretIdDeleteResponses, DeleteSecretV1SecretsSecretIdDeleteErrors, ThrowOnError>;
 /**
  * Get Secret
+ *
+ * Read one secret's metadata, whether the user owns it or a connection does.
+ *
+ * Managed secrets are readable because the list shows them; hiding them here
+ * would 404 every row the page invites you to click. They stay unwritable —
+ * the write routes below still refuse them.
  */
 export declare const getSecretV1SecretsSecretIdGet: <ThrowOnError extends boolean = false>(options: Options<GetSecretV1SecretsSecretIdGetData, ThrowOnError>) => RequestResult<GetSecretV1SecretsSecretIdGetResponses, GetSecretV1SecretsSecretIdGetErrors, ThrowOnError>;
 /**

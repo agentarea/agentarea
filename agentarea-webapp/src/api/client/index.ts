@@ -1476,6 +1476,7 @@ export type {
   SecretConsumer,
   SecretCreate,
   SecretDescriptionUpdate,
+  SecretOwner,
   SecretResponse,
   SecretValueUpdate,
   SendA2UiActionV1AgentsAgentIdTasksTaskIdA2UiActionPostData,
