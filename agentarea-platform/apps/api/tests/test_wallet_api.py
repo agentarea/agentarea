@@ -6,6 +6,11 @@ from uuid import uuid4
 
 import pytest
 from agentarea_api.api.v1.wallet import ensure_agent_exists, get_wallet_service, router
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import register_singleton
 from agentarea_common.testing.flows import MainFlow
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -49,6 +54,20 @@ def _mock_payment(**overrides):
     return p
 
 
+class _DenyAuthorizationService(WorkspaceScopedAuthorizationService):
+    """Simulates a non-admin workspace member for the assert_workspace_admin gate."""
+
+    async def can_write_workspace(self, user_context, workspace_id) -> bool:
+        return False
+
+
+@pytest.fixture(autouse=True)
+def _register_authz():
+    # Default: admin, matching the OSS one-owner-per-workspace model. Tests that
+    # exercise the non-admin path register _DenyAuthorizationService instead.
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+
+
 @pytest.fixture
 def mock_service():
     return AsyncMock()
@@ -60,6 +79,9 @@ def client(mock_service):
     app.include_router(router)
     app.dependency_overrides[get_wallet_service] = lambda: mock_service
     app.dependency_overrides[ensure_agent_exists] = lambda: None
+    app.dependency_overrides[get_user_context] = lambda: UserContext(
+        user_id="user-1", workspace_id="ws-1"
+    )
     return TestClient(app)
 
 
@@ -249,3 +271,37 @@ class TestFundWallet:
         })
 
         assert resp.status_code == 404
+
+
+# ------------------------------------------------------------------
+# Mutations require workspace admin, not just membership
+# ------------------------------------------------------------------
+
+
+class TestWalletMutationsRequireAdmin:
+    def test_fund_403_for_non_admin(self, client, mock_service):
+        register_singleton(AuthorizationService, _DenyAuthorizationService())
+
+        resp = client.post(f"/agents/{AGENT_ID}/wallet/fund", json={
+            "service_budget_usd": 20.0,
+        })
+
+        assert resp.status_code == 403
+        mock_service.update_wallet.assert_not_called()
+
+    def test_fund_200_for_admin(self, client, mock_service):
+        mock_service.update_wallet.return_value = _mock_wallet(service_budget_usd=20.0)
+
+        resp = client.post(f"/agents/{AGENT_ID}/wallet/fund", json={
+            "service_budget_usd": 20.0,
+        })
+
+        assert resp.status_code == 200
+
+    def test_delete_403_for_non_admin(self, client, mock_service):
+        register_singleton(AuthorizationService, _DenyAuthorizationService())
+
+        resp = client.delete(f"/agents/{AGENT_ID}/wallet")
+
+        assert resp.status_code == 403
+        mock_service.delete_wallet.assert_not_called()

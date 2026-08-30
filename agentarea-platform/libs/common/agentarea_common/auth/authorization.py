@@ -10,6 +10,8 @@ magic 'platform' workspace. Enterprise can replace this with ReBAC.
 import logging
 from abc import ABC, abstractmethod
 
+from fastapi import HTTPException
+
 from .context import UserContext
 
 logger = logging.getLogger(__name__)
@@ -46,3 +48,22 @@ class AuthorizationService(ABC):
             True if the user can write to the workspace.
         """
         ...
+
+
+async def assert_workspace_admin(user_context: UserContext) -> None:
+    """Raise 403 unless the caller may mutate the given workspace.
+
+    Endpoints that write policy or money — governance policy rules, wallet
+    credentials/budgets, the authorization graph — must gate on this.
+    Plain workspace membership is not enough: any member could otherwise
+    loosen their own spend cap, delete a deny rule, or drain another
+    agent's wallet.
+    """
+    from agentarea_common.di.container import resolve
+
+    authz = resolve(AuthorizationService)
+    if not await authz.can_write_workspace(user_context, user_context.workspace_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a workspace admin may perform this action",
+        )

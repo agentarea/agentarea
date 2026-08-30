@@ -27,7 +27,13 @@ from agentarea_agents.infrastructure.collection_repository import (
 )
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
-from agentarea_common.auth import UserContext, UserContextDep
+from agentarea_common.auth import (
+    UserContext,
+    UserContextDep,
+)
+from agentarea_common.auth import (
+    assert_workspace_admin as _assert_workspace_admin,
+)
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
@@ -347,23 +353,6 @@ async def _assert_subject_in_workspace(
             raise HTTPException(status_code=403, detail="Subject user is not in your workspace")
         return
     raise HTTPException(status_code=422, detail=f"Unsupported subject: {subject_id!r}")
-
-
-async def _assert_workspace_admin(user_context: UserContext) -> None:
-    """Only a workspace owner/admin may mutate the authorization graph.
-
-    Writing/deleting relationships grants or revokes access across the
-    workspace, so it must not be available to every member.
-    """
-    from agentarea_common.auth.authorization import AuthorizationService
-    from agentarea_common.di.container import resolve
-
-    authz = resolve(AuthorizationService)
-    if not await authz.can_write_workspace(user_context, user_context.workspace_id):
-        raise HTTPException(
-            status_code=403,
-            detail="Only a workspace admin may modify the authorization graph",
-        )
 
 
 def _to_resource_grant(payload: RelationshipWriteRequest) -> RelationTuple:

@@ -15,9 +15,12 @@ from agentarea_api.api.v1.policies import (
     list_policy_rules,
     update_policy_rule,
 )
+from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.base.models import BaseModel
+from agentarea_common.di.container import register_singleton
 from agentarea_common.testing.flows import MainFlow
 from agentarea_governance.domain.rules import PolicyEffect, PolicySubjectType
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
@@ -62,6 +65,20 @@ def audit_capture(monkeypatch):
     _FakeAuditService.calls = []
     monkeypatch.setattr("agentarea_common.audit.decorator.AuditService", _FakeAuditService)
     return _FakeAuditService.calls
+
+
+class _DenyAuthorizationService(WorkspaceScopedAuthorizationService):
+    """Simulates a non-admin workspace member for the assert_workspace_admin gate."""
+
+    async def can_write_workspace(self, user_context: UserContext, workspace_id: str) -> bool:
+        return False
+
+
+@pytest.fixture(autouse=True)
+def _register_authz():
+    # Default: admin, matching the OSS one-owner-per-workspace model. Tests that
+    # exercise the non-admin path register _DenyAuthorizationService instead.
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
 
 
 def _context(workspace_id: str = "workspace-a") -> UserContext:
@@ -140,6 +157,46 @@ async def test_create_get_list_update_delete(session_factory):
         with pytest.raises(HTTPException) as exc:
             await get_policy_rule(created.id, context, session)
         assert exc.value.status_code == 404
+
+
+# ---- write endpoints require workspace admin, not just membership ----
+
+
+async def test_delete_rejects_non_admin(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        created = await create_policy_rule(_cap_request(), context, session)
+
+        register_singleton(AuthorizationService, _DenyAuthorizationService())
+        with pytest.raises(HTTPException) as exc:
+            await delete_policy_rule(created.id, context, session)
+        assert exc.value.status_code == 403
+
+
+async def test_delete_succeeds_for_admin(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        created = await create_policy_rule(_cap_request(), context, session)
+
+        resp = await delete_policy_rule(created.id, context, session)
+        assert resp.status_code == 204
+
+
+async def test_create_and_update_reject_non_admin(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        created = await create_policy_rule(_cap_request(), context, session)
+
+        register_singleton(AuthorizationService, _DenyAuthorizationService())
+        with pytest.raises(HTTPException) as create_exc:
+            await create_policy_rule(_cap_request(), context, session)
+        assert create_exc.value.status_code == 403
+
+        with pytest.raises(HTTPException) as update_exc:
+            await update_policy_rule(
+                created.id, PolicyRuleUpdateRequest(enabled=False), context, session
+            )
+        assert update_exc.value.status_code == 403
 
 
 # ---- fail-closed write boundary: unenforceable rules must be rejected ----
