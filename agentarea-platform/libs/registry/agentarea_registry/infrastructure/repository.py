@@ -14,8 +14,23 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from agentarea_registry.domain.models import Registry, RegistryItem
+
+# Accepted catalog orderings, mapped to their ORDER BY. Every ordering ends with
+# ``id`` so rows with equal keys can't let OFFSET paging repeat one and drop
+# another. Public: the API validates ``sort`` against these names rather than
+# silently ignoring an unknown one, and the webapp mirrors them in SORT_KEYS.
+CATALOG_SORTS: dict[str, Any] = {
+    "featured": lambda: (
+        RegistryItem.featured.desc(),
+        RegistryItem.sort_key.asc(),
+        RegistryItem.id.asc(),
+    ),
+    "name": lambda: (RegistryItem.sort_key.asc(), RegistryItem.id.asc()),
+}
+DEFAULT_CATALOG_SORT = "featured"
 
 
 class RegistryRepository:
@@ -163,6 +178,83 @@ class RegistryItemRepository:
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
+
+    # ── Browsing (the /explore gallery) ──
+    #
+    # One ordered query across every active registry of a type. Paging each
+    # registry separately and stitching the results client-side cannot work: a
+    # single offset has no meaning over the concatenation, so pages past the
+    # first skip whole slices of each registry. Filtering and sorting live here
+    # for the same reason -- doing them on the loaded prefix reorders the list
+    # under the user as more pages arrive, and hides matches that were never
+    # fetched.
+
+    def _browse_filter(
+        self, registry_type: str, q: str | None, category: str | None
+    ) -> list[ColumnElement[bool]]:
+        """WHERE clause shared by the page query, its total, and the facets."""
+        conditions = [
+            Registry.registry_type == registry_type,
+            Registry.is_active.is_(True),
+        ]
+        if category:
+            conditions.append(RegistryItem.category == category)
+        if q:
+            pattern = f"%{q}%"
+            conditions.append(
+                RegistryItem.name.ilike(pattern) | RegistryItem.description.ilike(pattern)
+            )
+        return conditions
+
+    async def browse(
+        self,
+        registry_type: str,
+        q: str | None = None,
+        category: str | None = None,
+        sort: str = DEFAULT_CATALOG_SORT,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[RegistryItem], int]:
+        """One page of a type's catalog, plus how many items match in total.
+
+        The total is what lets the client know there is more to fetch even when
+        the current page contributes nothing visible.
+        """
+        conditions = self._browse_filter(registry_type, q, category)
+        join = select(RegistryItem).join(Registry, RegistryItem.registry_id == Registry.id)
+
+        order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS[DEFAULT_CATALOG_SORT])()
+        page = join.where(*conditions).order_by(*order_by).offset(offset).limit(limit)
+        items = list((await self.session.execute(page)).scalars().all())
+
+        counted = (
+            select(func.count())
+            .select_from(RegistryItem)
+            .join(Registry, RegistryItem.registry_id == Registry.id)
+            .where(*conditions)
+        )
+        total = (await self.session.execute(counted)).scalar_one()
+        return items, total
+
+    async def category_counts(
+        self, registry_type: str, q: str | None = None
+    ) -> list[tuple[str, int]]:
+        """Facet counts over the whole type, not just the loaded page.
+
+        Deliberately ignores any active category filter -- the sidebar has to
+        keep showing the other categories you could switch to. Uncategorised
+        items are left out rather than collected into a bucket nothing selects.
+        """
+        conditions = self._browse_filter(registry_type, q, category=None)
+        query = (
+            select(RegistryItem.category, func.count().label("n"))
+            .join(Registry, RegistryItem.registry_id == Registry.id)
+            .where(*conditions, RegistryItem.category.is_not(None))
+            .group_by(RegistryItem.category)
+            .order_by(func.count().desc(), RegistryItem.category.asc())
+        )
+        rows = (await self.session.execute(query)).all()
+        return [(value, count) for value, count in rows]
 
     async def search(
         self,

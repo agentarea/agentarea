@@ -37,6 +37,9 @@ import type {
   AnalyzeBundleV1BundlesAnalyzePostData,
   AnalyzeBundleV1BundlesAnalyzePostErrors,
   AnalyzeBundleV1BundlesAnalyzePostResponses,
+  BrowseCatalogV1RegistriesCatalogBrowseGetData,
+  BrowseCatalogV1RegistriesCatalogBrowseGetErrors,
+  BrowseCatalogV1RegistriesCatalogBrowseGetResponses,
   CancelAgentTaskV1AgentsAgentIdTasksTaskIdDeleteData,
   CancelAgentTaskV1AgentsAgentIdTasksTaskIdDeleteErrors,
   CancelAgentTaskV1AgentsAgentIdTasksTaskIdDeleteResponses,
@@ -6840,6 +6843,40 @@ export const createRegistryV1RegistriesPost = <
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * Browse Catalog
+ *
+ * Browse one catalog type: filtered, sorted and paged server-side.
+ *
+ * Paging every registry of a type separately and merging client-side cannot
+ * be made correct -- a single offset has no meaning over the concatenation --
+ * so the whole type is paged as one ordered result here instead.
+ */
+export const browseCatalogV1RegistriesCatalogBrowseGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<BrowseCatalogV1RegistriesCatalogBrowseGetData, ThrowOnError>
+): RequestResult<
+  BrowseCatalogV1RegistriesCatalogBrowseGetResponses,
+  BrowseCatalogV1RegistriesCatalogBrowseGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    BrowseCatalogV1RegistriesCatalogBrowseGetResponses,
+    BrowseCatalogV1RegistriesCatalogBrowseGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/catalog/browse",
+    ...options,
   });
 
 /**

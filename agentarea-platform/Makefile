@@ -52,10 +52,12 @@ SECRET_REDACTION_TESTS := libs/secrets/tests/test_database_secret_manager.py
 
 # Single source of truth for the per-merge gate (run verbatim by CI's
 # `platform-test`). Covers unit + functional + apps/api + libs/common
-# (OSS/Enterprise extension contract) + libs/tasks + all hermetic flow tests.
+# (OSS/Enterprise extension contract) + libs/tasks + libs/registry (catalog
+# browse: facet derivation and paging) + all hermetic flow tests.
 # Includes the flow coverage guard, which needs every flow test collected.
 test:
 	uv run python -m pytest tests/unit tests/functional apps/api/tests libs/common/tests libs/tasks/tests \
+		libs/registry/tests \
 		$(FLOW_TESTS) \
 		$(REDACTION_TESTS) \
 		-m "not integration"

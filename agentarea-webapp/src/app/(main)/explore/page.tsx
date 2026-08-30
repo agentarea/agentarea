@@ -1,20 +1,25 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
-import { fetchCatalogPage } from "@/lib/api";
+import { browseCatalog } from "@/lib/api";
 import CatalogGallery, {
   ExplorePendingProvider,
+  ExploreSortSelect,
   ExploreTypeTabs,
   ExploreViewToggle,
 } from "../bundles/components/CatalogGallery";
 import {
+  ALL,
+  DEFAULT_SORT,
   EXPLORE_VIEW_COOKIE,
   PAGE,
   isCatalogType,
+  isSortMode,
   normalize,
   type CatalogEntry,
   type CatalogType,
   type RegistryItem,
+  type SortMode,
 } from "../bundles/components/catalog-data";
 
 export const metadata: Metadata = {
@@ -25,14 +30,25 @@ interface ExplorePageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
+function param(v: string | string[] | undefined): string | undefined {
+  return typeof v === "string" && v ? v : undefined;
+}
+
 // Unified discovery surface: one faceted gallery across every catalog type
-// (bundles, agents, skills, connections). The first page is fetched server-side
-// so the gallery paints real data immediately — no client fetch race, no flash
-// of the wrong type. Switching tabs round-trips here (nuqs shallow:false) and
-// the gallery remounts via `key`, so loaded state can never go stale.
+// (bundles, agents, skills, connections).
+//
+// Every browse dimension — type, search, category, sort — is resolved here and
+// applied by the server in one ordered, paged query, so the first page is real
+// data on first paint and page N means the same thing as page 1. Changing any
+// of them round-trips here (nuqs shallow:false); the gallery re-seeds from the
+// new props, so loaded state can never go stale.
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   const sp = await searchParams;
   const type: CatalogType = isCatalogType(sp.type) ? sp.type : "bundles";
+  const query = param(sp.q);
+  const categoryParam = param(sp.category);
+  const category = categoryParam && categoryParam !== ALL ? categoryParam : undefined;
+  const sort: SortMode = isSortMode(sp.sort) ? sp.sort : DEFAULT_SORT;
 
   // Persisted grid/table choice: URL param wins, otherwise the cookie written
   // by the view toggle, otherwise grid. Seeds the toggle + gallery defaults so
@@ -45,7 +61,14 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         ? "table"
         : "grid";
 
-  const { items, hasMore, error } = await fetchCatalogPage(type, 0, PAGE);
+  const { items, total, categories, error } = await browseCatalog({
+    registryType: type,
+    q: query,
+    category,
+    sort,
+    limit: PAGE,
+    offset: 0,
+  });
   const entries: CatalogEntry[] = (items as RegistryItem[]).map((it) =>
     normalize(type, it)
   );
@@ -63,14 +86,18 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         subheader={
           <>
             <ExploreTypeTabs initialType={type} />
-            <ExploreViewToggle initialView={initialView} />
+            <div className="flex items-center gap-2">
+              <ExploreSortSelect initialSort={sort} />
+              <ExploreViewToggle initialView={initialView} />
+            </div>
           </>
         }
       >
         <CatalogGallery
           initialType={type}
           initialEntries={entries}
-          initialHasMore={hasMore}
+          initialTotal={total}
+          initialCategories={categories}
           initialError={error ? "Failed to load catalog." : null}
           initialView={initialView}
         />
