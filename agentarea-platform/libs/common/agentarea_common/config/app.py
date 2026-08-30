@@ -34,6 +34,12 @@ class AppSettings(BaseAppSettings):
 
     # Public base URL for this API (used in OAuth AS metadata and redirect URLs)
     API_BASE_URL: str = "http://localhost:8000"
+    # Public base URL Telegram should POST bot webhooks to, as
+    # {base}/webhooks/{webhook_id}. Usually the same host as the API; in a
+    # deployment where Telegram cannot reach that host directly (e.g. behind a
+    # relay), point this at the reachable ingress instead. Empty = fall back to
+    # API_BASE_URL.
+    TELEGRAM_WEBHOOK_BASE_URL: str = ""
     # AgentArea frontend URL (users are redirected here to log in if no session)
     FRONTEND_BASE_URL: str = "http://localhost:3000"
 

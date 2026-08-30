@@ -29,7 +29,9 @@ from agentarea_api.api.deps.services import (
     get_trigger_service,
 )
 from agentarea_common.auth.dependencies import UserContext, get_user_context
+from agentarea_common.config.app import get_app_settings
 from agentarea_common.utils.types import UtcDatetime
+from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
 from agentarea_triggers.schemas.dto import TriggerCreate, TriggerUpdate
 from agentarea_triggers.trigger_service import (
@@ -317,12 +319,34 @@ async def get_channel_events(
     return CHANNEL_EVENTS
 
 
+def get_channel_webhook_service() -> ChannelWebhookService:
+    """Composition root for inbound webhook registration.
+
+    Reads the reachable ingress base (TELEGRAM_WEBHOOK_BASE_URL if set, else
+    API_BASE_URL) and hands the endpoints a service that knows nothing about any
+    specific channel — that lives behind the WebhookRegistrar registry.
+    """
+    settings = get_app_settings()
+    base = getattr(settings, "TELEGRAM_WEBHOOK_BASE_URL", "") or settings.API_BASE_URL
+    return ChannelWebhookService(base)
+
+
+def _channel_secret_name(trigger: Any, trigger_id: Any) -> str | None:
+    """Secret name holding this trigger's channel credentials, if it is a webhook
+    trigger. Only the naming convention lives here — no channel logic.
+    """
+    wt = getattr(trigger, "webhook_type", None)
+    name = wt.value if hasattr(wt, "value") else str(wt or "")
+    return f"channel_cred:{name}:{trigger_id}" if name else None
+
+
 @router.post("/", response_model=TriggerResponse, status_code=201)
 async def create_trigger(
     secret_manager: BaseSecretManagerDep,
     payload: TriggerCreate = Body(...),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
+    webhook_service: ChannelWebhookService = Depends(get_channel_webhook_service),
 ) -> TriggerResponse:
     """Create a new trigger.
 
@@ -337,6 +361,7 @@ async def create_trigger(
         user_context: Authentication context.
         trigger_service: Injected trigger service.
         secret_manager: Injected secret manager for credential storage.
+        webhook_service: Injected service that registers the channel webhook.
 
     Returns:
         The created trigger.
@@ -379,6 +404,13 @@ async def create_trigger(
             await secret_manager.set_secret(secret_name, json.dumps(payload.channel_credentials))
             has_creds = True
             logger.info(f"Stored channel credentials for trigger {trigger.id}")
+
+        if has_creds:
+            await webhook_service.register(
+                channel_type=getattr(trigger, "webhook_type", None),
+                webhook_id=getattr(trigger, "webhook_id", None),
+                credentials=payload.channel_credentials,
+            )
 
         logger.info(f"Created trigger {trigger.id} for agent {trigger.agent_id}")
 
@@ -560,6 +592,7 @@ async def update_trigger(
     payload: TriggerUpdate = Body(...),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
+    webhook_service: ChannelWebhookService = Depends(get_channel_webhook_service),
 ) -> TriggerResponse:
     """Update an existing trigger.
 
@@ -573,6 +606,7 @@ async def update_trigger(
         user_context: Authentication context.
         trigger_service: Injected trigger service.
         secret_manager: Injected secret manager for credential storage.
+        webhook_service: Injected service that registers the channel webhook.
 
     Returns:
         The updated trigger.
@@ -605,6 +639,11 @@ async def update_trigger(
             secret_name = f"channel_cred:{channel_type}:{trigger_id}"
             await secret_manager.set_secret(secret_name, json.dumps(payload.channel_credentials))
             has_creds = True
+            await webhook_service.register(
+                channel_type=getattr(updated_trigger, "webhook_type", None),
+                webhook_id=getattr(updated_trigger, "webhook_id", None),
+                credentials=payload.channel_credentials,
+            )
             logger.info(f"Updated channel credentials for trigger {trigger_id}")
         elif secret_manager:
             # Check if credentials already exist
@@ -626,9 +665,11 @@ async def update_trigger(
 
 @router.delete("/{trigger_id}", status_code=204)
 async def delete_trigger(
+    secret_manager: BaseSecretManagerDep,
     trigger_id: UUID,
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
+    webhook_service: ChannelWebhookService = Depends(get_channel_webhook_service),
 ) -> None:
     """Delete a trigger.
 
@@ -636,9 +677,11 @@ async def delete_trigger(
     If it's a cron trigger, the schedule will also be removed.
 
     Args:
+        secret_manager: Injected secret manager, used to read channel credentials.
         trigger_id: The unique identifier of the trigger
         user_context: Authentication context
         trigger_service: Injected trigger service
+        webhook_service: Injected service that clears the channel webhook.
 
     Raises:
         HTTPException: If trigger not found
@@ -646,6 +689,22 @@ async def delete_trigger(
     _check_triggers_availability()
 
     try:
+        # Best-effort: clear this trigger's provider-side webhook before it goes
+        # away. Channel-agnostic — resolve the channel from the trigger, read its
+        # stored credentials, and let the service delegate. Never blocks delete.
+        try:
+            trigger = await trigger_service.get_trigger(trigger_id)
+            secret_name = _channel_secret_name(trigger, trigger_id) if trigger else None
+            if secret_manager and secret_name:
+                raw = await secret_manager.get_secret(secret_name)
+                if raw:
+                    await webhook_service.deregister(
+                        channel_type=getattr(trigger, "webhook_type", None),
+                        credentials=json.loads(raw),
+                    )
+        except Exception as e:
+            logger.warning(f"Webhook deregistration on delete failed for {trigger_id}: {e}")
+
         success = await trigger_service.delete_trigger(trigger_id)
 
         if not success:

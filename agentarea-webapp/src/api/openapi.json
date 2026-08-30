@@ -24590,7 +24590,7 @@
         ]
       },
       "post": {
-        "description": "Create a new trigger.\n\nCreates a new trigger with the specified configuration. The trigger will be\nvalidated and, if it's a cron trigger, automatically scheduled.\n\nIf channel_credentials are provided, they are stored encrypted in the secret\nstore under key ``channel_cred:{webhook_type}:{trigger_id}``.\n\nArgs:\n    payload: Trigger creation DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n\nReturns:\n    The created trigger.\n\nRaises:\n    HTTPException: If validation fails or creation errors occur.",
+        "description": "Create a new trigger.\n\nCreates a new trigger with the specified configuration. The trigger will be\nvalidated and, if it's a cron trigger, automatically scheduled.\n\nIf channel_credentials are provided, they are stored encrypted in the secret\nstore under key ``channel_cred:{webhook_type}:{trigger_id}``.\n\nArgs:\n    payload: Trigger creation DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The created trigger.\n\nRaises:\n    HTTPException: If validation fails or creation errors occur.",
         "operationId": "create_trigger_v1_triggers__post",
         "requestBody": {
           "content": {
@@ -24740,7 +24740,7 @@
     },
     "/v1/triggers/{trigger_id}": {
       "delete": {
-        "description": "Delete a trigger.\n\nPermanently deletes the specified trigger and all its execution history.\nIf it's a cron trigger, the schedule will also be removed.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nRaises:\n    HTTPException: If trigger not found",
+        "description": "Delete a trigger.\n\nPermanently deletes the specified trigger and all its execution history.\nIf it's a cron trigger, the schedule will also be removed.\n\nArgs:\n    secret_manager: Injected secret manager, used to read channel credentials.\n    trigger_id: The unique identifier of the trigger\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n    webhook_service: Injected service that clears the channel webhook.\n\nRaises:\n    HTTPException: If trigger not found",
         "operationId": "delete_trigger_v1_triggers__trigger_id__delete",
         "parameters": [
           {
@@ -24831,7 +24831,7 @@
         ]
       },
       "put": {
-        "description": "Update an existing trigger.\n\nUpdates the specified trigger with the provided data. Only non-null fields\nin the request will be updated. If channel_credentials are provided,\nthey replace the existing credentials in the secret store.\n\nArgs:\n    trigger_id: The unique identifier of the trigger.\n    payload: Trigger update DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n\nReturns:\n    The updated trigger.\n\nRaises:\n    HTTPException: If trigger not found or validation fails.",
+        "description": "Update an existing trigger.\n\nUpdates the specified trigger with the provided data. Only non-null fields\nin the request will be updated. If channel_credentials are provided,\nthey replace the existing credentials in the secret store.\n\nArgs:\n    trigger_id: The unique identifier of the trigger.\n    payload: Trigger update DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The updated trigger.\n\nRaises:\n    HTTPException: If trigger not found or validation fails.",
         "operationId": "update_trigger_v1_triggers__trigger_id__put",
         "parameters": [
           {
