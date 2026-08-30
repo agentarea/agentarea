@@ -115,6 +115,9 @@ import type {
   CreateRelationshipV1AccessControlRelationshipsPostData,
   CreateRelationshipV1AccessControlRelationshipsPostErrors,
   CreateRelationshipV1AccessControlRelationshipsPostResponses,
+  CreateSecretV1SecretsPostData,
+  CreateSecretV1SecretsPostErrors,
+  CreateSecretV1SecretsPostResponses,
   CreateSkillV1SkillsPostData,
   CreateSkillV1SkillsPostErrors,
   CreateSkillV1SkillsPostResponses,
@@ -178,6 +181,9 @@ import type {
   DeleteRelationshipV1AccessControlRelationshipsDeleteData,
   DeleteRelationshipV1AccessControlRelationshipsDeleteErrors,
   DeleteRelationshipV1AccessControlRelationshipsDeleteResponses,
+  DeleteSecretV1SecretsSecretIdDeleteData,
+  DeleteSecretV1SecretsSecretIdDeleteErrors,
+  DeleteSecretV1SecretsSecretIdDeleteResponses,
   DeleteSkillV1SkillsSkillIdDeleteData,
   DeleteSkillV1SkillsSkillIdDeleteErrors,
   DeleteSkillV1SkillsSkillIdDeleteResponses,
@@ -348,6 +354,9 @@ import type {
   GetRegistryV1RegistriesRegistryIdGetData,
   GetRegistryV1RegistriesRegistryIdGetErrors,
   GetRegistryV1RegistriesRegistryIdGetResponses,
+  GetSecretV1SecretsSecretIdGetData,
+  GetSecretV1SecretsSecretIdGetErrors,
+  GetSecretV1SecretsSecretIdGetResponses,
   GetSkillContentV1SkillsSkillIdContentGetData,
   GetSkillContentV1SkillsSkillIdContentGetErrors,
   GetSkillContentV1SkillsSkillIdContentGetResponses,
@@ -528,6 +537,8 @@ import type {
   ListRelationshipsV1AccessControlRelationshipsGetResponses,
   ListSandboxesV1SandboxesGetData,
   ListSandboxesV1SandboxesGetResponses,
+  ListSecretsV1SecretsGetData,
+  ListSecretsV1SecretsGetResponses,
   ListSkillFilesV1SkillsSkillIdFilesGetData,
   ListSkillFilesV1SkillsSkillIdFilesGetErrors,
   ListSkillFilesV1SkillsSkillIdFilesGetResponses,
@@ -635,6 +646,9 @@ import type {
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteData,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteErrors,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteResponses,
+  RotateSecretV1SecretsSecretIdValuePutData,
+  RotateSecretV1SecretsSecretIdValuePutErrors,
+  RotateSecretV1SecretsSecretIdValuePutResponses,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
@@ -708,6 +722,9 @@ import type {
   UpdateRegistryV1RegistriesRegistryIdPatchData,
   UpdateRegistryV1RegistriesRegistryIdPatchErrors,
   UpdateRegistryV1RegistriesRegistryIdPatchResponses,
+  UpdateSecretDescriptionV1SecretsSecretIdPatchData,
+  UpdateSecretDescriptionV1SecretsSecretIdPatchErrors,
+  UpdateSecretDescriptionV1SecretsSecretIdPatchResponses,
   UpdateSkillV1SkillsSkillIdPutData,
   UpdateSkillV1SkillsSkillIdPutErrors,
   UpdateSkillV1SkillsSkillIdPutResponses,
@@ -7162,6 +7179,185 @@ export const listSandboxesV1SandboxesGet = <
     ],
     url: "/v1/sandboxes",
     ...options,
+  });
+
+/**
+ * List Secrets
+ *
+ * List the workspace's own secrets. Values are not included.
+ */
+export const listSecretsV1SecretsGet = <ThrowOnError extends boolean = false>(
+  options?: Options<ListSecretsV1SecretsGetData, ThrowOnError>
+): RequestResult<ListSecretsV1SecretsGetResponses, unknown, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListSecretsV1SecretsGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/secrets",
+    ...options,
+  });
+
+/**
+ * Create Secret
+ */
+export const createSecretV1SecretsPost = <ThrowOnError extends boolean = false>(
+  options: Options<CreateSecretV1SecretsPostData, ThrowOnError>
+): RequestResult<
+  CreateSecretV1SecretsPostResponses,
+  CreateSecretV1SecretsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateSecretV1SecretsPostResponses,
+    CreateSecretV1SecretsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/secrets",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Secret
+ */
+export const deleteSecretV1SecretsSecretIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DeleteSecretV1SecretsSecretIdDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteSecretV1SecretsSecretIdDeleteResponses,
+  DeleteSecretV1SecretsSecretIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteSecretV1SecretsSecretIdDeleteResponses,
+    DeleteSecretV1SecretsSecretIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/secrets/{secret_id}",
+    ...options,
+  });
+
+/**
+ * Get Secret
+ */
+export const getSecretV1SecretsSecretIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetSecretV1SecretsSecretIdGetData, ThrowOnError>
+): RequestResult<
+  GetSecretV1SecretsSecretIdGetResponses,
+  GetSecretV1SecretsSecretIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetSecretV1SecretsSecretIdGetResponses,
+    GetSecretV1SecretsSecretIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/secrets/{secret_id}",
+    ...options,
+  });
+
+/**
+ * Update Secret Description
+ */
+export const updateSecretDescriptionV1SecretsSecretIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateSecretDescriptionV1SecretsSecretIdPatchData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateSecretDescriptionV1SecretsSecretIdPatchResponses,
+  UpdateSecretDescriptionV1SecretsSecretIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateSecretDescriptionV1SecretsSecretIdPatchResponses,
+    UpdateSecretDescriptionV1SecretsSecretIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/secrets/{secret_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Rotate Secret
+ *
+ * Replace the stored value. Everything pointing at this secret picks up the new one.
+ */
+export const rotateSecretV1SecretsSecretIdValuePut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<RotateSecretV1SecretsSecretIdValuePutData, ThrowOnError>
+): RequestResult<
+  RotateSecretV1SecretsSecretIdValuePutResponses,
+  RotateSecretV1SecretsSecretIdValuePutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    RotateSecretV1SecretsSecretIdValuePutResponses,
+    RotateSecretV1SecretsSecretIdValuePutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/secrets/{secret_id}/value",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**

@@ -45,6 +45,7 @@ from . import (
     wallet,
     workspace_config,
     workspace_invitations,
+    workspace_secrets,
     workspaces,
 )
 
@@ -128,6 +129,10 @@ protected_v1_router.include_router(mcp_oauth_connect.router)
 
 # MCP API Keys management - PROTECTED
 protected_v1_router.include_router(api_keys.router)
+
+# Workspace secrets - PROTECTED. User-owned rows only; the secrets the platform
+# mints for a connection are managed through that connection.
+protected_v1_router.include_router(workspace_secrets.router)
 
 # MCP per-instance reverse proxy (Streamable HTTP) - PROTECTED
 protected_v1_router.include_router(mcp_proxy.router)

@@ -1,67 +1,67 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import Table from "@/components/Table/Table";
-import { StatusIndicator } from "@/components/ui/status-indicator";
-import { getMcpCatalogStatusPresentation } from "@/lib/status";
+import { SecretRowActions } from "./SecretRowActions";
 
-type MCPInstance = {
-  id: string;
-  name: string;
-  auth_type?: string | null;
-  status?: string | null;
-  created_at?: string | null;
+export type SecretConsumer = {
+  consumer_type: string;
+  consumer_id: string;
+  field: string;
 };
 
+export type Secret = {
+  id: string;
+  name: string;
+  description?: string | null;
+  updated_at?: string | null;
+  used_by?: SecretConsumer[];
+};
+
+const CONSUMER_LABELS: Record<string, string> = {
+  provider_config: "LLM provider",
+  openapi_connection: "API connection",
+  mcp_instance: "MCP connection",
+};
+
+function describeUsage(used_by: SecretConsumer[] | undefined) {
+  if (!used_by || used_by.length === 0) return "Not used yet";
+  const kinds = new Set(
+    used_by.map((c) => CONSUMER_LABELS[c.consumer_type] ?? c.consumer_type)
+  );
+  return `${used_by.length} × ${Array.from(kinds).join(", ")}`;
+}
+
 const columns = [
+  { header: "Name", accessor: "name" },
   {
-    header: "Connection name",
-    accessor: "name",
+    header: "Description",
+    accessor: "description",
+    render: (value: string | null) => value || "—",
   },
   {
-    header: "Auth type",
-    accessor: "auth_type",
-    render: (value: string | null) => value ?? "None",
+    header: "Used by",
+    accessor: "used_by",
+    render: (value: SecretConsumer[] | undefined) => describeUsage(value),
   },
   {
-    header: "Status",
-    accessor: "status",
-    render: (value: string | null) => {
-      if (!value) return "—";
-      const status = getMcpCatalogStatusPresentation(value);
-      return (
-        <StatusIndicator
-          size="sm"
-          tone={status.tone}
-          pulse={status.pulse}
-          className="whitespace-nowrap"
-        >
-          {status.label}
-        </StatusIndicator>
-      );
-    },
+    header: "Updated",
+    accessor: "updated_at",
+    render: (value: string | null) =>
+      value
+        ? new Date(value).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          })
+        : "—",
   },
   {
-    header: "Created",
-    accessor: "created_at",
-    render: (value: string | null) => {
-      if (!value) return "—";
-      return new Date(value).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-    },
+    header: "",
+    accessor: "id",
+    render: (_value: string, row: Secret) => <SecretRowActions secret={row} />,
   },
 ];
 
-export function SecretsTable({ instances }: { instances: MCPInstance[] }) {
-  const router = useRouter();
-  return (
-    <Table
-      data={instances}
-      columns={columns}
-      onRowClick={(item) => router.push(`/connections/${item.id}`)}
-    />
-  );
+export function SecretsTable({ secrets }: { secrets: Secret[] }) {
+  return <Table data={secrets} columns={columns} />;
 }

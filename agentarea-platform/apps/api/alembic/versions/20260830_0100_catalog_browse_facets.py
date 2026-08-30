@@ -16,7 +16,7 @@ repo suffix glued on with a single dash), and the exact key is restored the
 next time the registry syncs.
 
 Revision ID: 20260830_0100_catalog_facets
-Revises: 20260804_0100_drop_last_used
+Revises: 20260825_0200_pcfg_secret_fk
 Create Date: 2026-08-30
 """
 
@@ -26,7 +26,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260830_0100_catalog_facets"
-down_revision: str | None = "20260804_0100_drop_last_used"
+down_revision: str | None = "20260825_0200_pcfg_secret_fk"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
