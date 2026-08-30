@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import {
   CatalogGallerySkeleton,
+  ExploreSortSelect,
   ExploreTypeTabs,
   ExploreViewToggle,
 } from "../bundles/components/CatalogGallery";
@@ -31,7 +32,10 @@ export default async function Loading() {
       subheader={
         <>
           <ExploreTypeTabs initialType="bundles" />
-          <ExploreViewToggle initialView={initialView} />
+          <div className="flex items-center gap-2">
+            <ExploreSortSelect />
+            <ExploreViewToggle initialView={initialView} />
+          </div>
         </>
       }
     >

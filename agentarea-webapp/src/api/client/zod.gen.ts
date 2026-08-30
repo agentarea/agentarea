@@ -454,6 +454,14 @@ export const zBundleSkill = z.object({
 });
 
 /**
+ * CategoryFacet
+ */
+export const zCategoryFacet = z.object({
+  count: z.number().int(),
+  value: z.string(),
+});
+
+/**
  * CheckRequest
  */
 export const zCheckRequest = z.object({
@@ -1937,9 +1945,11 @@ export const zRegistryCreate = z.object({
  * RegistryItemResponse
  */
 export const zRegistryItemResponse = z.object({
+  category: z.string().nullish(),
   created_at: z.string(),
   description: z.string().nullable(),
   external_id: z.string(),
+  featured: z.boolean().optional().default(false),
   id: z.string().uuid(),
   installed_entity_id: z.string().uuid().nullable(),
   installed_version: z.string().nullable(),
@@ -1950,6 +1960,22 @@ export const zRegistryItemResponse = z.object({
   update_available: z.boolean(),
   updated_at: z.string(),
   version: z.string().nullable(),
+});
+
+/**
+ * CatalogBrowseResponse
+ *
+ * One page of a type's catalog plus the context needed to browse it.
+ *
+ * ``total`` and ``categories`` cover the whole filtered catalog, not the page:
+ * without them a page that happens to contain no visible matches is
+ * indistinguishable from the end of the catalog, and facet counts drift as
+ * more pages load.
+ */
+export const zCatalogBrowseResponse = z.object({
+  categories: z.array(zCategoryFacet),
+  items: z.array(zRegistryItemResponse),
+  total: z.number().int(),
 });
 
 /**
@@ -4723,6 +4749,21 @@ export const zCreateRegistryV1RegistriesPostBody = zRegistryCreate;
  * Successful Response
  */
 export const zCreateRegistryV1RegistriesPostResponse = zRegistryResponse;
+
+export const zBrowseCatalogV1RegistriesCatalogBrowseGetQuery = z.object({
+  registry_type: z.string(),
+  q: z.string().nullish(),
+  category: z.string().nullish(),
+  sort: z.string().nullish(),
+  limit: z.number().int().gte(1).lte(500).optional().default(50),
+  offset: z.number().int().gte(0).optional().default(0),
+});
+
+/**
+ * Successful Response
+ */
+export const zBrowseCatalogV1RegistriesCatalogBrowseGetResponse =
+  zCatalogBrowseResponse;
 
 export const zGetCatalogItemV1RegistriesCatalogItemsItemIdGetPath = z.object({
   item_id: z.string().uuid(),

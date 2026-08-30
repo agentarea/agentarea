@@ -1311,6 +1311,43 @@ export type BundleSkill = {
     source_url?: string | null;
 };
 /**
+ * CatalogBrowseResponse
+ *
+ * One page of a type's catalog plus the context needed to browse it.
+ *
+ * ``total`` and ``categories`` cover the whole filtered catalog, not the page:
+ * without them a page that happens to contain no visible matches is
+ * indistinguishable from the end of the catalog, and facet counts drift as
+ * more pages load.
+ */
+export type CatalogBrowseResponse = {
+    /**
+     * Categories
+     */
+    categories: Array<CategoryFacet>;
+    /**
+     * Items
+     */
+    items: Array<RegistryItemResponse>;
+    /**
+     * Total
+     */
+    total: number;
+};
+/**
+ * CategoryFacet
+ */
+export type CategoryFacet = {
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Value
+     */
+    value: string;
+};
+/**
  * CheckRequest
  */
 export type CheckRequest = {
@@ -4632,6 +4669,10 @@ export type RegistryCreate = {
  */
 export type RegistryItemResponse = {
     /**
+     * Category
+     */
+    category?: string | null;
+    /**
      * Created At
      */
     created_at: string;
@@ -4643,6 +4684,10 @@ export type RegistryItemResponse = {
      * External Id
      */
     external_id: string;
+    /**
+     * Featured
+     */
+    featured?: boolean;
     /**
      * Id
      */
@@ -11408,6 +11453,59 @@ export type CreateRegistryV1RegistriesPostResponses = {
     200: RegistryResponse;
 };
 export type CreateRegistryV1RegistriesPostResponse = CreateRegistryV1RegistriesPostResponses[keyof CreateRegistryV1RegistriesPostResponses];
+export type BrowseCatalogV1RegistriesCatalogBrowseGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Registry Type
+         *
+         * Catalog type to browse
+         */
+        registry_type: string;
+        /**
+         * Q
+         *
+         * Free-text filter over name and description
+         */
+        q?: string | null;
+        /**
+         * Category
+         *
+         * Restrict to one category facet
+         */
+        category?: string | null;
+        /**
+         * Sort
+         *
+         * 'featured' (default) or 'name'
+         */
+        sort?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/v1/registries/catalog/browse';
+};
+export type BrowseCatalogV1RegistriesCatalogBrowseGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type BrowseCatalogV1RegistriesCatalogBrowseGetError = BrowseCatalogV1RegistriesCatalogBrowseGetErrors[keyof BrowseCatalogV1RegistriesCatalogBrowseGetErrors];
+export type BrowseCatalogV1RegistriesCatalogBrowseGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogBrowseResponse;
+};
+export type BrowseCatalogV1RegistriesCatalogBrowseGetResponse = BrowseCatalogV1RegistriesCatalogBrowseGetResponses[keyof BrowseCatalogV1RegistriesCatalogBrowseGetResponses];
 export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetData = {
     body?: never;
     path: {
