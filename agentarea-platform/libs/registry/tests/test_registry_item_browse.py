@@ -205,10 +205,40 @@ class TestCategoryCounts:
         counts = await item_repo.category_counts("skills")
         assert all(value is not None for value, _ in counts)
 
-    async def test_ordered_by_count_then_name(self, db_session, item_repo, catalog):
+    async def test_ordered_alphabetically_so_the_list_is_scannable(self, db_session, item_repo, catalog):
+        # Ordering by count put a category wherever its size happened to land,
+        # so finding a known one meant reading the whole sidebar. The counts are
+        # flat anyway (most categories hold one or two items), so size bought
+        # nothing.
         a, _ = catalog
         await _item(item_repo, a, "6", "six", tags=["category:alpha"])
-        assert await item_repo.category_counts("skills") == [("data", 2), ("alpha", 1), ("other", 1)]
+        assert await item_repo.category_counts("skills") == [
+            ("alpha", 1),
+            ("data", 2),
+            ("other", 1),
+        ]
+
+    async def test_the_fallback_bucket_sorts_last_however_big_it_is(self, db_session, item_repo, catalog):
+        # "other" is where the source puts what it couldn't classify -- a
+        # fallback, not a peer. Alphabetically it would land mid-list, and by
+        # size it sat near the top; neither is where it belongs.
+        a, _ = catalog
+        for n in range(5):
+            await _item(item_repo, a, f"pad-{n}", f"pad {n}", tags=["category:other"])
+        counts = await item_repo.category_counts("skills")
+        assert counts[-1][0] == "other"
+        assert counts[-1][1] == 6
+        assert [value for value, _ in counts] == ["data", "other"]
+
+    async def test_a_category_named_like_the_fallback_is_not_demoted(self, db_session, item_repo, catalog):
+        # Only the exact fallback value is special; "other-tools" is a category.
+        a, _ = catalog
+        await _item(item_repo, a, "7", "seven", tags=["category:other-tools"])
+        assert [v for v, _ in await item_repo.category_counts("skills")] == [
+            "data",
+            "other-tools",
+            "other",
+        ]
 
     async def test_counts_respect_the_search_query(self, item_repo, catalog):
         assert await item_repo.category_counts("skills", q="two") == [("data", 1)]

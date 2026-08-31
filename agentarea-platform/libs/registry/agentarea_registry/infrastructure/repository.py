@@ -12,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -31,6 +31,11 @@ CATALOG_SORTS: dict[str, Any] = {
     "name": lambda: (RegistryItem.sort_key.asc(), RegistryItem.id.asc()),
 }
 DEFAULT_CATALOG_SORT = "featured"
+
+# The category sources fall back to when they can't classify an entry. It is a
+# bucket, not a peer category, so the facet list sorts it last rather than
+# letting it land mid-alphabet or -- as ordering by size did -- near the top.
+FALLBACK_CATEGORY = "other"
 
 
 class RegistryRepository:
@@ -244,6 +249,12 @@ class RegistryItemRepository:
         Deliberately ignores any active category filter -- the sidebar has to
         keep showing the other categories you could switch to. Uncategorised
         items are left out rather than collected into a bucket nothing selects.
+
+        Ordered alphabetically, with the fallback bucket last. Ordering by size
+        put each category wherever its count happened to land, so finding a
+        known one meant reading the whole list -- and the counts are flat
+        enough (most categories hold one or two entries) that size conveyed
+        nothing to begin with.
         """
         conditions = self._browse_filter(registry_type, q, category=None)
         query = (
@@ -251,7 +262,10 @@ class RegistryItemRepository:
             .join(Registry, RegistryItem.registry_id == Registry.id)
             .where(*conditions, RegistryItem.category.is_not(None))
             .group_by(RegistryItem.category)
-            .order_by(func.count().desc(), RegistryItem.category.asc())
+            .order_by(
+                case((RegistryItem.category == FALLBACK_CATEGORY, 1), else_=0),
+                RegistryItem.category.asc(),
+            )
         )
         rows = (await self.session.execute(query)).all()
         return [(value, count) for value, count in rows]
