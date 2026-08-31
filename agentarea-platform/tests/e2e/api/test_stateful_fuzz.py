@@ -36,25 +36,35 @@ def _bootstrap_jwt() -> str:
         return _mint_user(admin, public, email).jwt
 
 
-_JWT = os.environ.get("FUZZ_JWT") or _bootstrap_jwt()
+# Both the JWT mint and the schema load happen at import time and need the stack
+# up, so @pytest.mark.integration on the test cannot help — the module fails to
+# import before markers are consulted, aborting collection for the whole suite.
+try:
+    _JWT = os.environ.get("FUZZ_JWT") or _bootstrap_jwt()
 
-_schema = schemathesis.openapi.from_url(
-    f"{API_URL}/openapi.json",
-    headers={"Authorization": f"Bearer {_JWT}"},
-).exclude(
-    path_regex=(
-        r".*/events/stream$"
-        r"|^/webhooks/"
-        r"|^/\.well-known/"
-        r"|/a2a/"
-        r"|^/oauth2/"
-        r"|/mcp-oauth/"
-        r"|/asyncapi"
-        # /v1/agents and /v1/agents/ are duplicates in the spec; schemathesis
-        # can't disambiguate. Keep the trailing-slash variant (canonical) only.
-        r"|^/v1/agents$"
-    ),
-)
+    _schema = schemathesis.openapi.from_url(
+        f"{API_URL}/openapi.json",
+        headers={"Authorization": f"Bearer {_JWT}"},
+    ).exclude(
+        path_regex=(
+            r".*/events/stream$"
+            r"|^/webhooks/"
+            r"|^/\.well-known/"
+            r"|/a2a/"
+            r"|^/oauth2/"
+            r"|/mcp-oauth/"
+            r"|/asyncapi"
+            # /v1/agents and /v1/agents/ are duplicates in the spec; schemathesis
+            # can't disambiguate. Keep the trailing-slash variant (canonical) only.
+            r"|^/v1/agents$"
+        ),
+    )
+except httpx.HTTPError as exc:
+    pytest.skip(
+        f"Live API stack unreachable ({type(exc).__name__}): {exc}. "
+        "Start it with `make up-dev`, or set FUZZ_JWT to skip the Kratos bootstrap.",
+        allow_module_level=True,
+    )
 
 BaseWorkflow = _schema.as_state_machine()
 

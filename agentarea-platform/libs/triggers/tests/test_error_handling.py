@@ -365,14 +365,24 @@ class TestTemporalScheduleManagerErrorHandling:
         """Create TemporalScheduleManager with mocked client."""
         return TemporalScheduleManager(temporal_client)
 
-    async def test_create_cron_schedule_no_client(self):
-        """Test schedule creation when client is unavailable."""
-        # Setup - no client. Mark as already "connected" so ``_ensure_client``
-        # short-circuits without building WorkflowSettings (which would raise a
-        # pydantic ValidationError for missing env), leaving ``client`` None so
-        # the no-client guard is exercised.
+    async def test_create_cron_schedule_no_client(self, monkeypatch):
+        """Test schedule creation when client is unavailable.
+
+        Setting ``_connected = True`` used to be enough to keep ``_ensure_client``
+        from reaching out, but its guard is ``self._connected and self.client is
+        not None`` — with a None client it fell through to a real
+        ``Client.connect``, so this unit test tried to open a TCP connection to
+        the Temporal server named in pytest.ini and failed on connection refused
+        rather than on the guard it means to exercise. Stub the connect step so
+        the no-client branch is reached without any I/O.
+        """
         schedule_manager = TemporalScheduleManager(None)
         schedule_manager._connected = True
+
+        async def _no_connect():
+            return None
+
+        monkeypatch.setattr(schedule_manager, "_ensure_client", _no_connect)
         trigger_id = uuid4()
 
         # Execute and verify

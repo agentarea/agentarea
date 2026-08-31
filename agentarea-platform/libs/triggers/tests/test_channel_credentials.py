@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_triggers.channels.email import EmailAdapter
+from agentarea_triggers.channels.exceptions import FatalError
 from agentarea_triggers.channels.telegram import TelegramAdapter
 
 
@@ -138,17 +139,21 @@ class TestEmailAdapterSecretStore:
         )
 
     @pytest.mark.asyncio
-    async def test_no_trigger_id_returns_none(self, adapter):
-        """Without trigger_id, returns None."""
+    async def test_no_trigger_id_raises(self, adapter):
+        """Without trigger_id the adapter fails loudly rather than returning None.
+
+        _resolve_smtp_credentials used to return None here, which sent the channel
+        on unauthenticated instead of saying it was misconfigured. It now raises
+        FatalError — fatal because redelivery cannot fix a missing trigger_id.
+        """
         channel_config = {"type": "email", "reply_to": "user@test.com"}
 
-        creds = await adapter._resolve_smtp_credentials(channel_config)
-
-        assert creds is None
+        with pytest.raises(FatalError, match="trigger_id"):
+            await adapter._resolve_smtp_credentials(channel_config)
 
     @pytest.mark.asyncio
-    async def test_no_secret_manager_returns_none(self):
-        """Without secret_manager, returns None."""
+    async def test_no_secret_manager_raises(self):
+        """Without a secret_manager the adapter fails loudly rather than returning None."""
         adapter = EmailAdapter()
         channel_config = {
             "type": "email",
@@ -156,9 +161,8 @@ class TestEmailAdapterSecretStore:
             "reply_to": "user@test.com",
         }
 
-        creds = await adapter._resolve_smtp_credentials(channel_config)
-
-        assert creds is None
+        with pytest.raises(FatalError, match="secret_manager"):
+            await adapter._resolve_smtp_credentials(channel_config)
 
 
 class TestChannelOriginTriggerID:

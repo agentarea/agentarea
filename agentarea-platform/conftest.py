@@ -243,8 +243,23 @@ def pytest_configure(config):
     )
 
 
+# Directories whose contents need live infrastructure (Postgres, Temporal, the
+# API) and therefore cannot run in the hermetic gate.
+_INFRA_TEST_DIRS = ("/tests/e2e/", "/tests/integration/")
+
+
 def pytest_collection_modifyitems(config, items):
-    """Record which main flows are exercised, for the flow-registry guard."""
+    """Record exercised main flows, and mark infra-dependent tests as integration.
+
+    The marker used to be applied per file, and 40 of the 95 files under the e2e
+    and integration directories never got one. That did not show while the gate
+    collected a hand-listed set of paths, but collecting everything means an
+    unmarked file there tries to reach Temporal or Postgres and either errors or
+    hangs the whole run. Marking by location makes the rule structural: a new file
+    in those directories is excluded from the hermetic gate on arrival, and
+    `make test-integration` (which does not filter on the marker) still runs it.
+    """
+    import pytest
     from agentarea_common.testing.flows import COVERED_FLOWS
 
     for item in items:
@@ -252,6 +267,10 @@ def pytest_collection_modifyitems(config, items):
             if marker.args:
                 flow = marker.args[0]
                 COVERED_FLOWS.add(getattr(flow, "value", flow))
+
+        path = item.path.as_posix() if hasattr(item, "path") else str(item.fspath)
+        if any(part in path for part in _INFRA_TEST_DIRS):
+            item.add_marker(pytest.mark.integration)
 
 
 # SQLite-backed Temporal server fixtures (see module docstring for when to use).
