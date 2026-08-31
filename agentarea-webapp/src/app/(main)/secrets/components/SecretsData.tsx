@@ -32,16 +32,8 @@ export async function SecretsData() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-sm font-medium">Workspace secrets</h2>
-          <p className="text-sm text-muted-foreground">
-            Every credential this workspace holds. Values are encrypted and
-            never shown again once saved. The ones marked managed belong to a
-            connection and are changed there; your own can be reused across
-            several connections, and rotating one updates all of them at once.
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-sm font-medium">Workspace secrets</h2>
         <CreateSecretDialog />
       </div>
 
