@@ -172,8 +172,11 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 	// Generate container name using the sanitized service name
 	containerName := m.config.GetContainerName(req.ServiceName)
 
-	// Check container limit
-	if len(m.containers) >= m.config.Container.MaxContainers {
+	// Check container limit. Counted over workloads the host is actually
+	// carrying, not over every record we hold: a stopped or failed container
+	// occupies no memory, and spending the ceiling on it wedges the host for
+	// good, since nothing removes those records on its own.
+	if occupied := m.occupiedSlotsUnsafe(); occupied >= m.config.Container.MaxContainers {
 		return nil, fmt.Errorf("maximum container limit reached (%d)", m.config.Container.MaxContainers)
 	}
 
@@ -472,6 +475,33 @@ func (m *Manager) GetRunningCount() int {
 // IMPORTANT: This method is not thread-safe and should only be used when the caller
 // already holds the mutex or when thread safety is not required (e.g., during validation)
 // nolint:unused // May be used for debugging or future features
+// occupiedSlotsUnsafe counts the containers that consume host resources.
+//
+// MaxContainers exists to keep a host inside its memory: the default limit per
+// container is 512m, and the RU sandbox host carries eight of them on 8 GB. So
+// the number to compare against it is the number of live workloads, including
+// the ones on the way up and down -- admitting another while one is still
+// starting is how a host is over-committed.
+//
+// Stopped and failed containers are records of something that used to run.
+// Eleven of them, all pinned to a registry deleted with a previous cluster,
+// held every slot on that host for two days while the machine sat idle, and
+// every MCP launch was refused with "maximum container limit reached (8)".
+//
+// Not thread-safe: callers must already hold the mutex.
+func (m *Manager) occupiedSlotsUnsafe() int {
+	count := 0
+	for _, container := range m.containers {
+		switch container.Status {
+		case models.StatusStopped, models.StatusError:
+			// Holds nothing; leaves the slot free.
+		default:
+			count++
+		}
+	}
+	return count
+}
+
 func (m *Manager) getRunningCountUnsafe() int {
 	count := 0
 	for _, container := range m.containers {
