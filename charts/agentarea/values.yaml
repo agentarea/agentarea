@@ -48,6 +48,18 @@ global:
     # Application secrets (JWT, encryption keys)
     application: "agentarea-app-secrets"
 
+    # Set true when the Secret named above is pre-provisioned -- ExternalSecret,
+    # SOPS, SealedSecret, or the customer's own manager -- and the chart should
+    # not render it.
+    #
+    # Turn it on for anything you cannot afford to rebuild. encryption-key
+    # decrypts every row of encrypted_secrets, and the chart's fallback invents
+    # a new one whenever the Secret is absent: `lookup` returns nothing under
+    # `helm template`, so under ArgoCD it is re-invented on every render and only
+    # ignoreDifferences keeps the cluster on one value. A fresh cluster restored
+    # from a database backup gets a key that opens none of its own data.
+    applicationExistingSecret: false
+
   # Pre-provision this Secret through SOPS/SealedSecret/ExternalSecret or the
   # customer's secret manager. The chart never generates these cross-service
   # credentials, which keeps ArgoCD rendering deterministic.
