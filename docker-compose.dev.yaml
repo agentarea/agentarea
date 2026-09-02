@@ -270,10 +270,9 @@ services:
     volumes:
       - ./agentarea-mcp-manager:/app:rw # Mount source code for live reload
       - /var/run/docker.sock:/var/run/docker.sock # Docker socket for container management
-      # Where `deploy/sandbox-host` writes the execution cluster's kubeconfig.
-      # Mounted read-only and unused unless MCP_BACKEND_TYPE selects kubernetes;
-      # see the environment block below.
-      - ./deploy/sandbox-host:/etc/agentarea/exec:ro
+      # To drive an execution cluster from here, mount its kubeconfig read-only
+      # and select the kubernetes backend in the environment block below:
+      #   - /path/to/execution-cluster.kubeconfig:/etc/agentarea/exec/kubeconfig:ro
     networks:
       - mcp-network
       - default
@@ -299,12 +298,12 @@ services:
       #   docker      (default) — on this host's Docker daemon, i.e. beside the
       #                control plane, on its kernel. Fine for development.
       #   kubernetes  — on the cluster named by KUBERNETES_KUBECONFIG, under the
-      #                runtime class below. This is how you point the stack at
-      #                the gVisor host provisioned by deploy/sandbox-host with
-      #                sandbox_k3s_enabled=true:
+      #                runtime class below. This is how you point the stack at a
+      #                gVisor execution cluster (docs/serverless-mcp.md), whose
+      #                kubeconfig you mount in the volumes block above:
       #
       #     MCP_BACKEND_TYPE=kubernetes
-      #     MCP_EXECUTION_KUBECONFIG=/etc/agentarea/exec/execution-cluster.kubeconfig
+      #     MCP_EXECUTION_KUBECONFIG=/etc/agentarea/exec/kubeconfig
       #     MCP_RUNTIME_CLASS=gvisor
       #
       # An unrecognised value is refused at startup rather than quietly

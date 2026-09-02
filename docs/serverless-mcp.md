@@ -79,21 +79,24 @@ fails here needs an escape hatch, and it is much cheaper to learn that now.
 
 **1. An execution cluster.** gVisor needs no KVM or nested virtualization, so
 any ordinary VM will do — you do not need bare metal or a special instance
-family. One box is enough to start:
+family. One box is enough to start. Build it however you build machines; it has
+to end up with:
+
+- a Kubernetes distribution the control plane can reach (k3s on a single node is
+  plenty),
+- `runsc` registered with containerd as a runtime handler,
+- a `RuntimeClass` named `gvisor` pointing at that handler,
+- a kubeconfig whose API address is reachable from the control plane, which is
+  usually not the address the installer writes into it.
+
+Prove the substrate before trusting it — that a `RuntimeClass` exists says
+nothing about whether a pod can actually run under it:
 
 ```bash
-cd deploy/sandbox-host
-cp inventory.example.ini inventory.ini      # put the host's address in
-ansible-playbook -i inventory.ini site.yml \
-  -e sandbox_k3s_enabled=true \
-  -e sandbox_activation_auth_secret="$SANDBOX_ACTIVATION_AUTH_SECRET"
+kubectl run gvisor-check --rm -it --restart=Never \
+  --overrides='{"spec":{"runtimeClassName":"gvisor"}}' \
+  --image=busybox -- dmesg | head -1     # gVisor announces itself here
 ```
-
-This installs k3s, registers `runsc` with containerd, and creates the `gvisor`
-RuntimeClass. It refuses to finish unless a pod really ran under gVisor, so a
-green run means the substrate works. It leaves a kubeconfig at
-`./execution-cluster.kubeconfig` with the API address rewritten to something
-reachable.
 
 **2. Point the control plane at it.**
 

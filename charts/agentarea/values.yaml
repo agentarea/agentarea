@@ -707,8 +707,8 @@ mcpManager:
   # The cluster MCP instances and agent sandboxes are created in, when that is
   # not the cluster the control plane itself runs in. Runtime class confines
   # untrusted code to its own kernel; this moves it onto other machines
-  # entirely. `deploy/sandbox-host` provisions such a cluster and leaves a
-  # kubeconfig behind.
+  # entirely. What such a cluster has to provide is in
+  # docs/serverless-mcp.md; building it is yours, not this chart's.
   #
   # Leaving kubeconfigSecret empty means "create workloads in the cluster I am
   # in". That is discovery, not a fallback: nothing was declared to fall back
