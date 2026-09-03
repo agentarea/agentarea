@@ -34,6 +34,7 @@ from agentarea_agents.schemas.skills_dto import (
     SkillImportFromGithub,
 )
 from agentarea_api.tools.agents_toolset import AgentsToolset
+from agentarea_api.tools.clients_toolset import ClientsToolset
 from agentarea_api.tools.mcp_servers_toolset import MCPServersToolset
 from agentarea_api.tools.openapi_connections_toolset import OpenAPIConnectionsToolset
 from agentarea_api.tools.projects_toolset import ProjectsToolset
@@ -42,6 +43,7 @@ from agentarea_api.tools.runs_toolset import RunsToolset
 from agentarea_api.tools.skills_toolset import SkillsToolset
 from agentarea_api.tools.triggers_toolset import TriggersToolset
 from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
+from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
 from agentarea_mcp.schemas.dto import (
     MCPServerCreate,
     MCPServerInstanceCreate,
@@ -71,6 +73,8 @@ PAIRS: list[Pair] = [
     Pair("runs.start", RunsToolset.start, RunCreate),
     Pair("projects.create", ProjectsToolset.create, ProjectCreate),
     Pair("projects.update", ProjectsToolset.update, ProjectUpdate),
+    Pair("clients.create", ClientsToolset.create, ClientCreate),
+    Pair("clients.update", ClientsToolset.update, ClientUpdate),
     Pair("providers.create_config", ProvidersToolset.create_config, ProviderConfigCreate),
     Pair("providers.update_config", ProvidersToolset.update_config, ProviderConfigUpdate),
     Pair(
@@ -134,6 +138,8 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
     "runs.start": {"task_policy", "execution"},
     "projects.create": set(),
     "projects.update": set(),
+    "clients.create": set(),
+    "clients.update": set(),
     "providers.create_config": set(),
     "providers.update_config": set(),
     "openapi_connections.create": set(),
@@ -180,6 +186,7 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
 # field — not as a path-like — and must be exposed normally.
 PATH_LIKE_KWARGS = {
     "agent_id",
+    "client_id",
     "config_id",
     "connection_id",
     "id",
