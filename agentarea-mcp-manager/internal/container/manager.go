@@ -471,10 +471,6 @@ func (m *Manager) GetRunningCount() int {
 	return count
 }
 
-// getRunningCountUnsafe returns the number of running containers without locking
-// IMPORTANT: This method is not thread-safe and should only be used when the caller
-// already holds the mutex or when thread safety is not required (e.g., during validation)
-// nolint:unused // May be used for debugging or future features
 // occupiedSlotsUnsafe counts the containers that consume host resources.
 //
 // MaxContainers exists to keep a host inside its memory: the default limit per
@@ -496,16 +492,6 @@ func (m *Manager) occupiedSlotsUnsafe() int {
 		case models.StatusStopped, models.StatusError:
 			// Holds nothing; leaves the slot free.
 		default:
-			count++
-		}
-	}
-	return count
-}
-
-func (m *Manager) getRunningCountUnsafe() int {
-	count := 0
-	for _, container := range m.containers {
-		if container.Status == models.StatusRunning {
 			count++
 		}
 	}
@@ -1254,7 +1240,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 	}
 
 	// Check container limit
-	if len(m.containers) >= m.config.Container.MaxContainers {
+	if occupied := m.occupiedSlotsUnsafe(); occupied >= m.config.Container.MaxContainers {
 		return fmt.Errorf("maximum container limit reached (%d)", m.config.Container.MaxContainers)
 	}
 
