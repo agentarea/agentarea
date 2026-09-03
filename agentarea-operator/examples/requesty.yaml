@@ -1,0 +1,18 @@
+# Example: Requesty through the existing OpenAI-compatible provider
+# Requesty uses the OpenAI API shape, so no dedicated ProviderSpec is required.
+# 1. Create the secret: kubectl create secret generic requesty-api-key --from-literal=api-key=$REQUESTY_API_KEY -n agentarea-staging
+# 2. Apply this: kubectl apply -f requesty.yaml
+apiVersion: agentarea.io/v1alpha1
+kind: LLMProviderConfig
+metadata:
+  name: requesty-production
+  namespace: agentarea-staging
+spec:
+  providerKey: openai
+  name: "Requesty"
+  endpointUrl: "https://router.requesty.ai/v1"
+  apiKeySecretRef:
+    name: requesty-api-key
+    key: api-key
+  discoverModels: true
+  isPublic: true
