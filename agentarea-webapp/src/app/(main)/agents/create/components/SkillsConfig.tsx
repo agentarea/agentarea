@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import Note from "@/components/ui/note";
 import { listSkillsAction as listSkills } from "@/lib/server-actions";
 import type { AgentSkill } from "../types";
-import AccordionControl from "./AccordionControl";
-import ConfigSheet from "./ConfigSheet";
+import AccordionControl from "@/components/AccordionControl";
+import ConfigSheet from "@/components/ConfigSheet";
 import { SelectableList } from "@/components/SelectableList";
 
 type SkillsConfigProps = {

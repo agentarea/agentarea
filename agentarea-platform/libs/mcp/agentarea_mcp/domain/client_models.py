@@ -1,9 +1,8 @@
 """Client (agent-proxy) domain models.
 
 A Client is a governable principal that is *not* runnable — it represents an
-external harness (codex, claude-code, …) that pulls a scoped set of MCP server
-instances and skills. Its tool set is either its own attachments, the ones
-pulled from a source Project, or the union of both.
+external harness (codex, claude-code, …) that connects to a scoped set of MCP
+server instances and skills. Its tool set is exactly its own attachments.
 """
 
 from __future__ import annotations
@@ -65,11 +64,6 @@ class Client(BaseModel, WorkspaceScopedMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     kind: Mapped[str] = mapped_column(String(32), nullable=False, default="harness")
-    source_project_id: Mapped[str | None] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("projects.id", ondelete="SET NULL"),
-        nullable=True,
-    )
 
     skills: Mapped[list[Skill]] = relationship(
         "Skill",
