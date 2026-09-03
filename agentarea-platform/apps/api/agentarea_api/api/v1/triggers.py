@@ -286,14 +286,24 @@ def _check_triggers_availability():
 
 
 async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) -> bool:
-    """Check if channel credentials exist for a trigger."""
+    """Check if channel credentials exist for a trigger.
+
+    Presence only — the value is never read, so a credential this deployment can
+    no longer decrypt still reports as configured. And because this is one
+    display flag on the response, a store that cannot answer at all costs the
+    flag, not the trigger: reading a trigger used to fail outright whenever its
+    credential had become unreadable.
+    """
     channel_type = "generic"
     if hasattr(trigger, "webhook_type"):
         wt = trigger.webhook_type
         channel_type = wt.value if hasattr(wt, "value") else str(wt)
     secret_name = f"channel_cred:{channel_type}:{trigger_id}"
-    raw = await secret_manager.get_secret(secret_name)
-    return raw is not None
+    try:
+        return await secret_manager.has_secret(secret_name)
+    except Exception as e:
+        logger.warning(f"Could not resolve channel credentials for trigger {trigger_id}: {e}")
+        return False
 
 
 # API Endpoints
