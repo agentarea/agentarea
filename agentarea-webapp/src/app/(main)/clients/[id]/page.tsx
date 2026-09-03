@@ -152,7 +152,7 @@ export default function ClientDetailPage() {
                 setShowEdit(true);
               }}
             >
-              <Pencil className="h-4 w-4" />
+              <Pencil />
               Edit
             </Button>
             <DeleteButton
@@ -303,7 +303,7 @@ export default function ClientDetailPage() {
               onClick={handleSave}
               disabled={!editName.trim() || saving}
             >
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {saving && <Loader2 className="animate-spin" />}
               Save
             </Button>
           </DialogFooter>

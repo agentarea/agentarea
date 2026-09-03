@@ -218,9 +218,9 @@ export function AttachmentSection<T extends AttachmentItem>({
                     aria-label={`Remove ${item.name}`}
                   >
                     {pendingId === item.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="animate-spin" />
                     ) : (
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 />
                     )}
                   </Button>
                 }
