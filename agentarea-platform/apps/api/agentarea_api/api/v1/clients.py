@@ -39,10 +39,6 @@ class McpInstanceAssociationBody(BaseModel):
     namespace_prefix: str | None = None
 
 
-class SourceProjectBody(BaseModel):
-    project_id: str | None = None
-
-
 class ClientRef(BaseModel):
     id: UUID
     name: str
@@ -57,7 +53,6 @@ class ClientResponse(BaseModel):
     name: str
     description: str | None
     kind: str
-    source_project_id: str | None
     skills: list[ClientRef] = []
     mcp_instances: list[ClientRef] = []
     mcp_endpoint_url: str | None = None
@@ -70,14 +65,15 @@ class ClientResponse(BaseModel):
         return v if v is not None else []
 
 
-def _mcp_endpoint_url(client_id: UUID) -> str:
+def client_mcp_endpoint_url(client_id: UUID) -> str:
+    """URL a harness connects to. Shared with the clients toolset — one shape."""
     base = get_app_settings().API_BASE_URL.rstrip("/")
     return f"{base}/client-mcp/{client_id}"
 
 
 def _to_response(client) -> ClientResponse:
     resp = ClientResponse.model_validate(client)
-    resp.mcp_endpoint_url = _mcp_endpoint_url(client.id)
+    resp.mcp_endpoint_url = client_mcp_endpoint_url(client.id)
     return resp
 
 
@@ -181,16 +177,3 @@ async def remove_mcp_instance_from_client(
     service: ClientServiceDep,
 ):
     await service.remove_mcp_instance(client_id, mcp_instance_id)
-
-
-@router.post("/{client_id}/pull-from-project", response_model=ClientResponse)
-async def pull_from_project(
-    client_id: UUID,
-    body: SourceProjectBody,
-    user_context: UserContextDep,
-    service: ClientServiceDep,
-):
-    client = await service.set_source_project(client_id, body.project_id)
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    return _to_response(client)

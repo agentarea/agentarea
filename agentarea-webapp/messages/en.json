@@ -939,7 +939,8 @@
       "blocked": "Blocked",
       "cancelled": "Cancelled",
       "paused": "Paused",
-      "pending": "Pending"
+      "pending": "Pending",
+      "scheduled": "Scheduled"
     },
     "tabs": {
       "overview": "Overview",

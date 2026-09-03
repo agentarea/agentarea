@@ -3,6 +3,7 @@ package container
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -255,5 +256,63 @@ func TestDeadlockPrevention(t *testing.T) {
 		// Test passed - no deadlock
 	case <-ctx.Done():
 		t.Fatal("Deadlock detected - GetRunningCount calls did not complete within timeout")
+	}
+}
+
+// A container that is stopped or failed holds no memory, no CPU and no port on
+// the host — it is a record of something that used to run. Counting it against
+// MaxContainers spends a ceiling meant to protect the host's RAM on corpses.
+//
+// This is not hypothetical. Eleven such records — every one pinned to a registry
+// deleted with the previous cluster, all stopped or error — filled the RU host's
+// eight slots for two days, and every MCP launch failed with "maximum container
+// limit reached (8)" while the machine sat idle.
+func TestOccupiedSlotsIgnoresDeadContainers(t *testing.T) {
+	cfg := &config.Config{
+		Container: config.ContainerConfig{
+			NamePrefix:    "test-",
+			MaxContainers: 8,
+		},
+		Redis: config.RedisConfig{
+			URL: "redis://localhost:6379",
+		},
+	}
+	manager := NewManager(cfg, slog.New(slog.NewTextHandler(os.Stdout, nil)))
+
+	dead := []models.ContainerStatus{
+		models.StatusStopped,
+		models.StatusError,
+		models.StatusStopped,
+	}
+	for i, status := range dead {
+		manager.containers[fmt.Sprintf("dead-%d", i)] = &models.Container{
+			Name:   fmt.Sprintf("dead-%d", i),
+			Status: status,
+		}
+	}
+
+	if got := manager.occupiedSlotsUnsafe(); got != 0 {
+		t.Fatalf("dead containers must not occupy slots, got %d", got)
+	}
+
+	// Everything else is a workload the host is actually carrying, including the
+	// states on the way up and down — admitting more while one is still starting
+	// is how a host is over-committed.
+	alive := []models.ContainerStatus{
+		models.StatusStarting,
+		models.StatusRunning,
+		models.StatusHealthy,
+		models.StatusUnhealthy,
+		models.StatusStopping,
+	}
+	for i, status := range alive {
+		manager.containers[fmt.Sprintf("alive-%d", i)] = &models.Container{
+			Name:   fmt.Sprintf("alive-%d", i),
+			Status: status,
+		}
+	}
+
+	if got, want := manager.occupiedSlotsUnsafe(), len(alive); got != want {
+		t.Fatalf("expected %d occupied slots, got %d", want, got)
 	}
 }

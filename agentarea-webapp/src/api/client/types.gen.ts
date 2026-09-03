@@ -707,6 +707,20 @@ export type ApprovalPolicy = {
 };
 
 /**
+ * ArchivedFileResponse
+ */
+export type ArchivedFileResponse = {
+  /**
+   * Archived Path
+   */
+  archived_path: string;
+  /**
+   * Path
+   */
+  path: string;
+};
+
+/**
  * ArtifactEventResponse
  */
 export type ArtifactEventResponse = {
@@ -878,6 +892,10 @@ export type BodyUploadFileV1FilesPost = {
    * File
    */
   file: Blob | File;
+  /**
+   * Path
+   */
+  path?: string;
   /**
    * Purpose
    */
@@ -1451,10 +1469,6 @@ export type ClientCreate = {
    * Name
    */
   name: string;
-  /**
-   * Source Project Id
-   */
-  source_project_id?: string | null;
 };
 
 /**
@@ -1508,10 +1522,6 @@ export type ClientResponse = {
    */
   skills?: Array<ClientRef>;
   /**
-   * Source Project Id
-   */
-  source_project_id: string | null;
-  /**
    * Workspace Id
    */
   workspace_id: string;
@@ -1535,10 +1545,6 @@ export type ClientUpdate = {
    * Name
    */
   name?: string | null;
-  /**
-   * Source Project Id
-   */
-  source_project_id?: string | null;
 };
 
 /**
@@ -5183,6 +5189,20 @@ export type ResolveResponse = {
 };
 
 /**
+ * RestoredFileResponse
+ */
+export type RestoredFileResponse = {
+  /**
+   * Path
+   */
+  path: string;
+  /**
+   * Restored From
+   */
+  restored_from: string;
+};
+
+/**
  * RunExecutionConfig
  *
  * Caller-requested execution ceiling; governance may only tighten it.
@@ -5281,6 +5301,42 @@ export type SandboxSummary = {
    * Task Id
    */
   task_id: string;
+};
+
+/**
+ * ScheduleTaskCreate
+ *
+ * A task to run once, at a time the caller picks.
+ */
+export type ScheduleTaskCreate = {
+  /**
+   * Attachments
+   */
+  attachments?: Array<string> | null;
+  /**
+   * Description
+   */
+  description: string;
+  execution?: RunExecutionConfig | null;
+  /**
+   * Parameters
+   */
+  parameters?: {
+    [key: string]: unknown;
+  };
+  /**
+   * Project Id
+   */
+  project_id?: string | null;
+  /**
+   * Requires Human Approval
+   */
+  requires_human_approval?: boolean | null;
+  /**
+   * Scheduled At
+   */
+  scheduled_at: string;
+  task_policy?: PolicyDocument | null;
 };
 
 /**
@@ -5738,16 +5794,6 @@ export type SkillUpdateRequest = {
 };
 
 /**
- * SourceProjectBody
- */
-export type SourceProjectBody = {
-  /**
-   * Project Id
-   */
-  project_id?: string | null;
-};
-
-/**
  * SpecPreviewRequest
  */
 export type SpecPreviewRequest = {
@@ -6077,6 +6123,10 @@ export type TaskResponse = {
     | string
     | null;
   /**
+   * Scheduled At
+   */
+  scheduled_at?: string | null;
+  /**
    * Status
    */
   status: string;
@@ -6233,6 +6283,10 @@ export type TaskWithAgent = {
       }
     | string
     | null;
+  /**
+   * Scheduled At
+   */
+  scheduled_at?: string | null;
   /**
    * Status
    */
@@ -7042,13 +7096,13 @@ export type WorkspaceResponse = {
    */
   name: string;
   /**
+   * Owner User Id
+   */
+  owner_user_id: string;
+  /**
    * Slug
    */
   slug: string;
-  /**
-   * Type
-   */
-  type: string;
 };
 
 /**
@@ -8229,6 +8283,38 @@ export type CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostResponses = {
    */
   200: unknown;
 };
+
+export type ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostData = {
+  body: ScheduleTaskCreate;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+  };
+  query?: never;
+  url: "/v1/agents/{agent_id}/tasks/schedule";
+};
+
+export type ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostError =
+  ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostErrors[keyof ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostErrors];
+
+export type ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponses = {
+  /**
+   * Successful Response
+   */
+  201: TaskResponse;
+};
+
+export type ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponse =
+  ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponses[keyof ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponses];
 
 export type CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostData = {
   body: TaskCreate;
@@ -9593,38 +9679,6 @@ export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceI
 export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse =
   RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses[keyof RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses];
 
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostData = {
-  body: SourceProjectBody;
-  path: {
-    /**
-     * Client Id
-     */
-    client_id: string;
-  };
-  query?: never;
-  url: "/v1/clients/{client_id}/pull-from-project";
-};
-
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostError =
-  PullFromProjectV1ClientsClientIdPullFromProjectPostErrors[keyof PullFromProjectV1ClientsClientIdPullFromProjectPostErrors];
-
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostResponses = {
-  /**
-   * Successful Response
-   */
-  200: ClientResponse;
-};
-
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostResponse =
-  PullFromProjectV1ClientsClientIdPullFromProjectPostResponses[keyof PullFromProjectV1ClientsClientIdPullFromProjectPostResponses];
-
 export type AddSkillToClientV1ClientsClientIdSkillsPostData = {
   body: AssociationBody;
   path: {
@@ -9796,6 +9850,38 @@ export type WorkspaceFileHistoryV1FilesHistoryGetResponses = {
 export type WorkspaceFileHistoryV1FilesHistoryGetResponse =
   WorkspaceFileHistoryV1FilesHistoryGetResponses[keyof WorkspaceFileHistoryV1FilesHistoryGetResponses];
 
+export type RestoreWorkspaceFileV1FilesRestoreFilePathPostData = {
+  body?: never;
+  path: {
+    /**
+     * File Path
+     */
+    file_path: string;
+  };
+  query?: never;
+  url: "/v1/files/restore/{file_path}";
+};
+
+export type RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RestoreWorkspaceFileV1FilesRestoreFilePathPostError =
+  RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors[keyof RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors];
+
+export type RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: RestoredFileResponse;
+};
+
+export type RestoreWorkspaceFileV1FilesRestoreFilePathPostResponse =
+  RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses[keyof RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses];
+
 export type CreateAttachmentUploadUrlV1FilesUploadUrlPostData = {
   body: PresignUploadRequest;
   path?: never;
@@ -9822,6 +9908,38 @@ export type CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses = {
 
 export type CreateAttachmentUploadUrlV1FilesUploadUrlPostResponse =
   CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses[keyof CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses];
+
+export type DeleteWorkspaceFileV1FilesFilePathDeleteData = {
+  body?: never;
+  path: {
+    /**
+     * File Path
+     */
+    file_path: string;
+  };
+  query?: never;
+  url: "/v1/files/{file_path}";
+};
+
+export type DeleteWorkspaceFileV1FilesFilePathDeleteErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteWorkspaceFileV1FilesFilePathDeleteError =
+  DeleteWorkspaceFileV1FilesFilePathDeleteErrors[keyof DeleteWorkspaceFileV1FilesFilePathDeleteErrors];
+
+export type DeleteWorkspaceFileV1FilesFilePathDeleteResponses = {
+  /**
+   * Successful Response
+   */
+  200: ArchivedFileResponse;
+};
+
+export type DeleteWorkspaceFileV1FilesFilePathDeleteResponse =
+  DeleteWorkspaceFileV1FilesFilePathDeleteResponses[keyof DeleteWorkspaceFileV1FilesFilePathDeleteResponses];
 
 export type DownloadWorkspaceFileV1FilesFilePathGetData = {
   body?: never;

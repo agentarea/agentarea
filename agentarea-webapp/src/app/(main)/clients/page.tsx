@@ -1,58 +1,38 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-  type ComponentType,
-  type SVGProps,
-} from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Loader2, Plus } from "lucide-react";
+import { toast } from "sonner";
 import type { ClientResponse } from "@/api/client/types.gen";
-import { Plus, Loader2, Plug } from "lucide-react";
-import { ClaudeIcon, CodexIcon } from "@/components/brand-icons";
 import ContentBlock from "@/components/ContentBlock";
 import EmptyState from "@/components/EmptyState/EmptyState";
+import FormLabel from "@/components/FormLabel/FormLabel";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { createClientAction, listClientsAction } from "@/lib/server-actions";
+import { HARNESS_OPTIONS, HarnessBadge, HarnessIcon } from "./harnesses";
 
 const McpIcon = ENTITY_ICONS.mcp;
 const SkillIcon = ENTITY_ICONS.skill;
-
-// Harness kinds a client can represent. `kind` is set at creation and updated by
-// `agentarea mcp sync --target=<harness>`.
-type HarnessIcon = ComponentType<SVGProps<SVGSVGElement>>;
-
-const HARNESSES: Record<string, { label: string; icon: HarnessIcon }> = {
-  claude: { label: "Claude Code", icon: ClaudeIcon },
-  "claude-code": { label: "Claude Code", icon: ClaudeIcon },
-  codex: { label: "Codex", icon: CodexIcon },
-  harness: { label: "Generic", icon: Plug },
-};
-
-function harnessOf(kind?: string | null) {
-  return HARNESSES[kind ?? ""] ?? { label: kind || "Generic", icon: Plug };
-}
-
-function HarnessIcon({
-  kind,
-  className,
-}: {
-  kind?: string | null;
-  className?: string;
-}) {
-  const { icon: Icon } = harnessOf(kind);
-  return <Icon aria-hidden="true" className={className} />;
-}
-
-function HarnessBadge({ kind }: { kind?: string | null }) {
-  const { label } = harnessOf(kind);
-  return (
-    <Badge variant="outline" className="text-xs">
-      {label}
-    </Badge>
-  );
-}
 
 function NameChips({
   items,
@@ -65,7 +45,11 @@ function NameChips({
   return (
     <div className="flex flex-wrap items-center gap-1">
       {list.slice(0, 3).map((i) => (
-        <Badge key={i.id} variant="secondary" className="max-w-[120px] truncate text-[10px]">
+        <Badge
+          key={i.id}
+          variant="secondary"
+          className="max-w-[120px] truncate text-[10px]"
+        >
           {i.name}
         </Badge>
       ))}
@@ -77,22 +61,8 @@ function NameChips({
     </div>
   );
 }
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
-import {
-  listClientsAction,
-  createClientAction,
-} from "@/lib/server-actions";
 
 export default function ClientsPage() {
-  const { toast } = useToast();
   const searchParams = useSearchParams();
   const [clients, setClients] = useState<ClientResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,9 +90,13 @@ export default function ClientsPage() {
     if (!name.trim()) return;
     setCreating(true);
     try {
-      const { error } = await createClientAction({ name: name.trim(), description: description || null, kind });
+      const { error } = await createClientAction({
+        name: name.trim(),
+        description: description || null,
+        kind,
+      });
       if (error) {
-        toast({ title: "Error", description: "Failed to create client", variant: "destructive" });
+        toast.error("Failed to create client");
         return;
       }
       setShowCreate(false);
@@ -179,7 +153,8 @@ export default function ClientsPage() {
     <ContentBlock
       header={{
         breadcrumb: [{ label: "Clients" }],
-        description: "Agent-proxies: scoped MCP + skill bundles for external harnesses (codex, claude-code)",
+        description:
+          "Agent-proxies: scoped MCP + skill bundles for external harnesses (codex, claude-code)",
         controls: (
           <Button className="shrink-0" size="xs" onClick={() => setShowCreate(true)}>
             <Plus />
@@ -245,34 +220,51 @@ export default function ClientsPage() {
           <DialogHeader>
             <DialogTitle>New Client</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <input
-              className="w-full rounded border bg-background px-3 py-2 text-sm"
-              placeholder="Name (e.g. my-codex)"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <textarea
-              className="w-full rounded border bg-background px-3 py-2 text-sm"
-              placeholder="Description (optional)"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Harness</label>
-              <select
-                className="w-full rounded border bg-background px-3 py-2 text-sm"
-                value={kind}
-                onChange={(e) => setKind(e.target.value)}
-              >
-                <option value="harness">Generic</option>
-                <option value="claude">Claude Code</option>
-                <option value="codex">Codex</option>
-              </select>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <FormLabel htmlFor="new-client-name" required>
+                Name
+              </FormLabel>
+              <Input
+                id="new-client-name"
+                placeholder="my-codex"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <FormLabel htmlFor="new-client-description" optional>
+                Description
+              </FormLabel>
+              <Textarea
+                id="new-client-description"
+                placeholder="What this connection is for"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <FormLabel htmlFor="new-client-kind">Harness</FormLabel>
+              <Select value={kind} onValueChange={setKind}>
+                <SelectTrigger id="new-client-kind">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {HARNESS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCreate(false)}
+            >
               Cancel
             </Button>
             <Button onClick={handleCreate} disabled={!name.trim() || creating}>

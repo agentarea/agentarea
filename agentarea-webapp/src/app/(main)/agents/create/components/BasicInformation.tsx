@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MarkdownTextarea } from "@/components/ui/markdown-textarea";
 import type { AgentFormValues } from "../../create/types";
 import { getNestedErrorMessage } from "../utils/formUtils";
-import ConfigSheet from "./ConfigSheet";
+import ConfigSheet from "@/components/ConfigSheet";
 
 type LLMModelInstance = ModelInstanceResponse;
 

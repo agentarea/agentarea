@@ -26,7 +26,11 @@ from agentarea_governance.domain.policies import (
 )
 
 from .domain.base_service import BaseTaskService
-from .domain.exceptions import AgentModelNotConfiguredError, BudgetCapExceededError
+from .domain.exceptions import (
+    AgentModelNotConfiguredError,
+    BudgetCapExceededError,
+    SchedulingNotSupportedError,
+)
 from .domain.interfaces import BaseTaskManager
 from .domain.models import AgentTask
 from .infrastructure.repository import TaskRepository
@@ -237,6 +241,7 @@ class TaskService(BaseTaskService):
         task_policy: PolicyDocument | None = None,
         upper_bound_policy: EffectivePolicy | None = None,
         require_model: bool = False,
+        scheduled_at: datetime | None = None,
     ) -> AgentTask:
         """Persist a task with resolved governance policy. Does not dispatch to Temporal.
 
@@ -249,6 +254,11 @@ class TaskService(BaseTaskService):
         it ``False``.
         """
         new_task_id = task_id or uuid4()
+        # Refuse before persisting: an engine without a timer would run this
+        # immediately, and a half-created row for a run that can never happen
+        # is worse than a clean rejection.
+        if scheduled_at is not None and not self.task_manager.supports_scheduling:
+            raise SchedulingNotSupportedError(new_task_id)
         parameters = dict(parameters or {})
         task_policy = self._with_requested_execution_limits(task_policy, parameters)
         # Compatibility input only: once translated into the typed policy it
@@ -314,6 +324,7 @@ class TaskService(BaseTaskService):
             status=status,
             task_parameters=parameters,
             metadata=metadata,
+            scheduled_at=scheduled_at,
         )
         stored_task = await self.create_task(task)
         # Hand the exact DB-persisted snapshot to Temporal. Policy changes after
@@ -406,6 +417,7 @@ class TaskService(BaseTaskService):
             task_policy=task_policy,
             metadata_overrides=metadata_overrides,
             task_id=task_id,
+            scheduled_at=payload.scheduled_at,
         )
 
     async def reserve_run(
@@ -455,6 +467,7 @@ class TaskService(BaseTaskService):
             status="preparing",
             task_policy=task_policy,
             require_model=True,
+            scheduled_at=payload.scheduled_at,
         )
 
     async def dispatch_reserved_run(self, task: AgentTask) -> AgentTask:
@@ -860,6 +873,7 @@ class TaskService(BaseTaskService):
         metadata_overrides: dict[str, Any] | None = None,
         status: str = "pending",
         task_policy: PolicyDocument | None = None,
+        scheduled_at: datetime | None = None,
     ) -> AgentTask:
         """Canonical entry point for creating and executing a task via Temporal workflow.
 
@@ -879,6 +893,7 @@ class TaskService(BaseTaskService):
             metadata_overrides: Caller metadata merged on top of canonical defaults.
             status: Initial task status (default ``pending``)
             task_policy: Optional task-scoped policy that may only tighten higher scopes.
+            scheduled_at: Absolute future time for a one-shot deferred run.
 
         Returns:
             Created task with workflow execution info, or the routed-into existing
@@ -891,7 +906,9 @@ class TaskService(BaseTaskService):
         # new effective policy. Routing only needs identity/message fields.
         channel_origin = (parameters or {}).get("channel_origin", {})
         chat_id = channel_origin.get("chat_id") if channel_origin else None
-        if chat_id:
+        # A deferred run is a new run, never a follow-up delivered into whatever
+        # workflow happens to be live for this chat right now.
+        if chat_id and scheduled_at is None:
             draft = AgentTask(
                 id=new_task_id,
                 title=title or description,
@@ -925,6 +942,7 @@ class TaskService(BaseTaskService):
             status=status,
             task_policy=task_policy,
             require_model=True,
+            scheduled_at=scheduled_at,
         )
 
         stored_task.status = "pending"
@@ -936,6 +954,10 @@ class TaskService(BaseTaskService):
             logger.info(
                 f"Task {new_task_id} submitted successfully with status {executed_task.status}"
             )
+        except SchedulingNotSupportedError:
+            # A deployment capability gap, not a transient dispatch failure —
+            # reporting it as a generic "failed" task would hide the cause.
+            raise
         except Exception as e:
             logger.error(f"Failed to submit task: {e}")
             stored_task.status = "failed"

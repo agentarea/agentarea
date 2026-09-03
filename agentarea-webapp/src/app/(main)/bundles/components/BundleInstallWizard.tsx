@@ -50,7 +50,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import ConfigSheet from "@/app/(main)/agents/create/components/ConfigSheet";
+import ConfigSheet from "@/components/ConfigSheet";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { cn } from "@/lib/utils";
 import type {

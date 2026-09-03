@@ -1,24 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { resolveActiveWorkspace, type Workspace } from "./workspaces";
+import {
+  isPersonalWorkspace,
+  resolveActiveWorkspace,
+  type Workspace,
+} from "./workspaces";
 
 const personal: Workspace = {
   id: "user-1",
   slug: "user-1",
   name: "Personal",
-  type: "personal",
+  owner_user_id: "user-1",
 };
 const acme: Workspace = {
   id: "ws-acme",
   slug: "acme",
   name: "Acme",
-  type: "shared",
+  owner_user_id: "user-1",
 };
 const globex: Workspace = {
   id: "ws-globex",
   slug: "globex",
   name: "Globex",
-  type: "shared",
+  owner_user_id: "user-2",
 };
+
+describe("isPersonalWorkspace", () => {
+  it("recognises the workspace whose id is its owner's", () => {
+    expect(isPersonalWorkspace(personal)).toBe(true);
+  });
+
+  it("does not treat a workspace you own as personal", () => {
+    // Alice owns Acme, but it is a real shared workspace: ownership is not
+    // the marker, the id being the owner's own id is.
+    expect(isPersonalWorkspace(acme)).toBe(false);
+  });
+});
 
 describe("resolveActiveWorkspace", () => {
   it("returns the workspace matching the preferred slug", () => {

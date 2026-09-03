@@ -218,6 +218,14 @@ export const zApprovalPolicy = z.object({
 });
 
 /**
+ * ArchivedFileResponse
+ */
+export const zArchivedFileResponse = z.object({
+  archived_path: z.string(),
+  path: z.string(),
+});
+
+/**
  * ArtifactEventResponse
  */
 export const zArtifactEventResponse = z.object({
@@ -289,6 +297,7 @@ export const zBodyImportWorkspaceConfigFileV1WorkspaceImportFilePost = z.object(
  */
 export const zBodyUploadFileV1FilesPost = z.object({
   file: z.string(),
+  path: z.string().optional().default(""),
   purpose: z.string().optional().default("workspace"),
 });
 
@@ -487,7 +496,6 @@ export const zClientCreate = z.object({
   description: z.string().max(1000).nullish(),
   kind: z.string().max(32).optional().default("harness"),
   name: z.string().min(1).max(255),
-  source_project_id: z.string().nullish(),
 });
 
 /**
@@ -510,7 +518,6 @@ export const zClientResponse = z.object({
   mcp_instances: z.array(zClientRef).optional().default([]),
   name: z.string(),
   skills: z.array(zClientRef).optional().default([]),
-  source_project_id: z.string().nullable(),
   workspace_id: z.string(),
 });
 
@@ -523,7 +530,6 @@ export const zClientUpdate = z.object({
   description: z.string().max(1000).nullish(),
   kind: z.string().max(32).nullish(),
   name: z.string().min(1).max(255).nullish(),
-  source_project_id: z.string().nullish(),
 });
 
 /**
@@ -2072,6 +2078,14 @@ export const zResolveResponse = z.object({
 });
 
 /**
+ * RestoredFileResponse
+ */
+export const zRestoredFileResponse = z.object({
+  path: z.string(),
+  restored_from: z.string(),
+});
+
+/**
  * RunExecutionConfig
  *
  * Caller-requested execution ceiling; governance may only tighten it.
@@ -2411,13 +2425,6 @@ export const zSkillUpdateRequest = z.object({
 });
 
 /**
- * SourceProjectBody
- */
-export const zSourceProjectBody = z.object({
-  project_id: z.string().nullish(),
-});
-
-/**
  * SpecPreviewRequest
  */
 export const zSpecPreviewRequest = z.object({
@@ -2550,6 +2557,7 @@ export const zTaskResponse = z.object({
   id: z.string().uuid(),
   parameters: z.record(z.unknown()),
   result: z.union([z.record(z.unknown()), z.string()]).nullish(),
+  scheduled_at: z.string().nullish(),
   status: z.string(),
   total_cost: z.number().nullish(),
 });
@@ -2604,6 +2612,7 @@ export const zTaskWithAgent = z.object({
   id: z.string().uuid(),
   parameters: z.record(z.unknown()),
   result: z.union([z.record(z.unknown()), z.string()]).nullish(),
+  scheduled_at: z.string().nullish(),
   status: z.string(),
   total_cost: z.number().nullish(),
 });
@@ -2696,6 +2705,22 @@ export const zPolicyDocument = z.object({
  */
 export const zEffectivePolicyPreviewRequest = z.object({
   agent_id: z.string().uuid().nullish(),
+  task_policy: zPolicyDocument.nullish(),
+});
+
+/**
+ * ScheduleTaskCreate
+ *
+ * A task to run once, at a time the caller picks.
+ */
+export const zScheduleTaskCreate = z.object({
+  attachments: z.array(z.string()).nullish(),
+  description: z.string(),
+  execution: zRunExecutionConfig.nullish(),
+  parameters: z.record(z.unknown()).optional(),
+  project_id: z.string().nullish(),
+  requires_human_approval: z.boolean().nullish().default(false),
+  scheduled_at: z.string().datetime(),
   task_policy: zPolicyDocument.nullish(),
 });
 
@@ -3012,8 +3037,8 @@ export const zWorkspaceFileListResponse = z.object({
 export const zWorkspaceResponse = z.object({
   id: z.string(),
   name: z.string(),
+  owner_user_id: z.string(),
   slug: z.string(),
-  type: z.string(),
 });
 
 /**
@@ -3380,6 +3405,20 @@ export const zCreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostPath =
   z.object({
     agent_id: z.string().uuid(),
   });
+
+export const zScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostBody =
+  zScheduleTaskCreate;
+
+export const zScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostPath =
+  z.object({
+    agent_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponse =
+  zTaskResponse;
 
 export const zCreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostBody =
   zTaskCreate;
@@ -3774,20 +3813,6 @@ export const zRemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanc
 export const zRemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse =
   z.void();
 
-export const zPullFromProjectV1ClientsClientIdPullFromProjectPostBody =
-  zSourceProjectBody;
-
-export const zPullFromProjectV1ClientsClientIdPullFromProjectPostPath =
-  z.object({
-    client_id: z.string().uuid(),
-  });
-
-/**
- * Successful Response
- */
-export const zPullFromProjectV1ClientsClientIdPullFromProjectPostResponse =
-  zClientResponse;
-
 export const zAddSkillToClientV1ClientsClientIdSkillsPostBody =
   zAssociationBody;
 
@@ -3833,6 +3858,16 @@ export const zWorkspaceFileHistoryV1FilesHistoryGetQuery = z.object({
 export const zWorkspaceFileHistoryV1FilesHistoryGetResponse =
   zArtifactHistoryResponse;
 
+export const zRestoreWorkspaceFileV1FilesRestoreFilePathPostPath = z.object({
+  file_path: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zRestoreWorkspaceFileV1FilesRestoreFilePathPostResponse =
+  zRestoredFileResponse;
+
 export const zCreateAttachmentUploadUrlV1FilesUploadUrlPostBody =
   zPresignUploadRequest;
 
@@ -3841,6 +3876,16 @@ export const zCreateAttachmentUploadUrlV1FilesUploadUrlPostBody =
  */
 export const zCreateAttachmentUploadUrlV1FilesUploadUrlPostResponse =
   zPresignUploadResponse;
+
+export const zDeleteWorkspaceFileV1FilesFilePathDeletePath = z.object({
+  file_path: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zDeleteWorkspaceFileV1FilesFilePathDeleteResponse =
+  zArchivedFileResponse;
 
 export const zDownloadWorkspaceFileV1FilesFilePathGetPath = z.object({
   file_path: z.string(),

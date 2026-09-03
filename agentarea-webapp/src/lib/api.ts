@@ -1779,7 +1779,7 @@ export const getClient = async (clientId: string) => {
 export const createClient = async (payload: {
   name: string;
   description?: string | null;
-  source_project_id?: string | null;
+  kind?: string;
 }) => {
   const { data, error } = await sdk.createClientV1ClientsPost({
     client: serverClient,
@@ -1793,7 +1793,7 @@ export const updateClient = async (
   payload: {
     name?: string;
     description?: string | null;
-    source_project_id?: string | null;
+    kind?: string;
   }
 ) => {
   const { data, error } = await sdk.updateClientV1ClientsClientIdPatch({
@@ -1860,19 +1860,6 @@ export const removeMcpInstanceFromClient = async (
         path: { client_id: clientId, mcp_instance_id: mcpInstanceId },
       }
     );
-  return { data, error };
-};
-
-export const pullClientFromProject = async (
-  clientId: string,
-  projectId: string | null
-) => {
-  const { data, error } =
-    await sdk.pullFromProjectV1ClientsClientIdPullFromProjectPost({
-      client: serverClient,
-      path: { client_id: clientId },
-      body: { project_id: projectId },
-    });
   return { data, error };
 };
 

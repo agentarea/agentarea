@@ -61,6 +61,7 @@ def _reserved_task(task_id, payload):
         # None forces the stream's non-tailing branch so the test never touches
         # the live Redis event feed.
         execution_id=None,
+        scheduled_at=None,
     )
 
 
@@ -497,6 +498,7 @@ async def test_sync_path_attaches_and_deletes_after_dispatch(monkeypatch):
             error_message=None,
             created_at=task.created_at,
             execution_id="exec-1",
+            scheduled_at=None,
         )
 
     async def dispatch_reserved_run(task):
