@@ -10,7 +10,7 @@ second copy of a fact that could only ever drift from the id it described.
 Reversible: the downgrade recreates the column and derives every value back.
 
 Revision ID: 20260828_1000_drop_ws_type
-Revises: 20260804_0100_drop_last_used
+Revises: 20260830_0100_catalog_facets
 Create Date: 2026-08-28 10:00:00.000000
 """
 
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260828_1000_drop_ws_type"
-down_revision: str | None = "20260804_0100_drop_last_used"
+down_revision: str | None = "20260830_0100_catalog_facets"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
