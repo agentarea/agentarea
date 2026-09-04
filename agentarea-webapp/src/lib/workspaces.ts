@@ -5,8 +5,20 @@ export type Workspace = {
   id: string;
   slug: string;
   name: string;
-  type: string;
+  owner_user_id: string;
 };
+
+/**
+ * A workspace auto-provisioned for a single user, recognised by its id being
+ * that user's own id.
+ *
+ * Derived rather than read from a ``type`` field: the backend used to store
+ * that alongside the id it described, which is one copy too many. Owning a
+ * workspace is not the same thing — you own every workspace you create.
+ */
+export function isPersonalWorkspace(workspace: Workspace): boolean {
+  return workspace.id === workspace.owner_user_id;
+}
 
 /**
  * Pick the workspace a request should run against.
@@ -28,5 +40,5 @@ export function resolveActiveWorkspace<T extends Workspace>(
     if (match) return match;
   }
 
-  return workspaces.find((w) => w.type === "personal") ?? workspaces[0];
+  return workspaces.find(isPersonalWorkspace) ?? workspaces[0];
 }

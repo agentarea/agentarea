@@ -16,8 +16,6 @@ SQLite because unrelated models use ``JSONB``.
 import pytest
 import pytest_asyncio
 from agentarea_common.workspaces.models import (
-    WORKSPACE_TYPE_PERSONAL,
-    WORKSPACE_TYPE_SHARED,
     Workspace,
     WorkspaceInvitation,
     WorkspaceMembership,
@@ -63,7 +61,6 @@ async def test_ensure_personal_creates_real_row_with_id_equal_to_user_id(workspa
     ws = await workspace_service.ensure_personal("user-1")
 
     assert ws.id == "user-1"
-    assert ws.type == WORKSPACE_TYPE_PERSONAL
     assert ws.owner_user_id == "user-1"
     assert ws.slug == "user"  # no email -> fallback handle
 
@@ -113,10 +110,25 @@ async def test_ensure_personal_is_idempotent(workspace_service):
 async def test_create_shared_creates_workspace_row(workspace_service):
     ws = await workspace_service.create_shared(owner_user_id="user-1", name="Team A")
 
-    assert ws.type == WORKSPACE_TYPE_SHARED
     assert ws.id != "user-1"
     assert ws.name == "Team A"
     assert ws.owner_user_id == "user-1"
+
+
+@pytest.mark.asyncio
+async def test_personal_is_derived_from_the_id_not_a_stored_flag(workspace_service):
+    """``id == owner_user_id`` is the only marker of a personal workspace.
+
+    There is no ``type`` column: a stored flag could disagree with the id it
+    describes, and the id already carries the fact (``ensure_personal`` reuses
+    the user id, ``create_shared`` mints a fresh uuid).
+    """
+    personal = await workspace_service.ensure_personal("user-1")
+    shared = await workspace_service.create_shared(owner_user_id="user-1", name="Team A")
+
+    assert personal.id == personal.owner_user_id
+    assert shared.id != shared.owner_user_id
+    assert not hasattr(shared, "type")
 
 
 @pytest.mark.asyncio

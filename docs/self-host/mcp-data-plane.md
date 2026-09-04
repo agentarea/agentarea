@@ -29,29 +29,40 @@ levered through this API.
 If none of those apply, the in-cluster backend is simpler and already the
 default.
 
-## Bring up the host
+## What the host must provide
 
-Provision the machine with the `sandbox_host` role. It installs Docker, gVisor
-(`runsc`), the egress firewall, and the data plane behind TLS:
+AgentArea does not provision this machine. Build it however you build machines;
+what matters is the state it ends up in.
+
+- **Docker**, with **gVisor** (`runsc`) registered as a runtime. This is the
+  point of the host: MCP servers are other people's code, and `runsc` is the
+  kernel boundary around it.
+- **The data-plane binary.** It is `mcp-manager` run in data-plane mode — build
+  `./cmd/mcp-manager` from this repository for the host's architecture and
+  install it as a service.
+- **`MCP_DATAPLANE_AUTH_TOKEN`**, at least 32 characters, the same value the
+  control plane will send. There is no default and no development bypass: a data
+  plane reachable without a token hands container creation on a gVisor host to
+  whoever finds the port.
+- **A closed inbound door.** Only the control plane's addresses may reach the
+  data-plane port. If the host is published on the internet, terminate TLS in
+  front of it and keep the process itself on loopback.
+- **Working DNS inside containers.** Containers do not share the host's resolver:
+  a stub on `127.0.0.53` is unreachable from them, and Docker then falls back to
+  public resolvers the network may not carry. Publish the stub on the Docker
+  bridge, or set `dns` in `daemon.json`.
+
+Two checks tell you the host is ready, and they are worth running as part of
+whatever builds it:
 
 ```bash
-cd deploy/sandbox-host
-cp inventory.example.ini inventory.ini      # put the host's address in
-
-export MCP_DP_TOKEN=$(openssl rand -hex 24)
-
-ansible-playbook -i inventory.ini site.yml --tags mcp-dataplane \
-  -e sandbox_mcp_dataplane_enabled=true \
-  -e sandbox_mcp_dataplane_public_hostname=mcp-dp.203-0-113-10.sslip.io \
-  -e sandbox_mcp_dataplane_auth_token="$MCP_DP_TOKEN"
+curl -fsS http://127.0.0.1:8090/healthz                       # answers 200
+curl -so /dev/null -w '%{http_code}\n' \
+  http://127.0.0.1:8090/dataplane/v1/instances                # answers 401
 ```
 
-The play refuses to finish unless the data plane answers `/healthz` **and**
-rejects an unauthenticated call with 401. A green run means the process is up and
-the door is shut.
-
-The token has no default and no development bypass. A data plane reachable
-without one hands container creation on a gVisor host to whoever finds the port.
+The first proves the process is up; the second proves the door is shut. A host
+that passes only the first is an open gVisor host.
 
 ## Point the control plane at it
 
@@ -73,6 +84,35 @@ mcpManager:
 Setting `url` switches the backend; you do not set `BACKEND_TYPE` yourself. All
 three fields go together — a partial set stops the render rather than quietly
 running containers in the cluster after you asked for them elsewhere.
+
+The hostname above is an example. `203.0.113.10` is a documentation address from
+RFC 5737 and resolves nowhere — substitute your host's own name or address.
+
+### When the hop is already private
+
+The public TLS name exists because the token travels on the wire. If the control
+plane reaches the host over a network that is already private — a cloud provider's
+internal network, WireGuard, an SSH tunnel — there is no public name to certify,
+and the data plane is addressed directly:
+
+```yaml
+mcpManager:
+  dataPlane:
+    url: "http://10.0.0.10:8090"
+```
+
+The manager refuses a plain-`http` data plane unless you also say the hop is
+private, so this arrangement cannot happen by accident:
+
+```
+MCP_DATAPLANE_ALLOW_INSECURE=true
+```
+
+Both topologies are supported, and which one a deployment uses is not visible
+from the outside: **a private deployment has no public data-plane hostname at
+all**, so probing one tells you nothing. Check `MCP_DATAPLANE_URL` on the manager
+for the address actually in use, and reach it from inside the network the manager
+sits in — see [Verifying it](#verifying-it).
 
 The manager proves the host is reachable and the token accepted at startup, so a
 wrong value fails the rollout instead of surfacing later as a broken tool call.
@@ -108,6 +148,23 @@ Any client that speaks MCP Streamable HTTP and can send a bearer token works the
 same way.
 
 ## Verifying it
+
+Run these from where the control plane runs, not from your workstation. A data
+plane on a private hop is unreachable from anywhere else by design, and a host
+firewalled to one region refuses everyone outside it — in both cases a probe from
+a laptop times out on a healthy host. From a control-plane cluster:
+
+```bash
+kubectl -n agentarea exec deploy/agentarea-app-backend -- \
+  curl -s "$MCP_DATAPLANE_URL/healthz"
+```
+
+`/healthz` is the one unauthenticated route; it answers `{"agent_id":"…","status":"ok"}`
+and settles whether the process is up before you look at anything else. Take
+`$MCP_DATAPLANE_URL` from the manager's own environment rather than from this
+page — the address here is an example.
+
+Then exercise the authenticated path:
 
 ```bash
 curl -sN -X POST \

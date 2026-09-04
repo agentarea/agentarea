@@ -17,11 +17,13 @@ import re
 import tempfile
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from botocore.exceptions import ClientError
 
 from agentarea_common.artifacts.audit import (
+    ACTION_ARCHIVED,
     ACTION_CREATED,
     ACTION_DELETED,
     ACTION_MODIFIED,
@@ -38,6 +40,11 @@ logger = logging.getLogger(__name__)
 
 _WORKSPACE_PREFIX = "workspaces"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+# Archived files stay in the workspace under this prefix instead of being
+# destroyed. Every listing that shows the workspace to a human or an agent must
+# filter it out, so the prefix is defined once here and imported by callers.
+TRASH_PREFIX = ".trash/"
 
 
 def sha256_hex_from_head(head: Mapping[str, Any]) -> str | None:
@@ -286,6 +293,50 @@ class ArtifactService:
 
         await asyncio.to_thread(_call)
         await self._record(workspace_id, path, ACTION_DELETED)
+
+    async def copy(self, workspace_id: str, source: str, destination: str) -> None:
+        """Copy one workspace path onto another, server-side.
+
+        The bytes never leave the object store, so this is cheap regardless of
+        file size. ``MetadataDirective`` is left at its ``COPY`` default so the
+        sha256 user-metadata written by :meth:`put` survives the move.
+        """
+        source_key = self._key(workspace_id, source)
+        destination_key = self._key(workspace_id, destination)
+
+        def _call() -> None:
+            self._client.copy_object(
+                Bucket=self._bucket,
+                Key=destination_key,
+                CopySource={"Bucket": self._bucket, "Key": source_key},
+            )
+
+        await asyncio.to_thread(_call)
+
+    async def archive(self, workspace_id: str, path: str) -> str:
+        """Move a file into the trash prefix and return its archived path.
+
+        Deletion through the API is never destructive: the object is copied
+        under ``.trash/{timestamp}/{path}`` first, and only then removed from
+        its original location. Timestamps carry microseconds so archiving the
+        same path repeatedly keeps every generation instead of overwriting the
+        previous one.
+        """
+        clean = path.lstrip("/")
+        if not await self.exists(workspace_id, clean):
+            raise FileNotFoundError(clean)
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
+        archived_path = f"{TRASH_PREFIX}{stamp}/{clean}"
+        await self.copy(workspace_id, clean, archived_path)
+
+        key = self._key(workspace_id, clean)
+
+        def _call() -> None:
+            self._client.delete_object(Bucket=self._bucket, Key=key)
+
+        await asyncio.to_thread(_call)
+        await self._record(workspace_id, clean, ACTION_ARCHIVED)
+        return archived_path
 
     async def list(
         self,

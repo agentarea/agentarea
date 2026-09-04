@@ -45,6 +45,7 @@ class WorkflowConfig:
     retry_initial_interval: timedelta = timedelta(seconds=30)
     retry_max_interval: timedelta = timedelta(minutes=10)
     task_queue: str = "default"
+    start_delay: timedelta | None = None
 
 
 class WorkflowExecutor(ABC):

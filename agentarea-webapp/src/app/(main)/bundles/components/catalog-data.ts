@@ -18,6 +18,23 @@ export const PAGE = 96;
 export const ALL = "__all__";
 export const FEATURED_TAG = "featured";
 
+// Catalog orderings, applied server-side. `featured` floats hand-curated
+// entries and alphabetises the rest; `name` is a plain A→Z. Kept in sync with
+// RegistryItemRepository._SORTS on the backend -- an unknown value is rejected
+// there rather than silently ignored.
+export const SORT_KEYS = ["featured", "name"] as const;
+export type SortMode = (typeof SORT_KEYS)[number];
+export const DEFAULT_SORT: SortMode = "featured";
+
+export const SORT_LABELS: Record<SortMode, string> = {
+  featured: "Featured first",
+  name: "Name A–Z",
+};
+
+export function isSortMode(v: unknown): v is SortMode {
+  return typeof v === "string" && (SORT_KEYS as readonly string[]).includes(v);
+}
+
 // Per-path cookie that persists the grid/table choice across navigation. Lives
 // here (not in the "use client" gallery) so the Server Components — explore
 // page.tsx + loading.tsx — import the real string, not a client-reference proxy.
@@ -34,6 +51,11 @@ export type RegistryItem = {
   tags: string[];
   spec: RawSpec;
   installed_entity_id?: string | null;
+  // Derived and stored server-side (agentarea_registry.application.catalog_facets)
+  // so browsing can filter, sort and count in SQL. Optional because the
+  // single-item endpoints predate them.
+  category?: string | null;
+  featured?: boolean | null;
 };
 
 export type Registry = { id: string; name: string; registry_type: string };
@@ -123,17 +145,22 @@ function prettifySkillName(name: string, repo?: string | null): string {
 export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
   const spec = item.spec || {};
   const tags = item.tags || [];
+  // The server derives `category`/`featured` and browses by those exact values.
+  // Re-deriving them here would risk a card sitting under a facet whose filter
+  // never returns it, so the stored values win; the local derivation is only a
+  // fallback for endpoints that don't carry them yet.
   const base = {
     id: item.id,
     type,
     description: item.description || "",
     tags,
     iconUrl: extractIcon(spec),
-    featured: tags.includes(FEATURED_TAG),
+    featured: item.featured ?? tags.includes(FEATURED_TAG),
     verified: false,
     installEntityId: item.installed_entity_id ?? null,
     spec,
   };
+  const serverCategory = str(item.category);
 
   if (type === "bundles") {
     const meta = spec.metadata as RawSpec | undefined;
@@ -150,7 +177,7 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
     return {
       ...base,
       title: str(spec.display_name) || str(spec.name) || item.name,
-      category: str(meta?.category),
+      category: serverCategory ?? str(meta?.category),
       integrations: arr(spec.mcps).map((m) => String(m.name ?? "")).filter(Boolean),
       meta: counts,
     };
@@ -165,7 +192,7 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
       title: item.name,
       // Catalog agents carry domain tags (support, engineering, data…); the
       // first one is a sensible category.
-      category: str(item.tags?.[0]),
+      category: serverCategory ?? str(item.tags?.[0]),
       integrations: [],
       meta: models,
     };
@@ -180,7 +207,7 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
     return {
       ...base,
       title: str(spec.display_name) ?? prettifySkillName(item.name, repo),
-      category: tagVal("category:"),
+      category: serverCategory ?? tagVal("category:"),
       integrations: [],
       meta: repo ? [repo] : [],
     };
@@ -193,7 +220,7 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
   return {
     ...base,
     title: item.name,
-    category: str(rawMeta?.["agentarea:category"]),
+    category: serverCategory ?? str(rawMeta?.["agentarea:category"]),
     verified: rawMeta?.["agentarea:oauth_status"] === "verified",
     integrations: [],
     meta: [conn],

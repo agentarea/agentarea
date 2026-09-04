@@ -20,7 +20,16 @@ than defects to work around.
 **The first call after an idle period pays a cold start.** How long depends
 entirely on the server: a small published image starts in a second or two, while
 a `uvx`/`npx` server that clones and installs on boot can take a minute or more.
-The call waits for provisioning rather than failing.
+That call waits for provisioning rather than failing.
+
+Calls that arrive while a start is already under way do not queue behind it.
+They are answered `503` with a `Retry-After`, and the retry lands on the
+workload the first call is bringing up. Queueing them instead would hold a
+database connection each for the whole cold start, so a client retrying faster
+than a slow start could finish would fill the manager's connection pool — taking
+the connection the start itself still needs and stalling every instance, not
+just the one being started. A client that honours `Retry-After` sees a slower
+first call; one that treats `503` as fatal needs its own retry.
 
 **Creating a connection no longer verifies it immediately.** Verification is
 what starts the container and lists its tools, so deferring the start defers the
@@ -70,21 +79,24 @@ fails here needs an escape hatch, and it is much cheaper to learn that now.
 
 **1. An execution cluster.** gVisor needs no KVM or nested virtualization, so
 any ordinary VM will do — you do not need bare metal or a special instance
-family. One box is enough to start:
+family. One box is enough to start. Build it however you build machines; it has
+to end up with:
+
+- a Kubernetes distribution the control plane can reach (k3s on a single node is
+  plenty),
+- `runsc` registered with containerd as a runtime handler,
+- a `RuntimeClass` named `gvisor` pointing at that handler,
+- a kubeconfig whose API address is reachable from the control plane, which is
+  usually not the address the installer writes into it.
+
+Prove the substrate before trusting it — that a `RuntimeClass` exists says
+nothing about whether a pod can actually run under it:
 
 ```bash
-cd deploy/sandbox-host
-cp inventory.example.ini inventory.ini      # put the host's address in
-ansible-playbook -i inventory.ini site.yml \
-  -e sandbox_k3s_enabled=true \
-  -e sandbox_activation_auth_secret="$SANDBOX_ACTIVATION_AUTH_SECRET"
+kubectl run gvisor-check --rm -it --restart=Never \
+  --overrides='{"spec":{"runtimeClassName":"gvisor"}}' \
+  --image=busybox -- dmesg | head -1     # gVisor announces itself here
 ```
-
-This installs k3s, registers `runsc` with containerd, and creates the `gvisor`
-RuntimeClass. It refuses to finish unless a pod really ran under gVisor, so a
-green run means the substrate works. It leaves a kubeconfig at
-`./execution-cluster.kubeconfig` with the API address rewritten to something
-reachable.
 
 **2. Point the control plane at it.**
 
@@ -129,17 +141,20 @@ worth exercising on a real task before you retire the old executor.
 
 ## Which instances are affected
 
-Only instances **created while serverless is on**. The choice is recorded on
-each instance when it is created, so enabling the setting later does not
-retroactively shorten the life of connections that already exist, and turning it
-off does not strand the ones that were created serverless.
+Reclamation is a property of the deployment, not of the instance. Every
+container-backed instance is eligible while the setting is on, whenever it was
+created; turning the setting off stops reclaiming all of them. Liveness lives in
+the control-plane runtime tables rather than on the instance row, so there is no
+per-instance serverless flag to inspect.
 
-Also excluded:
+Excluded from reclamation:
 
 - **Remote (`url`-type) connections** — there is no container to start or stop.
-- **Instances that have never been called.** An instance with no recorded use is
+- **Instances that have never been called.** An instance with no runtime row is
   treated as new, not as idle. Reclaiming requires evidence of disuse, not the
   absence of evidence of use.
+- **Instances with a live request lease.** A call in flight holds a lease, and a
+  leased instance is never swept out from under it.
 
 ## How reclaiming works
 
@@ -157,44 +172,45 @@ first time.
 Sweeping is serialised with a Postgres advisory lock, so running more than one
 manager replica does not mean more than one sweeper. If a manager dies
 mid-sweep, its lock is released with its connection — there is nothing to clear
-by hand.
+by hand. An instance that began starting between being listed as idle and being
+reclaimed holds that lock, so the sweep leaves it and moves on; the next sweep
+sees it as it now is.
 
 ## Verifying it works
 
-With serverless on, create a container-backed connection and watch the manager:
+Reclamation is visible in the control plane's runtime table, not in the log. The
+reaper is silent while it is working — it logs only when a sweep or an
+individual reclaim fails — so an empty log is the expected state, not evidence
+that nothing is running.
 
-```bash
-kubectl logs -l app.kubernetes.io/component=mcp-manager -f | grep -i idle
-```
-
-On startup you should see the reaper announce its window:
-
-```
-Starting MCP idle reaper idle_timeout=10m interval=1m0s
-```
-
-Call a tool on the connection, leave it alone for longer than `idleTimeout`, and
-the sweep reports the reclamation:
-
-```
-Stopped idle MCP instance instance_id=... instance_name=...
-```
-
-Calling the same connection again starts it back up. If instead you see nothing
-at all, the most likely cause is that the instances predate the setting — check
-one:
+With serverless on, create a container-backed connection, call a tool on it, and
+watch the instance's runtime state:
 
 ```sql
-SELECT name, json_spec->>'lazy_provisioning' AS serverless
-FROM mcp_server_instances;
+SELECT i.name, r.state, r.last_used_at
+FROM mcp_runtime_instances r
+JOIN mcp_server_instances i ON i.id = r.instance_id;
 ```
 
-Instances showing `false` or an empty value were created eagerly and are never
-reclaimed. Recreate the connection to make it serverless.
+Immediately after a call the row reads `ready`. Leave the connection alone for
+longer than `idleTimeout` and the next sweep moves it to `dormant`, at which
+point the workload is gone — the Deployment or container no longer exists, while
+the instance row, its credentials, and its discovered tool list are untouched.
+
+Calling the same connection again starts it back up and returns the row to
+`ready`. Cold starts are bounded by `startupTimeout`; in practice a small image
+that is already present comes back in a few seconds.
+
+If a workload is never reclaimed, check that `idleTimeout` is non-zero. A zero
+timeout disables the reaper, and that is the one case it announces:
+
+```
+MCP idle reaper disabled by explicit zero timeout
+```
 
 ## Turning it off
 
-Set `serverless.enabled: false`. Instances already created serverless keep that
-property, but nothing reclaims them any more: each one starts on its next call
-and then stays up. To make them permanently resident, recreate the connections
-with the setting off.
+Set `serverless.enabled: false`. Nothing is reclaimed any more: an instance that
+is currently dormant starts on its next call and then stays up, and one that is
+already running keeps running. No connection has to be recreated — the setting
+governs reclamation, not how an instance was created.

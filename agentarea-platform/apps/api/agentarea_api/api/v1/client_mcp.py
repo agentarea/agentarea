@@ -77,11 +77,11 @@ def _tool_cache() -> RedisToolListCache:
 async def _resolve_client_scope(
     client_id: str,
 ) -> tuple[MCPAggregatorProxy | None, dict]:
-    """Resolve a client's effective MCP instance proxy and skill registry.
+    """Resolve a client's MCP instance proxy and skill registry.
 
-    Effective set = the client's own attachments unioned with those of its
-    source project. Returns ``(proxy, skill_registry)``; proxy is None only when
-    the client does not exist.
+    The set is exactly the client's own attachments. Returns
+    ``(proxy, skill_registry)``; proxy is None only when the client does not
+    exist.
     """
     from agentarea_agents_sdk.skills.skill_catalog_builder import SkillEntry
     from agentarea_api.tools.base import platform_read_context
@@ -99,17 +99,6 @@ async def _resolve_client_scope(
         namespaces = await client_repo.get_instance_namespaces(client_id)
         instances = {str(i.id): i for i in client.mcp_instances}
         skills = {str(s.id): s for s in client.skills}
-
-        if client.source_project_id:
-            from agentarea_projects.infrastructure.repository import ProjectRepository
-
-            project_repo = ProjectRepository(session, user_ctx)
-            project = await project_repo.get_by_id(client.source_project_id)
-            if project is not None:
-                for inst in project.mcp_instances:
-                    instances.setdefault(str(inst.id), inst)
-                for skill in project.skills:
-                    skills.setdefault(str(skill.id), skill)
 
         skill_registry = {
             s.name: SkillEntry(

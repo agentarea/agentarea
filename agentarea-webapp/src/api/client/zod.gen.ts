@@ -218,6 +218,14 @@ export const zApprovalPolicy = z.object({
 });
 
 /**
+ * ArchivedFileResponse
+ */
+export const zArchivedFileResponse = z.object({
+  archived_path: z.string(),
+  path: z.string(),
+});
+
+/**
  * ArtifactEventResponse
  */
 export const zArtifactEventResponse = z.object({
@@ -289,6 +297,7 @@ export const zBodyImportWorkspaceConfigFileV1WorkspaceImportFilePost = z.object(
  */
 export const zBodyUploadFileV1FilesPost = z.object({
   file: z.string(),
+  path: z.string().optional().default(""),
   purpose: z.string().optional().default("workspace"),
 });
 
@@ -454,6 +463,14 @@ export const zBundleSkill = z.object({
 });
 
 /**
+ * CategoryFacet
+ */
+export const zCategoryFacet = z.object({
+  count: z.number().int(),
+  value: z.string(),
+});
+
+/**
  * CheckRequest
  */
 export const zCheckRequest = z.object({
@@ -479,7 +496,6 @@ export const zClientCreate = z.object({
   description: z.string().max(1000).nullish(),
   kind: z.string().max(32).optional().default("harness"),
   name: z.string().min(1).max(255),
-  source_project_id: z.string().nullish(),
 });
 
 /**
@@ -502,7 +518,6 @@ export const zClientResponse = z.object({
   mcp_instances: z.array(zClientRef).optional().default([]),
   name: z.string(),
   skills: z.array(zClientRef).optional().default([]),
-  source_project_id: z.string().nullable(),
   workspace_id: z.string(),
 });
 
@@ -515,7 +530,6 @@ export const zClientUpdate = z.object({
   description: z.string().max(1000).nullish(),
   kind: z.string().max(32).nullish(),
   name: z.string().min(1).max(255).nullish(),
-  source_project_id: z.string().nullish(),
 });
 
 /**
@@ -1865,6 +1879,7 @@ export const zProjectUpdate = z.object({
  */
 export const zProviderConfigCreate = z.object({
   api_key: z.string().nullish(),
+  api_key_secret_id: z.string().uuid().nullish(),
   description: z.string().max(1000).nullish(),
   endpoint_url: z.string().nullish(),
   is_public: z.boolean().optional().default(false),
@@ -1898,6 +1913,7 @@ export const zProviderConfigResponse = z.object({
  */
 export const zProviderConfigUpdate = z.object({
   api_key: z.string().nullish(),
+  api_key_secret_id: z.string().uuid().nullish(),
   description: z.string().max(1000).nullish(),
   endpoint_url: z.string().nullish(),
   is_active: z.boolean().nullish(),
@@ -1937,9 +1953,11 @@ export const zRegistryCreate = z.object({
  * RegistryItemResponse
  */
 export const zRegistryItemResponse = z.object({
+  category: z.string().nullish(),
   created_at: z.string(),
   description: z.string().nullable(),
   external_id: z.string(),
+  featured: z.boolean().optional().default(false),
   id: z.string().uuid(),
   installed_entity_id: z.string().uuid().nullable(),
   installed_version: z.string().nullable(),
@@ -1950,6 +1968,22 @@ export const zRegistryItemResponse = z.object({
   update_available: z.boolean(),
   updated_at: z.string(),
   version: z.string().nullable(),
+});
+
+/**
+ * CatalogBrowseResponse
+ *
+ * One page of a type's catalog plus the context needed to browse it.
+ *
+ * ``total`` and ``categories`` cover the whole filtered catalog, not the page:
+ * without them a page that happens to contain no visible matches is
+ * indistinguishable from the end of the catalog, and facet counts drift as
+ * more pages load.
+ */
+export const zCatalogBrowseResponse = z.object({
+  categories: z.array(zCategoryFacet),
+  items: z.array(zRegistryItemResponse),
+  total: z.number().int(),
 });
 
 /**
@@ -2044,6 +2078,14 @@ export const zResolveResponse = z.object({
 });
 
 /**
+ * RestoredFileResponse
+ */
+export const zRestoredFileResponse = z.object({
+  path: z.string(),
+  restored_from: z.string(),
+});
+
+/**
  * RunExecutionConfig
  *
  * Caller-requested execution ceiling; governance may only tighten it.
@@ -2095,6 +2137,65 @@ export const zSandboxSummary = z.object({
 export const zSandboxListResponse = z.object({
   items: z.array(zSandboxSummary),
   total: z.number().int(),
+});
+
+/**
+ * SecretConsumer
+ */
+export const zSecretConsumer = z.object({
+  consumer_id: z.string(),
+  consumer_type: z.string(),
+  field: z.string(),
+});
+
+/**
+ * SecretCreate
+ */
+export const zSecretCreate = z.object({
+  description: z.string().max(1000).nullish(),
+  name: z.string(),
+  value: z.string().min(1),
+});
+
+/**
+ * SecretDescriptionUpdate
+ */
+export const zSecretDescriptionUpdate = z.object({
+  description: z.string().max(1000).nullish(),
+});
+
+/**
+ * SecretOwner
+ *
+ * The connection a managed secret belongs to.
+ */
+export const zSecretOwner = z.object({
+  field: z.string().nullish(),
+  id: z.string(),
+  name: z.string().nullish(),
+  type: z.string(),
+});
+
+/**
+ * SecretResponse
+ *
+ * A secret's metadata. The value is never part of this.
+ */
+export const zSecretResponse = z.object({
+  created_at: z.string().nullish(),
+  description: z.string().nullish(),
+  id: z.string().uuid(),
+  name: z.string(),
+  owner: zSecretOwner.nullish(),
+  updated_at: z.string().nullish(),
+  used_by: z.array(zSecretConsumer).optional(),
+});
+
+/**
+ * SecretValueUpdate
+ */
+export const zSecretValueUpdate = z.object({
+  value: z.string().min(1),
 });
 
 /**
@@ -2324,13 +2425,6 @@ export const zSkillUpdateRequest = z.object({
 });
 
 /**
- * SourceProjectBody
- */
-export const zSourceProjectBody = z.object({
-  project_id: z.string().nullish(),
-});
-
-/**
  * SpecPreviewRequest
  */
 export const zSpecPreviewRequest = z.object({
@@ -2463,6 +2557,7 @@ export const zTaskResponse = z.object({
   id: z.string().uuid(),
   parameters: z.record(z.unknown()),
   result: z.union([z.record(z.unknown()), z.string()]).nullish(),
+  scheduled_at: z.string().nullish(),
   status: z.string(),
   total_cost: z.number().nullish(),
 });
@@ -2517,6 +2612,7 @@ export const zTaskWithAgent = z.object({
   id: z.string().uuid(),
   parameters: z.record(z.unknown()),
   result: z.union([z.record(z.unknown()), z.string()]).nullish(),
+  scheduled_at: z.string().nullish(),
   status: z.string(),
   total_cost: z.number().nullish(),
 });
@@ -2609,6 +2705,22 @@ export const zPolicyDocument = z.object({
  */
 export const zEffectivePolicyPreviewRequest = z.object({
   agent_id: z.string().uuid().nullish(),
+  task_policy: zPolicyDocument.nullish(),
+});
+
+/**
+ * ScheduleTaskCreate
+ *
+ * A task to run once, at a time the caller picks.
+ */
+export const zScheduleTaskCreate = z.object({
+  attachments: z.array(z.string()).nullish(),
+  description: z.string(),
+  execution: zRunExecutionConfig.nullish(),
+  parameters: z.record(z.unknown()).optional(),
+  project_id: z.string().nullish(),
+  requires_human_approval: z.boolean().nullish().default(false),
+  scheduled_at: z.string().datetime(),
   task_policy: zPolicyDocument.nullish(),
 });
 
@@ -2925,8 +3037,8 @@ export const zWorkspaceFileListResponse = z.object({
 export const zWorkspaceResponse = z.object({
   id: z.string(),
   name: z.string(),
+  owner_user_id: z.string(),
   slug: z.string(),
-  type: z.string(),
 });
 
 /**
@@ -3293,6 +3405,20 @@ export const zCreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostPath =
   z.object({
     agent_id: z.string().uuid(),
   });
+
+export const zScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostBody =
+  zScheduleTaskCreate;
+
+export const zScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostPath =
+  z.object({
+    agent_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponse =
+  zTaskResponse;
 
 export const zCreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostBody =
   zTaskCreate;
@@ -3687,20 +3813,6 @@ export const zRemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanc
 export const zRemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse =
   z.void();
 
-export const zPullFromProjectV1ClientsClientIdPullFromProjectPostBody =
-  zSourceProjectBody;
-
-export const zPullFromProjectV1ClientsClientIdPullFromProjectPostPath =
-  z.object({
-    client_id: z.string().uuid(),
-  });
-
-/**
- * Successful Response
- */
-export const zPullFromProjectV1ClientsClientIdPullFromProjectPostResponse =
-  zClientResponse;
-
 export const zAddSkillToClientV1ClientsClientIdSkillsPostBody =
   zAssociationBody;
 
@@ -3746,6 +3858,16 @@ export const zWorkspaceFileHistoryV1FilesHistoryGetQuery = z.object({
 export const zWorkspaceFileHistoryV1FilesHistoryGetResponse =
   zArtifactHistoryResponse;
 
+export const zRestoreWorkspaceFileV1FilesRestoreFilePathPostPath = z.object({
+  file_path: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zRestoreWorkspaceFileV1FilesRestoreFilePathPostResponse =
+  zRestoredFileResponse;
+
 export const zCreateAttachmentUploadUrlV1FilesUploadUrlPostBody =
   zPresignUploadRequest;
 
@@ -3754,6 +3876,16 @@ export const zCreateAttachmentUploadUrlV1FilesUploadUrlPostBody =
  */
 export const zCreateAttachmentUploadUrlV1FilesUploadUrlPostResponse =
   zPresignUploadResponse;
+
+export const zDeleteWorkspaceFileV1FilesFilePathDeletePath = z.object({
+  file_path: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zDeleteWorkspaceFileV1FilesFilePathDeleteResponse =
+  zArchivedFileResponse;
 
 export const zDownloadWorkspaceFileV1FilesFilePathGetPath = z.object({
   file_path: z.string(),
@@ -4724,6 +4856,21 @@ export const zCreateRegistryV1RegistriesPostBody = zRegistryCreate;
  */
 export const zCreateRegistryV1RegistriesPostResponse = zRegistryResponse;
 
+export const zBrowseCatalogV1RegistriesCatalogBrowseGetQuery = z.object({
+  registry_type: z.string(),
+  q: z.string().nullish(),
+  category: z.string().nullish(),
+  sort: z.string().nullish(),
+  limit: z.number().int().gte(1).lte(500).optional().default(50),
+  offset: z.number().int().gte(0).optional().default(0),
+});
+
+/**
+ * Successful Response
+ */
+export const zBrowseCatalogV1RegistriesCatalogBrowseGetResponse =
+  zCatalogBrowseResponse;
+
 export const zGetCatalogItemV1RegistriesCatalogItemsItemIdGetPath = z.object({
   item_id: z.string().uuid(),
 });
@@ -4823,6 +4970,62 @@ export const zUpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponse =
  * Successful Response
  */
 export const zListSandboxesV1SandboxesGetResponse = zSandboxListResponse;
+
+/**
+ * Response List Secrets V1 Secrets Get
+ *
+ * Successful Response
+ */
+export const zListSecretsV1SecretsGetResponse = z.array(zSecretResponse);
+
+export const zCreateSecretV1SecretsPostBody = zSecretCreate;
+
+/**
+ * Successful Response
+ */
+export const zCreateSecretV1SecretsPostResponse = zSecretResponse;
+
+export const zDeleteSecretV1SecretsSecretIdDeletePath = z.object({
+  secret_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zDeleteSecretV1SecretsSecretIdDeleteResponse = z.void();
+
+export const zGetSecretV1SecretsSecretIdGetPath = z.object({
+  secret_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zGetSecretV1SecretsSecretIdGetResponse = zSecretResponse;
+
+export const zUpdateSecretDescriptionV1SecretsSecretIdPatchBody =
+  zSecretDescriptionUpdate;
+
+export const zUpdateSecretDescriptionV1SecretsSecretIdPatchPath = z.object({
+  secret_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zUpdateSecretDescriptionV1SecretsSecretIdPatchResponse =
+  zSecretResponse;
+
+export const zRotateSecretV1SecretsSecretIdValuePutBody = zSecretValueUpdate;
+
+export const zRotateSecretV1SecretsSecretIdValuePutPath = z.object({
+  secret_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zRotateSecretV1SecretsSecretIdValuePutResponse = zSecretResponse;
 
 /**
  * Response List Collections V1 Skill Collections  Get

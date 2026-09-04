@@ -8,27 +8,18 @@ import logging
 import uuid
 
 from agentarea_common.auth import UserContext
-from agentarea_common.base.models import BaseModel
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from cryptography.fernet import Fernet
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+
+from .models import EncryptedSecret
+from .naming import parse_managed_name
 
 logger = logging.getLogger(__name__)
 
-
-class EncryptedSecret(BaseModel):
-    """Database model for encrypted secrets."""
-
-    __tablename__ = "encrypted_secrets"
-
-    workspace_id: Mapped[str] = mapped_column(nullable=False, index=True)
-    secret_name: Mapped[str] = mapped_column(nullable=False, index=True)
-    encrypted_value: Mapped[str] = mapped_column(nullable=False)
-    created_by: Mapped[str] = mapped_column(nullable=False)
-    updated_by: Mapped[str | None] = mapped_column(nullable=True)
+__all__ = ["DatabaseSecretManager", "EncryptedSecret"]
 
 
 class DatabaseSecretManager(BaseSecretManager):
@@ -109,6 +100,10 @@ class DatabaseSecretManager(BaseSecretManager):
             logger.error("Failed to decrypt secret value")
             raise ValueError("Failed to decrypt secret. Key may have changed.") from exc
 
+    def external_ref(self, secret_name: str) -> None:
+        """None: this backend keeps the value in the catalog row itself."""
+        return None
+
     async def get_secret(self, secret_name: str) -> str | None:
         """Get a secret value by name.
 
@@ -131,6 +126,15 @@ class DatabaseSecretManager(BaseSecretManager):
                 logger.debug("Secret not found in workspace %s", self.workspace_id)
                 return None
 
+            if secret.encrypted_value is None:
+                # The row points at an external store, which this backend cannot
+                # read. Saying "not found" would send the caller looking for a
+                # missing secret instead of a misconfigured backend.
+                raise ValueError(
+                    f"Secret '{secret_name}' is backed by an external provider; "
+                    "the database secret manager cannot resolve it."
+                )
+
             decrypted_value = self._decrypt(secret.encrypted_value)
             logger.debug("Retrieved secret from workspace %s", self.workspace_id)
             return decrypted_value
@@ -138,6 +142,31 @@ class DatabaseSecretManager(BaseSecretManager):
         except Exception as exc:
             logger.error(
                 "Failed to retrieve secret from workspace %s (%s)",
+                self.workspace_id,
+                type(exc).__name__,
+            )
+            raise
+
+    async def has_secret(self, secret_name: str) -> bool:
+        """Whether this workspace stores a value under this name.
+
+        Answered from the row, never from the plaintext. Deriving it from
+        ``get_secret`` meant a ciphertext this key can no longer open — or a row
+        pointing at an external store — turned "is a credential configured"
+        into an error, and callers that only wanted the flag failed with it.
+        """
+        try:
+            result = await self.session.execute(
+                select(EncryptedSecret.id).where(
+                    EncryptedSecret.workspace_id == self.workspace_id,
+                    EncryptedSecret.secret_name == secret_name,
+                )
+            )
+            return result.scalar_one_or_none() is not None
+
+        except Exception as exc:
+            logger.error(
+                "Failed to check for secret in workspace %s (%s)",
                 self.workspace_id,
                 type(exc).__name__,
             )
@@ -163,7 +192,9 @@ class DatabaseSecretManager(BaseSecretManager):
             existing_secret = result.scalar_one_or_none()
 
             if existing_secret:
-                # Update existing secret
+                # Update existing secret. Ownership is not re-derived: the name
+                # has not changed, and a row the catalog has since re-classified
+                # should not be silently reverted by a routine value rotation.
                 await self.session.execute(
                     update(EncryptedSecret)
                     .where(
@@ -172,18 +203,24 @@ class DatabaseSecretManager(BaseSecretManager):
                     )
                     .values(
                         encrypted_value=encrypted_value,
+                        external_ref=None,
                         updated_by=self.user_context.user_id,
                         updated_at=func.now(),
                     )
                 )
                 logger.info("Updated secret in workspace %s", self.workspace_id)
             else:
-                # Create new secret
+                # Names minted by a platform producer carry their owner, so the
+                # catalog can classify the row without every caller being taught
+                # to declare one. Anything unrecognised is a user's own secret.
+                owner = parse_managed_name(secret_name)
                 new_secret = EncryptedSecret(
                     id=uuid.uuid4(),
                     workspace_id=self.workspace_id,
                     secret_name=secret_name,
                     encrypted_value=encrypted_value,
+                    owner_type=owner.owner_type if owner else None,
+                    owner_id=owner.owner_id if owner else None,
                     created_by=self.user_context.user_id,
                 )
                 self.session.add(new_secret)

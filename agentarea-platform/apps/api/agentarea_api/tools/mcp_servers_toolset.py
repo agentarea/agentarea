@@ -53,6 +53,7 @@ def _serialize_instance(instance: Any) -> dict:
     display_name="MCP Server Management",
     description="Start, stop, and manage MCP server instances.",
     category="platform",
+    plane="build",
 )
 class MCPServersToolset(Toolset):
     """Manage MCP server specs (templates) and instances."""
@@ -65,7 +66,7 @@ class MCPServersToolset(Toolset):
     # Specs (catalog templates)
     # ------------------------------------------------------------------
 
-    @tool_method
+    @tool_method(effect="write")
     async def create_spec(
         self,
         name: str,
@@ -130,7 +131,7 @@ class MCPServersToolset(Toolset):
             server = await service.create_mcp_server(payload)
             return json.dumps(_serialize_server(server), default=str)
 
-    @tool_method
+    @tool_method(effect="write")
     async def update_spec(
         self,
         spec_id: str,
@@ -199,7 +200,7 @@ class MCPServersToolset(Toolset):
                 return json.dumps({"error": "MCP server spec not found"})
             return json.dumps(_serialize_server(server), default=str)
 
-    @tool_method
+    @tool_method(effect="read")
     async def list_specs(
         self,
         is_public: bool = False,
@@ -237,7 +238,7 @@ class MCPServersToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="read")
     async def get_spec(self, spec_id: str) -> str:
         """Get an MCP server spec (template) by ID."""
         async with platform_read_context() as (
@@ -261,7 +262,7 @@ class MCPServersToolset(Toolset):
             payload["registry_url"] = server.registry_url
             return json.dumps(payload, default=str)
 
-    @tool_method
+    @tool_method(effect="destructive")
     async def delete_spec(self, spec_id: str) -> str:
         """Delete an MCP server spec (template) by ID."""
         async with platform_context() as (
@@ -284,7 +285,7 @@ class MCPServersToolset(Toolset):
     # Instances (configured deployments of a spec)
     # ------------------------------------------------------------------
 
-    @tool_method
+    @tool_method(effect="write")
     async def create(
         self,
         name: str,
@@ -332,7 +333,7 @@ class MCPServersToolset(Toolset):
                 return json.dumps({"error": "Failed to create MCP server instance"})
             return json.dumps(_serialize_instance(instance), default=str)
 
-    @tool_method
+    @tool_method(effect="write")
     async def update(
         self,
         instance_id: str,
@@ -373,7 +374,7 @@ class MCPServersToolset(Toolset):
                 return json.dumps({"error": "MCP server instance not found"})
             return json.dumps(_serialize_instance(instance), default=str)
 
-    @tool_method
+    @tool_method(effect="read")
     async def list(self) -> str:
         """List all MCP server instances in the workspace."""
         async with platform_read_context() as (
@@ -396,7 +397,7 @@ class MCPServersToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="read")
     async def get(self, instance_id: str) -> str:
         """Get details of an MCP server instance."""
         async with platform_read_context() as (
@@ -421,7 +422,7 @@ class MCPServersToolset(Toolset):
             payload["tools"] = instance.tools
             return json.dumps(payload, default=str)
 
-    @tool_method
+    @tool_method(effect="destructive")
     async def delete_instance(self, instance_id: str) -> str:
         """Delete an MCP server instance."""
         async with platform_context() as (
@@ -441,7 +442,7 @@ class MCPServersToolset(Toolset):
             deleted = await service.delete_instance(UUID(instance_id))
             return json.dumps({"deleted": deleted})
 
-    @tool_method
+    @tool_method(effect="write")
     async def verify(self, instance_id: str) -> str:
         """Run end-to-end verification on an MCP server instance.
 

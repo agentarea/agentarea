@@ -32,13 +32,17 @@ from agentarea_common.money import ZERO, Money, serialize_money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
-from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
+from agentarea_secrets.naming import has_reserved_prefix
+from agentarea_tasks.domain.exceptions import (
+    AgentModelNotConfiguredError,
+    SchedulingNotSupportedError,
+)
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
-from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig
+from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig, require_future_instant
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
@@ -317,6 +321,8 @@ class TaskResponse(BaseModel):
     created_at: UtcDatetime
     execution_id: str | None = None  # Workflow execution ID
     total_cost: float | None = None  # LLM token cost in USD
+    # Set only on one-shot deferred runs; null means the task ran on creation.
+    scheduled_at: UtcDatetime | None = None
 
     @classmethod
     def create_new(
@@ -353,6 +359,7 @@ class TaskResponse(BaseModel):
             failure_reason=_failure_reason_from_result(task.result),
             created_at=task.created_at,
             execution_id=task.execution_id,
+            scheduled_at=task.scheduled_at,
         )
 
 
@@ -374,6 +381,7 @@ class TaskWithAgent(BaseModel):
     created_at: UtcDatetime
     execution_id: str | None = None
     total_cost: float | None = None  # LLM token cost in USD
+    scheduled_at: UtcDatetime | None = None
     # Populated by the inbox endpoint for waiting_for_approval tasks so the UI can
     # approve/reject the pending escalation inline without re-fetching task events.
     escalation_id: str | None = None
@@ -395,6 +403,7 @@ class TaskWithAgent(BaseModel):
             created_at=task.created_at,
             execution_id=task.execution_id,
             total_cost=task.total_cost,
+            scheduled_at=task.scheduled_at,
         )
 
 
@@ -441,6 +450,7 @@ async def get_all_tasks(
                     error=task.error,
                     failure_reason=_failure_reason_from_result(task.result),
                     created_at=task.created_at,
+                    scheduled_at=task.scheduled_at,
                     execution_id=task.execution_id,
                     total_cost=total_cost,
                 )
@@ -494,6 +504,7 @@ async def get_task_by_id(
             error=task.error,
             failure_reason=_failure_reason_from_result(task.result),
             created_at=task.created_at,
+            scheduled_at=task.scheduled_at,
             execution_id=task.execution_id,
             total_cost=total_cost,
         )
@@ -855,6 +866,97 @@ async def create_task_for_agent_sync(
         raise HTTPException(status_code=404, detail="Agent validation error") from exc
     except Exception as exc:
         logger.error("Task creation failed for agent %s", agent_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+class ScheduleTaskCreate(TaskCreate):
+    """A task to run once, at a time the caller picks."""
+
+    scheduled_at: datetime
+
+    # Enforced here so a bad time is a 422 on the field, not a generic error
+    # raised deeper in when RunCreate re-validates it.
+    _validate_scheduled_at = field_validator("scheduled_at")(require_future_instant)
+
+
+@router.post("/schedule", response_model=TaskResponse, status_code=201)
+async def schedule_task_for_agent(
+    agent_id: UUID,
+    data: ScheduleTaskCreate,
+    user_context: UserContextDep,
+    task_service: TaskService = Depends(get_task_service),
+):
+    """Create a task that runs once at an absolute future time.
+
+    Deliberately not the streaming sibling of ``POST /``: there is nothing to
+    stream until the run starts, which may be days away. Repeating schedules
+    are cron triggers, not tasks.
+    """
+    try:
+        if data.attachments:
+            reserved_task_id = uuid4()
+            attachment_descriptors = await _stage_attachments_into_task(
+                user_context.workspace_id,
+                reserved_task_id,
+                data.attachments,
+                user_context.user_id,
+            )
+            payload = RunCreate(
+                agent_id=agent_id,
+                description=data.description,
+                parameters={**data.parameters, "attachments": attachment_descriptors},
+                execution=data.execution,
+                requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+                task_policy=data.task_policy,
+                scheduled_at=data.scheduled_at,
+            )
+            task = await task_service.reserve_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
+                task_id=reserved_task_id,
+                trusted_metadata={"workspace_attachments": attachment_descriptors},
+            )
+            task = await task_service.dispatch_reserved_run(task)
+            await _delete_staging_refs(
+                user_context.workspace_id, data.attachments, user_context.user_id
+            )
+        else:
+            payload = RunCreate(
+                agent_id=agent_id,
+                description=data.description,
+                parameters=data.parameters,
+                execution=data.execution,
+                requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+                task_policy=data.task_policy,
+                scheduled_at=data.scheduled_at,
+            )
+            task = await task_service.start_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
+            )
+
+        return TaskResponse.from_agent_task(task)
+
+    except HTTPException:
+        raise
+    except SchedulingNotSupportedError as exc:
+        raise HTTPException(
+            status_code=501,
+            detail="This deployment's execution engine cannot defer runs",
+        ) from exc
+    except PolicyValidationError as exc:
+        raise HTTPException(status_code=422, detail="Task policy rejected") from exc
+    except AgentModelNotConfiguredError as exc:
+        raise HTTPException(status_code=422, detail="Agent model is not configured") from exc
+    except ValueError as exc:
+        logger.error("Agent validation failed for agent %s", agent_id, exc_info=True)
+        raise HTTPException(status_code=404, detail="Agent validation error") from exc
+    except Exception as exc:
+        logger.error("Task scheduling failed for agent %s", agent_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
@@ -1625,11 +1727,28 @@ async def submit_task_input(
 
         secret_refs: dict[str, dict[str, str]] = {}
         for field_name, raw_secret in submission.secrets.items():
-            if isinstance(raw_secret, InputSecretValue):
+            if isinstance(raw_secret, InputSecretValue) and raw_secret.secret_name:
+                # set_secret upserts on (workspace_id, name), so a caller-chosen
+                # name that lands on a platform prefix either overwrites the
+                # credential a connection resolves, or mints a row that renders
+                # on the secrets page as a connection's credential which does
+                # not exist. Only the prefixes are refused: the slug shape that
+                # POST /v1/secrets enforces is a house style for names it
+                # creates, and applying it here would break namespaced input
+                # names like `service/api_token` that already work.
+                if has_reserved_prefix(raw_secret.secret_name):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            f"Secret name '{raw_secret.secret_name}' uses a prefix reserved "
+                            "for secrets the platform manages on behalf of a connection."
+                        ),
+                    )
                 secret_value = raw_secret.value
-                secret_name = raw_secret.secret_name or _default_input_secret_name(
-                    task_id, field_name
-                )
+                secret_name = raw_secret.secret_name
+            elif isinstance(raw_secret, InputSecretValue):
+                secret_value = raw_secret.value
+                secret_name = _default_input_secret_name(task_id, field_name)
             else:
                 secret_value = str(raw_secret)
                 secret_name = _default_input_secret_name(task_id, field_name)

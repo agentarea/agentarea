@@ -54,6 +54,11 @@ class SecretManagerFactory:
                     "Infisical credentials not configured. "
                     "Set SECRET_MANAGER_ACCESS_KEY and SECRET_MANAGER_SECRET_KEY."
                 )
+            if not settings.SECRET_MANAGER_PROJECT_ID:
+                raise ValueError(
+                    "SECRET_MANAGER_PROJECT_ID must be set when using the Infisical "
+                    "secret manager: it selects which Infisical project holds the secrets."
+                )
 
         # Log a literal, not the settings value: the backend name is not secret,
         # but taint analysis treats every SECRET_*-named setting as one.
@@ -94,33 +99,25 @@ class SecretManagerFactory:
             )
 
         elif secret_type == "infisical":  # noqa: S105
-            try:
-                from infisical_sdk.client import InfisicalSDKClient
+            # infisicalsdk is a hard dependency of this package, so there is no
+            # import to guard against.
+            from infisical_sdk.client import InfisicalSDKClient
 
-                from .infisical_secret_manager import InfisicalSecretManager
+            from .infisical_secret_manager import InfisicalSecretManager
 
-                if (
-                    not self.settings.SECRET_MANAGER_ACCESS_KEY
-                    or not self.settings.SECRET_MANAGER_SECRET_KEY
-                ):
-                    raise ValueError(
-                        "Infisical credentials not configured. "
-                        "Set SECRET_MANAGER_ACCESS_KEY and SECRET_MANAGER_SECRET_KEY."
-                    )
+            client = cast(Any, InfisicalSDKClient)(
+                host=self.settings.SECRET_MANAGER_ENDPOINT or "https://app.infisical.com",
+                client_id=self.settings.SECRET_MANAGER_ACCESS_KEY,
+                client_secret=self.settings.SECRET_MANAGER_SECRET_KEY,
+            )
 
-                client = cast(Any, InfisicalSDKClient)(
-                    host=self.settings.SECRET_MANAGER_ENDPOINT or "https://app.infisical.com",
-                    client_id=self.settings.SECRET_MANAGER_ACCESS_KEY,
-                    client_secret=self.settings.SECRET_MANAGER_SECRET_KEY,
-                )
-
-                logger.debug("Created InfisicalSecretManager")
-                return InfisicalSecretManager(client)
-
-            except ImportError as e:
-                raise ValueError(
-                    "Infisical SDK not installed. Install with: pip install infisical-sdk"
-                ) from e
+            logger.debug("Created InfisicalSecretManager")
+            return InfisicalSecretManager(
+                client,
+                workspace_id=user_context.workspace_id,
+                project_id=self.settings.SECRET_MANAGER_PROJECT_ID,
+                environment_slug=self.settings.SECRET_MANAGER_ENVIRONMENT,
+            )
 
         else:
             raise ValueError(

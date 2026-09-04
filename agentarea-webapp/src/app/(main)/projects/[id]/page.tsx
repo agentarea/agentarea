@@ -1,19 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowUpRight, FileText, Network } from "lucide-react";
 import type {
   AgentResponse,
   McpServerInstanceResponse,
+  McpServerResponse,
   ProjectResponse,
   SkillResponse,
 } from "@/api/client";
+import { getMCPConnectionIconSrc } from "@/app/(main)/connections/utils";
+import {
+  AttachmentSection,
+  hydrateAttachments,
+  type AttachmentItem,
+} from "@/components/AttachmentSection";
 import { DetailSkeleton } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { EntityIcon } from "@/lib/entity-icons";
+import Divider from "@/components/ui/divider";
+import { ENTITY_ICONS, EntityIcon } from "@/lib/entity-icons";
 import {
   addAgentToProjectAction,
   addMcpInstanceToProjectAction,
@@ -21,17 +28,20 @@ import {
   getProjectAction,
   listAgentsAction,
   listMCPServerInstancesAction,
+  listMCPServersAction,
   listSkillsAction,
   removeAgentFromProjectAction,
   removeMcpInstanceFromProjectAction,
   removeSkillFromProjectAction,
 } from "@/lib/server-actions";
-import { AssociationSection } from "./components/AssociationSection";
+
+const AgentIcon = ENTITY_ICONS.agent;
+const McpIcon = ENTITY_ICONS.mcp;
+const SkillIcon = ENTITY_ICONS.skill;
 
 export default function ProjectOverviewPage() {
   const params = useParams();
   const projectId = params.id as string;
-  const { toast } = useToast();
 
   const [project, setProject] = useState<ProjectResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,26 +50,36 @@ export default function ProjectOverviewPage() {
   const [allMcpInstances, setAllMcpInstances] = useState<
     McpServerInstanceResponse[]
   >([]);
+  const [mcpServers, setMcpServers] = useState<McpServerResponse[]>([]);
 
-  const fetchProject = async () => {
+  const fetchProject = useCallback(async () => {
     const { data } = await getProjectAction(projectId);
     if (data) setProject(data);
-  };
+  }, [projectId]);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const [projectRes, agentsRes, skillsRes, mcpRes] = await Promise.all([
-          getProjectAction(projectId),
-          listAgentsAction(),
-          listSkillsAction(),
-          listMCPServerInstancesAction(),
-        ]);
+        const [projectRes, agentsRes, skillsRes, mcpRes, serversRes] =
+          await Promise.all([
+            getProjectAction(projectId),
+            listAgentsAction(),
+            listSkillsAction(),
+            listMCPServerInstancesAction(),
+            listMCPServersAction({ page_size: 100 }),
+          ]);
         if (projectRes.data) setProject(projectRes.data);
         setAllAgents(agentsRes.data || []);
         setAllSkills((skillsRes.data as SkillResponse[]) || []);
         setAllMcpInstances(mcpRes.data || []);
+        const serversData = serversRes.data as
+          | { items?: McpServerResponse[] }
+          | McpServerResponse[]
+          | undefined;
+        setMcpServers(
+          Array.isArray(serversData) ? serversData : serversData?.items || []
+        );
       } finally {
         setLoading(false);
       }
@@ -73,91 +93,11 @@ export default function ProjectOverviewPage() {
 
   if (!project) return null;
 
-  const handleAddAgent = async (agentId: string) => {
-    const { error } = await addAgentToProjectAction(projectId, agentId);
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add agent",
-        variant: "destructive",
-      });
-      throw error;
-    }
-    toast({ title: "Agent added" });
-    await fetchProject();
-  };
-
-  const handleRemoveAgent = async (agentId: string) => {
-    const { error } = await removeAgentFromProjectAction(projectId, agentId);
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to remove agent",
-        variant: "destructive",
-      });
-      throw error;
-    }
-    toast({ title: "Agent removed" });
-    await fetchProject();
-  };
-
-  const handleAddSkill = async (skillId: string) => {
-    const { error } = await addSkillToProjectAction(projectId, skillId);
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add skill",
-        variant: "destructive",
-      });
-      throw error;
-    }
-    toast({ title: "Skill added" });
-    await fetchProject();
-  };
-
-  const handleRemoveSkill = async (skillId: string) => {
-    const { error } = await removeSkillFromProjectAction(projectId, skillId);
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to remove skill",
-        variant: "destructive",
-      });
-      throw error;
-    }
-    toast({ title: "Skill removed" });
-    await fetchProject();
-  };
-
-  const handleAddMcp = async (mcpId: string) => {
-    const { error } = await addMcpInstanceToProjectAction(projectId, mcpId);
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add MCP instance",
-        variant: "destructive",
-      });
-      throw error;
-    }
-    toast({ title: "MCP instance added" });
-    await fetchProject();
-  };
-
-  const handleRemoveMcp = async (mcpId: string) => {
-    const { error } = await removeMcpInstanceFromProjectAction(
-      projectId,
-      mcpId
-    );
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to remove MCP instance",
-        variant: "destructive",
-      });
-      throw error;
-    }
-    toast({ title: "MCP instance removed" });
-    await fetchProject();
+  const instanceIconSrc = (instance: AttachmentItem) => {
+    const full = allMcpInstances.find((i) => String(i.id) === instance.id);
+    if (!full) return undefined;
+    const spec = mcpServers.find((s) => s.id === full.server_spec_id);
+    return getMCPConnectionIconSrc(full, spec);
   };
 
   const composition = [
@@ -279,43 +219,74 @@ export default function ProjectOverviewPage() {
           </p>
         </div>
 
-        <div className="relative mt-7 grid gap-8 pt-4 md:grid-cols-3 md:gap-5">
-          <div
-            aria-hidden="true"
-            className="absolute left-[16.67%] right-[16.67%] top-4 hidden h-px bg-gradient-to-r from-blue-300 via-violet-300 to-emerald-300 dark:from-blue-800 dark:via-violet-800 dark:to-emerald-800 md:block"
-          />
-          <AssociationSection
+        <div className="mt-5">
+          <AttachmentSection
+            id="project-agents"
             title="Agents"
-            kind="agent"
-            description="Specialists that reason and act on behalf of the project."
-            items={project.agents || []}
-            allItems={allAgents}
-            onAdd={handleAddAgent}
-            onRemove={handleRemoveAgent}
-            addLabel="Add Agent"
-            selectPlaceholder="Select an agent..."
+            icon={AgentIcon}
+            note={
+              <p>Specialists that reason and act on behalf of the project.</p>
+            }
+            triggerText="Agent"
+            sheetTitle="Agents"
+            sheetDescription="Add agents to this project"
+            availableTitle="Available Agents"
+            attached={hydrateAttachments(project.agents, allAgents)}
+            available={allAgents}
+            emptyLabel="No agents connected yet."
+            emptyAvailable={<p>No agents available. Create one first.</p>}
+            onAdd={(item) => addAgentToProjectAction(projectId, item.id)}
+            onRemove={(item) => removeAgentFromProjectAction(projectId, item.id)}
+            onChanged={fetchProject}
           />
-          <AssociationSection
+
+          <Divider />
+
+          <AttachmentSection
+            id="project-skills"
             title="Skills"
-            kind="skill"
-            description="Reusable instructions that sharpen how agents work."
-            items={project.skills || []}
-            allItems={allSkills}
-            onAdd={handleAddSkill}
-            onRemove={handleRemoveSkill}
-            addLabel="Add Skill"
-            selectPlaceholder="Select a skill..."
+            icon={SkillIcon}
+            note={<p>Reusable instructions that sharpen how agents work.</p>}
+            triggerText="Skill"
+            sheetTitle="Skills"
+            sheetDescription="Add skills to this project"
+            availableTitle="Available Skills"
+            attached={hydrateAttachments(project.skills, allSkills)}
+            available={allSkills}
+            emptyLabel="No skills connected yet."
+            emptyAvailable={<p>No skills available. Create one first.</p>}
+            onAdd={(item) => addSkillToProjectAction(projectId, item.id)}
+            onRemove={(item) => removeSkillFromProjectAction(projectId, item.id)}
+            onChanged={fetchProject}
           />
-          <AssociationSection
-            title="MCP Instances"
-            kind="mcp"
-            description="Live connections to tools, services, and external data."
-            items={project.mcp_instances || []}
-            allItems={allMcpInstances}
-            onAdd={handleAddMcp}
-            onRemove={handleRemoveMcp}
-            addLabel="Add MCP Instance"
-            selectPlaceholder="Select an MCP instance..."
+
+          <Divider />
+
+          <AttachmentSection
+            id="project-mcp"
+            title="MCP Servers"
+            icon={McpIcon}
+            note={
+              <p>Live connections to tools, services, and external data.</p>
+            }
+            triggerText="MCP Server"
+            sheetTitle="MCP Servers"
+            sheetDescription="Add MCP server instances to this project"
+            availableTitle="Active MCP Server Instances"
+            attached={hydrateAttachments(project.mcp_instances, allMcpInstances)}
+            available={allMcpInstances}
+            emptyLabel="No MCP servers connected yet."
+            emptyAvailable={
+              <p>
+                No MCP server instances yet. Create one under Connections first.
+              </p>
+            }
+            onAdd={(item) => addMcpInstanceToProjectAction(projectId, item.id)}
+            onRemove={(item) =>
+              removeMcpInstanceFromProjectAction(projectId, item.id)
+            }
+            onChanged={fetchProject}
+            getIconSrc={instanceIconSrc}
           />
         </div>
       </section>

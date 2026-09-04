@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   useTransition,
@@ -56,15 +57,24 @@ import ModelBadge from "@/components/ui/model-badge";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { HoverLink } from "@/components/ui/hover-link";
 import HeaderTabs from "@/components/HeaderTabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import EmptyState from "@/components/EmptyState";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
 import { getCookie, setCookie } from "@/utils/cookies";
 import {
   ALL,
+  DEFAULT_SORT,
   EXPLORE_VIEW_COOKIE,
   FEATURED_TAG,
-  PAGE,
+  SORT_KEYS,
+  SORT_LABELS,
   TYPE_KEYS,
   arr,
   modelNameMatchesPreferred,
@@ -75,7 +85,15 @@ import {
   type CatalogType,
   type RawSpec,
   type RegistryItem,
+  type SortMode,
 } from "./catalog-data";
+import {
+  canFetchMore,
+  catalogPagingReducer,
+  hasMore as hasMoreItems,
+  initialPaging,
+  type CategoryFacet,
+} from "./catalog-paging";
 import {
   addCatalogSkillToAgentAction,
   fetchCatalogItemAction,
@@ -112,11 +130,26 @@ const VIEW_KEYS = ["grid", "table"] as const;
 export type ViewMode = (typeof VIEW_KEYS)[number];
 
 // ── Data (client-side, for infinite-scroll "load more" only) ──
-// The first page is server-rendered (see explore/page.tsx); these helpers only
-// run for offset > 0 appends, so they can never race the initial paint.
+// The first page of every filter combination is server-rendered (see
+// explore/page.tsx); this only runs for appends, so it can never race the
+// initial paint.
 
-async function fetchPage(type: CatalogType, offset: number): Promise<RegistryItem[]> {
-  return fetchCatalogPageAction(type, offset);
+type BrowseParams = {
+  type: CatalogType;
+  offset: number;
+  q: string;
+  category: string;
+  sort: SortMode;
+};
+
+async function fetchPage(params: BrowseParams) {
+  return fetchCatalogPageAction({
+    type: params.type,
+    offset: params.offset,
+    q: params.q || undefined,
+    category: params.category === ALL ? undefined : params.category,
+    sort: params.sort,
+  });
 }
 
 const TYPE_ICON: Record<CatalogType, LucideIcon> = {
@@ -134,9 +167,19 @@ const TYPE_ICON: Record<CatalogType, LucideIcon> = {
 // chrome mounted and — crucially — avoids any flash of the previous type's data
 // mid-switch (React holds the old tree during a transition, so a type-vs-seed
 // comparison would briefly read stale; `isPending` doesn't).
+//
+// The kind of switch matters for how the wait is shown. Changing type makes the
+// current results wrong, so they're replaced by a skeleton. Changing a filter
+// within a type only narrows them, and search round-trips on every debounced
+// keystroke — skeletoning there would strobe the whole list while you type — so
+// the previous results stay on screen, dimmed, until the new page lands.
+type PendingKind = "type" | "filters" | null;
+
 type ExplorePending = {
   isPending: boolean;
-  startTransition: React.TransitionStartFunction;
+  pendingKind: PendingKind;
+  startTypeTransition: React.TransitionStartFunction;
+  startFilterTransition: React.TransitionStartFunction;
 };
 const ExplorePendingContext = createContext<ExplorePending | null>(null);
 
@@ -146,8 +189,29 @@ export function ExplorePendingProvider({
   children: React.ReactNode;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [pendingKind, setPendingKind] = useState<PendingKind>(null);
+
+  const startTypeTransition = useCallback<React.TransitionStartFunction>(
+    (fn) => {
+      setPendingKind("type");
+      startTransition(fn);
+    },
+    [startTransition]
+  );
+  const startFilterTransition = useCallback<React.TransitionStartFunction>(
+    (fn) => {
+      setPendingKind("filters");
+      startTransition(fn);
+    },
+    [startTransition]
+  );
+
+  const value = useMemo(
+    () => ({ isPending, pendingKind, startTypeTransition, startFilterTransition }),
+    [isPending, pendingKind, startTypeTransition, startFilterTransition]
+  );
   return (
-    <ExplorePendingContext.Provider value={{ isPending, startTransition }}>
+    <ExplorePendingContext.Provider value={value}>
       {children}
     </ExplorePendingContext.Provider>
   );
@@ -171,7 +235,7 @@ export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
     "type",
     parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
       shallow: false,
-      startTransition: pending?.startTransition,
+      startTransition: pending?.startTypeTransition,
     })
   );
   const [, setCategory] = useQueryState("category", parseAsString.withDefault(ALL));
@@ -252,12 +316,51 @@ export function ExploreViewToggle({
   );
 }
 
+// ── Sort control (lives in the ContentBlock subheader) ──
+// Ordering is applied server-side over the whole catalog, so this drives the
+// same nuqs key the gallery reads and round-trips the Server Component
+// (shallow:false) rather than reordering the loaded prefix.
+export function ExploreSortSelect({
+  initialSort = DEFAULT_SORT,
+}: {
+  initialSort?: SortMode;
+}) {
+  const pending = useExplorePending();
+  const [sort, setSort] = useQueryState(
+    "sort",
+    parseAsStringLiteral(SORT_KEYS).withDefault(initialSort).withOptions({
+      shallow: false,
+      startTransition: pending?.startFilterTransition,
+    })
+  );
+  const [itemId] = useQueryState("item", parseAsString);
+
+  if (itemId) return null;
+
+  return (
+    <Select value={sort} onValueChange={(v) => void setSort(v as SortMode)}>
+      <SelectTrigger className="h-8 w-[152px]" aria-label="Sort catalog">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {SORT_KEYS.map((key) => (
+          <SelectItem key={key} value={key}>
+            {SORT_LABELS[key]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 // ── Component ──
 
 type CatalogGalleryProps = {
   initialType: CatalogType;
   initialEntries: CatalogEntry[];
-  initialHasMore: boolean;
+  /** Items matching the active filters across the whole catalog. */
+  initialTotal: number;
+  initialCategories: CategoryFacet[];
   initialError?: string | null;
   /** Persisted grid/table choice (cookie), seeds the view nuqs default. */
   initialView?: ViewMode;
@@ -266,131 +369,138 @@ type CatalogGalleryProps = {
 export default function CatalogGallery({
   initialType,
   initialEntries,
-  initialHasMore,
+  initialTotal,
+  initialCategories,
   initialError = null,
   initialView = "grid",
 }: CatalogGalleryProps) {
   // Catalog UI state lives in the URL (nuqs) so views are shareable/back-able.
-  // `type` uses shallow:false so switching tabs re-runs the Server Component
-  // (explore/page.tsx) and re-fetches the first page server-side — every type
-  // view starts from fresh SSR data, with no client fetch on mount and no
-  // stale-response race across types.
   //
-  // `type` is read-only here — the switcher lives in the subheader
-  // (ExploreTypeTabs) and drives this same nuqs key. The component is NOT
-  // remounted on type change (no `key`); the effect below re-seeds state from
-  // the new SSR props, and `busy` skeletons the content while the switch is in
-  // flight, so the persistent chrome never flashes.
+  // Every browse dimension — type, search, category, sort — uses shallow:false,
+  // so changing any of them re-runs the explore Server Component and re-fetches
+  // page 1 with those filters applied in SQL. Nothing is filtered or reordered
+  // here: doing that over the loaded prefix hid matches that were never fetched
+  // and spliced later pages into the middle of the rendered list.
+  //
+  // These keys are read-only here — the switchers live in the subheader
+  // (ExploreTypeTabs / ExploreSortSelect / ExploreViewToggle) and drive the same
+  // nuqs keys. The component is NOT remounted; the effect below re-seeds state
+  // from the new SSR props, and `busy` skeletons the content while a switch is
+  // in flight, so the persistent chrome never flashes.
   const [type] = useQueryState(
     "type",
     parseAsStringLiteral(TYPE_KEYS).withDefault(initialType).withOptions({
       shallow: false,
     })
   );
-  // Shared transition state (the subheader tabs own the setter) — drives the
-  // content skeleton while a type switch is in flight.
+  const [sort] = useQueryState(
+    "sort",
+    parseAsStringLiteral(SORT_KEYS).withDefault(DEFAULT_SORT).withOptions({
+      shallow: false,
+    })
+  );
   const explorePending = useExplorePending();
-  // Seeded from the server-rendered first page (no initial client fetch / flash).
-  const [entries, setEntries] = useState<CatalogEntry[]>(initialEntries);
-  const [offset, setOffset] = useState(initialEntries.length);
-  const [loading, setLoading] = useState(false);
-  const [more, setMore] = useState(false);
-  const [hasMore, setHasMore] = useState(initialHasMore);
-  const [error, setError] = useState<string | null>(initialError);
-
-  const [query, setQuery] = useQueryState("q", parseAsString.withDefault(""));
-  const [category, setCategory] = useQueryState("category", parseAsString.withDefault(ALL));
-  // `view` is read-only here — the grid/table toggle lives in the subheader
-  // (ExploreViewToggle) and drives this same nuqs key. Default is seeded from
-  // the persisted cookie (via props) so it matches the toggle when there's no
-  // URL param yet.
+  const [query, setQuery] = useQueryState(
+    "q",
+    parseAsString.withDefault("").withOptions({
+      shallow: false,
+      startTransition: explorePending?.startFilterTransition,
+    })
+  );
+  const [category, setCategory] = useQueryState(
+    "category",
+    parseAsString.withDefault(ALL).withOptions({
+      shallow: false,
+      startTransition: explorePending?.startFilterTransition,
+    })
+  );
   const [view] = useQueryState(
     "view",
     parseAsStringLiteral(VIEW_KEYS).withDefault(initialView)
   );
   const [itemId, setItemId] = useQueryState("item", parseAsString);
+
+  // Paging bookkeeping, seeded from the server-rendered first page (no initial
+  // client fetch / flash). Kept in a reducer so the append/retry/exhaustion
+  // rules are testable apart from the component — see catalog-paging.ts.
+  const [paging, dispatch] = useReducer(catalogPagingReducer, undefined, () => ({
+    ...initialPaging(),
+    entries: initialEntries,
+    total: initialTotal,
+    categories: initialCategories,
+    error: initialError,
+  }));
+
+  // Typing shouldn't round-trip the server on every keystroke, so the input is
+  // local and the URL follows it on a short debounce.
+  const [draftQuery, setDraftQuery] = useState(query);
+  useEffect(() => setDraftQuery(query), [query]);
+  useEffect(() => {
+    if (draftQuery === query) return;
+    const t = setTimeout(() => void setQuery(draftQuery || null), 300);
+    return () => clearTimeout(t);
+  }, [draftQuery, query, setQuery]);
+
   // Deep-link fallback for ?item= that points outside the loaded page(s).
   const [deepItem, setDeepItem] = useState<CatalogEntry | null>(null);
   const [deepLoading, setDeepLoading] = useState(false);
   const [deepError, setDeepError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // Re-seed from fresh SSR data when the type's server round-trip lands. Because
-  // the component is no longer remounted on type change, this is what swaps in
-  // the new type's first page when the transition commits. The ref guards the
-  // initial mount (already seeded via the useState initializers above).
-  const seededType = useRef(initialType);
+  // Re-seed whenever a server round-trip lands with a different page. The props
+  // object identity changes on every SSR render, so a ref comparison is what
+  // tells "the server handed us something new" from a local re-render.
+  const seededFrom = useRef(initialEntries);
   useEffect(() => {
-    if (seededType.current === initialType) return;
-    seededType.current = initialType;
-    setEntries(initialEntries);
-    setOffset(initialEntries.length);
-    setHasMore(initialHasMore);
-    setError(initialError);
-  }, [initialType, initialEntries, initialHasMore, initialError]);
+    if (seededFrom.current === initialEntries) return;
+    seededFrom.current = initialEntries;
+    dispatch({
+      type: "seed",
+      entries: initialEntries,
+      total: initialTotal,
+      categories: initialCategories,
+      error: initialError,
+    });
+  }, [initialEntries, initialTotal, initialCategories, initialError]);
 
-  const load = useCallback(
-    async (t: CatalogType, off: number, append: boolean) => {
-      append ? setMore(true) : setLoading(true);
-      setError(null);
-      try {
-        const page = await fetchPage(t, off);
-        const mapped = page.map((it) => normalize(t, it));
-        setEntries((prev) => (append ? [...prev, ...mapped] : mapped));
-        setOffset(off + page.length);
-        // A short page means the server has nothing more — stop infinite scroll.
-        setHasMore(page.length >= PAGE);
-        setMore(false);
-        setLoading(false);
-        return page.length;
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load");
-        setHasMore(false);
-        setMore(false);
-        setLoading(false);
-        return 0;
-      }
-    },
-    []
-  );
-
-  const categories = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const e of entries) {
-      if (e.category) counts.set(e.category, (counts.get(e.category) ?? 0) + 1);
+  const loadMore = useCallback(async () => {
+    dispatch({ type: "appendStart" });
+    try {
+      const page = await fetchPage({
+        type,
+        // Entries are appended in server order, never reordered or
+        // filtered here, so the loaded count IS the next offset.
+        offset: paging.entries.length,
+        q: query,
+        category,
+        sort,
+      });
+      dispatch({
+        type: "append",
+        entries: page.items.map((it) => normalize(type, it as RegistryItem)),
+        total: page.total,
+        categories: page.categories,
+      });
+    } catch (e) {
+      dispatch({ type: "fail", error: e instanceof Error ? e.message : "Failed to load" });
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  }, [entries]);
+  }, [type, query, category, sort, paging.entries]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return entries
-      .filter((e) => {
-        if (category !== ALL && e.category !== category) return false;
-        if (q) {
-          const hay = `${e.title} ${e.description} ${e.tags.join(" ")}`.toLowerCase();
-          if (!hay.includes(q)) return false;
-        }
-        return true;
-      })
-      // Alphabetical by name, case-insensitive (so "monday.com"/"v0.dev" sit
-      // where you'd expect, not after "Zapier").
-      .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
-  }, [entries, query, category]);
-
-  // Infinite scroll: auto-load the next page when the sentinel nears the viewport.
+  // Infinite scroll: auto-load the next page when the sentinel nears the
+  // viewport. `canFetchMore` is the in-flight guard — a short page leaves the
+  // sentinel inside the viewport, so without it this fires page after page.
   useEffect(() => {
     const node = sentinelRef.current;
-    if (!node || !hasMore || more || loading) return;
+    if (!node || !canFetchMore(paging)) return;
     const io = new IntersectionObserver(
       (obs) => {
-        if (obs[0]?.isIntersecting) void load(type, offset, true);
+        if (obs[0]?.isIntersecting) void loadMore();
       },
       { rootMargin: "600px" }
     );
     io.observe(node);
     return () => io.disconnect();
-  }, [hasMore, more, loading, type, offset, load]);
+  }, [paging, loadMore]);
 
   // Deep-link fallback: if ?item= points at an entry that isn't in the loaded
   // page(s) (e.g. a shared link to something deep in the catalog), fetch that
@@ -403,7 +513,7 @@ export default function CatalogGallery({
       setDeepLoading(false);
       return;
     }
-    if (entries.some((e) => e.id === itemId)) return; // already in the list
+    if (paging.entries.some((e) => e.id === itemId)) return; // already in the list
     if (deepItem?.id === itemId) return; // already fetched
     let alive = true;
     setDeepLoading(true);
@@ -422,29 +532,38 @@ export default function CatalogGallery({
     return () => {
       alive = false;
     };
-  }, [itemId, entries, type, deepItem?.id]);
+  }, [itemId, paging.entries, type, deepItem?.id]);
 
   // Selected item (from ?item=) — resolved against the loaded page first, then
   // the deep-link fallback. When set, the main column shows the detail in place
   // — tabs + facets stay, so it feels like browsing a marketplace rather than a
   // full-page takeover.
   const active =
-    (itemId ? (entries.find((e) => e.id === itemId) ?? null) : null) ??
+    (itemId ? (paging.entries.find((e) => e.id === itemId) ?? null) : null) ??
     (deepItem?.id === itemId ? deepItem : null);
   // Drives the empty-state copy + "Clear filters" affordance.
   const hasFilters = query.trim() !== "" || category !== ALL;
 
-  // "Busy" = first-page client load OR an in-flight type switch (the shared
-  // transition from ExplorePendingProvider, triggered by the subheader tabs).
-  // Either way we skeleton the content/facets but keep the chrome mounted.
-  const busy = loading || (explorePending?.isPending ?? false);
+  // A type switch invalidates the current results, so they're skeletoned. A
+  // filter change only narrows them: the list stays and dims, which is what
+  // keeps debounced search from strobing the page on every keystroke. Appends
+  // are neither — they add to the list rather than replacing it.
+  const pending = explorePending?.isPending ?? false;
+  const busy = pending && explorePending?.pendingKind === "type";
+  const refreshing = pending && !busy;
+  const categories = useMemo(
+    () => paging.categories.map((c) => [c.value, c.count] as [string, number]),
+    [paging.categories]
+  );
+  const moreAvailable = hasMoreItems(paging);
 
   return (
     <div className="flex gap-6">
-        {/* Facet sidebar — reserved (fixed width) while busy or when the type
-            has categories, so the layout doesn't shift as they arrive. Omitted
-            entirely for category-less types so the grid isn't left with an empty
-            left gutter. */}
+        {/* Facet sidebar — reserved (fixed width) while a type switch is in
+            flight or when the type has categories, so the layout doesn't shift
+            as they arrive. Omitted entirely for category-less types so the grid
+            isn't left with an empty left gutter. Counts come from the server and
+            cover the whole catalog, so they don't drift as more pages load. */}
         {(busy || categories.length > 0) && (
           <aside className="hidden w-52 shrink-0 lg:block">
             {busy ? (
@@ -455,7 +574,7 @@ export default function CatalogGallery({
                 options={categories}
                 selected={category}
                 onSelect={(v) => {
-                  void setCategory(v);
+                  void setCategory(v === ALL ? null : v);
                   void setItemId(null);
                 }}
               />
@@ -490,22 +609,31 @@ export default function CatalogGallery({
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              value={query}
-              onChange={(e) => void setQuery(e.target.value)}
+              value={draftQuery}
+              onChange={(e) => setDraftQuery(e.target.value)}
               placeholder={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}…`}
               aria-label={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}`}
               className="pl-9"
             />
           </div>
 
-          {error && (
-            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              {error}
+          {paging.error && (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
+              <span className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {paging.error}
+              </span>
+              {/* A failed page used to end infinite scroll for good. It's a
+                  retry, not the end of the catalog. */}
+              {moreAvailable && (
+                <Button variant="outline" size="sm" onClick={() => void loadMore()}>
+                  Retry
+                </Button>
+              )}
             </div>
           )}
           {busy && <ContentSkeleton view={view} />}
-          {!busy && filtered.length === 0 && !error && (
+          {!busy && !refreshing && paging.entries.length === 0 && !paging.error && (
             <EmptyState
               title={hasFilters ? "No matches" : "Nothing here"}
               description={
@@ -519,8 +647,9 @@ export default function CatalogGallery({
                   ? {
                       label: "Clear filters",
                       onClick: () => {
-                        void setQuery("");
-                        void setCategory(ALL);
+                        setDraftQuery("");
+                        void setQuery(null);
+                        void setCategory(null);
                       },
                     }
                   : undefined
@@ -528,31 +657,44 @@ export default function CatalogGallery({
             />
           )}
 
-          {!busy && filtered.length > 0 && (
-            <>
+          {!busy && paging.entries.length > 0 && (
+            <div
+              className={cn(
+                "transition-opacity",
+                refreshing && "pointer-events-none opacity-50"
+              )}
+              aria-busy={refreshing}
+            >
               {view === "grid" ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                  {filtered.map((e) => (
+                  {paging.entries.map((e) => (
                     <CatalogCard key={e.id} entry={e} onOpen={() => void setItemId(e.id)} />
                   ))}
                 </div>
               ) : (
-                <CatalogTable entries={filtered} onOpen={(e) => void setItemId(e.id)} />
+                <CatalogTable entries={paging.entries} onOpen={(e) => void setItemId(e.id)} />
               )}
+            </div>
+          )}
 
-              {/* Infinite-scroll sentinel + manual fallback */}
+          {/* Infinite-scroll sentinel + manual fallback. Mounted whenever the
+              catalog has more, including when this page rendered nothing — a
+              filter whose matches all sit further in used to render "No matches"
+              here and strand the rest of the catalog. */}
+          {!busy && !refreshing && moreAvailable && (
+            <>
               <div ref={sentinelRef} className="h-px" aria-hidden />
-              {hasMore && (
-                <div className="flex justify-center pt-2">
-                  {more ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  ) : (
-                    <Button variant="outline" onClick={() => load(type, offset, true)}>
+              <div className="flex justify-center pt-2">
+                {paging.status === "appending" ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                ) : (
+                  !paging.error && (
+                    <Button variant="outline" onClick={() => void loadMore()}>
                       Load more
                     </Button>
-                  )}
-                </div>
-              )}
+                  )
+                )}
+              </div>
             </>
           )}
           </>

@@ -1355,6 +1355,24 @@
         "title": "ApprovalPolicy",
         "type": "object"
       },
+      "ArchivedFileResponse": {
+        "properties": {
+          "archived_path": {
+            "title": "Archived Path",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "archived_path"
+        ],
+        "title": "ArchivedFileResponse",
+        "type": "object"
+      },
       "ArtifactEventResponse": {
         "properties": {
           "action": {
@@ -1635,6 +1653,11 @@
           "file": {
             "contentMediaType": "application/octet-stream",
             "title": "File",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "title": "Path",
             "type": "string"
           },
           "purpose": {
@@ -2394,6 +2417,54 @@
         "title": "BundleSkill",
         "type": "object"
       },
+      "CatalogBrowseResponse": {
+        "description": "One page of a type's catalog plus the context needed to browse it.\n\n``total`` and ``categories`` cover the whole filtered catalog, not the page:\nwithout them a page that happens to contain no visible matches is\nindistinguishable from the end of the catalog, and facet counts drift as\nmore pages load.",
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryFacet"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RegistryItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "categories"
+        ],
+        "title": "CatalogBrowseResponse",
+        "type": "object"
+      },
+      "CategoryFacet": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ],
+        "title": "CategoryFacet",
+        "type": "object"
+      },
       "CheckRequest": {
         "properties": {
           "namespace": {
@@ -2462,17 +2533,6 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
-          },
-          "source_project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Project Id"
           }
         },
         "required": [
@@ -2557,17 +2617,6 @@
             "title": "Skills",
             "type": "array"
           },
-          "source_project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Project Id"
-          },
           "workspace_id": {
             "title": "Workspace Id",
             "type": "string"
@@ -2579,8 +2628,7 @@
           "created_by",
           "name",
           "description",
-          "kind",
-          "source_project_id"
+          "kind"
         ],
         "title": "ClientResponse",
         "type": "object"
@@ -2625,17 +2673,6 @@
               }
             ],
             "title": "Name"
-          },
-          "source_project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Project Id"
           }
         },
         "title": "ClientUpdate",
@@ -7814,6 +7851,19 @@
             "description": "Secret API key for the provider. Stored encrypted in the secret manager; never returned in responses. May be empty for proxies that accept keyless traffic \u2014 the backend suppresses the Authorization header when this is empty.",
             "title": "Api Key"
           },
+          "api_key_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Use an existing workspace secret as the API key instead of supplying one here. Mutually exclusive with api_key. The secret keeps its own lifecycle: several configurations may share it, and it cannot be deleted while any of them still points at it.",
+            "title": "Api Key Secret Id"
+          },
           "description": {
             "anyOf": [
               {
@@ -7976,6 +8026,19 @@
             ],
             "description": "New API key. Replaces the previously stored secret. Send an empty string to clear the key for keyless custom endpoints.",
             "title": "Api Key"
+          },
+          "api_key_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Point this configuration at an existing workspace secret instead. Mutually exclusive with api_key.",
+            "title": "Api Key Secret Id"
           },
           "description": {
             "anyOf": [
@@ -8261,6 +8324,17 @@
       },
       "RegistryItemResponse": {
         "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -8279,6 +8353,11 @@
           "external_id": {
             "title": "External Id",
             "type": "string"
+          },
+          "featured": {
+            "default": false,
+            "title": "Featured",
+            "type": "boolean"
           },
           "id": {
             "format": "uuid",
@@ -8776,6 +8855,24 @@
         "title": "ResolveResponse",
         "type": "object"
       },
+      "RestoredFileResponse": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "restored_from": {
+            "title": "Restored From",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "restored_from"
+        ],
+        "title": "RestoredFileResponse",
+        "type": "object"
+      },
       "RunExecutionConfig": {
         "additionalProperties": false,
         "description": "Caller-requested execution ceiling; governance may only tighten it.",
@@ -8923,6 +9020,300 @@
           "isolation"
         ],
         "title": "SandboxSummary",
+        "type": "object"
+      },
+      "ScheduleTaskCreate": {
+        "description": "A task to run once, at a time the caller picks.",
+        "properties": {
+          "attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachments"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunExecutionConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "requires_human_approval": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": false,
+            "title": "Requires Human Approval"
+          },
+          "scheduled_at": {
+            "format": "date-time",
+            "title": "Scheduled At",
+            "type": "string"
+          },
+          "task_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolicyDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "description",
+          "scheduled_at"
+        ],
+        "title": "ScheduleTaskCreate",
+        "type": "object"
+      },
+      "SecretConsumer": {
+        "properties": {
+          "consumer_id": {
+            "description": "Id of the using entity.",
+            "title": "Consumer Id",
+            "type": "string"
+          },
+          "consumer_type": {
+            "description": "Kind of thing using the secret, e.g. provider_config.",
+            "title": "Consumer Type",
+            "type": "string"
+          },
+          "field": {
+            "description": "Which slot on that entity \u2014 a header name, an env var.",
+            "title": "Field",
+            "type": "string"
+          }
+        },
+        "required": [
+          "consumer_type",
+          "consumer_id",
+          "field"
+        ],
+        "title": "SecretConsumer",
+        "type": "object"
+      },
+      "SecretCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "description": "2-64 characters: lowercase letters, digits, '-' and '_', starting and ending with a letter or digit. Prefixes the platform uses for its own secrets are rejected.",
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "description": "Stored encrypted; never returned.",
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "SecretCreate",
+        "type": "object"
+      },
+      "SecretDescriptionUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "title": "SecretDescriptionUpdate",
+        "type": "object"
+      },
+      "SecretOwner": {
+        "description": "The connection a managed secret belongs to.",
+        "properties": {
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which slot on the owner this fills \u2014 an env var, a header name.",
+            "title": "Field"
+          },
+          "id": {
+            "description": "Its id, for deep-linking to it.",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its display name, or null when the owner no longer exists.",
+            "title": "Name"
+          },
+          "type": {
+            "description": "Kind of owner, e.g. mcp_instance or provider_config.",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ],
+        "title": "SecretOwner",
+        "type": "object"
+      },
+      "SecretResponse": {
+        "description": "A secret's metadata. The value is never part of this.",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "description": "Unique within the workspace.",
+            "title": "Name",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SecretOwner"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when a connection holds this secret on the user's behalf. Such a secret is read-only here and is changed through its owner."
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "used_by": {
+            "items": {
+              "$ref": "#/components/schemas/SecretConsumer"
+            },
+            "title": "Used By",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "SecretResponse",
+        "type": "object"
+      },
+      "SecretValueUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "description": "Replaces the stored value.",
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "SecretValueUpdate",
         "type": "object"
       },
       "SetupField": {
@@ -9387,23 +9778,6 @@
           }
         },
         "title": "SkillUpdateRequest",
-        "type": "object"
-      },
-      "SourceProjectBody": {
-        "properties": {
-          "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Project Id"
-          }
-        },
-        "title": "SourceProjectBody",
         "type": "object"
       },
       "SpecPreviewRequest": {
@@ -9987,6 +10361,17 @@
             ],
             "title": "Result"
           },
+          "scheduled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled At"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -10251,6 +10636,17 @@
               }
             ],
             "title": "Result"
+          },
+          "scheduled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled At"
           },
           "status": {
             "title": "Status",
@@ -11618,12 +12014,12 @@
             "title": "Name",
             "type": "string"
           },
-          "slug": {
-            "title": "Slug",
+          "owner_user_id": {
+            "title": "Owner User Id",
             "type": "string"
           },
-          "type": {
-            "title": "Type",
+          "slug": {
+            "title": "Slug",
             "type": "string"
           }
         },
@@ -11631,7 +12027,7 @@
           "id",
           "slug",
           "name",
-          "type"
+          "owner_user_id"
         ],
         "title": "WorkspaceResponse",
         "type": "object"
@@ -13624,6 +14020,67 @@
           }
         ],
         "summary": "Create Task For Agent With Stream",
+        "tags": [
+          "v1",
+          "protected",
+          "agent-tasks"
+        ]
+      }
+    },
+    "/v1/agents/{agent_id}/tasks/schedule": {
+      "post": {
+        "description": "Create a task that runs once at an absolute future time.\n\nDeliberately not the streaming sibling of ``POST /``: there is nothing to\nstream until the run starts, which may be days away. Repeating schedules\nare cron triggers, not tasks.",
+        "operationId": "schedule_task_for_agent_v1_agents__agent_id__tasks_schedule_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleTaskCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Schedule Task For Agent",
         "tags": [
           "v1",
           "protected",
@@ -16076,66 +16533,6 @@
         ]
       }
     },
-    "/v1/clients/{client_id}/pull-from-project": {
-      "post": {
-        "operationId": "pull_from_project_v1_clients__client_id__pull_from_project_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "client_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Client Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SourceProjectBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClientResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Pull From Project",
-        "tags": [
-          "v1",
-          "protected",
-          "clients"
-        ]
-      }
-    },
     "/v1/clients/{client_id}/skills": {
       "post": {
         "operationId": "add_skill_to_client_v1_clients__client_id__skills_post",
@@ -16270,7 +16667,7 @@
         ]
       },
       "post": {
-        "description": "Upload a file, server-proxied.\n\n``purpose=\"workspace\"`` (the default) lands the file at the workspace\nartifact root. ``purpose=\"attachment\"`` stages it under\n``staging/{id}/{filename}`` \u2014 hidden from the workspace listing \u2014 and\nreturns a ``ref`` the task-create endpoint resolves into the task workspace.",
+        "description": "Upload a file, server-proxied.\n\n``purpose=\"workspace\"`` (the default) lands the file at ``path`` within the\nworkspace, or at the workspace root under its own name when ``path`` is\nomitted. ``purpose=\"attachment\"`` stages it under ``staging/{id}/{filename}``\n\u2014 hidden from the workspace listing \u2014 and returns a ``ref`` the task-create\nendpoint resolves into the task workspace.",
         "operationId": "upload_file_v1_files_post",
         "requestBody": {
           "content": {
@@ -16413,6 +16810,56 @@
         ]
       }
     },
+    "/v1/files/restore/{file_path}": {
+      "post": {
+        "description": "Move an archived file back to the path it was archived from.",
+        "operationId": "restore_workspace_file_v1_files_restore__file_path__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_path",
+            "required": true,
+            "schema": {
+              "title": "File Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoredFileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore Workspace File",
+        "tags": [
+          "v1",
+          "protected",
+          "files"
+        ]
+      }
+    },
     "/v1/files/upload-url": {
       "post": {
         "description": "Mint a presigned PUT for a task attachment uploaded directly to the store.\n\nThe client-declared sha256 is bound into the signature as ``ChecksumSHA256``,\nso the object store rejects a body that does not hash to it \u2014 the upload is\ncontent-verified without the API ever seeing the bytes. The returned ``ref``\nis consumed by the task-create endpoint exactly like a server-proxied one.",
@@ -16463,6 +16910,54 @@
       }
     },
     "/v1/files/{file_path}": {
+      "delete": {
+        "description": "Archive a workspace file instead of destroying it.\n\nThe object moves under ``.trash/{timestamp}/`` and disappears from the\nlisting, so a mistaken delete is always recoverable through\n:func:`restore_workspace_file`. Task-owned and staging paths are not\ndeletable here: they belong to a task's committed manifest, not to the\nworkspace library.",
+        "operationId": "delete_workspace_file_v1_files__file_path__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_path",
+            "required": true,
+            "schema": {
+              "title": "File Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchivedFileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Workspace File",
+        "tags": [
+          "v1",
+          "protected",
+          "files"
+        ]
+      },
       "get": {
         "operationId": "download_workspace_file_v1_files__file_path__get",
         "parameters": [
@@ -22012,6 +22507,135 @@
         ]
       }
     },
+    "/v1/registries/catalog/browse": {
+      "get": {
+        "description": "Browse one catalog type: filtered, sorted and paged server-side.\n\nPaging every registry of a type separately and merging client-side cannot\nbe made correct -- a single offset has no meaning over the concatenation --\nso the whole type is paged as one ordered result here instead.",
+        "operationId": "browse_catalog_v1_registries_catalog_browse_get",
+        "parameters": [
+          {
+            "description": "Catalog type to browse",
+            "in": "query",
+            "name": "registry_type",
+            "required": true,
+            "schema": {
+              "description": "Catalog type to browse",
+              "title": "Registry Type",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Free-text filter over name and description",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Free-text filter over name and description",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Restrict to one category facet",
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict to one category facet",
+              "title": "Category"
+            }
+          },
+          {
+            "description": "'featured' (default) or 'name'",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "'featured' (default) or 'name'",
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogBrowseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Browse Catalog",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      }
+    },
     "/v1/registries/catalog/items/{item_id}": {
       "get": {
         "operationId": "get_catalog_item_v1_registries_catalog_items__item_id__get",
@@ -22588,6 +23212,296 @@
           "v1",
           "protected",
           "sandboxes"
+        ]
+      }
+    },
+    "/v1/secrets": {
+      "get": {
+        "description": "Every credential in the workspace the user would recognise as theirs.\n\nTheir own, plus the ones connections hold for them \u2014 the latter read-only.\nValues are not included, here or anywhere.",
+        "operationId": "list_secrets_v1_secrets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SecretResponse"
+                  },
+                  "title": "Response List Secrets V1 Secrets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Secrets",
+        "tags": [
+          "v1",
+          "protected",
+          "secrets"
+        ]
+      },
+      "post": {
+        "operationId": "create_secret_v1_secrets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Secret",
+        "tags": [
+          "v1",
+          "protected",
+          "secrets"
+        ]
+      }
+    },
+    "/v1/secrets/{secret_id}": {
+      "delete": {
+        "operationId": "delete_secret_v1_secrets__secret_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "secret_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Secret Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Secret",
+        "tags": [
+          "v1",
+          "protected",
+          "secrets"
+        ]
+      },
+      "get": {
+        "description": "Read one secret's metadata, whether the user owns it or a connection does.\n\nManaged secrets are readable because the list shows them; hiding them here\nwould 404 every row the page invites you to click. They stay unwritable \u2014\nthe write routes below still refuse them.",
+        "operationId": "get_secret_v1_secrets__secret_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "secret_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Secret Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Secret",
+        "tags": [
+          "v1",
+          "protected",
+          "secrets"
+        ]
+      },
+      "patch": {
+        "operationId": "update_secret_description_v1_secrets__secret_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "secret_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Secret Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretDescriptionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Secret Description",
+        "tags": [
+          "v1",
+          "protected",
+          "secrets"
+        ]
+      }
+    },
+    "/v1/secrets/{secret_id}/value": {
+      "put": {
+        "description": "Replace the stored value. Everything pointing at this secret picks up the new one.",
+        "operationId": "rotate_secret_v1_secrets__secret_id__value_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "secret_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Secret Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretValueUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate Secret",
+        "tags": [
+          "v1",
+          "protected",
+          "secrets"
         ]
       }
     },
