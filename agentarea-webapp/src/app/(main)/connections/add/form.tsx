@@ -602,7 +602,7 @@ export function AddMCPServerForm() {
                 size="sm"
                 onClick={() => appendEnv({ key: "", value: "", secret: true })}
               >
-                <Plus className="mr-2 h-4 w-4" />
+                <Plus className="mr-2" />
                 Add variable
               </Button>
             </div>
@@ -630,9 +630,9 @@ export function AddMCPServerForm() {
                     onClick={() => setValue(`env.${index}.secret`, !isSecret)}
                   >
                     {isSecret ? (
-                      <Lock className="h-4 w-4" />
+                      <Lock />
                     ) : (
-                      <LockOpen className="h-4 w-4" />
+                      <LockOpen />
                     )}
                   </Button>
                   <Button
@@ -641,7 +641,7 @@ export function AddMCPServerForm() {
                     size="sm"
                     onClick={() => removeEnv(index)}
                   >
-                    <X className="h-4 w-4" />
+                    <X />
                   </Button>
                 </div>
               );
@@ -687,7 +687,7 @@ export function AddMCPServerForm() {
                   size="sm"
                   onClick={() => append({ key: "", value: "" })}
                 >
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="mr-2" />
                   Add Header
                 </Button>
               </div>
@@ -710,7 +710,7 @@ export function AddMCPServerForm() {
                     size="sm"
                     onClick={() => remove(index)}
                   >
-                    <X className="h-4 w-4" />
+                    <X />
                   </Button>
                 </div>
               ))}

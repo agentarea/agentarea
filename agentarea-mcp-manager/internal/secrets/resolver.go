@@ -146,35 +146,6 @@ func newInfisicalSecretResolver(logger *slog.Logger) (*InfisicalSecretResolver, 
 	}, nil
 }
 
-// ResolveSecrets resolves all secrets for an MCP instance
-func (sr *InfisicalSecretResolver) ResolveSecrets(instanceID string, envVars map[string]string) (map[string]string, error) {
-	resolved := make(map[string]string)
-
-	for key, value := range envVars {
-		// Check if this is a secret reference or a plain value
-		if strings.HasPrefix(value, "secret_ref:") {
-			// This is a secret reference, resolve it from Infisical
-			secretValue, err := sr.resolveSecretFromInfisical(instanceID, key)
-			if err != nil {
-				sr.logger.Error("Failed to resolve secret from Infisical",
-					slog.String("instance_id", instanceID))
-				return nil, errors.New("failed to resolve secrets for instance")
-			}
-			resolved[key] = secretValue
-		} else {
-			// This is a plain value, use as-is
-			resolved[key] = value
-		}
-	}
-
-	sr.logger.Debug("Resolved secrets for instance",
-		slog.String("instance_id", instanceID),
-		slog.Int("total_vars", len(envVars)),
-		slog.Int("resolved_secrets", len(resolved)))
-
-	return resolved, nil
-}
-
 // resolveSecretFromInfisical retrieves a secret from Infisical using the same pattern as Python service
 func (sr *InfisicalSecretResolver) resolveSecretFromInfisical(instanceID, secretKey string) (string, error) {
 	// Use the same secret key pattern as MCPEnvironmentService in Python:

@@ -32,13 +32,17 @@ from agentarea_common.money import ZERO, Money, serialize_money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
-from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
+from agentarea_secrets.naming import has_reserved_prefix
+from agentarea_tasks.domain.exceptions import (
+    AgentModelNotConfiguredError,
+    SchedulingNotSupportedError,
+)
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
-from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig
+from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig, require_future_instant
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
@@ -317,6 +321,8 @@ class TaskResponse(BaseModel):
     created_at: UtcDatetime
     execution_id: str | None = None  # Workflow execution ID
     total_cost: float | None = None  # LLM token cost in USD
+    # Set only on one-shot deferred runs; null means the task ran on creation.
+    scheduled_at: UtcDatetime | None = None
 
     @classmethod
     def create_new(
@@ -353,6 +359,7 @@ class TaskResponse(BaseModel):
             failure_reason=_failure_reason_from_result(task.result),
             created_at=task.created_at,
             execution_id=task.execution_id,
+            scheduled_at=task.scheduled_at,
         )
 
 
@@ -361,7 +368,10 @@ class TaskWithAgent(BaseModel):
 
     id: UUID
     agent_id: UUID
-    agent_name: str
+    # None when the task's agent no longer resolves. Never substitute a
+    # placeholder name: a fabricated "Unknown" is indistinguishable from an
+    # agent actually called that, and it hides the missing agent from the UI.
+    agent_name: str | None = None
     description: str
     parameters: dict[str, Any]
     status: str
@@ -371,13 +381,14 @@ class TaskWithAgent(BaseModel):
     created_at: UtcDatetime
     execution_id: str | None = None
     total_cost: float | None = None  # LLM token cost in USD
+    scheduled_at: UtcDatetime | None = None
     # Populated by the inbox endpoint for waiting_for_approval tasks so the UI can
     # approve/reject the pending escalation inline without re-fetching task events.
     escalation_id: str | None = None
     escalation_tool_name: str | None = None
 
     @classmethod
-    def from_task_response(cls, task: TaskResponse, agent_name: str) -> "TaskWithAgent":
+    def from_task_response(cls, task: TaskResponse, agent_name: str | None) -> "TaskWithAgent":
         """Create TaskWithAgent from TaskResponse and agent name."""
         return cls(
             id=task.id,
@@ -392,6 +403,7 @@ class TaskWithAgent(BaseModel):
             created_at=task.created_at,
             execution_id=task.execution_id,
             total_cost=task.total_cost,
+            scheduled_at=task.scheduled_at,
         )
 
 
@@ -430,7 +442,7 @@ async def get_all_tasks(
                 TaskWithAgent(
                     id=task.id,
                     agent_id=task.agent_id,
-                    agent_name=agent_map.get(str(task.agent_id), "Unknown"),
+                    agent_name=agent_map.get(str(task.agent_id)),
                     description=task.description,
                     parameters=task.parameters,
                     status=task.status,
@@ -438,6 +450,7 @@ async def get_all_tasks(
                     error=task.error,
                     failure_reason=_failure_reason_from_result(task.result),
                     created_at=task.created_at,
+                    scheduled_at=task.scheduled_at,
                     execution_id=task.execution_id,
                     total_cost=total_cost,
                 )
@@ -483,7 +496,7 @@ async def get_task_by_id(
         return TaskWithAgent(
             id=task.id,
             agent_id=task.agent_id,
-            agent_name=agent.name if agent else "Unknown",
+            agent_name=agent.name if agent else None,
             description=task.description,
             parameters=task.parameters,
             status=task.status,
@@ -491,6 +504,7 @@ async def get_task_by_id(
             error=task.error,
             failure_reason=_failure_reason_from_result(task.result),
             created_at=task.created_at,
+            scheduled_at=task.scheduled_at,
             execution_id=task.execution_id,
             total_cost=total_cost,
         )
@@ -507,7 +521,9 @@ class TaskEvent(BaseModel):
     id: str
     task_id: str
     agent_id: str
-    execution_id: str
+    # None for events recorded outside a workflow execution. "unknown" was a
+    # fabricated id that callers could not tell apart from a real one.
+    execution_id: str | None = None
     timestamp: UtcDatetime
     event_type: str
     message: str
@@ -853,6 +869,97 @@ async def create_task_for_agent_sync(
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
+class ScheduleTaskCreate(TaskCreate):
+    """A task to run once, at a time the caller picks."""
+
+    scheduled_at: datetime
+
+    # Enforced here so a bad time is a 422 on the field, not a generic error
+    # raised deeper in when RunCreate re-validates it.
+    _validate_scheduled_at = field_validator("scheduled_at")(require_future_instant)
+
+
+@router.post("/schedule", response_model=TaskResponse, status_code=201)
+async def schedule_task_for_agent(
+    agent_id: UUID,
+    data: ScheduleTaskCreate,
+    user_context: UserContextDep,
+    task_service: TaskService = Depends(get_task_service),
+):
+    """Create a task that runs once at an absolute future time.
+
+    Deliberately not the streaming sibling of ``POST /``: there is nothing to
+    stream until the run starts, which may be days away. Repeating schedules
+    are cron triggers, not tasks.
+    """
+    try:
+        if data.attachments:
+            reserved_task_id = uuid4()
+            attachment_descriptors = await _stage_attachments_into_task(
+                user_context.workspace_id,
+                reserved_task_id,
+                data.attachments,
+                user_context.user_id,
+            )
+            payload = RunCreate(
+                agent_id=agent_id,
+                description=data.description,
+                parameters={**data.parameters, "attachments": attachment_descriptors},
+                execution=data.execution,
+                requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+                task_policy=data.task_policy,
+                scheduled_at=data.scheduled_at,
+            )
+            task = await task_service.reserve_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
+                task_id=reserved_task_id,
+                trusted_metadata={"workspace_attachments": attachment_descriptors},
+            )
+            task = await task_service.dispatch_reserved_run(task)
+            await _delete_staging_refs(
+                user_context.workspace_id, data.attachments, user_context.user_id
+            )
+        else:
+            payload = RunCreate(
+                agent_id=agent_id,
+                description=data.description,
+                parameters=data.parameters,
+                execution=data.execution,
+                requires_human_approval=data.requires_human_approval or False,
+                project_id=data.project_id,
+                task_policy=data.task_policy,
+                scheduled_at=data.scheduled_at,
+            )
+            task = await task_service.start_run(
+                payload,
+                workspace_id=user_context.workspace_id,
+                user_id=user_context.user_id,
+            )
+
+        return TaskResponse.from_agent_task(task)
+
+    except HTTPException:
+        raise
+    except SchedulingNotSupportedError as exc:
+        raise HTTPException(
+            status_code=501,
+            detail="This deployment's execution engine cannot defer runs",
+        ) from exc
+    except PolicyValidationError as exc:
+        raise HTTPException(status_code=422, detail="Task policy rejected") from exc
+    except AgentModelNotConfiguredError as exc:
+        raise HTTPException(status_code=422, detail="Agent model is not configured") from exc
+    except ValueError as exc:
+        logger.error("Agent validation failed for agent %s", agent_id, exc_info=True)
+        raise HTTPException(status_code=404, detail="Agent validation error") from exc
+    except Exception as exc:
+        logger.error("Task scheduling failed for agent %s", agent_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
 @router.get("/", response_model=list[TaskResponse])
 async def list_agent_tasks(
     agent_id: UUID,
@@ -913,16 +1020,13 @@ async def get_agent_task(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Get a specific task for the specified agent."""
-    # Verify agent exists
-    agent = await agent_service.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
+    # No agent-existence gate: the task lookup below already proves the task is
+    # in the caller's workspace and belongs to `agent_id`. Requiring the agent
+    # to still exist only hid the tasks of deleted agents. See get_task_events.
     try:
         task = await task_service.get_task_with_workflow_status(task_id)
         if task:
@@ -964,16 +1068,11 @@ async def get_agent_task_status(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
-    agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Get the execution status of a specific task workflow."""
-    # Verify agent exists
-    agent = await agent_service.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
+    # No agent-existence gate — see get_agent_task.
     try:
         # DB is the source of truth for the task lifecycle; Temporal only
         # upgrades to a terminal state. The workflow may stay alive in
@@ -1628,11 +1727,28 @@ async def submit_task_input(
 
         secret_refs: dict[str, dict[str, str]] = {}
         for field_name, raw_secret in submission.secrets.items():
-            if isinstance(raw_secret, InputSecretValue):
+            if isinstance(raw_secret, InputSecretValue) and raw_secret.secret_name:
+                # set_secret upserts on (workspace_id, name), so a caller-chosen
+                # name that lands on a platform prefix either overwrites the
+                # credential a connection resolves, or mints a row that renders
+                # on the secrets page as a connection's credential which does
+                # not exist. Only the prefixes are refused: the slug shape that
+                # POST /v1/secrets enforces is a house style for names it
+                # creates, and applying it here would break namespaced input
+                # names like `service/api_token` that already work.
+                if has_reserved_prefix(raw_secret.secret_name):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            f"Secret name '{raw_secret.secret_name}' uses a prefix reserved "
+                            "for secrets the platform manages on behalf of a connection."
+                        ),
+                    )
                 secret_value = raw_secret.value
-                secret_name = raw_secret.secret_name or _default_input_secret_name(
-                    task_id, field_name
-                )
+                secret_name = raw_secret.secret_name
+            elif isinstance(raw_secret, InputSecretValue):
+                secret_value = raw_secret.value
+                secret_name = _default_input_secret_name(task_id, field_name)
             else:
                 secret_value = str(raw_secret)
                 secret_name = _default_input_secret_name(task_id, field_name)
@@ -1838,19 +1954,20 @@ async def get_task_events(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of events per page"),
     event_type: str | None = Query(None, description="Filter by event type"),
-    agent_service: AgentService = Depends(get_read_agent_service),
+    task_service: TaskService = Depends(get_read_task_service),
 ):
     """Get paginated task execution events for the specified task from database."""
-    # Verify agent exists
-    agent = await agent_service.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+    # Gate on the task, not the agent. Requiring `agent_id` to still resolve
+    # gated a task's history on its agent existing — deleting an agent silently
+    # took the Events tab of every task it ever ran down with it. The workspace
+    # filter inside the repositories is the actual authorization boundary; the
+    # ownership check matches the sibling task endpoints and keeps the caller
+    # from stamping an arbitrary `agent_id` onto this task's events below.
+    task = await task_service.get_task(task_id)
+    if not task or str(task.agent_id) != str(agent_id):
+        raise HTTPException(status_code=404, detail="Task not found")
 
     try:
-        # Read through the workspace-scoped repository. The check above only
-        # proves the caller owns an agent with this id — `agent_id` is a route
-        # parameter and is never tied to the task — so the workspace filter
-        # inside the repository is the actual authorization boundary here.
         event_repository = repository_factory.create_repository(TaskEventRepository)
         records, total_events = await event_repository.list_for_task(
             task_id,
@@ -1864,8 +1981,7 @@ async def get_task_events(
                 id=str(record.id),
                 task_id=str(record.task_id),
                 agent_id=str(agent_id),
-                execution_id=record.data.get("execution_id")
-                or record.metadata.get("execution_id", "unknown"),
+                execution_id=record.data.get("execution_id") or record.metadata.get("execution_id"),
                 timestamp=record.timestamp,
                 event_type=record.event_type,
                 message=record.data.get("message", f"Event: {record.event_type}"),
@@ -1895,19 +2011,16 @@ async def stream_task_events(
     include_chunks: bool = Query(
         True, description="Include incremental llm.call.chunk token events in the stream"
     ),
-    agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
 ):
     """Stream real-time task execution events via Server-Sent Events."""
-    # Verify agent exists
-    agent = await agent_service.get(agent_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
     try:
-        # Verify task exists
+        # Gated on the task, not the agent — see get_task_events. An agent that
+        # no longer resolves must not take the live stream of its past tasks
+        # down with it, but `agent_id` still has to own the task: it is echoed
+        # into every frame this stream emits.
         task = await task_service.get_task(task_id)
-        if not task:
+        if not task or str(task.agent_id) != str(agent_id):
             raise HTTPException(status_code=404, detail="Task not found")
 
         # Create SSE stream by tailing the task_events table (single source of

@@ -119,7 +119,7 @@ export default function ModelPicker({
           disabled={loading}
         >
           {loading ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Loader2 className="animate-spin" />
           ) : (
             "Change"
           )}

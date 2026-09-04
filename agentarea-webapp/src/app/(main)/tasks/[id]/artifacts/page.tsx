@@ -74,7 +74,7 @@ export default function TaskArtifactsPage() {
           variant="outline"
           onClick={() => void loadArtifacts()}
         >
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          <RefreshCw className="mr-1.5" />
           Refresh
         </Button>
       </div>
@@ -99,7 +99,7 @@ export default function TaskArtifactsPage() {
               </div>
               <Button variant="outline" size="sm" className="gap-1" asChild>
                 <a href={`/api/proxy${artifact.download_url}`}>
-                  <Download className="h-4 w-4" />
+                  <Download />
                   Download
                 </a>
               </Button>

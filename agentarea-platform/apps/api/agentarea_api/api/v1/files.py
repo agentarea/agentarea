@@ -2,9 +2,11 @@
 
 Lists and serves the files stored under the current workspace's S3 prefix.
 Files end up here from any source — agent tool runs, task artifacts, manual
-uploads from a project — so this is a read-only window into whatever the
-workspace already owns. Task workspace paths are resolved through committed
+uploads from a project. Task workspace paths are resolved through committed
 manifests; raw manifests and immutable-object keys are never exposed here.
+
+Only the workspace library is writable through this router, and deletes are
+archives: the object moves under ``.trash/`` rather than being destroyed.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from uuid import uuid4
 
 from agentarea_api.api.deps.database import ReadDatabaseSessionDep
 from agentarea_common.artifacts import (
+    TRASH_PREFIX,
     ArtifactActor,
     ArtifactEvent,
     ArtifactIntegrityError,
@@ -103,6 +106,16 @@ class PresignUploadResponse(BaseModel):
     expires_in: int
 
 
+class ArchivedFileResponse(BaseModel):
+    path: str
+    archived_path: str
+
+
+class RestoredFileResponse(BaseModel):
+    path: str
+    restored_from: str
+
+
 class ArtifactEventResponse(BaseModel):
     action: str
     actor_type: str
@@ -137,12 +150,39 @@ def _task_workspace_path(file_path: str) -> tuple[str, str] | None:
     return parts[1], relative_path
 
 
-def _is_task_storage_path(file_path: str) -> bool:
+def _is_hidden_storage_path(file_path: str) -> bool:
+    """Paths the workspace view never shows and manual writes may never touch.
+
+    ``staging/`` holds half-finished attachment uploads, ``tasks/`` is the
+    task-owned surface reached through committed manifests, and ``.trash/``
+    holds archived files that only the restore endpoint may resurrect.
+    """
     clean = file_path.lstrip("/")
-    if clean.startswith("staging/"):
+    if clean.startswith("staging/") or clean.startswith(TRASH_PREFIX):
         return True
     parts = PurePosixPath(clean).parts
     return bool(parts and parts[0] == "tasks")
+
+
+def _resolve_upload_path(path: str, filename: str) -> str:
+    """Resolve where an upload lands, rejecting anything outside the workspace.
+
+    An explicit ``path`` keeps the directory structure the client sent, which is
+    what makes folder uploads and prefix-scoped reads possible. Without one the
+    file lands at the workspace root under its own name.
+    """
+    if not path:
+        return PurePosixPath(filename or "unnamed").name or "unnamed"
+    try:
+        resolved = normalize_workspace_path(path)
+    except WorkspaceValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    if _is_hidden_storage_path(resolved):
+        raise HTTPException(
+            status_code=422,
+            detail=f"{resolved!r} is a reserved prefix and cannot be written directly",
+        )
+    return resolved
 
 
 def _workspace_file_download_url(file_path: str) -> str:
@@ -168,7 +208,7 @@ async def list_workspace_files(
 ) -> WorkspaceFileListResponse:
     svc = _get_artifact_service()
     objects = await svc.list(user_context.workspace_id)
-    visible_objects = [obj for obj in objects if not _is_task_storage_path(obj.path)]
+    visible_objects = [obj for obj in objects if not _is_hidden_storage_path(obj.path)]
     files = [
         WorkspaceFileInfo(
             path=obj.path,
@@ -199,15 +239,16 @@ async def upload_file(
     file: UploadFile,
     user_context: UserContextDep,
     purpose: Annotated[str, Form()] = "workspace",
+    path: Annotated[str, Form()] = "",
 ):
     """Upload a file, server-proxied.
 
-    ``purpose="workspace"`` (the default) lands the file at the workspace
-    artifact root. ``purpose="attachment"`` stages it under
-    ``staging/{id}/{filename}`` — hidden from the workspace listing — and
-    returns a ``ref`` the task-create endpoint resolves into the task workspace.
+    ``purpose="workspace"`` (the default) lands the file at ``path`` within the
+    workspace, or at the workspace root under its own name when ``path`` is
+    omitted. ``purpose="attachment"`` stages it under ``staging/{id}/{filename}``
+    — hidden from the workspace listing — and returns a ``ref`` the task-create
+    endpoint resolves into the task workspace.
     """
-    # Strip any directory components so an upload can't land in another prefix.
     filename = PurePosixPath(file.filename or "unnamed").name or "unnamed"
     content = await file.read()
     svc = ArtifactService(
@@ -217,7 +258,7 @@ async def upload_file(
     if purpose == "workspace":
         await svc.put(
             user_context.workspace_id,
-            filename,
+            _resolve_upload_path(path, filename),
             content,
             content_type=file.content_type,
         )
@@ -282,6 +323,57 @@ async def create_attachment_upload_url(
     return PresignUploadResponse(ref=path, upload_url=upload_url, expires_in=expires_in)
 
 
+@router.delete("/{file_path:path}", response_model=ArchivedFileResponse)
+async def delete_workspace_file(
+    file_path: str,
+    user_context: UserContextDep,
+) -> ArchivedFileResponse:
+    """Archive a workspace file instead of destroying it.
+
+    The object moves under ``.trash/{timestamp}/`` and disappears from the
+    listing, so a mistaken delete is always recoverable through
+    :func:`restore_workspace_file`. Task-owned and staging paths are not
+    deletable here: they belong to a task's committed manifest, not to the
+    workspace library.
+    """
+    clean = file_path.lstrip("/")
+    if _is_hidden_storage_path(clean):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{clean!r} is not a workspace library file",
+        )
+    svc = ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
+    if not await svc.exists(user_context.workspace_id, clean):
+        raise HTTPException(status_code=404, detail="File not found")
+    archived_path = await svc.archive(user_context.workspace_id, clean)
+    return ArchivedFileResponse(path=clean, archived_path=archived_path)
+
+
+@router.post("/restore/{file_path:path}", response_model=RestoredFileResponse)
+async def restore_workspace_file(
+    file_path: str,
+    user_context: UserContextDep,
+) -> RestoredFileResponse:
+    """Move an archived file back to the path it was archived from."""
+    clean = file_path.lstrip("/")
+    if not clean.startswith(TRASH_PREFIX):
+        raise HTTPException(status_code=400, detail="Not an archived file")
+    # .trash/{timestamp}/{original path} — drop the two-segment archive header.
+    original = "/".join(PurePosixPath(clean).parts[2:])
+    if not original:
+        raise HTTPException(status_code=400, detail="Archived path carries no original path")
+    svc = ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
+    await svc.copy(user_context.workspace_id, clean, original)
+    await svc.delete(user_context.workspace_id, clean)
+    return RestoredFileResponse(path=original, restored_from=clean)
+
+
 @router.get("/history", response_model=ArtifactHistoryResponse)
 async def workspace_file_history(
     path: str,
@@ -325,7 +417,7 @@ async def stream_workspace_file(
                 user_context.workspace_id, task_id, relative_path
             )
         else:
-            if _is_task_storage_path(file_path):
+            if _is_hidden_storage_path(file_path):
                 raise FileNotFoundError(file_path)
             body, content_type, size = await _get_artifact_service().stream(
                 user_context.workspace_id, file_path
@@ -354,9 +446,9 @@ async def download_workspace_file(
                 user_context.workspace_id, task_id, relative_path
             )
         else:
-            exists = not _is_task_storage_path(file_path) and await _get_artifact_service().exists(
-                user_context.workspace_id, file_path
-            )
+            exists = not _is_hidden_storage_path(
+                file_path
+            ) and await _get_artifact_service().exists(user_context.workspace_id, file_path)
     except WorkspaceValidationError:
         exists = False
     if not exists:

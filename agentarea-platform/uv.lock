@@ -71,7 +71,7 @@ wheels = [
 
 [[package]]
 name = "agentarea-agents"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/agents" }
 dependencies = [
     { name = "a2a-sdk" },
@@ -96,7 +96,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-agents-sdk"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/agentarea-agents-sdk" }
 dependencies = [
     { name = "httpx" },
@@ -126,7 +126,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "agentarea-api"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "agentarea-agents" },
@@ -191,7 +191,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-bundles"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/bundles" }
 dependencies = [
     { name = "agentarea-agents" },
@@ -216,7 +216,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-common"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/common" }
 dependencies = [
     { name = "asyncpg" },
@@ -257,7 +257,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-execution"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/execution" }
 dependencies = [
     { name = "agentarea-agents-sdk" },
@@ -293,7 +293,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "agentarea-governance"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/governance" }
 dependencies = [
     { name = "agentarea-common" },
@@ -319,10 +319,11 @@ provides-extras = ["temporal"]
 
 [[package]]
 name = "agentarea-llm"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/llm" }
 dependencies = [
     { name = "agentarea-common" },
+    { name = "agentarea-secrets" },
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
@@ -330,13 +331,14 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "agentarea-common", editable = "libs/common" },
+    { name = "agentarea-secrets", editable = "libs/secrets" },
     { name = "pydantic", specifier = ">=2.4.2" },
     { name = "pyyaml", specifier = ">=6.0.1" },
 ]
 
 [[package]]
 name = "agentarea-mcp"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/mcp" }
 dependencies = [
     { name = "agentarea-common" },
@@ -353,7 +355,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-openapi"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/openapi" }
 dependencies = [
     { name = "agentarea-common" },
@@ -372,7 +374,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-payment"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/payment" }
 dependencies = [
     { name = "agentarea-common" },
@@ -410,7 +412,7 @@ provides-extras = ["x402", "mpp", "all"]
 
 [[package]]
 name = "agentarea-projects"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/projects" }
 dependencies = [
     { name = "agentarea-common" },
@@ -425,7 +427,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-registry"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/registry" }
 dependencies = [
     { name = "agentarea-common" },
@@ -444,7 +446,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-secrets"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/secrets" }
 dependencies = [
     { name = "agentarea-common" },
@@ -461,7 +463,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-tasks"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/tasks" }
 dependencies = [
     { name = "a2a-sdk" },
@@ -482,7 +484,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-triggers"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/triggers" }
 dependencies = [
     { name = "agentarea-common" },
@@ -501,7 +503,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-wallet"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "libs/wallet" }
 dependencies = [
     { name = "agentarea-common" },
@@ -518,7 +520,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-worker"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "apps/worker" }
 dependencies = [
     { name = "agentarea-agents" },
@@ -551,7 +553,7 @@ requires-dist = [
 
 [[package]]
 name = "agentarea-workspace"
-version = "0.0.13"
+version = "0.0.14"
 source = { editable = "." }
 dependencies = [
     { name = "a2a-sdk" },

@@ -13,11 +13,12 @@ from .base import platform_context
     display_name="Models",
     description="Inspect model specifications and create/inspect model instances.",
     category="platform",
+    plane="build",
 )
 class ModelsToolset(Toolset):
     """Inspect available model specs and manage the workspace's model instances."""
 
-    @tool_method
+    @tool_method(effect="read")
     async def list_specs(self) -> str:
         """List available model specifications (e.g. gpt-4o, claude-sonnet)."""
         async with platform_context() as (
@@ -58,7 +59,7 @@ class ModelsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="read")
     async def list_instances(self) -> str:
         """List configured model instances (models connected to provider configs)."""
         async with platform_context() as (
@@ -101,7 +102,7 @@ class ModelsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="write")
     async def create_instance(
         self,
         provider_config_id: str,
@@ -160,7 +161,7 @@ class ModelsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="read")
     async def get(self, model_instance_id: str) -> str:
         """Get details of a model instance."""
         from uuid import UUID

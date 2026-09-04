@@ -85,19 +85,6 @@ export function getMcpHealthStatusPresentation(
   }
 }
 
-export function getMcpRuntimeHealthStatusPresentation(
-  status: string
-): StatusPresentation {
-  switch (normalizeStatus(status)) {
-    case "healthy":
-      return { label: "Healthy", tone: "success" };
-    case "unhealthy":
-      return { label: "Unhealthy", tone: "danger" };
-    default:
-      return fallbackStatusPresentation(status);
-  }
-}
-
 export function getOpenApiConnectionStatusPresentation(
   status: string
 ): StatusPresentation {
@@ -226,6 +213,9 @@ export function getTaskStatusPresentation(status: string): StatusPresentation {
       return { label: "Paused", labelKey: "paused", tone: "neutral" };
     case "pending":
       return { label: "Pending", labelKey: "pending", tone: "warning" };
+    case "scheduled":
+      // Waiting for its moment, not working — no pulse.
+      return { label: "Scheduled", labelKey: "scheduled", tone: "info" };
     default:
       return fallbackStatusPresentation(status);
   }

@@ -16,6 +16,7 @@ from agentarea_common.money import ZERO, serialize_money, to_money
 from agentarea_governance.domain.policies import effective_policy_from_json
 from agentarea_governance.domain.tool_calls import metered_tool_call_count
 
+from .domain.exceptions import SchedulingNotSupportedError
 from .domain.interfaces import BaseTaskManager
 from .domain.models import AgentTask
 from .infrastructure.repository import TaskRepository
@@ -36,6 +37,9 @@ class DirectTaskManager(BaseTaskManager):
 
     async def submit_task(self, task: AgentTask) -> AgentTask:
         """Submit and immediately execute a task in-process."""
+        if task.scheduled_at is not None:
+            raise SchedulingNotSupportedError(task.id)
+
         logger.info(f"DirectTaskManager: executing task {task.id} in-process")
 
         task.status = "running"

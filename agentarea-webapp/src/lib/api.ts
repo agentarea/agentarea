@@ -58,6 +58,7 @@ import type {
   UpdateWalletRequest,
   ValidateRequest,
 } from "@/api/client/types.gen";
+import { apiErrorMessage } from "@/lib/api-errors";
 
 type RawRequestOptions = {
   body?: unknown;
@@ -84,23 +85,6 @@ function requestJson<TData = unknown, TError = unknown>(
   });
 }
 
-interface McpContainerHealthCheck {
-  service_name: string;
-  slug: string;
-  url: string;
-  healthy: boolean;
-  http_reachable: boolean;
-  response_time_ms: number;
-  error?: string;
-  timestamp: string;
-  container_status: string;
-  details?: {
-    proxy_url?: string;
-    container_port?: number;
-    container_image?: string;
-  };
-}
-
 function withStatus<TData, TError>(result: {
   data?: TData;
   error?: TError;
@@ -113,52 +97,6 @@ function withStatus<TData, TError>(result: {
   };
 }
 
-// Extract a human-readable message from an API error. The backend returns
-// RFC 9457 problem+json ({ type, title, status, code, detail, ... }); validation
-// failures carry field errors under `errors`. We also keep the legacy FastAPI
-// shape (detail-as-array of {msg}) for backward compatibility.
-function formatErrorDetail(error: unknown) {
-  if (!error) return "No response data";
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message;
-  if (typeof error === "object") {
-    const obj = error as {
-      detail?: unknown;
-      errors?: unknown;
-      title?: unknown;
-    };
-
-    // problem+json validation errors: surface field-level messages.
-    if (Array.isArray(obj.errors) && obj.errors.length > 0) {
-      const msgs = obj.errors
-        .map((item) =>
-          typeof item === "object" && item && "msg" in item
-            ? String((item as { msg: unknown }).msg)
-            : String(item)
-        )
-        .filter(Boolean);
-      if (msgs.length > 0) return msgs.join(", ");
-    }
-
-    const detail = obj.detail;
-    if (typeof detail === "string") return detail;
-    if (Array.isArray(detail)) {
-      // Legacy FastAPI validation shape.
-      return detail
-        .map((item) =>
-          typeof item === "object" && item && "msg" in item
-            ? String((item as { msg: unknown }).msg)
-            : String(item)
-        )
-        .join(", ");
-    }
-
-    // problem+json without a usable detail: fall back to the title.
-    if (typeof obj.title === "string") return obj.title;
-  }
-  return JSON.stringify(error);
-}
-
 export const listAgents = async () => {
   const { data, error } = await sdk.listAgentsV1AgentsGet({
     client: serverClient,
@@ -167,10 +105,13 @@ export const listAgents = async () => {
 };
 
 export const listSandboxes = async () => {
-  const { data, error } = await sdk.listSandboxesV1SandboxesGet({
+  const result = await sdk.listSandboxesV1SandboxesGet({
     client: serverClient,
   });
-  return { data: data as SandboxListResponse | undefined, error };
+  return {
+    ...withStatus(result),
+    data: result.data as SandboxListResponse | undefined,
+  };
 };
 
 export const createAgent = async (agent: AgentCreate) => {
@@ -482,17 +423,16 @@ export const getAgentTaskEvents = async (
     event_type?: string;
   } = {}
 ) => {
-  const { data, error } =
-    await sdk.getTaskEventsV1AgentsAgentIdTasksTaskIdEventsGet({
-      client: serverClient,
-      path: { agent_id: agentId, task_id: taskId },
-      query: {
-        page: options.page || 1,
-        page_size: options.page_size || 50,
-        ...(options.event_type && { event_type: options.event_type }),
-      },
-    });
-  return { data, error };
+  const result = await sdk.getTaskEventsV1AgentsAgentIdTasksTaskIdEventsGet({
+    client: serverClient,
+    path: { agent_id: agentId, task_id: taskId },
+    query: {
+      page: options.page || 1,
+      page_size: options.page_size || 50,
+      ...(options.event_type && { event_type: options.event_type }),
+    },
+  });
+  return withStatus(result);
 };
 
 export const sendMessage = async (message: {
@@ -746,7 +686,7 @@ export const getProviderConfig = async (
 
   if (!response.data) {
     const error = new Error(
-      `Failed to load provider config (${response.response?.status ?? "unknown"}): ${formatErrorDetail(response.error)}`
+      apiErrorMessage(withStatus(response), "Failed to load provider config")
     );
     (error as Error & { status?: number }).status = response.response?.status;
     throw error;
@@ -969,49 +909,6 @@ export const listAllTools = async (options?: {
     },
   });
   return { data, error };
-};
-
-export const getMCPHealthStatus = async (): Promise<{
-  health_checks: McpContainerHealthCheck[];
-  total: number;
-}> => {
-  try {
-    const { data, error } =
-      await sdk.getContainersHealthV1McpServerInstancesHealthContainersGet({
-        client: serverClient,
-      });
-    if (error || !data) {
-      return { health_checks: [], total: 0 };
-    }
-    return data as { health_checks: McpContainerHealthCheck[]; total: number };
-  } catch (error) {
-    console.warn("Failed to fetch MCP health status:", error);
-    return { health_checks: [], total: 0 };
-  }
-};
-
-export const getMCPInstanceHealth = async (
-  managerServiceName: string
-): Promise<{
-  health_check: McpContainerHealthCheck | null;
-}> => {
-  try {
-    const { data, error } =
-      await sdk.getContainersHealthV1McpServerInstancesHealthContainersGet({
-        client: serverClient,
-      });
-    if (error || !data) {
-      return { health_check: null };
-    }
-    const healthData = data as { health_checks?: McpContainerHealthCheck[] };
-    const healthCheck = healthData.health_checks?.find(
-      (check) => check.service_name === managerServiceName
-    );
-    return { health_check: healthCheck || null };
-  } catch (error) {
-    console.warn("Failed to fetch MCP instance health:", error);
-    return { health_check: null };
-  }
 };
 
 export type MCPInstanceConsumer = McpInstanceConsumer;
@@ -1436,6 +1333,16 @@ export const importWorkspace = async (body: {
   return { data, error };
 };
 
+// Listing workspaces deliberately lives outside this client — see
+// getWorkspaceContext(), which must not send X-Workspace-Slug.
+export const createWorkspace = async (name: string) => {
+  const { data, error } = await sdk.createWorkspaceV1WorkspacesPost({
+    client: serverClient,
+    body: { name },
+  });
+  return { data, error };
+};
+
 export const listWorkspaceMembers = async (workspaceId: string) => {
   const { data, error } =
     await sdk.listMembersV1WorkspacesWorkspaceIdMembersGet({
@@ -1449,12 +1356,13 @@ export const removeWorkspaceMember = async (
   workspaceId: string,
   userId: string
 ) => {
-  const { data, error } =
-    await sdk.removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete({
+  const result = await sdk.removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete(
+    {
       client: serverClient,
       path: { workspace_id: workspaceId, user_id: userId },
-    });
-  return { data, error };
+    }
+  );
+  return withStatus(result);
 };
 
 export const listWorkspaceInvitations = async (workspaceId: string) => {
@@ -1470,35 +1378,36 @@ export const createWorkspaceInvitation = async (
   workspaceId: string,
   body: CreateInvitationBody
 ) => {
-  const { data, error } =
-    await sdk.createInvitationV1WorkspacesWorkspaceIdInvitationsPost({
+  const result = await sdk.createInvitationV1WorkspacesWorkspaceIdInvitationsPost(
+    {
       client: serverClient,
       path: { workspace_id: workspaceId },
       body,
-    });
-  return { data, error };
+    }
+  );
+  return withStatus(result);
 };
 
 export const revokeWorkspaceInvitation = async (
   workspaceId: string,
   invitationId: string
 ) => {
-  const { data, error } =
+  const result =
     await sdk.revokeInvitationV1WorkspacesWorkspaceIdInvitationsInvitationIdDelete(
       {
         client: serverClient,
         path: { workspace_id: workspaceId, invitation_id: invitationId },
       }
     );
-  return { data, error };
+  return withStatus(result);
 };
 
 export const acceptWorkspaceInvitation = async (token: string) => {
-  const { data, error } = await sdk.acceptInvitationV1InvitationsAcceptPost({
+  const result = await sdk.acceptInvitationV1InvitationsAcceptPost({
     client: serverClient,
     body: { token },
   });
-  return { data, error };
+  return withStatus(result);
 };
 
 export const discoverMCPInstanceTools = async (instanceId: string) => {
@@ -1870,7 +1779,7 @@ export const getClient = async (clientId: string) => {
 export const createClient = async (payload: {
   name: string;
   description?: string | null;
-  source_project_id?: string | null;
+  kind?: string;
 }) => {
   const { data, error } = await sdk.createClientV1ClientsPost({
     client: serverClient,
@@ -1884,7 +1793,7 @@ export const updateClient = async (
   payload: {
     name?: string;
     description?: string | null;
-    source_project_id?: string | null;
+    kind?: string;
   }
 ) => {
   const { data, error } = await sdk.updateClientV1ClientsClientIdPatch({
@@ -1951,19 +1860,6 @@ export const removeMcpInstanceFromClient = async (
         path: { client_id: clientId, mcp_instance_id: mcpInstanceId },
       }
     );
-  return { data, error };
-};
-
-export const pullClientFromProject = async (
-  clientId: string,
-  projectId: string | null
-) => {
-  const { data, error } =
-    await sdk.pullFromProjectV1ClientsClientIdPullFromProjectPost({
-      client: serverClient,
-      path: { client_id: clientId },
-      body: { project_id: projectId },
-    });
   return { data, error };
 };
 
@@ -2355,29 +2251,44 @@ export const listProviderConfigsWithModelInstances = async (params?: {
   };
 };
 
-// Catalog page fetch (server-side, SSR for /explore). Sums one page across the
-// active registries of a type, so the gallery's first paint is server-rendered
-// instead of racing client `useState`. Returns raw items + a `hasMore` hint;
-// the caller normalizes (see catalog-data.normalize).
-export const fetchCatalogPage = async (
-  registryType: string,
-  offset: number,
-  limit: number
-) => {
-  const { data: registries, error } = await listRegistries({
-    registry_type: registryType,
-    active_only: true,
+// Catalog page fetch (server-side, SSR for /explore).
+//
+// One ordered, filtered, paged query across every active registry of a type.
+// The previous shape -- request the same limit/offset from each registry and
+// concatenate -- could not be made correct: a single offset has no meaning over
+// the concatenation, so every page past the first skipped a slice of each
+// registry, and "is there more" was guessed from the merged page length.
+//
+// `total` and `categories` describe the whole filtered catalog, not this page,
+// so the caller can tell "nothing matched here yet" apart from "that's all".
+export const browseCatalog = async (params: {
+  registryType: string;
+  q?: string;
+  category?: string;
+  sort?: string;
+  limit: number;
+  offset: number;
+}) => {
+  const { data, error } = await sdk.browseCatalogV1RegistriesCatalogBrowseGet({
+    client: serverClient,
+    query: {
+      registry_type: params.registryType,
+      q: params.q || undefined,
+      category: params.category || undefined,
+      sort: params.sort || undefined,
+      limit: params.limit,
+      offset: params.offset,
+    },
   });
-  if (error) return { items: [], hasMore: false, error };
-  const lists = await Promise.all(
-    (registries ?? []).map((r: { id: string }) =>
-      listRegistryItems(r.id, { limit, offset })
-    )
-  );
-  const items = lists.flatMap((l: { data?: unknown[] }) => l.data ?? []);
-  // A short page (relative to the requested limit) means the server has no more.
-  const hasMore = items.length >= limit;
-  return { items, hasMore, error: null };
+  if (error || !data) {
+    return { items: [], total: 0, categories: [], error: error ?? "Failed to load catalog" };
+  }
+  return {
+    items: data.items,
+    total: data.total,
+    categories: data.categories,
+    error: null,
+  };
 };
 
 export const getProvidersAndConfigs = async () => {
@@ -2406,7 +2317,9 @@ export type ConversationResponse = unknown;
 export type TaskResponse = ApiTaskResponse;
 export type AgentCard = ApiAgentCard;
 export type TaskWithAgent = ApiTaskResponse & {
-  agent_name?: string;
+  // null when the task's agent no longer resolves — the API does not
+  // substitute a placeholder name.
+  agent_name?: string | null;
   agent_description?: string | null;
   // Set by the /v1/inbox endpoint for waiting_for_approval tasks so the inbox can
   // approve/reject the pending escalation inline.
@@ -2424,3 +2337,43 @@ export type Project = ProjectResponse;
 export type WorkspaceMember = MemberResponse;
 export type WorkspaceInvitation = InvitationResponse;
 export type WorkspaceInvitationCreated = InvitationCreatedResponse;
+
+// --- Workspace secrets -----------------------------------------------------
+// Values only ever travel inwards: no endpoint here returns one, so nothing
+// below can read a secret back out.
+
+export const listSecrets = async () => {
+  const { data, error } = await sdk.listSecretsV1SecretsGet({
+    client: serverClient,
+  });
+  return { data, error };
+};
+
+export const createSecret = async (body: {
+  name: string;
+  value: string;
+  description?: string | null;
+}) => {
+  const { data, error } = await sdk.createSecretV1SecretsPost({
+    client: serverClient,
+    body,
+  });
+  return { data, error };
+};
+
+export const rotateSecret = async (secretId: string, value: string) => {
+  const { data, error } = await sdk.rotateSecretV1SecretsSecretIdValuePut({
+    client: serverClient,
+    path: { secret_id: secretId },
+    body: { value },
+  });
+  return { data, error };
+};
+
+export const deleteSecret = async (secretId: string) => {
+  const { data, error } = await sdk.deleteSecretV1SecretsSecretIdDelete({
+    client: serverClient,
+    path: { secret_id: secretId },
+  });
+  return { data, error };
+};

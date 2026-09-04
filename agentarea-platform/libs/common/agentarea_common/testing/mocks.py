@@ -57,6 +57,10 @@ class TestSecretManager(BaseSecretManager):
     def __init__(self):
         self._secrets: dict[str, str] = {}
 
+    def external_ref(self, secret_name: str) -> None:
+        """Mirrors the database backend: the catalog row is the store."""
+        return None
+
     async def get_secret(self, secret_name: str) -> str | None:
         """Get a secret value."""
         return self._secrets.get(secret_name)

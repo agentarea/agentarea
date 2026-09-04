@@ -54,11 +54,11 @@ export default async function AgentsBrowsePage({
         controls: (
           <Link href="/agents/create">
             <Button
-              className="shrink-0 gap-2"
+              className="shrink-0"
               size="xs"
               data-test="deploy-button"
             >
-              <Plus className="h-5 w-5" />
+              <Plus />
               {t("deployNewAgent")}
             </Button>
           </Link>

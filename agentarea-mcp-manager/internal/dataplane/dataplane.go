@@ -202,7 +202,18 @@ func (s *Server) proxy(c *gin.Context) {
 // error: that is the whole point of stopping idle containers instead of deleting
 // them.
 func (s *Server) ensureRunning(c *gin.Context, status *backends.InstanceStatus) (*backends.InstanceStatus, error) {
+	deadline := time.Now().Add(startupTimeout)
+
+	// "Running" is the container's state, not the server's, so this branch waits
+	// for the socket as well. A create returns as soon as the container runs and
+	// has an address, which is before the process inside has bound: without the
+	// wait, the very first request after a create proxied into that window and
+	// came back as a bare 502 -- the shape of a broken instance, on a workload
+	// that was seconds away from serving. A warm instance pays one local dial.
 	if status.Status == "running" && status.InternalURL != "" {
+		if err := waitForListener(c.Request.Context(), status.InternalURL, deadline); err != nil {
+			return nil, err
+		}
 		return status, nil
 	}
 
@@ -221,9 +232,8 @@ func (s *Server) ensureRunning(c *gin.Context, status *backends.InstanceStatus) 
 		}
 	}
 
-	// The container is up before its server is listening, and an address appears
-	// only once Docker has attached it to the network.
-	deadline := time.Now().Add(startupTimeout)
+	// An address appears only once the runtime has attached the container to the
+	// network, so a started instance is polled for one before it is dialled.
 	for {
 		refreshed, err := s.backend.GetInstanceStatus(c.Request.Context(), instanceID)
 		if err == nil && refreshed.Status == "running" && refreshed.InternalURL != "" {

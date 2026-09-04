@@ -69,6 +69,12 @@ type ContainerConfig struct {
 	// Resource limits
 	DefaultMemoryLimit string `json:"default_memory_limit"`
 	DefaultCPULimit    string `json:"default_cpu_limit"`
+	// Include a failed workload's own output in the manager log. Off by default:
+	// that text belongs to third-party code and holds whatever credentials the
+	// process had.
+	LogWorkloadOutput bool   `json:"log_workload_output"`
+	MaxMemoryLimit    string `json:"max_memory_limit"`
+	MaxCPULimit       string `json:"max_cpu_limit"`
 
 	// DefaultIsolationTier is the confinement applied to instances whose spec
 	// does not name one. Third-party MCP images are untrusted unless an explicit
@@ -122,6 +128,12 @@ func Load() *Config {
 			ShutdownTimeout:    getEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
 			DefaultMemoryLimit: getEnv("DEFAULT_MEMORY_LIMIT", "512m"),
 			DefaultCPULimit:    getEnv("DEFAULT_CPU_LIMIT", "1.0"),
+			// The most a single workload may ask for. Defaults to the default:
+			// a caller may size an instance down, never up, unless this host
+			// says otherwise.
+			LogWorkloadOutput:  getEnv("LOG_WORKLOAD_OUTPUT", "false") == "true",
+			MaxMemoryLimit:     getEnv("MAX_MEMORY_LIMIT", getEnv("DEFAULT_MEMORY_LIMIT", "512m")),
+			MaxCPULimit:        getEnv("MAX_CPU_LIMIT", getEnv("DEFAULT_CPU_LIMIT", "1.0")),
 			SandboxExecutorURL: getEnv("SANDBOX_EXECUTOR_URL", ""),
 
 			DefaultIsolationTier: getEnv("DEFAULT_ISOLATION_TIER", IsolationUntrusted),

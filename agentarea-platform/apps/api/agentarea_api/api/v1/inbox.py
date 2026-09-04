@@ -126,7 +126,7 @@ async def get_inbox_items(
                 TaskWithAgent(
                     id=task.id,
                     agent_id=task.agent_id,
-                    agent_name=agent_map.get(str(task.agent_id), "Unknown"),
+                    agent_name=agent_map.get(str(task.agent_id)),
                     description=task.description,
                     parameters=task.parameters,
                     status=task.status,

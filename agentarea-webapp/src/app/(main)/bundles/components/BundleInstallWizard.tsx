@@ -50,7 +50,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import ConfigSheet from "@/app/(main)/agents/create/components/ConfigSheet";
+import ConfigSheet from "@/components/ConfigSheet";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { cn } from "@/lib/utils";
 import type {
@@ -886,7 +886,7 @@ function ModelPicker({
             ) : (
               <span className="truncate text-muted-foreground">Select a model</span>
             )}
-            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+            <ChevronsUpDown className="shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent

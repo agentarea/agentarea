@@ -9,6 +9,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/backends"
 	"github.com/agentarea/mcp-manager/internal/config"
+	"github.com/agentarea/mcp-manager/internal/mcpspec"
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/providers"
 )
@@ -103,7 +104,18 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 			}
 			select {
 			case <-ctx.Done():
-				return "", r.cleanupFailedStart(instance, ctx.Err())
+				// The gateway allows a start exactly StartupTimeout, which is
+				// also this loop's deadline, so this branch — not the timer
+				// below — is the one production takes. Report the same last
+				// state the timer would: without it the log says only that time
+				// ran out, and the workload has already been cleaned up by the
+				// time anyone could go and look at it.
+				if statusErr != nil {
+					return "", r.cleanupFailedStart(instance,
+						fmt.Errorf("MCP instance did not become ready: %w", errors.Join(ctx.Err(), statusErr)))
+				}
+				return "", r.cleanupFailedStart(instance,
+					fmt.Errorf("MCP instance did not become ready; last state %q: %w", status.Status, ctx.Err()))
 			case <-deadline.C:
 				if statusErr != nil {
 					return "", r.cleanupFailedStart(instance, fmt.Errorf("MCP instance did not become ready: %w", statusErr))
@@ -204,21 +216,13 @@ func commandArgs(jsonSpec map[string]any) []string {
 	return args
 }
 
-// containerCommandOverride mirrors the docker branch of the provider's spec
-// conversion, including its removal of --transport=stdio, so the gate judges
-// the argv the container is actually started with.
+// containerCommandOverride is the argv the container is actually started with,
+// read by the same function the provider uses. It read only a list-shaped
+// "command" once, while the provider also honoured a string command and args --
+// so a repository-only entry admitted an image with no override and the host then
+// ran whatever argv those other fields carried.
 func containerCommandOverride(jsonSpec map[string]any) []string {
-	raw, ok := jsonSpec["command"].([]any)
-	if !ok {
-		return nil
-	}
-	command := make([]string, 0, len(raw))
-	for _, entry := range raw {
-		if arg, ok := entry.(string); ok && arg != "--transport=stdio" {
-			command = append(command, arg)
-		}
-	}
-	return command
+	return mcpspec.DockerArgv(jsonSpec)
 }
 
 // instanceEnvironment reads both spec keys the provider merges into the pod

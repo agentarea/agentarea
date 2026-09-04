@@ -1,52 +1,51 @@
 import EmptyState from "@/components/EmptyState";
-import { listMCPServerInstances } from "@/lib/api";
-import { SecretsTable } from "./SecretsTable";
-
-type MCPInstance = {
-  id: string;
-  name: string;
-  auth_type?: string | null;
-  status?: string | null;
-  created_at?: string | null;
-};
+import { listSecrets } from "@/lib/api";
+import { CreateSecretDialog } from "./CreateSecretDialog";
+import { SecretsTable, type Secret } from "./SecretsTable";
 
 export async function SecretsData() {
-  let instances: MCPInstance[] = [];
+  let secrets: Secret[] = [];
   let error: string | null = null;
 
   try {
-    const { data, error: apiError } = await listMCPServerInstances();
+    const { data, error: apiError } = await listSecrets();
     if (apiError) {
-      console.error("Failed to fetch MCP server instances:", apiError);
-      error = "Failed to load connections";
+      console.error("Failed to fetch secrets:", apiError);
+      error = "Failed to load secrets";
     } else {
-      instances = (data as MCPInstance[] | undefined) ?? [];
+      secrets = (data as Secret[] | undefined) ?? [];
     }
   } catch (e) {
-    console.error("Failed to load secrets data:", e);
-    error = e instanceof Error ? e.message : "Failed to load connections";
+    console.error("Failed to load secrets:", e);
+    error = e instanceof Error ? e.message : "Failed to load secrets";
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Couldn't load secrets"
+        description={error}
+        iconsType="mcp"
+      />
+    );
   }
 
   return (
     <div className="space-y-6">
-      {error ? (
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-sm font-medium">Workspace secrets</h2>
+        <CreateSecretDialog />
+      </div>
+
+      {secrets.length === 0 ? (
         <EmptyState
-          title="Couldn't load connections"
-          description={error}
+          title="No secrets yet"
+          description="Nothing here holds a credential. Create a secret to reuse it across LLM providers and API connections, instead of pasting the same key into each one."
           iconsType="mcp"
-          action={{ label: "View MCP connections", href: "/connections" }}
-        />
-      ) : instances.length === 0 ? (
-        <EmptyState
-          title="No MCP connections"
-          description="Add an MCP server connection to manage its credentials here."
-          iconsType="mcp"
-          action={{ label: "Add connection", href: "/connections" }}
         />
       ) : (
-        <SecretsTable instances={instances} />
+        <SecretsTable secrets={secrets} />
       )}
-
     </div>
   );
 }

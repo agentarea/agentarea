@@ -50,9 +50,7 @@ async def test_hook_does_not_fire_on_idempotent_reread():
     async def on_created(ws: Workspace) -> None:
         fired.append(ws.id)
 
-    existing = Workspace(
-        id="u1", slug="jane", type="personal", name="Personal", owner_user_id="u1"
-    )
+    existing = Workspace(id="u1", slug="jane", name="Personal", owner_user_id="u1")
     service = WorkspaceService(
         _FakeWorkspaceRepo(existing=existing),
         on_created=on_created,

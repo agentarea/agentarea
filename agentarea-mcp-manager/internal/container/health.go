@@ -328,30 +328,37 @@ func (h *HealthChecker) GetHealthSummary(ctx context.Context, containers []*mode
 	return summary, nil
 }
 
-// getContainerIP retrieves the IP address of a container
+// getContainerIP retrieves the IP address of a container.
+//
+// The two formats are not interchangeable. `.NetworkSettings.IPAddress` is only
+// populated for the default bridge, and on current Docker releases asking for it
+// on a container attached to a user-defined network does not return empty -- the
+// template fails and the command exits non-zero. Every MCP container joins the
+// managed network, so ranging over the networks map is the read that works, and
+// the flat field survives only as a fallback for runtimes that leave the map
+// empty. Guarding the fallback on an empty result alone, as this did, meant the
+// first failure ended the lookup and no container ever reported an address.
 func (h *HealthChecker) getContainerIP(ctx context.Context, containerID string) (string, error) {
-	cmd := exec.CommandContext(ctx, h.config.Container.Runtime, "inspect", containerID, "--format", "{{.NetworkSettings.IPAddress}}")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to get container IP: %w", err)
+	formats := []string{
+		"{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}",
+		"{{.NetworkSettings.IPAddress}}",
 	}
 
-	ip := strings.TrimSpace(string(output))
-	if ip == "" {
-		// Try alternative format for newer podman versions
-		cmd = exec.CommandContext(ctx, h.config.Container.Runtime, "inspect", containerID, "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
-		output, err = cmd.CombinedOutput()
+	for _, format := range formats {
+		// Output, not CombinedOutput: a template error on stderr would otherwise
+		// be parsed as if it were an address.
+		output, err := exec.CommandContext(ctx, h.config.Container.Runtime, "inspect", containerID, "--format", format).Output()
 		if err != nil {
-			return "", fmt.Errorf("failed to get container IP (alternative): %w", err)
+			continue
 		}
-		ip = strings.TrimSpace(string(output))
+		// A container on several networks prints several addresses; the first is
+		// the one it was created with, which is the network we route over.
+		if fields := strings.Fields(string(output)); len(fields) > 0 {
+			return fields[0], nil
+		}
 	}
 
-	if ip == "" {
-		return "", fmt.Errorf("container IP address is empty")
-	}
-
-	return ip, nil
+	return "", fmt.Errorf("container %s reports no IP address on any network", containerID)
 }
 
 // getContainerExposedPort retrieves the first exposed HTTP port from a container

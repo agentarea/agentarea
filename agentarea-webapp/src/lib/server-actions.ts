@@ -67,7 +67,6 @@ import {
   getAgentWalletPayments,
   getAllTasks,
   getClient,
-  getMCPHealthStatus,
   getMCPServerInstance,
   getModelSpec,
   getNetworkTopology,
@@ -104,7 +103,6 @@ import {
   listWorkspaceFiles,
   pauseAgentTask,
   previewOpenAPISpec,
-  pullClientFromProject,
   removeAgentFromProject,
   removeMcpInstanceFromClient,
   removeMcpInstanceFromProject,
@@ -131,6 +129,7 @@ import {
   updateWorkspaceSettings,
 } from "@/lib/api-dashboard";
 import { getAuthToken } from "@/lib/getAuthToken";
+import { workspaceSlugHeaders } from "@/lib/workspace-request";
 
 function isUUID(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -273,10 +272,6 @@ export async function uploadSkillAction(formData: FormData) {
 
   const data = await response.json();
   return { data, error: null };
-}
-
-export async function getMCPHealthStatusAction() {
-  return await getMCPHealthStatus();
 }
 
 export async function checkMCPServerInstanceConfigurationAction(checkRequest: {
@@ -674,7 +669,6 @@ export async function createClientAction(payload: {
   name: string;
   description?: string | null;
   kind?: string;
-  source_project_id?: string | null;
 }) {
   return await createClient(payload);
 }
@@ -684,7 +678,7 @@ export async function updateClientAction(
   payload: {
     name?: string;
     description?: string | null;
-    source_project_id?: string | null;
+    kind?: string;
   }
 ) {
   return await updateClient(clientId, payload);
@@ -721,13 +715,6 @@ export async function removeMcpInstanceFromClientAction(
   mcpInstanceId: string
 ) {
   return await removeMcpInstanceFromClient(clientId, mcpInstanceId);
-}
-
-export async function pullClientFromProjectAction(
-  clientId: string,
-  projectId: string | null
-) {
-  return await pullClientFromProject(clientId, projectId);
 }
 
 // Project Actions
@@ -871,6 +858,7 @@ export async function uploadWorkspaceFileAction(formData: FormData) {
     method: "POST",
     headers: {
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...(await workspaceSlugHeaders()),
     },
     body: formData,
   });
@@ -884,6 +872,32 @@ export async function uploadWorkspaceFileAction(formData: FormData) {
 
   // 204 No Content — no JSON body to parse
   return { data: { ok: true }, error: null };
+}
+
+export async function deleteWorkspaceFileAction(filePath: string) {
+  const authToken = await getAuthToken();
+  const encoded = filePath
+    .split("/")
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join("/");
+
+  const response = await fetch(`${env.API_URL}/v1/files/${encoded}`, {
+    method: "DELETE",
+    headers: {
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...(await workspaceSlugHeaders()),
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({
+      detail: "Delete failed",
+    }));
+    return { data: null, error: errorData };
+  }
+
+  return { data: await response.json(), error: null };
 }
 
 export async function downloadWorkspaceFileAction(filePath: string) {

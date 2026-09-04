@@ -91,7 +91,11 @@ class WorkspaceResponse(BaseModel):
     id: str
     slug: str
     name: str
-    type: str
+    # A workspace auto-provisioned for one user reuses that user's id, so
+    # ``id == owner_user_id`` is what makes it personal. Sent instead of a
+    # ``type`` field so the client derives the fact rather than trusting a
+    # second copy of it.
+    owner_user_id: str
 
 
 class CreateWorkspaceBody(BaseModel):
@@ -134,7 +138,10 @@ async def create_workspace(
         ) from exc
 
     return WorkspaceResponse(
-        id=workspace.id, slug=workspace.slug, name=workspace.name, type=workspace.type
+        id=workspace.id,
+        slug=workspace.slug,
+        name=workspace.name,
+        owner_user_id=workspace.owner_user_id,
     )
 
 
@@ -158,4 +165,7 @@ async def list_workspaces(
         email=user.email,
         member_workspace_ids=member_workspace_ids,
     )
-    return [WorkspaceResponse(id=w.id, slug=w.slug, name=w.name, type=w.type) for w in workspaces]
+    return [
+        WorkspaceResponse(id=w.id, slug=w.slug, name=w.name, owner_user_id=w.owner_user_id)
+        for w in workspaces
+    ]

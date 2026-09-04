@@ -68,6 +68,7 @@ The following table lists configurable parameters of the chart and their default
 | global.secrets.redis | string | `"agentarea-redis-secret"` |  |
 | global.secrets.rustfs | string | `"agentarea-rustfs-secret"` |  |
 | global.secrets.application | string | `"agentarea-app-secrets"` |  |
+| global.secrets.applicationExistingSecret | bool | `false` |  |
 | global.runtimeCredentials.existingSecret | string | `"agentarea-runtime-credentials"` |  |
 | global.runtimeCredentials.keys.mcpGateway | string | `"mcp-gateway-token"` |  |
 | global.runtimeCredentials.keys.sandboxFile | string | `"sandbox-file-token"` |  |
@@ -291,6 +292,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.serverless.sweepInterval | string | `"60s"` |  |
 | mcpManager.serverless.requestLeaseTTL | string | `"90s"` |  |
 | mcpManager.serverless.startupTimeout | string | `"5m"` |  |
+| mcpManager.dataPlane.allowInsecure | bool | `false` |  |
 | mcpManager.dataPlane.url | string | `""` |  |
 | mcpManager.dataPlane.tokenSecret | string | `""` |  |
 | mcpManager.dataPlane.tokenKey | string | `""` |  |

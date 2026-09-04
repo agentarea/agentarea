@@ -137,17 +137,15 @@ export default function TaskHeader({
           onClick={onRefresh}
           disabled={refreshing}
         >
-          <RefreshCw
-            className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`}
-          />
+          <RefreshCw className={refreshing ? "animate-spin" : ""} />
           Refresh
         </Button>
         <Button variant="outline" size="sm" className="gap-1">
-          <Download className="h-3 w-3" />
+          <Download />
           Export
         </Button>
         <Button variant="outline" size="sm" className="gap-1">
-          <Share2 className="h-3 w-3" />
+          <Share2 />
           Share
         </Button>
       </div>

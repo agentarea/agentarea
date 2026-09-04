@@ -389,9 +389,9 @@ export default function TaskDetailsPage() {
                   </label>
                   <Button onClick={handleContinueTask} disabled={continuing}>
                     {continuing ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="mr-2 animate-spin" />
                     ) : (
-                      <Play className="mr-2 h-4 w-4" />
+                      <Play className="mr-2" />
                     )}
                     Continue task
                   </Button>
@@ -480,12 +480,12 @@ export default function TaskDetailsPage() {
             >
               {controlling ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 animate-spin" />
                   Cancelling...
                 </>
               ) : (
                 <>
-                  <X className="mr-2 h-4 w-4" />
+                  <X className="mr-2" />
                   Cancel Task
                 </>
               )}

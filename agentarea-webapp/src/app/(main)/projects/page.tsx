@@ -30,8 +30,8 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
         description: "Organize agents, skills, and tools into projects",
         controls: (
           <Link href="/projects/create">
-            <Button className="shrink-0 gap-2" size="xs">
-              <Plus className="h-5 w-5" />
+            <Button className="shrink-0" size="xs">
+              <Plus />
               New Project
             </Button>
           </Link>

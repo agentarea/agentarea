@@ -1,8 +1,12 @@
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from sqlalchemy import delete, select
+
+if TYPE_CHECKING:
+    from agentarea_secrets.models import EncryptedSecret
 
 from agentarea_llm.domain.models import (
     ModelInstance,
@@ -117,12 +121,52 @@ class ProviderService:
             created_by=created_by,
             is_public=payload.is_public,
         )
-        if payload.api_key:
+        if payload.api_key_secret_id:
+            secret = await self._require_usable_secret(payload.api_key_secret_id)
+            config.api_key = secret.secret_name
+            config.api_key_secret_id = secret.id
+        elif payload.api_key:
             secret_name = f"provider_config_{config_id}"
-            config.api_key = secret_name
             await self.secret_manager.set_secret(secret_name, payload.api_key)
+            config.api_key = secret_name
+            config.api_key_secret_id = await self._secret_id_for(secret_name)
 
+        await self._register_reference(config)
         return await self.provider_config_repo.create_config(config)
+
+    async def _require_usable_secret(self, secret_id: UUID) -> "EncryptedSecret":
+        """Look up a secret the caller asked to reuse, within their workspace."""
+        from agentarea_secrets.models import EncryptedSecret
+
+        result = await self.provider_config_repo.session.execute(
+            select(EncryptedSecret).where(
+                EncryptedSecret.id == secret_id,
+                EncryptedSecret.workspace_id == self.provider_config_repo.user_context.workspace_id,
+            )
+        )
+        secret = result.scalar_one_or_none()
+        if secret is None:
+            raise ValueError(f"No secret {secret_id} in this workspace")
+        if secret.owner_type is not None:
+            # Managed secrets belong to the connection that minted them. Sharing
+            # one would mean this config's key changes whenever that connection
+            # rotates its own.
+            raise ValueError(
+                f"Secret '{secret.secret_name}' is managed by {secret.owner_type} and "
+                "cannot be reused as a provider API key."
+            )
+        return secret
+
+    async def _secret_id_for(self, secret_name: str) -> UUID | None:
+        from agentarea_secrets.models import EncryptedSecret
+
+        result = await self.provider_config_repo.session.execute(
+            select(EncryptedSecret.id).where(
+                EncryptedSecret.secret_name == secret_name,
+                EncryptedSecret.workspace_id == self.provider_config_repo.user_context.workspace_id,
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def list_provider_configs(
         self,
@@ -189,20 +233,39 @@ class ProviderService:
             config.is_active = patch["is_active"]
         if "is_public" in patch:
             config.is_public = patch["is_public"]
-        if "api_key" in patch:
+        # A secret this config owns can only be deleted once nothing points at
+        # it any more: api_key_secret_id and the secret_references row both hold
+        # RESTRICT foreign keys, so deleting first makes Postgres reject the
+        # commit. Decide here, delete after the config row has been persisted
+        # without the pointer.
+        stale_own_secret: str | None = None
+
+        if patch.get("api_key_secret_id"):
+            secret = await self._require_usable_secret(patch["api_key_secret_id"])
+            stale_own_secret = self._own_secret_name_if_held(config)
+            config.api_key = secret.secret_name
+            config.api_key_secret_id = secret.id
+        elif "api_key" in patch:
             secret_name = f"provider_config_{config.id}"
             if patch["api_key"]:
                 await self.secret_manager.set_secret(secret_name, patch["api_key"])
                 # Domain field stores the secret name, not the raw key.
                 config.api_key = secret_name
+                config.api_key_secret_id = await self._secret_id_for(secret_name)
             else:
-                try:
-                    await self.secret_manager.delete_secret(secret_name)
-                except Exception:  # noqa: S110
-                    pass
+                stale_own_secret = self._own_secret_name_if_held(config)
                 config.api_key = None
+                config.api_key_secret_id = None
 
-        return await self.provider_config_repo.update_config(config)
+        if "api_key" in patch or "api_key_secret_id" in patch:
+            await self._register_reference(config)
+
+        updated = await self.provider_config_repo.update_config(config)
+
+        if stale_own_secret is not None:
+            await self.secret_manager.delete_secret(stale_own_secret)
+
+        return updated
 
     async def delete_provider_config(self, config_id: UUID) -> bool:
         """Delete a provider configuration and remove its API key from the secret manager.
@@ -213,13 +276,68 @@ class ProviderService:
         Returns:
             bool: True if deleted, False otherwise.
         """
-        secret_name = f"provider_config_{config_id}"
-        try:
-            await self.secret_manager.delete_secret(secret_name)
-        except Exception:  # noqa: S110
-            pass
+        from agentarea_secrets.models import SecretReference
 
-        return await self.provider_config_repo.delete(config_id)
+        config = await self.provider_config_repo.get_by_id(config_id)
+        own_secret = self._own_secret_name_if_held(config) if config is not None else None
+
+        # Both the reverse-index row and provider_configs.api_key_secret_id hold
+        # RESTRICT foreign keys to the secret, so they go first. Deleting the
+        # secret before them makes Postgres reject the commit, which is how this
+        # arrived: every delete of a config owning its key returned 500.
+        await self.provider_config_repo.session.execute(
+            delete(SecretReference).where(
+                SecretReference.consumer_type == "provider_config",
+                SecretReference.consumer_id == str(config_id),
+                SecretReference.workspace_id == self.provider_config_repo.user_context.workspace_id,
+            )
+        )
+
+        deleted = await self.provider_config_repo.delete(config_id)
+
+        if deleted and own_secret is not None:
+            await self.secret_manager.delete_secret(own_secret)
+
+        return deleted
+
+    async def _register_reference(self, config: ProviderConfig) -> None:
+        """Record this config in the secret's reverse index, replacing any prior entry."""
+        from agentarea_secrets.models import SecretReference
+
+        session = self.provider_config_repo.session
+        workspace_id = self.provider_config_repo.user_context.workspace_id
+        await session.execute(
+            delete(SecretReference).where(
+                SecretReference.consumer_type == "provider_config",
+                SecretReference.consumer_id == str(config.id),
+                SecretReference.workspace_id == workspace_id,
+            )
+        )
+        if config.api_key_secret_id is not None:
+            session.add(
+                SecretReference(
+                    workspace_id=workspace_id,
+                    secret_id=config.api_key_secret_id,
+                    consumer_type="provider_config",
+                    consumer_id=str(config.id),
+                    field="api_key",
+                )
+            )
+
+    @staticmethod
+    def _own_secret_name_if_held(config: ProviderConfig) -> str | None:
+        """The secret this config minted for itself, if that is what it holds.
+
+        A configuration pointing at a secret the user created is only borrowing
+        it — other configurations may share it, and the user still owns it.
+        Deleting that would take a credential out from under them, so only the
+        `provider_config_{id}` secret this config owns qualifies.
+
+        Deliberately free of I/O: callers need the answer *before* they drop the
+        references, and the deletion itself has to happen after.
+        """
+        own_name = f"provider_config_{config.id}"
+        return own_name if config.api_key == own_name else None
 
     # Model Specs methods
 

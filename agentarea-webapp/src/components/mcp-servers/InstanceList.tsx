@@ -102,9 +102,9 @@ export function InstanceList({ mcpInstanceList }: InstanceListProps) {
                           className={`h-8 w-8 p-0 ${isRunning ? "text-amber-600 hover:text-amber-700" : "text-green-600 hover:text-green-700"}`}
                         >
                           {isRunning ? (
-                            <Pause className="h-4 w-4" />
+                            <Pause />
                           ) : (
-                            <Play className="h-4 w-4" />
+                            <Play />
                           )}
                           <span className="sr-only">
                             {isRunning ? "Pause" : "Start"}
@@ -117,7 +117,7 @@ export function InstanceList({ mcpInstanceList }: InstanceListProps) {
                           asChild
                         >
                           <Link href={`/connections/instances/${instance.id}`}>
-                            <Edit className="h-4 w-4" />
+                            <Edit />
                             <span className="sr-only">Edit</span>
                           </Link>
                         </Button>
@@ -126,7 +126,7 @@ export function InstanceList({ mcpInstanceList }: InstanceListProps) {
                           size="sm"
                           className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 />
                           <span className="sr-only">Remove</span>
                         </Button>
                       </div>

@@ -197,6 +197,93 @@ class TestDatabaseSecretManager:
         assert sensitive_error not in caplog.text
 
     @pytest.mark.asyncio
+    async def test_has_secret_found(self, mock_db_session, test_user_context, encryption_key):
+        """A stored secret reports as present."""
+        manager = DatabaseSecretManager(
+            session=mock_db_session,
+            user_context=test_user_context,
+            encryption_key=encryption_key,
+        )
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = uuid4()
+        mock_db_session.execute.return_value = mock_result
+
+        assert await manager.has_secret("openai_api_key") is True
+
+    @pytest.mark.asyncio
+    async def test_has_secret_not_found(self, mock_db_session, test_user_context, encryption_key):
+        """A name with no row reports as absent."""
+        manager = DatabaseSecretManager(
+            session=mock_db_session,
+            user_context=test_user_context,
+            encryption_key=encryption_key,
+        )
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db_session.execute.return_value = mock_result
+
+        assert await manager.has_secret("nonexistent_key") is False
+
+    @pytest.mark.asyncio
+    async def test_has_secret_does_not_decrypt(self, mock_db_session, test_user_context):
+        """A value this key cannot open is still a value that exists.
+
+        A rotated ``SECRET_MANAGER_ENCRYPTION_KEY`` leaves rows behind that no
+        longer decrypt. Callers that only want to know whether a credential is
+        configured must get an answer, not the read failure.
+        """
+        written_with = Fernet.generate_key().decode("utf-8")
+        read_with = Fernet.generate_key().decode("utf-8")
+
+        author = DatabaseSecretManager(
+            session=mock_db_session,
+            user_context=test_user_context,
+            encryption_key=written_with,
+        )
+        manager = DatabaseSecretManager(
+            session=mock_db_session,
+            user_context=test_user_context,
+            encryption_key=read_with,
+        )
+
+        stale_secret = EncryptedSecret(
+            workspace_id="test-workspace-456",
+            secret_name="channel_cred:telegram:trigger-1",  # noqa: S106 - test fixture
+            encrypted_value=author._encrypt("bot-token"),
+            created_by="test-user-123",
+        )
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = stale_secret
+        mock_db_session.execute.return_value = mock_result
+
+        assert await manager.has_secret(stale_secret.secret_name) is True
+
+        # The value itself is genuinely unreadable — that has not been papered over.
+        with pytest.raises(ValueError, match="Failed to decrypt secret"):
+            await manager.get_secret(stale_secret.secret_name)
+
+    @pytest.mark.asyncio
+    async def test_has_secret_does_not_log_secret_identifier(
+        self, mock_db_session, test_user_context, encryption_key, caplog
+    ):
+        """Checking for a missing secret must not reveal its identifier in logs."""
+        manager = DatabaseSecretManager(
+            session=mock_db_session,
+            user_context=test_user_context,
+            encryption_key=encryption_key,
+        )
+        mock_db_session.execute.side_effect = Exception("boom")
+        secret_name = f"private-{uuid4()}"
+
+        with caplog.at_level(logging.ERROR, logger="agentarea_secrets.database_secret_manager"):
+            with pytest.raises(Exception, match="boom"):
+                await manager.has_secret(secret_name)
+
+        assert secret_name not in caplog.text
+
+    @pytest.mark.asyncio
     async def test_set_secret_creates_new(self, mock_db_session, test_user_context, encryption_key):
         """Test setting a secret that doesn't exist (create)."""
         manager = DatabaseSecretManager(

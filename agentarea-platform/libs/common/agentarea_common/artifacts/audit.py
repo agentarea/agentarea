@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 ACTION_CREATED = "created"
 ACTION_MODIFIED = "modified"
 ACTION_DELETED = "deleted"
+ACTION_ARCHIVED = "archived"
 
 ACTOR_USER = "user"
 ACTOR_AGENT = "agent"

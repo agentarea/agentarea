@@ -511,27 +511,97 @@ async def discover_mcp_server_instance_tools(
         ) from e
 
 
-@router.get("/health/containers")
+class MCPInstanceHealthResponse(BaseModel):
+    """One workload's health, as the calling workspace is entitled to see it.
+
+    Deliberately just the verdict and its reason. The manager's own health body
+    is richer — container id, image, ports, the gateway path it serves the
+    workload on — and none of that is something a caller needs in order to learn
+    that a workload is up. It is dropped here rather than passed through, so the
+    endpoint cannot become a way to enumerate the data plane.
+    """
+
+    instance_id: str
+    name: str | None = None
+    healthy: bool
+    status: str
+
+
+class MCPContainersHealthResponse(BaseModel):
+    instances: list[MCPInstanceHealthResponse]
+    total: int
+    healthy: int
+
+
+@router.get("/health/containers", response_model=MCPContainersHealthResponse)
 async def get_containers_health(
     user_context: UserContextDep,
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    """Get health status of all MCP containers by proxying to the Go manager."""
+    """Health of this workspace's MCP workloads.
+
+    The manager also has a route that answers for every workload it runs, which is
+    the wrong thing to hand a caller: its rows carry service names and container
+    ids belonging to other workspaces. The instance list comes from the
+    workspace-scoped service instead, and only those ids are asked about, so the
+    answer cannot name a workload the caller is not entitled to see.
+
+    A workload the manager reports as unhealthy, has never heard of, or cannot be
+    reached about is a fact about that instance, not a failure of the request: each
+    is reported per instance and the endpoint still answers 200.
+    """
+    import asyncio
+
     import httpx
 
-    try:
-        settings = get_settings()
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{settings.mcp.MCP_MANAGER_URL}/containers/health")
-            if response.status_code != 200:
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Failed to get container health: {response.text}",
-                )
-            return response.json()
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail="Unable to connect to container manager") from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    settings = get_settings()
+    instances = await service.list()
+
+    async def read_one(client: "httpx.AsyncClient", instance) -> dict:
+        row = {"instance_id": str(instance.id), "name": getattr(instance, "name", None)}
+        url = f"{settings.mcp.MCP_MANAGER_URL}/instances/{instance.id}/health"
+        try:
+            response = await client.get(url)
+        except httpx.RequestError as e:
+            logger.warning("MCP manager unreachable for instance %s: %s", instance.id, e)
+            return {**row, "healthy": False, "status": "manager_unreachable"}
+
+        # The manager answers 200 when healthy and 503 when not, both with the
+        # same body: the second is a report, not a transport failure.
+        if response.status_code in (200, 503):
+            try:
+                body = response.json()
+            except ValueError:
+                logger.error("MCP manager sent unreadable health for %s", instance.id)
+                return {**row, "healthy": False, "status": "unreadable"}
+            if not isinstance(body, dict):
+                return {**row, "healthy": False, "status": "unreadable"}
+            return {
+                **row,
+                "healthy": bool(body.get("healthy")),
+                "status": body.get("status") or ("healthy" if body.get("healthy") else "unhealthy"),
+            }
+
+        if response.status_code == 404:
+            # Never started, or already reaped for idleness: not an error.
+            return {**row, "healthy": False, "status": "not_running"}
+
+        logger.error(
+            "MCP manager answered %s for instance %s: %s",
+            response.status_code,
+            instance.id,
+            response.text[:200],
+        )
+        return {**row, "healthy": False, "status": "error"}
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        rows = await asyncio.gather(*(read_one(client, instance) for instance in instances))
+
+    return {
+        "instances": list(rows),
+        "total": len(rows),
+        "healthy": sum(1 for row in rows if row["healthy"]),
+    }
 
 
 @router.post("/{instance_id}/probe")

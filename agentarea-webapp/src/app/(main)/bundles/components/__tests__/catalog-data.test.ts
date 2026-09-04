@@ -121,6 +121,39 @@ describe("catalog data normalization", () => {
     "skill: explicit display_name wins over generated title"
   );
 
+  // ── server-derived facets win over local re-derivation ──
+  // Browsing is filtered, sorted and counted in SQL against the row's stored
+  // category/featured columns. If a card re-derived them and disagreed, an item
+  // could sit under a facet whose filter would never return it.
+
+  assertEqual(
+    normalize(
+      "skills",
+      item({ name: "x--y--z", tags: ["category:design"], category: "documents" })
+    ).category,
+    "documents",
+    "facets: server category wins over the tag-derived one"
+  );
+
+  assertEqual(
+    normalize("skills", item({ name: "x--y--z", tags: ["category:design"] }))
+      .category,
+    "design",
+    "facets: falls back to local derivation when the server sent none"
+  );
+
+  assertEqual(
+    normalize("skills", item({ name: "x", tags: [], featured: true })).featured,
+    true,
+    "facets: server featured flag is respected"
+  );
+
+  assertEqual(
+    normalize("skills", item({ name: "x", tags: ["featured"] })).featured,
+    true,
+    "facets: falls back to the featured tag when the server sent no flag"
+  );
+
   // ── tolerant model matching (drives the "preferred models" suggestion) ──
 
   assertEqual(

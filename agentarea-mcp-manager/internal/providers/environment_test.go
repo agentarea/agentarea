@@ -10,18 +10,6 @@ type recordingSecretResolver struct {
 	omit           map[string]bool
 }
 
-func (r *recordingSecretResolver) ResolveSecrets(_ string, values map[string]string) (map[string]string, error) {
-	resolved := make(map[string]string, len(values))
-	for key, value := range values {
-		if value == "secret_ref:" {
-			resolved[key] = "resolved-reference"
-		} else {
-			resolved[key] = value
-		}
-	}
-	return resolved, nil
-}
-
 func (r *recordingSecretResolver) ResolveInstanceEnvVars(_ string, names []string) (map[string]string, error) {
 	resolved := make(map[string]string, len(names))
 	for _, name := range names {
@@ -45,13 +33,10 @@ func TestResolveInstanceSpecSecretsRejectsOmittedRequestedSecret(t *testing.T) {
 
 func (r *recordingSecretResolver) Close() error { return nil }
 
-func TestResolveInstanceSpecSecretsResolvesBothSecretForms(t *testing.T) {
+func TestResolveInstanceSpecSecretsMergesNamedSecretsIntoEnvironment(t *testing.T) {
 	source := map[string]any{
-		"environment": map[string]any{
-			"PLAIN": "value",
-			"REF":   "secret_ref:",
-		},
-		"env_vars": []any{"NAMED"},
+		"environment": map[string]any{"PLAIN": "value"},
+		"env_vars":    []any{"NAMED"},
 	}
 	resolver := &recordingSecretResolver{instanceValues: map[string]string{"NAMED": "named-secret"}}
 
@@ -62,20 +47,19 @@ func TestResolveInstanceSpecSecretsResolvesBothSecretForms(t *testing.T) {
 
 	want := map[string]any{
 		"PLAIN": "value",
-		"REF":   "resolved-reference",
 		"NAMED": "named-secret",
 	}
 	if got := resolved["environment"]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("environment = %#v, want %#v", got, want)
 	}
-	if got := source["environment"].(map[string]any)["REF"]; got != "secret_ref:" {
-		t.Fatalf("source mutated: REF = %#v", got)
+	if _, mutated := source["environment"].(map[string]any)["NAMED"]; mutated {
+		t.Fatal("source mutated: NAMED leaked into the caller's spec")
 	}
 }
 
-func TestResolveInstanceSpecSecretsRequiresResolverForEmptyReference(t *testing.T) {
+func TestResolveInstanceSpecSecretsRequiresResolverForNamedSecrets(t *testing.T) {
 	_, err := resolveInstanceSpecSecrets(nil, "instance-1", map[string]any{
-		"environment": map[string]any{"REF": "secret_ref:"},
+		"env_vars": []any{"NAMED"},
 	})
 	if err == nil {
 		t.Fatal("expected missing resolver to fail closed")

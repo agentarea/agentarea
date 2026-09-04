@@ -254,14 +254,13 @@ export default function APIKeysClient({
           <Button
             variant="destructiveOutline"
             size="xs"
-            className="gap-1"
             onClick={(e) => {
               e.stopPropagation();
               setRevokeTarget(item);
               setRevokeOpen(true);
             }}
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 />
             {t("revoke.button")}
           </Button>
         ) : null,
@@ -307,7 +306,7 @@ export default function APIKeysClient({
               disabled={revoking}
             >
               {t("revoke.button")}
-              {revoking && <Loader2 className="h-4 w-4 animate-spin" />}
+              {revoking && <Loader2 className="animate-spin" />}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -335,9 +334,9 @@ export default function APIKeysClient({
                 onClick={handleCopyToken}
               >
                 {copied ? (
-                  <Check className="h-4 w-4 text-green-500" />
+                  <Check className="text-green-500" />
                 ) : (
-                  <Copy className="h-4 w-4" />
+                  <Copy />
                 )}
               </Button>
             </div>

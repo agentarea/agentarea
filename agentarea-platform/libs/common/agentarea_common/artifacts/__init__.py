@@ -5,6 +5,7 @@ lives under ``workspaces/{workspace_id}/...`` in the artifacts bucket.
 """
 
 from .audit import (
+    ACTION_ARCHIVED,
     ACTION_CREATED,
     ACTION_DELETED,
     ACTION_MODIFIED,
@@ -15,7 +16,12 @@ from .audit import (
     ArtifactEventRecorder,
     DbArtifactEventRecorder,
 )
-from .service import ArtifactIntegrityError, ArtifactObject, ArtifactService
+from .service import (
+    TRASH_PREFIX,
+    ArtifactIntegrityError,
+    ArtifactObject,
+    ArtifactService,
+)
 from .workspace import (
     S3WorkspaceRepository,
     WorkspaceConflictError,
@@ -31,11 +37,13 @@ from .workspace import (
 )
 
 __all__ = [
+    "ACTION_ARCHIVED",
     "ACTION_CREATED",
     "ACTION_DELETED",
     "ACTION_MODIFIED",
     "ACTOR_AGENT",
     "ACTOR_USER",
+    "TRASH_PREFIX",
     "ArtifactActor",
     "ArtifactEvent",
     "ArtifactEventRecorder",

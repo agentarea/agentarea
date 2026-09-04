@@ -53,7 +53,7 @@ export function WorkplaceOnboarding({
           >
             <Link href={primaryHref}>
               {primaryLabel}
-              <ArrowRight className="h-3 w-3" />
+              <ArrowRight />
             </Link>
           </Button>
         </div>
@@ -83,10 +83,10 @@ export function WorkplaceOnboarding({
               disabled
               className="h-8 w-8 text-muted-foreground"
             >
-              <Paperclip className="h-4 w-4" />
+              <Paperclip />
             </Button>
             <Button disabled size="icon" className="h-8 w-8">
-              <Send className="h-4 w-4" />
+              <Send />
             </Button>
           </div>
         </div>

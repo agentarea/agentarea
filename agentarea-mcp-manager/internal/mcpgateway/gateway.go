@@ -203,6 +203,15 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		return nil
 	})
 	cancelStart()
+	if errors.Is(err, ErrStartInProgress) {
+		// Another caller holds the lifecycle and is bringing this workload up.
+		// Answering "unavailable" would be wrong twice over: nothing failed, and
+		// the start this caller wanted is already running. Ask it to come back
+		// instead — that retry is what completes the cold start.
+		response.Header().Set("Retry-After", "1")
+		http.Error(response, "MCP instance is starting", http.StatusServiceUnavailable)
+		return
+	}
 	if err != nil {
 		g.logger.Warn("MCP demand could not be satisfied", slog.String("instance_id", instanceID), slog.String("error", err.Error()))
 		response.Header().Set("Retry-After", "5")
@@ -277,6 +286,9 @@ func (g *Gateway) RetireHTTP(response http.ResponseWriter, request *http.Request
 		case errors.Is(err, ErrInstanceBusy):
 			response.Header().Set("Retry-After", "5")
 			http.Error(response, "MCP instance has active requests", http.StatusConflict)
+		case errors.Is(err, ErrStartInProgress):
+			response.Header().Set("Retry-After", "5")
+			http.Error(response, "MCP instance is starting", http.StatusConflict)
 		case errors.Is(err, ErrInstanceNotFound):
 			http.Error(response, "MCP instance not found", http.StatusNotFound)
 		default:
@@ -354,6 +366,12 @@ func (g *Gateway) Reap(ctx context.Context) (int, error) {
 	reaped := 0
 	for _, instanceID := range ids {
 		removed, err := g.repository.ReapIfIdle(ctx, instanceID, g.policy.IdleTimeout, g.runtime.Delete)
+		if errors.Is(err, ErrStartInProgress) {
+			// The candidate went from idle to starting between the query and the
+			// lock. It is no longer eligible, and the next sweep will see the
+			// truth; the sweep did its job.
+			continue
+		}
 		if err != nil {
 			g.logger.Warn("Failed to reap idle MCP instance", slog.String("instance_id", instanceID), slog.String("error", err.Error()))
 			continue

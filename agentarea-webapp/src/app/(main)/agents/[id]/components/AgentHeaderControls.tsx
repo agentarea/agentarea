@@ -32,7 +32,7 @@ export default function AgentHeaderControls() {
           type="button"
           onClick={() => setIsChatSheetOpen(true)}
         >
-          <MessageSquare className="h-4 w-4" />
+          <MessageSquare />
         </Button>
       )}
       <Button size="xs" type="submit" form={formId} isLoading={isSubmitting}>

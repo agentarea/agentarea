@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ProviderConfigCreate(BaseModel):
@@ -39,6 +39,15 @@ class ProviderConfigCreate(BaseModel):
             "suppresses the Authorization header when this is empty."
         ),
     )
+    api_key_secret_id: UUID | None = Field(
+        default=None,
+        description=(
+            "Use an existing workspace secret as the API key instead of "
+            "supplying one here. Mutually exclusive with api_key. The secret "
+            "keeps its own lifecycle: several configurations may share it, and "
+            "it cannot be deleted while any of them still points at it."
+        ),
+    )
     endpoint_url: str | None = Field(
         default=None,
         description=(
@@ -58,6 +67,18 @@ class ProviderConfigCreate(BaseModel):
             "otherwise it is scoped to the creator."
         ),
     )
+
+    @model_validator(mode="after")
+    def _one_key_source(self) -> ProviderConfigCreate:
+        # Accepting both would leave the caller's intent unresolvable: one of
+        # the two would silently win, and which one is not something a caller
+        # should have to know.
+        if self.api_key and self.api_key_secret_id:
+            raise ValueError(
+                "Provide either api_key or api_key_secret_id, not both: "
+                "api_key stores a new secret, api_key_secret_id reuses an existing one."
+            )
+        return self
 
     @field_validator("name")
     @classmethod
@@ -94,10 +115,18 @@ class ProviderConfigUpdate(BaseModel):
             "string to clear the key for keyless custom endpoints."
         ),
     )
+    api_key_secret_id: UUID | None = Field(
+        default=None,
+        description=(
+            "Point this configuration at an existing workspace secret instead. "
+            "Mutually exclusive with api_key."
+        ),
+    )
     endpoint_url: str | None = Field(
         default=None,
         description="New endpoint URL, or empty string to clear.",
     )
+
     description: str | None = Field(
         default=None,
         max_length=1000,
@@ -111,6 +140,18 @@ class ProviderConfigUpdate(BaseModel):
         default=None,
         description="Toggle workspace-wide visibility.",
     )
+
+    @model_validator(mode="after")
+    def _one_key_source(self) -> ProviderConfigUpdate:
+        # The service resolves the conflict by letting api_key_secret_id win.
+        # Which of the two prevails is not something a caller should have to
+        # know, so a patch carrying both is rejected rather than half-applied.
+        if self.api_key and self.api_key_secret_id:
+            raise ValueError(
+                "Provide either api_key or api_key_secret_id, not both: "
+                "api_key stores a new secret, api_key_secret_id reuses an existing one."
+            )
+        return self
 
     @field_validator("api_key", mode="before")
     @classmethod

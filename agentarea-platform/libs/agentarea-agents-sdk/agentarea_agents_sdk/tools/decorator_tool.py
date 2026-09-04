@@ -9,6 +9,7 @@ from typing import Any, TypeVar, Union, cast, get_args, get_origin, get_type_hin
 from .base_tool import BaseTool
 from .tool_definition import (
     ToolDefinition,
+    ToolEffect,
     ToolsetMetadata,
     build_tool_definition,
 )
@@ -17,17 +18,19 @@ from .tool_definition import (
 class ToolMethodMetadata:
     """Per-method metadata stamped by ``@tool_method(...)``."""
 
-    __slots__ = ("display_name", "description", "requires_user_confirmation")
+    __slots__ = ("display_name", "description", "effect", "requires_user_confirmation")
 
     def __init__(
         self,
         *,
         display_name: str = "",
         description: str = "",
+        effect: ToolEffect | None = None,
         requires_user_confirmation: bool = False,
     ) -> None:
         self.display_name = display_name
         self.description = description
+        self.effect = effect
         self.requires_user_confirmation = requires_user_confirmation
 
 
@@ -44,6 +47,7 @@ def tool_method(
     *,
     display_name: str = "",
     description: str = "",
+    effect: ToolEffect | None = None,
     requires_user_confirmation: bool = False,
 ) -> Callable[[F], F]: ...
 
@@ -53,19 +57,25 @@ def tool_method(
     *,
     display_name: str = "",
     description: str = "",
+    effect: ToolEffect | None = None,
     requires_user_confirmation: bool = False,
 ) -> Callable[..., Any]:
     """Mark a method as a tool function.
 
     Description falls back to the docstring's first line. Optional metadata
-    (``display_name``, ``requires_user_confirmation``) is exposed via
-    ``method._tool_meta`` and surfaces in ``ToolsetMetadata``-driven UIs.
+    (``display_name``, ``effect``, ``requires_user_confirmation``) is exposed
+    via ``method._tool_meta`` and surfaces in ``ToolsetMetadata``-driven UIs.
+
+    ``effect`` says what a call does to the workspace — ``read``, ``write``,
+    ``destructive``, or ``privileged`` (changes someone's rights, limits, or
+    reach). It is never inferred from the method name: platform toolsets must
+    declare it, and their contract test fails when they don't.
 
     Usage:
-        @tool_method
+        @tool_method(effect="read")
         async def list(self): ...
 
-        @tool_method(display_name="Create Agent")
+        @tool_method(display_name="Create Agent", effect="write")
         async def create(self, payload: AgentCreate) -> AgentSummary: ...
     """
 
@@ -82,6 +92,7 @@ def tool_method(
         tagged._tool_meta = ToolMethodMetadata(
             display_name=display_name or f.__name__.replace("_", " ").title(),
             description=resolved_desc,
+            effect=effect,
             requires_user_confirmation=requires_user_confirmation,
         )
         return f

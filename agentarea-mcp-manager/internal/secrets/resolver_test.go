@@ -97,33 +97,3 @@ func TestDatabaseResolveInstanceEnvVarsHidesSecretIdentifiers(t *testing.T) {
 		}
 	}
 }
-
-func TestDatabaseResolveSecretsHidesSecretIdentifiers(t *testing.T) {
-	const (
-		envName = "PRIVATE_SECRET_KEY"
-		canary  = "dsn=postgres://user:PRIVATE_DB_PASSWORD@host/db"
-	)
-
-	var logs bytes.Buffer
-	resolver := newDatabaseResolverWithFailingDB(&logs, canary)
-	defer resolver.db.Close()
-
-	_, err := resolver.ResolveSecrets("instance-1", map[string]string{
-		envName:      "secret_ref:" + envName,
-		"PLAIN_ONLY": "plain-value",
-	})
-	if err == nil {
-		t.Fatal("ResolveSecrets() error = nil, want error for unreachable database")
-	}
-	if err.Error() != "failed to resolve secrets for instance" {
-		t.Fatalf("ResolveSecrets() error = %q, want the fixed redacted message", err)
-	}
-	for name, value := range map[string]string{"error": err.Error(), "logs": logs.String()} {
-		if strings.Contains(value, envName) {
-			t.Fatalf("%s exposed secret identifier: %s", name, value)
-		}
-		if strings.Contains(value, canary) {
-			t.Fatalf("%s exposed database error text: %s", name, value)
-		}
-	}
-}

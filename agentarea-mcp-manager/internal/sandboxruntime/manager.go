@@ -369,7 +369,7 @@ func (m *Manager) SandboxFileDownload(ctx context.Context, workspaceID, taskID, 
 		return nil, err
 	}
 	var download *FileDownload
-	err = m.runProviderOperation(ctx, session, func(operationCtx context.Context) error {
+	streamCtx, stopStream, err := m.runProviderStream(ctx, session, func(operationCtx context.Context) error {
 		var operationErr error
 		download, operationErr = m.provider.OpenFile(operationCtx, session, absolute)
 		return operationErr
@@ -386,7 +386,10 @@ func (m *Manager) SandboxFileDownload(ctx context.Context, workspaceID, taskID, 
 		}
 		return nil, fmt.Errorf("sandbox provider returned an invalid file stream")
 	}
-	download.Content = newProviderLeaseReadCloser(ctx, download.Content, m, session, release)
+	download.Content = newProviderLeaseReadCloser(streamCtx, download.Content, m, session, func() {
+		stopStream()
+		release()
+	})
 	handedOff = true
 	return download, nil
 }
@@ -899,6 +902,44 @@ func (m *Manager) runProviderOperation(ctx context.Context, session *Session, op
 		return fmt.Errorf("renew sandbox after provider operation: %w", err)
 	}
 	return nil
+}
+
+// runProviderStream runs a provider operation that hands back a live stream.
+//
+// It differs from runProviderOperation in the one way that matters: the operation
+// context is NOT cancelled when the call returns. A stream carries the provider's
+// open request, so cancelling here made the first read outside this call fail with
+// "context canceled" -- and since publishing an artifact reads the stream after
+// the open returns, every file a task delivered was lost behind a 502, which the
+// task saw as its deliverable being unpersistable.
+//
+// The returned stop function ends the heartbeat and the context; the stream
+// wrapper owns it and calls it once the stream is closed.
+func (m *Manager) runProviderStream(
+	ctx context.Context,
+	session *Session,
+	operation func(context.Context) error,
+) (context.Context, func(), error) {
+	operationCtx, cancel := context.WithCancel(ctx)
+	stop := make(chan struct{})
+	done := make(chan error, 1)
+	go m.leaseHeartbeat(operationCtx, session, stop, done, cancel, nil)
+	operationErr := operation(operationCtx)
+	close(stop)
+	heartbeatErr := <-done
+	if heartbeatErr != nil {
+		cancel()
+		return nil, nil, fmt.Errorf("%w: %w", ErrLeaseHeartbeatFailed, heartbeatErr)
+	}
+	if operationErr != nil {
+		cancel()
+		return nil, nil, operationErr
+	}
+	if err := m.renewActive(ctx, session); err != nil {
+		cancel()
+		return nil, nil, fmt.Errorf("renew sandbox after provider operation: %w", err)
+	}
+	return operationCtx, cancel, nil
 }
 
 func (m *Manager) leaseHeartbeat(

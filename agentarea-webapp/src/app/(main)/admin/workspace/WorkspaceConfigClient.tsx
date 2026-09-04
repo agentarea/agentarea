@@ -225,7 +225,7 @@ export default function WorkspaceConfigClient() {
               size="sm"
               className="gap-2 mt-4"
             >
-              <Download className="h-4 w-4" />
+              <Download />
               {isExporting ? t("export.exporting") : t("export.button")}
             </Button>
           </div>
@@ -350,7 +350,7 @@ export default function WorkspaceConfigClient() {
               size="sm"
               className="gap-2 w-fit"
             >
-              <Upload className="h-4 w-4" />
+              <Upload />
               {isImporting ? t("import.importing") : t("import.button")}
             </Button>
           </div>

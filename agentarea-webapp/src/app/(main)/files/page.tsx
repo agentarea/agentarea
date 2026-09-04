@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Upload, Loader2 } from "lucide-react";
+import { Upload, FolderUp, Loader2 } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
 import { Button } from "@/components/ui/button";
 import { FileBrowser, type BrowsedFile } from "@/components/files/file-browser";
@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   listWorkspaceFilesAction,
   uploadWorkspaceFileAction,
+  deleteWorkspaceFileAction,
   downloadWorkspaceFileAction,
   workspaceFileHistoryAction,
 } from "@/lib/server-actions";
@@ -18,6 +19,7 @@ import {
 export default function WorkspaceFilesPage() {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<BrowsedFile[]>([]);
   const [directories, setDirectories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,26 +47,54 @@ export default function WorkspaceFilesPage() {
   }, [fetchFiles]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const selected = Array.from(e.target.files ?? []);
+    const input = e.target;
+    if (selected.length === 0) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const { error } = await uploadWorkspaceFileAction(formData);
-      if (error) {
+      const failed: string[] = [];
+      for (const file of selected) {
+        const formData = new FormData();
+        formData.append("file", file);
+        // webkitRelativePath is set for directory picks and carries the folder
+        // structure the user chose; a plain file pick lands at the root.
+        const relativePath = (file as File & { webkitRelativePath?: string })
+          .webkitRelativePath;
+        if (relativePath) formData.append("path", relativePath);
+        const { error } = await uploadWorkspaceFileAction(formData);
+        if (error) failed.push(file.name);
+      }
+      if (failed.length > 0) {
         toast({
           title: "Upload failed",
-          description: (error as { detail?: string })?.detail || "Upload failed",
+          description: `${failed.length} of ${selected.length} files failed: ${failed.join(", ")}`,
           variant: "destructive",
         });
-        return;
       }
       await fetchFiles();
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      input.value = "";
     }
+  };
+
+  const handleDelete = async (file: BrowsedFile) => {
+    if (
+      !window.confirm(
+        `Move "${file.path}" to the trash? It stays recoverable through the API.`
+      )
+    )
+      return;
+    const { error } = await deleteWorkspaceFileAction(file.path);
+    if (error) {
+      toast({
+        title: "Delete failed",
+        description: (error as { detail?: string })?.detail || "Delete failed",
+        variant: "destructive",
+      });
+      return;
+    }
+    await fetchFiles();
   };
 
   const fetchUrl = useCallback(async (path: string) => {
@@ -96,17 +126,38 @@ export default function WorkspaceFilesPage() {
               disabled={uploading}
             >
               {uploading ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="mr-1.5 animate-spin" />
               ) : (
-                <Upload className="mr-1.5 h-3.5 w-3.5" />
+                <Upload className="mr-1.5" />
               )}
-              Upload File
+              Upload Files
+            </Button>
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={() => folderInputRef.current?.click()}
+              disabled={uploading}
+            >
+              <FolderUp className="mr-1.5 h-3.5 w-3.5" />
+              Upload Folder
             </Button>
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               className="hidden"
               onChange={handleUpload}
+            />
+            <input
+              ref={folderInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleUpload}
+              {...({
+                webkitdirectory: "",
+                directory: "",
+              } as Record<string, string>)}
             />
           </>
         ),
@@ -121,6 +172,7 @@ export default function WorkspaceFilesPage() {
           directories={directories}
           fetchUrl={fetchUrl}
           fetchHistory={fetchHistory}
+          onDelete={handleDelete}
           emptyMessage="No files in this workspace yet."
           className="h-full"
         />

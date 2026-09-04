@@ -3,6 +3,7 @@ package providers
 import (
 	"io"
 	"log/slog"
+	"reflect"
 	"testing"
 
 	"github.com/agentarea/mcp-manager/internal/models"
@@ -186,6 +187,120 @@ func TestConvertToInstanceSpec_DockerType_OnlyStdioFlag_CommandBecomesEmpty(t *t
 
 	if len(spec.Command) != 0 {
 		t.Errorf("expected empty Command after stripping --transport=stdio, got %v", spec.Command)
+	}
+}
+
+// docker-type written the way the catalog writes a command-type spec: a command
+// string plus args. Dropping args left every flag-driven image on its default
+// transport -- terraform-mcp-server, asked for streamable-http, announced
+// "running on stdio" and exited, so the instance could never be reached.
+func TestConvertToInstanceSpecDockerTypeExtendsACommandStringWithArgs(t *testing.T) {
+	p := newTestBackendProvider()
+
+	spec := p.convertToInstanceSpec(&models.MCPServerInstance{
+		InstanceID: "inst-args-1",
+		Name:       "terraform",
+		JSONSpec: map[string]interface{}{
+			"type":    "docker",
+			"image":   "hashicorp/terraform-mcp-server:latest",
+			"port":    float64(9111),
+			"command": "streamable-http",
+			"args":    []interface{}{"--transport-host", "0.0.0.0", "--transport-port", "9111"},
+		},
+	})
+
+	want := []string{"streamable-http", "--transport-host", "0.0.0.0", "--transport-port", "9111"}
+	if !reflect.DeepEqual(spec.Command, want) {
+		t.Fatalf("expected Command=%v, got %v", want, spec.Command)
+	}
+}
+
+// args alone reach the container: the image already has an entrypoint, so a
+// subcommand and its flags are all the spec needs to carry.
+func TestConvertToInstanceSpecDockerTypeAcceptsArgsWithoutACommand(t *testing.T) {
+	p := newTestBackendProvider()
+
+	spec := p.convertToInstanceSpec(&models.MCPServerInstance{
+		InstanceID: "inst-args-2",
+		Name:       "github",
+		JSONSpec: map[string]interface{}{
+			"type":  "docker",
+			"image": "ghcr.io/github/github-mcp-server:latest",
+			"port":  float64(8082),
+			"args":  []interface{}{"http", "--port", "8082"},
+		},
+	})
+
+	want := []string{"http", "--port", "8082"}
+	if !reflect.DeepEqual(spec.Command, want) {
+		t.Fatalf("expected Command=%v, got %v", want, spec.Command)
+	}
+}
+
+// The stdio flag is refused whichever field carried it: the gateway proxies to
+// a port, so a container speaking stdio is unreachable either way.
+func TestConvertToInstanceSpecDockerTypeDropsTheStdioFlagFromArgs(t *testing.T) {
+	p := newTestBackendProvider()
+
+	spec := p.convertToInstanceSpec(&models.MCPServerInstance{
+		InstanceID: "inst-args-3",
+		Name:       "stdio-in-args",
+		JSONSpec: map[string]interface{}{
+			"type":  "docker",
+			"image": "some/mcp:latest",
+			"port":  float64(8000),
+			"args":  []interface{}{"serve", "--transport=stdio", "--port", "8000"},
+		},
+	})
+
+	want := []string{"serve", "--port", "8000"}
+	if !reflect.DeepEqual(spec.Command, want) {
+		t.Fatalf("expected Command=%v, got %v", want, spec.Command)
+	}
+}
+
+// A command-type spec keeps carrying its args after both branches started
+// sharing one reader.
+func TestConvertToInstanceSpecCommandTypeStillCarriesArgs(t *testing.T) {
+	p := newTestBackendProvider()
+
+	spec := p.convertToInstanceSpec(&models.MCPServerInstance{
+		InstanceID: "inst-args-4",
+		Name:       "bridged",
+		JSONSpec: map[string]interface{}{
+			"type":    "command",
+			"command": "uvx",
+			"args":    []interface{}{"mcp-server-time", "--local-timezone", "UTC"},
+		},
+	})
+
+	want := []string{"uvx", "mcp-server-time", "--local-timezone", "UTC"}
+	if !reflect.DeepEqual(spec.Command, want) {
+		t.Fatalf("expected Command=%v, got %v", want, spec.Command)
+	}
+}
+
+// A per-instance ceiling from the control plane reaches the backend. Without it
+// the host default is the only ceiling, so every workspace gets the same slice of
+// the machine no matter what its plan says.
+func TestConvertToInstanceSpecCarriesAPerInstanceCeiling(t *testing.T) {
+	p := newTestBackendProvider()
+
+	spec := p.convertToInstanceSpec(&models.MCPServerInstance{
+		InstanceID: "inst-limits",
+		Name:       "heavy",
+		JSONSpec: map[string]interface{}{
+			"type":  "docker",
+			"image": "vendor/mcp:1.0",
+			"port":  float64(8080),
+			"resources": map[string]interface{}{
+				"limits": map[string]interface{}{"memory": "2g", "cpu": "2.0"},
+			},
+		},
+	})
+
+	if spec.Resources.Limits.Memory != "2g" || spec.Resources.Limits.CPU != "2.0" {
+		t.Fatalf("limits = %q/%q, want 2g/2.0", spec.Resources.Limits.Memory, spec.Resources.Limits.CPU)
 	}
 }
 

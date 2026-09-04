@@ -171,7 +171,7 @@ export default function TaskEventsPage() {
             disabled={eventsLoading}
           >
             <RefreshCw
-              className={`h-3 w-3 mr-1 ${eventsLoading ? "animate-spin" : ""}`}
+              className={`mr-1 ${eventsLoading ? "animate-spin" : ""}`}
             />
             Refresh
           </Button>
@@ -221,7 +221,7 @@ export default function TaskEventsPage() {
                     colSpan={6}
                     className="py-8 text-center text-muted-foreground text-xs"
                   >
-                    No events found.
+                    {eventsError ? "Could not load events." : "No events found."}
                   </td>
                 </tr>
               ) : (

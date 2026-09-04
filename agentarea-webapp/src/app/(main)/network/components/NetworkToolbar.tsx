@@ -40,7 +40,7 @@ export default function NetworkToolbar({
           className={`gap-1 text-xs h-7 px-2 ${!filters[key] ? "opacity-40" : ""}`}
           aria-label={`Toggle ${label}`}
         >
-          <Icon className={`h-3.5 w-3.5 ${color}`} />
+          <Icon className={color} />
           {label}
         </Button>
       ))}
@@ -55,7 +55,7 @@ export default function NetworkToolbar({
           className="gap-1 text-xs h-7 px-2"
           aria-label="Toggle governance"
         >
-          <Shield className="h-3.5 w-3.5" />
+          <Shield />
           Gov
         </Button>
       )}
@@ -67,7 +67,7 @@ export default function NetworkToolbar({
         onClick={onRefresh}
         disabled={loading}
       >
-        <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+        <RefreshCw className={loading ? "animate-spin" : ""} />
       </Button>
     </div>
   );

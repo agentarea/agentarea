@@ -5,6 +5,7 @@ import { Files, RefreshCw } from "lucide-react";
 import { FileBrowser, type BrowsedFile } from "@/components/files/file-browser";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiErrorMessage } from "@/lib/api-errors";
 import { listTaskSandboxFilesAction } from "@/lib/server-actions";
 import { useTaskContext } from "../TaskContext";
 
@@ -30,10 +31,12 @@ export default function TaskFilesPage() {
       const result = await listTaskSandboxFilesAction(task.agent_id, task.id);
       if (result.error) {
         setFiles([]);
+        // 410 is the expected end of a sandbox's life, not a failure — every
+        // other status is a real error and must say what actually went wrong.
         setError(
           result.status === 410
             ? "This sandbox has expired. Published artifacts remain available."
-            : "Live sandbox files are temporarily unavailable."
+            : apiErrorMessage(result, "Could not load sandbox files")
         );
         return;
       }
@@ -100,7 +103,7 @@ export default function TaskFilesPage() {
           </p>
         </div>
         <Button size="xs" variant="outline" onClick={() => void loadFiles()}>
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          <RefreshCw className="mr-1.5" />
           Refresh
         </Button>
       </div>

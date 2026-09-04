@@ -154,9 +154,9 @@ function CloudBillingPreview({
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
             <Button onClick={() => window.open(CLOUD_URL, "_blank")}>
-              <Cloud className="h-4 w-4" />
+              <Cloud />
               {t("cloudBilling.openCloud")}
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink />
             </Button>
             <Button
               variant="outline"
@@ -167,7 +167,7 @@ function CloudBillingPreview({
                 )
               }
             >
-              <Users className="h-4 w-4" />
+              <Users />
               {t("cloudBilling.contactSales")}
             </Button>
           </div>
@@ -366,9 +366,9 @@ function CloudMigrationPanel() {
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
             <Button onClick={() => window.open(CLOUD_URL, "_blank")}>
-              <Cloud className="h-4 w-4" />
+              <Cloud />
               {t("cloudMigration.openCloud")}
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink />
             </Button>
             <Button
               variant="outline"
@@ -379,7 +379,7 @@ function CloudMigrationPanel() {
                 )
               }
             >
-              <Users className="h-4 w-4" />
+              <Users />
               {t("cloudMigration.contactSales")}
             </Button>
           </div>
@@ -705,7 +705,7 @@ function PlanCard({
               window.open("https://agentarea.ai/pricing", "_blank")
             }
           >
-            <Sparkles className="h-3 w-3 mr-1.5" />
+            <Sparkles className="mr-1.5" />
             {t("availablePlans.setUpBilling")}
           </Button>
         )}
