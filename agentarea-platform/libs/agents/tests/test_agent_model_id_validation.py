@@ -20,6 +20,7 @@ from agentarea_common.base.models import BaseModel
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig, ProviderSpec
+from agentarea_secrets.models import EncryptedSecret
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 
@@ -40,6 +41,13 @@ async def session_factory():
                     ProviderConfig.__table__,
                     ModelSpec.__table__,
                     ModelInstance.__table__,
+                    # ProviderConfig.api_key_secret_id references encrypted_secrets
+                    # (#350). Creating the referring table without this one leaves a
+                    # dangling foreign key: harmless while SQLite has FK enforcement
+                    # off, but a flush fails the moment an earlier test in the same
+                    # session has turned it on — which is why this only broke once
+                    # the gate started collecting the whole suite.
+                    EncryptedSecret.__table__,
                 ],
             )
         )

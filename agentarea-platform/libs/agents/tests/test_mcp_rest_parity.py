@@ -140,8 +140,17 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
     "projects.update": set(),
     "clients.create": set(),
     "clients.update": set(),
-    "providers.create_config": set(),
-    "providers.update_config": set(),
+    # ``api_key_secret_id`` arrived with #350, which lets a config point at an
+    # existing workspace secret instead of carrying a raw key. The REST DTO takes
+    # it; the toolset does not, and this parity guard only surfaced it now because
+    # libs/agents/tests was outside the merge gate until this change.
+    #
+    # Listed rather than exposed, deliberately: letting an agent name which stored
+    # secret backs a provider config is a wider grant than letting it pass a key it
+    # was already given, and that is a call for whoever owns #350 — not something to
+    # settle by making a red test green. Exposing it later is a one-line move.
+    "providers.create_config": {"api_key_secret_id"},
+    "providers.update_config": {"api_key_secret_id"},
     "openapi_connections.create": set(),
     "openapi_connections.update": set(),
     "mcp_servers.create_spec": set(),

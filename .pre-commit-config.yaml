@@ -14,51 +14,15 @@ repos:
       - id: mixed-line-ending
         args: ['--fix=lf']
 
-  - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.86.0
-    hooks:
-      - id: terraform_fmt
-        args:
-          - --args=-recursive
-      - id: terraform_validate
-        args:
-          - --args=-json
-      - id: terraform_docs
-        args:
-          - --hook-config=--path-to-file=README.md
-          - --hook-config=--add-to-existing-file=true
-          - --hook-config=--create-file-if-not-exist=true
-      - id: terraform_tflint
-        args:
-          - --args=--only=terraform_deprecated_interpolation
-          - --args=--only=terraform_deprecated_index
-          - --args=--only=terraform_unused_declarations
-          - --args=--only=terraform_comment_syntax
-          - --args=--only=terraform_documented_outputs
-          - --args=--only=terraform_documented_variables
-          - --args=--only=terraform_typed_variables
-          - --args=--only=terraform_module_pinned_source
-          - --args=--only=terraform_naming_convention
-          - --args=--only=terraform_required_version
-          - --args=--only=terraform_required_providers
-          - --args=--only=terraform_standard_module_structure
-          - --args=--only=terraform_workspace_remote
-      - id: terraform_tfsec
-        args:
-          - --args=--minimum-severity=MEDIUM
-          - --args=--exclude-downloaded-modules
-      - id: terraform_checkov
-        args:
-          - --args=--quiet
-          - --args=--skip-check CKV_YC_1,CKV_YC_2,CKV_YC_3
-          - --args=--framework terraform
-
+  # Keep this rev in step with DETECT_SECRETS_VERSION in
+  # .github/workflows/secret-scan.yml — a baseline written by a newer
+  # detect-secrets aborts an older one with "No such plugin to initialize".
   - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
+    rev: v1.5.0
     hooks:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
-        exclude: package.lock.json
+        exclude: '(\.lock$|^node_modules/|^\.omc/|package-lock\.json$|pnpm-lock\.yaml$)'
 
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v3.13.0

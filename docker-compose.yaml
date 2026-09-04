@@ -382,6 +382,8 @@ services:
     environment:
       DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
       LOG_LEVEL: info
+      SECRETS_COOKIE: ${KRATOS_SECRETS_COOKIE:?KRATOS_SECRETS_COOKIE is required; scripts/install.sh generates it}
+      SECRETS_CIPHER: ${KRATOS_SECRETS_CIPHER:?KRATOS_SECRETS_CIPHER is required and must be exactly 32 characters; scripts/install.sh generates it}
       # SMTP Configuration - Override courier settings via environment variables
       COURIER_SMTP_CONNECTION_URI: "${SMTP_PROTOCOL}://${SMTP_USERNAME}:${SMTP_PASSWORD}@${SMTP_HOST}:${SMTP_PORT}/?skip_ssl_verify=${SMTP_SKIP_SSL_VERIFY}"
       COURIER_SMTP_FROM_ADDRESS: ${SMTP_FROM_EMAIL}

@@ -51,24 +51,6 @@ confirm_install_directory() {
   esac
 }
 
-random_token() {
-  bytes="${1:-32}"
-  if have openssl; then
-    openssl rand -base64 "$bytes" | tr '+/' '-_' | tr -d '\n'
-  elif [ -r /dev/urandom ]; then
-    LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c "$bytes"
-  else
-    date +%s
-  fi
-}
-
-fernet_key() {
-  if have openssl; then
-    openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n'
-  else
-    random_token 44
-  fi
-}
 
 download() {
   source_path="$1"
@@ -98,6 +80,11 @@ write_env_if_missing() {
   rustfs_access_key="agentarea"
   rustfs_secret_key=$(random_token 32)
   secret_key=$(fernet_key)
+  kratos_cookie_secret=$(random_secret_32)
+  kratos_cipher_secret=$(random_secret_32)
+  hydra_system_secret=$(random_secret_32)
+  hydra_cookie_secret=$(random_secret_32)
+  kratos_jwks_public_b64=$(generate_jwks "$AGENTAREA_HOME/config/auth/kratos/jwks.json")
 
   cat > "$env_file" <<EOF
 VERSION=latest
@@ -135,7 +122,14 @@ OIDC_GITHUB_CLIENT_SECRET=
 
 KRATOS_ISSUER=http://localhost:4433
 KRATOS_AUDIENCE=agentarea-api
-KRATOS_JWKS_B64=ewogICJrZXlzIjogWwogICAgewogICAgICAia3R5IjogIkVDIiwKICAgICAgImtpZCI6ICJhZ2VudGFyZWEtand0LWtleS0xIiwKICAgICAgInVzZSI6ICJzaWciLAogICAgICAiYWxnIjogIkVTMjU2IiwKICAgICAgImNydiI6ICJQLTI1NiIsCiAgICAgICJ4IjogIk1LQkNUTkljS1VTRGlpMTF5U3MzNTI2aURaOEFpVG83VHU2S1BBcXY3RDQiLAogICAgICAieSI6ICI0RXRsNlNSVzJZaUxVck41dmZ2Vkh1aHA3eDhQeGx0bVdXbGJiTTRJRnlNIiwKICAgICAgImQiOiAiODcwTUI2Z2Z1VEo0SHRVblV2WU15SnByNWVVWk5QNEJrNDNiVmRqM2VBRSIKICAgIH0KICBdCn0=
+# Public half of the keypair generated for this install. Kratos signs with the
+# private half in config/auth/kratos/jwks.json; the backend only verifies.
+KRATOS_JWKS_B64=$kratos_jwks_public_b64
+
+KRATOS_SECRETS_COOKIE=$kratos_cookie_secret
+KRATOS_SECRETS_CIPHER=$kratos_cipher_secret
+HYDRA_SECRETS_SYSTEM=$hydra_system_secret
+HYDRA_SECRETS_COOKIE=$hydra_cookie_secret
 EOF
   chmod 600 "$env_file"
   say "Created $env_file"
@@ -152,6 +146,12 @@ install_bundle() {
   download "config/auth/kratos/oidc.github.jsonnet" "$AGENTAREA_HOME/config/auth/kratos/oidc.github.jsonnet"
   download "config/auth/kratos/oidc.google.jsonnet" "$AGENTAREA_HOME/config/auth/kratos/oidc.google.jsonnet"
   download "agentarea-platform/temporal-config/development-sql.yaml" "$AGENTAREA_HOME/agentarea-platform/temporal-config/development-sql.yaml"
+  download "scripts/lib/secrets.sh" "$AGENTAREA_HOME/scripts/lib/secrets.sh"
+
+  # Credential generation lives in one place so the quickstart and the dev
+  # bootstrap cannot drift apart.
+  # shellcheck source=lib/secrets.sh
+  . "$AGENTAREA_HOME/scripts/lib/secrets.sh"
 
   chmod +x "$AGENTAREA_HOME/agentarea"
   write_env_if_missing

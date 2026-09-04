@@ -48,9 +48,22 @@ class WebhookType(StrEnum):
 
     @classmethod
     def _missing_(cls, value):
-        """Allow any string value for WebhookType to support dynamic configuration."""
-        # This is a bit of a hack to allow Pydantic to accept any string
-        # while still having an Enum for known constants.
-        # Ideally we should switch models to use str instead of WebhookType,
-        # but this maintains backward compatibility for now.
-        return value
+        """Accept any string, so a webhook type can be configured dynamically.
+
+        The named constants above are the ones the platform knows about; anything
+        else is passed through rather than rejected.
+
+        This returns a pseudo-member instead of the raw string on purpose.
+        ``_missing_`` is contractually required to return ``None`` or a member,
+        and returning the value itself only appeared to work: CPython validates
+        the return inside ``Enum.__contains__``, so ``"x" in WebhookType`` raises
+        ``TypeError: error in WebhookType._missing_`` on 3.12.14 while passing on
+        3.12.9. Since this is a StrEnum the pseudo-member still compares equal to
+        the string and is still a ``str``, so callers see no difference.
+        """
+        if not isinstance(value, str):
+            return None
+        member = str.__new__(cls, value)
+        member._name_ = value
+        member._value_ = value
+        return member

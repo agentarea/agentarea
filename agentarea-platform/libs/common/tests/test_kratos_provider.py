@@ -15,7 +15,18 @@ class TestKratosAuthProvider:
 
     @pytest.fixture
     def sample_jwks(self):
-        """Sample JWKS for testing."""
+        """Sample JWKS for testing.
+
+        The keypair is generated per run rather than hardcoded, so no private key
+        lives in the repository.
+        """
+        from cryptography.hazmat.primitives.asymmetric import ec
+
+        def b64(value: int) -> str:
+            return base64.urlsafe_b64encode(value.to_bytes(32, "big")).decode().rstrip("=")
+
+        key = ec.generate_private_key(ec.SECP256R1())
+        public = key.public_key().public_numbers()
         return {
             "keys": [
                 {
@@ -24,9 +35,9 @@ class TestKratosAuthProvider:
                     "use": "sig",
                     "alg": "ES256",
                     "crv": "P-256",
-                    "x": "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
-                    "y": "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM",
-                    "d": "870MB6gfuTJ4HtUnUvYMyJpr5eUZNP4Bk43bVdj3eAE",
+                    "x": b64(public.x),
+                    "y": b64(public.y),
+                    "d": b64(key.private_numbers().private_value),
                 }
             ]
         }

@@ -8,6 +8,12 @@ from pathlib import Path
 import httpx
 import pytest
 
+# The harness this exercises imports `mpp`, which ships in the optional
+# `pympp[tempo]` extra (libs/payment/pyproject.toml). Without it the module fails
+# to import, so skip rather than fail: a missing optional dependency is not a
+# defect in the code under test.
+pytest.importorskip("mpp", reason="requires the optional `mpp` extra: uv sync --extra mpp")
+
 
 def _load_endpoint_module():
     root = Path(__file__).resolve().parents[3]
