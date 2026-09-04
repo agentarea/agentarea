@@ -26,8 +26,10 @@ import yaml
 from agentarea_common.utils.slug import generate_slug
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
 
+from agentarea_registry.application.catalog_facets import apply_facets, derive_facets
 from agentarea_registry.domain.models import Registry, RegistryItem
 from agentarea_registry.infrastructure.repository import (
+    DEFAULT_CATALOG_SORT,
     RegistryItemRepository,
     RegistryRepository,
 )
@@ -127,6 +129,32 @@ class RegistryService:
     ) -> list[RegistryItem]:
         return await self.item_repo.list_by_registry(registry_id, limit=limit, offset=offset)
 
+    async def browse_catalog(
+        self,
+        registry_type: str,
+        query: str | None = None,
+        category: str | None = None,
+        sort: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[RegistryItem], int, list[tuple[str, int]]]:
+        """One page of a type's catalog, its total, and the category facets.
+
+        Backs the /explore gallery. All three come from the same filter so the
+        page, the "is there more" signal and the sidebar counts can never
+        disagree with each other.
+        """
+        items, total = await self.item_repo.browse(
+            registry_type=registry_type,
+            q=query,
+            category=category,
+            sort=sort or DEFAULT_CATALOG_SORT,
+            limit=limit,
+            offset=offset,
+        )
+        categories = await self.item_repo.category_counts(registry_type, q=query)
+        return items, total, categories
+
     async def search_catalog(
         self,
         query: str | None = None,
@@ -172,6 +200,10 @@ class RegistryService:
                     for field in ("name", "description", "spec", "tags"):
                         if field in item_data:
                             setattr(existing, field, item_data[field])
+                    # Browse facets are derived from the fields just overwritten,
+                    # so they have to be recomputed or the catalog keeps sorting
+                    # and faceting this item by what it used to be.
+                    apply_facets(existing, registry.registry_type)
 
                     new_version = item_data.get("version") or "latest"
                     existing.version = new_version
@@ -193,6 +225,12 @@ class RegistryService:
                                 registry.registry_type, existing, registry_url=registry.source_url
                             )
                 else:
+                    facets = derive_facets(
+                        registry.registry_type,
+                        item_data["name"],
+                        item_data.get("spec", {}),
+                        item_data.get("tags", []),
+                    )
                     item = await self.item_repo.create(
                         registry_id=registry_id,
                         external_id=item_data["external_id"],
@@ -201,6 +239,9 @@ class RegistryService:
                         version=item_data.get("version"),
                         spec=item_data.get("spec", {}),
                         tags=item_data.get("tags", []),
+                        category=facets.category,
+                        sort_key=facets.sort_key,
+                        featured=facets.featured,
                     )
                     entity_id = await self._create_entity(
                         registry.registry_type, item, registry_url=registry.source_url

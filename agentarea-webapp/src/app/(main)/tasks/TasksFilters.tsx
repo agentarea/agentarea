@@ -16,6 +16,7 @@ import {
 
 // Define all possible task statuses
 const TASK_STATUSES = [
+  "scheduled",
   "running",
   "completed",
   "success",

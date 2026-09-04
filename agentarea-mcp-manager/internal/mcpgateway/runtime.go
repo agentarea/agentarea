@@ -104,7 +104,18 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 			}
 			select {
 			case <-ctx.Done():
-				return "", r.cleanupFailedStart(instance, ctx.Err())
+				// The gateway allows a start exactly StartupTimeout, which is
+				// also this loop's deadline, so this branch — not the timer
+				// below — is the one production takes. Report the same last
+				// state the timer would: without it the log says only that time
+				// ran out, and the workload has already been cleaned up by the
+				// time anyone could go and look at it.
+				if statusErr != nil {
+					return "", r.cleanupFailedStart(instance,
+						fmt.Errorf("MCP instance did not become ready: %w", errors.Join(ctx.Err(), statusErr)))
+				}
+				return "", r.cleanupFailedStart(instance,
+					fmt.Errorf("MCP instance did not become ready; last state %q: %w", status.Status, ctx.Err()))
 			case <-deadline.C:
 				if statusErr != nil {
 					return "", r.cleanupFailedStart(instance, fmt.Errorf("MCP instance did not become ready: %w", statusErr))

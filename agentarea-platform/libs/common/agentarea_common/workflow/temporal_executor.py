@@ -159,6 +159,9 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
         if config.task_queue:
             temporal_params["task_queue"] = config.task_queue
 
+        if config.start_delay:
+            temporal_params["start_delay"] = config.start_delay
+
         # Convert retry policy
         temporal_params["retry_policy"] = RetryPolicy(
             maximum_attempts=config.retry_attempts,

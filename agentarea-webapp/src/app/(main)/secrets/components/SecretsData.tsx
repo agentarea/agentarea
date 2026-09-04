@@ -32,22 +32,15 @@ export async function SecretsData() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-sm font-medium">Workspace secrets</h2>
-          <p className="text-sm text-muted-foreground">
-            Values are encrypted and never shown again after you save them. A
-            secret can be reused by several connections, and rotating it updates
-            all of them at once.
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-sm font-medium">Workspace secrets</h2>
         <CreateSecretDialog />
       </div>
 
       {secrets.length === 0 ? (
         <EmptyState
           title="No secrets yet"
-          description="Create a secret here to reuse it across LLM providers and API connections, instead of pasting the same key into each one."
+          description="Nothing here holds a credential. Create a secret to reuse it across LLM providers and API connections, instead of pasting the same key into each one."
           iconsType="mcp"
         />
       ) : (

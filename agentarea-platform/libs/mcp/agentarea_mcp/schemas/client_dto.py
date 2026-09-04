@@ -13,7 +13,6 @@ class ClientCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=1000)
     kind: str = Field(default="harness", max_length=32)
-    source_project_id: str | None = Field(default=None)
 
     @field_validator("name")
     @classmethod
@@ -32,4 +31,3 @@ class ClientUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=1000)
     kind: str | None = Field(default=None, max_length=32)
-    source_project_id: str | None = Field(default=None)

@@ -10,6 +10,18 @@ from pydantic import BaseModel, Field, field_validator
 logger = logging.getLogger(__name__)
 
 
+def _require_aware(v: datetime | None) -> datetime | None:
+    """Reject naive datetimes for scheduling.
+
+    A future instant without an offset is ambiguous, and the neighbouring
+    ``started_at`` / ``completed_at`` columns are naive — assuming UTC here
+    would silently shift a run by hours.
+    """
+    if v is not None and v.tzinfo is None:
+        raise ValueError("scheduled_at must be timezone-aware")
+    return v
+
+
 class Task(BaseModel):
     """Task domain model."""
 
@@ -27,7 +39,10 @@ class Task(BaseModel):
     execution_id: str | None = None  # Temporal workflow execution ID
     user_id: str | None = None
     workspace_id: str | None = None
+    scheduled_at: datetime | None = None  # One-shot future run; None means run now
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    _validate_scheduled_at = field_validator("scheduled_at")(_require_aware)
 
     @field_validator("result", mode="before")
     @classmethod
@@ -175,8 +190,11 @@ class AgentTask(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     execution_id: str | None = None  # Temporal workflow execution ID or other execution identifier
+    scheduled_at: datetime | None = None  # One-shot future run; None means run now
     metadata: dict[str, Any] = Field(default_factory=dict)  # Additional task metadata
     effective_policy: dict[str, Any] | None = None  # Resolved governance policy passed to execution
+
+    _validate_scheduled_at = field_validator("scheduled_at")(_require_aware)
 
     @field_validator("result", mode="before")
     @classmethod

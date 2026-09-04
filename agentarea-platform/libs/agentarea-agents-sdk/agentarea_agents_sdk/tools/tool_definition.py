@@ -11,9 +11,25 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from typing import Any, get_type_hints
+from typing import Any, Literal, get_type_hints
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
+
+# Grouping axes for the tool surface. Two orthogonal tags, because the question
+# "which MCP server does this belong to" and the question "what can this call
+# break" have different answers and must be filterable separately.
+#
+# ``plane`` — the surface a toolset belongs to:
+#   build     design-time configuration (agents, skills, models, connections)
+#   operate   runtime intervention (runs, inbox, files)
+#   observe   read-only telemetry (audit, topology)
+#   govern    policy, access, membership, spend
+#   federate  outward-facing clients and catalogs (harnesses, bundles)
+ToolPlane = Literal["build", "operate", "observe", "govern", "federate"]
+
+# ``effect`` — per tool method. ``privileged`` is what changes someone's
+# rights, limits, or reach, which is not the same as merely writing data.
+ToolEffect = Literal["read", "write", "destructive", "privileged"]
 
 
 class ToolDefinition(BaseModel):
@@ -49,6 +65,10 @@ class ToolsetMetadata(BaseModel):
     Replaces the per-toolset block in ``code_tools.yaml``: namespace
     (publisher/name), human display label, category. Stamped onto the
     class via ``@toolset(...)``.
+
+    ``plane`` is the grouping axis; it defaults to ``None`` ("not declared")
+    rather than to a bucket, and the platform contract test rejects ``None`` —
+    an undeclared toolset is a bug, not a default.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -57,6 +77,7 @@ class ToolsetMetadata(BaseModel):
     display_name: str = ""
     description: str = ""
     category: str = ""
+    plane: ToolPlane | None = None
     enabled_by_default: bool = False
     requires_user_confirmation: bool = False
 
@@ -72,6 +93,7 @@ def toolset(
     display_name: str = "",
     description: str = "",
     category: str = "",
+    plane: ToolPlane | None = None,
     enabled_by_default: bool = False,
     requires_user_confirmation: bool = False,
     register: bool = True,
@@ -79,6 +101,8 @@ def toolset(
     """Stamp ``ToolsetMetadata`` on a Toolset subclass and (by default) register it.
 
     Args:
+        plane: Which surface this toolset belongs to — the axis a split into
+            separate MCP servers would cut along.
         register: If False, only stamps metadata without adding the class to the
             global lookup registry. Use when the class shares a ``namespace`` with
             another implementation that should win the lookup. (Example: the
@@ -92,6 +116,7 @@ def toolset(
         display_name=display_name,
         description=description,
         category=category,
+        plane=plane,
         enabled_by_default=enabled_by_default,
         requires_user_confirmation=requires_user_confirmation,
     )

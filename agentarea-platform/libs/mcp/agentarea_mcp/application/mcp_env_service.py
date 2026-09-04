@@ -96,8 +96,12 @@ class MCPEnvironmentService:
 
         for env_name in env_names:
             secret_key = self._get_secret_key(instance_id, env_name)
-            # Set to empty string to "delete" (since BaseSecretManager has no delete method)
-            await self.secret_manager.set_secret(secret_key, "")
+            # Blanking the value used to stand in for a delete the interface did
+            # not have. It does now, and the stand-in left a row behind for every
+            # env var ever removed — invisible until the secrets page started
+            # listing what connections hold, at which point they read as
+            # credentials for env vars that no longer exist.
+            await self.secret_manager.delete_secret(secret_key)
             deleted_env_names.append(env_name)
 
         return deleted_env_names

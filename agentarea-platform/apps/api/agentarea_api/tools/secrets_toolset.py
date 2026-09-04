@@ -21,6 +21,7 @@ from .base import platform_context
     display_name="Secrets",
     description="Manage workspace secrets (names only, values are encrypted).",
     category="platform",
+    plane="build",
 )
 class SecretsToolset(Toolset):
     """Manage the workspace's own secrets: list, create, delete.
@@ -32,7 +33,7 @@ class SecretsToolset(Toolset):
     a colliding write is an update.
     """
 
-    @tool_method
+    @tool_method(effect="read")
     async def list(self) -> str:
         """List the workspace's own secret names. Values are not returned."""
         async with platform_context() as (
@@ -56,7 +57,7 @@ class SecretsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="privileged")
     async def create(self, name: str, value: str, description: str | None = None) -> str:
         """Create a secret. Fails if the name is taken or reserved by the platform."""
         async with platform_context() as (
@@ -73,7 +74,7 @@ class SecretsToolset(Toolset):
                 return json.dumps({"created": False, "name": name, "error": str(exc)})
             return json.dumps({"created": True, "id": str(secret.id), "name": name})
 
-    @tool_method
+    @tool_method(effect="destructive")
     async def delete(self, name: str) -> str:
         """Delete one of the workspace's own secrets by name."""
         async with platform_context() as (

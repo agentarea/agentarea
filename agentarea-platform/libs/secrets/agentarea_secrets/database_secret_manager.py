@@ -147,6 +147,31 @@ class DatabaseSecretManager(BaseSecretManager):
             )
             raise
 
+    async def has_secret(self, secret_name: str) -> bool:
+        """Whether this workspace stores a value under this name.
+
+        Answered from the row, never from the plaintext. Deriving it from
+        ``get_secret`` meant a ciphertext this key can no longer open — or a row
+        pointing at an external store — turned "is a credential configured"
+        into an error, and callers that only wanted the flag failed with it.
+        """
+        try:
+            result = await self.session.execute(
+                select(EncryptedSecret.id).where(
+                    EncryptedSecret.workspace_id == self.workspace_id,
+                    EncryptedSecret.secret_name == secret_name,
+                )
+            )
+            return result.scalar_one_or_none() is not None
+
+        except Exception as exc:
+            logger.error(
+                "Failed to check for secret in workspace %s (%s)",
+                self.workspace_id,
+                type(exc).__name__,
+            )
+            raise
+
     async def set_secret(self, secret_name: str, secret_value: str) -> None:
         """Set a secret value (create or update).
 

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import ContentBlock from "@/components/ContentBlock";
-import { fetchCatalogPage } from "@/lib/api";
+import { browseCatalog } from "@/lib/api";
 import CatalogGallery from "../components/CatalogGallery";
 import {
   PAGE,
@@ -29,7 +29,11 @@ export default async function BundleCatalogPage({
   const sp = await searchParams;
   const type: CatalogType = isCatalogType(sp.type) ? sp.type : "bundles";
 
-  const { items, hasMore, error } = await fetchCatalogPage(type, 0, PAGE);
+  const { items, total, categories, error } = await browseCatalog({
+    registryType: type,
+    limit: PAGE,
+    offset: 0,
+  });
   const entries: CatalogEntry[] = (items as RegistryItem[]).map((it) =>
     normalize(type, it)
   );
@@ -48,7 +52,8 @@ export default async function BundleCatalogPage({
         key={type}
         initialType={type}
         initialEntries={entries}
-        initialHasMore={hasMore}
+        initialTotal={total}
+        initialCategories={categories}
         initialError={error ? "Failed to load catalog." : null}
       />
     </ContentBlock>

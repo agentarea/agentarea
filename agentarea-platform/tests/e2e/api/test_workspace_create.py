@@ -28,7 +28,10 @@ def test_create_shared_workspace(alice, alice_client: httpx.Client) -> None:
     assert resp.status_code == 201, resp.text
     ws = resp.json()
 
-    assert ws["type"] == "shared"
+    # No ``type`` on the wire: a shared workspace is one whose id is not its
+    # owner's, which the response already carries.
+    assert "type" not in ws
+    assert ws["owner_user_id"] == alice.identity_id
     assert ws["name"] == "Team Rocket"
     assert ws["slug"]  # slug derived from name
     # Shared workspaces get a generated id; never the owner's personal id.

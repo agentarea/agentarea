@@ -37,6 +37,9 @@ import type {
   AnalyzeBundleV1BundlesAnalyzePostData,
   AnalyzeBundleV1BundlesAnalyzePostErrors,
   AnalyzeBundleV1BundlesAnalyzePostResponses,
+  BrowseCatalogV1RegistriesCatalogBrowseGetData,
+  BrowseCatalogV1RegistriesCatalogBrowseGetErrors,
+  BrowseCatalogV1RegistriesCatalogBrowseGetResponses,
   CancelAgentTaskV1AgentsAgentIdTasksTaskIdDeleteData,
   CancelAgentTaskV1AgentsAgentIdTasksTaskIdDeleteErrors,
   CancelAgentTaskV1AgentsAgentIdTasksTaskIdDeleteResponses,
@@ -190,6 +193,9 @@ import type {
   DeleteWalletV1AgentsAgentIdWalletDeleteData,
   DeleteWalletV1AgentsAgentIdWalletDeleteErrors,
   DeleteWalletV1AgentsAgentIdWalletDeleteResponses,
+  DeleteWorkspaceFileV1FilesFilePathDeleteData,
+  DeleteWorkspaceFileV1FilesFilePathDeleteErrors,
+  DeleteWorkspaceFileV1FilesFilePathDeleteResponses,
   DeployMcpServerV1McpServersServerIdDeployPostData,
   DeployMcpServerV1McpServersServerIdDeployPostErrors,
   DeployMcpServerV1McpServersServerIdDeployPostResponses,
@@ -595,9 +601,6 @@ import type {
   ProxyInstanceV1McpInstanceIdMcpPostData,
   ProxyInstanceV1McpInstanceIdMcpPostErrors,
   ProxyInstanceV1McpInstanceIdMcpPostResponses,
-  PullFromProjectV1ClientsClientIdPullFromProjectPostData,
-  PullFromProjectV1ClientsClientIdPullFromProjectPostErrors,
-  PullFromProjectV1ClientsClientIdPullFromProjectPostResponses,
   ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetData,
   ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetErrors,
   ReadTaskSandboxFileV1AgentsAgentIdTasksTaskIdSandboxFilesFilePathGetResponses,
@@ -631,6 +634,9 @@ import type {
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostData,
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors,
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostResponses,
+  RestoreWorkspaceFileV1FilesRestoreFilePathPostData,
+  RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors,
+  RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses,
   ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostData,
   ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors,
   ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses,
@@ -649,6 +655,9 @@ import type {
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
+  ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostData,
+  ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostErrors,
+  ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponses,
   SearchCatalogV1RegistriesCatalogSearchGetData,
   SearchCatalogV1RegistriesCatalogSearchGetErrors,
   SearchCatalogV1RegistriesCatalogSearchGetResponses,
@@ -1952,6 +1961,47 @@ export const createTaskForAgentWithStreamV1AgentsAgentIdTasksPost = <
   });
 
 /**
+ * Schedule Task For Agent
+ *
+ * Create a task that runs once at an absolute future time.
+ *
+ * Deliberately not the streaming sibling of ``POST /``: there is nothing to
+ * stream until the run starts, which may be days away. Repeating schedules
+ * are cron triggers, not tasks.
+ */
+export const scheduleTaskForAgentV1AgentsAgentIdTasksSchedulePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostData,
+    ThrowOnError
+  >
+): RequestResult<
+  ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponses,
+  ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponses,
+    ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/agents/{agent_id}/tasks/schedule",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
  * Create Task For Agent Sync
  *
  * Create and execute a task for the specified agent (synchronous response).
@@ -3190,41 +3240,6 @@ export const removeMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstance
     });
 
 /**
- * Pull From Project
- */
-export const pullFromProjectV1ClientsClientIdPullFromProjectPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    PullFromProjectV1ClientsClientIdPullFromProjectPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  PullFromProjectV1ClientsClientIdPullFromProjectPostResponses,
-  PullFromProjectV1ClientsClientIdPullFromProjectPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    PullFromProjectV1ClientsClientIdPullFromProjectPostResponses,
-    PullFromProjectV1ClientsClientIdPullFromProjectPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/clients/{client_id}/pull-from-project",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
  * Add Skill To Client
  */
 export const addSkillToClientV1ClientsClientIdSkillsPost = <
@@ -3323,10 +3338,11 @@ export const listWorkspaceFilesV1FilesGet = <
  *
  * Upload a file, server-proxied.
  *
- * ``purpose="workspace"`` (the default) lands the file at the workspace
- * artifact root. ``purpose="attachment"`` stages it under
- * ``staging/{id}/{filename}`` — hidden from the workspace listing — and
- * returns a ``ref`` the task-create endpoint resolves into the task workspace.
+ * ``purpose="workspace"`` (the default) lands the file at ``path`` within the
+ * workspace, or at the workspace root under its own name when ``path`` is
+ * omitted. ``purpose="attachment"`` stages it under ``staging/{id}/{filename}``
+ * — hidden from the workspace listing — and returns a ``ref`` the task-create
+ * endpoint resolves into the task workspace.
  */
 export const uploadFileV1FilesPost = <ThrowOnError extends boolean = false>(
   options: Options<UploadFileV1FilesPostData, ThrowOnError>
@@ -3420,6 +3436,39 @@ export const workspaceFileHistoryV1FilesHistoryGet = <
   });
 
 /**
+ * Restore Workspace File
+ *
+ * Move an archived file back to the path it was archived from.
+ */
+export const restoreWorkspaceFileV1FilesRestoreFilePathPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RestoreWorkspaceFileV1FilesRestoreFilePathPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses,
+  RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses,
+    RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/files/restore/{file_path}",
+    ...options,
+  });
+
+/**
  * Create Attachment Upload Url
  *
  * Mint a presigned PUT for a task attachment uploaded directly to the store.
@@ -3459,6 +3508,42 @@ export const createAttachmentUploadUrlV1FilesUploadUrlPost = <
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * Delete Workspace File
+ *
+ * Archive a workspace file instead of destroying it.
+ *
+ * The object moves under ``.trash/{timestamp}/`` and disappears from the
+ * listing, so a mistaken delete is always recoverable through
+ * :func:`restore_workspace_file`. Task-owned and staging paths are not
+ * deletable here: they belong to a task's committed manifest, not to the
+ * workspace library.
+ */
+export const deleteWorkspaceFileV1FilesFilePathDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<DeleteWorkspaceFileV1FilesFilePathDeleteData, ThrowOnError>
+): RequestResult<
+  DeleteWorkspaceFileV1FilesFilePathDeleteResponses,
+  DeleteWorkspaceFileV1FilesFilePathDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteWorkspaceFileV1FilesFilePathDeleteResponses,
+    DeleteWorkspaceFileV1FilesFilePathDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/files/{file_path}",
+    ...options,
   });
 
 /**
@@ -6843,6 +6928,40 @@ export const createRegistryV1RegistriesPost = <
   });
 
 /**
+ * Browse Catalog
+ *
+ * Browse one catalog type: filtered, sorted and paged server-side.
+ *
+ * Paging every registry of a type separately and merging client-side cannot
+ * be made correct -- a single offset has no meaning over the concatenation --
+ * so the whole type is paged as one ordered result here instead.
+ */
+export const browseCatalogV1RegistriesCatalogBrowseGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<BrowseCatalogV1RegistriesCatalogBrowseGetData, ThrowOnError>
+): RequestResult<
+  BrowseCatalogV1RegistriesCatalogBrowseGetResponses,
+  BrowseCatalogV1RegistriesCatalogBrowseGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    BrowseCatalogV1RegistriesCatalogBrowseGetResponses,
+    BrowseCatalogV1RegistriesCatalogBrowseGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/catalog/browse",
+    ...options,
+  });
+
+/**
  * Get Catalog Item
  */
 export const getCatalogItemV1RegistriesCatalogItemsItemIdGet = <
@@ -7147,7 +7266,10 @@ export const listSandboxesV1SandboxesGet = <
 /**
  * List Secrets
  *
- * List the workspace's own secrets. Values are not included.
+ * Every credential in the workspace the user would recognise as theirs.
+ *
+ * Their own, plus the ones connections hold for them — the latter read-only.
+ * Values are not included, here or anywhere.
  */
 export const listSecretsV1SecretsGet = <ThrowOnError extends boolean = false>(
   options?: Options<ListSecretsV1SecretsGetData, ThrowOnError>
@@ -7228,6 +7350,12 @@ export const deleteSecretV1SecretsSecretIdDelete = <
 
 /**
  * Get Secret
+ *
+ * Read one secret's metadata, whether the user owns it or a connection does.
+ *
+ * Managed secrets are readable because the list shows them; hiding them here
+ * would 404 every row the page invites you to click. They stay unwritable —
+ * the write routes below still refuse them.
  */
 export const getSecretV1SecretsSecretIdGet = <
   ThrowOnError extends boolean = false,

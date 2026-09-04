@@ -940,7 +940,8 @@
       "blocked": "Заблокировано",
       "cancelled": "Отменено",
       "paused": "Пауза",
-      "pending": "Ожидание"
+      "pending": "Ожидание",
+      "scheduled": "Запланировано"
     },
     "tabs": {
       "overview": "Обзор",

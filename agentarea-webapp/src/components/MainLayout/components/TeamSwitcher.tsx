@@ -32,21 +32,17 @@ import {
   createWorkspaceAction,
   switchWorkspaceAction,
 } from "@/lib/workspace-actions";
-import type { Workspace } from "@/lib/workspaces";
+import { isPersonalWorkspace, type Workspace } from "@/lib/workspaces";
 
 function WorkspaceIcon({
-  type,
+  workspace,
   className,
 }: {
-  type: string;
+  workspace: Workspace;
   className?: string;
 }) {
-  const Icon = type === "personal" ? User : Building2;
+  const Icon = isPersonalWorkspace(workspace) ? User : Building2;
   return <Icon className={className} />;
-}
-
-function workspaceKind(type: string): string {
-  return type === "personal" ? "Personal" : "Organization";
 }
 
 export function TeamSwitcher({
@@ -110,7 +106,7 @@ export function TeamSwitcher({
               >
                 <div className="flex aspect-square size-8 items-center justify-center rounded-md border border-border/60 bg-transparent">
                   <WorkspaceIcon
-                    type={active.type}
+                    workspace={active}
                     className="size-4 text-zinc-900 dark:text-zinc-100"
                   />
                 </div>
@@ -118,8 +114,11 @@ export function TeamSwitcher({
                   <span className="truncate font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
                     {active.name}
                   </span>
-                  <span className="truncate text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
-                    {workspaceKind(active.type)}
+                  {/* The slug, not a tier label: there is no organization
+                      level in the model, and the slug is what identifies the
+                      workspace everywhere else. */}
+                  <span className="truncate text-[10px] font-medium text-zinc-500 tracking-wider">
+                    {active.slug}
                   </span>
                 </div>
                 <ChevronsUpDown className="ml-auto text-zinc-400" />
@@ -142,7 +141,7 @@ export function TeamSwitcher({
                   className="gap-2 p-2 cursor-pointer"
                 >
                   <div className="flex size-6 items-center justify-center rounded-md border">
-                    <WorkspaceIcon type={workspace.type} className="size-3.5" />
+                    <WorkspaceIcon workspace={workspace} className="size-3.5" />
                   </div>
                   <span className="flex-1 truncate">{workspace.name}</span>
                   {workspace.slug === activeSlug && (

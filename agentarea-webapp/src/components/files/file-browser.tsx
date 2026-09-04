@@ -17,6 +17,7 @@ export function FileBrowser({
   fetchHistory,
   emptyMessage = "No files yet.",
   className = "h-[calc(100vh-12rem)]",
+  onDelete,
 }: {
   files: BrowsedFile[];
   directories?: string[];
@@ -24,6 +25,7 @@ export function FileBrowser({
   fetchHistory?: FetchHistoryFn;
   emptyMessage?: string;
   className?: string;
+  onDelete?: (file: BrowsedFile) => void;
 }) {
   const [openFiles, setOpenFiles] = useState<BrowsedFile[]>([]);
   const [activePath, setActivePath] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export function FileBrowser({
             directories={directories}
             onSelect={handleSelect}
             selectedPath={activePath}
+            onDelete={onDelete}
           />
         </div>
 

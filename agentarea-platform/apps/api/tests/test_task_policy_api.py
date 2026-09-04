@@ -25,6 +25,7 @@ def _task(agent_id):
         error_message=None,
         created_at=datetime.now(UTC),
         execution_id="exec-1",
+        scheduled_at=None,
     )
 
 

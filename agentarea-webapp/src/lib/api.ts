@@ -1779,7 +1779,7 @@ export const getClient = async (clientId: string) => {
 export const createClient = async (payload: {
   name: string;
   description?: string | null;
-  source_project_id?: string | null;
+  kind?: string;
 }) => {
   const { data, error } = await sdk.createClientV1ClientsPost({
     client: serverClient,
@@ -1793,7 +1793,7 @@ export const updateClient = async (
   payload: {
     name?: string;
     description?: string | null;
-    source_project_id?: string | null;
+    kind?: string;
   }
 ) => {
   const { data, error } = await sdk.updateClientV1ClientsClientIdPatch({
@@ -1860,19 +1860,6 @@ export const removeMcpInstanceFromClient = async (
         path: { client_id: clientId, mcp_instance_id: mcpInstanceId },
       }
     );
-  return { data, error };
-};
-
-export const pullClientFromProject = async (
-  clientId: string,
-  projectId: string | null
-) => {
-  const { data, error } =
-    await sdk.pullFromProjectV1ClientsClientIdPullFromProjectPost({
-      client: serverClient,
-      path: { client_id: clientId },
-      body: { project_id: projectId },
-    });
   return { data, error };
 };
 
@@ -2264,29 +2251,44 @@ export const listProviderConfigsWithModelInstances = async (params?: {
   };
 };
 
-// Catalog page fetch (server-side, SSR for /explore). Sums one page across the
-// active registries of a type, so the gallery's first paint is server-rendered
-// instead of racing client `useState`. Returns raw items + a `hasMore` hint;
-// the caller normalizes (see catalog-data.normalize).
-export const fetchCatalogPage = async (
-  registryType: string,
-  offset: number,
-  limit: number
-) => {
-  const { data: registries, error } = await listRegistries({
-    registry_type: registryType,
-    active_only: true,
+// Catalog page fetch (server-side, SSR for /explore).
+//
+// One ordered, filtered, paged query across every active registry of a type.
+// The previous shape -- request the same limit/offset from each registry and
+// concatenate -- could not be made correct: a single offset has no meaning over
+// the concatenation, so every page past the first skipped a slice of each
+// registry, and "is there more" was guessed from the merged page length.
+//
+// `total` and `categories` describe the whole filtered catalog, not this page,
+// so the caller can tell "nothing matched here yet" apart from "that's all".
+export const browseCatalog = async (params: {
+  registryType: string;
+  q?: string;
+  category?: string;
+  sort?: string;
+  limit: number;
+  offset: number;
+}) => {
+  const { data, error } = await sdk.browseCatalogV1RegistriesCatalogBrowseGet({
+    client: serverClient,
+    query: {
+      registry_type: params.registryType,
+      q: params.q || undefined,
+      category: params.category || undefined,
+      sort: params.sort || undefined,
+      limit: params.limit,
+      offset: params.offset,
+    },
   });
-  if (error) return { items: [], hasMore: false, error };
-  const lists = await Promise.all(
-    (registries ?? []).map((r: { id: string }) =>
-      listRegistryItems(r.id, { limit, offset })
-    )
-  );
-  const items = lists.flatMap((l: { data?: unknown[] }) => l.data ?? []);
-  // A short page (relative to the requested limit) means the server has no more.
-  const hasMore = items.length >= limit;
-  return { items, hasMore, error: null };
+  if (error || !data) {
+    return { items: [], total: 0, categories: [], error: error ?? "Failed to load catalog" };
+  }
+  return {
+    items: data.items,
+    total: data.total,
+    categories: data.categories,
+    error: null,
+  };
 };
 
 export const getProvidersAndConfigs = async () => {

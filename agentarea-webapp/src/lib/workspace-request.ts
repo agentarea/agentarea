@@ -13,3 +13,16 @@ export async function resolveRequestWorkspaceSlug(
 ): Promise<string | null> {
   return request.headers.get(WORKSPACE_SLUG_HEADER) ?? getActiveWorkspaceSlug();
 }
+
+/**
+ * Headers a hand-rolled `fetch` inside a server action must carry.
+ *
+ * The generated client stamps the slug on every request it makes; a raw fetch
+ * (multipart upload, bare DELETE) does not go through it, and without the
+ * header the backend resolves the call against the user's personal workspace
+ * while the listing beside it shows the switched-into one.
+ */
+export async function workspaceSlugHeaders(): Promise<Record<string, string>> {
+  const slug = await getActiveWorkspaceSlug();
+  return slug ? { [WORKSPACE_SLUG_HEADER]: slug } : {};
+}

@@ -707,6 +707,20 @@ export type ApprovalPolicy = {
 };
 
 /**
+ * ArchivedFileResponse
+ */
+export type ArchivedFileResponse = {
+  /**
+   * Archived Path
+   */
+  archived_path: string;
+  /**
+   * Path
+   */
+  path: string;
+};
+
+/**
  * ArtifactEventResponse
  */
 export type ArtifactEventResponse = {
@@ -878,6 +892,10 @@ export type BodyUploadFileV1FilesPost = {
    * File
    */
   file: Blob | File;
+  /**
+   * Path
+   */
+  path?: string;
   /**
    * Purpose
    */
@@ -1363,6 +1381,45 @@ export type BundleSkill = {
 };
 
 /**
+ * CatalogBrowseResponse
+ *
+ * One page of a type's catalog plus the context needed to browse it.
+ *
+ * ``total`` and ``categories`` cover the whole filtered catalog, not the page:
+ * without them a page that happens to contain no visible matches is
+ * indistinguishable from the end of the catalog, and facet counts drift as
+ * more pages load.
+ */
+export type CatalogBrowseResponse = {
+  /**
+   * Categories
+   */
+  categories: Array<CategoryFacet>;
+  /**
+   * Items
+   */
+  items: Array<RegistryItemResponse>;
+  /**
+   * Total
+   */
+  total: number;
+};
+
+/**
+ * CategoryFacet
+ */
+export type CategoryFacet = {
+  /**
+   * Count
+   */
+  count: number;
+  /**
+   * Value
+   */
+  value: string;
+};
+
+/**
  * CheckRequest
  */
 export type CheckRequest = {
@@ -1412,10 +1469,6 @@ export type ClientCreate = {
    * Name
    */
   name: string;
-  /**
-   * Source Project Id
-   */
-  source_project_id?: string | null;
 };
 
 /**
@@ -1469,10 +1522,6 @@ export type ClientResponse = {
    */
   skills?: Array<ClientRef>;
   /**
-   * Source Project Id
-   */
-  source_project_id: string | null;
-  /**
    * Workspace Id
    */
   workspace_id: string;
@@ -1496,10 +1545,6 @@ export type ClientUpdate = {
    * Name
    */
   name?: string | null;
-  /**
-   * Source Project Id
-   */
-  source_project_id?: string | null;
 };
 
 /**
@@ -4837,6 +4882,10 @@ export type RegistryCreate = {
  */
 export type RegistryItemResponse = {
   /**
+   * Category
+   */
+  category?: string | null;
+  /**
    * Created At
    */
   created_at: string;
@@ -4848,6 +4897,10 @@ export type RegistryItemResponse = {
    * External Id
    */
   external_id: string;
+  /**
+   * Featured
+   */
+  featured?: boolean;
   /**
    * Id
    */
@@ -5136,6 +5189,20 @@ export type ResolveResponse = {
 };
 
 /**
+ * RestoredFileResponse
+ */
+export type RestoredFileResponse = {
+  /**
+   * Path
+   */
+  path: string;
+  /**
+   * Restored From
+   */
+  restored_from: string;
+};
+
+/**
  * RunExecutionConfig
  *
  * Caller-requested execution ceiling; governance may only tighten it.
@@ -5237,6 +5304,42 @@ export type SandboxSummary = {
 };
 
 /**
+ * ScheduleTaskCreate
+ *
+ * A task to run once, at a time the caller picks.
+ */
+export type ScheduleTaskCreate = {
+  /**
+   * Attachments
+   */
+  attachments?: Array<string> | null;
+  /**
+   * Description
+   */
+  description: string;
+  execution?: RunExecutionConfig | null;
+  /**
+   * Parameters
+   */
+  parameters?: {
+    [key: string]: unknown;
+  };
+  /**
+   * Project Id
+   */
+  project_id?: string | null;
+  /**
+   * Requires Human Approval
+   */
+  requires_human_approval?: boolean | null;
+  /**
+   * Scheduled At
+   */
+  scheduled_at: string;
+  task_policy?: PolicyDocument | null;
+};
+
+/**
  * SecretConsumer
  */
 export type SecretConsumer = {
@@ -5293,6 +5396,38 @@ export type SecretDescriptionUpdate = {
 };
 
 /**
+ * SecretOwner
+ *
+ * The connection a managed secret belongs to.
+ */
+export type SecretOwner = {
+  /**
+   * Field
+   *
+   * Which slot on the owner this fills — an env var, a header name.
+   */
+  field?: string | null;
+  /**
+   * Id
+   *
+   * Its id, for deep-linking to it.
+   */
+  id: string;
+  /**
+   * Name
+   *
+   * Its display name, or null when the owner no longer exists.
+   */
+  name?: string | null;
+  /**
+   * Type
+   *
+   * Kind of owner, e.g. mcp_instance or provider_config.
+   */
+  type: string;
+};
+
+/**
  * SecretResponse
  *
  * A secret's metadata. The value is never part of this.
@@ -5316,6 +5451,10 @@ export type SecretResponse = {
    * Unique within the workspace.
    */
   name: string;
+  /**
+   * Set when a connection holds this secret on the user's behalf. Such a secret is read-only here and is changed through its owner.
+   */
+  owner?: SecretOwner | null;
   /**
    * Updated At
    */
@@ -5655,16 +5794,6 @@ export type SkillUpdateRequest = {
 };
 
 /**
- * SourceProjectBody
- */
-export type SourceProjectBody = {
-  /**
-   * Project Id
-   */
-  project_id?: string | null;
-};
-
-/**
  * SpecPreviewRequest
  */
 export type SpecPreviewRequest = {
@@ -5994,6 +6123,10 @@ export type TaskResponse = {
     | string
     | null;
   /**
+   * Scheduled At
+   */
+  scheduled_at?: string | null;
+  /**
    * Status
    */
   status: string;
@@ -6150,6 +6283,10 @@ export type TaskWithAgent = {
       }
     | string
     | null;
+  /**
+   * Scheduled At
+   */
+  scheduled_at?: string | null;
   /**
    * Status
    */
@@ -6959,13 +7096,13 @@ export type WorkspaceResponse = {
    */
   name: string;
   /**
+   * Owner User Id
+   */
+  owner_user_id: string;
+  /**
    * Slug
    */
   slug: string;
-  /**
-   * Type
-   */
-  type: string;
 };
 
 /**
@@ -8146,6 +8283,38 @@ export type CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostResponses = {
    */
   200: unknown;
 };
+
+export type ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostData = {
+  body: ScheduleTaskCreate;
+  path: {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+  };
+  query?: never;
+  url: "/v1/agents/{agent_id}/tasks/schedule";
+};
+
+export type ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostError =
+  ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostErrors[keyof ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostErrors];
+
+export type ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponses = {
+  /**
+   * Successful Response
+   */
+  201: TaskResponse;
+};
+
+export type ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponse =
+  ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponses[keyof ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponses];
 
 export type CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostData = {
   body: TaskCreate;
@@ -9510,38 +9679,6 @@ export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceI
 export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse =
   RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses[keyof RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses];
 
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostData = {
-  body: SourceProjectBody;
-  path: {
-    /**
-     * Client Id
-     */
-    client_id: string;
-  };
-  query?: never;
-  url: "/v1/clients/{client_id}/pull-from-project";
-};
-
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostError =
-  PullFromProjectV1ClientsClientIdPullFromProjectPostErrors[keyof PullFromProjectV1ClientsClientIdPullFromProjectPostErrors];
-
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostResponses = {
-  /**
-   * Successful Response
-   */
-  200: ClientResponse;
-};
-
-export type PullFromProjectV1ClientsClientIdPullFromProjectPostResponse =
-  PullFromProjectV1ClientsClientIdPullFromProjectPostResponses[keyof PullFromProjectV1ClientsClientIdPullFromProjectPostResponses];
-
 export type AddSkillToClientV1ClientsClientIdSkillsPostData = {
   body: AssociationBody;
   path: {
@@ -9713,6 +9850,38 @@ export type WorkspaceFileHistoryV1FilesHistoryGetResponses = {
 export type WorkspaceFileHistoryV1FilesHistoryGetResponse =
   WorkspaceFileHistoryV1FilesHistoryGetResponses[keyof WorkspaceFileHistoryV1FilesHistoryGetResponses];
 
+export type RestoreWorkspaceFileV1FilesRestoreFilePathPostData = {
+  body?: never;
+  path: {
+    /**
+     * File Path
+     */
+    file_path: string;
+  };
+  query?: never;
+  url: "/v1/files/restore/{file_path}";
+};
+
+export type RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RestoreWorkspaceFileV1FilesRestoreFilePathPostError =
+  RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors[keyof RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors];
+
+export type RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: RestoredFileResponse;
+};
+
+export type RestoreWorkspaceFileV1FilesRestoreFilePathPostResponse =
+  RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses[keyof RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses];
+
 export type CreateAttachmentUploadUrlV1FilesUploadUrlPostData = {
   body: PresignUploadRequest;
   path?: never;
@@ -9739,6 +9908,38 @@ export type CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses = {
 
 export type CreateAttachmentUploadUrlV1FilesUploadUrlPostResponse =
   CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses[keyof CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses];
+
+export type DeleteWorkspaceFileV1FilesFilePathDeleteData = {
+  body?: never;
+  path: {
+    /**
+     * File Path
+     */
+    file_path: string;
+  };
+  query?: never;
+  url: "/v1/files/{file_path}";
+};
+
+export type DeleteWorkspaceFileV1FilesFilePathDeleteErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteWorkspaceFileV1FilesFilePathDeleteError =
+  DeleteWorkspaceFileV1FilesFilePathDeleteErrors[keyof DeleteWorkspaceFileV1FilesFilePathDeleteErrors];
+
+export type DeleteWorkspaceFileV1FilesFilePathDeleteResponses = {
+  /**
+   * Successful Response
+   */
+  200: ArchivedFileResponse;
+};
+
+export type DeleteWorkspaceFileV1FilesFilePathDeleteResponse =
+  DeleteWorkspaceFileV1FilesFilePathDeleteResponses[keyof DeleteWorkspaceFileV1FilesFilePathDeleteResponses];
 
 export type DownloadWorkspaceFileV1FilesFilePathGetData = {
   body?: never;
@@ -13007,6 +13208,66 @@ export type CreateRegistryV1RegistriesPostResponses = {
 
 export type CreateRegistryV1RegistriesPostResponse =
   CreateRegistryV1RegistriesPostResponses[keyof CreateRegistryV1RegistriesPostResponses];
+
+export type BrowseCatalogV1RegistriesCatalogBrowseGetData = {
+  body?: never;
+  path?: never;
+  query: {
+    /**
+     * Registry Type
+     *
+     * Catalog type to browse
+     */
+    registry_type: string;
+    /**
+     * Q
+     *
+     * Free-text filter over name and description
+     */
+    q?: string | null;
+    /**
+     * Category
+     *
+     * Restrict to one category facet
+     */
+    category?: string | null;
+    /**
+     * Sort
+     *
+     * 'featured' (default) or 'name'
+     */
+    sort?: string | null;
+    /**
+     * Limit
+     */
+    limit?: number;
+    /**
+     * Offset
+     */
+    offset?: number;
+  };
+  url: "/v1/registries/catalog/browse";
+};
+
+export type BrowseCatalogV1RegistriesCatalogBrowseGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type BrowseCatalogV1RegistriesCatalogBrowseGetError =
+  BrowseCatalogV1RegistriesCatalogBrowseGetErrors[keyof BrowseCatalogV1RegistriesCatalogBrowseGetErrors];
+
+export type BrowseCatalogV1RegistriesCatalogBrowseGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: CatalogBrowseResponse;
+};
+
+export type BrowseCatalogV1RegistriesCatalogBrowseGetResponse =
+  BrowseCatalogV1RegistriesCatalogBrowseGetResponses[keyof BrowseCatalogV1RegistriesCatalogBrowseGetResponses];
 
 export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetData = {
   body?: never;

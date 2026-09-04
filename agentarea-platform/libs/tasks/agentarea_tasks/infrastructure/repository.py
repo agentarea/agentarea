@@ -55,6 +55,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             "error": entity.error,
             "started_at": entity.started_at,
             "completed_at": entity.completed_at,
+            "scheduled_at": entity.scheduled_at,
             "execution_id": entity.execution_id,
             "task_metadata": metadata,
         }
@@ -85,6 +86,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             "error": entity.error,
             "started_at": entity.started_at,
             "completed_at": entity.completed_at,
+            "scheduled_at": entity.scheduled_at,
             "execution_id": entity.execution_id,
             "task_metadata": metadata,
         }
@@ -353,6 +355,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
                 "updated_at": task_orm.updated_at,  # Added to match BaseModel
                 "started_at": task_orm.started_at,
                 "completed_at": task_orm.completed_at,
+                "scheduled_at": task_orm.scheduled_at,
                 "execution_id": task_orm.execution_id,
                 "user_id": task_orm.created_by,
                 "workspace_id": task_orm.workspace_id,
@@ -387,6 +390,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             updated_at=task.updated_at,
             started_at=task.started_at,
             completed_at=task.completed_at,
+            scheduled_at=task.scheduled_at,
             execution_id=task.execution_id,
             user_id=task.user_id,
             workspace_id=task.workspace_id,

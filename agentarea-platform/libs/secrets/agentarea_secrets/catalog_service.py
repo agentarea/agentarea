@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 
 from agentarea_common.auth import UserContext
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,6 +53,25 @@ class ConsumerRef:
     field: str
 
 
+# Owners whose secret the user typed in themselves, and so expects to find when
+# they go looking for "my credentials". Listing them read-only is the difference
+# between the page answering that question and telling someone with a configured
+# MCP server that they have no secrets.
+#
+# The two left out are the ones no one configured: `task-input/{task}/{field}`
+# mints a row per secret input field per task and `a2a_push_token:*` one per push
+# config, so they scale with usage rather than with setup and would bury
+# everything else.
+SURFACED_OWNER_TYPES: tuple[str, ...] = (
+    "provider_config",
+    "mcp_instance",
+    "mcp_auth_config",
+    "openapi_connection",
+    "trigger",
+    "agent",  # wallet credentials, supplied in the request body like the rest
+)
+
+
 class SecretCatalogService:
     def __init__(
         self,
@@ -70,7 +89,11 @@ class SecretCatalogService:
     # ------------------------------------------------------------------
 
     async def list_user_secrets(self) -> list[EncryptedSecret]:
-        """Secrets the user created. Managed rows are the platform's business."""
+        """Only the secrets the user created themselves.
+
+        The write surface is scoped to these: anything with an owner is changed
+        through the connection that owns it.
+        """
         result = await self._session.execute(
             select(EncryptedSecret)
             .where(
@@ -78,6 +101,26 @@ class SecretCatalogService:
                 EncryptedSecret.owner_type.is_(None),
             )
             .order_by(EncryptedSecret.secret_name)
+        )
+        return list(result.scalars().all())
+
+    async def list_visible_secrets(self) -> list[EncryptedSecret]:
+        """Every credential in the workspace a user would recognise as theirs.
+
+        Their own, plus the ones a connection holds on their behalf — the
+        latter read-only. Listing only the former made the page claim a
+        workspace with a configured MCP server had no secrets at all.
+        """
+        result = await self._session.execute(
+            select(EncryptedSecret)
+            .where(
+                EncryptedSecret.workspace_id == self._workspace_id,
+                or_(
+                    EncryptedSecret.owner_type.is_(None),
+                    EncryptedSecret.owner_type.in_(SURFACED_OWNER_TYPES),
+                ),
+            )
+            .order_by(EncryptedSecret.owner_type.is_(None).desc(), EncryptedSecret.secret_name)
         )
         return list(result.scalars().all())
 
