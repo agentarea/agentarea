@@ -331,6 +331,17 @@ func (s *Server) createInstance(c *gin.Context) {
 		return
 	}
 
+	// A backend keys its instances by service name. Accepting a spec without one
+	// creates a container that no later request can name: inspection, health,
+	// proxy, and delete all resolve an id to a service name first, and an empty
+	// result is indistinguishable from "no such instance". The workload would run
+	// with no way to reach or retire it through this API. Refuse it at the edge
+	// rather than leave the host holding something unaddressable.
+	if strings.TrimSpace(spec.ServiceName) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "instance spec requires a service_name"})
+		return
+	}
+
 	// Stamped after binding so a caller cannot claim another agent's instances
 	// by sending the label itself.
 	if spec.Labels == nil {
