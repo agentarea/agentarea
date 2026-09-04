@@ -346,7 +346,7 @@ def _channel_secret_name(trigger: Any, trigger_id: Any) -> str | None:
     trigger. Only the naming convention lives here — no channel logic.
     """
     wt = getattr(trigger, "webhook_type", None)
-    name = wt.value if hasattr(wt, "value") else str(wt or "")
+    name = getattr(wt, "value", None) or str(wt or "")
     return f"channel_cred:{name}:{trigger_id}" if name else None
 
 

@@ -93,4 +93,4 @@ def list_webhook_registrars() -> list[str]:
 # Import builtin channel modules so their registrars self-register on package
 # import. Kept at the bottom so the registry callables above already exist; there
 # is no circular import because telegram only needs the names defined here.
-from . import telegram  # noqa: E402,F401
+from . import telegram as telegram  # noqa: E402
