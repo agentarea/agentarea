@@ -49,6 +49,7 @@ class _Settings:
         HYDRA_PUBLIC_URL = HYDRA
         HYDRA_ADMIN_URL = HYDRA_ADMIN
         HYDRA_BROWSER_URL = HYDRA
+        MCP_OAUTH_SCOPES = "openid offline_access"
 
 
 class _FakeResponse:

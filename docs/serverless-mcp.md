@@ -141,17 +141,20 @@ worth exercising on a real task before you retire the old executor.
 
 ## Which instances are affected
 
-Only instances **created while serverless is on**. The choice is recorded on
-each instance when it is created, so enabling the setting later does not
-retroactively shorten the life of connections that already exist, and turning it
-off does not strand the ones that were created serverless.
+Reclamation is a property of the deployment, not of the instance. Every
+container-backed instance is eligible while the setting is on, whenever it was
+created; turning the setting off stops reclaiming all of them. Liveness lives in
+the control-plane runtime tables rather than on the instance row, so there is no
+per-instance serverless flag to inspect.
 
-Also excluded:
+Excluded from reclamation:
 
 - **Remote (`url`-type) connections** — there is no container to start or stop.
-- **Instances that have never been called.** An instance with no recorded use is
+- **Instances that have never been called.** An instance with no runtime row is
   treated as new, not as idle. Reclaiming requires evidence of disuse, not the
   absence of evidence of use.
+- **Instances with a live request lease.** A call in flight holds a lease, and a
+  leased instance is never swept out from under it.
 
 ## How reclaiming works
 
@@ -175,40 +178,39 @@ sees it as it now is.
 
 ## Verifying it works
 
-With serverless on, create a container-backed connection and watch the manager:
+Reclamation is visible in the control plane's runtime table, not in the log. The
+reaper is silent while it is working — it logs only when a sweep or an
+individual reclaim fails — so an empty log is the expected state, not evidence
+that nothing is running.
 
-```bash
-kubectl logs -l app.kubernetes.io/component=mcp-manager -f | grep -i idle
-```
-
-On startup you should see the reaper announce its window:
-
-```
-Starting MCP idle reaper idle_timeout=10m interval=1m0s
-```
-
-Call a tool on the connection, leave it alone for longer than `idleTimeout`, and
-the sweep reports the reclamation:
-
-```
-Stopped idle MCP instance instance_id=... instance_name=...
-```
-
-Calling the same connection again starts it back up. If instead you see nothing
-at all, the most likely cause is that the instances predate the setting — check
-one:
+With serverless on, create a container-backed connection, call a tool on it, and
+watch the instance's runtime state:
 
 ```sql
-SELECT name, json_spec->>'lazy_provisioning' AS serverless
-FROM mcp_server_instances;
+SELECT i.name, r.state, r.last_used_at
+FROM mcp_runtime_instances r
+JOIN mcp_server_instances i ON i.id = r.instance_id;
 ```
 
-Instances showing `false` or an empty value were created eagerly and are never
-reclaimed. Recreate the connection to make it serverless.
+Immediately after a call the row reads `ready`. Leave the connection alone for
+longer than `idleTimeout` and the next sweep moves it to `dormant`, at which
+point the workload is gone — the Deployment or container no longer exists, while
+the instance row, its credentials, and its discovered tool list are untouched.
+
+Calling the same connection again starts it back up and returns the row to
+`ready`. Cold starts are bounded by `startupTimeout`; in practice a small image
+that is already present comes back in a few seconds.
+
+If a workload is never reclaimed, check that `idleTimeout` is non-zero. A zero
+timeout disables the reaper, and that is the one case it announces:
+
+```
+MCP idle reaper disabled by explicit zero timeout
+```
 
 ## Turning it off
 
-Set `serverless.enabled: false`. Instances already created serverless keep that
-property, but nothing reclaims them any more: each one starts on its next call
-and then stays up. To make them permanently resident, recreate the connections
-with the setting off.
+Set `serverless.enabled: false`. Nothing is reclaimed any more: an instance that
+is currently dormant starts on its next call and then stays up, and one that is
+already running keeps running. No connection has to be recreated — the setting
+governs reclamation, not how an instance was created.

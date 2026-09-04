@@ -606,6 +606,8 @@ services:
     environment:
       DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
       LOG_LEVEL: debug
+      SECRETS_COOKIE: ${KRATOS_SECRETS_COOKIE:?KRATOS_SECRETS_COOKIE is required; run scripts/gen-dev-secrets.sh}
+      SECRETS_CIPHER: ${KRATOS_SECRETS_CIPHER:?KRATOS_SECRETS_CIPHER is required and must be exactly 32 characters; run scripts/gen-dev-secrets.sh}
       # SMTP Configuration - Override courier settings via environment variables.
       # disable_starttls defaults to true because the bundled dev catcher (mailpit)
       # speaks plain SMTP on :1025 with no STARTTLS; set SMTP_DISABLE_STARTTLS=false
@@ -722,9 +724,10 @@ services:
       URLS_LOGIN: http://localhost:3000/api/hydra/login
       URLS_LOGOUT: http://localhost:3000/auth/logout
       URLS_ERROR: http://localhost:3000/auth/error
-      SECRETS_SYSTEM: this-is-the-primary-secret-replace-me-in-production
+      SECRETS_SYSTEM: ${HYDRA_SECRETS_SYSTEM:?HYDRA_SECRETS_SYSTEM is required; run scripts/gen-dev-secrets.sh}
+      SECRETS_COOKIE: ${HYDRA_SECRETS_COOKIE:?HYDRA_SECRETS_COOKIE is required; run scripts/gen-dev-secrets.sh}
       OIDC_SUBJECT_IDENTIFIERS_SUPPORTED_TYPES: public,pairwise
-      OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: some-random-salt
+      OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: ${HYDRA_PAIRWISE_SALT:?HYDRA_PAIRWISE_SALT is required; run scripts/gen-dev-secrets.sh}
       LOG_LEVEL: debug
       LOG_LEAK_SENSITIVE_VALUES: true
       # Enable Dynamic Client Registration

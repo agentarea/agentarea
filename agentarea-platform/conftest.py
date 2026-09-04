@@ -54,23 +54,36 @@ def test_database_url():
 
 
 # Auth fixtures
+def generate_es256_jwk(kid: str = "test-key-1") -> dict:
+    """Build a throwaway ES256 JWK, including its private component.
+
+    Generated per run rather than hardcoded: a committed private key trips secret
+    scanners and invites reuse outside tests, which is how one key ended up
+    signing tokens on every self-hosted install.
+    """
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    def b64(value: int) -> str:
+        return base64.urlsafe_b64encode(value.to_bytes(32, "big")).decode().rstrip("=")
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    public = key.public_key().public_numbers()
+    return {
+        "kty": "EC",
+        "kid": kid,
+        "use": "sig",
+        "alg": "ES256",
+        "crv": "P-256",
+        "x": b64(public.x),
+        "y": b64(public.y),
+        "d": b64(key.private_numbers().private_value),
+    }
+
+
 @pytest.fixture
 def sample_jwks():
     """Sample JWKS for testing."""
-    return {
-        "keys": [
-            {
-                "kty": "EC",
-                "kid": "test-key-1",
-                "use": "sig",
-                "alg": "ES256",
-                "crv": "P-256",
-                "x": "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
-                "y": "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM",
-                "d": "870MB6gfuTJ4HtUnUvYMyJpr5eUZNP4Bk43bVdj3eAE",
-            }
-        ]
-    }
+    return {"keys": [generate_es256_jwk()]}
 
 
 @pytest.fixture
@@ -230,8 +243,23 @@ def pytest_configure(config):
     )
 
 
+# Directories whose contents need live infrastructure (Postgres, Temporal, the
+# API) and therefore cannot run in the hermetic gate.
+_INFRA_TEST_DIRS = ("/tests/e2e/", "/tests/integration/")
+
+
 def pytest_collection_modifyitems(config, items):
-    """Record which main flows are exercised, for the flow-registry guard."""
+    """Record exercised main flows, and mark infra-dependent tests as integration.
+
+    The marker used to be applied per file, and 40 of the 95 files under the e2e
+    and integration directories never got one. That did not show while the gate
+    collected a hand-listed set of paths, but collecting everything means an
+    unmarked file there tries to reach Temporal or Postgres and either errors or
+    hangs the whole run. Marking by location makes the rule structural: a new file
+    in those directories is excluded from the hermetic gate on arrival, and
+    `make test-integration` (which does not filter on the marker) still runs it.
+    """
+    import pytest
     from agentarea_common.testing.flows import COVERED_FLOWS
 
     for item in items:
@@ -239,6 +267,10 @@ def pytest_collection_modifyitems(config, items):
             if marker.args:
                 flow = marker.args[0]
                 COVERED_FLOWS.add(getattr(flow, "value", flow))
+
+        path = item.path.as_posix() if hasattr(item, "path") else str(item.fspath)
+        if any(part in path for part in _INFRA_TEST_DIRS):
+            item.add_marker(pytest.mark.integration)
 
 
 # SQLite-backed Temporal server fixtures (see module docstring for when to use).

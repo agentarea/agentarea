@@ -8,10 +8,13 @@ These tests verify the complete flow:
 5. Verify container is removed
 """
 
+import base64
+import json
 import os
 import subprocess
 import time
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -32,19 +35,36 @@ API_BASE_URL = "http://localhost:8000"
 TEST_WORKSPACE = "test-mcp-container-workspace"
 
 
+JWKS_PATH = Path(
+    os.getenv(
+        "KRATOS_JWKS_PATH",
+        Path(__file__).resolve().parents[3] / "config/auth/kratos/jwks.json",
+    )
+)
+
+
 def generate_test_token() -> str:
-    """Generate a test JWT token for local development."""
-    from cryptography.hazmat.primitives import serialization
-    
-    # AgentArea Kratos test key (local dev only)
-    private_key_pem = """-----BEGIN EC PRIVATE KEY-----
-MHcCAQEEIPO9DAeoH7kyeB7VJ1L2DMiaa+XlGTT+AZON21XY93gBoAoGCCqGSM49
-AwEHoUQDQgAEMKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D7gS2XpJFbZ
-iItSs3m9+9Ue6GnvHw/GW2ZZaVtszggXIw==
------END EC PRIVATE KEY-----"""
-    
-    private_key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
-    
+    """Sign a test JWT with this installation's Kratos signing key.
+
+    Read from the per-install JWKS rather than embedded here — a private key in
+    the repository is one anyone can use to mint a token the API accepts.
+    Run ./scripts/gen-dev-secrets.sh to create it.
+    """
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    if not JWKS_PATH.is_file():
+        pytest.skip(f"No Kratos signing key at {JWKS_PATH}; run ./scripts/gen-dev-secrets.sh")
+
+    jwks = json.loads(JWKS_PATH.read_text())
+    key_data = next((k for k in jwks.get("keys", []) if "d" in k), None)
+    if key_data is None:
+        pytest.skip(f"{JWKS_PATH} holds no private key component")
+
+    def b64u_int(value: str) -> int:
+        return int.from_bytes(base64.urlsafe_b64decode(value + "=" * (-len(value) % 4)), "big")
+
+    private_key = ec.derive_private_key(b64u_int(key_data["d"]), ec.SECP256R1())
+
     payload = {
         "sub": "e2e-test-user",
         "workspace_id": TEST_WORKSPACE,
@@ -54,7 +74,7 @@ iItSs3m9+9Ue6GnvHw/GW2ZZaVtszggXIw==
         "exp": datetime.now(UTC) + timedelta(minutes=60),
     }
     
-    headers = {"kid": "agentarea-jwt-key-1"}
+    headers = {"kid": key_data.get("kid", "agentarea-jwt-key-1")}
     return jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
 
 

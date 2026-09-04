@@ -14,15 +14,36 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 
-def _app_for(agent_service, workflow_service, secret_manager, context: UserContext) -> FastAPI:
+def _app_for(
+    agent_service,
+    workflow_service,
+    secret_manager,
+    context: UserContext,
+    task_service=None,
+) -> FastAPI:
     app = FastAPI()
     app.include_router(agents_tasks.router, prefix="/v1")
+
+    if task_service is None:
+        # The endpoint resolves the task through the workspace-scoped TaskService
+        # before signalling Temporal. Default double: the task belongs to the agent
+        # the test staged. Pass an explicit task_service to simulate a foreign task.
+        task_service = AsyncMock()
+
+        async def _get_task(task_id):
+            agent = agent_service.get.return_value
+            return SimpleNamespace(id=task_id, agent_id=getattr(agent, "id", None))
+
+        task_service.get_task.side_effect = _get_task
 
     async def override_agent_service():
         return agent_service
 
     async def override_workflow_service():
         return workflow_service
+
+    async def override_task_service():
+        return task_service
 
     async def override_secret_manager():
         return secret_manager
@@ -32,6 +53,7 @@ def _app_for(agent_service, workflow_service, secret_manager, context: UserConte
 
     app.dependency_overrides[agents_tasks.get_agent_service] = override_agent_service
     app.dependency_overrides[agents_tasks.get_temporal_workflow_service] = override_workflow_service
+    app.dependency_overrides[agents_tasks.get_task_service] = override_task_service
     app.dependency_overrides[get_secret_manager] = override_secret_manager
     app.dependency_overrides[get_user_context] = override_user_context
     return app

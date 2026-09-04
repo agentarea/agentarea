@@ -23,6 +23,8 @@ from agentarea_triggers.channels.telegram import (
     TelegramAdapter,
     _escape_md,
     create_telegram_adapter,
+    delete_webhook,
+    set_webhook,
 )
 
 
@@ -32,9 +34,7 @@ class TestTelegramAdapter:
     @pytest.fixture
     def secret_manager(self):
         sm = AsyncMock()
-        sm.get_secret = AsyncMock(
-            return_value=json.dumps({"bot_token": "test-token"})
-        )
+        sm.get_secret = AsyncMock(return_value=json.dumps({"bot_token": "test-token"}))
         return sm
 
     @pytest.fixture
@@ -112,9 +112,7 @@ class TestComposedTelegramAdapter:
     @pytest.fixture
     def secret_manager(self):
         sm = AsyncMock()
-        sm.get_secret = AsyncMock(
-            return_value=json.dumps({"bot_token": "test-token"})
-        )
+        sm.get_secret = AsyncMock(return_value=json.dumps({"bot_token": "test-token"}))
         return sm
 
     def test_formatter_escapes_status_punctuation_for_markdown_v2(self):
@@ -181,9 +179,7 @@ class TestComposedTelegramAdapter:
             assert retry_payload["reply_to_message_id"] == 99
 
     @pytest.mark.asyncio
-    async def test_streaming_sender_collapses_feed_to_result_on_terminal(
-        self, secret_manager
-    ):
+    async def test_streaming_sender_collapses_feed_to_result_on_terminal(self, secret_manager):
         """The live message accumulates progress while the task runs, but a
         terminal event replaces the '⏳ Working on it...' feed with just the
         final result — no stale status line pinned above the answer.
@@ -224,12 +220,8 @@ class TestComposedTelegramAdapter:
                 "chat_id": "42",
                 "task_id": "task-1",
             }
-            await sender(
-                {**base, "event_type": "task.started"}, r"⏳ Working on it\.\.\."
-            )
-            await sender(
-                {**base, "event_type": "task.completed"}, "Report ready"
-            )
+            await sender({**base, "event_type": "task.started"}, r"⏳ Working on it\.\.\.")
+            await sender({**base, "event_type": "task.completed"}, "Report ready")
 
         assert "sendMessage" in posts[0][0]
         assert "Working on it" in posts[0][1]["text"]
@@ -312,9 +304,7 @@ class TestEmailAdapter:
         sm = AsyncMock()
         sm.get_secret = AsyncMock(return_value=creds)
         adapter = EmailAdapter(secret_manager=sm)
-        with patch(
-            "agentarea_triggers.channels.email.aiosmtplib.send", new=AsyncMock()
-        ) as send:
+        with patch("agentarea_triggers.channels.email.aiosmtplib.send", new=AsyncMock()) as send:
             await adapter.send(
                 {"trigger_id": "t1", "reply_to": "u@x.io", "subject": "Hi"},
                 "<p>hi</p>",
@@ -377,3 +367,59 @@ class TestAdapterRegistry:
         adapter = create_email_adapter()
         assert isinstance(adapter, EmailAdapter)
         assert get_adapter("email") is adapter
+
+
+class TestTelegramWebhookRegistration:
+    """set_webhook / delete_webhook register the bot's webhook with Telegram."""
+
+    @pytest.mark.asyncio
+    async def test_set_webhook_calls_bot_api_with_url_and_secret(self):
+        with patch("agentarea_triggers.channels.telegram.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_resp = AsyncMock()
+            mock_resp.is_success = True
+            mock_resp.raise_for_status = lambda: None
+            mock_client.post.return_value = mock_resp
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            ok = await set_webhook(
+                "123:ABC",
+                "https://gw.example/webhooks/wh1",
+                secret_token="s3cr3t",  # noqa: S106
+            )
+
+            assert ok is True
+            args, kwargs = mock_client.post.call_args
+            assert args[0] == "https://api.telegram.org/bot123:ABC/setWebhook"
+            assert kwargs["json"]["url"] == "https://gw.example/webhooks/wh1"
+            assert kwargs["json"]["secret_token"] == "s3cr3t"  # noqa: S105
+
+    @pytest.mark.asyncio
+    async def test_delete_webhook_calls_bot_api(self):
+        with patch("agentarea_triggers.channels.telegram.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_resp = AsyncMock()
+            mock_resp.is_success = True
+            mock_resp.raise_for_status = lambda: None
+            mock_client.post.return_value = mock_resp
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            ok = await delete_webhook("123:ABC")
+
+            assert ok is True
+            args, _ = mock_client.post.call_args
+            assert args[0] == "https://api.telegram.org/bot123:ABC/deleteWebhook"
+
+    @pytest.mark.asyncio
+    async def test_set_webhook_is_best_effort_on_network_error(self):
+        with patch("agentarea_triggers.channels.telegram.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post.side_effect = httpx.ConnectTimeout("blocked")
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            # Must not raise; returns False so trigger creation can continue.
+            ok = await set_webhook("123:ABC", "https://gw.example/webhooks/wh1")
+            assert ok is False

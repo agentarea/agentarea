@@ -122,10 +122,11 @@ func TestCreateStampsOwnerLabelOverCallerValue(t *testing.T) {
 	router := newTestServer(backend)
 
 	spec := backends.InstanceSpec{
-		InstanceID: "i-1",
-		Name:       "mcp-1",
-		Image:      "example:latest",
-		Labels:     map[string]string{OwnerLabel: "someone-else", "keep": "me"},
+		InstanceID:  "i-1",
+		Name:        "mcp-1",
+		ServiceName: "mcp-1",
+		Image:       "example:latest",
+		Labels:      map[string]string{OwnerLabel: "someone-else", "keep": "me"},
 	}
 	if got := request(t, router, http.MethodPost, "/dataplane/v1/instances", testToken, spec); got.Code != http.StatusCreated {
 		t.Fatalf("got %d, want 201: %s", got.Code, got.Body.String())
@@ -136,6 +137,28 @@ func TestCreateStampsOwnerLabelOverCallerValue(t *testing.T) {
 	}
 	if backend.created.Labels["keep"] != "me" {
 		t.Error("unrelated caller labels must survive")
+	}
+}
+
+func TestCreateRejectsSpecWithoutServiceName(t *testing.T) {
+	backend := &fakeBackend{instances: map[string]*backends.InstanceStatus{}}
+	router := newTestServer(backend)
+
+	// Every later route resolves an id to a service name before it can act. A
+	// container created without one answers "not found" to inspection, health,
+	// proxy, and delete alike, so it would run until someone cleaned it up on
+	// the host by hand.
+	spec := backends.InstanceSpec{
+		InstanceID: "i-1",
+		Name:       "mcp-1",
+		Image:      "example:latest",
+	}
+	got := request(t, router, http.MethodPost, "/dataplane/v1/instances", testToken, spec)
+	if got.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400: %s", got.Code, got.Body.String())
+	}
+	if backend.created != nil {
+		t.Error("an unaddressable spec must not reach the backend")
 	}
 }
 

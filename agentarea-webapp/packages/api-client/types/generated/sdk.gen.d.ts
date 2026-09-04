@@ -1515,6 +1515,7 @@ export declare const listTriggersV1TriggersGet: <ThrowOnError extends boolean = 
  * user_context: Authentication context.
  * trigger_service: Injected trigger service.
  * secret_manager: Injected secret manager for credential storage.
+ * webhook_service: Injected service that registers the channel webhook.
  *
  * Returns:
  * The created trigger.
@@ -1560,9 +1561,11 @@ export declare const triggersHealthCheckV1TriggersHealthGet: <ThrowOnError exten
  * If it's a cron trigger, the schedule will also be removed.
  *
  * Args:
+ * secret_manager: Injected secret manager, used to read channel credentials.
  * trigger_id: The unique identifier of the trigger
  * user_context: Authentication context
  * trigger_service: Injected trigger service
+ * webhook_service: Injected service that clears the channel webhook.
  *
  * Raises:
  * HTTPException: If trigger not found
@@ -1601,6 +1604,7 @@ export declare const getTriggerV1TriggersTriggerIdGet: <ThrowOnError extends boo
  * user_context: Authentication context.
  * trigger_service: Injected trigger service.
  * secret_manager: Injected secret manager for credential storage.
+ * webhook_service: Injected service that registers the channel webhook.
  *
  * Returns:
  * The updated trigger.

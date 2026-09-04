@@ -4,7 +4,7 @@ This module provides a modular authentication system that can be easily extended
 to support different authentication providers.
 """
 
-from .authorization import AuthorizationService
+from .authorization import AuthorizationService, assert_workspace_admin
 from .context import UserContext
 from .context_manager import ContextManager
 from .dependencies import UserContextDep, get_user_context
@@ -24,6 +24,7 @@ __all__ = [
     "UserContextDep",
     "WorkspaceScopedAuthorizationService",
     "WorkspaceScopedPermissionService",
+    "assert_workspace_admin",
     "get_jwt_handler",
     "get_user_context",
     "require_permission",

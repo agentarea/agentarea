@@ -21,6 +21,7 @@ dynamic client registration still works on deployments that rely on the shim.
 """
 
 import re
+from urllib.parse import urlparse
 
 import httpx
 from agentarea_common.config import get_settings
@@ -247,11 +248,79 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     except Exception:
         client_data = {}
 
-    # Inject server-side defaults for MCP clients.
+    # Security-relevant fields are FORCED, not defaulted. `setdefault` let the
+    # caller keep its own value, so a self-registering client could ask for
+    # grant_types=["client_credentials"] and receive a token with no user behind
+    # it, or name its own client_id and collide with an existing registration.
+    # Registration itself stays open — that is what makes Cursor / Claude Desktop
+    # self-registration work — but the caller does not get to choose what the
+    # resulting token is allowed to do.
+    client_data.pop("client_id", None)  # Hydra assigns it
+    client_data.pop("client_secret", None)
+    client_data["audience"] = [api_base]
+    client_data["response_types"] = ["code"]
+    client_data["skip_consent"] = False
+
+    # A client may narrow its own grants — registering without refresh_token means
+    # it can only ever re-authenticate — but it may not reach outside this set.
+    # client_credentials in particular would mint a token with no user behind it,
+    # which auth/dependencies.py would then accept as a full principal.
+    allowed_grants = ["authorization_code", "refresh_token"]
+    requested_grants = client_data.get("grant_types") or []
+    granted = [g for g in allowed_grants if g in requested_grants] or allowed_grants
+    if requested_grants and not any(g in allowed_grants for g in requested_grants):
+        return Response(
+            content=_json.dumps(
+                {
+                    "error": "invalid_client_metadata",
+                    "error_description": f"grant_types must be a subset of {allowed_grants}",
+                }
+            ),
+            status_code=400,
+            headers={"Content-Type": "application/json"},
+        )
+    client_data["grant_types"] = granted
+
+    # Cap the requested scope to what this authorization server issues.
+    allowed_scopes = set(settings.mcp.MCP_OAUTH_SCOPES.split())
+    requested_scopes = set(str(client_data.get("scope", "")).split())
+    granted_scopes = requested_scopes & allowed_scopes if requested_scopes else allowed_scopes
+    if not granted_scopes:
+        return Response(
+            content=_json.dumps(
+                {
+                    "error": "invalid_client_metadata",
+                    "error_description": (
+                        "none of the requested scopes are offered by this server; "
+                        f"available: {sorted(allowed_scopes)}"
+                    ),
+                }
+            ),
+            status_code=400,
+            headers={"Content-Type": "application/json"},
+        )
+    client_data["scope"] = " ".join(sorted(granted_scopes))
+
+    # A redirect_uri is the client's own callback, so it stays caller-supplied —
+    # but only over https, or loopback for desktop clients.
+    redirect_uris = client_data.get("redirect_uris") or []
+    for uri in redirect_uris:
+        parsed = urlparse(str(uri))
+        is_loopback = parsed.hostname in ("localhost", "127.0.0.1", "::1")
+        if parsed.scheme != "https" and not is_loopback:
+            return Response(
+                content=_json.dumps(
+                    {
+                        "error": "invalid_redirect_uri",
+                        "error_description": "redirect_uris must use https, or loopback for native clients",
+                    }
+                ),
+                status_code=400,
+                headers={"Content-Type": "application/json"},
+            )
+
     # Hydra requires client_uri to be a valid URL and contacts to be an array;
-    # MCP clients (Cursor, Claude Desktop) often omit these in their DCR payload.
-    client_data.setdefault("skip_consent", True)
-    client_data.setdefault("audience", [api_base])
+    # MCP clients often omit these in their DCR payload.
     client_data.setdefault("client_uri", api_base)
     if not client_data.get("contacts"):
         client_data["contacts"] = []

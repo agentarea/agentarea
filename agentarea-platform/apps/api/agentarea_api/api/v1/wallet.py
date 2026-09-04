@@ -13,6 +13,7 @@ from agentarea_api.api.deps.services import (
     DatabaseSessionDep,
     get_agent_service,
 )
+from agentarea_common.auth import assert_workspace_admin
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.utils.types import UtcDatetime
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -167,10 +168,12 @@ async def ensure_agent_exists(
 async def create_wallet(
     agent_id: UUID,
     request: CreateWalletRequest,
+    user_context: UserContextDep,
     _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Create a wallet for an agent."""
+    await assert_workspace_admin(user_context)
     from agentarea_wallet.domain.exceptions import WalletAlreadyExistsError
 
     try:
@@ -214,10 +217,12 @@ async def get_wallet(
 async def update_wallet(
     agent_id: UUID,
     request: UpdateWalletRequest,
+    user_context: UserContextDep,
     _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Update wallet configuration."""
+    await assert_workspace_admin(user_context)
     from agentarea_wallet.domain.exceptions import WalletNotFoundError
 
     try:
@@ -253,10 +258,12 @@ async def update_wallet(
 @router.delete("", status_code=204)
 async def delete_wallet(
     agent_id: UUID,
+    user_context: UserContextDep,
     _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Delete wallet and associated credentials."""
+    await assert_workspace_admin(user_context)
     from agentarea_wallet.domain.exceptions import WalletNotFoundError
 
     try:
@@ -325,10 +332,12 @@ async def get_payment_history(
 async def fund_wallet(
     agent_id: UUID,
     request: FundWalletRequest,
+    user_context: UserContextDep,
     _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Update the service budget amount."""
+    await assert_workspace_admin(user_context)
     from agentarea_wallet.domain.exceptions import WalletNotFoundError
 
     try:

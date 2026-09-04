@@ -1,5 +1,6 @@
 """Tests for A2UI action endpoint — workspace isolation and lifecycle guards."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -7,9 +8,14 @@ import pytest
 import pytest_asyncio
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
-from agentarea_api.api.deps.services import get_agent_service, get_temporal_workflow_service
+from agentarea_api.api.deps.services import (
+    get_agent_service,
+    get_task_service,
+    get_temporal_workflow_service,
+)
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_tasks.task_service import TaskService
 from agentarea_common.testing.flows import MainFlow
 from httpx import ASGITransport, AsyncClient
 
@@ -39,23 +45,49 @@ def mock_user_context():
     return context
 
 
+@pytest.fixture
+def mock_task_service(mock_agent_service):
+    """Task lookup that reports the task as owned by whichever agent the test staged.
+
+    The endpoint now resolves the task through the workspace-scoped TaskService
+    before touching Temporal, so a test that stages an agent is also implicitly
+    staging that agent's task. Override `get_task.side_effect` to simulate a task
+    belonging to someone else.
+    """
+    service = AsyncMock(spec=TaskService)
+
+    async def _get_task(task_id):
+        agent = mock_agent_service.get.return_value
+        return SimpleNamespace(id=task_id, agent_id=getattr(agent, "id", None))
+
+    service.get_task.side_effect = _get_task
+    return service
+
+
 @pytest.fixture(autouse=True)
-def override_dependencies(mock_agent_service, mock_workflow_service, mock_user_context):
+def override_dependencies(
+    mock_agent_service, mock_workflow_service, mock_task_service, mock_user_context
+):
     async def _override_agent_service():
         return mock_agent_service
 
     async def _override_workflow_service():
         return mock_workflow_service
 
+    async def _override_task_service():
+        return mock_task_service
+
     async def _override_user_context():
         return mock_user_context
 
     app.dependency_overrides[get_agent_service] = _override_agent_service
     app.dependency_overrides[get_temporal_workflow_service] = _override_workflow_service
+    app.dependency_overrides[get_task_service] = _override_task_service
     app.dependency_overrides[get_user_context] = _override_user_context
     yield
     app.dependency_overrides.pop(get_agent_service, None)
     app.dependency_overrides.pop(get_temporal_workflow_service, None)
+    app.dependency_overrides.pop(get_task_service, None)
     app.dependency_overrides.pop(get_user_context, None)
 
 
@@ -105,9 +137,7 @@ class TestA2UIActionEndpoint:
         )
 
     @pytest.mark.asyncio
-    async def test_agent_not_found_returns_404(
-        self, async_client, mock_agent_service
-    ):
+    async def test_agent_not_found_returns_404(self, async_client, mock_agent_service):
         """Workspace-scoped get returns None → 404.
 
         This is the core workspace isolation test: AgentService.get() uses
@@ -124,9 +154,54 @@ class TestA2UIActionEndpoint:
         assert "Agent not found" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_a2ui_not_enabled_returns_400(
-        self, async_client, mock_agent_service
+    async def test_task_belonging_to_another_agent_returns_404(
+        self, async_client, mock_agent_service, mock_task_service, mock_workflow_service
     ):
+        """A task the caller does not own is a 404, and Temporal is never signalled.
+
+        The endpoint addresses the workflow by bare task_id, so owning any agent
+        used to be enough to steer any workspace's task.
+        """
+        agent = _make_agent(a2ui_enabled=True)
+        mock_agent_service.get.return_value = agent
+
+        async def _foreign_task(task_id):
+            return SimpleNamespace(id=task_id, agent_id=uuid4())
+
+        mock_task_service.get_task.side_effect = _foreign_task
+
+        response = await async_client.post(
+            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            json=SAMPLE_ACTION,
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Task not found"
+        mock_workflow_service.send_a2ui_action.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_missing_task_returns_404(
+        self, async_client, mock_agent_service, mock_task_service, mock_workflow_service
+    ):
+        """A task id that resolves to nothing is also a 404, not a Temporal lookup."""
+        agent = _make_agent(a2ui_enabled=True)
+        mock_agent_service.get.return_value = agent
+
+        async def _no_task(task_id):
+            return None
+
+        mock_task_service.get_task.side_effect = _no_task
+
+        response = await async_client.post(
+            f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
+            json=SAMPLE_ACTION,
+        )
+
+        assert response.status_code == 404
+        mock_workflow_service.send_a2ui_action.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a2ui_not_enabled_returns_400(self, async_client, mock_agent_service):
         """Agent exists but a2ui_enabled=False → 400."""
         agent = _make_agent(a2ui_enabled=False)
         mock_agent_service.get.return_value = agent
@@ -282,9 +357,7 @@ class TestA2UIActionEndpoint:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_workspace_isolation_via_agent_service(
-        self, async_client, mock_agent_service
-    ):
+    async def test_workspace_isolation_via_agent_service(self, async_client, mock_agent_service):
         """Verify that workspace isolation is enforced through agent_service.get().
 
         The agent service uses WorkspaceScopedMixin which filters by workspace_id

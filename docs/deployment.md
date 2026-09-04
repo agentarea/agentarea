@@ -204,6 +204,16 @@ This guide provides detailed instructions for deploying AgentArea using Docker a
     cp .env.example .env.production
     nano .env.production  # Edit with your values
     ```
+
+    <Warning>
+      `.env.example` ships with every secret field left empty on purpose. Generate
+      fresh values for this deployment — never reuse a key that appears in a public
+      repository. `SECRET_MANAGER_ENCRYPTION_KEY`, `KRATOS_SECRETS_COOKIE`,
+      `KRATOS_SECRETS_CIPHER`, `HYDRA_SECRETS_SYSTEM`, `HYDRA_SECRETS_COOKIE` and
+      `HYDRA_PAIRWISE_SALT` must all be set, and `KRATOS_JWKS_B64` must hold the
+      public half of a keypair you generated yourself. The services refuse to start
+      if any of them is missing.
+    </Warning>
   </Step>
   
   <Step title="Deploy Services">

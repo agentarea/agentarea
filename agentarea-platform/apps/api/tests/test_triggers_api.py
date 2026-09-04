@@ -740,7 +740,9 @@ class TestTriggersAPI:
         """Test triggers health check when service fails."""
         # Setup mocks
         mock_get_service.return_value = mock_trigger_service
-        mock_health_checker.check_all_components.side_effect = Exception("Database connection failed")
+        mock_health_checker.check_all_components.side_effect = Exception(
+            "Database connection failed"
+        )
 
         # Make request
         response = await async_client.get("/v1/triggers/health")
@@ -807,3 +809,103 @@ class TestTriggersAPI:
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+@pytest.mark.asyncio
+async def test_create_telegram_webhook_trigger_registers_webhook(
+    async_client, mock_trigger_service, sample_webhook_trigger_data
+):
+    """Creating a Telegram webhook trigger with a bot token auto-registers the
+    webhook with Telegram at {base}/webhooks/{webhook_id}."""
+    data = dict(sample_webhook_trigger_data)
+    data["webhook_type"] = WebhookType.TELEGRAM
+    data["webhook_id"] = "test_webhook_123"
+    mock_trigger_service.create_trigger.return_value = WebhookTrigger(**data)
+
+    class _Settings:
+        TELEGRAM_WEBHOOK_BASE_URL = "https://gw.example"
+        API_BASE_URL = "http://localhost:8000"
+
+    with (
+        patch(
+            "agentarea_triggers.channels.telegram.set_webhook", new=AsyncMock(return_value=True)
+        ) as mock_sw,
+        patch("agentarea_api.api.v1.triggers.get_app_settings", return_value=_Settings()),
+    ):
+        resp = await async_client.post(
+            "/v1/triggers/",
+            json={
+                "name": "TG Webhook",
+                "agent_id": str(data["agent_id"]),
+                "trigger_type": "webhook",
+                "webhook_id": "test_webhook_123",
+                "allowed_methods": ["POST"],
+                "webhook_type": "telegram",
+                "channel_credentials": {"bot_token": "123:ABC"},
+            },
+        )
+
+    assert resp.status_code == 201, resp.text
+    mock_sw.assert_awaited_once()
+    blob = " ".join(map(str, mock_sw.call_args.args)) + " " + str(mock_sw.call_args.kwargs)
+    assert "https://gw.example/webhooks/test_webhook_123" in blob
+    assert "123:ABC" in blob
+
+
+@pytest.mark.asyncio
+async def test_delete_telegram_webhook_trigger_deregisters_webhook(
+    async_client, mock_trigger_service
+):
+    """Deleting a Telegram webhook trigger clears the bot's webhook (best-effort)."""
+    import json as _json
+
+    from agentarea_api.api.deps.services import get_secret_manager
+    from agentarea_api.main import app as _app
+
+    mock_trigger_service.delete_trigger.return_value = True
+    _tg = dict(_sample_webhook_trigger_data())
+    _tg["webhook_type"] = WebhookType.TELEGRAM
+    mock_trigger_service.get_trigger.return_value = WebhookTrigger(**_tg)
+    sm = AsyncMock()
+    sm.get_secret = AsyncMock(return_value=_json.dumps({"bot_token": "123:ABC"}))
+
+    async def _override_sm():
+        return sm
+
+    _app.dependency_overrides[get_secret_manager] = _override_sm
+    try:
+        with patch(
+            "agentarea_triggers.channels.telegram.delete_webhook",
+            new=AsyncMock(return_value=True),
+        ) as mock_dw:
+            resp = await async_client.delete(f"/v1/triggers/{uuid4()}")
+        assert resp.status_code == 204, resp.text
+        mock_dw.assert_awaited_once()
+        assert "123:ABC" in " ".join(map(str, mock_dw.call_args.args))
+    finally:
+        _app.dependency_overrides.pop(get_secret_manager, None)
+
+
+def _sample_webhook_trigger_data():
+    return {
+        "id": uuid4(),
+        "name": "Test Webhook Trigger",
+        "description": "A test webhook trigger",
+        "agent_id": uuid4(),
+        "trigger_type": TriggerType.WEBHOOK,
+        "is_active": True,
+        "task_parameters": {},
+        "conditions": {},
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
+        "created_by": "test_user",
+        "max_executions_per_hour": 60,
+        "failure_threshold": 5,
+        "consecutive_failures": 0,
+        "last_execution_at": None,
+        "webhook_id": "test_webhook_123",
+        "allowed_methods": ["POST"],
+        "webhook_type": WebhookType.GENERIC,
+        "validation_rules": {},
+        "webhook_config": None,
+    }

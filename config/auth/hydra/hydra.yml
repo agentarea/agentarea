@@ -55,11 +55,12 @@ urls:
   logout: http://localhost:3000/auth/logout
   error: http://localhost:3000/auth/error
 
-secrets:
-  system:
-    - this-is-the-primary-secret-replace-me-in-production
-  cookie:
-    - PLEASE-CHANGE-ME-I-AM-VERY-INSECURE-dev-only
+# Secrets are intentionally NOT defined here. Hydra reads them from the
+# environment (SECRETS_SYSTEM / SECRETS_COOKIE), supplied by the compose files
+# from HYDRA_SECRETS_SYSTEM / HYDRA_SECRETS_COOKIE. Leaving them unset here means
+# a deployment that forgets to provide them fails to start instead of silently
+# running on a published value. Rotating SECRETS_SYSTEM invalidates issued
+# tokens and encrypted columns, so treat it as a one-time install value.
 
 oidc:
   subject_identifiers:
@@ -67,7 +68,10 @@ oidc:
       - public
       - pairwise
     pairwise:
-      salt: some-random-salt
+      # Supplied via OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT (HYDRA_PAIRWISE_SALT
+      # in .env). Unset here so a deployment cannot inherit a published salt —
+      # a shared salt makes pairwise subject identifiers linkable across installs.
+      salt: ""
   dynamic_client_registration:
     enabled: true
 

@@ -1021,7 +1021,6 @@ async def get_agent_task(
     task_id: UUID,
     user_context: UserContextDep,
     task_service: TaskService = Depends(get_read_task_service),
-    workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Get a specific task for the specified agent."""
     # No agent-existence gate: the task lookup below already proves the task is
@@ -1035,27 +1034,11 @@ async def get_agent_task(
 
             return TaskResponse.from_agent_task(task)
 
-        # Fall back to workflow status for workflow-only tasks.
-        execution_id = f"task-{task_id}"
-        status = await workflow_task_service.get_workflow_status(execution_id)
-
-        # If status indicates unknown, the task/workflow doesn't exist
-        if status.get("status") == "unknown":
-            raise HTTPException(status_code=404, detail="Task not found")
-
-        # Convert workflow status to TaskResponse format
-        return TaskResponse(
-            id=task_id,
-            agent_id=agent_id,
-            description="Workflow-based task",  # Description not stored in workflow status
-            parameters={},  # Parameters not stored in workflow status
-            status=status.get("status", "unknown"),
-            result=status.get("result"),
-            error=status.get("error"),
-            failure_reason=status.get("failure_reason"),
-            created_at=datetime.now(UTC),  # Could be extracted from start_time if available
-            execution_id=execution_id,
-        )
+        # No workflow-status fallback here. task_service.get_task_with_workflow_status
+        # is workspace-scoped, so a miss means either "no such task" or "belongs to
+        # another workspace" — and reading the Temporal workflow by bare task_id
+        # returned that other workspace's result and error to the caller.
+        raise HTTPException(status_code=404, detail="Task not found")
 
     except HTTPException:
         raise
@@ -1511,6 +1494,7 @@ async def cancel_agent_task(
     task_id: UUID,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
+    task_service: TaskService = Depends(get_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Cancel a specific task workflow for the specified agent."""
@@ -1518,6 +1502,10 @@ async def cancel_agent_task(
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    # The Temporal handle below is addressed by bare task_id, so owning any agent
+    # would otherwise be enough to act on any workspace's task.
+    await _verify_task_for_agent(task_service, agent_id, task_id)
 
     try:
         # Cancel the workflow using the execution ID pattern
@@ -1541,6 +1529,7 @@ async def pause_agent_task(
     task_id: UUID,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
+    task_service: TaskService = Depends(get_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Pause a specific task workflow for the specified agent."""
@@ -1548,6 +1537,8 @@ async def pause_agent_task(
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    await _verify_task_for_agent(task_service, agent_id, task_id)
 
     try:
         # Get current task status to validate it can be paused
@@ -1594,6 +1585,7 @@ async def resume_agent_task(
     task_id: UUID,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
+    task_service: TaskService = Depends(get_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Resume a paused task workflow for the specified agent."""
@@ -1601,6 +1593,8 @@ async def resume_agent_task(
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    await _verify_task_for_agent(task_service, agent_id, task_id)
 
     try:
         # Get current task status to validate it can be resumed
@@ -1651,6 +1645,7 @@ async def send_a2ui_action(
     action: A2UIActionPayload,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
+    task_service: TaskService = Depends(get_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Send an A2UI user action to a running task workflow."""
@@ -1660,6 +1655,8 @@ async def send_a2ui_action(
 
     if not getattr(agent, "a2ui_enabled", False):
         raise HTTPException(status_code=400, detail="Agent does not have A2UI enabled")
+
+    await _verify_task_for_agent(task_service, agent_id, task_id)
 
     try:
         execution_id = f"agent-task-{task_id}"
@@ -1701,6 +1698,7 @@ async def submit_task_input(
     user_context: UserContextDep,
     secret_manager: BaseSecretManagerDep,
     agent_service: AgentService = Depends(get_agent_service),
+    task_service: TaskService = Depends(get_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Submit structured user input to a workflow waiting on request_user_input.
@@ -1708,6 +1706,8 @@ async def submit_task_input(
     Secret values are written to the workspace secret manager at the API boundary.
     Only secret refs are sent to Temporal/LLM context.
     """
+    await _verify_task_for_agent(task_service, agent_id, task_id)
+
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -1831,6 +1831,7 @@ async def send_task_command(
     payload: TaskCommandPayload,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
+    task_service: TaskService = Depends(get_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
     model_instance_service: ModelInstanceService = Depends(get_model_instance_service),
 ):
@@ -1839,6 +1840,8 @@ async def send_task_command(
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    await _verify_task_for_agent(task_service, agent_id, task_id)
 
     execution_id = f"task-{task_id}"
 
@@ -1912,6 +1915,7 @@ async def resolve_task_escalation(
     data: EscalationResolution,
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
+    task_service: TaskService = Depends(get_task_service),
     workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
 ):
     """Resolve a tool escalation for the specified task workflow."""
@@ -1919,6 +1923,8 @@ async def resolve_task_escalation(
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    await _verify_task_for_agent(task_service, agent_id, task_id)
 
     try:
         execution_id = f"task-{task_id}"

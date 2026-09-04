@@ -3,7 +3,7 @@
 from typing import Annotated, Any
 from uuid import UUID
 
-from agentarea_common.auth import UserContextDep
+from agentarea_common.auth import UserContextDep, assert_workspace_admin
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
 from agentarea_governance.application import GovernancePolicyService
@@ -109,6 +109,7 @@ async def create_policy_rule(
     db_session: DatabaseSessionDep,
 ) -> PolicyRuleResponse:
     """Create a policy rule in the current workspace."""
+    await assert_workspace_admin(user_context)
     service = GovernancePolicyService(RepositoryFactory(db_session, user_context))
     rule = PolicyRule(
         subject_type=payload.subject_type,
@@ -150,6 +151,7 @@ async def update_policy_rule(
     db_session: DatabaseSessionDep,
 ) -> PolicyRuleResponse:
     """Partially update a policy rule."""
+    await assert_workspace_admin(user_context)
     service = GovernancePolicyService(RepositoryFactory(db_session, user_context))
     fields = payload.model_dump(exclude_unset=True)
     existing = await service.get_rule(rule_id=rule_id)
@@ -172,6 +174,7 @@ async def delete_policy_rule(
     db_session: DatabaseSessionDep,
 ) -> Response:
     """Delete a policy rule."""
+    await assert_workspace_admin(user_context)
     service = GovernancePolicyService(RepositoryFactory(db_session, user_context))
     deleted = await service.delete_rule(rule_id=rule_id)
     if not deleted:
