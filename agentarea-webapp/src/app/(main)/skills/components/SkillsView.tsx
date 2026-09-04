@@ -6,31 +6,17 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDownAZ,
   Clock,
-  Filter,
   Inbox,
   Layers,
   Rows3,
-  SlidersHorizontal,
   Tag,
-  X,
 } from "lucide-react";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
+import DisplayMenu from "@/components/DisplayMenu/DisplayMenu";
 import EmptyState from "@/components/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import SearchInput from "@/components/SearchInput";
 import { GroupHeader } from "@/components/ui/group-header";
-import { MenuRow, MenuSectionLabel, MenuSeparator } from "@/components/ui/menu-row";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { listSkillsAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 import type { PaginatedSkills, Skill } from "@/types/skill";
@@ -40,7 +26,6 @@ import SkillRow from "./SkillRow";
 import SkillsCard from "./SkillsCard";
 import SkillsContentSkeleton from "./SkillsContentSkeleton";
 import {
-  SCOPE_META,
   SCOPE_ORDER,
   scopeMeta,
   SOURCE_ORDER,
@@ -108,15 +93,12 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   const [group, setGroup] = useState<GroupKey>(initial.group);
   const [order, setOrder] = useState<OrderKey>(initial.order);
   const [sourceTab, setSourceTab] = useState(initial.sourceTab);
-  const [scope, setScope] = useState(initial.scope);
+  const [scope] = useState(initial.scope);
   const [search, setSearch] = useState(initial.search);
 
   // local-only UI state
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [filtersOpen, setFiltersOpen] = useState(
-    Boolean(initial.scope)
-  );
 
   useEffect(() => {
     let active = true;
@@ -248,9 +230,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       .filter((g) => g.items.length > 0);
   }, [group, visible, sortItems]);
 
-  const hasActiveFilters =
-    Boolean(scope) || Boolean(search) || sourceTab !== "all";
-
   // ---- toolbar control helpers ----
   const onTab = (value: string) => {
     setSourceTab(value);
@@ -269,21 +248,9 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     setOrder(value);
     syncUrl({ order: value });
   };
-  const onScope = (value: string) => {
-    const v = value === "all" ? "" : value;
-    setScope(v);
-    syncUrl({ scope: v });
-  };
-  const onSearch = (value: string) => {
+  const onSearch = useCallback((value: string) => {
     setSearch(value);
-    syncUrl({ search: value });
-  };
-  const clearFilters = () => {
-    setScope("");
-    setSearch("");
-    setSourceTab("all");
-    syncUrl({ scope: "", search: "", sourceTab: "all" });
-  };
+  }, []);
 
   return (
     <div className="skills-cq flex h-full w-full flex-col">
@@ -317,71 +284,69 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
             <div className="mx-1 h-[18px] w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />
           </>
         ) : (
-          <div className="min-w-0 flex-1" />
+          <div className="min-w-0 flex-1">
+            <SearchInput
+              urlParamName="search"
+              urlPath="/skills"
+              onDebouncedChange={onSearch}
+            />
+          </div>
         )}
 
-        {/* Filter toggle */}
-        <button
-          type="button"
-          onClick={() => setFiltersOpen((v) => !v)}
-          className={cn(
-            "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal transition-colors",
-            filtersOpen
-              ? "bg-muted text-foreground"
-              : "text-foreground/80 hover:bg-muted/60"
-          )}
-        >
-          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="skills-btn-label">{t("filters.filter")}</span>
-        </button>
-
         {/* Display menu */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal text-foreground/80 transition-colors hover:bg-muted/60"
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="skills-btn-label">{t("display.display")}</span>
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-52 p-1.5">
-            <MenuSectionLabel>{t("display.grouping")}</MenuSectionLabel>
-            <MenuRow
-              icon={<Layers className="h-3.5 w-3.5" />}
-              label={t("display.source")}
-              selected={group === "source"}
-              onClick={() => onGroup("source")}
-            />
-            <MenuRow
-              icon={<Tag className="h-3.5 w-3.5" />}
-              label={t("display.scope")}
-              selected={group === "scope"}
-              onClick={() => onGroup("scope")}
-            />
-            <MenuRow
-              icon={<Rows3 className="h-3.5 w-3.5" />}
-              label={t("display.none")}
-              selected={group === "none"}
-              onClick={() => onGroup("none")}
-            />
-            <MenuSeparator />
-            <MenuSectionLabel>{t("display.ordering")}</MenuSectionLabel>
-            <MenuRow
-              icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
-              label={t("display.name")}
-              selected={order === "name"}
-              onClick={() => onOrder("name")}
-            />
-            <MenuRow
-              icon={<Clock className="h-3.5 w-3.5" />}
-              label={t("display.created")}
-              selected={order === "created"}
-              onClick={() => onOrder("created")}
-            />
-          </PopoverContent>
-        </Popover>
+        <DisplayMenu
+          label={t("display.display")}
+          labelClassName="skills-btn-label"
+          sections={[
+            {
+              key: "grouping",
+              label: t("display.grouping"),
+              items: [
+                {
+                  key: "source",
+                  icon: <Layers className="h-3.5 w-3.5" />,
+                  label: t("display.source"),
+                  selected: group === "source",
+                  onSelect: () => onGroup("source"),
+                },
+                {
+                  key: "scope",
+                  icon: <Tag className="h-3.5 w-3.5" />,
+                  label: t("display.scope"),
+                  selected: group === "scope",
+                  onSelect: () => onGroup("scope"),
+                },
+                {
+                  key: "none",
+                  icon: <Rows3 className="h-3.5 w-3.5" />,
+                  label: t("display.none"),
+                  selected: group === "none",
+                  onSelect: () => onGroup("none"),
+                },
+              ],
+            },
+            {
+              key: "ordering",
+              label: t("display.ordering"),
+              items: [
+                {
+                  key: "name",
+                  icon: <ArrowDownAZ className="h-3.5 w-3.5" />,
+                  label: t("display.name"),
+                  selected: order === "name",
+                  onSelect: () => onOrder("name"),
+                },
+                {
+                  key: "created",
+                  icon: <Clock className="h-3.5 w-3.5" />,
+                  label: t("display.created"),
+                  selected: order === "created",
+                  onSelect: () => onOrder("created"),
+                },
+              ],
+            },
+          ]}
+        />
 
         {/* list / grid segment */}
         <HeaderTabs
@@ -394,43 +359,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
           ]}
         />
       </div>
-
-      {/* ---------------- applied filter row ---------------- */}
-      {filtersOpen && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 px-3.5 py-2 dark:border-zinc-700">
-          <FilterSelect
-            value={scope || "all"}
-            placeholder={t("filters.scope")}
-            active={Boolean(scope)}
-            onValueChange={onScope}
-          >
-            <SelectItem value="all">{t("filters.allScopes")}</SelectItem>
-            {SCOPE_ORDER.map((s) => (
-              <SelectItem key={s} value={s}>
-                {SCOPE_META[s].label}
-              </SelectItem>
-            ))}
-          </FilterSelect>
-          <div className="relative">
-            <input
-              value={search}
-              onChange={(e) => onSearch(e.target.value)}
-              placeholder={t("searchPlaceholder")}
-              className="h-6 w-44 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
-            />
-          </div>
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-              {t("filters.clear")}
-            </button>
-          )}
-        </div>
-      )}
 
       {/* ---------------- body ---------------- */}
       <div className="min-h-0 flex-1 overflow-auto">
@@ -505,33 +433,5 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
         )}
       </div>
     </div>
-  );
-}
-
-function FilterSelect({
-  value,
-  placeholder,
-  active,
-  onValueChange,
-  children,
-}: {
-  value: string;
-  placeholder: string;
-  active: boolean;
-  onValueChange: (v: string) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger
-        className={cn(
-          "h-6 w-auto gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-normal shadow-none focus:ring-0",
-          active ? "font-medium text-foreground" : "text-muted-foreground"
-        )}
-      >
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>{children}</SelectContent>
-    </Select>
   );
 }
