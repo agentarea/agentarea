@@ -3,9 +3,8 @@
 A single MCP server is mounted at ``/client-mcp`` and its session manager is
 started once in the app lifespan. Each request carries a client id in the path
 (``/client-mcp/{client_id}``); a scope middleware stashes it in a ContextVar and
-the ``list_tools`` / ``call_tool`` handlers resolve that client's effective MCP
-instance set (its own attachments unioned with those of its source project) and
-aggregate the member tools on the fly.
+the ``list_tools`` / ``call_tool`` handlers resolve that client's own MCP
+instance set and aggregate the member tools on the fly.
 """
 
 from __future__ import annotations
@@ -65,12 +64,21 @@ _tool_list_cache: RedisToolListCache | None = None
 
 
 def _tool_cache() -> RedisToolListCache:
-    """Process-wide cache handle (the client itself pools connections)."""
+    """Process-wide cache handle (the client itself pools connections).
+
+    ``settings.broker`` is whichever broker this deployment configured, so the
+    Redis URL is read defensively — and refused loudly when absent rather than
+    quietly pointed at localhost, which would look like a working cache while
+    every aggregate paid the full round trip.
+    """
     global _tool_list_cache
     if _tool_list_cache is None:
         from agentarea_common.config import get_settings
 
-        _tool_list_cache = RedisToolListCache(get_settings().broker.REDIS_URL)
+        redis_url = getattr(get_settings().broker, "REDIS_URL", None)
+        if not redis_url:
+            raise RuntimeError("The client MCP tool-list cache requires a Redis broker (REDIS_URL)")
+        _tool_list_cache = RedisToolListCache(redis_url)
     return _tool_list_cache
 
 
