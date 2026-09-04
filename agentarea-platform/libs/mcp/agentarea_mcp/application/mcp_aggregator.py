@@ -21,6 +21,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.server.fastmcp import FastMCP
 
+from agentarea_mcp.application.tool_list_cache import ToolListCache
 from agentarea_mcp.verification import mcp_transport_candidates
 
 logger = logging.getLogger(__name__)
@@ -49,10 +50,6 @@ class AggregatedMember:
     # re-probes by URL suffix, and a wrong first candidate costs a full connect
     # timeout — on every tools/list, not once.
     transport: str | None = None
-    # Tools verification already discovered and persisted on the instance row.
-    # None means "nothing stored yet" (never verified) and falls back to a live
-    # listing; an empty list is a real answer and is honoured as one.
-    tools: list[dict[str, Any]] | None = None
 
 
 class MCPAggregatorProxy:
@@ -66,6 +63,7 @@ class MCPAggregatorProxy:
         instance_urls: dict[str, str],
         instance_names: dict[str, str],
         instance_headers: dict[str, dict[str, str]] | None = None,
+        tool_cache: ToolListCache | None = None,
     ) -> None:
         self.name = name
         self.description = description
@@ -73,6 +71,10 @@ class MCPAggregatorProxy:
         self.instance_urls = instance_urls
         self.instance_names = instance_names
         self.instance_headers = instance_headers or {}
+        self._tool_cache = tool_cache
+        # Per-member single-flight: harnesses start in bursts, and without this
+        # every one of them pays the full round trip on a cold key.
+        self._discovery_locks: dict[str, asyncio.Lock] = {}
         self._server: FastMCP | None = None
 
     @staticmethod
@@ -101,24 +103,30 @@ class MCPAggregatorProxy:
         return self._streamable_candidates(url, member.transport)
 
     async def _discover_member_tools(self, member: AggregatedMember) -> list[dict[str, Any]]:
-        """Tools for a member, preferring what verification already stored.
+        """Tools for a member: the upstream's answer, cached briefly.
 
-        Listing upstream is a full session per member per call — ~15s against
-        prod for one member — and it re-derives what the instance row already
-        holds. The stored copy moves when the instance is verified or refreshed,
-        which is also what the instance page shows.
+        The list belongs to the upstream, so it is asked rather than stored;
+        the cache only keeps the round trip off the hot path (see
+        ``tool_list_cache``). Without a cache configured this is a passthrough.
         """
-        if member.tools is not None:
-            return [
-                {
-                    "name": tool.get("name", ""),
-                    "description": tool.get("description", "") or "",
-                    "inputSchema": tool.get("inputSchema") or {"type": "object"},
-                }
-                for tool in member.tools
-                if tool.get("name")
-            ]
-        return await self._discover_member_tools_upstream(member)
+        instance_id = str(member.mcp_instance_id)
+        if self._tool_cache is None:
+            return await self._discover_member_tools_upstream(member)
+
+        cached = await self._tool_cache.get(instance_id)
+        if cached is not None:
+            return cached
+
+        lock = self._discovery_locks.setdefault(instance_id, asyncio.Lock())
+        async with lock:
+            # A concurrent caller may have filled it while we waited.
+            cached = await self._tool_cache.get(instance_id)
+            if cached is not None:
+                return cached
+
+            tools = await self._discover_member_tools_upstream(member)
+            await self._tool_cache.set(instance_id, tools)
+            return tools
 
     async def _discover_member_tools_upstream(
         self, member: AggregatedMember
@@ -286,7 +294,16 @@ class MCPAggregatorProxy:
             namespace = self._get_namespace(member)
             prefix = f"{namespace}{NS_SEP}"
             if namespaced_name.startswith(prefix):
-                return await self._call_member_tool(
-                    member, namespaced_name[len(prefix) :], arguments
-                )
+                try:
+                    return await self._call_member_tool(
+                        member, namespaced_name[len(prefix) :], arguments
+                    )
+                except Exception:
+                    # An upstream never announces that its tools changed, so a
+                    # failed call is the only evidence we get that the list we
+                    # handed out may no longer match it. Drop it and let the
+                    # next listing ask again.
+                    if self._tool_cache is not None:
+                        await self._tool_cache.invalidate(str(member.mcp_instance_id))
+                    raise
         raise ValueError(f"No member owns tool {namespaced_name}")

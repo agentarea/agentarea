@@ -3,9 +3,8 @@
 A single MCP server is mounted at ``/client-mcp`` and its session manager is
 started once in the app lifespan. Each request carries a client id in the path
 (``/client-mcp/{client_id}``); a scope middleware stashes it in a ContextVar and
-the ``list_tools`` / ``call_tool`` handlers resolve that client's effective MCP
-instance set (its own attachments unioned with those of its source project) and
-aggregate the member tools on the fly.
+the ``list_tools`` / ``call_tool`` handlers resolve that client's own MCP
+instance set and aggregate the member tools on the fly.
 """
 
 from __future__ import annotations
@@ -15,6 +14,7 @@ from contextvars import ContextVar
 
 from agentarea_agents_sdk.mcp_server.auth import PROTECTED_RESOURCE_SCOPE_KEY
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
+from agentarea_mcp.application.tool_list_cache import RedisToolListCache
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import TextContent, Tool
@@ -58,6 +58,28 @@ client_mcp_server = FastMCP(
     # harness gets 421 on every call after finishing its OAuth flow.
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
+
+
+_tool_list_cache: RedisToolListCache | None = None
+
+
+def _tool_cache() -> RedisToolListCache:
+    """Process-wide cache handle (the client itself pools connections).
+
+    ``settings.broker`` is whichever broker this deployment configured, so the
+    Redis URL is read defensively — and refused loudly when absent rather than
+    quietly pointed at localhost, which would look like a working cache while
+    every aggregate paid the full round trip.
+    """
+    global _tool_list_cache
+    if _tool_list_cache is None:
+        from agentarea_common.config import get_settings
+
+        redis_url = getattr(get_settings().broker, "REDIS_URL", None)
+        if not redis_url:
+            raise RuntimeError("The client MCP tool-list cache requires a Redis broker (REDIS_URL)")
+        _tool_list_cache = RedisToolListCache(redis_url)
+    return _tool_list_cache
 
 
 async def _resolve_client_scope(
@@ -122,7 +144,6 @@ async def _resolve_client_scope(
                     order=order,
                     namespace_prefix=namespaces.get(iid),
                     transport=instance_transports[iid],
-                    tools=full.tools,
                 )
             )
         proxy = MCPAggregatorProxy(
@@ -132,6 +153,7 @@ async def _resolve_client_scope(
             instance_urls,
             instance_names,
             instance_headers,
+            tool_cache=_tool_cache(),
         )
         return proxy, skill_registry
 
