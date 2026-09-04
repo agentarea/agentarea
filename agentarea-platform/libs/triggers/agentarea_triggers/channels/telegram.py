@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from . import register_adapter
+from . import register_adapter, register_webhook_registrar
 
 if TYPE_CHECKING:
     from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -17,6 +17,64 @@ logger = logging.getLogger(__name__)
 
 # Telegram message length limit
 MAX_MESSAGE_LENGTH = 4096
+
+
+async def set_webhook(bot_token: str, url: str, secret_token: str | None = None) -> bool:
+    """Register ``url`` as this bot's webhook with Telegram.
+
+    Best-effort: a failure (including the ConnectTimeout you get when the host
+    cannot reach ``api.telegram.org``) is logged and reported as ``False`` so the
+    caller — trigger creation — is never brought down by an unreachable Telegram.
+    ``secret_token`` is echoed back by Telegram in the ``X-Telegram-Bot-Api-Secret-Token``
+    header on every delivery, letting the webhook endpoint reject forged POSTs.
+    """
+    api = f"https://api.telegram.org/bot{bot_token}/setWebhook"
+    payload: dict[str, Any] = {"url": url, "allowed_updates": ["message"]}
+    if secret_token:
+        payload["secret_token"] = secret_token
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(api, json=payload)
+            resp.raise_for_status()
+        return True
+    except httpx.HTTPError as e:
+        logger.warning("Telegram setWebhook failed: %s", e)
+        return False
+
+
+async def delete_webhook(bot_token: str) -> bool:
+    """Clear this bot's webhook. Best-effort, same contract as :func:`set_webhook`."""
+    api = f"https://api.telegram.org/bot{bot_token}/deleteWebhook"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(api, json={})
+            resp.raise_for_status()
+        return True
+    except httpx.HTTPError as e:
+        logger.warning("Telegram deleteWebhook failed: %s", e)
+        return False
+
+
+class TelegramWebhookRegistrar:
+    """WebhookRegistrar (see channels.WebhookRegistrar) for Telegram bots.
+
+    Encapsulates *that* Telegram registers via setWebhook/deleteWebhook keyed by
+    the bot token; the controller and the orchestrating service stay unaware of
+    it. Delegates the actual HTTP to the module-level best-effort helpers.
+    """
+
+    async def register(
+        self, *, webhook_url: str, credentials: dict[str, Any], secret_token: str | None = None
+    ) -> bool:
+        token = (credentials or {}).get("bot_token")
+        if not token:
+            return False
+        return await set_webhook(token, webhook_url, secret_token)
+
+    async def deregister(self, *, credentials: dict[str, Any]) -> None:
+        token = (credentials or {}).get("bot_token")
+        if token:
+            await delete_webhook(token)
 
 
 class TelegramAdapter:
@@ -169,3 +227,7 @@ def create_telegram_adapter(
     adapter = TelegramAdapter(secret_manager=secret_manager)
     register_adapter("telegram", adapter)
     return adapter
+
+
+# Self-register this channel's inbound webhook registrar on import.
+register_webhook_registrar("telegram", TelegramWebhookRegistrar())
