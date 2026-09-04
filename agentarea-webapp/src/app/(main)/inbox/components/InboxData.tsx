@@ -1,4 +1,5 @@
 import { getInbox, type TaskWithAgent } from "@/lib/api";
+import { INBOX_PAGE_SIZE } from "@/app/(main)/inbox/components/inboxShared";
 import { InboxClient } from "./InboxClient";
 
 /**
@@ -9,18 +10,37 @@ import { InboxClient } from "./InboxClient";
  */
 export async function InboxData() {
   let items: TaskWithAgent[] = [];
+  let total = 0;
+  let statusCounts: Record<string, number> = {};
   let error: string | null = null;
 
   try {
-    const res = await getInbox();
+    const res = await getInbox({ page: 1, page_size: INBOX_PAGE_SIZE });
     if (res.error) {
       error = "Failed to load inbox";
     } else {
-      items = ((res.data as { items?: TaskWithAgent[] } | undefined)?.items ?? []);
+      const data = res.data as
+        | {
+            items?: TaskWithAgent[];
+            total?: number;
+            status_counts?: Record<string, number>;
+          }
+        | undefined;
+      items = data?.items ?? [];
+      total = data?.total ?? items.length;
+      statusCounts = data?.status_counts ?? {};
     }
   } catch {
     error = "Failed to load inbox";
   }
 
-  return <InboxClient items={items} error={error} />;
+  return (
+    <InboxClient
+      initialItems={items}
+      initialTotal={total}
+      initialStatusCounts={statusCounts}
+      pageSize={INBOX_PAGE_SIZE}
+      error={error}
+    />
+  );
 }

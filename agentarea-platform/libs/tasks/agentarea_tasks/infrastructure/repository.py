@@ -255,6 +255,20 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
+    async def count_grouped_by_statuses(self, statuses: list[str]) -> dict[str, int]:
+        """Return a {status: count} breakdown for the given statuses in one query.
+
+        Only statuses with at least one task appear in the result.
+        """
+        stmt = (
+            select(TaskORM.status, func.count(TaskORM.id))
+            .where(self._get_workspace_filter())
+            .where(TaskORM.status.in_(statuses))
+            .group_by(TaskORM.status)
+        )
+        result = await self.session.execute(stmt)
+        return dict(result.tuples().all())
+
     async def sum_spend_since(self, since: datetime) -> float:
         """Sum each task's own model spend for the workspace since a UTC time.
 

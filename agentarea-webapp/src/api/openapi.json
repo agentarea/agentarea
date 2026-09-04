@@ -4244,6 +4244,14 @@
             "title": "Page Size",
             "type": "integer"
           },
+          "status_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "title": "Status Counts",
+            "type": "object"
+          },
           "total": {
             "title": "Total",
             "type": "integer"
@@ -4253,7 +4261,8 @@
           "items",
           "total",
           "page",
-          "page_size"
+          "page_size",
+          "status_counts"
         ],
         "title": "InboxResponse",
         "type": "object"
