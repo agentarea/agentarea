@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { env } from "@/env";
+import { formatApiError } from "@/lib/api-errors";
 import { getAuthToken } from "@/lib/getAuthToken";
 
 export async function GET(
@@ -79,6 +80,8 @@ export async function GET(
     });
   } catch (error) {
     console.error("SSE events proxy error:", error);
-    return new Response(`SSE events proxy error: ${error}`, { status: 500 });
+    return new Response(`SSE events proxy error: ${formatApiError(error)}`, {
+      status: 500,
+    });
   }
 }

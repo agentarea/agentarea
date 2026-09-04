@@ -12,7 +12,6 @@ TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY: "true"
 DEBUG: "false"
 ENVIRONMENT: "production"
 MCP_MANAGER_URL: "http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}"
-MCP_LAZY_PROVISIONING_ENABLED: "{{ .Values.mcpManager.serverless.enabled }}"
 {{- end }}
 
 {{- define "agentarea.worker.envs" }}
@@ -56,9 +55,4 @@ MCP_LAZY_PROVISIONING_ENABLED: "{{ .Values.mcpManager.serverless.enabled }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-worker
       key: MCP_MANAGER_URL
-- name: MCP_LAZY_PROVISIONING_ENABLED
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-worker
-      key: MCP_LAZY_PROVISIONING_ENABLED
 {{- end }}

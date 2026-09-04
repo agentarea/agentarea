@@ -5,10 +5,10 @@ from typing import ClassVar
 from uuid import uuid4
 
 import pytest
-from agentarea_api.api.deps.services import get_temporal_workflow_service
 from agentarea_api.api.v1 import governance, policies
 from agentarea_api.api.v1.policies import (
     PolicyRuleCreateRequest,
+    PolicyRuleUpdateRequest,
     create_policy_rule,
     delete_policy_rule,
     get_policy_rule,
@@ -142,6 +142,84 @@ async def test_create_get_list_update_delete(session_factory):
         assert exc.value.status_code == 404
 
 
+# ---- fail-closed write boundary: unenforceable rules must be rejected ----
+
+
+async def test_create_rejects_group_subject(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        request = PolicyRuleCreateRequest(
+            subject_type=PolicySubjectType.GROUP,
+            subject_id="group:eng",
+            target="tool:send_email",
+            effect=PolicyEffect.DENY,
+        )
+        with pytest.raises(HTTPException) as exc:
+            await create_policy_rule(request, context, session)
+        assert exc.value.status_code == 422
+        assert "group" in exc.value.detail.lower()
+
+
+async def test_create_rejects_condition(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        request = PolicyRuleCreateRequest(
+            subject_type=PolicySubjectType.WORKSPACE,
+            subject_id="workspace-a",
+            target="tool:send_email",
+            effect=PolicyEffect.DENY,
+            condition="resource.env == 'prod'",
+        )
+        with pytest.raises(HTTPException) as exc:
+            await create_policy_rule(request, context, session)
+        assert exc.value.status_code == 422
+        assert "condition" in exc.value.detail.lower()
+
+
+async def test_create_rejects_invalid_target(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        request = PolicyRuleCreateRequest(
+            subject_type=PolicySubjectType.WORKSPACE,
+            subject_id="workspace-a",
+            target="tool_send_email",  # missing ':' -> unknown selector kind
+            effect=PolicyEffect.DENY,
+        )
+        with pytest.raises(HTTPException) as exc:
+            await create_policy_rule(request, context, session)
+        assert exc.value.status_code == 422
+
+
+async def test_create_rejects_cap_without_amount(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        request = PolicyRuleCreateRequest(
+            subject_type=PolicySubjectType.WORKSPACE,
+            subject_id="workspace-a",
+            target="spend",
+            effect=PolicyEffect.CAP,
+            params={"period": "month"},  # no amount_usd -> silently dropped by compiler
+        )
+        with pytest.raises(HTTPException) as exc:
+            await create_policy_rule(request, context, session)
+        assert exc.value.status_code == 422
+        assert "amount_usd" in exc.value.detail
+
+
+async def test_update_rejects_condition(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        created = await create_policy_rule(_cap_request("25.00"), context, session)
+        with pytest.raises(HTTPException) as exc:
+            await update_policy_rule(
+                created.id,
+                PolicyRuleUpdateRequest(condition="x == 1"),
+                context,
+                session,
+            )
+        assert exc.value.status_code == 422
+
+
 async def test_list_is_workspace_scoped(session_factory):
     async with session_factory() as session:
         context_a = _context("workspace-a")
@@ -170,9 +248,7 @@ async def test_http_crud_and_audit(session_factory, audit_capture):
             )
             rule_id = created.json()["id"]
             listed = await client.get("/v1/policies")
-            patched = await client.patch(
-                f"/v1/policies/{rule_id}", json={"enabled": False}
-            )
+            patched = await client.patch(f"/v1/policies/{rule_id}", json={"enabled": False})
             deleted = await client.delete(f"/v1/policies/{rule_id}")
 
         assert created.status_code == 201
@@ -325,20 +401,13 @@ async def test_preview_rejects_loosening_task_policy(session_factory):
         assert "monthly_spend_cap_usd" in preview.json()["detail"]
 
 
-async def test_reads_task_policy_from_workflow(session_factory):
+async def test_reads_task_policy_from_persisted_task_snapshot(session_factory):
     task_id = uuid4()
-    execution_id = f"task-{task_id}"
     context = _context()
 
-    class _FakeWorkflowService:
-        async def get_effective_policy(self, exec_id: str):
-            if exec_id == execution_id:
-                return {"budget": {"run_budget_usd": "1.25"}}
-            return None
-
     async with session_factory() as session:
-        # Seed a task carrying an execution_id; the effective policy lives in the
-        # workflow, served on demand by the (faked) workflow service.
+        # The exact resolved policy is written before Temporal dispatch, so it
+        # remains auditable after workflow retention expires.
         now = datetime.now(UTC)
         await TaskRepository(session, context).create_task(
             Task(
@@ -351,11 +420,15 @@ async def test_reads_task_policy_from_workflow(session_factory):
                 updated_at=now,
                 user_id=context.user_id,
                 workspace_id=context.workspace_id,
-                execution_id=execution_id,
+                metadata={
+                    "governance_snapshot": {
+                        "effective_policy": {"budget": {"run_budget_usd": "1.25"}},
+                        "resolved_at": now.isoformat(),
+                    }
+                },
             )
         )
         app = _app_for(session, context)
-        app.dependency_overrides[get_temporal_workflow_service] = lambda: _FakeWorkflowService()
         transport = ASGITransport(app=app)
 
         async with AsyncClient(transport=transport, base_url="http://test") as client:

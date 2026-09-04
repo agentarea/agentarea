@@ -303,7 +303,7 @@ export function CreateTriggerForm({
         className="h-4 w-4 shrink-0 text-muted-foreground hover:bg-transparent hover:text-destructive"
         onClick={() => onRemove(resource.id)}
       >
-        <X className="h-3 w-3" />
+        <X />
       </Button>
     </div>
   );

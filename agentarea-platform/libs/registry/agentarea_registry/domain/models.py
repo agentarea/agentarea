@@ -100,6 +100,15 @@ class RegistryItem(BaseModel):
     update_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     installed_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
+    # Browse facets, derived from the heterogeneous spec/tags above at sync time
+    # (see application.catalog_facets.derive_facets). Denormalized so the
+    # catalog can be filtered, ordered and counted in SQL: every registry type
+    # hides its category somewhere different, and the title the UI shows is
+    # often not `name`, so neither is reachable from a portable query.
+    category: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    sort_key: Mapped[str] = mapped_column(String(255), nullable=False, default="", index=True)
+    featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
     def __init__(
         self,
         registry_id: str,
@@ -109,6 +118,9 @@ class RegistryItem(BaseModel):
         version: str | None = None,
         spec: dict[str, Any] | None = None,
         tags: list[str] | None = None,
+        category: str | None = None,
+        sort_key: str | None = None,
+        featured: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -122,6 +134,12 @@ class RegistryItem(BaseModel):
         self.installed_entity_id = None
         self.update_available = False
         self.installed_version = None
+        self.category = category
+        # Never leave the ordering column empty: a caller that skips facet
+        # derivation gets plain case-folded name ordering rather than a catalog
+        # that pages in arbitrary order.
+        self.sort_key = sort_key if sort_key is not None else name.casefold()
+        self.featured = featured
 
 
 class RegistryItemInstall(BaseModel):

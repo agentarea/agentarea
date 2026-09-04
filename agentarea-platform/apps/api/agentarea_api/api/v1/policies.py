@@ -11,6 +11,7 @@ from agentarea_governance.domain.rules import (
     PolicyEffect,
     PolicyRule,
     PolicySubjectType,
+    assert_enforceable,
 )
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -119,6 +120,10 @@ async def create_policy_rule(
         enabled=payload.enabled,
         priority=payload.priority,
     )
+    try:
+        assert_enforceable(rule)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     created = await service.create_rule(rule=rule, subject_id=payload.subject_id)
     return _rule_response(created)
 
@@ -147,6 +152,13 @@ async def update_policy_rule(
     """Partially update a policy rule."""
     service = GovernancePolicyService(RepositoryFactory(db_session, user_context))
     fields = payload.model_dump(exclude_unset=True)
+    existing = await service.get_rule(rule_id=rule_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Policy rule not found")
+    try:
+        assert_enforceable(existing.model_copy(update=fields))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     updated = await service.update_rule(rule_id=rule_id, **fields)
     if updated is None:
         raise HTTPException(status_code=404, detail="Policy rule not found")

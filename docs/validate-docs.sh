@@ -94,29 +94,26 @@ fi
 
 echo -e "${BLUE}📋 Step 4: Running Mintlify validation...${NC}"
 
-# Run Mintlify validation (broken links)
-if command -v mint > /dev/null 2>&1; then
-    echo -e "${YELLOW}🔧 Using global mint CLI...${NC}"
-    mint broken-links
-elif [ -f "node_modules/.bin/mint" ]; then
-    echo -e "${YELLOW}🔧 Using local mint CLI...${NC}"
-    npx mint broken-links
+# Run Mintlify validation (broken links). Mintlify 4.x ships the `mintlify`
+# executable even though its help output uses `mint` as the command name.
+if [ -x "node_modules/.bin/mintlify" ]; then
+    MINTLIFY_BIN="node_modules/.bin/mintlify"
+elif command -v mintlify > /dev/null 2>&1; then
+    MINTLIFY_BIN="$(command -v mintlify)"
 else
-    echo -e "${YELLOW}⚠️  Mint CLI not found. Installing globally...${NC}"
-    npm install -g mintlify
-    mint broken-links
+    echo -e "${RED}❌ Mintlify CLI not found after dependency installation${NC}"
+    exit 1
 fi
+
+echo -e "${YELLOW}🔧 Using ${MINTLIFY_BIN}...${NC}"
+"${MINTLIFY_BIN}" broken-links
 
 echo -e "${BLUE}📋 Step 5: Testing local preview...${NC}"
 
 # Start dev server briefly to test
 echo -e "${YELLOW}🌐 Testing local preview server (5 seconds)...${NC}"
 
-if command -v mint > /dev/null 2>&1; then
-    timeout 5s mint dev --port 3333 > /dev/null 2>&1 &
-elif [ -f "node_modules/.bin/mint" ]; then
-    timeout 5s npx mint dev --port 3333 > /dev/null 2>&1 &
-fi
+timeout 5s "${MINTLIFY_BIN}" dev --port 3333 > /dev/null 2>&1 &
 
 MINT_PID=$!
 sleep 2

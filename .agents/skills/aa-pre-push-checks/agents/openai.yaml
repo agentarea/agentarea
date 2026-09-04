@@ -1,0 +1,4 @@
+interface:
+  display_name: "AgentArea Pre-Push Checks"
+  short_description: "Select and run the checks CI will actually run on this diff"
+  default_prompt: "Use $aa-pre-push-checks before pushing this branch."

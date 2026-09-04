@@ -1,321 +1,313 @@
-import fs from 'fs/promises';
-import os from 'os';
-import path from 'path';
-import {type AuthToken} from '../types/index.js';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import * as sdk from '@agentarea/api-client';
+import {
+	attachMcpInstance,
+	codexProjectConfigPath,
+	codexSeesServer,
+	defaultClientName,
+	harnessAddArgs,
+	harnessLoginArgs,
+	mcpAlias,
+	resolveMcpInstanceId,
+	resolveOrCreateClient,
+	runHarnessCommand,
+	upsertCodexServer,
+	type ClientApi,
+	type ClientRecord,
+	type ClientRef,
+	type Harness,
+	type Scope,
+} from './harness.js';
+import {type SdkResult} from './output.js';
 
-type Scope = 'project' | 'user';
-type Client = 'codex' | 'claude';
+/**
+ * `agentarea connect <codex|claude>` — point a local harness at a governed
+ * client bundle. The client is resolved (or created) server-side, the harness's
+ * own CLI writes its config and runs its OAuth flow, and nothing here ever
+ * touches a token or another tool's config file.
+ */
 
-interface ConnectOptions {
+export interface ConnectOptions {
 	apiUrl: string;
-	token: AuthToken;
-	scope?: string;
-	name?: string;
 	clientId?: string;
+	name?: string;
+	alias?: string;
+	scope?: string;
+	mcp?: string;
+	login?: boolean;
 }
 
 interface ConnectionRecord {
-	client: Client;
-	name: string;
+	client: Harness;
+	clientId: string;
+	clientName: string;
+	alias: string;
 	scope: Scope;
 	apiUrl: string;
 	mcpUrl: string;
-	tokenEnvVar: string;
-	tokenPrefix: string;
+	auth: 'oauth';
 	connectedAt: string;
 	updatedAt: string;
-	clientId?: string;
 }
 
 interface ConnectionState {
 	version: 1;
 	updatedAt: string;
-	connections: Partial<Record<Client, Record<string, ConnectionRecord>>>;
+	connections: Partial<Record<Harness, Record<string, ConnectionRecord>>>;
 }
 
 function normalizedScope(scope: string | undefined): Scope {
-	if (scope === 'user' || scope === 'project') {
-		return scope;
+	return scope === 'user' ? 'user' : 'project';
+}
+
+function unwrap<T>(result: SdkResult, what: string): T {
+	const status = result.response?.status;
+	if (result.error !== undefined || (status !== undefined && status >= 400)) {
+		throw new Error(
+			`Failed to ${what} (${status ?? 'no status'}): ${JSON.stringify(
+				result.error ?? null,
+			)}`,
+		);
 	}
 
-	return 'project';
+	return result.data as T;
 }
 
-function normalizedName(name: string | undefined): string {
-	const value = name?.trim();
-	return value || 'default';
+function clientApi(): ClientApi {
+	return {
+		async list() {
+			return unwrap<ClientRecord[]>(
+				(await sdk.listClientsV1ClientsGet({})) as SdkResult,
+				'list clients',
+			);
+		},
+		async create(data) {
+			return unwrap<ClientRecord>(
+				(await sdk.createClientV1ClientsPost({
+					body: {name: data.name, kind: data.kind, description: null},
+				} as never)) as SdkResult,
+				`create client "${data.name}"`,
+			);
+		},
+		async addMcp(clientId, mcpInstanceId) {
+			unwrap(
+				(await sdk.addMcpInstanceToClientV1ClientsClientIdMcpInstancesPost({
+					path: {client_id: clientId},
+					body: {id: mcpInstanceId},
+				} as never)) as SdkResult,
+				'attach the MCP instance to the client',
+			);
+		},
+	};
 }
 
-function mcpServerName(name: string): string {
-	if (name === 'default') {
-		return 'agentarea';
-	}
-
-	const suffix = name
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '_')
-		.replace(/^_+|_+$/g, '');
-
-	return `agentarea_${suffix || 'default'}`;
-}
-
-function targetSuffix(name: string): string {
-	return (
-		name
-			.toUpperCase()
-			.replace(/[^A-Z0-9]+/g, '_')
-			.replace(/^_+|_+$/g, '') || 'DEFAULT'
+async function getClient(clientId: string): Promise<ClientRecord> {
+	return unwrap<ClientRecord>(
+		(await sdk.getClientV1ClientsClientIdGet({
+			path: {client_id: clientId},
+		} as never)) as SdkResult,
+		`read client ${clientId}`,
 	);
 }
 
-function tokenEnvVar(name: string): string {
-	return name === 'default'
-		? 'AGENTAREA_TOKEN'
-		: `AGENTAREA_${targetSuffix(name)}_TOKEN`;
+async function setClientKind(
+	clientId: string,
+	kind: Harness,
+): Promise<ClientRecord> {
+	return unwrap<ClientRecord>(
+		(await sdk.updateClientV1ClientsClientIdPatch({
+			path: {client_id: clientId},
+			body: {kind},
+		} as never)) as SdkResult,
+		`label client ${clientId} as ${kind}`,
+	);
 }
 
-function mcpUrl(apiUrl: string, clientId?: string): string {
-	const base = apiUrl.replace(/\/$/, '');
-	return clientId ? `${base}/client-mcp/${clientId}` : `${base}/mcp`;
-}
-
-function agentareaDir(): string {
-	return path.join(os.homedir(), '.agentarea');
+async function listMcpInstances(): Promise<ClientRef[]> {
+	const instances = unwrap<Array<{id: string; name: string}>>(
+		(await sdk.listMcpServerInstancesV1McpServerInstancesGet({})) as SdkResult,
+		'list MCP instances',
+	);
+	return instances.map(instance => ({id: instance.id, name: instance.name}));
 }
 
 function connectionsPath(): string {
-	return path.join(agentareaDir(), 'connections.json');
-}
-
-function codexConfigPath(scope: Scope): string {
-	return scope === 'user'
-		? path.join(os.homedir(), '.codex', 'config.toml')
-		: path.join(process.cwd(), '.codex', 'config.toml');
-}
-
-function tokenPrefix(token: AuthToken): string {
-	return token.accessToken ? token.accessToken.slice(0, 12) : '';
+	return path.join(os.homedir(), '.agentarea', 'connections.json');
 }
 
 async function loadConnectionState(): Promise<ConnectionState> {
 	try {
-		const raw = await fs.readFile(connectionsPath(), 'utf8');
-		return JSON.parse(raw) as ConnectionState;
+		return JSON.parse(
+			await fs.readFile(connectionsPath(), 'utf8'),
+		) as ConnectionState;
 	} catch (error: unknown) {
 		if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
 			throw error;
 		}
 
-		return {
-			version: 1,
-			updatedAt: new Date(0).toISOString(),
-			connections: {},
-		};
+		return {version: 1, updatedAt: new Date(0).toISOString(), connections: {}};
 	}
 }
 
-async function saveConnectionState(
-	client: Client,
-	scope: Scope,
-	options: ConnectOptions,
-): Promise<string> {
-	const now = new Date().toISOString();
+async function saveConnectionState(record: ConnectionRecord): Promise<string> {
 	const state = await loadConnectionState();
-	const name = normalizedName(options.name);
-	const previous = state.connections[client]?.[name];
-	const record: ConnectionRecord = {
-		client,
-		name,
-		scope,
-		apiUrl: options.apiUrl.replace(/\/$/, ''),
-		mcpUrl: mcpUrl(options.apiUrl, options.clientId),
-		tokenEnvVar: tokenEnvVar(name),
-		tokenPrefix: tokenPrefix(options.token),
-		connectedAt: previous?.connectedAt ?? now,
-		updatedAt: now,
-		clientId: options.clientId,
+	const previous = state.connections[record.client]?.[record.alias];
+	state.connections[record.client] = {
+		...(state.connections[record.client] ?? {}),
+		[record.alias]: {
+			...record,
+			connectedAt: previous?.connectedAt ?? record.connectedAt,
+		},
 	};
+	state.updatedAt = record.updatedAt;
 
-	state.connections[client] = {
-		...(state.connections[client] ?? {}),
-		[name]: record,
-	};
-	state.updatedAt = now;
-
-	await fs.mkdir(agentareaDir(), {recursive: true, mode: 0o700});
+	await fs.mkdir(path.dirname(connectionsPath()), {
+		recursive: true,
+		mode: 0o700,
+	});
 	await fs.writeFile(connectionsPath(), `${JSON.stringify(state, null, 2)}\n`, {
 		mode: 0o600,
 	});
-
 	return connectionsPath();
 }
 
-function codexBlockStart(name: string): string {
-	return `# >>> agentarea-cli managed: ${mcpServerName(name)} MCP`;
-}
-
-function codexBlockEnd(name: string): string {
-	return `# <<< agentarea-cli managed: ${mcpServerName(name)} MCP`;
-}
-
-function codexManagedBlock(
-	apiUrl: string,
-	name: string,
-	clientId?: string,
-): string {
-	return [
-		codexBlockStart(name),
-		`[mcp_servers.${mcpServerName(name)}]`,
-		`url = "${mcpUrl(apiUrl, clientId)}"`,
-		`bearer_token_env_var = "${tokenEnvVar(name)}"`,
-		'startup_timeout_sec = 10',
-		'tool_timeout_sec = 60',
-		codexBlockEnd(name),
-	].join('\n');
-}
-
-async function writeCodexConfig(
-	apiUrl: string,
-	scope: Scope,
-	name: string,
-	clientId?: string,
-): Promise<string> {
-	const configPath = codexConfigPath(scope);
-	let existing = '';
-
-	try {
-		existing = await fs.readFile(configPath, 'utf8');
-	} catch (error: unknown) {
-		if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-			throw error;
-		}
-	}
-
-	const managedPattern = new RegExp(
-		`${codexBlockStart(name)}[\\s\\S]*?${codexBlockEnd(name)}`,
-		'm',
-	);
-	const nextBlock = codexManagedBlock(apiUrl, name, clientId);
-	let nextConfig: string;
-
-	if (managedPattern.test(existing)) {
-		nextConfig = existing.replace(managedPattern, nextBlock);
-	} else {
-		const tablePattern = new RegExp(
-			`^\\[mcp_servers\\.${mcpServerName(name)}\\]`,
-			'm',
-		);
-		if (tablePattern.test(existing)) {
-			throw new Error(
-				`Refusing to overwrite existing unmanaged Codex MCP config ${mcpServerName(
-					name,
-				)} at ${configPath}`,
-			);
-		}
-
-		nextConfig = `${existing.trimEnd()}${existing ? '\n\n' : ''}${nextBlock}\n`;
-	}
-
-	await fs.mkdir(path.dirname(configPath), {recursive: true});
-	await fs.writeFile(configPath, nextConfig, 'utf8');
-	return configPath;
-}
-
-function codexInstructions(
-	apiUrl: string,
-	configPath: string,
-	name: string,
-): string {
-	return [
-		'Codex connection',
-		`- target: ${name}`,
-		`- MCP server: ${mcpServerName(name)}`,
-		`- config written: ${configPath}`,
-		`- token source: ${tokenEnvVar(name)} environment variable`,
-		'- local client gets one MCP for this Agentarea target',
-		'',
-		'Run Codex with:',
-		`  export ${tokenEnvVar(name)}="<agentarea-token>"`,
-		'',
-		'No per-tool sync is needed. Hosted third-party MCP access changes in Agentarea policy.',
-	].join('\n');
-}
-
-function claudeInstructions(
-	apiUrl: string,
-	scope: Scope,
-	token: AuthToken,
-	name: string,
-	clientId?: string,
-): string {
-	const tokenPlaceholder = token.accessToken
-		? '<stored-agentarea-token>'
-		: '<agentarea-token>';
-
-	return [
-		'Claude Code connection',
-		`- target: ${name}`,
-		`- MCP server: ${mcpServerName(name)}`,
-		`- scope: ${scope}`,
-		'- local client gets one MCP for this Agentarea target',
-		'- token source: stored Agentarea CLI token',
-		'',
-		'Run:',
-		`  claude mcp add --transport http ${mcpServerName(
-			name,
-		)} --scope ${scope} ${mcpUrl(
-			apiUrl,
-			clientId,
-		)} --header "Authorization: Bearer ${tokenPlaceholder}"`,
-		'',
-		'No per-tool sync is needed. Hosted third-party MCP access changes in Agentarea policy.',
-	].join('\n');
-}
-
-function connectionModel(): string {
-	return [
-		'Model:',
-		'  Claude/Codex -> agentarea MCP -> Agentarea policy/router -> hosted MCP instances',
-		'',
-		'Connect once. Local config stays stable; Agentarea handles grant, revoke, audit, and routing centrally.',
-	].join('\n');
-}
-
 export async function connectClient(
-	client: string | undefined,
+	harness: string | undefined,
 	options: ConnectOptions,
 ): Promise<boolean> {
-	if (client !== 'codex' && client !== 'claude') {
+	if (harness !== 'codex' && harness !== 'claude') {
 		console.error(
-			'Usage: agentarea-cli connect <codex|claude> [--scope=project|user]',
+			'Usage: agentarea connect <codex|claude> [--name=<client>] [--mcp=<instance>] [--alias=<local name>] [--scope=project|user]',
 		);
 		return false;
 	}
 
 	const scope = normalizedScope(options.scope);
-	const name = normalizedName(options.name);
-	const statePath = await saveConnectionState(client, scope, options);
-	const codexConfig =
-		client === 'codex'
-			? await writeCodexConfig(options.apiUrl, scope, name, options.clientId)
-			: '';
-	const output =
-		client === 'codex'
-			? codexInstructions(options.apiUrl, codexConfig, name)
-			: claudeInstructions(
-					options.apiUrl,
-					scope,
-					options.token,
-					name,
-					options.clientId,
-			  );
+	const api = clientApi();
+	const clientName = options.name ?? defaultClientName(os.hostname(), harness);
 
-	console.log(output);
+	let client: ClientRecord;
+	if (options.clientId) {
+		client = await getClient(options.clientId);
+		console.log(`Using client ${client.name} (${client.id})`);
+		if (client.kind !== harness) {
+			client = await setClientKind(client.id, harness);
+			console.log(`Labelled it as a ${harness} harness`);
+		}
+	} else {
+		const resolved = await resolveOrCreateClient(api, {
+			name: clientName,
+			kind: harness,
+		});
+		client = resolved.client;
+		console.log(
+			`${resolved.created ? 'Created' : 'Reusing'} client ${client.name} (${
+				client.id
+			})`,
+		);
+	}
+
+	if (options.mcp) {
+		const instanceId = resolveMcpInstanceId(
+			await listMcpInstances(),
+			options.mcp,
+		);
+		const outcome = await attachMcpInstance(api, client, instanceId);
+		console.log(
+			outcome === 'attached'
+				? `Attached MCP instance ${instanceId}`
+				: `MCP instance ${instanceId} was already attached`,
+		);
+		client = await getClient(client.id);
+	}
+
+	const mcpUrl = client.mcp_endpoint_url;
+	if (!mcpUrl) {
+		throw new Error(
+			`The API returned no mcp_endpoint_url for client ${client.id}; check API_BASE_URL on the server`,
+		);
+	}
+
+	const bundle = [
+		`${client.mcp_instances?.length ?? 0} MCP instance(s)`,
+		`${client.skills?.length ?? 0} skill(s)`,
+	].join(', ');
+	console.log(`Bundle: ${bundle}`);
+	if (!client.mcp_instances?.length && !client.skills?.length) {
+		console.log(
+			'Warning: the bundle is empty — the harness will connect but see no tools.',
+		);
+	}
+
+	const alias = options.alias ?? mcpAlias('default');
+	if (harness === 'codex' && scope === 'project') {
+		// `codex mcp add` only ever writes the user-wide config, so a project
+		// scope has to be written as the file codex itself resolves: it walks up
+		// from the working directory and the closest .codex/config.toml wins.
+		const configPath = codexProjectConfigPath(process.cwd());
+		let existing = '';
+		try {
+			existing = await fs.readFile(configPath, 'utf8');
+		} catch (error: unknown) {
+			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+				throw error;
+			}
+		}
+
+		await fs.mkdir(path.dirname(configPath), {recursive: true});
+		await fs.writeFile(
+			configPath,
+			upsertCodexServer(existing, alias, mcpUrl),
+			'utf8',
+		);
+		console.log(`Wrote ${configPath}`);
+
+		if (!(await codexSeesServer(alias))) {
+			console.error(
+				`codex does not resolve "${alias}" from ${process.cwd()} — a project-scoped config is only read for a trusted project. Trust this directory in codex (or use --scope=user) and run this again.`,
+			);
+			return false;
+		}
+	} else {
+		await runHarnessCommand(
+			harness,
+			harnessAddArgs(harness, {alias, url: mcpUrl, scope}),
+		);
+		console.log(`Registered MCP server "${alias}" with ${harness}`);
+	}
+
+	const loginArgs = harnessLoginArgs(harness, alias);
+	if (loginArgs && options.login !== false) {
+		await runHarnessCommand(harness, loginArgs);
+	} else if (harness === 'claude') {
+		console.log(
+			`Authorize it from inside Claude Code: run /mcp and pick "${alias}".`,
+		);
+	}
+
+	const now = new Date().toISOString();
+	const statePath = await saveConnectionState({
+		client: harness,
+		clientId: client.id,
+		clientName: client.name,
+		alias,
+		scope,
+		apiUrl: options.apiUrl.replace(/\/$/, ''),
+		mcpUrl,
+		auth: 'oauth',
+		connectedAt: now,
+		updatedAt: now,
+	});
+
 	console.log('');
-	console.log(connectionModel());
-	console.log('');
+	console.log(
+		'Model: harness -> client bundle -> Agentarea policy/router -> hosted MCP instances.',
+	);
+	console.log(
+		'Change what the harness can reach in Agentarea; local config stays put.',
+	);
 	console.log(`Saved non-secret connection state: ${statePath}`);
-	console.log('');
-	console.log('Do not paste real tokens into project files.');
 	return true;
 }

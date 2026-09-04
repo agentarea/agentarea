@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { env } from "@/env";
+import { formatApiError } from "@/lib/api-errors";
 import { getAuthToken } from "@/lib/getAuthToken";
+import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
 
 export async function POST(
   request: NextRequest,
@@ -22,12 +24,7 @@ export async function POST(
       backendHeaders["Authorization"] = `Bearer ${token}`;
     }
 
-    let workspaceSlug = request.headers.get("x-workspace-slug");
-    if (!workspaceSlug) {
-      const referer = request.headers.get("referer");
-      const match = referer?.match(/\/w\/([^/?#]+)/);
-      if (match) workspaceSlug = decodeURIComponent(match[1]);
-    }
+    const workspaceSlug = await resolveRequestWorkspaceSlug(request);
     if (workspaceSlug) {
       backendHeaders["X-Workspace-Slug"] = workspaceSlug;
     }
@@ -94,6 +91,8 @@ export async function POST(
     });
   } catch (error) {
     console.error("Task creation proxy error:", error);
-    return new Response(`Task creation proxy error: ${error}`, { status: 500 });
+    return new Response(`Task creation proxy error: ${formatApiError(error)}`, {
+      status: 500,
+    });
   }
 }

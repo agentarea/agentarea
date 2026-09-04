@@ -118,7 +118,7 @@ export default async function ProviderSpecsPage({
             data-test="new-provider-button"
           >
             <Link href="/admin/provider-configs">
-              <PlusCircleIcon className="mr-2 h-4 w-4" />
+              <PlusCircleIcon className="mr-2" />
               {tProviders("addProvider")}
             </Link>
           </Button>

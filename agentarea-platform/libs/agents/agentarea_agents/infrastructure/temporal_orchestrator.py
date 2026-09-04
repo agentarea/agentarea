@@ -253,11 +253,21 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                     "failure_reason": failure_reason,
                 }
             elif mapped_status in {"failed", "cancelled"}:
-                # Best-effort extraction of terminal failure details.
+                # Best-effort extraction of terminal failure details. The raw
+                # Temporal failure text carries the whole cause chain, including
+                # provider response bodies, and this value reaches the task API
+                # through TaskService enrichment - so classify it here and
+                # surface a fixed message instead.
                 try:
                     await handle.result()
                 except Exception as e:
-                    response["error"] = str(e)
+                    logger.error(
+                        "Workflow %s ended %s (%s)",
+                        execution_id,
+                        mapped_status,
+                        type(e).__name__,
+                        exc_info=True,
+                    )
                     response["success"] = False
 
                     error_text = str(e).lower()
@@ -268,7 +278,9 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                     ):
                         response["status"] = "blocked"
                         response["error_type"] = "provider_quota_exceeded"
-
+                        response["error"] = "Provider quota exceeded"
+                    else:
+                        response["error"] = "Workflow execution failed"
             return response
 
         except Exception as e:
@@ -278,8 +290,13 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             # layer can map it to 404 instead of 500.
             if "not found" in str(e).lower() or "no execution" in str(e).lower():
                 return {"status": "unknown", "success": False, "error": "Workflow not found"}
-            logger.error(f"Failed to get workflow status: {e}")
-            raise RuntimeError(f"Failed to get workflow status: {e}") from e
+            logger.error(
+                "Failed to get workflow status for %s (%s)",
+                execution_id,
+                type(e).__name__,
+                exc_info=True,
+            )
+            raise RuntimeError("Failed to get workflow status") from e
 
     async def get_workflow_effective_policy(self, execution_id: str) -> dict | None:
         """Read the effective governance policy from a running/closed workflow.

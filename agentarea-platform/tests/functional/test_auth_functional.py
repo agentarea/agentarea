@@ -40,7 +40,6 @@ class TestAuthenticationEnforcement:
                     "name": "Test Agent",
                     "description": "Test description",
                     "instruction": "Test instruction",
-                    "model_id": "test-model",
                 },
             )
 
@@ -172,7 +171,6 @@ class TestAuthenticatedAccess:
                     "name": "Functional Test Agent",
                     "description": "Created by functional test",
                     "instruction": "Test instruction",
-                    "model_id": "test-model",
                 },
             )
 

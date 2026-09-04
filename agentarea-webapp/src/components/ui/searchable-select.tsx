@@ -189,7 +189,7 @@ export function SearchableSelect({
           {renderTrigger
             ? renderTrigger(selectedOption)
             : renderDefaultTrigger(selectedOption)}
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronDown className="ml-2 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0" style={{ width: popoverWidth }}>

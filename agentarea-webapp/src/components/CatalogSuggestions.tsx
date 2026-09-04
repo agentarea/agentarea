@@ -92,7 +92,7 @@ export default function CatalogSuggestions({
         <Button asChild variant="outline">
           <Link href={`/explore?type=${type}`}>
             Browse the catalog
-            <ArrowRight className="h-4 w-4" />
+            <ArrowRight />
           </Link>
         </Button>
       </div>

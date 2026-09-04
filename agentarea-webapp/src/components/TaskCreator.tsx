@@ -179,12 +179,12 @@ export default function TaskCreator() {
         >
           {loading ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="mr-2 animate-spin" />
               Creating Task...
             </>
           ) : (
             <>
-              <Send className="mr-2 h-4 w-4" />
+              <Send className="mr-2" />
               Create Task
             </>
           )}

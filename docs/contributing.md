@@ -1,3 +1,8 @@
+---
+title: Contributing to AgentArea
+description: Set up the repository, follow the contribution workflow, and submit changes to AgentArea.
+---
+
 # Contributing to AgentArea
 
 <Info>

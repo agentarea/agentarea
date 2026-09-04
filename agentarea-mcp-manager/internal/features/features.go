@@ -263,8 +263,8 @@ func (s *Service) GatewayAPIEnabled() bool {
 
 // GetWarmPoolConfig and its WarmPoolConfig struct were removed here. They had no
 // callers: nothing read Size, and nothing read IdleTimeout — the pool size comes
-// from the chart, and MCP instance idleness is owned by internal/mcpidle via
-// MCP_IDLE_TIMEOUT. Keeping them was worse than dead weight, because an
+// from the chart, and MCP instance idleness is owned by internal/mcpgateway via
+// request leases and MCP_IDLE_TIMEOUT. Keeping them was worse than dead weight, because an
 // `idle_timeout` variant on the warm_pool flag reads as the way to configure
 // exactly the thing it did not configure. Restore from git history if a warm
 // pool ever needs per-variant tuning.

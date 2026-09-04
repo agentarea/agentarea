@@ -234,9 +234,9 @@ export const BuiltinToolIconGrid = ({
                             }}
                           >
                             {isExpanded ? (
-                              <ChevronUp className="h-3 w-3" />
+                              <ChevronUp />
                             ) : (
-                              <ChevronDown className="h-3 w-3" />
+                              <ChevronDown />
                             )}
                           </Button>
                         )}

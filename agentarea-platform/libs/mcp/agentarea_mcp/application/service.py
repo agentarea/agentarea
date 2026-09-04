@@ -1,12 +1,12 @@
 import asyncio
 import inspect
 import logging
-import os
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+import httpx
 from agentarea_common.audit import audited
 from agentarea_common.base.service import BaseCrudService
 from agentarea_common.config import get_database, get_settings
@@ -56,34 +56,6 @@ logger = logging.getLogger(__name__)
 # Sentinel value for masked secrets — must match across backend and frontend
 SECRET_MASKED_VALUE = "*" * 6
 INSTANCE_TRANSPORT_FIELDS = {"type", "endpoint_url", "image", "command", "args"}
-
-
-def _lazy_mcp_provisioning_enabled() -> bool:
-    return os.getenv("MCP_LAZY_PROVISIONING_ENABLED", "").lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-
-
-def _is_lazy_instance(instance: MCPServerInstance) -> bool:
-    return bool((instance.json_spec or {}).get("lazy_provisioning"))
-
-
-def needs_lazy_provisioning(instance: MCPServerInstance) -> bool:
-    """True when this instance is started on demand and is not running now.
-
-    Every caller that dispatches to an instance has to answer this, and there is
-    more than one such caller: the agent tool path and the MCP proxy. Keeping the
-    predicate in one place is what stops them from disagreeing about when an
-    instance needs bringing back up.
-    """
-    return (
-        _lazy_mcp_provisioning_enabled()
-        and _is_lazy_instance(instance)
-        and (instance.verification or {}).get("status") != "succeeded"
-    )
 
 
 def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
@@ -414,11 +386,7 @@ class MCPServerInstanceService:
         if instance_type == "url":
             return spec.get("endpoint_url", "")
         if instance_type in ("docker", "command"):
-            resolved = spec.get("internal_url")
-            if isinstance(resolved, str) and "://" in resolved:
-                return resolved
-            port = 8080 if instance_type == "command" else spec.get("port") or 8000
-            return f"http://mcp-{instance.id}:{port}"
+            return get_settings().mcp.manager_gateway_url(instance.id)
         raise ValueError("bundle has no endpoint_url")
 
     async def _extract_secrets_from_spec(
@@ -539,22 +507,6 @@ class MCPServerInstanceService:
             # health checks against a url-type connection).
             spec.setdefault("type", instance_type)
 
-            # Record whether this instance is serverless — started on its first
-            # call and reclaimed once idle. Nothing else ever writes this field,
-            # so without stamping it here MCP_LAZY_PROVISIONING_ENABLED changes
-            # nothing: both the provisioning path and the reaper key off the
-            # instance, not the platform flag, and every instance stays eager and
-            # runs forever.
-            #
-            # Stored explicitly rather than left absent so the decision is the one
-            # in force when the instance was created. Flipping the platform flag
-            # later must not retroactively change how long existing instances
-            # live — an instance created eagerly was asked to stay up.
-            #
-            # url-type instances have no container to start or stop.
-            if instance_type != "url":
-                spec.setdefault("lazy_provisioning", _lazy_mcp_provisioning_enabled())
-
             create_kwargs: dict[str, Any] = {
                 "name": name,
                 "description": description,
@@ -602,12 +554,6 @@ class MCPServerInstanceService:
             refresh_result = self.repository.session.refresh(instance)
             if inspect.isawaitable(refresh_result):
                 await refresh_result
-
-        elif _lazy_mcp_provisioning_enabled() and (spec or {}).get("lazy_provisioning"):
-            logger.info(
-                "Skipping background MCP verification for lazy instance %s",
-                instance.id,
-            )
 
         else:
             # docker/command — fire background verify; monitor will also sweep.
@@ -857,8 +803,43 @@ class MCPServerInstanceService:
         if not instance:
             return False
 
-        await self.event_broker.publish(MCPServerInstanceDeleted(instance_id=instance.id))
-        return await self.repository.delete(id)
+        transport_spec = await self._get_transport_spec_for_instance(instance)
+        if transport_spec.get("type", "docker") in ("docker", "command", "kubernetes"):
+            await self._retire_runtime_before_delete(instance.id)
+
+        deleted = await self.repository.delete(id)
+        if deleted:
+            # This event is notification only. Runtime deletion has already
+            # completed synchronously and never depends on lossy Pub/Sub.
+            await self.event_broker.publish(MCPServerInstanceDeleted(instance_id=instance.id))
+        return deleted
+
+    async def _retire_runtime_before_delete(self, instance_id: UUID) -> None:
+        settings = get_settings().mcp
+        url = settings.manager_retire_url(instance_id)
+        headers = settings.manager_gateway_headers()
+        retryable = {409, 502, 503, 504}
+        last_error: Exception | None = None
+
+        async with httpx.AsyncClient(timeout=settings.MCP_CLIENT_TIMEOUT) as client:
+            for attempt in range(3):
+                try:
+                    response = await client.delete(url, headers=headers)
+                    if response.status_code == 204:
+                        return
+                    if response.status_code not in retryable:
+                        response.raise_for_status()
+                    last_error = RuntimeError(
+                        f"MCP manager retirement returned HTTP {response.status_code}"
+                    )
+                except (httpx.TransportError, httpx.TimeoutException) as exc:
+                    last_error = exc
+                if attempt < 2:
+                    await asyncio.sleep(0.2 * (attempt + 1))
+
+        raise RuntimeError(
+            f"MCP runtime retirement failed for {instance_id}; desired state was preserved"
+        ) from last_error
 
     async def get(self, id: UUID) -> MCPServerInstance | None:
         return await self.repository.get_by_id(id)
@@ -962,59 +943,11 @@ class MCPServerInstanceService:
                     f"Bundle member {member_instance_id} not found",
                 )
 
-            member_v = member.verification or {}
-            if member_v.get("status") != "succeeded":
-                member_err = (member_v.get("error") or {}).get("message", "unknown error")
-                return _fail(
-                    f"Bundle member '{member.name}' is not available: {member_err}. "
-                    "Recreate or re-verify the member.",
-                    f"Bundle member '{member.name}' verification status: {member_v.get('status')}",
-                )
-
             return await self.execute_tool(
                 UUID(member_instance_id),
                 original_tool_name,
                 tool_args,
                 httpx_client_factory=httpx_client_factory,
-            )
-
-        # Non-bundle: check verification status
-        verification = instance.verification or {}
-        if verification.get("status") != "succeeded":
-            if needs_lazy_provisioning(instance):
-                logger.info(
-                    "Lazy MCP provisioning on first tool call: instance=%s tool=%s",
-                    server_instance_id,
-                    tool_name,
-                )
-                verification = await self.verify_instance(server_instance_id)
-                instance = await self.repository.get_by_id(server_instance_id)
-                if not instance:
-                    return _fail(
-                        f"MCP server instance {server_instance_id} disappeared during provisioning.",
-                        f"MCP server instance {server_instance_id} disappeared during provisioning",
-                    )
-                refresh_result = self.repository.session.refresh(instance)
-                if inspect.isawaitable(refresh_result):
-                    await refresh_result
-            else:
-                reason = verification.get("status", "unknown")
-                v_err = (verification.get("error") or {}).get("message", "")
-                detail = f" ({v_err})" if v_err else ""
-                return _fail(
-                    f"MCP '{instance.name}' is not available (status: {reason}{detail}). "
-                    "Re-verify the instance.",
-                    f"Instance {server_instance_id} verification status: {reason}",
-                )
-
-        if verification.get("status") != "succeeded":
-            reason = verification.get("status", "unknown")
-            v_err = (verification.get("error") or {}).get("message", "")
-            detail = f" ({v_err})" if v_err else ""
-            return _fail(
-                f"MCP '{instance.name}' is not available (status: {reason}{detail}). "
-                "Re-verify the instance.",
-                f"Instance {server_instance_id} verification status: {reason}",
             )
 
         try:
@@ -1099,6 +1032,7 @@ class MCPServerInstanceService:
         self, instance: MCPServerInstance
     ) -> tuple[str, dict[str, str], str | None]:
         transport_spec = await self._get_transport_spec_for_instance(instance)
+        instance_type = transport_spec.get("type", "docker")
         mcp_url = self._endpoint_url_from_spec(instance, transport_spec)
         if not mcp_url:
             raise RuntimeError(
@@ -1125,6 +1059,10 @@ class MCPServerInstanceService:
                     headers = await auth_service.get_auth_headers(auth_config)
             except Exception as e:
                 logger.warning("Failed to resolve auth headers for instance %s: %s", instance.id, e)
+
+        if instance_type in ("docker", "command"):
+            headers.update(get_settings().mcp.manager_gateway_headers())
+            transport = "streamable-http"
 
         return mcp_url, headers, transport
 

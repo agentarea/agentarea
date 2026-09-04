@@ -44,7 +44,7 @@ export default function SettingsClient() {
             size="sm"
             className="gap-1"
           >
-            <LogOut className="h-3 w-3" />
+            <LogOut />
             {t("logout")}
           </Button>
         ),

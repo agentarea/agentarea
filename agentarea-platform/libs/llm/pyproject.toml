@@ -4,18 +4,20 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentarea-llm"
-version = "0.0.13"
+version = "0.0.14"
 description = "LLM functionality for AgentArea"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.12"
 dependencies = [
     "agentarea-common",
+    "agentarea-secrets",
     "pydantic>=2.4.2",
     "pyyaml>=6.0.1",
 ]
 
 [tool.uv.sources]
 agentarea-common = { workspace = true }
+agentarea-secrets = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["agentarea_llm"] 

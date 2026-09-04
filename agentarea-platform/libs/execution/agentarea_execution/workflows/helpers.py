@@ -10,6 +10,7 @@ from agentarea_common.auth.tool_authorization import (
     decide_tool_policy,
 )
 from agentarea_common.events.contract import canonical_type, ensure_terminal_message
+from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
@@ -39,7 +40,7 @@ def resolve_effective_budget(
 
     candidates = [to_money(b) for b in (request_budget, policy_budget) if b is not None]
     if not candidates:
-        return None
+        raise ValueError("effective policy is missing required runtime limit budget.run_budget_usd")
     return min(candidates)
 
 
@@ -95,23 +96,6 @@ def decide_tool_action(effective_policy: dict[str, Any] | None, tool_name: str) 
     return ToolAction.DENY
 
 
-# Workflow control flow, not capabilities: these tools reach no external system,
-# are never policy-gated on execution, and must survive a deny-by-default policy
-# — without completion the agent can never finish, without request_user_input it
-# can never ask. Keep in sync with the ungated branches of _execute_tool_calls.
-CONTROL_FLOW_TOOLS = frozenset(
-    {
-        "completion",
-        "task_complete",
-        "request_user_input",
-        "recall_history",
-        "read_tool_output",
-        "activate_tool_source",
-        "load_tools",
-    }
-)
-
-
 def tool_definition_name(tool: dict[str, Any]) -> str | None:
     """Read a tool's name from either definition shape (OpenAI function or bare)."""
     if tool.get("type") == "function":
@@ -134,7 +118,7 @@ def filter_disclosed_tools(
         name = tool_definition_name(tool)
         if not name:
             continue
-        if name in CONTROL_FLOW_TOOLS:
+        if name in CONTROL_FLOW_TOOL_NAMES:
             disclosed.append(tool)
             continue
         if decide_tool_action(effective_policy, name) is not ToolAction.DENY:
@@ -336,9 +320,13 @@ class BudgetTracker:
         budget_usd: Money | float | None = None,
         service_budget_usd: Money | float | None = None,
     ):
-        from .constants import BUDGET_WARNING_THRESHOLD, DEFAULT_BUDGET_USD
+        from .constants import BUDGET_WARNING_THRESHOLD
 
-        self.budget_limit: Money = to_money(budget_usd or DEFAULT_BUDGET_USD)
+        if budget_usd is None:
+            raise ValueError("budget_usd is required; runtime budgets have no code default")
+        self.budget_limit: Money = to_money(budget_usd)
+        if self.budget_limit <= ZERO:
+            raise ValueError("budget_usd must be greater than zero")
         self.cost: Money = ZERO
         self.warning_threshold = BUDGET_WARNING_THRESHOLD
         self._warning_sent = False
@@ -711,7 +699,12 @@ class ToolCallExtractor:
     @staticmethod
     def extract_usage_info(response: Any) -> dict[str, Any]:
         """Extract usage and cost information from LLM response."""
-        usage_info = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0.0}
+        usage_info = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": None,
+        }
 
         if not hasattr(response, "usage") or not response.usage:
             return usage_info
@@ -726,25 +719,23 @@ class ToolCallExtractor:
         )
 
         # Calculate cost — try multiple sources
-        cost = 0.0
+        cost: float | None = None
 
         # LiteLLM stores cost in _hidden_params.response_cost
         if hasattr(response, "_hidden_params"):
             hidden = response._hidden_params
             if isinstance(hidden, dict):
-                cost = hidden.get("response_cost", 0.0) or 0.0
+                cost = hidden.get("response_cost")
             elif hasattr(hidden, "response_cost"):
-                cost = getattr(hidden, "response_cost", 0.0) or 0.0
+                cost = hidden.response_cost
 
         # Try usage-level cost attributes
-        if cost == 0.0 and hasattr(usage, "completion_tokens_cost"):
-            cost += getattr(usage, "completion_tokens_cost", 0.0) or 0.0
-        if cost == 0.0 and hasattr(usage, "prompt_tokens_cost"):
-            cost += getattr(usage, "prompt_tokens_cost", 0.0) or 0.0
-
-        # Fallback estimate: $0.01 per 1K tokens
-        if cost == 0.0 and getattr(usage, "total_tokens", 0):
-            cost = getattr(usage, "total_tokens", 0) * 0.00001
+        if cost is None and (
+            hasattr(usage, "completion_tokens_cost") or hasattr(usage, "prompt_tokens_cost")
+        ):
+            cost = (getattr(usage, "completion_tokens_cost", 0.0) or 0.0) + (
+                getattr(usage, "prompt_tokens_cost", 0.0) or 0.0
+            )
 
         usage_info["cost"] = cost
         return usage_info

@@ -25,3 +25,7 @@ class AgentNotFoundError(PermanentError):
 
 class ModelInstanceNotFoundError(PermanentError):
     """The requested model instance does not exist."""
+
+
+class NoModelBoundError(PermanentError):
+    """The agent has no model bound and the run supplied no override."""

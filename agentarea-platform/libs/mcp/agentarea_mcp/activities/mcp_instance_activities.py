@@ -3,7 +3,8 @@
 Lifecycle activities (create/delete/poll_health) removed — replaced by verify().
 
 Remaining activities:
-  1. discover_mcp_tools           — plain async helper (used by verify())
+  1. discover_mcp_tools           — plain async helper; container-backed
+                                    discovery goes through the manager gateway
   2. discover_mcp_tools_activity  — Temporal-wrapped version
   3. get_mcp_instance_environment_activity
   4. resolve_auth_headers_activity
@@ -15,7 +16,6 @@ import logging
 from datetime import timedelta
 from typing import Any
 
-import httpx
 from agentarea_execution.interfaces import ActivityDependencies
 from temporalio import activity
 
@@ -40,9 +40,10 @@ async def discover_mcp_tools(
     root (e.g. Vercel) are hit at the URL as-given, not re-suffixed to /mcp or /sse.
 
     Args:
-        endpoint_url: Direct URL (for url-type MCPs or already-resolved container URL).
-        instance_id: Instance UUID string (used to resolve container URL from Go manager).
-        instance_name: Instance name (used as fallback gateway path).
+        endpoint_url: Direct URL — url-type MCP servers only. Container-backed
+            servers have no direct address; pass instance_id instead.
+        instance_id: Instance UUID string, reached through the manager gateway.
+        instance_name: Unused for addressing; retained for logging by callers.
         headers: Extra request headers (e.g. auth).
         timeout: Per-attempt connection timeout in seconds.
         transport: Declared MCP wire transport ("streamable-http"|"sse"); when set,
@@ -65,26 +66,22 @@ async def discover_mcp_tools(
         # Do NOT pre-append /mcp — let the shared resolver honor the URL as-given
         # (bare root, /mcp, or /sse) so root-streamable remotes aren't broken.
         base_url = endpoint_url.rstrip("/")
+    elif instance_id:
+        # Container-backed discovery is an ordinary request through the manager
+        # gateway, exactly like verification and agent tool calls.
+        #
+        # This used to ask the manager for `direct_http_endpoint` and dial the
+        # workload address, falling back to a retired Traefik path. Both routes
+        # skipped the gateway that starts the workload on demand, holds a
+        # request lease for the call, and reaps it when idle — so discovery
+        # could hit a workload nothing was keeping alive, or one already gone.
+        base_url = settings.mcp.manager_gateway_url(instance_id)
+        custom_headers.update(settings.mcp.manager_gateway_headers())
     else:
-        base_url = None
-        mcp_manager_url = settings.mcp.MCP_MANAGER_URL
-        if instance_id:
-            try:
-                async with httpx.AsyncClient(timeout=5) as client:
-                    resp = await client.get(
-                        f"{mcp_manager_url}/instances/{instance_id}/health",
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        direct = data.get("details", {}).get("direct_http_endpoint")
-                        if direct:
-                            base_url = f"{direct}/mcp"
-            except Exception as exc:
-                logger.debug("Direct endpoint resolution failed: %s", exc)
-
-        if not base_url:
-            gateway_url = settings.mcp.MCP_GATEWAY_URL
-            base_url = f"{gateway_url}/mcp/{instance_name}/mcp"
+        raise ValueError(
+            "tool discovery needs endpoint_url for a URL-type MCP server, "
+            "or instance_id to reach a container-backed one through the gateway"
+        )
 
     logger.info("Tool discovery connecting to %s", base_url)
 

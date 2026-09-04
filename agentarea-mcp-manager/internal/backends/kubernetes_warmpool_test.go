@@ -15,22 +15,21 @@ import (
 func TestExecuteSandboxRequiresTaskIdentity(t *testing.T) {
 	backend := &KubernetesBackend{}
 	_, err := backend.ExecuteSandbox(context.Background(), warmpool.ExecuteRequest{
-		WorkflowID: "legacy-workflow-owner",
+		WorkflowID: "workflow-owner",
 	})
 	if err == nil || !strings.Contains(err.Error(), "task_id is required") {
 		t.Fatalf("ExecuteSandbox() error = %v, want task_id requirement", err)
 	}
 }
 
-func TestRuntimeManifestSelectsExactPackageInstallProfile(t *testing.T) {
+func TestRuntimeManifestFailsWithoutReadyRuntime(t *testing.T) {
 	clientset := fake.NewSimpleClientset(&corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "allowed-runtime",
+			Name:      "sandbox-runtime",
 			Namespace: "agentarea",
 			Labels: map[string]string{
-				"app.kubernetes.io/component":      "warm-pool",
-				"mcp.agentarea.io/status":          "waiting",
-				"mcp.agentarea.io/package-install": "allowed",
+				"app.kubernetes.io/component": "warm-pool",
+				"mcp.agentarea.io/status":     "waiting",
 			},
 		},
 	})
@@ -39,8 +38,8 @@ func TestRuntimeManifestSelectsExactPackageInstallProfile(t *testing.T) {
 		k8sConfig: &config.KubernetesConfig{Namespace: "agentarea"},
 	}
 
-	_, err := backend.RuntimeManifest(context.Background(), "locked")
-	if err == nil || !strings.Contains(err.Error(), `profile "locked"`) {
-		t.Fatalf("RuntimeManifest() error = %v, want exact locked-profile selection failure", err)
+	_, err := backend.RuntimeManifest(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "no ready runtime pods") {
+		t.Fatalf("RuntimeManifest() error = %v, want no ready runtime pods", err)
 	}
 }

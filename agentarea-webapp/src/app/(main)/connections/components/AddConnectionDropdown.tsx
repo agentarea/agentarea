@@ -75,11 +75,11 @@ export function AddConnectionDropdown() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
-          className="shrink-0 gap-2"
+          className="shrink-0"
           size="xs"
           data-test="new-connection-button"
         >
-          <Plus className="mr-1 h-4 w-4" />
+          <Plus />
           {t("trigger")}
         </Button>
       </DialogTrigger>

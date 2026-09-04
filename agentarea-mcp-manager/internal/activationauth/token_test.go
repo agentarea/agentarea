@@ -46,3 +46,28 @@ func TestTamperedTokenIsRejected(t *testing.T) {
 		t.Fatal("tampered token was accepted")
 	}
 }
+
+func TestFileTransferTokenIsBoundToMethodPathSizeAndDigest(t *testing.T) {
+	secret := []byte(strings.Repeat("s", 32))
+	now := time.Unix(1_700_000_000, 0)
+	identity := Identity{WorkspaceID: "workspace-1", TaskID: "task-1", FencingToken: 1}
+	contentDigest := BodySHA256([]byte("body"))
+	binding := TransferSHA256("PUT", "inputs/a.txt", 4, 0o600, contentDigest)
+	token, err := Sign(secret, ScopeFiles, identity, binding, now, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, changed := range map[string]string{
+		"method": TransferSHA256("GET", "inputs/a.txt", 4, 0o600, contentDigest),
+		"path":   TransferSHA256("PUT", "inputs/b.txt", 4, 0o600, contentDigest),
+		"size":   TransferSHA256("PUT", "inputs/a.txt", 5, 0o600, contentDigest),
+		"mode":   TransferSHA256("PUT", "inputs/a.txt", 4, 0o755, contentDigest),
+		"digest": TransferSHA256("PUT", "inputs/a.txt", 4, 0o600, BodySHA256([]byte("else"))),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := Verify(token, secret, ScopeFiles, identity, changed, now); err == nil {
+				t.Fatal("transfer token accepted changed operation")
+			}
+		})
+	}
+}

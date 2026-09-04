@@ -273,6 +273,5 @@ export function getCategoryColorClasses(category: MCPServerCategory): string {
  * Constants for MCP server configuration
  */
 export const MCP_CONSTANTS = {
-  HEALTH_CHECK_INTERVAL_MS: 60000, // 1 minute
   DEFAULT_CONTAINER_PORT: 8000,
 } as const;

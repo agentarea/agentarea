@@ -42,6 +42,9 @@ def _ensure_all_toolsets_imported() -> None:
         # platform toolsets remain API-only until similarly relocated.
         "agentarea_agents.tools.skills_toolset",
         "agentarea_api.tools.projects_toolset",
+        "agentarea_api.tools.clients_toolset",
+        "agentarea_api.tools.members_toolset",
+        "agentarea_api.tools.policies_toolset",
         "agentarea_api.tools.openapi_connections_toolset",
         "agentarea_api.tools.mcp_servers_toolset",
         "agentarea_api.tools.providers_toolset",
@@ -73,6 +76,7 @@ def _meta_to_dict(meta: ToolsetMetadata, cls: type) -> dict[str, Any]:
         "display_name": meta.display_name,
         "description": meta.description,
         "category": meta.category,
+        "plane": meta.plane,
         "enabled_by_default": meta.enabled_by_default,
         "requires_user_confirmation": meta.requires_user_confirmation,
         "class_path": f"{cls.__module__}.{cls.__name__}",

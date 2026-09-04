@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -17,6 +19,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/database"
 	"github.com/agentarea/mcp-manager/internal/events"
+	"github.com/agentarea/mcp-manager/internal/mcpspec"
 	"github.com/agentarea/mcp-manager/internal/models"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -77,16 +80,18 @@ func (m *Manager) SetSecretResolver(resolver SecretResolverInterface) {
 // values are decrypted here from the DB and never sent over the wire.
 //
 // Returns an empty map when no resolver is configured or no secret names are
-// present. This is the single source of secret resolution shared by the HTTP
-// create path (which owns provisioning) and the DB-sync reconcile loop.
-func (m *Manager) ResolveSecretEnvVars(instanceID string, jsonSpec map[string]interface{}) map[string]string {
+// present. A resolver that fails is an error, not an empty map: starting the
+// container anyway would hand the workload a spec whose credentials silently
+// went missing. This is the single source of secret resolution shared by the
+// HTTP create path (which owns provisioning) and the DB-sync reconcile loop.
+func (m *Manager) ResolveSecretEnvVars(instanceID string, jsonSpec map[string]interface{}) (map[string]string, error) {
 	resolved := make(map[string]string)
 	if m.secretResolver == nil || jsonSpec == nil {
-		return resolved
+		return resolved, nil
 	}
 	envVarsRaw, ok := jsonSpec["env_vars"].([]interface{})
 	if !ok || len(envVarsRaw) == 0 {
-		return resolved
+		return resolved, nil
 	}
 	envVarNames := make([]string, 0, len(envVarsRaw))
 	for _, v := range envVarsRaw {
@@ -95,21 +100,18 @@ func (m *Manager) ResolveSecretEnvVars(instanceID string, jsonSpec map[string]in
 		}
 	}
 	if len(envVarNames) == 0 {
-		return resolved
+		return resolved, nil
 	}
 	secretEnvVars, err := m.secretResolver.ResolveInstanceEnvVars(instanceID, envVarNames)
 	if err != nil {
-		m.logger.Error("Failed to resolve secret env vars",
-			slog.String("instance_id", instanceID),
-			slog.String("error", err.Error()))
-		return resolved
+		return nil, fmt.Errorf("resolve secret env vars for instance %s: %w", instanceID, err)
 	}
 	if len(secretEnvVars) > 0 {
 		m.logger.Info("Resolved secret env vars from encrypted_secrets",
 			slog.String("instance_id", instanceID),
 			slog.Int("count", len(secretEnvVars)))
 	}
-	return secretEnvVars
+	return secretEnvVars, nil
 }
 
 // Initialize initializes the container manager
@@ -161,15 +163,20 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 	defer m.mutex.Unlock()
 
 	// Check if container already exists
-	if _, exists := m.containers[req.ServiceName]; exists {
-		return nil, fmt.Errorf("container %s already exists", req.ServiceName)
+	if existing, exists := m.containers[req.ServiceName]; exists {
+		if err := m.reclaimStoppedRecord(ctx, existing, req.ServiceName); err != nil {
+			return nil, err
+		}
 	}
 
 	// Generate container name using the sanitized service name
 	containerName := m.config.GetContainerName(req.ServiceName)
 
-	// Check container limit
-	if len(m.containers) >= m.config.Container.MaxContainers {
+	// Check container limit. Counted over workloads the host is actually
+	// carrying, not over every record we hold: a stopped or failed container
+	// occupies no memory, and spending the ceiling on it wedges the host for
+	// good, since nothing removes those records on its own.
+	if occupied := m.occupiedSlotsUnsafe(); occupied >= m.config.Container.MaxContainers {
 		return nil, fmt.Errorf("maximum container limit reached (%d)", m.config.Container.MaxContainers)
 	}
 
@@ -192,11 +199,25 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 		Environment: req.Environment,
 		Command:     req.Command,
 		Isolation:   req.Isolation,
+		MemoryLimit: req.MemoryLimit,
+		CPULimit:    req.CPULimit,
 	}
 
 	// Refuse rather than silently downgrade: starting third-party code without
 	// the isolation it was assigned is worse than not starting it.
 	if err := m.ensureRuntimeAvailable(ctx, container.Isolation); err != nil {
+		return nil, err
+	}
+
+	// The requested ceiling is caller input: an MCP spec reaches here from the
+	// control plane's API, so a workload could otherwise name its own limit and
+	// take the host. A request may lower its share, never raise it.
+	if err := m.enforceResourceCeiling(container); err != nil {
+		return nil, err
+	}
+
+	// A leftover container from an earlier attempt holds the name this run needs.
+	if err := m.clearContainerName(ctx, container.Name, container.ServiceName); err != nil {
 		return nil, err
 	}
 
@@ -212,7 +233,7 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 			slog.String("container", containerName),
 			slog.String("error", err.Error()),
 			slog.String("output", string(output)))
-		return nil, fmt.Errorf("failed to create container: %w", err)
+		return nil, fmt.Errorf("failed to create container: %s", runtimeRefusal(output))
 	}
 
 	// Get container ID from output
@@ -221,6 +242,20 @@ func (m *Manager) CreateContainer(ctx context.Context, req models.CreateContaine
 	// Wait for container to be running
 	if err := m.waitForContainer(ctx, container.ID); err != nil {
 		container.Status = models.StatusError
+		// No caller ever receives a handle to this container, and it was never
+		// recorded, so nothing can reclaim it later: it would sit dead on the
+		// host holding its name and its disk, unknown to the control plane.
+		// What it printed is the only record of why it stopped, so that is kept
+		// before the corpse goes.
+		m.logger.Error("Container exited before it could serve",
+			slog.String("container", containerName),
+			slog.String("id", container.ID),
+			slog.String("diagnostic", m.startFailureDiagnostic(ctx, container)))
+		if reapErr := m.removeContainerByID(ctx, container.ID); reapErr != nil {
+			m.logger.Warn("Could not remove the container that failed to start",
+				slog.String("container", containerName),
+				slog.String("error", reapErr.Error()))
+		}
 		return nil, fmt.Errorf("container failed to start: %w", err)
 	}
 
@@ -264,6 +299,50 @@ func (m *Manager) ListContainers() []models.Container {
 }
 
 // GetContainerStatus gets the real-time status of a container
+// StartContainer starts a container that exists but is stopped.
+//
+// Separate from CreateContainer because an idle-reclaimed instance still has
+// its container, with its image, environment and isolation already settled.
+// Recreating it would re-resolve all of that and could quietly produce a
+// different container than the one that was reclaimed.
+func (m *Manager) StartContainer(ctx context.Context, serviceName string) error {
+	managed, err := m.GetContainer(serviceName)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "start", managed.ID)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("starting %s: %w: %s", serviceName, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+// ContainerAddress returns host:port for reaching a container from this host.
+//
+// Resolved on every call rather than cached: Docker assigns a new IP when a
+// container restarts, and a stale address silently routes traffic to whichever
+// container took it over.
+func (m *Manager) ContainerAddress(ctx context.Context, serviceName string) (string, error) {
+	managed, err := m.GetContainer(serviceName)
+	if err != nil {
+		return "", err
+	}
+
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", managed.ID,
+		"--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("inspecting %s for its address: %w", serviceName, err)
+	}
+
+	address := strings.TrimSpace(string(output))
+	if address == "" {
+		return "", fmt.Errorf("container %s has no network address yet", serviceName)
+	}
+	return net.JoinHostPort(address, strconv.Itoa(managed.Port)), nil
+}
+
 func (m *Manager) GetContainerStatus(ctx context.Context, serviceName string) (models.ContainerStatus, error) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -345,7 +424,8 @@ func (m *Manager) DeleteContainer(ctx context.Context, serviceName string) error
 
 	container.Status = models.StatusStopping
 
-	// Stop container
+	// Stopping is best effort: a container that already exited, or that the host
+	// reaped, cannot be stopped, and neither is a reason to keep the record.
 	stopCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "stop", container.ID)
 	if output, err := stopCmd.CombinedOutput(); err != nil {
 		m.logger.Error("Failed to stop container",
@@ -354,9 +434,13 @@ func (m *Manager) DeleteContainer(ctx context.Context, serviceName string) error
 			slog.String("output", string(output)))
 	}
 
-	// Remove container
-	rmCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "rm", container.ID)
-	if output, err := rmCmd.CombinedOutput(); err != nil {
+	// A container that is no longer there is the state the caller asked for, so
+	// removal is idempotent. Without this, a container reaped out of band -- by
+	// a host cleanup, or a runtime restart -- left a record that nothing could
+	// ever delete: every retirement failed on the missing container and the
+	// instance stayed in the control plane for good.
+	rmCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "rm", "-f", container.ID)
+	if output, err := rmCmd.CombinedOutput(); err != nil && !containerAlreadyGone(output) {
 		m.logger.Error("Failed to remove container",
 			slog.String("container", container.Name),
 			slog.String("error", err.Error()),
@@ -387,14 +471,27 @@ func (m *Manager) GetRunningCount() int {
 	return count
 }
 
-// getRunningCountUnsafe returns the number of running containers without locking
-// IMPORTANT: This method is not thread-safe and should only be used when the caller
-// already holds the mutex or when thread safety is not required (e.g., during validation)
-// nolint:unused // May be used for debugging or future features
-func (m *Manager) getRunningCountUnsafe() int {
+// occupiedSlotsUnsafe counts the containers that consume host resources.
+//
+// MaxContainers exists to keep a host inside its memory: the default limit per
+// container is 512m, and the RU sandbox host carries eight of them on 8 GB. So
+// the number to compare against it is the number of live workloads, including
+// the ones on the way up and down -- admitting another while one is still
+// starting is how a host is over-committed.
+//
+// Stopped and failed containers are records of something that used to run.
+// Eleven of them, all pinned to a registry deleted with a previous cluster,
+// held every slot on that host for two days while the machine sat idle, and
+// every MCP launch was refused with "maximum container limit reached (8)".
+//
+// Not thread-safe: callers must already hold the mutex.
+func (m *Manager) occupiedSlotsUnsafe() int {
 	count := 0
 	for _, container := range m.containers {
-		if container.Status == models.StatusRunning {
+		switch container.Status {
+		case models.StatusStopped, models.StatusError:
+			// Holds nothing; leaves the slot free.
+		default:
 			count++
 		}
 	}
@@ -402,6 +499,76 @@ func (m *Manager) getRunningCountUnsafe() int {
 }
 
 // discoverContainers discovers existing containers managed by this service
+// containerEnvironment reads a container's environment as a map.
+//
+// Discovery previously scraped this output with substring searches for two
+// specific variables. Parsing it once, properly, is what lets a rediscovered
+// container answer lookups by instance id.
+func (m *Manager) containerEnvironment(ctx context.Context, containerID string) map[string]string {
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", containerID,
+		"--format", "{{json .Config.Env}}")
+	output, err := cmd.Output()
+	if err != nil {
+		m.logger.Warn("Failed to read container environment",
+			slog.String("container_id", containerID),
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	var entries []string
+	if err := json.Unmarshal(output, &entries); err != nil {
+		m.logger.Warn("Failed to parse container environment",
+			slog.String("container_id", containerID),
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	environment := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		if name, value, found := strings.Cut(entry, "="); found {
+			environment[name] = value
+		}
+	}
+	return environment
+}
+
+// containerLabels reads the labels the runtime holds for a container.
+//
+// The listing does not carry them in a shape both runtimes agree on, so this
+// asks the runtime directly. An error yields no labels rather than a partial
+// set: a half-read label map would let an ownership check pass on absence.
+func (m *Manager) containerLabels(ctx context.Context, containerID string) map[string]string {
+	cmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", containerID,
+		"--format", "{{json .Config.Labels}}")
+	output, err := cmd.Output()
+	if err != nil {
+		m.logger.Warn("Failed to read container labels",
+			slog.String("container_id", containerID),
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	labels := make(map[string]string)
+	if err := json.Unmarshal(output, &labels); err != nil {
+		m.logger.Warn("Failed to parse container labels",
+			slog.String("container_id", containerID),
+			slog.String("error", err.Error()))
+		return nil
+	}
+	return labels
+}
+
+// jsonString reads the first present string field, so one parser handles both
+// the Docker and Podman spellings of the same listing.
+func jsonString(source map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := source[key].(string); ok && value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 func (m *Manager) discoverContainers(ctx context.Context) error {
 	// List all containers with our prefix
 	// Use {{json .}} to get JSON lines output which is compatible across more versions
@@ -433,20 +600,52 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 
 	prefix := m.config.Container.NamePrefix
 	for _, pc := range podmanContainers {
-		names, ok := pc["Names"].([]interface{})
-		if !ok || len(names) == 0 {
+		// Docker and Podman disagree on the shape of this field: Podman emits an
+		// array, Docker a comma-separated string. Reading only the array meant
+		// discovery silently found nothing on Docker — every container failed the
+		// type assertion and was skipped. That went unnoticed while the manager
+		// always re-synced its instances from the Core API on boot; a data plane
+		// has no Core API, so it forgot every instance across a restart and could
+		// never wake a stopped one.
+		containerName := ""
+		switch names := pc["Names"].(type) {
+		case string:
+			containerName, _, _ = strings.Cut(names, ",")
+		case []interface{}:
+			if len(names) > 0 {
+				containerName, _ = names[0].(string)
+			}
+		}
+
+		if containerName == "" || !strings.HasPrefix(containerName, prefix) {
 			continue
 		}
 
-		containerName, ok := names[0].(string)
-		if !ok || !strings.HasPrefix(containerName, prefix) {
+		// The name prefix alone is too broad: the manager's own container is
+		// called mcp-manager, and anything a human started by hand can share the
+		// prefix too. Adopting those would put the manager under its own
+		// lifecycle management. Every instance the manager creates is stamped
+		// with MCP_INSTANCE_ID, so that — not the name — is what marks a
+		// container as ours.
+		environment := m.containerEnvironment(ctx, jsonString(pc, "Id", "ID"))
+		if environment["MCP_INSTANCE_ID"] == "" {
+			m.logger.Debug("Ignoring container that this manager did not create",
+				slog.String("name", containerName))
+			continue
+		}
+
+		// Same split as Names: Podman spells this "Id", Docker "ID". A bare type
+		// assertion on the missing one panics the process during startup.
+		containerID := jsonString(pc, "Id", "ID")
+		if containerID == "" {
+			m.logger.Warn("Skipping container with no id in listing", slog.String("name", containerName))
 			continue
 		}
 
 		// Extract service name from container environment (original name)
 		// First try to get original service name from environment variable
 		originalServiceName := ""
-		if inspectCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", pc["Id"].(string), "--format", "{{.Config.Env}}"); inspectCmd != nil {
+		if inspectCmd := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", containerID, "--format", "{{.Config.Env}}"); inspectCmd != nil {
 			if inspectOutput, err := inspectCmd.CombinedOutput(); err == nil {
 				envStr := string(inspectOutput)
 				if strings.Contains(envStr, "MCP_SERVICE_NAME=") {
@@ -471,8 +670,6 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 		if serviceName == "" {
 			serviceName = strings.TrimPrefix(containerName, prefix)
 		}
-
-		containerID := pc["Id"].(string)
 
 		// Get container port from inspect
 		port := 8000 // Default port
@@ -504,11 +701,22 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 			Name:        containerName,
 			ServiceName: serviceName,
 			Slug:        slug,
-			Image:       pc["Image"].(string),
-			Status:      m.mapPodmanStatus(pc["State"].(string)),
+			Image:       jsonString(pc, "Image"),
+			Status:      m.mapPodmanStatus(jsonString(pc, "State", "Status")),
 			Port:        port,
 			URL:         fmt.Sprintf("/mcp/%s", slug),
 			Host:        containerName,
+			// Labels are read back rather than left empty because they carry
+			// ownership. A data plane decides whether an instance is its own by
+			// the label on it, so a rediscovered container without labels is
+			// indistinguishable from someone else's and can never be served
+			// again after a restart.
+			Labels: m.containerLabels(ctx, containerID),
+			// Carries MCP_INSTANCE_ID, which is how a caller's instance id is
+			// resolved back to a service name. Left empty, every lookup by
+			// instance id misses and the container is unreachable after a
+			// restart even though it is sitting right there.
+			Environment: environment,
 			CreatedAt:   time.Now(), // We don't have exact creation time
 			UpdatedAt:   time.Now(),
 		}
@@ -528,9 +736,296 @@ func (m *Manager) discoverContainers(ctx context.Context) error {
 	return nil
 }
 
+// runtimeRefusal classifies why a runtime would not create a container.
+//
+// The reason has to cross the API, because until it did the control plane showed
+// a bare exit status and the cause was visible only to whoever could read the
+// host journal. The runtime\x27s own text does not cross: it can carry host paths
+// and registry hints, and the caller can act on the class alone. The full output
+// stays in the error log next to this call.
+func runtimeRefusal(output []byte) string {
+	lowered := strings.ToLower(string(output))
+	switch {
+	case strings.Contains(lowered, "pull access denied"),
+		strings.Contains(lowered, "requested access to the resource is denied"),
+		strings.Contains(lowered, "authentication required"),
+		strings.Contains(lowered, "unauthorized"):
+		return "the image registry refused the pull; this host has no credentials for it"
+	case strings.Contains(lowered, "manifest unknown"),
+		strings.Contains(lowered, "not found"),
+		strings.Contains(lowered, "repository does not exist"):
+		return "the image does not exist in the registry"
+	case strings.Contains(lowered, "already in use by container"):
+		return "a container already holds this instance\x27s name"
+	case strings.Contains(lowered, "no space left on device"):
+		return "the host is out of disk"
+	case strings.Contains(lowered, "no such image"):
+		return "the image is not present on this host"
+	case len(strings.TrimSpace(lowered)) == 0:
+		return "the runtime failed without output"
+	default:
+		return "the runtime rejected the container; see the data-plane log for its output"
+	}
+}
+
+// reclaimStoppedRecord clears a record for a workload that is not running, so the
+// instance can start again.
+//
+// Discovery adopts stopped containers on startup, and a crash between the run and
+// its cleanup leaves exactly that: a stopped container this service owns, adopted
+// into the registry. Refusing on the record alone made every retry answer "already
+// exists" and left the instance dead until somebody removed the container by hand.
+// The container is only removed when it is stopped and carries this service's owner
+// label; anything else is reported.
+func (m *Manager) reclaimStoppedRecord(ctx context.Context, existing *models.Container, serviceName string) error {
+	if existing.Status == models.StatusRunning || existing.Status == models.StatusHealthy || existing.Status == models.StatusStarting {
+		return fmt.Errorf("container %s already exists in state %s", serviceName, existing.Status)
+	}
+
+	if err := m.clearContainerName(ctx, m.config.GetContainerName(serviceName), serviceName); err != nil {
+		return fmt.Errorf("container %s exists in state %s and cannot be reclaimed: %w",
+			serviceName, existing.Status, err)
+	}
+
+	m.logger.Info("Reclaimed a stopped container so its instance can start again",
+		slog.String("service", serviceName),
+		slog.String("previous_status", string(existing.Status)))
+	delete(m.containers, serviceName)
+
+	return nil
+}
+
+// enforceResourceCeiling rejects a workload asking for more than this host allows.
+// The limits travel with the instance spec, which is caller input all the way from
+// the platform API, so the data plane cannot treat them as trusted: without this,
+// one request could name 100g and evict everything else on a box that also runs
+// agent sandboxes.
+//
+// Refusing rather than clamping keeps the outcome legible -- a silently shrunk
+// container fails later, in the workload, for reasons the caller cannot see.
+func (m *Manager) enforceResourceCeiling(container *models.Container) error {
+	if container.MemoryLimit != "" {
+		requested, err := parseMemoryLimit(container.MemoryLimit)
+		if err != nil {
+			return fmt.Errorf("memory limit %q: %w", container.MemoryLimit, err)
+		}
+		maximum, err := parseMemoryLimit(m.config.Container.MaxMemoryLimit)
+		if err != nil {
+			// A caller named a limit and this host cannot say what it allows. The
+			// safe reading of an unusable maximum is "nothing above the default",
+			// not "anything at all" -- a typo in one variable must not become a
+			// tenant's licence to take the machine.
+			return fmt.Errorf("MAX_MEMORY_LIMIT %q is unusable, refusing the requested %s: %w",
+				m.config.Container.MaxMemoryLimit, container.MemoryLimit, err)
+		}
+		if requested > maximum {
+			return fmt.Errorf("requested memory %s exceeds the %s this host allows",
+				container.MemoryLimit, m.config.Container.MaxMemoryLimit)
+		}
+	}
+
+	if container.CPULimit != "" {
+		requested, err := parseCPULimit(container.CPULimit)
+		if err != nil {
+			return fmt.Errorf("cpu limit %q is not a positive number", container.CPULimit)
+		}
+		maximum, err := parseCPULimit(m.config.Container.MaxCPULimit)
+		if err != nil {
+			return fmt.Errorf("MAX_CPU_LIMIT %q is unusable, refusing the requested %s",
+				m.config.Container.MaxCPULimit, container.CPULimit)
+		}
+		if requested > maximum {
+			return fmt.Errorf("requested cpu %s exceeds the %s this host allows",
+				container.CPULimit, m.config.Container.MaxCPULimit)
+		}
+	}
+
+	return nil
+}
+
+// parseCPULimit reads a core count. Positivity alone is not enough: ParseFloat
+// accepts NaN and Inf, and neither survives being compared. A NaN maximum leaves
+// "requested > maximum" false for every request, and an Inf maximum is above
+// every finite one, so either would quietly turn the host's ceiling off. Both
+// sides of the comparison go through here so neither can.
+func parseCPULimit(value string) (float64, error) {
+	parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil {
+		return 0, err
+	}
+	if math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+		return 0, fmt.Errorf("%q is not a finite number", value)
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("%q is not a positive number", value)
+	}
+	return parsed, nil
+}
+
+// parseMemoryLimit reads the runtime's own memory syntax: a byte count with an
+// optional b/k/m/g suffix.
+func parseMemoryLimit(value string) (int64, error) {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	if trimmed == "" {
+		return 0, fmt.Errorf("empty")
+	}
+	multiplier := int64(1)
+	switch trimmed[len(trimmed)-1] {
+	case 'b':
+		trimmed = trimmed[:len(trimmed)-1]
+	case 'k':
+		multiplier, trimmed = 1024, trimmed[:len(trimmed)-1]
+	case 'm':
+		multiplier, trimmed = 1024*1024, trimmed[:len(trimmed)-1]
+	case 'g':
+		multiplier, trimmed = 1024*1024*1024, trimmed[:len(trimmed)-1]
+	}
+	amount, err := strconv.ParseInt(strings.TrimSpace(trimmed), 10, 64)
+	if err != nil || amount <= 0 {
+		return 0, fmt.Errorf("not a positive byte count")
+	}
+	// The suffix multiplies, and int64 wraps: "9223372036g" parses cleanly and
+	// then overflows into a negative byte count, which sits below every maximum
+	// and would walk straight through the ceiling it was supposed to hit.
+	if amount > math.MaxInt64/multiplier {
+		return 0, fmt.Errorf("byte count %s does not fit in int64", value)
+	}
+	return amount * multiplier, nil
+}
+
+// startFailureDiagnostic says why a container is gone without reprinting what it
+// said.
+//
+// Its own output is the most useful thing here and the one thing that cannot be
+// logged by default: it is third-party code that held credentials. Those arrive
+// in plain environment as often as through the secret store, and a process can
+// print a token it fetched after it started, which nothing derived from the spec
+// would recognise. The normal path therefore records identifiers and the
+// runtime's classification; an operator who needs the text turns it on for one
+// host, knowing what lands in the log.
+func (m *Manager) startFailureDiagnostic(ctx context.Context, container *models.Container) string {
+	if !m.config.Container.LogWorkloadOutput {
+		return "workload output withheld; set LOG_WORKLOAD_OUTPUT=true on this host to include it"
+	}
+
+	output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "logs", "--tail", "20", container.ID).CombinedOutput()
+	trimmed := strings.TrimSpace(string(output))
+	if err != nil && trimmed == "" {
+		return "no output could be read: " + err.Error()
+	}
+	return redactEnvironment(trimmed, container.Environment)
+}
+
+// redactEnvironment removes the values this container was given from text about
+// to be logged. A floor, not a guarantee: it cannot know a credential the process
+// obtained itself, which is why the raw text is off by default.
+func redactEnvironment(text string, environment map[string]string) string {
+	for key, value := range environment {
+		// One to three characters is not a credential worth the message it would
+		// destroy: "true", a port, a log level.
+		if len(value) < 4 {
+			continue
+		}
+		text = strings.ReplaceAll(text, value, "[redacted "+key+"]")
+	}
+	if len(text) > 4000 {
+		text = text[:4000] + " [truncated]"
+	}
+	return text
+}
+
+// firstNonEmpty returns the first value that was actually set.
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+// failRegisteredContainer reports a failure that happened after the container was
+// already recorded, and forgets the record. Every exit past registration has to
+// do both: a tracked error entry makes the next create event refuse the instance
+// as existing, so one transient conflict outlives whatever caused it.
+func (m *Manager) failRegisteredContainer(ctx context.Context, container *models.Container, instanceID, name, reason string) {
+	container.Status = models.StatusError
+	if m.eventPublisher != nil {
+		if err := m.eventPublisher.PublishFailed(ctx, instanceID, name, reason); err != nil {
+			m.logger.Warn("Failed to publish failed status",
+				slog.String("instance_id", instanceID),
+				slog.String("error", err.Error()))
+		}
+	}
+	delete(m.containers, name)
+}
+
+// removeContainerByID force-removes one container by id. Reclaiming by name is
+// ownership-checked; by id there is nothing to confuse, because the id came from
+// the run that just failed.
+func (m *Manager) removeContainerByID(ctx context.Context, id string) error {
+	output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "rm", "-f", id).CombinedOutput()
+	if err != nil && !containerAlreadyGone(output) {
+		return fmt.Errorf("removing container %s: %w: %s", id, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+// ownerLabel records which service a container was created for, so a name can
+// only be reclaimed by the workload that owns it.
+const ownerLabel = "ai.agentarea.service"
+
+// containerAlreadyGone reports whether a runtime refused an operation because
+// the container does not exist. Runtimes disagree on the exit code for that, so
+// the message is what can be relied on.
+func containerAlreadyGone(output []byte) bool {
+	return strings.Contains(strings.ToLower(string(output)), "no such container")
+}
+
+// clearContainerName frees the runtime name a workload is about to take.
+//
+// A container name is derived from the instance it serves, so a leftover
+// container under that name is the same instance's corpse from an earlier
+// attempt: it can never serve traffic again, yet the runtime refuses to reuse
+// its name. That turned every retry for the instance into a permanent "name is
+// already in use" failure which hid the original start error and left the
+// instance id unusable for good. A *running* namesake is a different situation
+// -- something is actively serving under it -- so it is reported, not killed.
+func (m *Manager) clearContainerName(ctx context.Context, name, owner string) error {
+	// Two fields, read apart and compared exactly. Matching a suffix would let a
+	// name that merely ends in the owner's pass for the owner's own.
+	format := "{{.State.Running}}\x1f{{index .Config.Labels \"" + ownerLabel + "\"}}"
+	state, err := exec.CommandContext(ctx, m.config.Container.Runtime, "inspect", name, "--format", format).Output()
+	if err != nil {
+		// Nothing answers to that name. This is the ordinary case.
+		return nil
+	}
+
+	running, recordedOwner, _ := strings.Cut(strings.TrimSpace(string(state)), "\x1f")
+	if strings.TrimSpace(running) == "true" {
+		return fmt.Errorf("container %s is already running", name)
+	}
+
+	// A corpse under this name that this instance did not create is somebody
+	// else's: a different service whose name sanitized to the same string, or a
+	// container placed here by hand. Report it rather than reclaim it.
+	if strings.TrimSpace(recordedOwner) != owner {
+		return fmt.Errorf("container %s exists and was not created for %s", name, owner)
+	}
+
+	if output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "rm", "-f", name).CombinedOutput(); err != nil {
+		return fmt.Errorf("removing stale container %s: %w: %s", name, err, strings.TrimSpace(string(output)))
+	}
+
+	m.logger.Info("Removed a stale container holding the name of a new workload",
+		slog.String("container", name))
+
+	return nil
+}
+
 // buildContainerRunArgs builds the arguments for the container runtime run command.
-// Traefik labels are added so that Traefik auto-discovers the container and routes
-// /mcp/{slug}/* traffic to it.
+// MCP containers intentionally have no external router labels: every request
+// must cross the manager demand gateway so lifecycle leases stay authoritative.
 func (m *Manager) buildContainerRunArgs(container *models.Container) []string {
 	args := []string{"run", "-d"}
 
@@ -545,35 +1040,36 @@ func (m *Manager) buildContainerRunArgs(container *models.Container) []string {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
 	}
 
-	// Add user-supplied labels
+	// Add user-supplied labels. The owner label is reserved: a caller that could
+	// set it would be naming itself the owner of somebody else's container.
 	for key, value := range container.Labels {
+		if key == ownerLabel {
+			continue
+		}
 		args = append(args, "--label", fmt.Sprintf("%s=%s", key, value))
 	}
 
-	// Add Traefik labels for automatic routing
-	slug := container.Slug
-	port := container.Port
-	args = append(args,
-		"--label", "traefik.enable=true",
-		"--label", fmt.Sprintf("traefik.http.routers.%s.rule=PathPrefix(`/mcp/%s`)", slug, slug),
-		"--label", fmt.Sprintf("traefik.http.routers.%s.entrypoints=mcp", slug),
-		"--label", fmt.Sprintf("traefik.http.services.%s.loadbalancer.server.port=%d", slug, port),
-		"--label", fmt.Sprintf("traefik.http.middlewares.%s-strip.stripprefix.prefixes=/mcp/%s", slug, slug),
-		"--label", fmt.Sprintf("traefik.http.routers.%s.middlewares=%s-strip", slug, slug),
-	)
+	// Who this container belongs to. Names are derived by lossy sanitization, so
+	// two services can produce one runtime name; without an owner recorded here,
+	// reclaiming a name by name alone can take a different workload's container.
+	// Written last so it wins over any duplicate that slipped through.
+	args = append(args, "--label", fmt.Sprintf("%s=%s", ownerLabel, container.ServiceName))
 
 	// Add isolation flags. MCP servers are third-party code; without these the
 	// container runs with the daemon's full default capability set next to the
 	// control plane.
 	args = append(args, isolationRunArgs(container.Isolation)...)
 
-	// Add default resource limits
-	if m.config.Container.DefaultMemoryLimit != "" {
-		args = append(args, "--memory", m.config.Container.DefaultMemoryLimit)
+	// What this workload may take. The request wins over the host default: the
+	// ceiling belongs to the workload, and a caller that sizes one instance
+	// differently -- a paid tier, a heavy server -- had its value accepted and
+	// then dropped here, so every container ran on the one host-wide number.
+	if memory := firstNonEmpty(container.MemoryLimit, m.config.Container.DefaultMemoryLimit); memory != "" {
+		args = append(args, "--memory", memory)
 	}
 
-	if m.config.Container.DefaultCPULimit != "" {
-		args = append(args, "--cpus", m.config.Container.DefaultCPULimit)
+	if cpus := firstNonEmpty(container.CPULimit, m.config.Container.DefaultCPULimit); cpus != "" {
+		args = append(args, "--cpus", cpus)
 	}
 
 	// Add image
@@ -716,6 +1212,10 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 	if image == "" {
 		return fmt.Errorf("image is required in json_spec (or use type='command')")
 	}
+	isolation, err := config.ResolveIsolation(m.config.Container.DefaultIsolationTier)
+	if err != nil {
+		return fmt.Errorf("resolve MCP isolation policy: %w", err)
+	}
 
 	// Get container name for later use
 	containerName := m.config.GetContainerName(name)
@@ -730,12 +1230,17 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 	defer m.mutex.Unlock()
 
 	// Check if container already exists
-	if _, exists := m.containers[name]; exists {
-		return fmt.Errorf("container %s already exists", name)
+	if existing, exists := m.containers[name]; exists {
+		if existing.Status == models.StatusRunning || existing.Status == models.StatusHealthy || existing.Status == models.StatusStarting {
+			return nil
+		}
+		if err := m.reclaimStoppedRecord(ctx, existing, name); err != nil {
+			return err
+		}
 	}
 
 	// Check container limit
-	if len(m.containers) >= m.config.Container.MaxContainers {
+	if occupied := m.occupiedSlotsUnsafe(); occupied >= m.config.Container.MaxContainers {
 		return fmt.Errorf("maximum container limit reached (%d)", m.config.Container.MaxContainers)
 	}
 
@@ -757,6 +1262,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		Labels:      make(map[string]string),
 		Environment: environment,
 		Command:     command,
+		Isolation:   isolation,
 	}
 
 	// Store container in tracking map with validating status
@@ -778,6 +1284,17 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		slog.String("instance_id", instanceID),
 		slog.String("image", image))
 
+	// The name has to be free before the run, or the retry that follows a failed
+	// start reports a name conflict instead of the reason the start failed.
+	if err := m.clearContainerName(ctx, containerName, container.ServiceName); err != nil {
+		// The record was inserted above. Left behind, it answers the next create
+		// event with "already exists" and the instance stays stranded even after
+		// whatever held the name is gone.
+		m.failRegisteredContainer(ctx, container, instanceID, name,
+			fmt.Sprintf("Container name unavailable: %v", err))
+		return err
+	}
+
 	// Build container run command
 	args := m.buildContainerRunArgs(container)
 
@@ -788,7 +1305,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		container.Status = models.StatusError
 
 		// Publish failed status
-		errorMsg := fmt.Sprintf("Failed to create container: %v", err)
+		errorMsg := fmt.Sprintf("Failed to create container: %s", runtimeRefusal(output))
 		if publishErr := m.eventPublisher.PublishFailed(ctx, instanceID, name, errorMsg); publishErr != nil {
 			m.logger.Warn("Failed to publish failed status",
 				slog.String("instance_id", instanceID),
@@ -798,7 +1315,8 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		m.logger.Error("Failed to create container",
 			slog.String("container", containerName),
 			slog.String("error", err.Error()),
-			slog.String("output", string(output)))
+			slog.String("output", runtimeRefusal(output)))
+		delete(m.containers, name)
 		return fmt.Errorf("failed to create container: %w", err)
 	}
 
@@ -816,6 +1334,21 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 				slog.String("instance_id", instanceID),
 				slog.String("error", publishErr.Error()))
 		}
+
+		// Same reclaim as the direct path, for the same reason: the caller gets an
+		// error and no handle, so nothing else can remove this container or forget
+		// the record. Left in place, the corpse holds the name and the error record
+		// answers every retry, which made a single failed start permanent.
+		m.logger.Error("Container exited before it could serve",
+			slog.String("container", containerName),
+			slog.String("instance_id", instanceID),
+			slog.String("diagnostic", m.startFailureDiagnostic(ctx, container)))
+		if reapErr := m.removeContainerByID(ctx, container.ID); reapErr != nil {
+			m.logger.Warn("Could not remove the container that failed to start",
+				slog.String("container", containerName),
+				slog.String("error", reapErr.Error()))
+		}
+		delete(m.containers, name)
 
 		return fmt.Errorf("container failed to start: %w", err)
 	}
@@ -938,20 +1471,11 @@ func ResolveContainerSpec(jsonSpec map[string]interface{}) (image string, port i
 		port = 8000
 	}
 
-	// Optional command override (supports both "cmd" and "command" keys)
-	cmdInterface, ok := jsonSpec["cmd"]
-	if !ok {
-		cmdInterface, ok = jsonSpec["command"]
-	}
-	if ok {
-		if cmdSlice, ok := cmdInterface.([]interface{}); ok {
-			for _, cmdItem := range cmdSlice {
-				if cmdStr, ok := cmdItem.(string); ok {
-					command = append(command, cmdStr)
-				}
-			}
-		}
-	}
+	// The invocation, read by the same function the admission gate uses. Two
+	// readers meant two answers: this one took "cmd" and ignored "args", the gate
+	// took "command" and ignored "cmd", and a spec could satisfy the gate with one
+	// field while the runtime obeyed another.
+	command = mcpspec.DockerArgv(jsonSpec)
 	return
 }
 
@@ -1439,8 +1963,18 @@ func (m *Manager) syncWithCoreAPI(ctx context.Context) error {
 		}
 
 		// Resolve secret env vars from encrypted_secrets table (shared with the
-		// HTTP create path via Manager.ResolveSecretEnvVars).
-		for k, v := range m.ResolveSecretEnvVars(instance.InstanceID, instance.JSONSpec) {
+		// HTTP create path via Manager.ResolveSecretEnvVars). Skip the instance
+		// rather than start it with its credentials missing — the next sweep
+		// retries once the cause is gone.
+		secretEnvVars, err := m.ResolveSecretEnvVars(instance.InstanceID, instance.JSONSpec)
+		if err != nil {
+			m.logger.Error("Failed to resolve secret env vars for instance",
+				slog.String("instance_id", instance.InstanceID),
+				slog.String("name", instance.Name),
+				slog.String("error", err.Error()))
+			continue
+		}
+		for k, v := range secretEnvVars {
 			environment[k] = v
 		}
 

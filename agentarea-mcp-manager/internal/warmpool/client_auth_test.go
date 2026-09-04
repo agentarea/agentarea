@@ -1,8 +1,12 @@
 package warmpool
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +15,6 @@ import (
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/activationauth"
-	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/workspace"
 )
 
@@ -48,8 +51,7 @@ func TestPostExecuteUsesTaskBoundBearerToken(t *testing.T) {
 	defer server.Close()
 
 	_, err := PostExecute(context.Background(), server.URL, ExecuteRequest{
-		PackageInstall: runtimeinfo.PackageInstallAllowed,
-		CommandBody:    "echo ok", WorkspaceID: "workspace-1", TaskID: "task-1",
+		CommandBody: "echo ok", WorkspaceID: "workspace-1", TaskID: "task-1",
 		WorkspaceManifestRef: ref,
 	}, time.Second)
 	if err != nil {
@@ -94,11 +96,102 @@ func TestPostExecuteFailsClosedWithoutAuthSecret(t *testing.T) {
 	t.Setenv(activationauth.SecretEnv, "")
 	ref := &workspace.ManifestRef{WorkspaceID: "workspace-1", TaskID: "task-1", Generation: 1, FencingToken: 1}
 	_, err := PostExecute(context.Background(), "http://127.0.0.1:1", ExecuteRequest{
-		PackageInstall: runtimeinfo.PackageInstallAllowed,
-		CommandBody:    "echo ok", WorkspaceID: "workspace-1", TaskID: "task-1",
+		CommandBody: "echo ok", WorkspaceID: "workspace-1", TaskID: "task-1",
 		WorkspaceManifestRef: ref,
 	}, time.Second)
 	if err == nil || !strings.Contains(err.Error(), activationauth.SecretEnv) {
 		t.Fatalf("PostExecute() error = %v, want missing secret", err)
+	}
+}
+
+func TestDeleteTaskWorkspaceUsesSeparateTaskBoundScope(t *testing.T) {
+	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/workspace/task" ||
+			r.URL.Query().Get("workspace_id") != "workspace-1" || r.URL.Query().Get("task_id") != "task-1" {
+			t.Errorf("unexpected cleanup request: %s %s", r.Method, r.URL.String())
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token, err := activationauth.BearerToken(r.Header.Get("Authorization"))
+		if err != nil {
+			t.Errorf("BearerToken() error = %v", err)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		err = activationauth.VerifyFromEnv(token, activationauth.ScopeCleanup, activationauth.Identity{
+			WorkspaceID: "workspace-1", TaskID: "task-1", Generation: 0, FencingToken: 1,
+		}, activationauth.BodySHA256(nil), time.Now())
+		if err != nil {
+			t.Errorf("VerifyFromEnv() error = %v", err)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	if err := DeleteTaskWorkspace(context.Background(), server.URL, "workspace-1", "task-1", time.Second); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFileReadMapsReclaimedWorkspaceToTypedGone(t *testing.T) {
+	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "gone", http.StatusGone)
+	}))
+	defer server.Close()
+
+	if _, err := GetFile(context.Background(), server.URL, "workspace-1", "task-1", "report.txt", time.Second); !errors.Is(err, ErrTaskWorkspaceGone) {
+		t.Fatalf("GetFile() error = %v, want ErrTaskWorkspaceGone", err)
+	}
+	if _, err := ListFiles(context.Background(), server.URL, "workspace-1", "task-1", "", time.Second); !errors.Is(err, ErrTaskWorkspaceGone) {
+		t.Fatalf("ListFiles() error = %v, want ErrTaskWorkspaceGone", err)
+	}
+}
+
+func TestPutFileStreamSignsAndTransfersRawContent(t *testing.T) {
+	t.Setenv(activationauth.SecretEnv, strings.Repeat("s", 32))
+	content := bytes.Repeat([]byte("x"), 1024*1024+7)
+	digest := sha256.Sum256(content)
+	digestHex := hex.EncodeToString(digest[:])
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/files/content" || r.URL.Query().Get("path") != "inputs/data.bin" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token, err := activationauth.BearerToken(r.Header.Get("Authorization"))
+		if err != nil {
+			t.Errorf("BearerToken() error = %v", err)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if err := activationauth.VerifyFromEnv(token, activationauth.ScopeFiles, activationauth.Identity{
+			WorkspaceID: "workspace-1", TaskID: "task-1", Generation: 0, FencingToken: 1,
+		}, activationauth.TransferSHA256(http.MethodPut, "inputs/data.bin", int64(len(content)), 0o600, digestHex), time.Now()); err != nil {
+			t.Errorf("VerifyFromEnv() error = %v", err)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		if !bytes.Equal(body, content) {
+			t.Errorf("body bytes = %d, want %d", len(body), len(content))
+		}
+		_ = json.NewEncoder(w).Encode(FilePutResponse{Path: "inputs/data.bin", Size: int64(len(body))})
+	}))
+	defer server.Close()
+
+	result, err := PutFileStream(context.Background(), server.URL, FileTransferRequest{
+		WorkspaceID: "workspace-1", TaskID: "task-1", Path: "inputs/data.bin",
+		Size: int64(len(content)), SHA256: digestHex,
+		Mode: 0o600,
+	}, bytes.NewReader(content), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Size != int64(len(content)) {
+		t.Fatalf("uploaded size = %d", result.Size)
 	}
 }

@@ -10,6 +10,7 @@ exercise the repository merge with light fakes, no database.
 from datetime import datetime
 from uuid import uuid4
 
+import pytest
 from agentarea_common.auth.context import UserContext
 from agentarea_llm.domain.models import ModelSpec
 from agentarea_llm.infrastructure.catalog_model_spec_repository import CatalogModelSpecItem
@@ -83,6 +84,13 @@ def test_project_carries_registry_item_timestamps():
     assert spec.updated_at == ts
 
 
+def test_catalog_projection_rejects_missing_context_window():
+    item = _item(spec={"model_name": "unknown-limit-model"})
+
+    with pytest.raises(KeyError, match="context_window"):
+        _project_catalog_model_spec(item)
+
+
 async def test_catalog_projections_shadows_instantiated_and_projects_rest():
     item_unforked = _item(name="Unforked")
     item_shadowed = _item(name="Shadowed")
@@ -110,14 +118,10 @@ async def test_catalog_projections_filter_by_provider_and_active():
 
     from uuid import UUID
 
-    active_only = await repo._catalog_projections(
-        [], provider_spec_id=UUID(pid), is_active=True
-    )
+    active_only = await repo._catalog_projections([], provider_spec_id=UUID(pid), is_active=True)
     assert {str(s.id) for s in active_only} == {item.id}
 
-    other_provider = await repo._catalog_projections(
-        [], provider_spec_id=uuid4(), is_active=None
-    )
+    other_provider = await repo._catalog_projections([], provider_spec_id=uuid4(), is_active=None)
     assert other_provider == []
 
 

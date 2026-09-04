@@ -459,7 +459,7 @@ export function ChatInputArea({
                 disabled={isLoading}
                 className="h-8 w-8 rounded-full p-0 hover:bg-zinc-200 hover:text-text dark:hover:bg-gray-800"
               >
-                <Paperclip className="h-4 w-4" />
+                <Paperclip />
               </Button>
 
               {showSendButton && (
@@ -476,7 +476,7 @@ export function ChatInputArea({
                       {isResuming ? (
                         <LoadingSpinner size="sm" />
                       ) : (
-                        <Play className="h-4 w-4" />
+                        <Play />
                       )}
                     </Button>
                   ) : isLoading && onStop ? (
@@ -491,7 +491,7 @@ export function ChatInputArea({
                       {isStopping ? (
                         <LoadingSpinner variant="light" size="sm" />
                       ) : (
-                        <Pause className="h-4 w-4" />
+                        <Pause />
                       )}
                     </Button>
                   ) : (
@@ -507,7 +507,7 @@ export function ChatInputArea({
                       {isLoading ? (
                         <LoadingSpinner variant="light" size="sm" />
                       ) : (
-                        <SendIcon className="h-4 w-4" />
+                        <SendIcon />
                       )}
                     </Button>
                   )}

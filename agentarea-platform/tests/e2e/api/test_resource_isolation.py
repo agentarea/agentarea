@@ -68,7 +68,6 @@ RESOURCES = [
             "name": "iso-agent",
             "description": "isolation test",
             "instruction": "behave",
-            "model_id": "gpt-4",
             "agent_type": "stateless",
         },
     ),

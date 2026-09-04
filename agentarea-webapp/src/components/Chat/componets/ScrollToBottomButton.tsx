@@ -25,7 +25,7 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
         variant="outline"
         className="h-8 w-8 rounded-full shadow-lg"
       >
-        <ChevronDown className="h-4 w-4" />
+        <ChevronDown />
       </Button>
     </div>
   );

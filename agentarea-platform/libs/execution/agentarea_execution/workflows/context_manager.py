@@ -11,7 +11,6 @@ from .constants import (
     CONTEXT_COMPACT_THRESHOLD,
     CONTEXT_RESERVE_FOR_OUTPUT,
     CONTEXT_WARNING_THRESHOLD,
-    DEFAULT_CONTEXT_WINDOW,
     TOKENS_PER_MESSAGE_OVERHEAD,
 )
 
@@ -161,8 +160,14 @@ class ContextWindowManager:
     Mirrors BudgetTracker pattern from helpers.py.
     """
 
-    def __init__(self, context_window: int | None = None) -> None:
-        raw_limit = context_window or DEFAULT_CONTEXT_WINDOW
+    def __init__(self, context_window: int) -> None:
+        if (
+            isinstance(context_window, bool)
+            or not isinstance(context_window, int)
+            or context_window <= 0
+        ):
+            raise ValueError("context_window must be a positive integer from ModelSpec")
+        raw_limit = context_window
         # Reserve a fraction for model output
         self._effective_limit = int(raw_limit * (1.0 - CONTEXT_RESERVE_FOR_OUTPUT))
         self._current_tokens: int = 0

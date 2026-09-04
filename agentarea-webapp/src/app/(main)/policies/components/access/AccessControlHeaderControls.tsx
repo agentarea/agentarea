@@ -15,7 +15,7 @@ export default function AccessControlHeaderControls() {
 
   return (
     <Button size="sm" className="shrink-0 gap-2" onClick={handleClick}>
-      <Plus className="h-4 w-4" />
+      <Plus />
       New rule
     </Button>
   );

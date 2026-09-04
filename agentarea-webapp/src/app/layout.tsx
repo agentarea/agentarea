@@ -10,6 +10,7 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 import ConditionalLayout from "@/components/ConditionalLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { getWorkspaceContext } from "@/lib/workspace-context";
 
 const sharedMetadata: Omit<Metadata, "metadataBase"> = {
   title: {
@@ -105,6 +106,11 @@ export default async function RootLayout({
     sidebarCookie !== undefined ? sidebarCookie === "true" : true;
   const session = await getServerSession();
   const runtimeConfig = getRuntimeConfig();
+  // Anonymous visitors (landing, auth) have no workspaces to switch between,
+  // and listing them would provision a personal workspace for nobody.
+  const { workspaces, active } = session
+    ? await getWorkspaceContext()
+    : { workspaces: [], active: null };
 
   return (
     <html lang={locale} suppressHydrationWarning className={inter.variable}>
@@ -120,7 +126,11 @@ export default async function RootLayout({
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <NextIntlClientProvider>
               <NuqsAdapter>
-                <ConditionalLayout sidebarDefaultOpen={sidebarDefaultOpen}>
+                <ConditionalLayout
+                  sidebarDefaultOpen={sidebarDefaultOpen}
+                  workspaces={workspaces}
+                  activeWorkspaceSlug={active?.slug ?? null}
+                >
                   {children}
                 </ConditionalLayout>
               </NuqsAdapter>

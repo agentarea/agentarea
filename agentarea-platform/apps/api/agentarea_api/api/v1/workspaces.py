@@ -54,9 +54,11 @@ def get_workspace_service(session: SessionDep, user: UserContextDep) -> Workspac
         Seeds the baseline governance policy row and the authorization graph
         (creator as admin, default root project). Fires for both personal
         (``ensure_personal``) and shared workspaces. Scoped to the new workspace
-        (not the caller's current one) so rows land in the right place. Never
-        propagates failures — a workspace must still be created even if seeding
-        hiccups — but logs loudly.
+        (not the caller's current one) so rows land in the right place.
+
+        Governance provisioning is part of workspace admission and therefore
+        fails closed. A workspace without a runtime baseline must not appear
+        ready and later execute under weaker implicit settings.
         """
         try:
             ctx = UserContext(user_id=user.user_id, workspace_id=workspace.id)
@@ -67,6 +69,7 @@ def get_workspace_service(session: SessionDep, user: UserContextDep) -> Workspac
         except Exception:
             logger.exception("failed to seed default policies for workspace %s", workspace.id)
             await session.rollback()
+            raise
         try:
             await seed_workspace(
                 workspace_id=workspace.id,
@@ -88,7 +91,11 @@ class WorkspaceResponse(BaseModel):
     id: str
     slug: str
     name: str
-    type: str
+    # A workspace auto-provisioned for one user reuses that user's id, so
+    # ``id == owner_user_id`` is what makes it personal. Sent instead of a
+    # ``type`` field so the client derives the fact rather than trusting a
+    # second copy of it.
+    owner_user_id: str
 
 
 class CreateWorkspaceBody(BaseModel):
@@ -131,7 +138,10 @@ async def create_workspace(
         ) from exc
 
     return WorkspaceResponse(
-        id=workspace.id, slug=workspace.slug, name=workspace.name, type=workspace.type
+        id=workspace.id,
+        slug=workspace.slug,
+        name=workspace.name,
+        owner_user_id=workspace.owner_user_id,
     )
 
 
@@ -155,4 +165,7 @@ async def list_workspaces(
         email=user.email,
         member_workspace_ids=member_workspace_ids,
     )
-    return [WorkspaceResponse(id=w.id, slug=w.slug, name=w.name, type=w.type) for w in workspaces]
+    return [
+        WorkspaceResponse(id=w.id, slug=w.slug, name=w.name, owner_user_id=w.owner_user_id)
+        for w in workspaces
+    ]

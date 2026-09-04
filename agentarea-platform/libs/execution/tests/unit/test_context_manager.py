@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+from agentarea_execution.workflows.constants import (
+    CONTEXT_COMPACT_THRESHOLD,
+    CONTEXT_RESERVE_FOR_OUTPUT,
+    CONTEXT_WARNING_THRESHOLD,
+)
 from agentarea_execution.workflows.context_manager import (
     ContextWindowManager,
     estimate_tokens,
@@ -9,13 +15,6 @@ from agentarea_execution.workflows.context_manager import (
     find_compaction_boundary,
     validate_tool_pairs,
 )
-from agentarea_execution.workflows.constants import (
-    CONTEXT_COMPACT_THRESHOLD,
-    CONTEXT_RESERVE_FOR_OUTPUT,
-    CONTEXT_WARNING_THRESHOLD,
-    DEFAULT_CONTEXT_WINDOW,
-)
-
 
 # ---------------------------------------------------------------------------
 # estimate_tokens
@@ -118,7 +117,13 @@ class TestValidateToolPairs:
             {
                 "role": "assistant",
                 "content": None,
-                "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "foo", "arguments": "{}"}}],
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "foo", "arguments": "{}"},
+                    }
+                ],
             },
             {"role": "tool", "tool_call_id": "call_1", "content": "result"},
         ]
@@ -144,8 +149,16 @@ class TestValidateToolPairs:
             {
                 "role": "assistant",
                 "tool_calls": [
-                    {"id": "call_1", "type": "function", "function": {"name": "a", "arguments": "{}"}},
-                    {"id": "call_2", "type": "function", "function": {"name": "b", "arguments": "{}"}},
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "a", "arguments": "{}"},
+                    },
+                    {
+                        "id": "call_2",
+                        "type": "function",
+                        "function": {"name": "b", "arguments": "{}"},
+                    },
                 ],
             },
             {"role": "tool", "tool_call_id": "call_1", "content": "r1"},
@@ -158,7 +171,13 @@ class TestValidateToolPairs:
         messages = [
             {
                 "role": "assistant",
-                "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "a", "arguments": "{}"}}],
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "a", "arguments": "{}"},
+                    }
+                ],
             },
             {"role": "tool", "tool_call_id": "call_1", "content": "r1"},
             {"role": "tool", "tool_call_id": "call_orphan", "content": "r2"},
@@ -208,7 +227,13 @@ class TestFindCompactionBoundary:
             {"role": "user", "content": "u2"},
             {
                 "role": "assistant",
-                "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "f", "arguments": "{}"}}],
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "f", "arguments": "{}"},
+                    }
+                ],
             },
             {"role": "tool", "tool_call_id": "call_1", "content": "result"},
             {"role": "assistant", "content": "done"},
@@ -218,7 +243,7 @@ class TestFindCompactionBoundary:
         boundary = find_compaction_boundary(messages, keep_recent=3)
         if boundary > 0:
             # The kept suffix must still pass validate_tool_pairs
-            kept = [messages[0]] + messages[boundary:]
+            kept = [messages[0], *messages[boundary:]]
             assert validate_tool_pairs(kept) is True
 
     def test_keeps_recent_messages(self):
@@ -235,10 +260,14 @@ class TestFindCompactionBoundary:
 
 
 class TestContextWindowManager:
-    def test_default_context_window(self):
-        mgr = ContextWindowManager()
-        expected_limit = int(DEFAULT_CONTEXT_WINDOW * (1.0 - CONTEXT_RESERVE_FOR_OUTPUT))
-        assert mgr._effective_limit == expected_limit
+    def test_context_window_is_required(self):
+        with pytest.raises(TypeError):
+            ContextWindowManager()  # type: ignore[call-arg]
+
+    @pytest.mark.parametrize("value", [0, -1, None, True])
+    def test_context_window_must_be_positive_integer(self, value):
+        with pytest.raises(ValueError, match="positive integer"):
+            ContextWindowManager(context_window=value)  # type: ignore[arg-type]
 
     def test_custom_context_window(self):
         mgr = ContextWindowManager(context_window=200000)
@@ -287,7 +316,7 @@ class TestContextWindowManager:
         assert mgr.should_warn() is True
 
     def test_compaction_count(self):
-        mgr = ContextWindowManager()
+        mgr = ContextWindowManager(context_window=100000)
         assert mgr.compaction_count == 0
         mgr.mark_compacted()
         mgr.mark_compacted()

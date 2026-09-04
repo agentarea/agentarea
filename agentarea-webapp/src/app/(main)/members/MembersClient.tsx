@@ -206,7 +206,7 @@ export default function MembersClient({
             </p>
           </div>
           <Button size="sm" className="gap-1.5" onClick={openInvite}>
-            <UserPlus className="h-4 w-4" />
+            <UserPlus />
             {t("invitePeople")}
           </Button>
         </div>
@@ -270,9 +270,9 @@ export default function MembersClient({
                           onClick={() => handleRemove(m.user_id)}
                         >
                           {isPending && busyId === m.user_id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Loader2 className="animate-spin" />
                           ) : (
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 />
                           )}
                           <span className="ml-1">
                             {isSelf ? t("leave") : t("remove")}
@@ -342,9 +342,9 @@ export default function MembersClient({
                         onClick={() => handleRevoke(inv.id)}
                       >
                         {isPending && busyId === inv.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Loader2 className="animate-spin" />
                         ) : (
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 />
                         )}
                         <span className="ml-1">{t("revoke")}</span>
                       </Button>
@@ -378,9 +378,9 @@ export default function MembersClient({
                   onClick={handleCopy}
                 >
                   {copied ? (
-                    <Check className="h-4 w-4 text-green-600" />
+                    <Check className="text-green-600" />
                   ) : (
-                    <Copy className="h-4 w-4" />
+                    <Copy />
                   )}
                 </Button>
               </div>
@@ -420,7 +420,7 @@ export default function MembersClient({
               <Button onClick={() => setInviteOpen(false)}>{t("done")}</Button>
             ) : (
               <Button onClick={handleCreate} disabled={isPending}>
-                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isPending && <Loader2 className="mr-2 animate-spin" />}
                 {t("createInvite")}
               </Button>
             )}

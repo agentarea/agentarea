@@ -4,12 +4,13 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, LayoutDashboard, Package } from "lucide-react";
+import { Activity, Files, LayoutDashboard, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { key: "", icon: LayoutDashboard, labelKey: "overview" },
   { key: "events", icon: Activity, labelKey: "events" },
+  { key: "files", icon: Files, labelKey: "files" },
   { key: "artifacts", icon: Package, labelKey: "artifacts" },
 ];
 

@@ -43,11 +43,12 @@ def _build_service(session, user_ctx, event_broker, secret_mgr):
     display_name="LLM Providers",
     description="Manage LLM provider specs and configurations.",
     category="platform",
+    plane="build",
 )
 class ProvidersToolset(Toolset):
     """Manage LLM providers: list specs, list/create/update/delete configurations."""
 
-    @tool_method
+    @tool_method(effect="read")
     async def list_specs(self) -> str:
         """List available LLM provider specifications (e.g. OpenAI, Anthropic)."""
         async with platform_context() as (
@@ -64,7 +65,7 @@ class ProvidersToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="read")
     async def list_configs(self) -> str:
         """List configured LLM provider connections."""
         async with platform_context() as (
@@ -89,7 +90,7 @@ class ProvidersToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="privileged")
     async def create_config(
         self,
         provider_spec_id: str,
@@ -123,7 +124,7 @@ class ProvidersToolset(Toolset):
             )
             return json.dumps({"id": str(config.id), "name": config.name}, default=str)
 
-    @tool_method
+    @tool_method(effect="privileged")
     async def update_config(
         self,
         config_id: str,
@@ -166,7 +167,7 @@ class ProvidersToolset(Toolset):
                 return json.dumps({"error": "Provider configuration not found"})
             return json.dumps({"id": str(config.id), "name": config.name}, default=str)
 
-    @tool_method
+    @tool_method(effect="destructive")
     async def delete_config(self, config_id: str) -> str:
         """Delete a provider configuration."""
         async with platform_context() as (

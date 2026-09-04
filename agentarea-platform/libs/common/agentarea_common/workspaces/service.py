@@ -13,8 +13,6 @@ from .models import (
     INVITATION_STATUS_ACCEPTED,
     INVITATION_STATUS_PENDING,
     INVITATION_STATUS_REVOKED,
-    WORKSPACE_TYPE_PERSONAL,
-    WORKSPACE_TYPE_SHARED,
     Workspace,
     WorkspaceInvitation,
 )
@@ -166,7 +164,6 @@ class WorkspaceService:
             lambda slug: Workspace(
                 id=user_id,
                 slug=slug,
-                type=WORKSPACE_TYPE_PERSONAL,
                 name="Personal",
                 owner_user_id=user_id,
             ),
@@ -186,7 +183,6 @@ class WorkspaceService:
             lambda slug: Workspace(
                 id=str(uuid4()),
                 slug=slug,
-                type=WORKSPACE_TYPE_SHARED,
                 name=name,
                 owner_user_id=owner_user_id,
             ),

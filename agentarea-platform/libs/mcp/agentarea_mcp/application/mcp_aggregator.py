@@ -8,6 +8,7 @@ a Project bundle, or a standalone compound.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 from collections.abc import Callable
@@ -44,6 +45,14 @@ class AggregatedMember:
     order: int = 0
     namespace_prefix: str | None = None
     config: dict = field(default_factory=dict)
+    # Transport declared by the instance's spec. Without it every discovery
+    # re-probes by URL suffix, and a wrong first candidate costs a full connect
+    # timeout — on every tools/list, not once.
+    transport: str | None = None
+    # Tools verification already discovered and persisted on the instance row.
+    # None means "nothing stored yet" (never verified) and falls back to a live
+    # listing; an empty list is a real answer and is honoured as one.
+    tools: list[dict[str, Any]] | None = None
 
 
 class MCPAggregatorProxy:
@@ -67,14 +76,14 @@ class MCPAggregatorProxy:
         self._server: FastMCP | None = None
 
     @staticmethod
-    def _streamable_candidates(url: str) -> list[str]:
+    def _streamable_candidates(url: str, transport: str | None = None) -> list[str]:
         """Ordered streamable-HTTP URLs to try for a member, via the shared resolver.
 
         Honors the URL as-given first (root-streamable remotes like Vercel), then
         /mcp. The aggregator speaks streamable-HTTP only, so an sse-suffixed member
         URL is best-effort mapped to its /mcp sibling.
         """
-        streamable_urls, _ = mcp_transport_candidates(url)
+        streamable_urls, _ = mcp_transport_candidates(url, transport)
         if streamable_urls:
             return streamable_urls
         base = url.rstrip("/")
@@ -88,7 +97,32 @@ class MCPAggregatorProxy:
             return name.lower().replace(" ", "_").replace("-", "_")
         return str(member.mcp_instance_id)[:8]
 
+    def _candidates_for(self, member: AggregatedMember, url: str) -> list[str]:
+        return self._streamable_candidates(url, member.transport)
+
     async def _discover_member_tools(self, member: AggregatedMember) -> list[dict[str, Any]]:
+        """Tools for a member, preferring what verification already stored.
+
+        Listing upstream is a full session per member per call — ~15s against
+        prod for one member — and it re-derives what the instance row already
+        holds. The stored copy moves when the instance is verified or refreshed,
+        which is also what the instance page shows.
+        """
+        if member.tools is not None:
+            return [
+                {
+                    "name": tool.get("name", ""),
+                    "description": tool.get("description", "") or "",
+                    "inputSchema": tool.get("inputSchema") or {"type": "object"},
+                }
+                for tool in member.tools
+                if tool.get("name")
+            ]
+        return await self._discover_member_tools_upstream(member)
+
+    async def _discover_member_tools_upstream(
+        self, member: AggregatedMember
+    ) -> list[dict[str, Any]]:
         instance_id = str(member.mcp_instance_id)
         mcp_url = self.instance_urls.get(instance_id)
         if not mcp_url:
@@ -96,7 +130,7 @@ class MCPAggregatorProxy:
             return []
         headers = self.instance_headers.get(instance_id) or None
         last_err: BaseException | None = None
-        for candidate in self._streamable_candidates(mcp_url):
+        for candidate in self._candidates_for(member, mcp_url):
             try:
                 async with streamablehttp_client(
                     candidate, timeout=timedelta(seconds=10), headers=headers
@@ -134,7 +168,7 @@ class MCPAggregatorProxy:
         if not mcp_url:
             raise ValueError(f"No URL for member instance {instance_id}")
         headers = self.instance_headers.get(instance_id) or None
-        candidates = self._streamable_candidates(mcp_url)
+        candidates = self._candidates_for(member, mcp_url)
         last_err: BaseException | None = None
         for idx, candidate in enumerate(candidates):
             try:
@@ -226,10 +260,17 @@ class MCPAggregatorProxy:
         Used by the dynamically-scoped client endpoint, which drives the MCP
         protocol itself instead of minting a standalone FastMCP server.
         """
+        # One network round trip per member, so fan out: serialising them makes
+        # a bundle cost the sum of its members, and a harness pays that on every
+        # session start. gather keeps the member order of the results.
+        discovered = await asyncio.gather(
+            *(self._discover_member_tools(member) for member in self.members)
+        )
+
         aggregated: list[dict[str, Any]] = []
-        for member in self.members:
+        for member, tools in zip(self.members, discovered, strict=True):
             namespace = self._get_namespace(member)
-            for tool in await self._discover_member_tools(member):
+            for tool in tools:
                 aggregated.append(
                     {
                         "name": f"{namespace}{NS_SEP}{tool['name']}",

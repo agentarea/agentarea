@@ -225,7 +225,7 @@ def create_app() -> FastAPI:
     # Create MCP server — stateless_http=True means no session tracking
     # between requests, but the task group still needs to be initialised
     # via session_manager.run() in the lifespan.
-    from agentarea_agents_sdk.mcp_server import create_mcp_server
+    from agentarea_agents_sdk.mcp_server import create_mcp_server, mount_mcp_app
     from agentarea_agents_sdk.mcp_server.auth import MCPAuthMiddleware
     from agentarea_agents_sdk.tools.base_tool import BaseTool
     from agentarea_agents_sdk.tools.decorator_tool import Toolset
@@ -339,8 +339,10 @@ def create_app() -> FastAPI:
     # Auth: Hydra OAuth tokens (Cursor/Claude Desktop), API keys, Kratos JWT.
     # Session manager lifespan is run in _lifespan (above) so the task group
     # is guaranteed to be initialised before any request reaches the handler.
-    app.mount("/mcp", _mcp_app)
-    app.mount("/client-mcp", _client_mcp_app)
+    # mount_mcp_app, not app.mount: the bare /mcp form is the resource identifier
+    # we advertise, so it has to be served rather than redirected to /mcp/.
+    mount_mcp_app(app, "/mcp", _mcp_app)
+    mount_mcp_app(app, "/client-mcp", _client_mcp_app)
 
     from agentarea_api.tools import get_platform_tools
 
@@ -356,9 +358,21 @@ def create_app() -> FastAPI:
     # domain exception stays free of web concerns; the composition layer renders
     # it via the shared problem+json helper, surfacing the numbers so the UI can
     # show "you've spent $X of $Y, raise the cap or wait".
+    from agentarea_agents.application.agent_service import InvalidModelIdError
     from agentarea_common.exceptions import problem_response
     from agentarea_tasks.domain.exceptions import BudgetCapExceededError
     from fastapi import Request
+
+    # A model_id the runtime cannot resolve is a client mistake, not a server
+    # fault: the service rejects it on write so it can no longer surface as a
+    # workflow failure hours later.
+    @app.exception_handler(InvalidModelIdError)
+    async def _invalid_model_id_handler(_request: Request, exc: InvalidModelIdError):
+        return problem_response(
+            status_code=400,
+            code="invalid_model_id",
+            detail=str(exc),
+        )
 
     @app.exception_handler(BudgetCapExceededError)
     async def _budget_cap_exceeded_handler(_request: Request, exc: BudgetCapExceededError):

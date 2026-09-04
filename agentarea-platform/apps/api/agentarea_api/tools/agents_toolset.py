@@ -29,11 +29,12 @@ def _build_service(repo_factory, event_broker) -> AgentService:
     display_name="Agent Management",
     description="Create, list, update, and delete agents in the workspace.",
     category="platform",
+    plane="build",
 )
 class AgentsToolset(Toolset):
     """Manage agents: list, get, create, update, delete."""
 
-    @tool_method
+    @tool_method(effect="read")
     async def list(self, limit: int = 50, offset: int = 0) -> str:
         """List all agents in the workspace."""
         async with platform_read_context() as (_s, _u, repo_factory, event_broker, _):
@@ -44,7 +45,7 @@ class AgentsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="read")
     async def get(self, agent_id: str) -> str:
         """Get agent details by ID."""
         async with platform_read_context() as (_s, _u, repo_factory, event_broker, _):
@@ -64,7 +65,7 @@ class AgentsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="write")
     async def create(
         self,
         name: str,
@@ -86,7 +87,7 @@ class AgentsToolset(Toolset):
             agent = await service.create_agent(payload)
             return json.dumps({"id": str(agent.id), "name": agent.name}, default=str)
 
-    @tool_method
+    @tool_method(effect="write")
     async def update(
         self,
         agent_id: str,
@@ -114,7 +115,7 @@ class AgentsToolset(Toolset):
                 return json.dumps({"error": "Agent not found"})
             return json.dumps({"id": str(agent.id), "name": agent.name}, default=str)
 
-    @tool_method
+    @tool_method(effect="destructive")
     async def delete(self, agent_id: str) -> str:
         """Delete an agent by ID."""
         async with platform_context() as (_s, _u, repo_factory, event_broker, _):

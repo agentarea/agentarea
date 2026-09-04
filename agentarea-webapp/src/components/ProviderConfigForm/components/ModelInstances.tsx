@@ -230,7 +230,7 @@ export default function ModelInstances({
                 : t("testAndDiscoverTooltip")
             }
           >
-            <RefreshCw className={`h-3 w-3 ${isDiscovering ? "animate-spin" : ""}`} />
+            <RefreshCw className={isDiscovering ? "animate-spin" : ""} />
             {isDiscovering
               ? t("discovering")
               : providerConfigId

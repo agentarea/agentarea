@@ -21,7 +21,6 @@ class ClientService:
             name=payload.name,
             description=payload.description,
             kind=payload.kind,
-            source_project_id=payload.source_project_id,
         )
 
     async def update_client(self, client_id: UUID | str, payload: ClientUpdate) -> Client | None:
@@ -36,13 +35,6 @@ class ClientService:
 
     async def delete(self, client_id: UUID | str) -> bool:
         return await self.repository.delete(client_id)
-
-    async def set_source_project(
-        self, client_id: UUID | str, project_id: UUID | str | None
-    ) -> Client | None:
-        return await self.repository.update(
-            client_id, source_project_id=str(project_id) if project_id else None
-        )
 
     # --- Skill associations ---
 

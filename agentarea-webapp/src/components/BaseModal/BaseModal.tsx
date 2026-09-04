@@ -166,7 +166,7 @@ export default function BaseModal({
             variant={type === "delete" ? "destructive" : "default"}
           >
             {type === "delete" ? tCommon("delete") : tCommon("confirm")}
-            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isLoading && <Loader2 className="animate-spin" />}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -411,9 +411,9 @@ export default function SkillDetailPage() {
                 disabled={installing}
               >
                 {installing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 animate-spin" />
                 ) : (
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="mr-2" />
                 )}
                 {installing ? tDetail("installing") : tDetail("customize")}
               </Button>
@@ -426,9 +426,9 @@ export default function SkillDetailPage() {
                   disabled={!hasChanges || saving}
                 >
                   {saving ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-2 animate-spin" />
                   ) : (
-                    <Save className="mr-2 h-4 w-4" />
+                    <Save className="mr-2" />
                   )}
                   {tDetail("save")}
                 </Button>
@@ -469,9 +469,9 @@ export default function SkillDetailPage() {
                       disabled={saving}
                     >
                       {saving ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="mr-2 animate-spin" />
                       ) : (
-                        <Save className="mr-2 h-4 w-4" />
+                        <Save className="mr-2" />
                       )}
                       {tDetail("save")}
                     </Button>
@@ -486,9 +486,9 @@ export default function SkillDetailPage() {
                       disabled={installing}
                     >
                       {installing ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="mr-2 animate-spin" />
                       ) : (
-                        <Plus className="mr-2 h-4 w-4" />
+                        <Plus className="mr-2" />
                       )}
                       {installing
                         ? tDetail("installing")
@@ -602,7 +602,7 @@ export default function SkillDetailPage() {
               variant="outline"
               onClick={() => setShowAddChildDialog(true)}
             >
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              <Plus className="mr-1.5" />
               Add Child Skill
             </Button>
           </div>
@@ -625,9 +625,9 @@ export default function SkillDetailPage() {
                     disabled={removingChildId === child.id}
                   >
                     {removingChildId === child.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <Loader2 className="animate-spin" />
                     ) : (
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      <Trash2 className="text-destructive" />
                     )}
                   </Button>
                 </li>
@@ -675,7 +675,7 @@ export default function SkillDetailPage() {
               disabled={!addingChildId || isAddingChild}
             >
               {isAddingChild ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 animate-spin" />
               ) : null}
               Add
             </Button>

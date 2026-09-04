@@ -56,21 +56,3 @@ export interface UnifiedConnection {
   original: MCPInstance | OpenAPIConnection;
 }
 
-/**
- * Health check result for MCP instances
- */
-export interface HealthCheck {
-  service_name: string;
-  slug: string;
-  url: string;
-  healthy: boolean;
-  http_reachable: boolean;
-  response_time_ms: number;
-  error?: string;
-}
-
-/**
- * Health status type
- */
-export type HealthStatus = "healthy" | "unhealthy" | "starting" | "connected" | "unknown";
-

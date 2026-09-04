@@ -48,3 +48,33 @@ async def test_user_without_use_relation_is_denied(monkeypatch):
 
     with pytest.raises(ClientAccessDeniedError):
         await _authorize_client_access(_ctx(), CLIENT_ID)
+
+
+class TestTransportSecurity:
+    """Host validation belongs to the ingress, not to this mount.
+
+    FastMCP turns DNS-rebinding protection on by default with an empty
+    ``allowed_hosts``, which rejects every Host header with 421. The platform
+    ``/mcp`` server opts out explicitly because it runs behind a reverse proxy;
+    ``/client-mcp`` is the same deployment and must agree, or an authenticated
+    harness gets 421 on every call once it finally has a token.
+    """
+
+    def test_dns_rebinding_protection_is_disabled(self):
+        from agentarea_api.api.v1.client_mcp import client_mcp_server
+
+        security = client_mcp_server.settings.transport_security
+
+        assert security is not None
+        assert security.enable_dns_rebinding_protection is False
+
+    def test_agrees_with_the_platform_mcp_mount(self):
+        from agentarea_agents_sdk.mcp_server import create_mcp_server
+        from agentarea_api.api.v1.client_mcp import client_mcp_server
+
+        platform = create_mcp_server(toolsets=[], name="probe")
+
+        assert (
+            client_mcp_server.settings.transport_security.enable_dns_rebinding_protection
+            is platform.settings.transport_security.enable_dns_rebinding_protection
+        )

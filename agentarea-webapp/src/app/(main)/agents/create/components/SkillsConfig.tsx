@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import Note from "@/components/ui/note";
 import { listSkillsAction as listSkills } from "@/lib/server-actions";
 import type { AgentSkill } from "../types";
-import AccordionControl from "./AccordionControl";
-import ConfigSheet from "./ConfigSheet";
+import AccordionControl from "@/components/AccordionControl";
+import ConfigSheet from "@/components/ConfigSheet";
 import { SelectableList } from "@/components/SelectableList";
 
 type SkillsConfigProps = {
@@ -159,7 +159,7 @@ const SkillsConfig = ({
                         className="h-4 w-4 flex-shrink-0 text-muted-foreground/60 hover:bg-transparent hover:text-red-500"
                         aria-label="Remove Skill"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 />
                       </Button>
                     </div>
                   }

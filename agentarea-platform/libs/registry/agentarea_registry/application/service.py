@@ -26,8 +26,10 @@ import yaml
 from agentarea_common.utils.slug import generate_slug
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
 
+from agentarea_registry.application.catalog_facets import apply_facets, derive_facets
 from agentarea_registry.domain.models import Registry, RegistryItem
 from agentarea_registry.infrastructure.repository import (
+    DEFAULT_CATALOG_SORT,
     RegistryItemRepository,
     RegistryRepository,
 )
@@ -127,6 +129,32 @@ class RegistryService:
     ) -> list[RegistryItem]:
         return await self.item_repo.list_by_registry(registry_id, limit=limit, offset=offset)
 
+    async def browse_catalog(
+        self,
+        registry_type: str,
+        query: str | None = None,
+        category: str | None = None,
+        sort: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[RegistryItem], int, list[tuple[str, int]]]:
+        """One page of a type's catalog, its total, and the category facets.
+
+        Backs the /explore gallery. All three come from the same filter so the
+        page, the "is there more" signal and the sidebar counts can never
+        disagree with each other.
+        """
+        items, total = await self.item_repo.browse(
+            registry_type=registry_type,
+            q=query,
+            category=category,
+            sort=sort or DEFAULT_CATALOG_SORT,
+            limit=limit,
+            offset=offset,
+        )
+        categories = await self.item_repo.category_counts(registry_type, q=query)
+        return items, total, categories
+
     async def search_catalog(
         self,
         query: str | None = None,
@@ -172,6 +200,10 @@ class RegistryService:
                     for field in ("name", "description", "spec", "tags"):
                         if field in item_data:
                             setattr(existing, field, item_data[field])
+                    # Browse facets are derived from the fields just overwritten,
+                    # so they have to be recomputed or the catalog keeps sorting
+                    # and faceting this item by what it used to be.
+                    apply_facets(existing, registry.registry_type)
 
                     new_version = item_data.get("version") or "latest"
                     existing.version = new_version
@@ -193,6 +225,12 @@ class RegistryService:
                                 registry.registry_type, existing, registry_url=registry.source_url
                             )
                 else:
+                    facets = derive_facets(
+                        registry.registry_type,
+                        item_data["name"],
+                        item_data.get("spec", {}),
+                        item_data.get("tags", []),
+                    )
                     item = await self.item_repo.create(
                         registry_id=registry_id,
                         external_id=item_data["external_id"],
@@ -201,6 +239,9 @@ class RegistryService:
                         version=item_data.get("version"),
                         spec=item_data.get("spec", {}),
                         tags=item_data.get("tags", []),
+                        category=facets.category,
+                        sort_key=facets.sort_key,
+                        featured=facets.featured,
                     )
                     entity_id = await self._create_entity(
                         registry.registry_type, item, registry_url=registry.source_url
@@ -497,12 +538,25 @@ class RegistryService:
             raise ValueError(
                 f"Provider '{spec['provider_key']}' not found; sync llm_providers registry first"
             )
+        context_window = spec.get("context_window")
+        if (
+            isinstance(context_window, bool)
+            or not isinstance(context_window, int)
+            or context_window <= 0
+        ):
+            raise ValueError(
+                f"Model '{spec['model_name']}' has no explicit positive context_window"
+            )
+        if spec.get("input_cost_per_token") is None:
+            raise ValueError(f"Model '{spec['model_name']}' has no explicit input_cost_per_token")
+        if spec.get("output_cost_per_token") is None:
+            raise ValueError(f"Model '{spec['model_name']}' has no explicit output_cost_per_token")
         model = await self.model_spec_repo.upsert_by_provider_and_model_kwargs(
             provider_spec_id=provider.id,
             model_name=spec["model_name"],
             display_name=item.name,
             description=item.description,
-            context_window=spec.get("context_window", 4096),
+            context_window=context_window,
             max_output_tokens=spec.get("max_output_tokens"),
             input_cost_per_token=spec.get("input_cost_per_token"),
             output_cost_per_token=spec.get("output_cost_per_token"),
@@ -584,22 +638,47 @@ class RegistryService:
 
     @staticmethod
     def _parse_mcp_servers(data: dict[str, Any]) -> list[dict[str, Any]]:
-        """Parse MCP servers from the standard registry format.
+        """Parse MCP servers from an official or AgentArea registry artifact.
 
         Standard format (registry.modelcontextprotocol.io):
             {"servers": [{"server": {"name": ..., "remotes": [...], "packages": [...]}, "_meta": {...}}]}
+
+        AgentArea flattened format (published system catalog):
+            {"servers": [{"registry_id": ..., "connection_type": ..., "json_spec": {...}}]}
         """
         servers = data.get("servers", [])
         if not servers:
             return []
 
-        first = servers[0]
-        if "server" not in first:
+        formats: set[str] = set()
+        for index, entry in enumerate(servers):
+            if not isinstance(entry, dict):
+                raise ValueError(
+                    "Unrecognized MCP registry format: each entry of 'servers' must be a mapping "
+                    f"(entry {index} is {type(entry).__name__})"
+                )
+            if isinstance(entry.get("server"), dict):
+                formats.add("standard")
+            elif (
+                isinstance(entry.get("registry_id"), str)
+                and isinstance(entry.get("connection_type"), str)
+                and isinstance(entry.get("json_spec"), dict)
+            ):
+                formats.add("agentarea")
+            else:
+                raise ValueError(
+                    "Unrecognized MCP registry format: each entry of 'servers' must contain either "
+                    "a mapping 'server' key or the AgentArea keys 'registry_id', "
+                    f"'connection_type', and 'json_spec' (entry {index} keys: {sorted(entry)})"
+                )
+
+        if len(formats) != 1:
             raise ValueError(
-                "Unrecognized MCP registry format: each entry of 'servers' must contain a "
-                f"'server' key (got keys: {sorted(first)})"
+                "Unrecognized MCP registry format: official and AgentArea entries cannot be mixed"
             )
-        return RegistryService._parse_standard_mcp_registry(servers)
+        if "standard" in formats:
+            return RegistryService._parse_standard_mcp_registry(servers)
+        return RegistryService._parse_agentarea_mcp_registry(servers)
 
     @staticmethod
     def _parse_standard_mcp_registry(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -746,6 +825,44 @@ class RegistryService:
         return items
 
     @staticmethod
+    def _parse_agentarea_mcp_registry(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Parse the normalized format published by the AgentArea catalog pipeline."""
+        items = []
+        for entry in servers:
+            external_id = entry["registry_id"]
+            connection_type = entry["connection_type"]
+            json_spec = entry["json_spec"]
+
+            item_external_id = (
+                f"{external_id}/{connection_type}" if connection_type != "url" else external_id
+            )
+
+            tags = []
+            if entry.get("package_registry"):
+                tags.append(entry["package_registry"])
+            if entry.get("requires_auth"):
+                tags.append("requires-auth")
+            transport = entry.get("transport") or json_spec.get("transport", "")
+            if transport:
+                tags.append(transport)
+
+            spec = {**json_spec, "connection_type": connection_type}
+            if entry.get("env_schema"):
+                spec["env_schema"] = entry["env_schema"]
+
+            items.append(
+                {
+                    "external_id": item_external_id,
+                    "name": entry.get("name") or external_id,
+                    "description": (entry.get("description") or "")[:500],
+                    "version": entry.get("version") or "latest",
+                    "spec": spec,
+                    "tags": tags,
+                }
+            )
+        return items
+
+    @staticmethod
     def _parse_skills(data: dict[str, Any]) -> list[dict[str, Any]]:
         skills = data.get("skills", [])
         items = []
@@ -812,7 +929,7 @@ class RegistryService:
                     "spec": {
                         "provider_key": provider_key,
                         "model_name": model_name,
-                        "context_window": entry.get("context_window", 4096),
+                        "context_window": entry.get("context_window"),
                         "max_output_tokens": entry.get("max_output_tokens"),
                         "input_cost_per_token": entry.get("input_cost_per_token"),
                         "output_cost_per_token": entry.get("output_cost_per_token"),

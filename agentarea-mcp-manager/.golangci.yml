@@ -43,6 +43,14 @@ linters:
       - common-false-positives
       - legacy
       - std-error-handling
+    rules:
+      # A test's branch count measures how many cases it covers, not how
+      # tangled it is: a stub server that answers every route of a provider
+      # contract, or a table with thirty rows, is exactly what we want. Keep
+      # gocyclo pointed at production control flow, where it means something.
+      - path: _test\.go
+        linters:
+          - gocyclo
     paths:
       - vendor
       - third_party$

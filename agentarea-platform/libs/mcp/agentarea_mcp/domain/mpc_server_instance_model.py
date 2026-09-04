@@ -1,10 +1,9 @@
-from datetime import datetime
 from importlib import import_module
 from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,12 +27,6 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         JSON, nullable=False, default=lambda: dict(DEFAULT_VERIFICATION)
     )
     last_dispatch: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
-    # Stamped by the MCP proxy on each call so the control plane can tell an
-    # idle instance from a busy one. Lazy provisioning starts instances on
-    # demand but nothing stopped them, so they accumulated and ran forever.
-    last_used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, default=None
-    )
     tools: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
     network_scope: Mapped[str] = mapped_column(String(20), nullable=False, default="private")
     auth_config_id: Mapped[UUID | None] = mapped_column(
@@ -70,24 +63,23 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
 
     @property
     def endpoint_url(self) -> str:
+        """The directly addressable endpoint, which only URL-type servers have.
+
+        Container-backed servers deliberately have none. Their address is owned
+        by the Go manager gateway, which is the single boundary that starts them
+        on demand, holds a request lease for the call, and reaps them when idle.
+        Reconstructing a workload address here — as this property used to, from
+        the manager's `mcp-<id>` naming scheme — bypasses all three, so it fails
+        loudly instead of handing back an address that must not be used.
+        """
         instance_type = self.json_spec.get("type") or self.json_spec.get("server_type", "")
         if instance_type == "url":
             return self.json_spec.get("endpoint_url", "")
-        if instance_type in ("docker", "command"):
-            # Prefer a full URL the Go manager returned (K8s backend reports
-            # `http://mcp-<name>.<ns>.svc.cluster.local:80`). Docker backend
-            # returns a traefik path like `/mcp/<slug>` — ignore those and fall
-            # back to the direct-container address.
-            resolved = self.json_spec.get("internal_url")
-            if isinstance(resolved, str) and "://" in resolved:
-                return resolved
-            # command type is always wrapped in mcp-bridge, which listens on
-            # 8080 regardless of json_spec.port (usually absent).
-            if instance_type == "command":
-                port = 8080
-            else:
-                port = self.json_spec.get("port") or 8000
-            return f"http://mcp-{self.id}:{port}"
+        if instance_type in ("docker", "command", "kubernetes"):
+            raise ValueError(
+                f"container-backed MCP instance {self.id} has no direct endpoint; "
+                "route the request through the manager gateway"
+            )
         raise ValueError("bundle has no endpoint_url")
 
     def get_configured_env_vars(self) -> list[str]:

@@ -12,9 +12,6 @@ INVITATION_STATUS_PENDING = "pending"
 INVITATION_STATUS_ACCEPTED = "accepted"
 INVITATION_STATUS_REVOKED = "revoked"
 
-WORKSPACE_TYPE_PERSONAL = "personal"
-WORKSPACE_TYPE_SHARED = "shared"
-
 
 class WorkspaceInvitation(BaseModel):
     """A pending or resolved invitation to join a workspace.
@@ -62,29 +59,23 @@ class WorkspaceMembership(BaseModel):
 class Workspace(BaseModel):
     """A workspace: the tenancy / isolation boundary for scoped resources.
 
-    Reifies what used to be an opaque ``workspace_id`` string into a real
-    row. Two flavours, distinguished by ``type``:
+    Reifies what used to be an opaque ``workspace_id`` string into a real row.
+    A workspace auto-provisioned for a single user reuses that user's id, so
+    data tagged with ``workspace_id == user_id`` before this table existed
+    stays valid without a backfill; one created explicitly gets a fresh uuid.
+    That is the whole distinction — it is carried by ``id`` itself and is
+    deliberately *not* mirrored into a column, which could only ever
+    contradict the id it describes.
 
-    - ``personal``: auto-provisioned per user; ``id`` equals the user's
-      id so existing data tagged with ``workspace_id == user_id`` keeps
-      working without a backfill.
-    - ``shared``: created explicitly; ``id`` is a generated uuid string.
-
-    ``id`` is a ``String`` (not BaseModel's UUID) precisely so a personal
-    workspace can reuse the user's id. No foreign keys from scoped tables
-    point here yet (additive table), and there is intentionally no
-    ``parent_org_id`` — the organization layer is deferred until billing
-    or SSO concretely require it.
+    ``id`` is a ``String`` (not BaseModel's UUID) precisely so it can reuse a
+    user id. No foreign keys from scoped tables point here yet (additive
+    table), and there is intentionally no ``parent_org_id`` — the organization
+    layer is deferred until billing or SSO concretely require it.
     """
 
     __tablename__ = "workspaces"
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
     slug: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
-    type: Mapped[str] = mapped_column(String(20), nullable=False, default=WORKSPACE_TYPE_PERSONAL)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     owner_user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-
-    @property
-    def is_personal(self) -> bool:
-        return self.type == WORKSPACE_TYPE_PERSONAL

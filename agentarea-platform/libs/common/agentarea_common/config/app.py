@@ -21,8 +21,7 @@ class AppSettings(BaseAppSettings):
     MAX_REQUEST_BODY_BYTES: int = 50 * 1024 * 1024  # 50 MB
 
     # Multipart task attachments are bounded independently so the API can
-    # reject the whole upload before workflow dispatch. The defaults permit a
-    # file larger than the retired 25 MiB inline bridge while leaving room for
+    # reject the whole upload before workflow dispatch while leaving room for
     # multipart framing under MAX_REQUEST_BODY_BYTES.
     TASK_ATTACHMENT_MAX_FILES: int = 100
     TASK_ATTACHMENT_MAX_FILE_BYTES: int = 40 * 1024 * 1024
@@ -37,6 +36,13 @@ class AppSettings(BaseAppSettings):
     API_BASE_URL: str = "http://localhost:8000"
     # AgentArea frontend URL (users are redirected here to log in if no session)
     FRONTEND_BASE_URL: str = "http://localhost:3000"
+
+    # Optional SearXNG-compatible endpoint used by agentarea/web.search_web.
+    # When unset, search attempts fail explicitly; URL fetching remains usable.
+    WEB_SEARCH_BASE_URL: str | None = None
+    # Audited service for agent-supplied URL fetches. The trusted worker never
+    # fetches those URLs directly because that would expose internal networks.
+    WEB_FETCH_BASE_URL: str | None = None
 
     # Comma-separated browser origins allowed to make credentialed CORS requests.
     # Defaults to the local frontend. NEVER "*": with allow_credentials=True a

@@ -9,32 +9,44 @@ import (
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/config"
+	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // KubernetesBackend implements the Backend interface using Kubernetes resources
 type KubernetesBackend struct {
-	client    client.Client
-	clientset kubernetes.Interface
-	config    *config.Config
-	k8sConfig *config.KubernetesConfig
-	logger    *slog.Logger
-	scheme    *runtime.Scheme
+	client       client.Client
+	clientset    kubernetes.Interface
+	config       *config.Config
+	k8sConfig    *config.KubernetesConfig
+	logger       *slog.Logger
+	scheme       *runtime.Scheme
+	taskLeaseTTL time.Duration
+	// scratchSizeLimit bounds every ephemeral volume on a spawned instance pod.
+	// Resolved once here so no code path can reach a pod with an unbounded one.
+	scratchSizeLimit resource.Quantity
+	// taskOperations fences composite task work against in-process retirement.
+	taskOperations *sandboxruntime.TaskOperationGate
 }
 
 // NewKubernetesBackend creates a new Kubernetes backend
-func NewKubernetesBackend(cfg *config.Config, logger *slog.Logger) (*KubernetesBackend, error) {
+func NewKubernetesBackend(cfg *config.Config, logger *slog.Logger, taskLeaseTTL time.Duration) (*KubernetesBackend, error) {
+	if taskLeaseTTL <= 0 {
+		return nil, fmt.Errorf("sandbox task lease TTL must be positive")
+	}
+	scratchSizeLimit, err := cfg.Kubernetes.InstancePod.ScratchSizeLimitQuantity()
+	if err != nil {
+		return nil, err
+	}
 	k8sConfig, err := resolveClusterConfig(cfg.Kubernetes.Kubeconfig, logger)
 	if err != nil {
 		return nil, err
@@ -48,13 +60,9 @@ func NewKubernetesBackend(cfg *config.Config, logger *slog.Logger) (*KubernetesB
 	if err := appsv1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add apps/v1 to scheme: %w", err)
 	}
-	if err := networkingv1.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("failed to add networking/v1 to scheme: %w", err)
-	}
-	// Add Gateway API scheme
-	if err := gatewayv1.Install(scheme); err != nil {
-		return nil, fmt.Errorf("failed to add gateway API to scheme: %w", err)
-	}
+	// Ingress and Gateway API types are deliberately absent: instances are
+	// reachable only through the demand gateway, so this client never creates,
+	// reads or deletes a route.
 
 	runtimeClient, err := client.New(k8sConfig, client.Options{Scheme: scheme})
 	if err != nil {
@@ -68,12 +76,16 @@ func NewKubernetesBackend(cfg *config.Config, logger *slog.Logger) (*KubernetesB
 	}
 
 	return &KubernetesBackend{
-		client:    runtimeClient,
-		clientset: clientset,
-		config:    cfg,
-		k8sConfig: &cfg.Kubernetes,
-		logger:    logger,
-		scheme:    scheme,
+		client:       runtimeClient,
+		clientset:    clientset,
+		config:       cfg,
+		k8sConfig:    &cfg.Kubernetes,
+		logger:       logger,
+		scheme:       scheme,
+		taskLeaseTTL: taskLeaseTTL,
+
+		scratchSizeLimit: scratchSizeLimit,
+		taskOperations:   sandboxruntime.NewTaskOperationGate("kubernetes"),
 	}, nil
 }
 
@@ -87,7 +99,6 @@ func (k *KubernetesBackend) Initialize(ctx context.Context) error {
 	if err := k.ensureNamespace(ctx); err != nil {
 		return fmt.Errorf("failed to ensure namespace: %w", err)
 	}
-
 	k.logger.Info("Kubernetes backend initialized successfully")
 	return nil
 }
@@ -114,14 +125,11 @@ func (k *KubernetesBackend) CreateInstance(ctx context.Context, spec *InstanceSp
 	if cmErr == nil {
 		existingID := existingCM.Data["instance-id"]
 		if existingID == spec.InstanceID {
-			// Verify the Deployment also exists — if not, the previous run
-			// crashed partway through; fall through to re-create.
-			existingDeploy := &appsv1.Deployment{}
-			deployErr := k.client.Get(ctx, types.NamespacedName{
-				Namespace: k.k8sConfig.Namespace,
-				Name:      fmt.Sprintf("mcp-%s", instanceName),
-			}, existingDeploy)
-			if deployErr == nil {
+			complete, graphErr := k.instanceResourceGraphComplete(ctx, instanceName)
+			if graphErr != nil {
+				return nil, graphErr
+			}
+			if complete {
 				k.logger.Info("Resources already exist for this instance — returning early (idempotent)",
 					slog.String("instance_id", spec.InstanceID))
 				return &InstanceResult{
@@ -133,9 +141,10 @@ func (k *KubernetesBackend) CreateInstance(ctx context.Context, spec *InstanceSp
 					CreatedAt:   time.Now(),
 				}, nil
 			}
-			// Deployment missing — fall through to re-create (configmap will be
-			// overwritten or partial resources cleaned before retry).
-			k.logger.Warn("ConfigMap exists for this instance but Deployment is missing, re-creating",
+			// Recreate the complete graph atomically from the manager's point of
+			// view. A ready Deployment without its Secret or Service is not a
+			// usable/idempotent instance.
+			k.logger.Warn("MCP resource graph is incomplete, re-creating",
 				slog.String("instance_id", spec.InstanceID))
 			if err := k.cleanupResources(ctx, instanceName); err != nil {
 				return nil, fmt.Errorf("failed to clean up partial resources for %s: %w", instanceName, err)
@@ -158,8 +167,6 @@ func (k *KubernetesBackend) CreateInstance(ctx context.Context, spec *InstanceSp
 		k.createSecret,
 		k.createDeployment,
 		k.createService,
-		k.createIngress,
-		k.createHTTPRoute, // Gateway API route
 	}
 
 	for _, createFunc := range resources {
@@ -199,6 +206,26 @@ func (k *KubernetesBackend) CreateInstance(ctx context.Context, spec *InstanceSp
 	return result, nil
 }
 
+func (k *KubernetesBackend) instanceResourceGraphComplete(ctx context.Context, instanceName string) (bool, error) {
+	name := fmt.Sprintf("mcp-%s", instanceName)
+	key := types.NamespacedName{Namespace: k.k8sConfig.Namespace, Name: name}
+	objects := []client.Object{
+		&corev1.ConfigMap{},
+		&corev1.Secret{},
+		&appsv1.Deployment{},
+		&corev1.Service{},
+	}
+	for _, object := range objects {
+		if err := k.client.Get(ctx, key, object); err != nil {
+			if errors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, fmt.Errorf("inspect MCP resource graph %s: %w", name, err)
+		}
+	}
+	return true, nil
+}
+
 // DeleteInstance removes an MCP server instance and all its Kubernetes resources
 func (k *KubernetesBackend) DeleteInstance(ctx context.Context, instanceID string) error {
 	instanceName, err := k.findInstanceNameByID(ctx, instanceID)
@@ -227,6 +254,13 @@ func (k *KubernetesBackend) GetInstanceStatus(ctx context.Context, instanceID st
 	if err != nil {
 		return nil, fmt.Errorf("failed to find instance: %w", err)
 	}
+	complete, err := k.instanceResourceGraphComplete(ctx, instanceName)
+	if err != nil {
+		return nil, err
+	}
+	if !complete {
+		return nil, fmt.Errorf("%w: incomplete Kubernetes resource graph for %s", ErrInstanceNotFound, instanceID)
+	}
 
 	// Get deployment
 	deployment := &appsv1.Deployment{}
@@ -235,7 +269,7 @@ func (k *KubernetesBackend) GetInstanceStatus(ctx context.Context, instanceID st
 		Name:      fmt.Sprintf("mcp-%s", instanceName),
 	}, deployment); err != nil {
 		if errors.IsNotFound(err) {
-			return nil, fmt.Errorf("instance not found: %s", instanceID)
+			return nil, fmt.Errorf("%w: %s", ErrInstanceNotFound, instanceID)
 		}
 		return nil, fmt.Errorf("failed to get deployment: %w", err)
 	}

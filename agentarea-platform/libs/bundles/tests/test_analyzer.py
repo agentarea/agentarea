@@ -37,7 +37,7 @@ async def test_parse_empty():
         parse_bundle("   ")
 
 
-async def test_good_package_installable():
+async def test_good_bundle_is_installable():
     preview = await BundleAnalyzer().analyze(parse_bundle(GOOD))
     assert preview.installable is True
     assert not preview.block_issues

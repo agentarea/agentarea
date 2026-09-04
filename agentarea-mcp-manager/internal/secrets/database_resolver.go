@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/database"
@@ -74,39 +73,6 @@ func NewDatabaseSecretResolver(logger *slog.Logger) (*DatabaseSecretResolver, er
 	}, nil
 }
 
-// ResolveSecrets resolves all secrets for an MCP instance from database
-func (dr *DatabaseSecretResolver) ResolveSecrets(instanceID string, envVars map[string]string) (map[string]string, error) {
-	resolved := make(map[string]string)
-
-	for key, value := range envVars {
-		// Check if this is a secret reference or a plain value
-		if strings.HasPrefix(value, "secret_ref:") {
-			// This is a secret reference, resolve it from database
-			secretName := strings.TrimPrefix(value, "secret_ref:")
-			secretValue, err := dr.getSecretFromDatabase(instanceID, secretName)
-			if err != nil {
-				dr.logger.Error("Failed to resolve secret from database",
-					slog.String("instance_id", instanceID),
-					slog.String("secret_key", key),
-					slog.String("secret_name", secretName),
-					slog.String("error", err.Error()))
-				return nil, fmt.Errorf("failed to resolve secret %s: %w", key, err)
-			}
-			resolved[key] = secretValue
-		} else {
-			// This is a plain value, use as-is
-			resolved[key] = value
-		}
-	}
-
-	dr.logger.Debug("Resolved secrets for instance from database",
-		slog.String("instance_id", instanceID),
-		slog.Int("total_vars", len(envVars)),
-		slog.Int("resolved_secrets", len(resolved)))
-
-	return resolved, nil
-}
-
 // getSecretFromDatabase retrieves and decrypts a secret from PostgreSQL
 func (dr *DatabaseSecretResolver) getSecretFromDatabase(instanceID, secretName string) (string, error) {
 	// Use the same secret key pattern as Python:
@@ -114,34 +80,46 @@ func (dr *DatabaseSecretResolver) getSecretFromDatabase(instanceID, secretName s
 	fullSecretName := fmt.Sprintf("mcp_instance_%s_%s", instanceID, secretName)
 
 	dr.logger.Debug("Retrieving secret from database",
-		slog.String("instance_id", instanceID),
-		slog.String("secret_name", secretName),
-		slog.String("full_secret_name", fullSecretName))
+		slog.String("instance_id", instanceID))
 
-	// Query database for the encrypted secret by full secret name
+	// The instance's own row supplies the workspace. Secret names are unique
+	// only within a workspace (uq_encrypted_secrets_workspace_name), so matching
+	// on the name alone would let any workspace serve a secret named after
+	// another workspace's instance. The instance is committed before the create
+	// event is published, so this join always has a row to find for a real
+	// instance; an unknown instance resolves to nothing, which is correct.
 	var encryptedValue string
-	query := `SELECT encrypted_value FROM encrypted_secrets WHERE secret_name = $1 LIMIT 1`
+	query := `
+		SELECT es.encrypted_value
+		FROM encrypted_secrets es
+		JOIN mcp_server_instances msi ON msi.workspace_id = es.workspace_id
+		WHERE msi.id = $1::uuid AND es.secret_name = $2`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := dr.db.QueryRowContext(ctx, query, fullSecretName).Scan(&encryptedValue)
+	err := dr.db.QueryRowContext(ctx, query, instanceID, fullSecretName).Scan(&encryptedValue)
 	if err == sql.ErrNoRows {
-		return "", fmt.Errorf("secret not found: %s", fullSecretName)
+		return "", errors.New("secret not found")
 	}
 	if err != nil {
-		return "", fmt.Errorf("database query failed: %w", err)
+		// The driver error can carry the connection string, so keep it local.
+		dr.logger.Error("Secret lookup failed",
+			slog.String("instance_id", instanceID),
+			slog.String("error_type", fmt.Sprintf("%T", err)))
+		return "", errors.New("secret lookup failed")
 	}
 
 	// Decrypt the secret using Fernet
 	decryptedValue, err := dr.fernetDecrypt(encryptedValue)
 	if err != nil {
-		return "", fmt.Errorf("failed to decrypt secret: %w", err)
+		dr.logger.Error("Secret decryption failed",
+			slog.String("instance_id", instanceID))
+		return "", errors.New("failed to decrypt secret")
 	}
 
 	dr.logger.Info("Successfully retrieved secret from database",
-		slog.String("instance_id", instanceID),
-		slog.String("secret_name", secretName))
+		slog.String("instance_id", instanceID))
 
 	return decryptedValue, nil
 }
@@ -242,11 +220,9 @@ func (dr *DatabaseSecretResolver) ResolveInstanceEnvVars(instanceID string, envV
 	for _, envName := range envVarNames {
 		secretValue, err := dr.getSecretFromDatabase(instanceID, envName)
 		if err != nil {
-			dr.logger.Warn("Failed to resolve env var from database",
-				slog.String("instance_id", instanceID),
-				slog.String("env_var", envName),
-				slog.String("error", err.Error()))
-			continue // Skip missing secrets rather than failing the whole container
+			dr.logger.Error("Failed to resolve requested env var from database",
+				slog.String("instance_id", instanceID))
+			return nil, errors.New("failed to resolve requested environment variable")
 		}
 		resolved[envName] = secretValue
 	}

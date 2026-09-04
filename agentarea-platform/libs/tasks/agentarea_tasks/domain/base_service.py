@@ -380,6 +380,7 @@ class BaseTaskService(ABC):
             "submitted",
             "pending",
             "preparing",
+            "scheduled",
             "running",
             "working",
             "completed",

@@ -1,0 +1,4 @@
+interface:
+  display_name: "AgentArea Code Review"
+  short_description: "Review a change against this repo's invariants"
+  default_prompt: "Use $aa-code-review to review this change."

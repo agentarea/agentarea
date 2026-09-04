@@ -95,7 +95,6 @@ class TestAgentMCPE2E:
         agent_data = {
             "name": "mcp-test-agent",
             "description": "Agent for testing MCP integration",
-            "model_id": "qwen2.5:latest",
             "instruction": "You are a helpful assistant that can use MCP tools. When asked to echo something, use the echo tool.",
             "mcp_server_ids": [mcp_instance_id],
             "capabilities": ["mcp_tools"],
@@ -230,7 +229,6 @@ class TestAgentMCPE2E:
         agent_data = {
             "name": "mcp-error-test-agent",
             "description": "Agent for testing MCP error handling",
-            "model_id": "qwen2.5:latest",
             "instructions": "You are a helpful assistant.",
             "mcp_server_ids": [fake_instance_id],
             "capabilities": ["mcp_tools"],

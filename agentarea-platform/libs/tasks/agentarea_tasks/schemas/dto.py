@@ -13,11 +13,39 @@ doc.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from agentarea_governance.domain.policies import PolicyDocument
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def require_future_instant(v: datetime | None) -> datetime | None:
+    """Reject naive or already-past run times.
+
+    A naive timestamp is rejected rather than assumed to be UTC — guessing
+    wrong shifts the run by hours, and only the caller knows the offset.
+    Shared with the REST request model so both surfaces enforce one rule.
+    """
+    if v is None:
+        return None
+    if v.tzinfo is None:
+        raise ValueError("scheduled_at must include a UTC offset")
+    if v <= datetime.now(UTC):
+        raise ValueError("scheduled_at must be in the future")
+    return v
+
+
+class RunExecutionConfig(BaseModel):
+    """Caller-requested execution ceiling; governance may only tighten it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_model_turns: int = Field(
+        gt=0,
+        description="Maximum LLM/model turns requested for this run.",
+    )
 
 
 class RunCreate(BaseModel):
@@ -49,6 +77,13 @@ class RunCreate(BaseModel):
             "context the workflow should see."
         ),
     )
+    execution: RunExecutionConfig | None = Field(
+        default=None,
+        description=(
+            "Typed execution request. The resolved value is capped by governance "
+            "and persisted in the task governance snapshot."
+        ),
+    )
     requires_human_approval: bool = Field(
         default=False,
         description="Gate task execution on a human approval step before tool calls.",
@@ -57,14 +92,17 @@ class RunCreate(BaseModel):
         default=None,
         description="Optional project scope for billing / organization.",
     )
-    package_install: Literal["allowed", "locked"] | None = Field(
-        default=None,
-        description=(
-            "Sandbox managed-environment profile for this run. When omitted, "
-            "the agent shell-tool setting is used, then defaults to 'allowed'."
-        ),
-    )
     task_policy: PolicyDocument | None = Field(
         default=None,
         description="Optional task-scoped governance policy that may only tighten higher scopes.",
     )
+    scheduled_at: datetime | None = Field(
+        default=None,
+        description=(
+            "Run this once at an absolute future time instead of immediately. "
+            "ISO-8601 with a UTC offset, e.g. '2026-09-01T09:00:00+03:00'. "
+            "This is one-shot: for a repeating schedule create a cron trigger instead."
+        ),
+    )
+
+    _validate_scheduled_at = field_validator("scheduled_at")(require_future_instant)

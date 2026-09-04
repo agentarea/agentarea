@@ -225,7 +225,7 @@ export function PaymentHistoryTable({ agentId }: PaymentHistoryTableProps) {
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1 || loading}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft />
           </Button>
           <span className="text-sm">
             Page {page} of {totalPages}
@@ -236,7 +236,7 @@ export function PaymentHistoryTable({ agentId }: PaymentHistoryTableProps) {
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages || loading}
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight />
           </Button>
         </div>
       )}

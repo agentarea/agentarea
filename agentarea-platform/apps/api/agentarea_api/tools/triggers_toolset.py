@@ -65,6 +65,7 @@ def _trigger_summary(trigger: Any) -> dict[str, Any]:
     display_name="Triggers",
     description="Schedule agents on cron expressions or wire them to webhooks.",
     category="platform",
+    plane="build",
     # Shares namespace with TriggersAgentToolset (agent self-management). The
     # agent variant owns the registry lookup; this platform variant is exposed
     # only via ``get_platform_tools()`` for the /mcp surface, so we skip
@@ -74,7 +75,7 @@ def _trigger_summary(trigger: Any) -> dict[str, Any]:
 class TriggersToolset(Toolset):
     """Manage triggers: list, get, create cron/webhook, update, delete, enable/disable, history."""
 
-    @tool_method
+    @tool_method(effect="read")
     async def list(
         self,
         agent_id: str = "",
@@ -91,7 +92,7 @@ class TriggersToolset(Toolset):
             )
             return json.dumps([_trigger_summary(t) for t in triggers], default=str)
 
-    @tool_method
+    @tool_method(effect="read")
     async def get(self, trigger_id: str) -> str:
         """Get a trigger by ID."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, broker, secret):
@@ -101,7 +102,7 @@ class TriggersToolset(Toolset):
                 return json.dumps({"error": "Trigger not found"})
             return json.dumps(_trigger_summary(trigger), default=str)
 
-    @tool_method
+    @tool_method(effect="write")
     async def create_cron(
         self,
         name: str,
@@ -117,8 +118,9 @@ class TriggersToolset(Toolset):
         """Create a cron-based trigger that fires the given agent on a schedule.
 
         ``cron_expression`` is a 5- or 6-field expression evaluated in
-        ``timezone`` (default UTC). For one-shot reminders set day-of-month +
-        month so the cron only matches the intended date.
+        ``timezone`` (default UTC). This always repeats — cron cannot express a
+        year, so a "one-shot" cron fires again next year. For a single run at a
+        given moment use ``runs.start`` with ``scheduled_at`` instead.
 
         ``task_parameters`` are merged into every task created when the trigger
         fires. ``conditions`` is an optional rule/LLM condition map evaluated
@@ -145,7 +147,7 @@ class TriggersToolset(Toolset):
             )
             return json.dumps(_trigger_summary(trigger), default=str)
 
-    @tool_method
+    @tool_method(effect="write")
     async def create_webhook(
         self,
         name: str,
@@ -190,7 +192,7 @@ class TriggersToolset(Toolset):
             )
             return json.dumps(_trigger_summary(trigger), default=str)
 
-    @tool_method
+    @tool_method(effect="destructive")
     async def delete(self, trigger_id: str) -> str:
         """Delete a trigger and its schedule."""
         async with platform_context() as (_session, _user_ctx, repo_factory, broker, secret):
@@ -198,7 +200,7 @@ class TriggersToolset(Toolset):
             deleted = await service.delete_trigger(UUID(trigger_id))
             return json.dumps({"deleted": deleted})
 
-    @tool_method
+    @tool_method(effect="write")
     async def enable(self, trigger_id: str) -> str:
         """Enable a trigger (resumes its schedule for cron triggers)."""
         async with platform_context() as (_session, _user_ctx, repo_factory, broker, secret):
@@ -206,7 +208,7 @@ class TriggersToolset(Toolset):
             ok = await service.enable_trigger(UUID(trigger_id))
             return json.dumps({"enabled": ok})
 
-    @tool_method
+    @tool_method(effect="write")
     async def disable(self, trigger_id: str) -> str:
         """Disable a trigger (pauses its schedule for cron triggers)."""
         async with platform_context() as (_session, _user_ctx, repo_factory, broker, secret):
@@ -214,7 +216,7 @@ class TriggersToolset(Toolset):
             ok = await service.disable_trigger(UUID(trigger_id))
             return json.dumps({"disabled": ok})
 
-    @tool_method
+    @tool_method(effect="read")
     async def get_history(self, trigger_id: str, limit: int = 50, offset: int = 0) -> str:
         """Get recent execution history for a trigger."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, broker, secret):

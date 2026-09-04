@@ -5,7 +5,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from agentarea_common.auth.context import UserContext
 
-from agentarea_agents_sdk.mcp_server.auth import MCPAuthMiddleware, _mcp_user_context_var
+from agentarea_agents_sdk.mcp_server.auth import (
+    PROTECTED_RESOURCE_SCOPE_KEY,
+    MCPAuthMiddleware,
+    _mcp_user_context_var,
+)
 
 
 @pytest.mark.asyncio
@@ -146,3 +150,62 @@ class TestMCPWorkspaceOverrideIsAuthorized:
             assert _mcp_user_context_var.get(None) is None
         finally:
             _mcp_user_context_var.reset(token)
+
+
+class TestUnauthenticatedChallenge:
+    """Where the 401 sends a client to discover OAuth (RFC 9728).
+
+    Every mount used to advertise the root metadata document, whose ``resource``
+    is ``<API>/mcp``. A harness that follows §3.3 compares that against the URL
+    it called and refuses when they disagree — which is exactly what
+    ``codex mcp login`` does against ``/client-mcp/<id>``.
+    """
+
+    @staticmethod
+    async def _challenge(scope_extra: dict) -> str:
+        sent: list[dict] = []
+
+        async def receive():
+            return {
+                "type": "http.request",
+                "body": b'{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
+                "more_body": False,
+            }
+
+        async def send(message):
+            sent.append(message)
+
+        settings = MagicMock()
+        settings.app.API_BASE_URL = "https://api.example.com"
+        middleware = MCPAuthMiddleware(AsyncMock())
+
+        with patch("agentarea_common.config.get_settings", return_value=settings):
+            await middleware(
+                {"type": "http", "path": "/", "headers": [], **scope_extra},
+                receive,
+                send,
+            )
+
+        start = next(m for m in sent if m["type"] == "http.response.start")
+        assert start["status"] == 401
+        return next(value.decode() for key, value in start["headers"] if key == b"www-authenticate")
+
+    @pytest.mark.asyncio
+    async def test_client_mcp_points_at_its_own_metadata(self):
+        challenge = await self._challenge(
+            {PROTECTED_RESOURCE_SCOPE_KEY: "client-mcp/74dfa41a-1736-4ab1-a470-2e2d4c4e56c8"}
+        )
+
+        assert challenge == (
+            'Bearer resource_metadata="https://api.example.com/.well-known/'
+            'oauth-protected-resource/client-mcp/74dfa41a-1736-4ab1-a470-2e2d4c4e56c8"'
+        )
+
+    @pytest.mark.asyncio
+    async def test_plain_mcp_mount_keeps_the_root_location(self):
+        challenge = await self._challenge({})
+
+        assert challenge == (
+            'Bearer resource_metadata="https://api.example.com/.well-known/'
+            'oauth-protected-resource"'
+        )

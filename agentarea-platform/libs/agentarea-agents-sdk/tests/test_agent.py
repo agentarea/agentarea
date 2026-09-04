@@ -11,7 +11,11 @@ class TestAgentCreation:
     def test_create_agent_with_valid_model(self, test_model):
         """Test creating an agent with valid model specification."""
         agent = create_agent(
-            name="Test Agent", instruction="You are a test assistant.", model=test_model
+            name="Test Agent",
+            instruction="You are a test assistant.",
+            model=test_model,
+            max_tokens=500,
+            max_iterations=10,
         )
 
         assert agent.name == "Test Agent"
@@ -50,6 +54,8 @@ class TestAgentCreation:
             name="Tool Agent",
             instruction="Agent with custom tools.",
             model=test_model,
+            max_tokens=500,
+            max_iterations=10,
             tools=[custom_tool],
         )
 
@@ -65,6 +71,8 @@ class TestAgentCreation:
             instruction="Agent without default tools.",
             model_provider="ollama_chat",
             model_name="qwen2.5",
+            max_tokens=500,
+            max_iterations=10,
             include_default_tools=False,
         )
 
@@ -82,7 +90,11 @@ class TestAgentExecution:
         skip_if_no_llm()
 
         agent = create_agent(
-            name="Test Agent", instruction="You are a helpful assistant.", model=test_model
+            name="Test Agent",
+            instruction="You are a helpful assistant.",
+            model=test_model,
+            max_tokens=500,
+            max_iterations=10,
         )
 
         result = await agent.run("What is 2 + 2?")
@@ -96,7 +108,11 @@ class TestAgentExecution:
         skip_if_no_llm()
 
         agent = create_agent(
-            name="Streaming Agent", instruction="You are a helpful assistant.", model=test_model
+            name="Streaming Agent",
+            instruction="You are a helpful assistant.",
+            model=test_model,
+            max_tokens=500,
+            max_iterations=10,
         )
 
         content_received = False
@@ -117,7 +133,11 @@ class TestAgentExecution:
         skip_if_no_llm()
 
         agent = create_agent(
-            name="Goal Agent", instruction="You are a systematic assistant.", model=test_model
+            name="Goal Agent",
+            instruction="You are a systematic assistant.",
+            model=test_model,
+            max_tokens=500,
+            max_iterations=10,
         )
 
         task = "Help me understand"
@@ -138,6 +158,8 @@ class TestAgentExecution:
             name="Echo Agent",
             instruction="You are an assistant that echoes text using the echo tool.",
             model=test_model,
+            max_tokens=500,
+            max_iterations=10,
             tools=[echo_tool_cls()],
         )
 
@@ -159,6 +181,8 @@ class TestAgentUtilities:
             name="Tool Agent",
             instruction="Agent for tool testing.",
             model=test_model,
+            max_tokens=500,
+            max_iterations=10,
             include_default_tools=False,
         )
 
@@ -176,7 +200,11 @@ class TestAgentUtilities:
     def test_get_conversation_history(self, test_model):
         """Test getting conversation history (currently returns empty list)."""
         agent = create_agent(
-            name="History Agent", instruction="Agent for history testing.", model=test_model
+            name="History Agent",
+            instruction="Agent for history testing.",
+            model=test_model,
+            max_tokens=500,
+            max_iterations=10,
         )
 
         history = agent.get_conversation_history()
@@ -187,9 +215,22 @@ class TestAgentUtilities:
     def test_reset_agent(self, test_model):
         """Test resetting agent state."""
         agent = create_agent(
-            name="Reset Agent", instruction="Agent for reset testing.", model=test_model
+            name="Reset Agent",
+            instruction="Agent for reset testing.",
+            model=test_model,
+            max_tokens=500,
+            max_iterations=10,
         )
 
         # Should not raise any errors
         agent.reset()
         assert True  # If we get here, reset worked
+
+    def test_execution_limits_are_required(self):
+        with pytest.raises(ValueError, match="max_tokens"):
+            Agent(
+                name="No Limits",
+                instruction="No implicit execution limits.",
+                model_provider="ollama_chat",
+                model_name="qwen2.5",
+            )

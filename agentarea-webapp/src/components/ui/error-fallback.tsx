@@ -101,7 +101,7 @@ export function ErrorFallback({
               onClick={reset}
               className="gap-2"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw />
               Try again
             </Button>
           )}
@@ -113,7 +113,7 @@ export function ErrorFallback({
               onClick={handleGoHome}
               className="gap-2"
             >
-              <Home className="h-4 w-4" />
+              <Home />
               Go home
             </Button>
           )}

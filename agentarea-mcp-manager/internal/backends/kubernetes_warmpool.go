@@ -2,38 +2,33 @@ package backends
 
 import (
 	"context"
-	"crypto/sha256"
+	"errors"
 	"fmt"
-	"log/slog"
+	"sync"
+	"time"
 
-	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
+	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
+	"github.com/agentarea/mcp-manager/internal/workspace"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-const warmPoolMCPPort = 3000
-
-func (k *KubernetesBackend) RuntimeManifest(ctx context.Context, packageInstall string) (*runtimeinfo.Manifest, error) {
-	if err := runtimeinfo.ValidatePackageInstall(packageInstall); err != nil {
-		return nil, err
-	}
+func (k *KubernetesBackend) RuntimeManifest(ctx context.Context) (*runtimeinfo.Manifest, error) {
 	client := k.GetWarmPoolClient()
 	if client == nil {
 		return nil, fmt.Errorf("sandbox warm pool client is not available")
 	}
-	pod, err := client.FindRuntimeManifestPod(ctx, packageInstall)
+	pod, err := client.FindRuntimeManifestPod(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return client.RuntimeManifestInPod(ctx, pod, packageInstall)
+	return client.RuntimeManifestInPod(ctx, pod)
 }
 
 // GetWarmPoolClient returns a warm pool client for the current namespace.
 func (k *KubernetesBackend) GetWarmPoolClient() *warmpool.Client {
-	return warmpool.NewClient(k.clientset, k.k8sConfig.Namespace)
+	return warmpool.NewClient(k.clientset, k.k8sConfig.Namespace, k.taskLeaseTTL)
 }
 
 // ExecuteSandbox runs a sandbox script on the warm-pool data plane. TaskID
@@ -47,159 +42,135 @@ func (k *KubernetesBackend) ExecuteSandbox(ctx context.Context, req warmpool.Exe
 	if wp == nil {
 		return nil, fmt.Errorf("warm pool client unavailable")
 	}
-	pod, err := wp.FindOrAssignPodForTask(ctx, req.TaskID, req.PackageInstall)
+	scope, ok := operationScope(ctx)
+	if !ok {
+		return nil, fmt.Errorf("%w: Kubernetes execution requires a hydrated operation scope", sandboxruntime.ErrWorkspaceRehydration)
+	}
+	pod, operationCtx, err := scope.pod(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return wp.ExecuteInPod(ctx, pod, req)
+	incarnation, err := scope.incarnation()
+	if err != nil {
+		return nil, err
+	}
+	req.ExecutorIncarnation = incarnation
+	result, executeErr := wp.ExecuteInPod(operationCtx, pod, req)
+	return result, k.invalidateUnsafePod(ctx, wp, pod, executeErr)
 }
 
-// CreateInstanceWithWarmPool creates MCP instance using warm pool for fast activation
-func (k *KubernetesBackend) CreateInstanceWithWarmPool(ctx context.Context, spec *InstanceSpec) (*InstanceResult, error) {
-	instanceName := k.sanitizeInstanceName(spec.Name)
+func (k *KubernetesBackend) invalidateUnsafePod(
+	ctx context.Context,
+	client *warmpool.Client,
+	pod *corev1.Pod,
+	operationErr error,
+) error {
+	if operationErr == nil || errors.Is(operationErr, warmpool.ErrFileNotFound) || errors.Is(operationErr, warmpool.ErrTaskWorkspaceGone) {
+		return operationErr
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	deleteErr := client.DeleteExactPod(cleanupCtx, pod)
+	cancel()
+	reason := "sandbox data-plane operation failed with an ambiguous workspace state"
+	if errors.Is(operationErr, warmpool.ErrExecutorUnsafe) {
+		reason = "sandbox executor discarded its workspace"
+	} else if errors.Is(operationErr, warmpool.ErrExecutorIncarnationChanged) {
+		reason = "sandbox executor incarnation changed"
+	}
+	return errors.Join(
+		fmt.Errorf("%w: %s", sandboxruntime.ErrWorkspaceRehydration, reason),
+		operationErr,
+		deleteErr,
+	)
+}
 
-	k.logger.Info("Creating Kubernetes instance with warm pool",
-		slog.String("name", spec.Name),
-		slog.String("instance_name", instanceName))
-
-	// Try warm pool activation before creating per-instance resources. If the
-	// pool is empty, standard deployment can create those resources cleanly.
-	warmPoolClient := warmpool.NewClient(k.clientset, k.k8sConfig.Namespace)
-	pod, err := warmPoolClient.FindAvailablePod(ctx, runtimeinfo.PackageInstallAllowed)
+// BeginOperation creates a demand scope that is first fenced locally and, once
+// hydration selects a pod, bound to that exact pod UID by a distributed
+// TaskOperation annotation. Manager, runner, and reaper replicas therefore
+// share the same retirement boundary across hydration and execution.
+func (k *KubernetesBackend) BeginOperation(ctx context.Context, workspaceID, taskID string) (context.Context, func(), error) {
+	if err := workspace.ValidateIdentifier("workspace_id", workspaceID); err != nil {
+		return nil, nil, err
+	}
+	if err := workspace.ValidateIdentifier("task_id", taskID); err != nil {
+		return nil, nil, err
+	}
+	operationCtx, releaseLocal, err := k.taskOperations.BeginOperation(ctx, workspaceID, taskID)
 	if err != nil {
-		k.logger.Warn("No warm pods available, falling back to standard deployment",
-			slog.String("error", err.Error()))
-		return k.CreateInstance(ctx, spec)
+		return nil, nil, err
 	}
+	scope := &kubernetesOperationScope{}
+	operationCtx = context.WithValue(operationCtx, kubernetesOperationScopeKey{}, scope)
+	var once sync.Once
+	return operationCtx, func() {
+		once.Do(func() {
+			if err := scope.stop(); err != nil {
+				k.logger.Error("failed to release Kubernetes distributed task fence", "error", err)
+			}
+			releaseLocal()
+		})
+	}, nil
+}
 
-	// Create ConfigMap and Secret first
-	if err := k.createConfigMap(ctx, instanceName, spec); err != nil {
-		return nil, fmt.Errorf("failed to create configmap: %w", err)
+func (k *KubernetesBackend) RetireSandboxTask(ctx context.Context, workspaceID, taskID string, idleTTL time.Duration) error {
+	if err := workspace.ValidateIdentifier("workspace_id", workspaceID); err != nil {
+		return err
 	}
-
-	if err := k.createSecret(ctx, instanceName, spec); err != nil {
-		_ = k.cleanupResources(ctx, instanceName)
-		return nil, fmt.Errorf("failed to create secret: %w", err)
+	if err := workspace.ValidateIdentifier("task_id", taskID); err != nil {
+		return err
 	}
-
-	k.logger.Info("Found warm pod",
-		slog.String("pod", pod.Name),
-		slog.String("node", pod.Spec.NodeName))
-
-	// Create MCP instance model for activation
-	instance := &models.MCPServerInstance{
-		InstanceID: spec.InstanceID,
-		Name:       spec.Name,
-		JSONSpec: map[string]interface{}{
-			"image": spec.Image,
-			"port":  warmPoolMCPPort,
-		},
-	}
-
-	// Assign pod to instance
-	pod, err = warmPoolClient.AssignPod(ctx, pod, instance)
+	ctx, release, err := k.taskOperations.BeginRetirement(ctx, workspaceID, taskID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to assign warm pod: %w", err)
+		return err
 	}
-
-	// Activate MCP inside pod
-	activationReq := warmpool.ActivationRequest{
-		MCPImage:     spec.Image,
-		MCPImageHash: hashImage(spec.Image),
-		Port:         warmPoolMCPPort,
-		Entrypoint:   spec.Entrypoint,
-		Command:      spec.Command,
-		Env:          spec.Environment,
+	defer release()
+	client := k.GetWarmPoolClient()
+	if client == nil {
+		return fmt.Errorf("sandbox warm pool client is not available")
 	}
+	return client.RetirePodForTask(ctx, workspaceID, taskID, idleTTL)
+}
 
-	k.logger.Info("Sending activation request",
-		slog.Int("port", warmPoolMCPPort),
-		slog.String("image", spec.Image))
-
-	if err := warmPoolClient.ActivatePod(ctx, pod, activationReq); err != nil {
-		// Return pod to pool and fallback
-		_ = warmPoolClient.ReturnToPool(ctx, pod)
-		_ = k.cleanupResources(ctx, instanceName)
-		k.logger.Error("Warm pool activation failed, falling back",
-			slog.String("error", err.Error()))
-		return k.CreateInstance(ctx, spec)
+func (k *KubernetesBackend) ListSandboxes(ctx context.Context, workspaceID string) ([]sandboxruntime.SandboxStatus, error) {
+	client := k.GetWarmPoolClient()
+	if client == nil {
+		return nil, fmt.Errorf("sandbox warm pool client is not available")
 	}
-
-	// Mark pod as ready
-	pod, err = warmPoolClient.MarkReady(ctx, pod)
+	pods, err := client.ListTaskPodsForWorkspace(ctx, workspaceID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to mark pod ready: %w", err)
+		return nil, err
 	}
-
-	// Create Service pointing to this pod
-	if err := k.createServiceForPod(ctx, instanceName, spec, pod); err != nil {
-		_ = warmPoolClient.ReturnToPool(ctx, pod)
-		_ = k.cleanupResources(ctx, instanceName)
-		return nil, fmt.Errorf("failed to create service: %w", err)
+	result := make([]sandboxruntime.SandboxStatus, 0, len(pods))
+	for _, pod := range pods {
+		result = append(result, sandboxruntime.SandboxStatus{
+			ID: pod.ID, Provider: "kubernetes", WorkspaceID: pod.WorkspaceID,
+			TaskID: pod.TaskID, State: pod.State,
+			CreatedAt: pod.CreatedAt, ExpiresAt: pod.ExpiresAt,
+			Resources: pod.Resources, Isolation: pod.Isolation,
+		})
 	}
-
-	// Create route for external access
-	// Try Gateway API HTTPRoute first, fall back to Ingress if needed
-	if err := k.createRoute(ctx, instanceName, spec); err != nil {
-		_ = k.cleanupResources(ctx, instanceName)
-		return nil, fmt.Errorf("failed to create route: %w", err)
-	}
-
-	result := &InstanceResult{
-		ID:          spec.InstanceID,
-		Name:        spec.Name,
-		URL:         k.k8sConfig.GetInstanceURL(instanceName),
-		InternalURL: k.k8sConfig.GetInternalServiceURL(instanceName, spec.Port),
-		Status:      "running",
-	}
-
-	k.logger.Info("Successfully created Kubernetes instance via warm pool",
-		slog.String("id", result.ID),
-		slog.String("name", result.Name),
-		slog.String("url", result.URL))
-
 	return result, nil
 }
 
-// createServiceForPod creates a Service targeting a specific pod
-func (k *KubernetesBackend) createServiceForPod(ctx context.Context, instanceName string, spec *InstanceSpec, pod *corev1.Pod) error {
-	service := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("mcp-%s", instanceName),
-			Namespace: k.k8sConfig.Namespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/managed-by": "mcp-manager",
-				"app.kubernetes.io/component":  "mcp-server",
-				"app.kubernetes.io/instance":   instanceName,
-				"agentarea.io/instance":        instanceName,
-				"mcp.agentarea.io/warm-pod":    pod.Name,
-			},
-		},
-		Spec: corev1.ServiceSpec{
-			Type: corev1.ServiceTypeClusterIP,
-			Selector: map[string]string{
-				"mcp.agentarea.io/instance-name": instanceName,
-			},
-			Ports: []corev1.ServicePort{
-				{
-					Name:       "mcp",
-					Port:       80,
-					TargetPort: intstr.FromInt(warmPoolMCPPort),
-					Protocol:   corev1.ProtocolTCP,
-				},
-			},
-		},
+func (k *KubernetesBackend) EnsureWorkspaceHydrated(
+	ctx context.Context,
+	workspaceID, taskID, revision string,
+	hydrate func(context.Context) error,
+) error {
+	client := k.GetWarmPoolClient()
+	if client == nil {
+		return fmt.Errorf("sandbox warm pool client is not available")
 	}
-
-	if err := k.client.Create(ctx, service); err != nil {
-		return fmt.Errorf("failed to create service: %w", err)
+	scope, ok := operationScope(ctx)
+	if !ok {
+		return fmt.Errorf("%w: Kubernetes hydration requires an operation scope", sandboxruntime.ErrWorkspaceRehydration)
 	}
-
-	return nil
-}
-
-// hashImage generates a hash for image caching
-func hashImage(image string) string {
-	sum := sha256.Sum256([]byte(image))
-	return fmt.Sprintf("%x", sum[:])
+	pod, err := client.EnsurePodHydratedBinding(ctx, workspaceID, taskID, revision, hydrate)
+	if err != nil {
+		if errors.Is(err, warmpool.ErrExecutorIncarnationChanged) {
+			return errors.Join(fmt.Errorf("%w: sandbox executor restarted during hydration", sandboxruntime.ErrWorkspaceRehydration), err)
+		}
+		return err
+	}
+	return scope.bind(ctx, k, client, pod, revision)
 }

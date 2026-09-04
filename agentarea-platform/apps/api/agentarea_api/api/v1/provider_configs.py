@@ -12,7 +12,7 @@ from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
-from agentarea_llm.application.model_discovery_service import ModelDiscoveryService
+from agentarea_llm.application.model_discovery_service import DiscoveredModel, ModelDiscoveryService
 from agentarea_llm.application.provider_service import ProviderService  # type: ignore
 from agentarea_llm.domain.models import ProviderConfig  # type: ignore
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
@@ -233,9 +233,9 @@ class DiscoverPreviewModelResponse(BaseModel):
     model_name: str
     display_name: str
     context_window: int
-    max_output_tokens: int = 4096
-    input_cost_per_token: float = 0.0
-    output_cost_per_token: float = 0.0
+    max_output_tokens: int | None = None
+    input_cost_per_token: float | None = None
+    output_cost_per_token: float | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -247,6 +247,31 @@ class DiscoverPreviewResponse(BaseModel):
     discovered: int
     new_models: int
     models: list[DiscoverPreviewModelResponse]
+
+
+def _require_discovered_runtime_metadata(model: DiscoveredModel) -> int:
+    """Return the required context window or reject an incomplete catalog entry."""
+    missing = []
+    if (
+        isinstance(model.context_window, bool)
+        or not isinstance(model.context_window, int)
+        or model.context_window <= 0
+    ):
+        missing.append("context_window")
+    if model.input_cost_per_token is None:
+        missing.append("input_cost_per_token")
+    if model.output_cost_per_token is None:
+        missing.append("output_cost_per_token")
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Discovered model '{model.model_name}' is missing required runtime metadata: "
+                + ", ".join(missing)
+                + ". Configure the model spec explicitly before execution."
+            ),
+        )
+    return cast(int, model.context_window)
 
 
 @router.post("/discover-preview", response_model=DiscoverPreviewResponse)
@@ -282,6 +307,7 @@ async def discover_models_preview(
     results = []
     new_count = 0
     for model in discovered:
+        context_window = _require_discovered_runtime_metadata(model)
         existing = await model_spec_repo.get_by_provider_and_model(
             UUID(str(provider_spec_id)), model.model_name
         )
@@ -309,7 +335,7 @@ async def discover_models_preview(
                 id=str(spec.id),
                 model_name=model.model_name,
                 display_name=model.display_name or model.model_name,
-                context_window=model.context_window,
+                context_window=context_window,
                 max_output_tokens=model.max_output_tokens,
                 input_cost_per_token=model.input_cost_per_token,
                 output_cost_per_token=model.output_cost_per_token,
@@ -400,9 +426,9 @@ class DiscoveredModelResponse(BaseModel):
     model_name: str
     display_name: str
     context_window: int
-    max_output_tokens: int = 4096
-    input_cost_per_token: float = 0.0
-    output_cost_per_token: float = 0.0
+    max_output_tokens: int | None = None
+    input_cost_per_token: float | None = None
+    output_cost_per_token: float | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -453,6 +479,7 @@ async def discover_models(
     results = []
     new_count = 0
     for model in discovered:
+        context_window = _require_discovered_runtime_metadata(model)
         # Check if model already exists
         existing = await model_spec_repo.get_by_provider_and_model(
             UUID(str(provider_spec_id)), model.model_name
@@ -480,7 +507,7 @@ async def discover_models(
             DiscoveredModelResponse(
                 model_name=model.model_name,
                 display_name=model.display_name or model.model_name,
-                context_window=model.context_window,
+                context_window=context_window,
                 max_output_tokens=model.max_output_tokens,
                 input_cost_per_token=model.input_cost_per_token,
                 output_cost_per_token=model.output_cost_per_token,

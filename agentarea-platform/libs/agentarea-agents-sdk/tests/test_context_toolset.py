@@ -48,7 +48,7 @@ class _FakeOrgStore:
 async def test_read_context_returns_bytes_decoded():
     store = _FakeOrgStore({("ws1", "shared/notes.md"): b"hello org"})
     ct = ContextToolset(storage=store, workspace_id="ws1")
-    result = await ct.read_context("shared/notes.md")
+    result = await ct.read_org_file("shared/notes.md")
     assert result == "hello org"
 
 
@@ -62,7 +62,7 @@ async def test_list_context_returns_paths():
         }
     )
     ct = ContextToolset(storage=store, workspace_id="ws1")
-    result = await ct.list_context()
+    result = await ct.list_org_files()
     assert "shared/a.md" in result
     assert "projects/b.md" in result
     # cross-workspace isolation: ws2 content never appears
@@ -73,7 +73,7 @@ async def test_list_context_returns_paths():
 async def test_read_context_missing_file_is_graceful_error():
     store = _FakeOrgStore({})
     ct = ContextToolset(storage=store, workspace_id="ws1")
-    result = await ct.read_context("nope.md")
+    result = await ct.read_org_file("nope.md")
     assert "does not exist" in result.lower() or "error" in result.lower()
 
 
@@ -82,7 +82,7 @@ async def test_read_context_rejects_path_traversal():
     store = _FakeOrgStore({("ws1", "shared/notes.md"): b"secret"})
     ct = ContextToolset(storage=store, workspace_id="ws1")
     for bad in ("../secret", "/etc/passwd", "a/../../b"):
-        result = await ct.read_context(bad)
+        result = await ct.read_org_file(bad)
         assert "escapes" in result.lower() or "error" in result.lower()
 
 
@@ -90,6 +90,6 @@ def test_context_toolset_is_read_only():
     ct = ContextToolset(workspace_id="ws1")
     method_names = set(ct._tool_methods.keys())
     # only read surface is exposed
-    assert method_names == {"read_context", "list_context"}
-    for forbidden in ("save_context", "write_context", "put", "delete", "save_file"):
+    assert method_names == {"read_org_file", "list_org_files"}
+    for forbidden in ("save_org_file", "write_org_file", "put", "delete", "save_file"):
         assert forbidden not in method_names

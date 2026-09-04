@@ -1,64 +1,27 @@
-"""Completion guards: declarative checks a task clears before it can claim done.
+"""Completion barrier: the files a task promises are persisted before it is done.
 
-Prior art (Claude Code, OpenCode, Google ADK, AWS AgentCore, OpenAI, Devin) is
-unanimous: no platform gates completion on a platform-side artifact-validity
-probe — the filesystem / artifact store is the source of truth and saving is an
-explicit agent action, with any real verification pushed OUT to user-owned CI.
-We follow that default. What we keep is a thin, OPTIONAL guard layer so a task
-with an explicit contract can assert it before completing.
-
-Guards evaluate against the DURABLE task workspace — the manifest the ``/files``
-API serves — never the ephemeral sandbox ``/workspace``. A file that exists only
-in the sandbox was never made durable (copy-out failed / over quota / no pod
-routing); a guard that consulted the sandbox would pass in exactly the cases
-where the deliverable is about to vanish, making copy-before-claim
-unrepresentable.
-
-Active guard: ``deliverable`` — a declared deliverable must be present and
-identified in the durable workspace (catches copy-out failure or a hallucinated
-file). Seam: ``goal`` — judging the deliverable against a task-defined goal —
-deliberately inert until goals carry a spec (that spec is task/eval-owned, never
-a format probe baked into the runtime).
+Content validity is the task/eval layer's call, not the runtime's. The one
+guarantee kept here is that whatever the final answer says it delivers actually
+leaves the sandbox before the sandbox goes away.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass, field
-from typing import Any, Protocol
+import re
+from typing import Any
 
-from agentarea_common.artifacts import (
-    WorkspaceRepository,
-    WorkspaceValidationError,
-    normalize_workspace_path,
-)
+import httpx
+from agentarea_common.artifacts import WorkspaceValidationError, normalize_workspace_path
 
 from ..models import (
     ArtifactValidationEvidence,
     ArtifactValidationIssue,
     ArtifactValidationRequest,
     ArtifactValidationResult,
+    CapabilityUnavailableResult,
 )
 
-
-@dataclass
-class GuardOutcome:
-    """One guard's contribution to the completion decision."""
-
-    issues: list[ArtifactValidationIssue] = field(default_factory=list)
-    evidence: list[ArtifactValidationEvidence] = field(default_factory=list)
-
-
-class Guard(Protocol):
-    """A completion guard: pure over the durable snapshot, side-effect free."""
-
-    name: str
-
-    def evaluate(
-        self,
-        request: ArtifactValidationRequest,
-        objects_by_path: Mapping[str, Any],
-    ) -> GuardOutcome: ...
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _normalize_declared(raw_path: str) -> str:
@@ -81,116 +44,128 @@ def _normalize_declared(raw_path: str) -> str:
     return normalize_workspace_path(candidate)
 
 
-class DeliverableGuard:
-    """Every declared deliverable must be durable in the task workspace."""
-
-    name = "deliverable"
-
-    def evaluate(
-        self,
-        request: ArtifactValidationRequest,
-        objects_by_path: Mapping[str, Any],
-    ) -> GuardOutcome:
-        outcome = GuardOutcome()
-        declared: list[str] = []
-        for raw_path in request.declared_paths:
-            path = _normalize_declared(raw_path)  # may raise WorkspaceValidationError
-            if path not in declared:
-                declared.append(path)
-
-        for path in declared:
-            obj = objects_by_path.get(path)
-            if obj is None:
-                outcome.issues.append(
-                    ArtifactValidationIssue(
-                        path=path,
-                        validator="deliverable",
-                        code="artifact_missing",
-                        message=(
-                            "declared deliverable is not in the durable task workspace; "
-                            "write it to your working directory so it is captured"
-                        ),
-                    )
-                )
-                continue
-            sha256 = str(getattr(obj, "sha256", "") or "")
-            if not sha256:
-                outcome.issues.append(
-                    ArtifactValidationIssue(
-                        path=path,
-                        validator="deliverable",
-                        code="artifact_missing_identity",
-                        message="durable deliverable has no recorded content hash",
-                    )
-                )
-                continue
-            outcome.evidence.append(
-                ArtifactValidationEvidence(
-                    path=path,
-                    validator="deliverable",
-                    sha256=sha256,
-                    size=int(getattr(obj, "size", 0) or 0),
-                )
+def _artifact_store_unavailable(message: str) -> ArtifactValidationResult:
+    return ArtifactValidationResult(
+        state="unavailable",
+        generation=0,
+        capability_unavailable=CapabilityUnavailableResult(capability="published_artifact_store"),
+        issues=[
+            ArtifactValidationIssue(
+                path="",
+                validator="published_artifact",
+                code="capability_unavailable",
+                message=message,
             )
-        return outcome
+        ],
+    )
 
 
-class GoalGuard:
-    """Seam for judging the deliverable against a task-defined goal.
-
-    Inert until goals carry an explicit, task-owned spec (criteria / judge). It is
-    intentionally NOT a format probe: whether the content meets the goal is the
-    task/eval layer's call, not the runtime's. Kept out of the default guard set
-    so completion stays persist-and-trust until a goal spec actually exists.
-    """
-
-    name = "goal"
-
-    def evaluate(
-        self,
-        request: ArtifactValidationRequest,
-        objects_by_path: Mapping[str, Any],
-    ) -> GuardOutcome:
-        return GuardOutcome()
-
-
-DEFAULT_GUARDS: tuple[Guard, ...] = (DeliverableGuard(),)
-
-
-async def validate_workspace_artifacts(
+async def validate_published_artifacts(
     request: ArtifactValidationRequest,
     *,
-    repository: WorkspaceRepository,
-    guards: tuple[Guard, ...] = DEFAULT_GUARDS,
+    manager_url: str,
+    auth_secret: str,
+    http_client: Any = None,
 ) -> ArtifactValidationResult:
-    """Run the completion guards over the durable task workspace and aggregate."""
-    objects = await repository.list(request.workspace_id, request.task_id)
-    generation = max((item.generation for item in objects), default=0)
-    objects_by_path = {obj.path: obj for obj in objects}
-
-    issues: list[ArtifactValidationIssue] = []
-    evidence: list[ArtifactValidationEvidence] = []
-    for guard in guards:
+    """Persist the files a completion delivers, then report their identity."""
+    declared: list[str] = []
+    for raw_path in request.declared_paths:
         try:
-            outcome = guard.evaluate(request, objects_by_path)
+            path = _normalize_declared(raw_path)
         except WorkspaceValidationError as exc:
             return ArtifactValidationResult(
                 state="failed",
-                generation=generation,
+                generation=0,
                 issues=[
                     ArtifactValidationIssue(
-                        path="",
-                        validator=guard.name,
+                        path=str(raw_path),
+                        validator="published_artifact",
                         code="invalid_artifact_path",
                         message=str(exc),
                     )
                 ],
             )
-        issues.extend(outcome.issues)
-        evidence.extend(outcome.evidence)
+        if path not in declared:
+            declared.append(path)
+    if not declared:
+        return ArtifactValidationResult(state="passed", generation=0)
+    if not manager_url or not auth_secret:
+        return _artifact_store_unavailable("artifact store authentication is not configured")
+
+    client = http_client
+    owned = client is None
+    if client is None:
+        client = httpx.AsyncClient(timeout=60)
+    issues: list[ArtifactValidationIssue] = []
+    evidence: list[ArtifactValidationEvidence] = []
+    try:
+        for path in declared:
+            try:
+                response = await client.post(
+                    f"{manager_url.rstrip('/')}/sandbox/artifacts",
+                    json={
+                        "workspace_id": request.workspace_id,
+                        "task_id": request.task_id,
+                        "path": path,
+                    },
+                    headers={"Authorization": f"Bearer {auth_secret}"},
+                )
+            except httpx.RequestError:
+                return _artifact_store_unavailable("artifact store could not be reached")
+            outcome = _artifact_publication_outcome(path, response)
+            if isinstance(outcome, ArtifactValidationResult):
+                return outcome
+            if isinstance(outcome, ArtifactValidationIssue):
+                issues.append(outcome)
+            else:
+                evidence.append(outcome)
+    finally:
+        if owned:
+            await client.aclose()
 
     if issues:
         return ArtifactValidationResult(
-            state="failed", generation=generation, evidence=evidence, issues=issues
+            state="failed", generation=0, evidence=evidence, issues=issues
         )
-    return ArtifactValidationResult(state="passed", generation=generation, evidence=evidence)
+    return ArtifactValidationResult(state="passed", generation=0, evidence=evidence)
+
+
+def _artifact_publication_outcome(
+    path: str, response: Any
+) -> ArtifactValidationEvidence | ArtifactValidationIssue | ArtifactValidationResult:
+    """Classify one publication response: evidence, agent-repairable, or blocked."""
+    if response.status_code == 404:
+        return ArtifactValidationIssue(
+            path=path,
+            validator="published_artifact",
+            code="artifact_missing",
+            message=(
+                "the response declares this file but it is not in the workspace; "
+                "write it before completing, or drop it from artifacts"
+            ),
+        )
+    if response.status_code == 413:
+        return ArtifactValidationIssue(
+            path=path,
+            validator="published_artifact",
+            code="artifact_quota_exceeded",
+            message="declared file exceeds the task artifact quota",
+        )
+    if response.status_code != 201:
+        return _artifact_store_unavailable(
+            f"artifact store returned HTTP {response.status_code} for {path}"
+        )
+    try:
+        item = response.json()
+        sha256 = str(item["sha256"])
+        size = item["size"]
+    except (TypeError, ValueError, KeyError):
+        return _artifact_store_unavailable("artifact store returned an invalid response")
+    if not _SHA256_RE.fullmatch(sha256) or not isinstance(size, int) or size < 0:
+        return _artifact_store_unavailable(f"published artifact {path} has no valid identity")
+    return ArtifactValidationEvidence(
+        path=path,
+        validator="published_artifact",
+        sha256=sha256,
+        size=size,
+    )

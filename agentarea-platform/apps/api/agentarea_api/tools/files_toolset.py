@@ -21,13 +21,14 @@ def _workspace_file_download_url(path: str) -> str:
     display_name="Workspace Files",
     description="List, fetch download URLs for, and delete workspace files.",
     category="platform",
+    plane="operate",
     requires_user_confirmation=True,
     register=False,
 )
 class FilesToolset(Toolset):
     """List, fetch download URLs for, and delete workspace files."""
 
-    @tool_method
+    @tool_method(effect="read")
     async def list(self, prefix: str = "", max_items: int = 200) -> str:
         """List files in the current workspace's storage."""
         async with platform_read_context() as (_session, user_ctx, _repo, _broker, _secret):
@@ -48,7 +49,7 @@ class FilesToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="read")
     async def get_url(self, path: str, expires_in: int = 3600) -> str:
         """Get an AgentArea API download URL for a workspace file."""
         async with platform_read_context() as (_session, user_ctx, _repo, _broker, _secret):
@@ -60,7 +61,7 @@ class FilesToolset(Toolset):
             url = _workspace_file_download_url(path)
             return json.dumps({"url": url, "path": path, "expires_in": expires_in})
 
-    @tool_method
+    @tool_method(effect="destructive")
     async def delete(self, path: str) -> str:
         """Delete a workspace file."""
         async with platform_context() as (_session, user_ctx, _repo, _broker, _secret):

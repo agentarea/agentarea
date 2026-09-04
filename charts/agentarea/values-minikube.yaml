@@ -124,3 +124,9 @@ jobs:
 # Disable ingress for local dev
 ingress:
   enabled: false
+
+# Sandbox pods run agent-authored code. Local dev has no gVisor node, so the
+# weaker runtime is accepted explicitly rather than by leaving a value blank.
+sandboxRuntime:
+  runtimeClass: ""
+  allowWeakIsolationForDevelopment: true

@@ -21,16 +21,10 @@ rules:
     resources: ["deployments", "replicasets"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   
-  # Gateway API - HTTPRoute for Envoy Gateway
-  - apiGroups: ["gateway.networking.k8s.io"]
-    resources: ["httproutes", "gateways"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  
-  # Ingress for fallback routing
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["ingresses"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  
+  # No Ingress or Gateway API permissions: MCP instances are reachable only
+  # through the demand gateway, so the manager never creates a route and must
+  # not be able to.
+
   # Events for logging
   - apiGroups: [""]
     resources: ["events"]

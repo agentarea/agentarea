@@ -24,7 +24,9 @@ with workflow.unsafe.imports_passed_through():
         CodeToolProvider,
         MCPToolProvider,
     )
-    from agentarea_common.money import ZERO, serialize_money, to_money
+    from agentarea_common.money import ZERO, Money, serialize_money, to_money
+    from agentarea_governance.domain.policies import effective_policy_from_json
+    from agentarea_governance.domain.tool_calls import metered_tool_call_count
 
     from .context_manager import (
         ContextWindowManager,
@@ -99,6 +101,8 @@ from ..models import (
     StoreOutputResult,
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
+    UpdateTaskGovernanceSnapshotRequest,
+    UpdateTaskGovernanceSnapshotResult,
     UpdateTaskStatusRequest,
     WorkflowEventsRequest,
 )
@@ -112,7 +116,6 @@ from .constants import (
     HEARTBEAT_TIMEOUT,
     LLM_CALL_TIMEOUT,
     LLM_RETRY_ATTEMPTS,
-    MAX_ITERATIONS,
     TOOL_EXECUTION_TIMEOUT,
     TOOL_OUTPUT_OFFLOAD_CHARS,
     Activities,
@@ -212,6 +215,7 @@ class AgentExecutionWorkflow:
         self._continuation_failure_reason: str | None = None
         self._continuation_message: str | None = None
         self._continuation_count = 0
+        self._delegated_cost: Money = ZERO
 
     @property
     def _events(self) -> EventManager:
@@ -224,6 +228,52 @@ class AgentExecutionWorkflow:
         if self.budget_tracker is None:
             raise RuntimeError("Workflow budget tracker is not initialized")
         return self.budget_tracker
+
+    @property
+    def _own_cost(self) -> Money:
+        """Model spend incurred by this task, excluding child workflows."""
+        if self.budget_tracker is None:
+            return ZERO
+        return max(self.budget_tracker.cost - self._delegated_cost, ZERO)
+
+    def _record_inference_usage(
+        self,
+        *,
+        cost: Money | float,
+        total_tokens: int,
+        source: str,
+    ) -> None:
+        """Account and enforce every paid model call, including compaction."""
+        if isinstance(total_tokens, bool) or not isinstance(total_tokens, int) or total_tokens <= 0:
+            raise ApplicationError(
+                f"{source} usage accounting is missing total_tokens",
+                type="LLMAccountingUnavailable",
+                non_retryable=True,
+            )
+        self._budget.add_cost(cost)
+        if self._budget.cost > self._budget.budget_limit:
+            raise ApplicationError(
+                f"{source} exceeded the resolved run budget: "
+                f"${self._budget.cost}/${self._budget.budget_limit}",
+                type="BudgetExceeded",
+                non_retryable=True,
+            )
+
+        self.state.tokens_used += total_tokens
+        token_limit = ((self.state.effective_policy or {}).get("tokens") or {}).get("max_tokens")
+        if isinstance(token_limit, bool) or not isinstance(token_limit, int) or token_limit <= 0:
+            raise ApplicationError(
+                "effective policy is missing tokens.max_tokens",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
+        if self.state.tokens_used > token_limit:
+            raise ApplicationError(
+                f"{source} exceeded the resolved token budget: "
+                f"{self.state.tokens_used}/{token_limit}",
+                type="TokenBudgetExceeded",
+                non_retryable=True,
+            )
 
     @workflow.signal
     async def pause_execution(self, reason: str = "Paused by user") -> None:
@@ -377,10 +427,17 @@ class AgentExecutionWorkflow:
         )
 
     def _handle_update_budget(self, payload: dict[str, Any]) -> None:
-        """Set a new absolute inference budget using Money semantics."""
+        """Allow only a tighter budget without a governance re-resolution."""
         info = BudgetUpdatePayload(**payload)
         if info.budget_usd < self._budget.cost:
             raise ValueError("budget_usd cannot be lower than accumulated cost")
+        policy_budget = ((self.state.effective_policy or {}).get("budget") or {}).get(
+            "run_budget_usd"
+        )
+        if policy_budget is None:
+            raise ValueError("effective policy is missing budget.run_budget_usd")
+        if info.budget_usd > to_money(policy_budget):
+            raise ValueError("budget increases require a re-resolved governance snapshot")
         old_limit = self._budget.budget_limit
         self._budget.set_limit(info.budget_usd)
         self.state.budget_usd = self._budget.budget_limit
@@ -393,31 +450,88 @@ class AgentExecutionWorkflow:
                 },
             )
 
-    def _apply_continuation(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Atomically grant resources to a workflow in continuation wait."""
+    def _prepare_continuation(
+        self,
+        payload: dict[str, Any],
+    ) -> tuple[ContinueExecutionPayload | None, dict[str, Any] | None]:
+        """Validate a policy revision without mutating workflow state."""
         info = ContinueExecutionPayload(**payload)
         if not self._waiting_for_continuation:
-            return {"accepted": False, "reason": "not_waiting_for_continuation"}
+            return None, {"accepted": False, "reason": "not_waiting_for_continuation"}
         if info.additional_iterations == 0 and info.additional_budget_usd is None:
-            return {"accepted": False, "reason": "no_resources_granted"}
+            return None, {"accepted": False, "reason": "no_resources_granted"}
         if (
             self._continuation_failure_reason == "iteration_limit"
             and info.additional_iterations == 0
         ):
-            return {"accepted": False, "reason": "additional_iterations_required"}
+            return None, {
+                "accepted": False,
+                "reason": "additional_iterations_required",
+            }
         if (
             self._continuation_failure_reason == "budget_exceeded"
             and info.additional_budget_usd is None
         ):
-            return {"accepted": False, "reason": "additional_budget_required"}
+            return None, {"accepted": False, "reason": "additional_budget_required"}
+        if self.state.goal is None:
+            return None, {"accepted": False, "reason": "goal_not_initialized"}
+        if info.effective_policy is None or info.governance_snapshot is None:
+            return None, {
+                "accepted": False,
+                "reason": "governance_snapshot_required",
+            }
 
-        if info.additional_iterations:
-            if self.state.goal is None:
-                return {"accepted": False, "reason": "goal_not_initialized"}
-            self.state.goal.max_iterations += info.additional_iterations
-        if info.additional_budget_usd is not None:
-            self._budget.add_budget(info.additional_budget_usd)
-            self.state.budget_usd = self._budget.budget_limit
+        try:
+            current_policy = effective_policy_from_json(self.state.effective_policy)
+            next_policy = effective_policy_from_json(info.effective_policy)
+            current_policy.runtime_contract()
+            next_runtime = next_policy.runtime_contract()
+        except (TypeError, ValueError):
+            return None, {"accepted": False, "reason": "invalid_governance_snapshot"}
+
+        if info.governance_snapshot.get("effective_policy") != next_policy.to_json_dict():
+            return None, {"accepted": False, "reason": "invalid_governance_snapshot"}
+        revision = info.governance_snapshot.get("revision")
+        if isinstance(revision, bool) or not isinstance(revision, int) or revision < 2:
+            return None, {"accepted": False, "reason": "invalid_governance_snapshot"}
+
+        expected_iterations = self.state.goal.max_iterations + info.additional_iterations
+        if next_runtime.max_model_turns != expected_iterations:
+            return None, {"accepted": False, "reason": "policy_revision_mismatch"}
+        expected_budget = self._budget.budget_limit + (info.additional_budget_usd or ZERO)
+        if next_runtime.run_budget_usd != expected_budget:
+            return None, {"accepted": False, "reason": "policy_revision_mismatch"}
+
+        current_contract = current_policy.to_json_dict()
+        next_contract = next_policy.to_json_dict()
+        for contract in (current_contract, next_contract):
+            contract.pop("source_policy_ids", None)
+            contract.pop("resolver_version", None)
+            contract["budget"].pop("run_budget_usd", None)
+            contract["execution"].pop("max_model_turns", None)
+        if next_contract != current_contract:
+            return None, {
+                "accepted": False,
+                "reason": "unexpected_policy_dimension_change",
+            }
+        return info, None
+
+    def _commit_continuation(
+        self,
+        info: ContinueExecutionPayload,
+    ) -> dict[str, Any]:
+        """Commit a policy revision after its task snapshot is durable."""
+        next_policy = effective_policy_from_json(info.effective_policy)
+        next_runtime = next_policy.runtime_contract()
+        if self.state.goal is None:
+            raise RuntimeError("goal is not initialized")
+
+        self.state.goal = self.state.goal.model_copy(
+            update={"max_iterations": next_runtime.max_model_turns}
+        )
+        self._budget.set_limit(next_runtime.run_budget_usd)
+        self.state.budget_usd = self._budget.budget_limit
+        self.state.effective_policy = next_policy.to_json_dict()
 
         self._continuation_count += 1
         self._waiting_for_continuation = False
@@ -431,16 +545,50 @@ class AgentExecutionWorkflow:
             "budget_usd": serialize_money(self._budget.budget_limit),
         }
 
+    def _apply_continuation(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Validate and commit a continuation for deterministic unit use."""
+        info, rejection = self._prepare_continuation(payload)
+        if rejection is not None:
+            return rejection
+        if info is None:
+            raise RuntimeError("continuation validation returned no result")
+        return self._commit_continuation(info)
+
     def _handle_continue_execution(self, payload: dict[str, Any]) -> None:
-        """Signal-compatible continuation handler used by internal callers."""
-        result = self._apply_continuation(payload)
-        if not result["accepted"]:
-            workflow.logger.warning("Continuation ignored: %s", result["reason"])
+        """Reject the legacy signal path, which cannot persist a policy revision."""
+        workflow.logger.warning(
+            "continue_execution signal ignored; use the validated workflow update"
+        )
 
     @workflow.update
     async def continue_execution(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Validated request/response continuation entry point for the API."""
-        return self._apply_continuation(payload)
+        """Persist and atomically apply a re-resolved policy revision."""
+        info, rejection = self._prepare_continuation(payload)
+        if rejection is not None:
+            return rejection
+        if info is None or info.governance_snapshot is None:
+            raise RuntimeError("continuation validation returned no result")
+
+        result: UpdateTaskGovernanceSnapshotResult = await workflow.execute_activity(
+            Activities.UPDATE_TASK_GOVERNANCE_SNAPSHOT,
+            args=[
+                UpdateTaskGovernanceSnapshotRequest(
+                    task_id=self.state.task_id,
+                    workspace_id=self.state.workspace_id,
+                    governance_snapshot=info.governance_snapshot,
+                )
+            ],
+            result_type=UpdateTaskGovernanceSnapshotResult,
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+        )
+        if not result.success:
+            raise ApplicationError(
+                result.error or "Failed to persist governance snapshot",
+                type="GovernanceSnapshotPersistenceFailed",
+                non_retryable=True,
+            )
+        return self._commit_continuation(info)
 
     def _handle_queue_message(self, payload: dict[str, Any]) -> None:
         """Queue a user message for the agent's next iteration."""
@@ -580,6 +728,7 @@ class AgentExecutionWorkflow:
             agent_id=UUID(self.state.agent_id),
             user_context_data=self.state.user_context_data,
             execution_context=self._workflow_metadata,
+            task_id=UUID(self.state.task_id),
         )
         agent_config_result: AgentConfigResult = await workflow.execute_activity(
             Activities.BUILD_AGENT_CONFIG,
@@ -601,7 +750,18 @@ class AgentExecutionWorkflow:
         await self._publish_events_immediately()
 
         # Store context window in state and initialize context manager
-        self.state.context_window = self.state.agent_config.get("context_window", 128000)
+        context_window = self.state.agent_config.get("context_window")
+        if (
+            isinstance(context_window, bool)
+            or not isinstance(context_window, int)
+            or context_window <= 0
+        ):
+            raise ApplicationError(
+                "agent configuration has no valid ModelSpec context_window",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
+        self.state.context_window = context_window
         self.context_manager = ContextWindowManager(self.state.context_window)
 
         # Resolve model info once and cache in state to avoid per-call DB lookups
@@ -759,17 +919,19 @@ class AgentExecutionWorkflow:
                             "type": "string",
                             "description": "Your complete response to the user. This is what they will read.",
                         },
-                        "artifact_paths": {
+                        "artifacts": {
                             "type": "array",
                             "items": {"type": "string"},
                             "maxItems": 1000,
                             "description": (
-                                "Workspace-relative paths of artifacts promised in the response. "
-                                "They must exist and pass validation before completion."
+                                "Workspace-relative paths of every file the response delivers, "
+                                "for example reports/result.pdf. They are saved for the user on "
+                                "completion. Use an empty list only when the response promises "
+                                "no files."
                             ),
                         },
                     },
-                    "required": ["result"],
+                    "required": ["result", "artifacts"],
                 },
             },
         }
@@ -1051,6 +1213,7 @@ class AgentExecutionWorkflow:
         self.state.agent_config = state.agent_config
         self.state.available_tools = state.available_tools
         self.state.current_iteration = state.current_iteration
+        self.state.tool_calls_used = state.tool_calls_used
         self.state.budget_usd = state.budget_usd
         self.state.tokens_used = state.tokens_used
         self.state.context_window = state.context_window
@@ -1106,6 +1269,7 @@ class AgentExecutionWorkflow:
         self._continuation_failure_reason = state.continuation_failure_reason
         self._continuation_message = state.continuation_message
         self._continuation_count = state.continuation_count
+        self._delegated_cost = state.delegated_cost
         self.state.status = state.status
         self.state.success = state.success
         self.state.final_response = state.final_response
@@ -1149,6 +1313,12 @@ class AgentExecutionWorkflow:
         )
         self.budget_tracker = BudgetTracker(self.state.budget_usd)
         self.budget_tracker.add_cost(state.total_cost)
+        if self.state.context_window is None:
+            raise ApplicationError(
+                "continued execution state has no ModelSpec context_window",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
         self.context_manager = ContextWindowManager(self.state.context_window)
 
         workflow.logger.info(
@@ -1183,26 +1353,27 @@ class AgentExecutionWorkflow:
             for msg in self.state.messages
         ]
 
+        if self.state.goal is None:
+            raise ApplicationError(
+                "workflow goal is missing from execution state",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
+
         continued_state = ContinueAsNewState(
             execution_id=self.state.execution_id,
             agent_id=self.state.agent_id,
             task_id=self.state.task_id,
             user_id=self.state.user_id,
             workspace_id=self.state.workspace_id,
-            goal=self.state.goal
-            or AgentGoal(
-                id="continued",
-                description="",
-                success_criteria=[],
-                max_iterations=0,
-                requires_human_approval=False,
-                context={},
-            ),
+            goal=self.state.goal,
             messages=messages_dict,
             agent_config=self.state.agent_config,
             available_tools=self.state.available_tools,
             current_iteration=self.state.current_iteration,
+            tool_calls_used=self.state.tool_calls_used,
             total_cost=self._budget.cost,
+            delegated_cost=self._delegated_cost,
             tokens_used=self.state.tokens_used,
             budget_usd=self.state.budget_usd,
             context_window=self.state.context_window,
@@ -1263,10 +1434,7 @@ class AgentExecutionWorkflow:
             agent_id=UUID(self.state.agent_id),
             user_id=self.state.user_id,
             workspace_id=self.state.workspace_id,
-            task_query=self.state.goal.description if self.state.goal else "",
-            max_reasoning_iterations=self.state.goal.max_iterations
-            if self.state.goal
-            else MAX_ITERATIONS,
+            task_query=self.state.goal.description,
             budget_usd=self.state.budget_usd,
             effective_policy=self.state.effective_policy,
             continued_state=continued_state.model_dump(),
@@ -1305,7 +1473,18 @@ class AgentExecutionWorkflow:
             workflow.logger.info(f"Starting iteration {self.state.current_iteration}")
 
             # Execute iteration
-            await self._execute_iteration()
+            try:
+                await self._execute_iteration()
+            except ApplicationError as error:
+                if error.type != "BudgetExceeded":
+                    raise
+                reason = (
+                    f"Budget exceeded (${self._budget.cost:.2f}/${self._budget.budget_limit:.2f})"
+                )
+                if await self._await_continuation("budget_exceeded", reason):
+                    continue
+                self._record_unsuccessful_termination("budget_exceeded", reason)
+                break
 
             if self.state.validation_terminal:
                 break
@@ -1498,7 +1677,13 @@ class AgentExecutionWorkflow:
             return False, None, "Goal achieved successfully"
 
         # Check maximum iterations
-        max_iterations = self.state.goal.max_iterations if self.state.goal else MAX_ITERATIONS
+        if self.state.goal is None:
+            raise ApplicationError(
+                "workflow goal is missing from execution state",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
+        max_iterations = self.state.goal.max_iterations
         if self.state.current_iteration > max_iterations:
             workflow.logger.info(
                 f"Max iterations reached ({max_iterations}) - terminating workflow"
@@ -1627,10 +1812,7 @@ class AgentExecutionWorkflow:
                 agent_instruction += (
                     "\n\nProject input files are available to shell commands in the "
                     "`inputs/` directory of the sandbox. Use ordinary file operations "
-                    "such as `find inputs -maxdepth 2 -type f` to inspect them. "
-                    "When a shell command creates a file that should be returned to "
-                    "the user, pass that relative file path in the shell tool's "
-                    "`artifact_paths` argument so it is stored as a task artifact."
+                    "such as `find inputs -maxdepth 2 -type f` to inspect them."
                 )
 
             agent_instruction += _render_workspace_attachment_prompt(
@@ -1641,9 +1823,16 @@ class AgentExecutionWorkflow:
             # Pool lives in workflow state; only this name+description block is
             # sent to the LLM until it explicitly calls load_tools(...).
             if self._disclosure_policy and self.state.searchable_tool_pool:
+                context_window = self.state.context_window
+                if context_window is None:
+                    raise ApplicationError(
+                        "execution state has no ModelSpec context_window",
+                        type="InvalidExecutionSnapshot",
+                        non_retryable=True,
+                    )
                 ctx = DisclosureContext(
                     model_name=str(self.state.agent_config.get("model_id", "")),
-                    context_window=self.state.context_window,
+                    context_window=context_window,
                     iteration=self.state.current_iteration,
                 )
                 pool = [ToolCandidate(**c) for c in self.state.searchable_tool_pool]
@@ -1818,12 +2007,12 @@ class AgentExecutionWorkflow:
                 "cost": cost_value,
                 "usage": usage_payload,
             }
-            self._budget.add_cost(usage_info["cost"])
-
-            # Accumulate cumulative token usage for governance token-budget gating
             total_tokens = usage_payload.get("total_tokens", 0) if usage_payload else 0
-            if total_tokens:
-                self.state.tokens_used += total_tokens
+            self._record_inference_usage(
+                cost=usage_info["cost"],
+                total_tokens=total_tokens,
+                source="LLM call",
+            )
 
             # Update context window manager with actual token usage
             if self.context_manager and usage_payload:
@@ -1975,7 +2164,7 @@ class AgentExecutionWorkflow:
                 id=str(workflow.uuid4()),
                 function={
                     "name": "completion",
-                    "arguments": json.dumps({"result": effective_content.strip()}),
+                    "arguments": json.dumps({"result": effective_content.strip(), "artifacts": []}),
                 },
             )
             await self._handle_task_completion(completion_call)
@@ -1995,7 +2184,41 @@ class AgentExecutionWorkflow:
         """
         import asyncio
 
-        completion_call = None
+        execution_limits = (self.state.effective_policy or {}).get("execution") or {}
+        max_per_turn = execution_limits.get("max_tool_calls_per_turn")
+        max_total = execution_limits.get("max_tool_calls_total")
+        if not isinstance(max_per_turn, int) or max_per_turn <= 0:
+            raise ApplicationError(
+                "effective policy is missing execution.max_tool_calls_per_turn",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
+        if not isinstance(max_total, int) or max_total <= 0:
+            raise ApplicationError(
+                "effective policy is missing execution.max_tool_calls_total",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
+        metered_calls_this_turn = metered_tool_call_count(
+            tool_call.function["name"] for tool_call in tool_calls
+        )
+        if metered_calls_this_turn > max_per_turn:
+            raise ApplicationError(
+                f"model requested {metered_calls_this_turn} metered tool calls; "
+                f"policy allows {max_per_turn} per turn",
+                type="ToolCallLimitExceeded",
+                non_retryable=True,
+            )
+        attempted_total = self.state.tool_calls_used + metered_calls_this_turn
+        if attempted_total > max_total:
+            raise ApplicationError(
+                f"tool-call budget exceeded: {attempted_total}/{max_total}",
+                type="ToolCallLimitExceeded",
+                non_retryable=True,
+            )
+        self.state.tool_calls_used = attempted_total
+
+        completion_calls: list[ToolCall] = []
         agent_calls: list[ToolCall] = []
         regular_calls: list[ToolCall] = []
         recall_calls: list[ToolCall] = []
@@ -2008,7 +2231,7 @@ class AgentExecutionWorkflow:
         for tool_call in tool_calls:
             tool_name = tool_call.function["name"]
             if tool_name in {"completion", "task_complete"}:
-                completion_call = tool_call
+                completion_calls.append(tool_call)
             elif tool_name == "request_user_input":
                 input_calls.append(tool_call)
             elif tool_name == "recall_history":
@@ -2025,6 +2248,19 @@ class AgentExecutionWorkflow:
                 agent_calls.append(tool_call)
             else:
                 regular_calls.append(tool_call)
+
+        if len(completion_calls) > 1:
+            # Two completions in one message is a malformed answer, not a policy
+            # breach, and every other malformed completion here is handed back
+            # for repair rather than killing the run and the budget spent on it.
+            # None of them is accepted: picking one would be guessing which
+            # answer the model meant.
+            for duplicate in completion_calls:
+                self._reject_invalid_completion_arguments(
+                    duplicate, "exactly one completion call may be made per turn"
+                )
+            completion_calls = []
+        completion_call = completion_calls[0] if completion_calls else None
 
         # User-input requests are exclusive: the workflow must pause and get a
         # reply before any further side effects or final completion happen.
@@ -2076,13 +2312,24 @@ class AgentExecutionWorkflow:
 
         # Run agent delegations in parallel (fan-out)
         if agent_calls:
+            remaining_budget = self._budget.get_remaining()
+            if remaining_budget <= ZERO:
+                raise ApplicationError(
+                    "no inference budget remains for agent delegation",
+                    type="BudgetExceeded",
+                    non_retryable=True,
+                )
+            child_budget = remaining_budget / len(agent_calls)
             if len(agent_calls) == 1:
-                await self._execute_agent_delegation(agent_calls[0])
+                await self._execute_agent_delegation(
+                    agent_calls[0],
+                    child_budget,
+                )
             else:
                 workflow.logger.info(
                     f"Fan-out: delegating to {len(agent_calls)} agents in parallel"
                 )
-                tasks = [self._execute_agent_delegation(tc) for tc in agent_calls]
+                tasks = [self._execute_agent_delegation(tc, child_budget) for tc in agent_calls]
                 await asyncio.gather(*tasks)
 
         # Run regular tools sequentially
@@ -2094,21 +2341,51 @@ class AgentExecutionWorkflow:
             await self._handle_task_completion(completion_call)
 
     async def _handle_task_completion(self, completion_call: ToolCall) -> None:
-        """Gate completion on code-enforced validation of committed artifacts."""
+        """Gate completion on code-enforced validation of published artifacts."""
         try:
             tool_args = json.loads(completion_call.function["arguments"])
-            if not isinstance(tool_args, dict):
-                tool_args = {}
-            result_text = str(tool_args.get("result") or "Task completed")
-            raw_paths = tool_args.get("artifact_paths")
-            declared_paths = (
-                [path for path in raw_paths[:1000] if isinstance(path, str)]
-                if isinstance(raw_paths, list)
-                else []
+        except (json.JSONDecodeError, KeyError, TypeError) as exc:
+            self._reject_invalid_completion_arguments(
+                completion_call, f"arguments must be valid JSON: {exc}"
             )
-        except (json.JSONDecodeError, KeyError, TypeError):
-            result_text = "Task completed"
-            declared_paths = []
+            return
+        if not isinstance(tool_args, dict):
+            self._reject_invalid_completion_arguments(
+                completion_call, "arguments must be a JSON object"
+            )
+            return
+        result_value = tool_args.get("result")
+        if not isinstance(result_value, str) or not result_value.strip():
+            self._reject_invalid_completion_arguments(
+                completion_call, "result must be a non-empty string"
+            )
+            return
+        if "artifacts" not in tool_args:
+            self._reject_invalid_completion_arguments(
+                completion_call, "artifacts is required; use [] when the response delivers no files"
+            )
+            return
+        raw_paths = tool_args["artifacts"]
+        if not isinstance(raw_paths, list):
+            self._reject_invalid_completion_arguments(
+                completion_call, "artifacts must be an array of workspace-relative paths"
+            )
+            return
+        if len(raw_paths) > 1000 or any(
+            not isinstance(path, str) or not path.strip() for path in raw_paths
+        ):
+            self._reject_invalid_completion_arguments(
+                completion_call,
+                "artifacts must contain at most 1000 non-empty workspace-relative paths",
+            )
+            return
+        if len(set(raw_paths)) != len(raw_paths):
+            self._reject_invalid_completion_arguments(
+                completion_call, "artifacts must not contain duplicates"
+            )
+            return
+        result_text = result_value.strip()
+        declared_paths = raw_paths
 
         validation = await self._validate_completion_artifacts(declared_paths)
         if validation.state != "passed":
@@ -2167,21 +2444,77 @@ class AgentExecutionWorkflow:
                     result=json.dumps(
                         {
                             "response": result_text,
+                            "artifacts": [evidence.path for evidence in validation.evidence],
                             "validation_state": self.state.validation_state,
                         }
                     ),
                     workspace_id=self.state.workspace_id,
                     total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
+                    own_cost=self._own_cost,
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
+        self._events.add_event(
+            EventTypes.WORKFLOW_AWAITING_FOLLOW_UP,
+            {
+                "state": "awaiting_follow_up",
+                "timeout_seconds": 1800,
+            },
+        )
+        await self._publish_events_immediately()
+
+    def _reject_invalid_completion_arguments(self, completion_call: ToolCall, reason: str) -> None:
+        """Return a tool-paired contract error instead of inventing completion data."""
+        self.state.success = False
+        self.state.final_response = None
+        self._awaiting_input = False
+        call_is_in_history = any(
+            call.get("id") == completion_call.id
+            for message in self.state.messages
+            for call in (message.tool_calls or [])
+            if isinstance(call, dict)
+        )
+        if not call_is_in_history:
+            self.state.messages.append(
+                Message(
+                    role="assistant",
+                    content="",
+                    tool_calls=[
+                        {
+                            "id": completion_call.id,
+                            "type": "function",
+                            "function": completion_call.function,
+                        }
+                    ],
+                )
+            )
+        self.state.messages.append(
+            Message(
+                role="tool",
+                name="completion",
+                tool_call_id=completion_call.id,
+                content=json.dumps(
+                    {
+                        "status": "invalid_completion_arguments",
+                        "error": reason,
+                        "instruction": (
+                            "Call completion again with a non-empty result and an explicit "
+                            "artifacts array of workspace-relative paths. Use [] only when the "
+                            "response delivers no files."
+                        ),
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+            )
+        )
 
     async def _validate_completion_artifacts(
         self, declared_paths: list[str]
     ) -> ArtifactValidationResult:
-        """Run the refs-only Temporal validation gate and persist its audit events."""
+        """Persist the files the completion delivers and record the audit events."""
         self.state.validation_state = "running"
         self._events.add_event(
             EventTypes.VALIDATION_STARTED,
@@ -2202,11 +2535,6 @@ class AgentExecutionWorkflow:
                         task_id=self.state.task_id,
                         workflow_id=self.state.execution_id,
                         declared_paths=declared_paths,
-                        package_install=(
-                            "locked"
-                            if (self._workflow_metadata or {}).get("package_install") == "locked"
-                            else "allowed"
-                        ),
                     )
                 ],
                 result_type=ArtifactValidationResult,
@@ -2283,8 +2611,9 @@ class AgentExecutionWorkflow:
             "generation": result.generation,
             "issues": [item.model_dump() for item in result.issues],
             "instruction": (
-                "Repair the listed workspace artifacts, then call completion again. "
-                "Do not claim success until validation passes."
+                "Repair or create the missing output in the workspace, then call completion "
+                "again with the workspace-relative paths in artifacts. Do not claim success "
+                "until validation passes."
             ),
         }
         self.state.messages.append(
@@ -3030,9 +3359,16 @@ class AgentExecutionWorkflow:
             return
 
         pool = [ToolCandidate(**c) for c in self.state.searchable_tool_pool]
+        context_window = self.state.context_window
+        if context_window is None:
+            raise ApplicationError(
+                "execution state has no ModelSpec context_window",
+                type="InvalidExecutionSnapshot",
+                non_retryable=True,
+            )
         ctx = DisclosureContext(
             model_name=str(self.state.agent_config.get("model_id", "")),
-            context_window=self.state.context_window,
+            context_window=context_window,
             iteration=self.state.current_iteration,
         )
         result = self._disclosure_policy.reveal(RevealRequest(tool_names=requested), pool, ctx)
@@ -3236,7 +3572,11 @@ class AgentExecutionWorkflow:
             f'Run them with the shell tool, e.g. bash("python {result.directory}/<script>").'
         )
 
-    async def _execute_agent_delegation(self, tool_call: ToolCall) -> None:
+    async def _execute_agent_delegation(
+        self,
+        tool_call: ToolCall,
+        run_budget_usd: Money,
+    ) -> None:
         """Delegate to another agent via Temporal child workflow.
 
         Instead of routing through execute_mcp_tool_activity (which polls),
@@ -3272,6 +3612,8 @@ class AgentExecutionWorkflow:
         )
         await self._publish_events_immediately()
 
+        child_task_created = False
+        child_cost_accounted = False
         try:
             # Create a task record in DB for the child agent
             create_task_request = CreateDelegationTaskRequest(
@@ -3282,6 +3624,8 @@ class AgentExecutionWorkflow:
                 message=message,
                 user_id=self.state.user_id,
                 workspace_id=self.state.workspace_id,
+                parent_effective_policy=self.state.effective_policy,
+                run_budget_usd=run_budget_usd,
             )
             create_task_result: CreateDelegationTaskResult = await workflow.execute_activity(
                 Activities.CREATE_DELEGATION_TASK,
@@ -3295,8 +3639,15 @@ class AgentExecutionWorkflow:
                 raise ApplicationError(
                     f"Failed to create delegation task: {create_task_result.error}"
                 )
+            if create_task_result.effective_policy is None:
+                raise ApplicationError(
+                    "delegation task was created without an effective-policy snapshot",
+                    type="InvalidExecutionSnapshot",
+                    non_retryable=True,
+                )
 
             child_task_id = create_task_result.task_id
+            child_task_created = True
 
             # Build child workflow request with its own task_id
             child_request = AgentExecutionRequest(
@@ -3305,14 +3656,13 @@ class AgentExecutionWorkflow:
                 user_id=self.state.user_id,
                 workspace_id=self.state.workspace_id,
                 task_query=message,
-                max_reasoning_iterations=MAX_ITERATIONS,
                 workflow_metadata={
                     "source": "agent_delegation",
                     "parent_execution_id": self.state.execution_id,
                     "parent_agent_id": self.state.agent_id,
                     "parent_task_id": self.state.task_id,
                 },
-                effective_policy=self.state.effective_policy,
+                effective_policy=create_task_result.effective_policy,
             )
 
             # Start child workflow and await result
@@ -3380,7 +3730,9 @@ class AgentExecutionWorkflow:
 
             # Account for child's cost in parent budget
             if child_result.total_cost > 0:
+                self._delegated_cost += child_result.total_cost
                 self._budget.add_cost(child_result.total_cost)
+            child_cost_accounted = True
 
             workflow.logger.info(
                 f"Agent delegation to '{agent_name}' completed "
@@ -3388,6 +3740,13 @@ class AgentExecutionWorkflow:
             )
 
         except Exception as e:
+            if child_task_created and not child_cost_accounted:
+                # A failed child does not return AgentExecutionResult, so the
+                # parent cannot recover its exact spend from Temporal. Consume
+                # the full allocation as a fail-closed reservation; the child
+                # task still persists its exact own_cost for billing.
+                self._delegated_cost += run_budget_usd
+                self._budget.add_cost(run_budget_usd)
             # Surface the failure to the parent's LLM as a tool message and
             # continue. Re-raising here would propagate out of asyncio.gather
             # and abort sibling delegations — wrong semantics for fan-out
@@ -3501,6 +3860,7 @@ class AgentExecutionWorkflow:
                 workspace_id=self.state.workspace_id,
                 user_context_data=self.state.user_context_data,
                 resolved_model=self.state.resolved_model,
+                effective_policy=self.state.effective_policy,
             )
 
             result: CompactMessagesResult = await workflow.execute_activity(
@@ -3509,6 +3869,17 @@ class AgentExecutionWorkflow:
                 start_to_close_timeout=LLM_CALL_TIMEOUT,
                 heartbeat_timeout=HEARTBEAT_TIMEOUT,
                 retry_policy=make_retry_policy(2),
+            )
+            if result.cost is None or result.usage is None:
+                raise ApplicationError(
+                    "compaction result has no usage accounting",
+                    type="LLMAccountingUnavailable",
+                    non_retryable=True,
+                )
+            self._record_inference_usage(
+                cost=result.cost,
+                total_tokens=result.usage.total_tokens,
+                source="Context compaction",
             )
 
             # Rebuild message list: system prompt + summary + kept recent messages
@@ -3574,7 +3945,7 @@ class AgentExecutionWorkflow:
 
         except Exception as e:
             workflow.logger.error(f"Context compaction failed: {e}")
-            return False
+            raise
 
     async def _check_budget_status(self) -> None:
         """Check budget status and send warnings if needed."""
@@ -3734,21 +4105,12 @@ class AgentExecutionWorkflow:
                     or (self.state.blocked_reason if final_status == "blocked" else None),
                     workspace_id=self.state.workspace_id,
                     total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
+                    own_cost=self._own_cost,
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
-
-        try:
-            await workflow.execute_activity(
-                Activities.CLEANUP_SANDBOX_TASK,
-                args=[self.state.task_id],
-                start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=make_retry_policy(1),
-            )
-        except Exception as e:
-            workflow.logger.warning(f"Sandbox task cleanup failed: {e}")
 
         # Return result - convert messages to dict format for response
         conversation_history: list[dict[str, Any]] = []
@@ -3773,6 +4135,7 @@ class AgentExecutionWorkflow:
             error_message=self.state.error_message,
             total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
             reasoning_iterations_used=self.state.current_iteration,
+            total_tool_calls=self.state.tool_calls_used,
             conversation_history=conversation_history,
         )
 
@@ -3806,6 +4169,8 @@ class AgentExecutionWorkflow:
                         status=status,
                         error_message=self.state.blocked_reason or error_details,
                         workspace_id=self.state.workspace_id,
+                        total_cost=self.budget_tracker.cost if self.budget_tracker else None,
+                        own_cost=self._own_cost if self.budget_tracker else None,
                     )
                 ],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
@@ -3911,15 +4276,17 @@ class AgentExecutionWorkflow:
 
     def _build_goal_from_request(self, request: AgentExecutionRequest) -> AgentGoal:
         """Build goal from execution request."""
+        execution_limits = (request.effective_policy or {}).get("execution") or {}
+        max_model_turns = execution_limits.get("max_model_turns")
+        if not isinstance(max_model_turns, int) or max_model_turns <= 0:
+            raise ValueError(
+                "effective policy is missing required runtime limit execution.max_model_turns"
+            )
         return AgentGoal(
             id=str(request.task_id),
             description=request.task_query,
-            success_criteria=request.task_parameters.get(
-                "success_criteria", ["Task completed successfully"]
-            ),
-            max_iterations=request.task_parameters.get(
-                "max_iterations", request.max_reasoning_iterations
-            ),
+            success_criteria=request.task_parameters.get("success_criteria", []),
+            max_iterations=max_model_turns,
             requires_human_approval=request.requires_human_approval,
             context=request.task_parameters,
         )

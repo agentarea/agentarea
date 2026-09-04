@@ -1,5 +1,6 @@
 import {
   Bot,
+  Boxes,
   Brain,
   ClipboardList,
   Compass,
@@ -34,14 +35,6 @@ export type NavSection = {
 };
 
 export const navData = {
-  workspaces: [
-    {
-      name: "AgentArea",
-      logo: GalleryVerticalEnd,
-      plan: "Base workspace",
-      logoFile: "/Icon.svg",
-    },
-  ],
   navSections: [
     {
       label: "Work",
@@ -142,6 +135,12 @@ export const navData = {
           titleKey: "dashboard",
           url: "/dashboard",
           icon: Gauge,
+        },
+        {
+          title: "Sandboxes",
+          titleKey: "sandboxes",
+          url: "/sandboxes",
+          icon: Boxes,
         },
         {
           title: "Network",

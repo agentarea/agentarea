@@ -75,7 +75,7 @@ export function NetworkHeaderControls() {
         className="h-7 w-7 text-muted-foreground"
         aria-label="Refresh topology"
       >
-        <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+        <RefreshCw className={loading ? "animate-spin" : ""} />
       </Button>
     </div>
   );

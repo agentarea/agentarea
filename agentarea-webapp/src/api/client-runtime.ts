@@ -2,12 +2,22 @@ import type { CreateClientConfig } from "./client/client";
 import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { SERVER_API_TIMEOUT_MS } from "@/lib/server-timeouts";
+import { WORKSPACE_SLUG_HEADER } from "@/lib/workspaces";
 
 async function addWorkspaceSlug(request: Request) {
   try {
+    // Imported lazily: this module is also pulled into the browser bundle via
+    // the generated client, and next/headers cannot be statically imported
+    // there.
     const { headers } = await import("next/headers");
+    const { getActiveWorkspaceSlug } = await import("@/lib/workspace-context");
     const requestHeaders = await headers();
-    const workspaceSlug = requestHeaders.get("x-workspace-slug");
+    // An explicit header wins so a caller can pin one request to a workspace;
+    // otherwise the switcher decides, via a slug validated against the user's
+    // memberships rather than read straight off the cookie.
+    const workspaceSlug =
+      requestHeaders.get(WORKSPACE_SLUG_HEADER) ??
+      (await getActiveWorkspaceSlug());
     if (workspaceSlug) {
       request.headers.set("X-Workspace-Slug", workspaceSlug);
     }

@@ -6,7 +6,11 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from agentarea_mcp.application.auth_service import MCPAuthService, OAuthReauthRequiredError
+from agentarea_mcp.application.auth_service import (
+    MCPAuthService,
+    MissingCredentialsError,
+    OAuthReauthRequiredError,
+)
 from agentarea_mcp.domain.auth_models import (
     AUTH_TYPE_API_KEY,
     AUTH_TYPE_BEARER,
@@ -138,13 +142,27 @@ class TestGetAuthHeaders:
         headers = await svc.get_auth_headers(config)
         assert headers == {"Authorization": "Bearer abc123"}
 
-    async def test_missing_secret_returns_empty(self):
+    async def test_missing_secret_is_reported_not_sent_empty(self):
+        """A vanished secret must not become an empty header.
+
+        It used to: get_auth_headers returned `{"X-Key": ""}` and the request
+        went out, so the user saw a 401 from the upstream server and went
+        looking there instead of at the credential that was gone.
+        """
         svc, _, sm = _make_service()
         sm.get_secret.return_value = None
 
         config = _make_config(AUTH_TYPE_API_KEY, config={"header_name": "X-Key"})
-        headers = await svc.get_auth_headers(config)
-        assert headers.get("X-Key") == ""
+        with pytest.raises(MissingCredentialsError):
+            await svc.get_auth_headers(config)
+
+    async def test_empty_stored_api_key_is_reported(self):
+        svc, _, sm = _make_service()
+        sm.get_secret.return_value = json.dumps({"header_value": ""})
+
+        config = _make_config(AUTH_TYPE_API_KEY, config={"header_name": "X-Key"})
+        with pytest.raises(MissingCredentialsError):
+            await svc.get_auth_headers(config)
 
 
 # ---------------------------------------------------------------------------

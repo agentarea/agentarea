@@ -16,11 +16,12 @@ INBOX_STATUSES = ["waiting_for_approval", "waiting_for_input", "completed", "fai
     display_name="Inbox",
     description="Inspect agent inbox messages awaiting human input.",
     category="platform",
+    plane="operate",
 )
 class InboxToolset(Toolset):
     """List tasks awaiting user action (waiting_for_approval, waiting_for_input, completed, failed)."""
 
-    @tool_method
+    @tool_method(effect="read")
     async def list(
         self,
         status: str = "",

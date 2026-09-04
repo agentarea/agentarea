@@ -56,11 +56,11 @@ export default async function ProviderConfigsPage({
         controls: (
           <Link href="/admin/provider-configs/create">
             <Button
-              className="shrink-0 gap-2"
+              className="shrink-0"
               size="xs"
               data-test="new-config-button"
             >
-              <Settings className="mr-2 h-4 w-4" />
+              <Settings />
               {t("createButton")}
             </Button>
           </Link>

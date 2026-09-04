@@ -18,11 +18,19 @@ from agentarea_common.money import Money, serialize_money, to_money
 from agentarea_common.ports.policy_resolver import PolicyResolverPort
 from agentarea_governance.domain.policies import (
     EffectivePolicy,
+    ExecutionLimitsPolicy,
     PolicyDocument,
+    PolicyResolver,
+    PolicyValidationError,
+    effective_policy_from_json,
 )
 
 from .domain.base_service import BaseTaskService
-from .domain.exceptions import AgentModelNotConfiguredError, BudgetCapExceededError
+from .domain.exceptions import (
+    AgentModelNotConfiguredError,
+    BudgetCapExceededError,
+    SchedulingNotSupportedError,
+)
 from .domain.interfaces import BaseTaskManager
 from .domain.models import AgentTask
 from .infrastructure.repository import TaskRepository
@@ -38,27 +46,7 @@ logger = logging.getLogger(__name__)
 # because the workflow may legitimately stay alive in await_follow_up
 # after the activity has already persisted "completed" to the DB.
 _TERMINAL_WORKFLOW_STATUSES = frozenset({"completed", "failed", "cancelled", "canceled"})
-_PACKAGE_INSTALL_PROFILES = frozenset({"allowed", "locked"})
-
-
-def _agent_package_install_profile(agent: Any) -> str:
-    """Resolve the agent's sandbox profile from its shell-tool configuration."""
-    tools = getattr(agent, "tools", None)
-    if not isinstance(tools, list):
-        return "allowed"
-    for tool in tools:
-        if not isinstance(tool, dict) or tool.get("name") != "agentarea/shell":
-            continue
-        settings = tool.get("settings")
-        if not isinstance(settings, dict):
-            return "allowed"
-        profile = settings.get("package_install")
-        if profile is None:
-            return "allowed"
-        if profile not in _PACKAGE_INSTALL_PROFILES:
-            raise ValueError(f"invalid agent package_install profile: {profile}")
-        return str(profile)
-    return "allowed"
+_GOVERNANCE_SNAPSHOT_METADATA_KEY = "governance_snapshot"
 
 
 class TaskService(BaseTaskService):
@@ -125,7 +113,7 @@ class TaskService(BaseTaskService):
         caller's permissions — the same agent can resolve differently per user.
         """
         if not workspace_id:
-            return EffectivePolicy()
+            raise ValueError("workspace_id is required to resolve runtime policy")
 
         return await self.policy_resolver.resolve(
             workspace_id=workspace_id,
@@ -133,6 +121,40 @@ class TaskService(BaseTaskService):
             task_id=task_id,
             task_policy=task_policy,
             user_id=self.repository_factory.user_context.user_id,
+        )
+
+    @staticmethod
+    def _with_requested_execution_limits(
+        task_policy: PolicyDocument | None,
+        parameters: dict[str, Any] | None,
+    ) -> PolicyDocument | None:
+        """Translate legacy task parameters into the typed task policy layer.
+
+        ``max_iterations`` remains accepted at the API edge for compatibility,
+        but it can only tighten the persisted workspace/agent ceiling. The
+        workflow never reads the free-form parameter directly.
+        """
+        requested = (parameters or {}).get("max_iterations")
+        if requested is None:
+            return task_policy
+        if isinstance(requested, bool) or not isinstance(requested, int) or requested <= 0:
+            raise PolicyValidationError("parameters.max_iterations must be a positive integer")
+
+        requested_policy = PolicyDocument(
+            execution=ExecutionLimitsPolicy(max_model_turns=requested)
+        )
+        if task_policy is None:
+            return requested_policy
+        existing = (
+            task_policy.execution.max_model_turns if task_policy.execution is not None else None
+        )
+        if existing is not None and existing != requested:
+            raise PolicyValidationError(
+                "execution.max_model_turns conflicts with task_policy.execution.max_model_turns"
+            )
+        merged = PolicyResolver().resolve([task_policy, requested_policy])
+        return PolicyDocument.model_validate(
+            merged.model_dump(exclude={"source_policy_ids", "resolver_version"})
         )
 
     async def _enforce_budget_cap(
@@ -217,7 +239,9 @@ class TaskService(BaseTaskService):
         metadata_overrides: dict[str, Any] | None = None,
         status: str = "submitted",
         task_policy: PolicyDocument | None = None,
+        upper_bound_policy: EffectivePolicy | None = None,
         require_model: bool = False,
+        scheduled_at: datetime | None = None,
     ) -> AgentTask:
         """Persist a task with resolved governance policy. Does not dispatch to Temporal.
 
@@ -230,31 +254,64 @@ class TaskService(BaseTaskService):
         it ``False``.
         """
         new_task_id = task_id or uuid4()
+        # Refuse before persisting: an engine without a timer would run this
+        # immediately, and a half-created row for a run that can never happen
+        # is worse than a clean rejection.
+        if scheduled_at is not None and not self.task_manager.supports_scheduling:
+            raise SchedulingNotSupportedError(new_task_id)
+        parameters = dict(parameters or {})
+        task_policy = self._with_requested_execution_limits(task_policy, parameters)
+        # Compatibility input only: once translated into the typed policy it
+        # must not survive as a second runtime source of truth.
+        parameters.pop("max_iterations", None)
         effective_policy = await self._resolve_effective_policy(
             workspace_id=workspace_id,
             agent_id=agent_id,
             task_id=new_task_id,
             task_policy=task_policy,
         )
+        effective_policy.require_runtime_contract()
+        if upper_bound_policy is not None:
+            upper_bound_policy.require_runtime_contract()
+            upper_bound_document = PolicyDocument.model_validate(
+                upper_bound_policy.model_dump(exclude={"source_policy_ids", "resolver_version"})
+            )
+            effective_document = PolicyDocument.model_validate(
+                effective_policy.model_dump(exclude={"source_policy_ids", "resolver_version"})
+            )
+            # A delegated task may be stricter than its parent, but never
+            # acquire limits or capabilities the parent execution did not have.
+            PolicyResolver().resolve([upper_bound_document, effective_document])
         await self._enforce_budget_cap(workspace_id, effective_policy)
 
         agent = await self._validate_agent_exists(agent_id)
         if require_model:
             self._require_agent_model(agent, agent_id, parameters)
-        agent_name = getattr(agent, "name", "unknown") if agent else "unknown"
-
         metadata: dict[str, Any] = {}
         if metadata_overrides:
             metadata.update(metadata_overrides)
         metadata.setdefault("created_via", "api")
-        metadata["agent_name"] = agent_name
+        # Only stamp a name we actually loaded. `agent` is None only in
+        # test/standalone mode (no agent_repository wired) — recording
+        # "unknown" there would be indistinguishable from a real agent name.
+        if agent is not None:
+            metadata["agent_name"] = agent.name
         metadata["requires_human_approval"] = requires_human_approval
-        package_install = metadata.get("package_install")
-        if package_install is None:
-            package_install = _agent_package_install_profile(agent)
-        if package_install not in _PACKAGE_INSTALL_PROFILES:
-            raise ValueError(f"invalid task package_install profile: {package_install}")
-        metadata["package_install"] = package_install
+        requested_execution = (
+            task_policy.execution.model_dump(exclude_none=True)
+            if task_policy is not None and task_policy.execution is not None
+            else {}
+        )
+        metadata[_GOVERNANCE_SNAPSHOT_METADATA_KEY] = {
+            "requested_policy": task_policy.to_json_dict() if task_policy is not None else {},
+            "requested_execution": requested_execution,
+            "resolved_execution": effective_policy.execution.model_dump(exclude_none=True)
+            if effective_policy.execution is not None
+            else {},
+            "effective_policy": effective_policy.to_json_dict(),
+            "resolved_at": datetime.now(UTC).isoformat(),
+            "revision": 1,
+        }
 
         task = AgentTask(
             id=new_task_id,
@@ -265,13 +322,13 @@ class TaskService(BaseTaskService):
             workspace_id=workspace_id or "",
             agent_id=agent_id,
             status=status,
-            task_parameters=parameters or {},
+            task_parameters=parameters,
             metadata=metadata,
+            scheduled_at=scheduled_at,
         )
         stored_task = await self.create_task(task)
-        # Hand the just-resolved effective policy to TemporalTaskManager via the
-        # transient field. The workflow carries it in its state and is the
-        # canonical source served on demand by the governance API.
+        # Hand the exact DB-persisted snapshot to Temporal. Policy changes after
+        # this point must not affect the run.
         stored_task.effective_policy = effective_policy.to_json_dict()
         return stored_task
 
@@ -336,19 +393,31 @@ class TaskService(BaseTaskService):
             metadata_overrides.update(trusted_metadata)
         if payload.project_id is not None:
             metadata_overrides["project_id"] = payload.project_id
-        if payload.package_install is not None:
-            metadata_overrides["package_install"] = payload.package_install
+        parameters = dict(payload.parameters)
+        task_policy = payload.task_policy
+        if payload.execution is not None:
+            legacy_value = parameters.get("max_iterations")
+            requested_value = payload.execution.max_model_turns
+            if legacy_value is not None and legacy_value != requested_value:
+                raise PolicyValidationError(
+                    "execution.max_model_turns conflicts with parameters.max_iterations"
+                )
+            task_policy = self._with_requested_execution_limits(
+                task_policy,
+                {"max_iterations": requested_value},
+            )
 
         return await self.create_and_execute_task_with_workflow(
             agent_id=payload.agent_id,
             description=payload.description,
             workspace_id=workspace_id,
-            parameters=payload.parameters,
+            parameters=parameters,
             user_id=user_id,
             requires_human_approval=payload.requires_human_approval,
-            task_policy=payload.task_policy,
+            task_policy=task_policy,
             metadata_overrides=metadata_overrides,
             task_id=task_id,
+            scheduled_at=payload.scheduled_at,
         )
 
     async def reserve_run(
@@ -372,20 +441,33 @@ class TaskService(BaseTaskService):
             metadata_overrides.update(trusted_metadata)
         if payload.project_id is not None:
             metadata_overrides["project_id"] = payload.project_id
-        if payload.package_install is not None:
-            metadata_overrides["package_install"] = payload.package_install
+        parameters = dict(payload.parameters)
+        task_policy = payload.task_policy
+        if payload.execution is not None:
+            legacy_value = parameters.get("max_iterations")
+            requested_value = payload.execution.max_model_turns
+            if legacy_value is not None and legacy_value != requested_value:
+                raise PolicyValidationError(
+                    "execution.max_model_turns conflicts with parameters.max_iterations"
+                )
+            task_policy = self._with_requested_execution_limits(
+                task_policy,
+                {"max_iterations": requested_value},
+            )
+
         return await self.create_task_with_policy(
             agent_id=payload.agent_id,
             description=payload.description,
             workspace_id=workspace_id,
-            parameters=payload.parameters,
+            parameters=parameters,
             user_id=user_id,
             requires_human_approval=payload.requires_human_approval,
             task_id=task_id,
             metadata_overrides=metadata_overrides,
             status="preparing",
-            task_policy=payload.task_policy,
+            task_policy=task_policy,
             require_model=True,
+            scheduled_at=payload.scheduled_at,
         )
 
     async def dispatch_reserved_run(self, task: AgentTask) -> AgentTask:
@@ -686,7 +768,61 @@ class TaskService(BaseTaskService):
         if not task.execution_id or self.workflow_service is None:
             return {"accepted": False, "reason": "workflow_unavailable"}
 
-        payload: dict[str, Any] = {"additional_iterations": additional_iterations}
+        metadata = dict(task.metadata or {})
+        current_snapshot = metadata.get(_GOVERNANCE_SNAPSHOT_METADATA_KEY)
+        if not isinstance(current_snapshot, dict):
+            return {"accepted": False, "reason": "governance_snapshot_missing"}
+        current_policy_data = current_snapshot.get("effective_policy")
+        if not isinstance(current_policy_data, dict):
+            return {"accepted": False, "reason": "governance_snapshot_missing"}
+        current_policy = effective_policy_from_json(current_policy_data)
+        current_runtime = current_policy.runtime_contract()
+
+        requested_policy = PolicyDocument.model_validate(
+            current_snapshot.get("requested_policy") or {}
+        )
+        requested_data = requested_policy.to_json_dict()
+        if additional_iterations:
+            execution = dict(requested_data.get("execution") or {})
+            execution["max_model_turns"] = current_runtime.max_model_turns + additional_iterations
+            requested_data["execution"] = execution
+        if additional_budget_usd is not None:
+            budget = dict(requested_data.get("budget") or {})
+            budget["run_budget_usd"] = serialize_money(
+                current_runtime.run_budget_usd + additional_budget_usd
+            )
+            requested_data["budget"] = budget
+        requested_policy = PolicyDocument.model_validate(requested_data)
+
+        try:
+            next_policy = await self._resolve_effective_policy(
+                workspace_id=task.workspace_id,
+                agent_id=task.agent_id,
+                task_id=task.id,
+                task_policy=requested_policy,
+            )
+            next_policy.runtime_contract()
+        except PolicyValidationError:
+            return {"accepted": False, "reason": "policy_ceiling"}
+
+        resolved_execution = next_policy.execution
+        if resolved_execution is None:
+            return {"accepted": False, "reason": "governance_snapshot_missing"}
+        next_snapshot = {
+            "requested_policy": requested_policy.to_json_dict(),
+            "requested_execution": requested_policy.execution.model_dump(exclude_none=True)
+            if requested_policy.execution is not None
+            else {},
+            "resolved_execution": resolved_execution.model_dump(exclude_none=True),
+            "effective_policy": next_policy.to_json_dict(),
+            "resolved_at": datetime.now(UTC).isoformat(),
+            "revision": int(current_snapshot.get("revision") or 1) + 1,
+        }
+        payload: dict[str, Any] = {
+            "additional_iterations": additional_iterations,
+            "effective_policy": next_policy.to_json_dict(),
+            "governance_snapshot": next_snapshot,
+        }
         if additional_budget_usd is not None:
             payload["additional_budget_usd"] = serialize_money(additional_budget_usd)
         return await self.workflow_service.continue_execution(task.execution_id, payload)
@@ -737,6 +873,7 @@ class TaskService(BaseTaskService):
         metadata_overrides: dict[str, Any] | None = None,
         status: str = "pending",
         task_policy: PolicyDocument | None = None,
+        scheduled_at: datetime | None = None,
     ) -> AgentTask:
         """Canonical entry point for creating and executing a task via Temporal workflow.
 
@@ -756,6 +893,7 @@ class TaskService(BaseTaskService):
             metadata_overrides: Caller metadata merged on top of canonical defaults.
             status: Initial task status (default ``pending``)
             task_policy: Optional task-scoped policy that may only tighten higher scopes.
+            scheduled_at: Absolute future time for a one-shot deferred run.
 
         Returns:
             Created task with workflow execution info, or the routed-into existing
@@ -768,7 +906,9 @@ class TaskService(BaseTaskService):
         # new effective policy. Routing only needs identity/message fields.
         channel_origin = (parameters or {}).get("channel_origin", {})
         chat_id = channel_origin.get("chat_id") if channel_origin else None
-        if chat_id:
+        # A deferred run is a new run, never a follow-up delivered into whatever
+        # workflow happens to be live for this chat right now.
+        if chat_id and scheduled_at is None:
             draft = AgentTask(
                 id=new_task_id,
                 title=title or description,
@@ -802,6 +942,7 @@ class TaskService(BaseTaskService):
             status=status,
             task_policy=task_policy,
             require_model=True,
+            scheduled_at=scheduled_at,
         )
 
         stored_task.status = "pending"
@@ -813,6 +954,10 @@ class TaskService(BaseTaskService):
             logger.info(
                 f"Task {new_task_id} submitted successfully with status {executed_task.status}"
             )
+        except SchedulingNotSupportedError:
+            # A deployment capability gap, not a transient dispatch failure —
+            # reporting it as a generic "failed" task would hide the cause.
+            raise
         except Exception as e:
             logger.error(f"Failed to submit task: {e}")
             stored_task.status = "failed"

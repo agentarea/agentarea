@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 _SECRET_PREFIX = "mcp_auth_cred"  # noqa: S105
 
 
+class MissingCredentialsError(Exception):
+    """The auth config names credentials that are not there.
+
+    Distinct from OAuthReauthRequiredError: nothing is expired or revoked, the
+    stored value is simply absent, so the fix is to enter it rather than to
+    re-authorize.
+    """
+
+
 class OAuthReauthRequiredError(Exception):
     """The OAuth session cannot be renewed unattended — the user must reconnect.
 
@@ -62,12 +71,21 @@ class MCPAuthService:
         return key
 
     async def _load_credentials(self, config: MCPAuthConfig) -> dict[str, Any]:
-        """Retrieve and decrypt credentials for a config."""
+        """Retrieve and decrypt credentials for a config.
+
+        A config with no secret_key legitimately has no credentials. A config
+        that names one which has gone missing is broken, and saying so beats
+        returning an empty dict — that ends as an empty Authorization header and
+        a 401 from the far end, which reads like the remote server's problem.
+        """
         if not config.secret_key:
             return {}
         raw = await self._secret_manager.get_secret(config.secret_key)
         if raw is None:
-            return {}
+            raise MissingCredentialsError(
+                f"Auth config {config.id} references a secret that no longer exists. "
+                "Re-enter its credentials."
+            )
         return json.loads(raw)
 
     async def _delete_credentials(self, config: MCPAuthConfig) -> None:
@@ -97,11 +115,19 @@ class MCPAuthService:
             header_name = config.config.get("header_name", "X-API-Key")
             header_value = creds.get("header_value", "")
             if not header_value:
-                logger.warning("api_key auth config %s has no header_value credential", config.id)
+                # Sending the header empty produces a 401 from the upstream
+                # server, which points the user at the wrong system.
+                raise MissingCredentialsError(
+                    f"Auth config {config.id} has no API key stored. Re-enter its credentials."
+                )
             return {header_name: header_value}
 
         if config.auth_type == AUTH_TYPE_BEARER:
             token = creds.get("token", "")
+            if not token:
+                raise MissingCredentialsError(
+                    f"Auth config {config.id} has no bearer token stored. Re-enter its credentials."
+                )
             return {"Authorization": f"Bearer {token}"}
 
         if config.auth_type == AUTH_TYPE_OAUTH2:

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
+import { ChevronRight, FileText, Folder, FolderOpen, Trash2 } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -88,28 +88,44 @@ function FileRow({
   depth,
   onSelect,
   selectedPath,
+  onDelete,
 }: {
   node: TreeNode;
   depth: number;
   onSelect: (file: BrowsedFile) => void;
   selectedPath: string | null;
+  onDelete?: (file: BrowsedFile) => void;
 }) {
   const file = node.file;
   if (!file) return null;
   const isSelected = selectedPath === file.path;
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(file)}
+    <div
       className={cn(
-        "flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm transition-colors hover:bg-muted",
+        "group flex w-full items-center rounded transition-colors hover:bg-muted",
         isSelected && "bg-muted"
       )}
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
     >
-      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <span className="truncate flex-1">{node.name}</span>
-    </button>
+      <button
+        type="button"
+        onClick={() => onSelect(file)}
+        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm"
+        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+      >
+        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate">{node.name}</span>
+      </button>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(file)}
+          aria-label={`Delete ${node.name}`}
+          className="mr-1 hidden shrink-0 rounded p-1 text-muted-foreground hover:text-destructive group-hover:block focus-visible:block"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -118,11 +134,13 @@ function FolderRow({
   depth,
   onSelect,
   selectedPath,
+  onDelete,
 }: {
   node: TreeNode;
   depth: number;
   onSelect: (file: BrowsedFile) => void;
   selectedPath: string | null;
+  onDelete?: (file: BrowsedFile) => void;
 }) {
   const [open, setOpen] = useState(depth < 1);
   return (
@@ -159,6 +177,7 @@ function FolderRow({
               depth={depth + 1}
               onSelect={onSelect}
               selectedPath={selectedPath}
+              onDelete={onDelete}
             />
           ) : (
             <FolderRow
@@ -167,6 +186,7 @@ function FolderRow({
               depth={depth + 1}
               onSelect={onSelect}
               selectedPath={selectedPath}
+              onDelete={onDelete}
             />
           )
         )}
@@ -180,11 +200,13 @@ export function FileTree({
   directories = [],
   onSelect,
   selectedPath,
+  onDelete,
 }: {
   files: BrowsedFile[];
   directories?: string[];
   onSelect: (file: BrowsedFile) => void;
   selectedPath: string | null;
+  onDelete?: (file: BrowsedFile) => void;
 }) {
   const root = buildTree(files, directories);
   const top = sortedChildren(root);
@@ -198,6 +220,7 @@ export function FileTree({
             depth={0}
             onSelect={onSelect}
             selectedPath={selectedPath}
+            onDelete={onDelete}
           />
         ) : (
           <FolderRow
@@ -206,6 +229,7 @@ export function FileTree({
             depth={0}
             onSelect={onSelect}
             selectedPath={selectedPath}
+            onDelete={onDelete}
           />
         )
       )}

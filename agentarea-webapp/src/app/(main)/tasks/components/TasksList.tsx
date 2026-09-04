@@ -36,21 +36,26 @@ export default function TasksList({
       header: t("statusLabel"),
       headerClassName: "w-[140px]",
       cellClassName: "whitespace-nowrap",
-      render: (value: string) => {
+      render: (value: string, row: TaskWithAgent) => {
         const presentation = getTaskStatusPresentation(value);
         const label = presentation.labelKey
           ? tStatus(presentation.labelKey)
           : presentation.label;
 
         return (
-          <StatusIndicator
-            size="default"
-            tone={presentation.tone}
-            pulse={presentation.pulse}
-            className="font-medium"
-          >
-            {label}
-          </StatusIndicator>
+          <div className="flex flex-col gap-1">
+            <StatusIndicator
+              size="default"
+              tone={presentation.tone}
+              pulse={presentation.pulse}
+              className="font-medium"
+            >
+              {label}
+            </StatusIndicator>
+            {row.scheduled_at && (
+              <TableDateDisplay dateString={row.scheduled_at} />
+            )}
+          </div>
         );
       },
     },

@@ -11,11 +11,12 @@ from .base import platform_read_context
     display_name="Network",
     description="Inspect workspace network topology (agents, skills, MCP instances, triggers).",
     category="platform",
+    plane="observe",
 )
 class NetworkToolset(Toolset):
     """Inspect the workspace network topology (agents, skills, MCP instances, triggers)."""
 
-    @tool_method
+    @tool_method(effect="read")
     async def get_topology(self) -> str:
         """Return all nodes and edges in the workspace's agent/skill/MCP/trigger graph."""
         async with platform_read_context() as (_session, user_ctx, _repo, _broker, _secret):

@@ -91,11 +91,16 @@ memory-bank/
 mcp-infrastructure/bin
 .specify
 specs
-.claude
 .serena
 
+# Agent harness config. `.agents/` is the shared, harness-neutral home for
+# skills and notes and IS tracked. `.claude/` is per-developer local state
+# (settings.local.json, worktrees/, commands/) and is NOT — except the
+# `.claude/skills` symlink that points Claude Code at `.agents/skills`.
+.claude/*
+!.claude/skills
+
 openspec
-.agents
 .trae
 .sisyphus
 

@@ -34,6 +34,105 @@ func TestRepositoryRejectsCrossTaskObjectBeforeSigning(t *testing.T) {
 	}
 }
 
+func TestPrepareCurrentHydrationSignsOnlyTaskInputs(t *testing.T) {
+	repository, storage, ref, manifest := repositoryFixture(t)
+	content := []byte("uploaded input")
+	digest := sha256.Sum256(content)
+	hash := hex.EncodeToString(digest[:])
+	input := Entry{
+		RelativePath:        "inputs/attachments/report.txt",
+		ObjectURI:           repository.objectURI(repository.taskPrefix(ref.WorkspaceID, ref.TaskID) + "/objects/" + hash),
+		ObjectVersionOrETag: "input-object-1",
+		SHA256:              hash,
+		Size:                int64(len(content)),
+		ContentType:         "text/plain",
+		Mode:                0o600,
+	}
+	manifest.Entries = append(manifest.Entries, input)
+	storage.put(repository.keyFromURI(input.ObjectURI), content, "input-object-1", map[string]string{"sha256": hash})
+	ref = storage.replaceManifest(t, repository, ref, manifest)
+	storage.putJSON(repository.pointerKey(ref), ref, "current-inputs")
+
+	hydration, err := repository.PrepareCurrentHydration(
+		context.Background(), ref.WorkspaceID, ref.TaskID, "inputs",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hydration.Generation != ref.Generation || len(hydration.Downloads) != 1 {
+		t.Fatalf("hydration = %#v", hydration)
+	}
+	if hydration.Downloads[0].RelativePath != input.RelativePath || hydration.Downloads[0].SHA256 != hash {
+		t.Fatalf("download = %#v", hydration.Downloads[0])
+	}
+	if len(hydration.RevisionSHA256) != sha256.Size*2 {
+		t.Fatalf("revision_sha256 = %q", hydration.RevisionSHA256)
+	}
+
+	outputContent := []byte("runner output")
+	outputDigest := sha256.Sum256(outputContent)
+	outputHash := hex.EncodeToString(outputDigest[:])
+	output := Entry{
+		RelativePath:        ".agentarea/executions/sexec-1/stdout.txt",
+		ObjectURI:           repository.objectURI(repository.taskPrefix(ref.WorkspaceID, ref.TaskID) + "/objects/" + outputHash),
+		ObjectVersionOrETag: "output-object-1",
+		SHA256:              outputHash,
+		Size:                int64(len(outputContent)),
+		ContentType:         "text/plain",
+		Mode:                0o600,
+	}
+	storage.put(repository.keyFromURI(output.ObjectURI), outputContent, "output-object-1", map[string]string{"sha256": outputHash})
+	manifest.Entries = append(manifest.Entries, output)
+	manifest.BaseGeneration = manifest.Generation
+	manifest.Generation++
+	nextRef := ref
+	nextRef.BaseGeneration = ref.Generation
+	nextRef.Generation = manifest.Generation
+	nextRef = storage.replaceManifest(t, repository, nextRef, manifest)
+	storage.putJSON(repository.pointerKey(nextRef), nextRef, "current-with-output")
+
+	afterOutput, err := repository.PrepareCurrentHydration(
+		context.Background(), nextRef.WorkspaceID, nextRef.TaskID, "inputs",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if afterOutput.Generation == hydration.Generation || afterOutput.ManifestSHA256 == hydration.ManifestSHA256 {
+		t.Fatalf("containing manifest identity did not advance: before=%#v after=%#v", hydration, afterOutput)
+	}
+	if afterOutput.RevisionSHA256 != hydration.RevisionSHA256 {
+		t.Fatalf("input revision changed after output-only commit: before=%s after=%s", hydration.RevisionSHA256, afterOutput.RevisionSHA256)
+	}
+	if len(afterOutput.Downloads) != 1 || afterOutput.Downloads[0].RelativePath != input.RelativePath {
+		t.Fatalf("output-only commit changed hydration downloads: %#v", afterOutput.Downloads)
+	}
+
+	mutatedContent := []byte("mutated after first demand")
+	mutatedDigest := sha256.Sum256(mutatedContent)
+	mutatedHash := hex.EncodeToString(mutatedDigest[:])
+	for index := range manifest.Entries {
+		if manifest.Entries[index].RelativePath != input.RelativePath {
+			continue
+		}
+		manifest.Entries[index].SHA256 = mutatedHash
+		manifest.Entries[index].Size = int64(len(mutatedContent))
+		manifest.Entries[index].ObjectURI = repository.objectURI(repository.taskPrefix(ref.WorkspaceID, ref.TaskID) + "/objects/" + mutatedHash)
+		manifest.Entries[index].ObjectVersionOrETag = "input-object-2"
+		storage.put(repository.keyFromURI(manifest.Entries[index].ObjectURI), mutatedContent, "input-object-2", map[string]string{"sha256": mutatedHash})
+		break
+	}
+	manifest.BaseGeneration = manifest.Generation
+	manifest.Generation++
+	mutatedRef := nextRef
+	mutatedRef.BaseGeneration = nextRef.Generation
+	mutatedRef.Generation = manifest.Generation
+	mutatedRef = storage.replaceManifest(t, repository, mutatedRef, manifest)
+	storage.putJSON(repository.pointerKey(mutatedRef), mutatedRef, "current-mutated-input")
+	if _, err := repository.PrepareCurrentHydration(context.Background(), mutatedRef.WorkspaceID, mutatedRef.TaskID, "inputs"); err == nil || !errorsIs(err, ErrWorkspaceConflict) {
+		t.Fatalf("PrepareCurrentHydration() error = %v, want immutable input conflict", err)
+	}
+}
+
 func TestRepositoryStaleCurrentETagCannotCommit(t *testing.T) {
 	repository, storage, ref, _ := repositoryFixture(t)
 	_, base, err := repository.PrepareHydration(context.Background(), ref)
@@ -124,26 +223,30 @@ func TestManifestRefRejectsTraversalAndSignedURI(t *testing.T) {
 	if err := ref.Validate(); err == nil {
 		t.Fatal("signed manifest URI was accepted")
 	}
-	for _, candidate := range []string{"/absolute", "../escape", "a/../b", `a\b`} {
+	for _, candidate := range []string{"/absolute", "../escape", "a/../b", `a\b`, "line\nbreak"} {
 		if _, err := NormalizeRelativePath(candidate); err == nil {
 			t.Fatalf("path %q was accepted", candidate)
 		}
 	}
 }
 
-func TestConfigFromEnvUsesPlatformStorageFallbacksAndAlignedQuotas(t *testing.T) {
+func TestLoadConfigFromEnvUsesPlatformStorageFallbacksAndExplicitQuotas(t *testing.T) {
 	t.Setenv("SANDBOX_WORKSPACE_S3_BUCKET", "")
 	t.Setenv("SANDBOX_WORKSPACE_S3_REGION", "")
 	t.Setenv("SANDBOX_WORKSPACE_S3_ENDPOINT", "")
-	t.Setenv("SANDBOX_WORKSPACE_MAX_FILES", "")
-	t.Setenv("SANDBOX_WORKSPACE_MAX_FILE_BYTES", "")
-	t.Setenv("SANDBOX_WORKSPACE_MAX_BYTES", "")
-	t.Setenv("SANDBOX_WORKSPACE_SIGNED_URL_TTL", "")
+	t.Setenv("SANDBOX_WORKSPACE_MAX_FILES", "10000")
+	t.Setenv("SANDBOX_WORKSPACE_MAX_FILE_BYTES", "268435456")
+	t.Setenv("SANDBOX_WORKSPACE_MAX_BYTES", "2147483648")
+	t.Setenv("SANDBOX_WORKSPACE_SIGNED_URL_TTL", "1h")
+	t.Setenv("SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE", "true")
 	t.Setenv("ARTIFACTS_BUCKET_NAME", "artifacts-fallback")
 	t.Setenv("AWS_REGION", "eu-west-2")
 	t.Setenv("AWS_ENDPOINT_URL", "http://rustfs:9000/")
 
-	cfg := ConfigFromEnv()
+	cfg, err := LoadConfigFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if cfg.Bucket != "artifacts-fallback" || cfg.Region != "eu-west-2" || cfg.Endpoint != "http://rustfs:9000" {
 		t.Fatalf("storage fallback config = %#v", cfg)
 	}
@@ -155,7 +258,8 @@ func TestConfigFromEnvUsesPlatformStorageFallbacksAndAlignedQuotas(t *testing.T)
 	}
 }
 
-func TestConfigFromEnvPrefersWorkspaceOverrides(t *testing.T) {
+func TestLoadConfigFromEnvPrefersWorkspaceOverrides(t *testing.T) {
+	setWorkspacePolicyEnv(t)
 	t.Setenv("ARTIFACTS_BUCKET_NAME", "platform-bucket")
 	t.Setenv("AWS_REGION", "platform-region")
 	t.Setenv("AWS_ENDPOINT_URL", "http://platform.invalid")
@@ -163,10 +267,29 @@ func TestConfigFromEnvPrefersWorkspaceOverrides(t *testing.T) {
 	t.Setenv("SANDBOX_WORKSPACE_S3_REGION", "workspace-region")
 	t.Setenv("SANDBOX_WORKSPACE_S3_ENDPOINT", "http://workspace.invalid/")
 
-	cfg := ConfigFromEnv()
+	cfg, err := LoadConfigFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if cfg.Bucket != "workspace-bucket" || cfg.Region != "workspace-region" || cfg.Endpoint != "http://workspace.invalid" {
 		t.Fatalf("workspace override config = %#v", cfg)
 	}
+}
+
+func TestLoadConfigFromEnvRejectsMissingQuotaPolicy(t *testing.T) {
+	t.Setenv("SANDBOX_WORKSPACE_MAX_FILES", "")
+	if _, err := LoadConfigFromEnv(); err == nil {
+		t.Fatal("missing workspace quota policy unexpectedly accepted")
+	}
+}
+
+func setWorkspacePolicyEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("SANDBOX_WORKSPACE_MAX_FILES", "10000")
+	t.Setenv("SANDBOX_WORKSPACE_MAX_FILE_BYTES", "268435456")
+	t.Setenv("SANDBOX_WORKSPACE_MAX_BYTES", "2147483648")
+	t.Setenv("SANDBOX_WORKSPACE_SIGNED_URL_TTL", "1h")
+	t.Setenv("SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE", "true")
 }
 
 func TestRepositoryReleaseLeaseExpiresMatchingToken(t *testing.T) {
@@ -381,7 +504,7 @@ func TestRepositoryRejectsExecutionOutputIdentityCollision(t *testing.T) {
 func repositoryFixture(t *testing.T) (*Repository, *fakeS3, ManifestRef, Manifest) {
 	t.Helper()
 	storage := newFakeS3()
-	repository, err := NewRepository(RepositoryConfig{Bucket: "trusted", Prefix: "root", SignedURLTTL: time.Minute, MaxFiles: 100, MaxBytes: 1024 * 1024}, storage, storage)
+	repository, err := NewRepository(RepositoryConfig{Bucket: "trusted", Prefix: "root", SignedURLTTL: time.Minute, MaxFiles: 100, MaxFileBytes: 512 * 1024, MaxBytes: 1024 * 1024}, storage, storage)
 	if err != nil {
 		t.Fatal(err)
 	}

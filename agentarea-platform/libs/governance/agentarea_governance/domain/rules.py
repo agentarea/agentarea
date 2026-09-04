@@ -11,19 +11,29 @@ contract is unchanged; only the storage shape changed.
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from agentarea_common.money import to_money
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from .policies import (
     ApprovalPolicy,
     BudgetPolicy,
     ContentSafetyPolicy,
+    ExecutionLimitsPolicy,
     PolicyDocument,
     TokenPolicy,
     ToolsPolicy,
+    parse_subject,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,6 +91,7 @@ _TARGET_KINDS = frozenset(
         "spend",
         "service",
         "tokens",
+        "execution",
         "content",
         "all",
     }
@@ -122,12 +133,195 @@ def parse_target(selector: str) -> tuple[str, str | None]:
     return kind, value
 
 
+class SpendCapParams(BaseModel):
+    """``params`` for a ``cap`` on ``spend`` (per calendar month or per run)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    amount_usd: Decimal = Field(ge=0)
+    period: Literal["month", "run"] = "month"
+
+
+class ServiceCapParams(BaseModel):
+    """``params`` for a ``cap`` on ``service`` spend."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    amount_usd: Decimal = Field(gt=0)
+
+
+class TokenCapParams(BaseModel):
+    """``params`` for a ``cap`` on ``tokens``; at least one ceiling is required."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_tokens: int | None = Field(default=None, gt=0)
+    max_tokens_per_call: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _require_one(self) -> TokenCapParams:
+        if self.max_tokens is None and self.max_tokens_per_call is None:
+            raise ValueError("token cap requires 'max_tokens' or 'max_tokens_per_call'")
+        return self
+
+
+class ExecutionCapParams(BaseModel):
+    """``params`` for a ``cap`` on ``execution``; at least one ceiling is required."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_model_turns: int | None = Field(default=None, gt=0)
+    max_tool_calls_per_turn: int | None = Field(default=None, gt=0)
+    max_tool_calls_total: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _require_one(self) -> ExecutionCapParams:
+        if (
+            self.max_model_turns is None
+            and self.max_tool_calls_per_turn is None
+            and self.max_tool_calls_total is None
+        ):
+            raise ValueError(
+                "execution cap requires 'max_model_turns', 'max_tool_calls_per_turn', "
+                "or 'max_tool_calls_total'"
+            )
+        return self
+
+
+class ApprovalParams(BaseModel):
+    """``params`` for an ``approval`` rule; approvers are Keto-style subject refs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    approvers: list[str] = Field(default_factory=list)
+
+    @field_validator("approvers")
+    @classmethod
+    def _validate_refs(cls, value: list[str]) -> list[str]:
+        for ref in value:
+            parse_subject(ref)  # raises ValueError on a non subject-ref (e.g. a raw id)
+        return value
+
+
+class SafetyParams(BaseModel):
+    """``params`` for a ``safety`` rule on ``content``; at least one toggle required."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prompt_injection: bool | None = None
+    output_sanitizer: bool | None = None
+
+    @model_validator(mode="after")
+    def _require_one(self) -> SafetyParams:
+        if self.prompt_injection is None and self.output_sanitizer is None:
+            raise ValueError("safety on content requires 'prompt_injection' or 'output_sanitizer'")
+        return self
+
+
+# Which typed param model validates a cap for each cap target kind.
+_CAP_PARAM_MODEL: dict[str, type[BaseModel]] = {
+    "spend": SpendCapParams,
+    "service": ServiceCapParams,
+    "tokens": TokenCapParams,
+    "execution": ExecutionCapParams,
+}
+
+
+def _validate_params(rule: PolicyRule, model: type[BaseModel]) -> None:
+    """Validate ``rule.params`` through a typed model at the write boundary.
+
+    Pydantic's ``ValidationError`` does not subclass ``ValueError`` in v2, so the
+    write API's ``except ValueError`` would miss it; translate it into a compact,
+    caller-facing ``ValueError`` instead of surfacing the multi-line pydantic dump.
+    """
+    try:
+        model.model_validate(rule.params or {})
+    except ValidationError as exc:
+        problems = "; ".join(
+            f"{'.'.join(str(loc) for loc in err['loc']) or 'params'}: {err['msg']}"
+            for err in exc.errors()
+        )
+        raise ValueError(
+            f"invalid params for {rule.effect.value} on {rule.target!r}: {problems}"
+        ) from exc
+
+
+def assert_enforceable(rule: PolicyRule) -> None:
+    """Reject a rule the engine would silently ignore at runtime.
+
+    The compiler debug-skips unenforceable rules, so without this guard the write
+    API returns 201 for rules that never take effect (fail-open). Fail loudly at
+    the write boundary instead: the effect/target selector is checked structurally,
+    then ``params`` is validated through the matching typed model above. This runs
+    only on create/update — never when loading existing rows from the database.
+
+    Raises:
+        ValueError: with a caller-facing reason when the rule cannot be enforced.
+    """
+    if rule.subject_type == PolicySubjectType.GROUP:
+        raise ValueError(
+            "group subjects are not resolved yet (issue #198); bind the rule to a "
+            "workspace, agent, or user"
+        )
+    if rule.condition is not None:
+        raise ValueError("conditions (CEL) are not evaluated yet; omit 'condition'")
+
+    kind, value = parse_target(rule.target)  # raises ValueError on an unknown kind
+    effect = rule.effect
+
+    if effect == PolicyEffect.CAP:
+        model = _CAP_PARAM_MODEL.get(kind)
+        if model is None:
+            raise ValueError(
+                f"cap on {rule.target!r} is not enforceable; caps apply to "
+                "spend, service, tokens, or execution"
+            )
+        _validate_params(rule, model)
+        return
+
+    if effect in (PolicyEffect.DENY, PolicyEffect.ALLOW):
+        if kind != "tool":
+            raise ValueError(
+                f"{effect.value} is only enforceable on a tool target (tool:<name>), "
+                f"not {rule.target!r}"
+            )
+        if value in (None, "*"):
+            raise ValueError(
+                f"{effect.value} requires a specific tool (tool:<name>), not a wildcard "
+                f"{rule.target!r}"
+            )
+        return
+
+    if effect == PolicyEffect.APPROVAL:
+        if not (kind == "all" or (kind == "tool" and (value == "*" or value))):
+            raise ValueError(
+                f"approval is enforceable on '*' (all tools) or tool:<name>, not {rule.target!r}"
+            )
+        _validate_params(rule, ApprovalParams)
+        return
+
+    if effect == PolicyEffect.SAFETY:
+        if kind != "content":
+            raise ValueError(f"safety is only enforceable on a content target, not {rule.target!r}")
+        _validate_params(rule, SafetyParams)
+        return
+
+    if effect == PolicyEffect.EGRESS:
+        # Accepted as opaque data — core neither validates nor enforces egress.
+        # Enforcement is the enterprise EgressEnforcer at the container network
+        # boundary; core only stores and round-trips the rows for it to consume.
+        return
+
+    raise ValueError(f"effect {effect.value!r} on {rule.target!r} is not enforceable")
+
+
 class _DocumentAccumulator:
     """Mutable scratch space that the compiler folds rules into."""
 
     def __init__(self) -> None:
         self.budget: dict[str, Any] = {}
         self.tokens: dict[str, Any] = {}
+        self.execution: dict[str, Any] = {}
         self.tools_allowed: list[str] = []
         self.tools_denied: list[str] = []
         self.approval_required: bool = False
@@ -139,6 +333,7 @@ class _DocumentAccumulator:
     def to_document(self) -> PolicyDocument:
         budget = BudgetPolicy(**self.budget) if self.budget else None
         tokens = TokenPolicy(**self.tokens) if self.tokens else None
+        execution = ExecutionLimitsPolicy(**self.execution) if self.execution else None
 
         tools: ToolsPolicy | None = None
         if self.tools_allowed or self.tools_denied:
@@ -168,6 +363,7 @@ class _DocumentAccumulator:
         return PolicyDocument(
             budget=budget,
             tokens=tokens,
+            execution=execution,
             tools=tools,
             approval=approval,
             content_safety=content_safety,
@@ -276,6 +472,16 @@ def _apply_cap(
             acc.tokens["max_tokens"] = params["max_tokens"]
         if "max_tokens_per_call" in params:
             acc.tokens["max_tokens_per_call"] = params["max_tokens_per_call"]
+        return
+
+    if kind == "execution":
+        for field in (
+            "max_model_turns",
+            "max_tool_calls_per_turn",
+            "max_tool_calls_total",
+        ):
+            if field in params:
+                acc.execution[field] = params[field]
         return
 
     logger.debug("skipping cap rule %s: unsupported cap target %r", rule.id, rule.target)

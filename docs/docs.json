@@ -2,11 +2,12 @@
   "$schema": "https://mintlify.com/schema.json",
   "name": "AgentArea",
   "theme": "maple",
-  "colors": { 
+  "colors": {
     "primary": "#3b82f6"
   },
-  
-  "versions": ["v1"],
+  "versions": [
+    "v1"
+  ],
   "feedback": {
     "thumbsRating": true,
     "suggestEdit": true
@@ -17,85 +18,158 @@
   "navigation": {
     "groups": [
       {
-        "group": "Get Started",
+        "group": "Start here",
         "icon": "rocket",
         "pages": [
-          "welcome",
-          "getting-started",
-          "platform-overview"
+          "index",
+          "how-it-works"
         ]
       },
       {
-        "group": "Features",
-        "icon": "sparkles",
-        "pages": [
-          "features",
-          "agentic-networks",
-          "agent-governance",
-          "mcp-integration",
-          "mcp-oauth",
-          "serverless-mcp",
-          "compound-mcps",
-          "event-triggers"
-        ]
-      },
-      {
-        "group": "Core Concepts",
+        "group": "Concepts",
         "icon": "lightbulb",
         "pages": [
-          "building-agents",
-          "skills",
-          "agent-communication"
+          "concepts/agentic-networks",
+          "concepts/control-and-data-plane",
+          "concepts/workspaces-projects-resources",
+          "concepts/open-core",
+          {
+            "group": "Agents",
+            "pages": [
+              "concepts/agents/what-is-an-agent",
+              "concepts/agents/context-strategies",
+              "concepts/agents/skills",
+              "concepts/agents/a2a"
+            ]
+          },
+          {
+            "group": "Execution",
+            "pages": [
+              "concepts/execution/tasks",
+              "concepts/execution/durable-execution",
+              "concepts/execution/events",
+              "concepts/execution/artifacts"
+            ]
+          },
+          {
+            "group": "Governance",
+            "pages": [
+              "concepts/governance/the-agentarea-model",
+              "concepts/governance/authorization-basics",
+              "concepts/governance/policy-engine",
+              "concepts/governance/tool-authorization",
+              "concepts/governance/approvals",
+              "concepts/governance/budgets-and-quotas",
+              "concepts/governance/audit"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "concepts/integration/mcp",
+              "concepts/integration/bundles",
+              "concepts/integration/registry-and-catalog"
+            ]
+          },
+          {
+            "group": "Sandboxes",
+            "pages": [
+              "concepts/sandbox/why-a-sandbox",
+              "concepts/sandbox/sessions",
+              "concepts/sandbox/lifecycle",
+              "concepts/sandbox/isolation",
+              "concepts/sandbox/the-file-model"
+            ]
+          }
         ]
       },
       {
-        "group": "Technical Deep-Dives",
-        "icon": "code",
+        "group": "Guides",
+        "icon": "compass",
         "pages": [
-          "architecture",
-          "temporal-workflows",
-          "warm-pool",
-          "skill-sandboxing",
-          "feature-flags",
-          "engineering-principles"
+          {
+            "group": "Tasks",
+            "pages": [
+              "guides/tasks/start-a-task",
+              "guides/tasks/attach-files",
+              "guides/tasks/stream-events",
+              "guides/tasks/retrieve-artifacts",
+              "guides/tasks/debug-a-failed-task",
+              "guides/tasks/cancel-and-retry"
+            ]
+          },
+          {
+            "group": "Sandboxes",
+            "pages": [
+              "guides/sandbox/provide-input-files",
+              "guides/sandbox/run-a-command",
+              "guides/sandbox/collect-artifacts-and-logs"
+            ]
+          },
+          {
+            "group": "MCP",
+            "pages": [
+              "guides/mcp/connect-a-remote-server",
+              "guides/mcp/add-a-hosted-server",
+              "guides/mcp/authenticate-with-oauth",
+              "guides/mcp/pass-secrets",
+              "guides/mcp/issue-access-tokens",
+              "guides/mcp/build-a-compound-mcp"
+            ]
+          },
+          {
+            "group": "Governance",
+            "pages": [
+              "guides/governance/authorize-a-tool-call",
+              "guides/governance/grant-resource-access",
+              "guides/governance/model-a-custom-relation",
+              "guides/governance/require-human-approval",
+              "guides/governance/review-the-audit-trail",
+              "guides/governance/set-a-budget"
+            ]
+          }
         ]
       },
       {
-        "group": "Examples",
-        "icon": "play",
-        "pages": [
-          "examples"
-        ]
-      },
-      {
-        "group": "Deployment",
+        "group": "Self-host",
         "icon": "server",
         "pages": [
-          "infrastructure",
-          "deployment",
-          "secrets-management",
-          "monitoring"
+          "self-host/requirements",
+          "self-host/configuration",
+          "self-host/docker-compose",
+          "self-host/kubernetes",
+          "self-host/mcp-data-plane",
+          "self-host/networking",
+          "self-host/secrets-backends",
+          "self-host/database-and-migrations",
+          "self-host/observability",
+          "self-host/backup-and-recovery",
+          "self-host/upgrades",
+          "self-host/troubleshooting"
         ]
       },
       {
-        "group": "Resources",
+        "group": "Reference",
         "icon": "book",
         "pages": [
-          "security",
-          "mcp-access-tokens",
-          "troubleshooting",
-          "api-reference"
+          "reference/authorization-model",
+          "reference/policy-syntax",
+          "reference/limits",
+          "reference/errors"
         ]
+      },
+      {
+        "group": "API Endpoints",
+        "icon": "server",
+        "openapi": "api-reference/openapi.json"
       },
       {
         "group": "Community",
         "icon": "users",
         "pages": [
-          "contributing",
           "VERSIONING",
           "community",
-          "roadmap",
-          "changelog"
+          "roadmap"
         ]
       }
     ]

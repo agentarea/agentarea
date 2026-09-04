@@ -13,6 +13,7 @@ from agentarea_api.api.deps.services import (
 from agentarea_api.api.v1.a2a_auth import require_a2a_execute_auth
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from fastapi.testclient import TestClient
 
 
@@ -108,6 +109,73 @@ def create_mock_trigger():
     mock_trigger.data_extractor = None
     mock_trigger.has_channel_credentials = False
     return mock_trigger
+
+
+class UnreadableSecretManager(BaseSecretManager):
+    """A store that still holds the credential but can no longer read it.
+
+    What a rotated ``SECRET_MANAGER_ENCRYPTION_KEY`` leaves behind: the row is
+    still there, its ciphertext no longer decrypts. Deliberately does not
+    override ``has_secret``, so the presence check falls back to reading the
+    value — the worst case a backend can put the endpoint in.
+    """
+
+    async def get_secret(self, secret_name: str) -> str | None:
+        raise ValueError("Failed to decrypt secret. Key may have changed.")
+
+    async def set_secret(self, secret_name: str, secret_value: str) -> None:
+        raise AssertionError("reading a trigger must not write secrets")
+
+    async def delete_secret(self, secret_name: str) -> bool:
+        raise AssertionError("reading a trigger must not delete secrets")
+
+    def external_ref(self, secret_name: str) -> str | None:
+        return None
+
+
+@pytest.fixture
+def unreadable_secrets():
+    """Point the API at a secret store whose values cannot be read."""
+
+    async def _override():
+        return UnreadableSecretManager()
+
+    app.dependency_overrides[get_secret_manager] = _override
+    yield
+    app.dependency_overrides.pop(get_secret_manager, None)
+
+
+class TestTriggerCredentialFlagFailures:
+    """A credential that cannot be read must not take the trigger down.
+
+    ``has_channel_credentials`` is a display flag. Resolving it used to decrypt
+    the stored credential, so one unreadable secret turned every read of that
+    trigger into a 500 — which the webapp surfaced as "Failed to load triggers".
+    """
+
+    def test_get_trigger_survives_unreadable_credential(
+        self, client, mock_trigger_service, unreadable_secrets
+    ):
+        mock_trigger = create_mock_trigger()
+        mock_trigger.webhook_type = "telegram"
+        mock_trigger_service.get_trigger.return_value = mock_trigger
+
+        response = client.get(f"/v1/triggers/{mock_trigger.id}")
+
+        assert response.status_code == 200
+        assert response.json()["has_channel_credentials"] is False
+
+    def test_list_triggers_survives_unreadable_credential(
+        self, client, mock_trigger_service, unreadable_secrets
+    ):
+        mock_trigger = create_mock_trigger()
+        mock_trigger.webhook_type = "telegram"
+        mock_trigger_service.list_triggers.return_value = [mock_trigger]
+
+        response = client.get("/v1/triggers/")
+
+        assert response.status_code == 200
+        assert len(response.json()) == 1
 
 
 class TestTriggersAPISimple:

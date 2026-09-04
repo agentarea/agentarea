@@ -6,6 +6,7 @@ task execution through Temporal workflows.
 """
 
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -22,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 class TemporalTaskManager(BaseTaskManager):
     """Task manager that uses Temporal workflows for task execution."""
+
+    supports_scheduling = True
 
     def __init__(self, task_repository: TaskRepository):
         """Initialize with TaskRepository dependency."""
@@ -66,6 +69,13 @@ class TemporalTaskManager(BaseTaskManager):
             # If it's not a dict (e.g., SQLAlchemy MetaData), convert to empty dict
             metadata = {}
 
+        governance_snapshot = metadata.get("governance_snapshot")
+        effective_policy = (
+            governance_snapshot.get("effective_policy")
+            if isinstance(governance_snapshot, dict)
+            else None
+        )
+
         return AgentTask(
             id=task.id,
             title=task.description,  # Use description as title
@@ -83,7 +93,9 @@ class TemporalTaskManager(BaseTaskManager):
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,
+            scheduled_at=task.scheduled_at,
             metadata=metadata,
+            effective_policy=effective_policy,
         )
 
     def _agent_task_to_task(self, agent_task: AgentTask):
@@ -105,8 +117,22 @@ class TemporalTaskManager(BaseTaskManager):
             execution_id=agent_task.execution_id,
             user_id=agent_task.user_id,  # This will be mapped to created_by in the repository
             workspace_id=agent_task.workspace_id,
+            scheduled_at=agent_task.scheduled_at,
             metadata=agent_task.metadata,
         )
+
+    def _start_delay_for(self, task: AgentTask) -> timedelta | None:
+        """How long Temporal should wait before the workflow's first task."""
+        if task.scheduled_at is None:
+            return None
+        delay = task.scheduled_at - datetime.now(UTC)
+        if delay <= timedelta(0):
+            logger.warning(
+                f"Task {task.id} was due at {task.scheduled_at} and is already past - "
+                "dispatching immediately"
+            )
+            return None
+        return delay
 
     async def submit_task(self, task: AgentTask) -> AgentTask:
         """Submit a task for execution."""
@@ -147,16 +173,19 @@ class TemporalTaskManager(BaseTaskManager):
                 "workspace_id": execution_request.workspace_id,
                 "task_query": execution_request.task_query,
                 "task_parameters": execution_request.task_parameters,
-                "timeout_seconds": execution_request.timeout_seconds,
-                "max_reasoning_iterations": execution_request.max_reasoning_iterations,
                 "requires_human_approval": execution_request.requires_human_approval,
                 "workflow_metadata": execution_request.workflow_metadata,
                 "effective_policy": execution_request.effective_policy,
             }
 
-            # Create workflow config with task queue
+            # Activity retries handle transient failures at the side-effect boundary.
+            # Retrying the whole agent workflow would replay a fresh run after a
+            # terminal failure and can execute shell/MCP side effects again.
+            start_delay = self._start_delay_for(task)
             config = WorkflowConfig(
-                task_queue="agent-tasks"  # Use the same task queue as the worker
+                task_queue="agent-tasks",
+                retry_attempts=1,
+                start_delay=start_delay,
             )
 
             # Debug: Log args_dict to verify workspace_id is present
@@ -170,9 +199,12 @@ class TemporalTaskManager(BaseTaskManager):
                 config=config,
             )
 
-            # Update task status to running (not submitted) since workflow started successfully
-            # Also set the execution_id for tracking
-            updated_task_domain = await self.task_repository.update_status(task.id, "running")
+            # Update task status to running (not submitted) since workflow started successfully.
+            # A delayed workflow exists but has not begun, so it stays "scheduled" until its
+            # first task fires. Also set the execution_id for tracking.
+            updated_task_domain = await self.task_repository.update_status(
+                task.id, "scheduled" if start_delay else "running"
+            )
             if updated_task_domain:
                 # Set execution_id on the task
                 updated_task_domain.execution_id = execution_id

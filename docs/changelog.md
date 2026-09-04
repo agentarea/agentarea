@@ -1,3 +1,8 @@
+---
+title: Changelog
+description: Notable AgentArea features, fixes, and compatibility changes by release.
+---
+
 # Changelog
 
 All notable changes to AgentArea will be documented in this file.

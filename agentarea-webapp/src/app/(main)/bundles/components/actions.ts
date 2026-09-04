@@ -15,6 +15,7 @@ import {
   zAnalyzeBundleV1BundlesAnalyzePostBody,
   zAnalyzeBundleV1BundlesAnalyzePostResponse,
   zGetAgentV1AgentsAgentIdGetResponse,
+  zBrowseCatalogV1RegistriesCatalogBrowseGetResponse,
   zGetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse,
   zGetSkillContentV1SkillsSkillIdContentGetResponse,
   zInstallAgentV1AgentsAgentIdInstallPostResponse,
@@ -23,13 +24,12 @@ import {
   zInstallSkillV1SkillsSkillIdInstallPostResponse,
   zListAgentsV1AgentsGetResponse,
   zListModelInstancesV1ModelInstancesGetResponse,
-  zListRegistriesV1RegistriesGetResponse,
-  zListRegistryItemsV1RegistriesRegistryIdItemsGetResponse,
   zListSkillFilesV1SkillsSkillIdFilesGetResponse,
   zUpdateAgentV1AgentsAgentIdPatchResponse,
 } from "@/api/client/zod.gen";
 import {
   analyzeBundle,
+  browseCatalog,
   getAgent,
   getCatalogItem,
   getSkillContent,
@@ -40,8 +40,6 @@ import {
   installSkill,
   listAgents,
   listModelInstances,
-  listRegistries,
-  listRegistryItems,
   updateAgent,
 } from "@/lib/api";
 import { z } from "zod";
@@ -88,34 +86,48 @@ function assertCatalogType(type: CatalogType): CatalogType {
   return type;
 }
 
-export async function fetchCatalogPageAction(
-  type: CatalogType,
-  offset: number
-): Promise<RegistryItemResponse[]> {
-  const registryType = assertCatalogType(type);
-  const { data: registriesData, error: registriesError } = await listRegistries({
-    registry_type: registryType,
-    active_only: true,
+export type CatalogPageResult = {
+  items: RegistryItemResponse[];
+  /** Items matching the filters across the whole catalog, not just this page. */
+  total: number;
+  categories: { value: string; count: number }[];
+};
+
+/**
+ * One page of a catalog type, filtered/sorted/paged by the server.
+ *
+ * Only used for infinite-scroll appends -- the first page of every filter
+ * combination is server-rendered by the explore page itself.
+ */
+export async function fetchCatalogPageAction(params: {
+  type: CatalogType;
+  offset: number;
+  q?: string;
+  category?: string;
+  sort?: string;
+}): Promise<CatalogPageResult> {
+  const registryType = assertCatalogType(params.type);
+  const { items, total, categories, error } = await browseCatalog({
+    registryType,
+    q: params.q,
+    category: params.category,
+    sort: params.sort,
+    limit: PAGE,
+    offset: params.offset,
   });
-  if (registriesError || !registriesData) {
-    throw new Error(errorMessage(registriesError, "Failed to load registries"));
+  if (error) {
+    throw new Error(errorMessage(error, "Failed to load catalog items"));
   }
-
-  const registries = zListRegistriesV1RegistriesGetResponse.parse(registriesData);
-  const lists = await Promise.all(
-    registries.map(async (registry) => {
-      const { data, error } = await listRegistryItems(registry.id, {
-        limit: PAGE,
-        offset,
-      });
-      if (error || !data) {
-        throw new Error(errorMessage(error, "Failed to load catalog items"));
-      }
-      return zListRegistryItemsV1RegistriesRegistryIdItemsGetResponse.parse(data);
-    })
-  );
-
-  return lists.flat();
+  const parsed = zBrowseCatalogV1RegistriesCatalogBrowseGetResponse.parse({
+    items,
+    total,
+    categories,
+  });
+  return {
+    items: parsed.items,
+    total: parsed.total,
+    categories: parsed.categories,
+  };
 }
 
 export async function fetchCatalogItemAction(

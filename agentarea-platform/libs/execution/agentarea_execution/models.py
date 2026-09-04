@@ -3,6 +3,7 @@
 Integrates with existing AgentArea domain models and uses proper UUID types.
 """
 
+from pathlib import PurePosixPath
 from typing import Any, Literal
 from uuid import UUID
 
@@ -22,8 +23,13 @@ class ResolvedModelInfo(BaseModel):
     model_name: str
     api_key_secret: str | None = None  # secret manager key name, not the actual key
     endpoint_url: str | None = None
-    context_window: int = 128000
-    max_output_tokens: int | None = None  # model_spec cap; bounds the per-call max_tokens
+    context_window: int = Field(gt=0)
+    max_output_tokens: int | None = Field(
+        default=None,
+        gt=0,
+    )  # model_spec cap; bounds the per-call max_tokens
+    input_cost_per_token: float | None = Field(default=None, ge=0)
+    output_cost_per_token: float | None = Field(default=None, ge=0)
     display_name: str | None = None
     provider_display_name: str | None = None
     resolved_at: str | None = None  # ISO timestamp for staleness debugging
@@ -52,7 +58,10 @@ class ChangeModelPayload(BaseModel):
     model_name: str
     api_key_secret: str | None = None
     endpoint_url: str | None = None
-    context_window: int = 128000
+    context_window: int = Field(gt=0)
+    max_output_tokens: int | None = Field(default=None, gt=0)
+    input_cost_per_token: float | None = Field(default=None, ge=0)
+    output_cost_per_token: float | None = Field(default=None, ge=0)
     display_name: str | None = None
     provider_display_name: str | None = None
     resolved_at: str | None = None
@@ -69,6 +78,8 @@ class ContinueExecutionPayload(BaseModel):
 
     additional_iterations: int = Field(default=0, ge=0, le=1000)
     additional_budget_usd: Money | None = Field(default=None, gt=ZERO)
+    effective_policy: dict[str, Any] | None = None
+    governance_snapshot: dict[str, Any] | None = None
 
 
 class AgentExecutionRequest(BaseModel):
@@ -85,8 +96,10 @@ class AgentExecutionRequest(BaseModel):
     task_parameters: dict[str, Any] = Field(default_factory=dict)
 
     # Execution configuration
-    timeout_seconds: int = 300
-    max_reasoning_iterations: int = 10
+    timeout_seconds: int | None = None
+    # Legacy input kept for Temporal history compatibility. New workflow runs
+    # derive their model-turn ceiling exclusively from effective_policy.
+    max_reasoning_iterations: int | None = None
     requires_human_approval: bool = False
     budget_usd: Money | None = None  # Optional budget limit in USD
 
@@ -209,6 +222,8 @@ class AgentConfigRequest(BaseModel):
     execution_context: dict[str, Any] | None = None
     step_type: str | None = None
     override_model: str | None = None
+    # Set so the resolved config hash can be recorded against the run.
+    task_id: UUID | None = None
 
 
 class SkillInfo(BaseModel):
@@ -228,7 +243,8 @@ class RuntimePython(BaseModel):
 
 class RuntimeNode(BaseModel):
     version: str
-    npm_version: str
+    # None in a locked runtime: the immutable image strips npm on purpose.
+    npm_version: str | None = None
 
 
 class RuntimeFeatures(BaseModel):
@@ -237,8 +253,23 @@ class RuntimeFeatures(BaseModel):
     arbitrary_workspace_code: bool
 
 
+class RuntimeExecutionSupervisor(BaseModel):
+    path: str
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    protocol_version: Literal[1]
+    command_uid: int = Field(gt=0)
+    command_gid: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_path(self) -> "RuntimeExecutionSupervisor":
+        parsed = PurePosixPath(self.path)
+        if not parsed.is_absolute() or str(parsed) != self.path or self.path == "/":
+            raise ValueError("execution supervisor path must be an absolute clean file path")
+        return self
+
+
 class RuntimeManifest(BaseModel):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     image_version: str
     managed_environment: Literal["mutable", "immutable"]
     python: RuntimePython
@@ -246,6 +277,7 @@ class RuntimeManifest(BaseModel):
     tools: dict[str, str] = Field(default_factory=dict)
     packages: dict[str, str] = Field(default_factory=dict)
     features: RuntimeFeatures
+    execution_supervisor: RuntimeExecutionSupervisor
 
     @model_validator(mode="after")
     def validate_profile_features(self) -> "RuntimeManifest":
@@ -288,13 +320,12 @@ class ArtifactValidationEvidence(BaseModel):
 
 
 class ArtifactValidationRequest(BaseModel):
-    """Refs-only request for validating the current canonical task workspace."""
+    """Request to persist and verify the files a completion claims to deliver."""
 
     workspace_id: str
     task_id: str
     workflow_id: str
     declared_paths: list[str] = Field(default_factory=list, max_length=1000)
-    package_install: Literal["allowed", "locked"] = "allowed"
 
 
 class ArtifactValidationResult(BaseModel):
@@ -316,7 +347,7 @@ class AgentConfigResult(BaseModel):
     instruction: str
     agent_type: str = "stateless"
     model_id: str
-    context_window: int = 128000  # From ModelSpec, used for context window management
+    context_window: int = Field(gt=0)  # From ModelSpec, used for context window management
     default_context_strategy: str | None = None  # From ModelSpec: "static", "hybrid", "dynamic"
     tools: list[dict[str, Any]] = Field(default_factory=list)
     events_config: dict[str, Any] = Field(default_factory=dict)
@@ -327,6 +358,8 @@ class AgentConfigResult(BaseModel):
     skills: list[SkillInfo] = Field(default_factory=list)
     runtime: RuntimeDiscoveryResult | None = None
     runtime_event_data: dict[str, Any] = Field(default_factory=dict)
+    # Hash of the agent's declared config as resolved for this run.
+    config_hash: str | None = None
 
 
 class ToolDiscoveryRequest(BaseModel):
@@ -520,12 +553,26 @@ class UpdateTaskStatusRequest(BaseModel):
     result: str | None = None
     error_message: str | None = None
     workspace_id: str
-    total_cost: Money = ZERO
+    total_cost: Money | None = None
+    own_cost: Money | None = None
 
 
 class UpdateTaskStatusResult(BaseModel):
     """Result of task status update."""
 
+    success: bool
+    error: str | None = None
+
+
+class UpdateTaskGovernanceSnapshotRequest(BaseModel):
+    """Persist a re-resolved policy before resuming a waiting workflow."""
+
+    task_id: str
+    workspace_id: str
+    governance_snapshot: dict[str, Any]
+
+
+class UpdateTaskGovernanceSnapshotResult(BaseModel):
     success: bool
     error: str | None = None
 
@@ -538,6 +585,7 @@ class CompactMessagesRequest(BaseModel):
     workspace_id: str
     user_context_data: dict[str, Any] | None = None
     resolved_model: dict | None = None  # Cached ResolvedModelInfo dict; None = DB lookup
+    effective_policy: dict[str, Any] | None = None
 
 
 class CompactMessagesResult(BaseModel):
@@ -546,6 +594,10 @@ class CompactMessagesResult(BaseModel):
     summary: str
     original_message_count: int
     estimated_tokens_saved: int
+    # Optional only for decoding activity results recorded before accounting
+    # was added. New executions require both fields.
+    cost: Money | None = None
+    usage: LLMUsage | None = None
 
 
 # === Trigger Activity Models ===
@@ -610,6 +662,10 @@ class CreateDelegationTaskRequest(BaseModel):
     message: str
     user_id: str
     workspace_id: str
+    # Optional only for Temporal history compatibility. New callers always
+    # provide it and the activity rejects its absence.
+    parent_effective_policy: dict[str, Any] | None = None
+    run_budget_usd: Money | None = Field(default=None, gt=ZERO)
 
 
 class CreateDelegationTaskResult(BaseModel):
@@ -618,6 +674,8 @@ class CreateDelegationTaskResult(BaseModel):
     task_id: UUID | None = None
     status: str
     error: str | None = None
+    # Optional only so old activity payloads remain decodable during rollout.
+    effective_policy: dict[str, Any] | None = None
 
 
 class CreateTaskFromTriggerRequest(BaseModel):

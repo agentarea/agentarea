@@ -28,6 +28,7 @@ class TestSecretManagerFactory:
             SECRET_MANAGER_TYPE="infisical",
             SECRET_MANAGER_ACCESS_KEY="test-key",
             SECRET_MANAGER_SECRET_KEY="test-secret",
+            SECRET_MANAGER_PROJECT_ID="proj-1",
         )
         factory = SecretManagerFactory(settings)
 
@@ -68,6 +69,7 @@ class TestSecretManagerFactory:
             SECRET_MANAGER_ENDPOINT="https://test.infisical.com",
             SECRET_MANAGER_ACCESS_KEY="test-client-id",
             SECRET_MANAGER_SECRET_KEY="test-client-secret",
+            SECRET_MANAGER_PROJECT_ID="proj-1",
         )
         factory = SecretManagerFactory(settings)
 
@@ -87,6 +89,7 @@ class TestSecretManagerFactory:
             SECRET_MANAGER_TYPE="infisical",
             SECRET_MANAGER_ACCESS_KEY="test-id",
             SECRET_MANAGER_SECRET_KEY="test-secret",
+            SECRET_MANAGER_PROJECT_ID="proj-1",
         )
         factory = SecretManagerFactory(settings)
 
@@ -99,16 +102,47 @@ class TestSecretManagerFactory:
             client_secret="test-secret",
         )
 
+    @patch("infisical_sdk.client.InfisicalSDKClient")
+    def test_create_infisical_scopes_the_secret_path_per_workspace(
+        self, mock_infisical_client, mock_db_session, test_user_context
+    ):
+        """Two workspaces must not share a secret path.
+
+        Names are unique per workspace, not globally, and users choose some of
+        them. A shared path means one workspace reads and overwrites another's
+        value under the same name.
+        """
+        settings = SecretManagerSettings(
+            SECRET_MANAGER_TYPE="infisical",
+            SECRET_MANAGER_ACCESS_KEY="test-id",
+            SECRET_MANAGER_SECRET_KEY="test-secret",
+            SECRET_MANAGER_PROJECT_ID="proj-1",
+        )
+        factory = SecretManagerFactory(settings)
+
+        manager = factory.create(session=mock_db_session, user_context=test_user_context)
+
+        assert test_user_context.workspace_id in manager._secret_path
+
+    def test_create_infisical_requires_project_id(self, mock_db_session, test_user_context):
+        """Without a project id there is no Infisical project to read or write."""
+        settings = SecretManagerSettings(
+            SECRET_MANAGER_TYPE="infisical",
+            SECRET_MANAGER_ACCESS_KEY="test-id",
+            SECRET_MANAGER_SECRET_KEY="test-secret",
+        )
+
+        with pytest.raises(ValueError, match="SECRET_MANAGER_PROJECT_ID"):
+            SecretManagerFactory(settings)
+
     def test_create_infisical_missing_credentials(self, mock_db_session, test_user_context):
         """Test that Infisical requires credentials."""
         settings = SecretManagerSettings(
             SECRET_MANAGER_TYPE="infisical",
             # Missing credentials
         )
-        factory = SecretManagerFactory(settings)
-
         with pytest.raises(ValueError, match="Infisical credentials not configured"):
-            factory.create(session=mock_db_session, user_context=test_user_context)
+            SecretManagerFactory(settings)
 
     def test_create_infisical_partial_credentials(self, mock_db_session, test_user_context):
         """Test that Infisical requires both access and secret keys."""
@@ -117,10 +151,8 @@ class TestSecretManagerFactory:
             SECRET_MANAGER_ACCESS_KEY="test-key",
             # Missing SECRET_MANAGER_SECRET_KEY
         )
-        factory = SecretManagerFactory(settings)
-
         with pytest.raises(ValueError, match="Infisical credentials not configured"):
-            factory.create(session=mock_db_session, user_context=test_user_context)
+            SecretManagerFactory(settings)
 
     def test_create_invalid_type(self, mock_db_session, test_user_context):
         """Test that invalid secret manager type raises error."""
@@ -139,18 +171,9 @@ class TestSecretManagerFactory:
 
         assert isinstance(manager, DatabaseSecretManager)
 
-    @patch("infisical_sdk.client.InfisicalSDKClient", side_effect=ImportError("No module"))
-    def test_create_infisical_sdk_not_installed(self, mock_client, mock_db_session, test_user_context):
-        """Test error message when Infisical SDK is not installed."""
-        settings = SecretManagerSettings(
-            SECRET_MANAGER_TYPE="infisical",
-            SECRET_MANAGER_ACCESS_KEY="test-id",
-            SECRET_MANAGER_SECRET_KEY="test-secret",
-        )
-        factory = SecretManagerFactory(settings)
-
-        with pytest.raises(ValueError, match="Infisical SDK not installed"):
-            factory.create(session=mock_db_session, user_context=test_user_context)
+    # Dropped: test_create_infisical_sdk_not_installed. infisicalsdk is a hard
+    # dependency of agentarea-secrets, so the import cannot fail and the branch
+    # that reported it no longer exists.
 
     def test_factory_reusable_for_multiple_contexts(self, mock_db_session, test_user_context, test_admin_context):
         """Test that same factory can create managers for different contexts."""

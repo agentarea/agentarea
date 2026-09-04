@@ -55,6 +55,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             "error": entity.error,
             "started_at": entity.started_at,
             "completed_at": entity.completed_at,
+            "scheduled_at": entity.scheduled_at,
             "execution_id": entity.execution_id,
             "task_metadata": metadata,
         }
@@ -85,6 +86,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             "error": entity.error,
             "started_at": entity.started_at,
             "completed_at": entity.completed_at,
+            "scheduled_at": entity.scheduled_at,
             "execution_id": entity.execution_id,
             "task_metadata": metadata,
         }
@@ -254,14 +256,19 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         return result.scalar() or 0
 
     async def sum_spend_since(self, since: datetime) -> float:
-        """Sum task.result.total_cost for the current workspace since a given UTC time.
+        """Sum each task's own model spend for the workspace since a UTC time.
 
         Uses started_at (falling back to created_at when started_at is null)
-        as the activity timestamp. Tasks with no total_cost contribute 0.
+        as the activity timestamp. New task results persist ``own_cost`` so
+        delegated child spend is not counted once on the child and again in
+        the parent's transitive ``total_cost``. Historical results fall back
+        to ``total_cost``.
         ``TaskORM.result`` is a plain JSON column, so we extract via the
         ``->>`` operator (returns text) and cast to numeric.
         """
-        cost_expr = cast(TaskORM.result.op("->>")("total_cost"), Numeric)
+        own_cost_expr = cast(TaskORM.result.op("->>")("own_cost"), Numeric)
+        total_cost_expr = cast(TaskORM.result.op("->>")("total_cost"), Numeric)
+        cost_expr = func.coalesce(own_cost_expr, total_cost_expr, 0)
         activity_at = func.coalesce(TaskORM.started_at, TaskORM.created_at)
         stmt = (
             select(func.coalesce(func.sum(cost_expr), 0))
@@ -307,6 +314,26 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         await self.session.flush()
         return await self.get_task(task_id)
 
+    async def merge_metadata(self, task_id: UUID, patch: dict[str, Any]) -> bool:
+        """Shallow-merge ``patch`` into the task's metadata, leaving status alone.
+
+        Returns False when the task no longer exists.
+        """
+        task_orm = await self.session.get(TaskORM, task_id)
+        if task_orm is None or task_orm.workspace_id != self.user_context.workspace_id:
+            return False
+
+        existing = task_orm.task_metadata if isinstance(task_orm.task_metadata, dict) else {}
+        stmt = (
+            update(TaskORM)
+            .where(TaskORM.id == task_id)
+            .where(TaskORM.workspace_id == self.user_context.workspace_id)
+            .values(task_metadata={**existing, **patch}, updated_at=datetime.utcnow())
+        )
+        await self.session.execute(stmt)
+        await self.session.flush()
+        return True
+
     def _orm_to_domain(self, task_orm: TaskORM) -> Task:
         """Convert ORM model to domain model."""
         task_metadata = task_orm.task_metadata or {}
@@ -328,6 +355,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
                 "updated_at": task_orm.updated_at,  # Added to match BaseModel
                 "started_at": task_orm.started_at,
                 "completed_at": task_orm.completed_at,
+                "scheduled_at": task_orm.scheduled_at,
                 "execution_id": task_orm.execution_id,
                 "user_id": task_orm.created_by,
                 "workspace_id": task_orm.workspace_id,
@@ -362,6 +390,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             updated_at=task.updated_at,
             started_at=task.started_at,
             completed_at=task.completed_at,
+            scheduled_at=task.scheduled_at,
             execution_id=task.execution_id,
             user_id=task.user_id,
             workspace_id=task.workspace_id,

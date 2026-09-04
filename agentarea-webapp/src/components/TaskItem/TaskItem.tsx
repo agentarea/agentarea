@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Calendar, Clock, GitFork } from "lucide-react";
+import { Calendar, CalendarClock, Clock, GitFork } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { StatusIndicator } from "@/components/ui/status-indicator";
@@ -12,9 +12,10 @@ export interface TaskItemData {
   description: string;
   status: string;
   created_at: string;
-  agent_name?: string;
+  agent_name?: string | null;
   agent_id?: string;
   parameters?: Record<string, unknown>;
+  scheduled_at?: string | null;
 }
 
 interface TaskItemProps {
@@ -66,6 +67,20 @@ export default function TaskItem({
             />
             <span className="truncate">
               {task.agent_name || "Unknown Agent"}
+            </span>
+          </div>
+        )}
+        {task.scheduled_at && (
+          <div className="flex items-center gap-1.5 text-primary">
+            <CalendarClock className="h-3 w-3" />
+            <span>
+              Runs{" "}
+              {new Date(task.scheduled_at).toLocaleString("en", {
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </span>
           </div>
         )}

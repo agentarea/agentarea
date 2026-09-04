@@ -9,7 +9,7 @@ import re
 from hashlib import sha256
 from pathlib import PurePosixPath
 
-SKILLS_ROOT = "skills"
+SKILLS_ROOT = "inputs/skills"
 SKILL_MANIFEST = "SKILL.md"
 
 

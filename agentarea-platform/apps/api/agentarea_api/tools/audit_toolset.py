@@ -15,11 +15,12 @@ from .base import platform_read_context
     display_name="Audit Log",
     description="Inspect workspace audit log entries.",
     category="platform",
+    plane="observe",
 )
 class AuditToolset(Toolset):
     """Query the workspace audit log (read-only)."""
 
-    @tool_method
+    @tool_method(effect="read")
     async def list(
         self,
         action: str = "",

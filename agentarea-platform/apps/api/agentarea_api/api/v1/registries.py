@@ -9,8 +9,9 @@ from uuid import UUID
 from agentarea_api.api.deps.services import get_registry_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.utils.types import UtcDatetime
-from agentarea_registry.application.service import RegistryService
+from agentarea_registry.application.service import VALID_REGISTRY_TYPES, RegistryService
 from agentarea_registry.domain.models import Registry, RegistryItem
+from agentarea_registry.infrastructure.repository import CATALOG_SORTS
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -83,6 +84,10 @@ class RegistryItemResponse(BaseModel):
     installed_entity_id: UUID | None
     update_available: bool
     installed_version: str | None
+    # Derived server-side (see agentarea_registry.application.catalog_facets) so
+    # browsing filters, sorts and counts by the same values the gallery renders.
+    category: str | None = None
+    featured: bool = False
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -102,6 +107,8 @@ class RegistryItemResponse(BaseModel):
             else None,
             update_available=item.update_available,
             installed_version=item.installed_version,
+            category=item.category,
+            featured=item.featured,
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
@@ -176,6 +183,64 @@ async def list_registries(
 ):
     registries = await service.list_registries(active_only=active_only, registry_type=registry_type)
     return [RegistryResponse.from_domain(r) for r in registries]
+
+
+class CategoryFacet(BaseModel):
+    value: str
+    count: int
+
+
+class CatalogBrowseResponse(BaseModel):
+    """One page of a type's catalog plus the context needed to browse it.
+
+    ``total`` and ``categories`` cover the whole filtered catalog, not the page:
+    without them a page that happens to contain no visible matches is
+    indistinguishable from the end of the catalog, and facet counts drift as
+    more pages load.
+    """
+
+    items: list[RegistryItemResponse]
+    total: int
+    categories: list[CategoryFacet]
+
+
+@router.get("/catalog/browse", response_model=CatalogBrowseResponse)
+async def browse_catalog(
+    user_context: UserContextDep,
+    registry_type: str = Query(..., description="Catalog type to browse"),
+    q: str | None = Query(None, description="Free-text filter over name and description"),
+    category: str | None = Query(None, description="Restrict to one category facet"),
+    sort: str | None = Query(None, description="'featured' (default) or 'name'"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    service: RegistryService = Depends(get_registry_service),
+):
+    """Browse one catalog type: filtered, sorted and paged server-side.
+
+    Paging every registry of a type separately and merging client-side cannot
+    be made correct -- a single offset has no meaning over the concatenation --
+    so the whole type is paged as one ordered result here instead.
+    """
+    if registry_type not in VALID_REGISTRY_TYPES:
+        raise HTTPException(
+            status_code=400, detail=f"registry_type must be one of {VALID_REGISTRY_TYPES}"
+        )
+    if sort is not None and sort not in CATALOG_SORTS:
+        raise HTTPException(status_code=400, detail=f"sort must be one of {tuple(CATALOG_SORTS)}")
+
+    items, total, categories = await service.browse_catalog(
+        registry_type=registry_type,
+        query=q,
+        category=category,
+        sort=sort,
+        limit=limit,
+        offset=offset,
+    )
+    return CatalogBrowseResponse(
+        items=[RegistryItemResponse.from_domain(i) for i in items],
+        total=total,
+        categories=[CategoryFacet(value=v, count=c) for v, c in categories],
+    )
 
 
 @router.get("/catalog/search", response_model=list[RegistryItemResponse])

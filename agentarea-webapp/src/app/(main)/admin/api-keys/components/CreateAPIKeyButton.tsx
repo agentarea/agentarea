@@ -23,12 +23,12 @@ export default function CreateAPIKeyButton() {
   return (
     <>
       <Button
-        className="shrink-0 gap-2"
+        className="shrink-0"
         size="xs"
         onClick={() => setDialogOpen(true)}
         data-test="create-api-key-button"
       >
-        <Plus className="h-4 w-4" />
+        <Plus />
         {t("createKey")}
       </Button>
       <CreateAPIKeyDialog

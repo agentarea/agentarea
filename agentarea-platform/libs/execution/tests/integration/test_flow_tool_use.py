@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from agentarea_common.testing.flows import MainFlow
+from agentarea_common.workflow.sandbox import create_workflow_runner
 from agentarea_execution.models import (
     AgentConfigRequest,
     AgentExecutionRequest,
@@ -45,6 +46,7 @@ async def _mock_build_config(request: AgentConfigRequest) -> dict[str, Any]:
         "description": "Agent that calls a tool",
         "instruction": "You are a helpful assistant.",
         "tools_config": {"mcp_servers": []},
+        "context_window": 128000,
         "events_config": {},
         "planning": False,
     }
@@ -143,7 +145,7 @@ async def _mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
                     "type": "function",
                     "function": {
                         "name": "completion",
-                        "arguments": json.dumps({"result": final_text}),
+                        "arguments": json.dumps({"result": final_text, "artifacts": []}),
                     },
                 }
             ],
@@ -213,6 +215,7 @@ class TestAgentToolUseFlow:
                     workflows=[AgentExecutionWorkflow],
                     activities=_ALL_ACTIVITIES,
                     activity_executor=executor,
+                    workflow_runner=create_workflow_runner(),
                 )
 
                 async with worker:
@@ -223,11 +226,21 @@ class TestAgentToolUseFlow:
                         workspace_id="test-workspace",
                         task_query="What is the weather in Berlin?",
                         timeout_seconds=30,
-                        max_reasoning_iterations=5,
-                        budget_usd=1.0,
                         # Tool authorization is zero-trust/default-deny: the task
                         # policy must explicitly grant tools for this round-trip.
-                        effective_policy={"tools": {"allowed": ["*"]}},
+                        effective_policy={
+                            "budget": {"run_budget_usd": "1.00"},
+                            "tokens": {
+                                "max_tokens": 20_000,
+                                "max_tokens_per_call": 2_000,
+                            },
+                            "execution": {
+                                "max_model_turns": 5,
+                                "max_tool_calls_per_turn": 1,
+                                "max_tool_calls_total": 1,
+                            },
+                            "tools": {"allowed": ["*"]},
+                        },
                     )
 
                     handle = await env.client.start_workflow(
@@ -271,3 +284,4 @@ class TestAgentToolUseFlow:
                     assert _FAKE_TOOL_RESULT in result.final_response, (
                         f"Final response should contain tool result. Got: {result.final_response!r}"
                     )
+                    assert result.total_tool_calls == 1

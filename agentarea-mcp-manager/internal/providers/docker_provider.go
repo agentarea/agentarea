@@ -37,76 +37,17 @@ func (p *DockerProvider) CreateInstance(ctx context.Context, instance *models.MC
 		slog.String("instance_id", instance.InstanceID),
 		slog.String("name", instance.Name))
 
-	// Resolve secrets in the json_spec before passing to container manager
-	resolvedSpec := make(map[string]interface{})
-	for key, value := range instance.JSONSpec {
-		resolvedSpec[key] = value
-	}
-
-	// Resolve secret env vars from secret store using env_vars name list
-	if envVarsInterface, exists := resolvedSpec["env_vars"]; exists {
-		if envVarsList, ok := envVarsInterface.([]interface{}); ok && len(envVarsList) > 0 {
-			envVarNames := make([]string, 0, len(envVarsList))
-			for _, v := range envVarsList {
-				if name, ok := v.(string); ok {
-					envVarNames = append(envVarNames, name)
-				}
-			}
-
-			if len(envVarNames) > 0 {
-				secretEnvVars, err := p.secretResolver.ResolveInstanceEnvVars(instance.InstanceID, envVarNames)
-				if err != nil {
-					p.logger.Error("Failed to resolve secret env vars",
-						slog.String("instance_id", instance.InstanceID),
-						slog.String("error", err.Error()))
-					return fmt.Errorf("failed to resolve secret env vars: %w", err)
-				}
-
-				// Merge resolved secrets into environment
-				envInterface := resolvedSpec["environment"]
-				envMap, _ := envInterface.(map[string]interface{})
-				if envMap == nil {
-					envMap = make(map[string]interface{})
-				}
-				for key, value := range secretEnvVars {
-					envMap[key] = value
-				}
-				resolvedSpec["environment"] = envMap
-
-				p.logger.Info("Resolved secret env vars for instance",
-					slog.String("instance_id", instance.InstanceID),
-					slog.Int("count", len(secretEnvVars)))
-			}
-		}
-	}
-
-	// Also resolve inline secret_ref: values in the environment
-	if envInterface, exists := resolvedSpec["environment"]; exists {
-		if envMap, ok := envInterface.(map[string]interface{}); ok {
-			stringEnvMap := make(map[string]string)
-			for key, value := range envMap {
-				stringEnvMap[key] = fmt.Sprintf("%v", value)
-			}
-
-			resolvedEnv, err := p.secretResolver.ResolveSecrets(instance.InstanceID, stringEnvMap)
-			if err != nil {
-				p.logger.Error("Failed to resolve secrets",
-					slog.String("instance_id", instance.InstanceID),
-					slog.String("error", err.Error()))
-				return fmt.Errorf("failed to resolve secrets: %w", err)
-			}
-
-			resolvedEnvInterface := make(map[string]interface{})
-			for key, value := range resolvedEnv {
-				resolvedEnvInterface[key] = value
-			}
-			resolvedSpec["environment"] = resolvedEnvInterface
-		}
+	resolvedSpec, err := resolveInstanceSpecSecrets(p.secretResolver, instance.InstanceID, instance.JSONSpec)
+	if err != nil {
+		p.logger.Error("Failed to resolve MCP instance environment",
+			slog.String("instance_id", instance.InstanceID),
+			slog.String("error", err.Error()))
+		return err
 	}
 
 	// Use the container manager to create the container
 	// This ensures the container is properly tracked in the manager's internal map
-	err := p.containerManager.HandleMCPInstanceCreated(ctx, instance.InstanceID, instance.Name, resolvedSpec)
+	err = p.containerManager.HandleMCPInstanceCreated(ctx, instance.InstanceID, instance.InstanceID, resolvedSpec)
 	if err != nil {
 		p.logger.Error("Failed to create container via container manager",
 			slog.String("instance_id", instance.InstanceID),

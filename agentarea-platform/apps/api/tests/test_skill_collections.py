@@ -453,7 +453,6 @@ async def test_sync_grants_mirrors_workspace_members(session_factory, monkeypatc
             Workspace(
                 id=context.workspace_id,
                 slug="workspace-a",
-                type="shared",
                 name="Workspace A",
                 owner_user_id="owner-1",
             )

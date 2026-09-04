@@ -2,8 +2,8 @@
 
 Covers: create instance -> verify (Go mcp-manager mocked) -> usable/succeeded state.
 
-The Go mcp-manager HTTP calls are exercised through verify()'s test seams
-(_go_create_fn, _go_health_fn, _list_tools_fn); no network or DB server needed.
+The MCP probe is exercised through verify()'s list-tools seam; no network or
+database server is needed.
 The service layer uses a fully-mocked repository so no SQLAlchemy session is opened.
 """
 
@@ -137,8 +137,9 @@ async def test_mcp_instance_lifecycle_url_type_reaches_succeeded():
         "error": None,
     }
 
-    async def _fake_verify(instance, session=None, *, extra_headers=None,
-                           _list_tools_fn=None, _go_create_fn=None, _go_health_fn=None):
+    async def _fake_verify(
+        instance, session=None, *, extra_headers=None, force=False, _list_tools_fn=None
+    ):
         nonlocal created_instance
         created_instance = instance
         # Simulate verify() persisting the result back onto the ORM object
@@ -147,6 +148,7 @@ async def test_mcp_instance_lifecycle_url_type_reaches_succeeded():
 
     # Patch verify at the service module import site (where create_instance calls it)
     import agentarea_mcp.application.service as svc_mod
+
     original_verify = svc_mod.verify
     svc_mod.verify = _fake_verify
     try:
@@ -203,8 +205,9 @@ async def test_mcp_instance_lifecycle_docker_type_dispatches_background_verify()
 
     verify_calls: list[str] = []
 
-    async def _fake_verify(instance, session=None, *, extra_headers=None,
-                           _list_tools_fn=None, _go_create_fn=None, _go_health_fn=None):
+    async def _fake_verify(
+        instance, session=None, *, extra_headers=None, force=False, _list_tools_fn=None
+    ):
         verify_calls.append(str(instance.id))
         # Background verify: simulate Go manager ack + list_tools success
         instance.verification = {
@@ -218,6 +221,7 @@ async def test_mcp_instance_lifecycle_docker_type_dispatches_background_verify()
     import asyncio
 
     import agentarea_mcp.application.service as svc_mod
+
     original_verify = svc_mod.verify
     svc_mod.verify = _fake_verify
     try:

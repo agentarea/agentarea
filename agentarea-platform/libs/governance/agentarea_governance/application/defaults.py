@@ -36,13 +36,12 @@ def _config_path(path: Path | None) -> Path:
 def load_default_policy_specs(path: Path | None = None) -> list[dict[str, Any]]:
     """Read the raw default-policy specs from the YAML config.
 
-    Returns an empty list when the file is absent so a missing config simply
-    means "new workspaces start empty" rather than an error.
+    The packaged baseline is part of the runtime safety contract. Missing it is
+    a deployment/configuration error, never permission to start empty.
     """
     resolved = _config_path(path)
     if not resolved.exists():
-        logger.info("no default policies file at %s; workspaces start empty", resolved)
-        return []
+        raise FileNotFoundError(f"required governance baseline not found: {resolved}")
 
     data = yaml.safe_load(resolved.read_text()) or {}
     specs = data.get("policies", [])

@@ -23,10 +23,12 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 )
 
 var (
 	ErrWorkspaceConflict = errors.New("workspace_conflict")
+	ErrWorkspaceNotFound = errors.New("workspace_not_found")
 	ErrQuotaExceeded     = errors.New("workspace_quota_exceeded")
 )
 
@@ -73,24 +75,36 @@ type leaseRecord struct {
 	ExpiresAt    time.Time `json:"expires_at"`
 }
 
-func ConfigFromEnv() RepositoryConfig {
-	maxFiles, _ := strconv.Atoi(os.Getenv("SANDBOX_WORKSPACE_MAX_FILES"))
-	if maxFiles <= 0 {
-		maxFiles = 10_000
+type hydrationRevisionRecord struct {
+	SchemaVersion  int    `json:"schema_version"`
+	WorkspaceID    string `json:"workspace_id"`
+	TaskID         string `json:"task_id"`
+	Prefix         string `json:"prefix"`
+	RevisionSHA256 string `json:"revision_sha256"`
+}
+
+func LoadConfigFromEnv() (RepositoryConfig, error) {
+	maxFiles, err := requiredPositiveInt("SANDBOX_WORKSPACE_MAX_FILES")
+	if err != nil {
+		return RepositoryConfig{}, err
 	}
-	maxFileBytes, _ := strconv.ParseInt(os.Getenv("SANDBOX_WORKSPACE_MAX_FILE_BYTES"), 10, 64)
-	if maxFileBytes <= 0 {
-		maxFileBytes = 256 * 1024 * 1024
+	maxFileBytes, err := requiredPositiveInt64("SANDBOX_WORKSPACE_MAX_FILE_BYTES")
+	if err != nil {
+		return RepositoryConfig{}, err
 	}
-	maxBytes, _ := strconv.ParseInt(os.Getenv("SANDBOX_WORKSPACE_MAX_BYTES"), 10, 64)
-	if maxBytes <= 0 {
-		maxBytes = 2 * 1024 * 1024 * 1024
+	maxBytes, err := requiredPositiveInt64("SANDBOX_WORKSPACE_MAX_BYTES")
+	if err != nil {
+		return RepositoryConfig{}, err
 	}
 	ttl, err := time.ParseDuration(os.Getenv("SANDBOX_WORKSPACE_SIGNED_URL_TTL"))
 	if err != nil || ttl <= 0 {
-		ttl = time.Hour
+		return RepositoryConfig{}, fmt.Errorf("SANDBOX_WORKSPACE_SIGNED_URL_TTL must be a positive duration")
 	}
-	return RepositoryConfig{
+	forcePathStyle, err := strconv.ParseBool(os.Getenv("SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE"))
+	if err != nil {
+		return RepositoryConfig{}, fmt.Errorf("SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE must be true or false")
+	}
+	cfg := RepositoryConfig{
 		Bucket:         firstEnv("SANDBOX_WORKSPACE_S3_BUCKET", "ARTIFACTS_BUCKET_NAME"),
 		Prefix:         strings.Trim(os.Getenv("SANDBOX_WORKSPACE_S3_PREFIX"), "/"),
 		Region:         firstEnvOr("us-east-1", "SANDBOX_WORKSPACE_S3_REGION", "AWS_REGION"),
@@ -99,15 +113,15 @@ func ConfigFromEnv() RepositoryConfig {
 		MaxFiles:       maxFiles,
 		MaxFileBytes:   maxFileBytes,
 		MaxBytes:       maxBytes,
-		ForcePathStyle: os.Getenv("SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE") != "false",
+		ForcePathStyle: forcePathStyle,
 	}
+	if cfg.Bucket == "" {
+		return RepositoryConfig{}, fmt.Errorf("workspace S3 bucket is required; set SANDBOX_WORKSPACE_S3_BUCKET or ARTIFACTS_BUCKET_NAME")
+	}
+	return cfg, nil
 }
 
-func NewRepositoryFromEnv(ctx context.Context) (*Repository, error) {
-	cfg := ConfigFromEnv()
-	if cfg.Bucket == "" {
-		return nil, fmt.Errorf("workspace S3 bucket is required; set SANDBOX_WORKSPACE_S3_BUCKET or ARTIFACTS_BUCKET_NAME")
-	}
+func NewRepositoryFromConfig(ctx context.Context, cfg RepositoryConfig) (*Repository, error) {
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.Region))
 	if err != nil {
 		return nil, fmt.Errorf("load workspace S3 configuration: %w", err)
@@ -121,21 +135,28 @@ func NewRepositoryFromEnv(ctx context.Context) (*Repository, error) {
 	return NewRepository(cfg, client, s3.NewPresignClient(client))
 }
 
+func requiredPositiveInt(name string) (int, error) {
+	value, err := strconv.Atoi(os.Getenv(name))
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", name)
+	}
+	return value, nil
+}
+
+func requiredPositiveInt64(name string) (int64, error) {
+	value, err := strconv.ParseInt(os.Getenv(name), 10, 64)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", name)
+	}
+	return value, nil
+}
+
 func NewRepository(cfg RepositoryConfig, client s3Client, presigner s3Presigner) (*Repository, error) {
 	if cfg.Bucket == "" || client == nil || presigner == nil {
 		return nil, fmt.Errorf("workspace bucket, S3 client, and presigner are required")
 	}
-	if cfg.SignedURLTTL <= 0 {
-		cfg.SignedURLTTL = time.Hour
-	}
-	if cfg.MaxFiles <= 0 {
-		cfg.MaxFiles = 10_000
-	}
-	if cfg.MaxFileBytes <= 0 {
-		cfg.MaxFileBytes = 256 * 1024 * 1024
-	}
-	if cfg.MaxBytes <= 0 {
-		cfg.MaxBytes = 2 * 1024 * 1024 * 1024
+	if cfg.SignedURLTTL <= 0 || cfg.MaxFiles <= 0 || cfg.MaxFileBytes <= 0 || cfg.MaxBytes <= 0 || cfg.MaxFileBytes > cfg.MaxBytes {
+		return nil, fmt.Errorf("workspace signed URL TTL and quota limits must be positive and internally consistent")
 	}
 	cfg.Prefix = strings.Trim(cfg.Prefix, "/")
 	return &Repository{cfg: cfg, client: client, presign: presigner}, nil
@@ -149,14 +170,175 @@ func (r *Repository) PrepareHydration(ctx context.Context, ref ManifestRef) (Hyd
 	if _, err := r.validateCurrentLease(ctx, ref); err != nil {
 		return Hydration{}, Manifest{}, err
 	}
-	downloads := make([]Download, 0, len(manifest.Entries))
-	for _, entry := range manifest.Entries {
-		if entry.Deleted {
+	entries := selectHydrationEntries(manifest.Entries, "")
+	revision, err := hydrationRevisionSHA256("", entries)
+	if err != nil {
+		return Hydration{}, Manifest{}, err
+	}
+	downloads, err := r.signHydrationEntries(ctx, ref, entries)
+	if err != nil {
+		return Hydration{}, Manifest{}, err
+	}
+	return Hydration{
+		Generation:     ref.Generation,
+		ManifestSHA256: ref.ManifestSHA256,
+		RevisionSHA256: revision,
+		FencingToken:   ref.FencingToken,
+		Downloads:      downloads,
+	}, manifest, nil
+}
+
+// PrepareCurrentHydration resolves the current committed task workspace and
+// signs only entries below prefix. It is the manager-side copy-in seam: callers
+// need workspace/task identity, never S3 credentials or object paths. A task
+// with no committed workspace yet legitimately returns an empty generation.
+func (r *Repository) PrepareCurrentHydration(ctx context.Context, workspaceID, taskID, prefix string) (Hydration, error) {
+	if err := ValidateIdentifier("workspace_id", workspaceID); err != nil {
+		return Hydration{}, err
+	}
+	if err := ValidateIdentifier("task_id", taskID); err != nil {
+		return Hydration{}, err
+	}
+	if prefix != "" {
+		if _, err := NormalizeRelativePath(prefix); err != nil {
+			return Hydration{}, fmt.Errorf("invalid hydration prefix: %w", err)
+		}
+	}
+	ref, err := r.loadCurrentRef(ctx, workspaceID, taskID)
+	if errors.Is(err, ErrWorkspaceNotFound) {
+		revision, revisionErr := hydrationRevisionSHA256(prefix, nil)
+		if revisionErr != nil {
+			return Hydration{}, revisionErr
+		}
+		if pinErr := r.pinHydrationRevision(ctx, workspaceID, taskID, prefix, revision); pinErr != nil {
+			return Hydration{}, pinErr
+		}
+		return Hydration{RevisionSHA256: revision}, nil
+	}
+	if err != nil {
+		return Hydration{}, err
+	}
+	manifest, err := r.loadManifest(ctx, ref)
+	if err != nil {
+		return Hydration{}, err
+	}
+	entries := selectHydrationEntries(manifest.Entries, prefix)
+	revision, err := hydrationRevisionSHA256(prefix, entries)
+	if err != nil {
+		return Hydration{}, err
+	}
+	if err := r.pinHydrationRevision(ctx, workspaceID, taskID, prefix, revision); err != nil {
+		return Hydration{}, err
+	}
+	downloads, err := r.signHydrationEntries(ctx, ref, entries)
+	if err != nil {
+		return Hydration{}, err
+	}
+	return Hydration{
+		Generation:     ref.Generation,
+		ManifestSHA256: ref.ManifestSHA256,
+		RevisionSHA256: revision,
+		FencingToken:   ref.FencingToken,
+		Downloads:      downloads,
+	}, nil
+}
+
+// pinHydrationRevision makes the selected input view immutable across live
+// volume deletion and manager restarts. Conditional create is the arbitration
+// point when multiple managers observe first demand concurrently.
+func (r *Repository) pinHydrationRevision(ctx context.Context, workspaceID, taskID, prefix, revision string) error {
+	record := hydrationRevisionRecord{
+		SchemaVersion: SchemaVersion, WorkspaceID: workspaceID, TaskID: taskID,
+		Prefix: prefix, RevisionSHA256: revision,
+	}
+	body, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("encode hydration revision pin: %w", err)
+	}
+	prefixDigest := sha256.Sum256([]byte(prefix))
+	key := path.Join(r.taskPrefix(workspaceID, taskID), "hydration-revisions", hex.EncodeToString(prefixDigest[:])+".json")
+	bodyDigest := sha256.Sum256(body)
+	_, putErr := r.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:         aws.String(r.cfg.Bucket),
+		Key:            aws.String(key),
+		Body:           bytes.NewReader(body),
+		ContentLength:  aws.Int64(int64(len(body))),
+		ContentType:    aws.String("application/json"),
+		ChecksumSHA256: aws.String(base64.StdEncoding.EncodeToString(bodyDigest[:])),
+		IfNoneMatch:    aws.String("*"),
+	})
+	if putErr == nil {
+		return nil
+	}
+
+	object, getErr := r.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(r.cfg.Bucket), Key: aws.String(key)})
+	if getErr != nil {
+		return fmt.Errorf("pin hydration revision: create failed: %v; read existing pin: %w", putErr, getErr)
+	}
+	defer object.Body.Close()
+	existingBody, readErr := io.ReadAll(io.LimitReader(object.Body, 64*1024+1))
+	if readErr != nil || len(existingBody) > 64*1024 {
+		return fmt.Errorf("read hydration revision pin: invalid size or body: %w", readErr)
+	}
+	var existing hydrationRevisionRecord
+	decoder := json.NewDecoder(bytes.NewReader(existingBody))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&existing); err != nil {
+		return fmt.Errorf("decode hydration revision pin: %w", err)
+	}
+	if existing.SchemaVersion != SchemaVersion || existing.WorkspaceID != workspaceID || existing.TaskID != taskID || existing.Prefix != prefix {
+		return fmt.Errorf("%w: hydration revision pin identity mismatch", ErrWorkspaceConflict)
+	}
+	if existing.RevisionSHA256 != revision {
+		return fmt.Errorf(
+			"%w: immutable task input revision changed from %s to %s",
+			ErrWorkspaceConflict,
+			existing.RevisionSHA256,
+			revision,
+		)
+	}
+	return nil
+}
+
+func selectHydrationEntries(entries []Entry, prefix string) []Entry {
+	selected := make([]Entry, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Deleted || (prefix != "" && entry.RelativePath != prefix && !strings.HasPrefix(entry.RelativePath, prefix+"/")) {
 			continue
 		}
+		selected = append(selected, entry)
+	}
+	sort.Slice(selected, func(left, right int) bool {
+		return selected[left].RelativePath < selected[right].RelativePath
+	})
+	return selected
+}
+
+// hydrationRevisionSHA256 identifies only the immutable view copied into a
+// sandbox. It intentionally excludes the containing manifest generation:
+// execution stdout/stderr may advance that manifest without changing inputs.
+func hydrationRevisionSHA256(prefix string, entries []Entry) (string, error) {
+	if entries == nil {
+		entries = []Entry{}
+	}
+	canonical, err := json.Marshal(struct {
+		SchemaVersion int     `json:"schema_version"`
+		Prefix        string  `json:"prefix"`
+		Entries       []Entry `json:"entries"`
+	}{SchemaVersion: SchemaVersion, Prefix: prefix, Entries: entries})
+	if err != nil {
+		return "", fmt.Errorf("encode workspace hydration revision: %w", err)
+	}
+	digest := sha256.Sum256(canonical)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func (r *Repository) signHydrationEntries(ctx context.Context, ref ManifestRef, entries []Entry) ([]Download, error) {
+	downloads := make([]Download, 0, len(entries))
+	for _, entry := range entries {
 		bucket, key, err := r.authorizeObjectURI(ref.WorkspaceID, ref.TaskID, entry.ObjectURI, "objects/"+entry.SHA256)
 		if err != nil {
-			return Hydration{}, Manifest{}, err
+			return nil, err
 		}
 		input := &s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)}
 		if strings.HasPrefix(entry.ObjectVersionOrETag, "version:") {
@@ -168,7 +350,7 @@ func (r *Repository) PrepareHydration(ctx context.Context, ref ManifestRef) (Hyd
 			options.Expires = r.cfg.SignedURLTTL
 		})
 		if err != nil {
-			return Hydration{}, Manifest{}, fmt.Errorf("sign workspace input %q: %w", entry.RelativePath, err)
+			return nil, fmt.Errorf("sign workspace input %q: %w", entry.RelativePath, err)
 		}
 		downloads = append(downloads, Download{
 			RelativePath: entry.RelativePath,
@@ -180,7 +362,7 @@ func (r *Repository) PrepareHydration(ctx context.Context, ref ManifestRef) (Hyd
 			Mode:         entry.Mode,
 		})
 	}
-	return Hydration{Generation: ref.Generation, FencingToken: ref.FencingToken, Downloads: downloads}, manifest, nil
+	return downloads, nil
 }
 
 func (r *Repository) ValidateCurrentLease(ctx context.Context, ref ManifestRef) error {
@@ -860,6 +1042,10 @@ func (r *Repository) loadCurrentRef(ctx context.Context, workspaceID, taskID str
 	key := path.Join(r.taskPrefix(workspaceID, taskID), "current.json")
 	object, err := r.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(r.cfg.Bucket), Key: aws.String(key)})
 	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && (apiErr.ErrorCode() == "NoSuchKey" || apiErr.ErrorCode() == "NotFound" || apiErr.ErrorCode() == "404") {
+			return ManifestRef{}, fmt.Errorf("%w: task workspace has no current pointer", ErrWorkspaceNotFound)
+		}
 		return ManifestRef{}, fmt.Errorf("load workspace current pointer: %w", err)
 	}
 	defer object.Body.Close()

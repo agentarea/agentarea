@@ -18,6 +18,22 @@ class AgentModelNotConfiguredError(Exception):
         )
 
 
+class SchedulingNotSupportedError(Exception):
+    """Raised when a task carrying ``scheduled_at`` is handed to a manager without a timer.
+
+    Maps to HTTP 501 Not Implemented at the API boundary. Only the Temporal
+    manager can defer a run; the in-process manager would otherwise execute a
+    task scheduled for next Tuesday immediately.
+    """
+
+    def __init__(self, task_id):
+        self.task_id = str(task_id)
+        super().__init__(
+            f"Task {self.task_id} is scheduled for a future time, "
+            "which the in-process execution engine cannot honour."
+        )
+
+
 class BudgetCapExceededError(Exception):
     """Raised when a workspace's month-to-date spend has reached its monthly cap.
 

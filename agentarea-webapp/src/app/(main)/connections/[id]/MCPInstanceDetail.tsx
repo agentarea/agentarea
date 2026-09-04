@@ -27,17 +27,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import {
-  getMcpRuntimeHealthStatusPresentation,
-  getMcpVerificationStatusPresentation,
-} from "@/lib/status";
-import { getMCPInstanceHealth } from "@/lib/api";
+import { formatApiError } from "@/lib/api-errors";
+import { getMcpVerificationStatusPresentation } from "@/lib/status";
 import {
   discoverMCPInstanceToolsAction as discoverMCPInstanceTools,
   oauthAuthorizeAction,
 } from "@/lib/server-actions";
 import { ToolsTable } from "../components/ToolsTable";
 import { ConsumersSection } from "./ConsumersSection";
+import { InstanceActivitySection } from "./InstanceActivitySection";
 import { MCPInstance, MCPServer } from "../types";
 import { getEffectiveMCPVerificationStatus } from "../utils";
 import { verifyInstance } from "./actions";
@@ -89,9 +87,9 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   return (
     <Button variant="outline" size="xs" onClick={handleCopy}>
       {copied ? (
-        <Check className="h-4 w-4 text-green-500" />
+        <Check className="text-green-500" />
       ) : (
-        <Copy className="h-4 w-4" />
+        <Copy />
       )}
     </Button>
   );
@@ -104,15 +102,7 @@ export default function MCPInstanceDetail({
 }: Props) {
   const t = useTranslations("MCPServersPage.instanceDetail");
   const router = useRouter();
-  const [connectionUrl, setConnectionUrl] = useState<string | null>(null);
-  const [isLoadingUrl, setIsLoadingUrl] = useState(false);
-
   const [isRefreshingTools, setIsRefreshingTools] = useState(false);
-  const [health, setHealth] = useState<{
-    healthy: boolean;
-    response_time_ms: number;
-    container_status: string;
-  } | null>(null);
 
   // Stuck detection: in_progress verification older than 30s
   const verification = instance.verification as
@@ -196,12 +186,7 @@ export default function MCPInstanceDetail({
     setIsRefreshingTools(true);
     try {
       const { data, error } = await discoverMCPInstanceTools(instance.id);
-      if (error)
-        throw new Error(
-          typeof error === "object" && "detail" in error
-            ? String(error.detail)
-            : "Failed to refresh tools"
-        );
+      if (error) throw new Error(formatApiError(error));
       // The endpoint returns 200 with {tools, verification} even when verification
       // failed — so report based on the actual result, not the HTTP status.
       const result = data as
@@ -248,9 +233,6 @@ export default function MCPInstanceDetail({
     return () => clearInterval(interval);
   }, [verification?.status, router]);
 
-  // Derive running state from verification
-  const isVerificationSucceeded = effectiveVerificationStatus === "succeeded";
-
   // Derive transport type. After PR #151 transport moved to MCPServer columns,
   // so instance.json_spec.type is empty for newly-created instances — fall back
   // to the parent server spec (remote_url → url, cmd → command, else docker).
@@ -263,35 +245,6 @@ export default function MCPInstanceDetail({
     if (serverSpec?.cmd) return MCP_TRANSPORT.command;
     return MCP_TRANSPORT.docker;
   })();
-  const jsonSpecType = derivedTransportType;
-  const managerServiceName = instance.id;
-  useEffect(() => {
-    if (
-      jsonSpecType === MCP_TRANSPORT.url ||
-      jsonSpecType === MCP_TRANSPORT.bundle
-    )
-      return;
-    if (isVerificationSucceeded && managerServiceName) {
-      setIsLoadingUrl(true);
-      getMCPInstanceHealth(managerServiceName)
-        .then(({ health_check }) => {
-          if (health_check?.details?.proxy_url) {
-            setConnectionUrl(health_check.details.proxy_url);
-          } else if (health_check?.url) {
-            setConnectionUrl(health_check.url);
-          }
-          if (health_check) {
-            setHealth({
-              healthy: health_check.healthy,
-              response_time_ms: health_check.response_time_ms,
-              container_status: health_check.container_status,
-            });
-          }
-        })
-        .catch(console.error)
-        .finally(() => setIsLoadingUrl(false));
-    }
-  }, [isVerificationSucceeded, managerServiceName, jsonSpecType]);
 
   const plainEnvVars = (instance.json_spec?.environment ?? {}) as Record<
     string,
@@ -334,20 +287,11 @@ export default function MCPInstanceDetail({
     string
   >;
 
-  // Generate SSE endpoint URL from connection URL
-  const bundleEndpointUrl = isBundleType ? `/mcp/${instance.id}` : null;
-  const effectiveConnectionUrl = isUrlType
-    ? endpointUrl
-    : isBundleType
-      ? bundleEndpointUrl
-      : connectionUrl;
-  const sseUrl =
-    effectiveConnectionUrl && !isBundleType
-      ? `${effectiveConnectionUrl.replace(/\/$/, "")}/sse`
-      : null;
-
-  // AgentArea proxy URL — how other agents/tools connect to this MCP through AgentArea.
-  // Rendered as a compact top-row so it stays discoverable without dominating the layout.
+  // The one way in, for every transport: AgentArea's demand gateway, keyed by
+  // instance id. It is what gives on-demand start, the request lease and idle
+  // reclamation, so nothing here should ever offer a second, direct address —
+  // the workload's own URL is the manager's business. Rendered as a compact
+  // top-row so it stays discoverable without dominating the layout.
   const apiBaseUrl =
     typeof window !== "undefined"
       ? (window as unknown as { __ENV__?: { CLIENT_API_URL?: string } })
@@ -527,106 +471,6 @@ export default function MCPInstanceDetail({
               </div>
             )}
 
-            {/* Connection URL — only shown for non-URL types since URL-type
-                shows its endpoint inside the External Server card below. */}
-            {!isUrlType && (isVerificationSucceeded || isBundleType) && (
-              <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
-                <div className="flex items-center gap-2">
-                  <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {t("connection.title")}
-                  </div>
-                </div>
-
-                {isLoadingUrl ? (
-                  <div className="note">{t("connection.loading")}</div>
-                ) : effectiveConnectionUrl ? (
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <div className="text-xs text-muted-foreground">
-                        {t("connection.mcpEndpoint")}
-                      </div>
-                      <div className="flex gap-2">
-                        <Input
-                          value={effectiveConnectionUrl}
-                          readOnly
-                          className="font-mono text-sm"
-                        />
-                        <CopyButton
-                          text={effectiveConnectionUrl}
-                          label={t("labels.connectionUrl")}
-                        />
-                      </div>
-                    </div>
-
-                    {sseUrl && (
-                      <div className="space-y-1.5">
-                        <div className="text-xs text-muted-foreground">
-                          {t("connection.sseEndpoint")}
-                        </div>
-                        <div className="flex gap-2">
-                          <Input
-                            value={sseUrl}
-                            readOnly
-                            className="font-mono text-sm"
-                          />
-                          <CopyButton
-                            text={sseUrl}
-                            label={t("labels.sseUrl")}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    <p className="note">{t("connection.note")}</p>
-                  </div>
-                ) : (
-                  <div className="note">{t("connection.notAvailable")}</div>
-                )}
-              </div>
-            )}
-
-            {/* Health info */}
-            {health && (
-              <div className="space-y-3 rounded-lg border border-border/60 bg-background p-4 dark:bg-zinc-900/30">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Health
-                </div>
-                <div className="grid gap-2 text-sm sm:grid-cols-3">
-                  <div>
-                    <span className="text-muted-foreground">Status</span>
-                    <p className="mt-0.5">
-                      {(() => {
-                        const presentation = getMcpRuntimeHealthStatusPresentation(
-                          health.healthy ? "healthy" : "unhealthy"
-                        );
-                        return (
-                          <StatusIndicator
-                            tone={presentation.tone}
-                            pulse={presentation.pulse}
-                          >
-                            {presentation.label}
-                          </StatusIndicator>
-                        );
-                      })()}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Response Time</span>
-                    <p className="mt-0.5 font-mono">
-                      {health.response_time_ms}ms
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Container</span>
-                    <p className="mt-0.5 capitalize">
-                      {health.container_status}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div className="grid gap-4 md:grid-cols-2">
               {!isCommandType &&
                 !isUrlType &&
@@ -686,7 +530,7 @@ export default function MCPInstanceDetail({
                         size="xs"
                         onClick={() => setIsEditingConfig(true)}
                       >
-                        <Pencil className="h-3 w-3 mr-1" /> Edit
+                        <Pencil className="mr-1" /> Edit
                       </Button>
                     )}
                   </div>
@@ -811,7 +655,7 @@ export default function MCPInstanceDetail({
                     disabled={isRefreshingTools}
                   >
                     <RefreshCw
-                      className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`}
+                      className={`mr-1.5 ${isRefreshingTools ? "animate-spin" : ""}`}
                     />
                     Refresh
                   </Button>
@@ -832,7 +676,7 @@ export default function MCPInstanceDetail({
                   disabled={isRefreshingTools}
                 >
                   <RefreshCw
-                    className={`mr-1.5 h-3.5 w-3.5 ${isRefreshingTools ? "animate-spin" : ""}`}
+                    className={`mr-1.5 ${isRefreshingTools ? "animate-spin" : ""}`}
                   />
                   Discover Tools
                 </Button>
@@ -840,6 +684,8 @@ export default function MCPInstanceDetail({
             )}
 
             <ConsumersSection instanceId={instance.id} />
+
+            <InstanceActivitySection instanceId={instance.id} />
 
             {Object.keys(envVars).length > 0 && (
               <div className="space-y-3">

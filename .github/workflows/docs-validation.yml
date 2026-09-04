@@ -64,7 +64,7 @@ jobs:
         working-directory: docs
         run: |
           # Check for broken links to validate configuration
-          npx mint broken-links || {
+          npx --no-install mintlify broken-links || {
             echo "❌ Mintlify broken links check failed"
             exit 1
           }
@@ -141,5 +141,5 @@ jobs:
       - name: Validate internal links
         working-directory: docs
         run: |
-          npx mint broken-links || { echo "❌ Mintlify broken links check failed"; exit 1; }
+          npx --no-install mintlify broken-links || { echo "❌ Mintlify broken links check failed"; exit 1; }
           echo "✅ Internal link validation completed"

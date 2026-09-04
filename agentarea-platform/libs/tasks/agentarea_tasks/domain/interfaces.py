@@ -19,6 +19,11 @@ class BaseTaskManager(ABC):
     (Temporal, Celery, etc.).
     """
 
+    #: Whether this engine can hold a task until ``scheduled_at`` instead of
+    #: running it on submission. Engines without a durable timer say False and
+    #: callers reject the run up front rather than running it early.
+    supports_scheduling: bool = False
+
     @abstractmethod
     async def submit_task(self, task: AgentTask) -> AgentTask:
         """Submit a task for execution.

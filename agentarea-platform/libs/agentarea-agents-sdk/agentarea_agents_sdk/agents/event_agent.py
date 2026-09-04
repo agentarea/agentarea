@@ -67,14 +67,18 @@ class EventAgent:
         include_default_tools: bool = True,
         # Generation params
         temperature: float = 0.3,
-        max_tokens: int = 500,
-        max_iterations: int = 10,
+        max_tokens: int | None = None,
+        max_iterations: int | None = None,
         # Events
         event_listener: EventListener | None = None,
         # Context persistence (optional)
         context_service: Any | None = None,
         context_task_id: str | None = None,
     ) -> None:
+        if max_tokens is None or max_tokens <= 0:
+            raise ValueError("max_tokens must be provided explicitly and be positive")
+        if max_iterations is None or max_iterations <= 0:
+            raise ValueError("max_iterations must be provided explicitly and be positive")
         self.name = name
         self.instruction = instruction
         self.temperature = temperature
@@ -165,20 +169,11 @@ class EventAgent:
                 }
             )
 
-        # Default success criteria if none provided
-        if success_criteria is None:
-            success_criteria = [
-                "Understand the task requirements",
-                "Use available tools when needed",
-                "Provide clear reasoning for actions",
-                "Complete the task successfully",
-            ]
-
         return PromptBuilder.build_react_system_prompt(
             agent_name=self.name,
             agent_instruction=self.instruction,
             goal_description=goal,
-            success_criteria=success_criteria,
+            success_criteria=success_criteria or [],
             available_tools=available_tools,
         )
 

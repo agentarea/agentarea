@@ -28,11 +28,12 @@ def _build_service(repo_factory) -> ProjectService:
     display_name="Projects",
     description="Manage projects and their skills/agents/MCP instances.",
     category="platform",
+    plane="build",
 )
 class ProjectsToolset(Toolset):
     """Manage projects: list, get, create, update, delete, and attach skills/agents/MCP instances."""
 
-    @tool_method
+    @tool_method(effect="read")
     async def list(self, limit: int = 50, offset: int = 0) -> str:
         """List projects in the workspace."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -43,7 +44,7 @@ class ProjectsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="read")
     async def get(self, project_id: str) -> str:
         """Get a project by ID."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -64,7 +65,7 @@ class ProjectsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="write")
     async def create(
         self,
         name: str,
@@ -84,7 +85,7 @@ class ProjectsToolset(Toolset):
             project = await service.create_project(payload)
             return json.dumps({"id": str(project.id), "name": project.name}, default=str)
 
-    @tool_method
+    @tool_method(effect="write")
     async def update(
         self,
         project_id: str,
@@ -112,7 +113,7 @@ class ProjectsToolset(Toolset):
                 return json.dumps({"error": "Project not found"})
             return json.dumps({"id": str(project.id), "name": project.name}, default=str)
 
-    @tool_method
+    @tool_method(effect="destructive")
     async def delete(self, project_id: str) -> str:
         """Delete a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -120,7 +121,7 @@ class ProjectsToolset(Toolset):
             deleted = await service.delete(UUID(project_id))
             return json.dumps({"deleted": deleted})
 
-    @tool_method
+    @tool_method(effect="write")
     async def add_skill(self, project_id: str, skill_id: str) -> str:
         """Attach a skill to a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -128,7 +129,7 @@ class ProjectsToolset(Toolset):
             await service.add_skill(UUID(project_id), UUID(skill_id))
             return json.dumps({"added": True})
 
-    @tool_method
+    @tool_method(effect="write")
     async def remove_skill(self, project_id: str, skill_id: str) -> str:
         """Detach a skill from a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -136,7 +137,7 @@ class ProjectsToolset(Toolset):
             await service.remove_skill(UUID(project_id), UUID(skill_id))
             return json.dumps({"removed": True})
 
-    @tool_method
+    @tool_method(effect="write")
     async def add_agent(self, project_id: str, agent_id: str) -> str:
         """Attach an agent to a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -144,7 +145,7 @@ class ProjectsToolset(Toolset):
             await service.add_agent(UUID(project_id), UUID(agent_id))
             return json.dumps({"added": True})
 
-    @tool_method
+    @tool_method(effect="write")
     async def remove_agent(self, project_id: str, agent_id: str) -> str:
         """Detach an agent from a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -152,7 +153,7 @@ class ProjectsToolset(Toolset):
             await service.remove_agent(UUID(project_id), UUID(agent_id))
             return json.dumps({"removed": True})
 
-    @tool_method
+    @tool_method(effect="write")
     async def add_mcp_instance(self, project_id: str, mcp_instance_id: str) -> str:
         """Attach an MCP server instance to a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -160,7 +161,7 @@ class ProjectsToolset(Toolset):
             await service.add_mcp_instance(UUID(project_id), UUID(mcp_instance_id))
             return json.dumps({"added": True})
 
-    @tool_method
+    @tool_method(effect="write")
     async def remove_mcp_instance(self, project_id: str, mcp_instance_id: str) -> str:
         """Detach an MCP server instance from a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):

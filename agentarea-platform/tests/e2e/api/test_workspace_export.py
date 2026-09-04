@@ -34,7 +34,6 @@ def test_workspace_export_with_content_ok(alice_client: httpx.Client) -> None:
             "name": agent_name,
             "description": "d",
             "instruction": "i",
-            "model_id": "gpt-4",
             "agent_type": "stateless",
         },
     ).raise_for_status()

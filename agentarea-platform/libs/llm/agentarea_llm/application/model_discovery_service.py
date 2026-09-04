@@ -23,15 +23,31 @@ _PROVIDER_BASE_URLS: dict[str, str] = {
 }
 
 
+def _positive_int_or_none(value) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _nonnegative_float_or_none(value) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
+
+
 @dataclass
 class DiscoveredModel:
     model_name: str
     display_name: str
-    context_window: int = 4096
+    context_window: int | None = None
     description: str = ""
-    max_output_tokens: int = 4096
-    input_cost_per_token: float = 0.0
-    output_cost_per_token: float = 0.0
+    max_output_tokens: int | None = None
+    input_cost_per_token: float | None = None
+    output_cost_per_token: float | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -101,11 +117,18 @@ class ModelDiscoveryService:
             model_id = m.get("id", "")
             if not model_id:
                 continue
+            pricing = m.get("pricing") if isinstance(m.get("pricing"), dict) else {}
+            top_provider = m.get("top_provider") if isinstance(m.get("top_provider"), dict) else {}
             models.append(
                 DiscoveredModel(
                     model_name=model_id,
                     display_name=m.get("name", model_id),
-                    context_window=m.get("context_length", 4096),
+                    context_window=_positive_int_or_none(m.get("context_length")),
+                    max_output_tokens=_positive_int_or_none(
+                        m.get("max_output_tokens") or top_provider.get("max_completion_tokens")
+                    ),
+                    input_cost_per_token=_nonnegative_float_or_none(pricing.get("prompt")),
+                    output_cost_per_token=_nonnegative_float_or_none(pricing.get("completion")),
                     description=m.get("description", ""),
                 )
             )

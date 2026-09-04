@@ -1,7 +1,16 @@
+from importlib import import_module
+from uuid import UUID
+
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+# Register encrypted_secrets on the shared metadata before SQLAlchemy resolves
+# the api_key_secret_id foreign key below. Importing this module alone would
+# otherwise leave the target table unknown, which surfaces as
+# NoReferencedTableError the first time any mapper is configured.
+import_module("agentarea_secrets.models")
 
 
 class ProviderSpec(BaseModel, WorkspaceScopedMixin):
@@ -44,7 +53,17 @@ class ProviderConfig(BaseModel, WorkspaceScopedMixin):
     )
     name: Mapped[str] = mapped_column(String, nullable=False)  # "My OpenAI", "Work OpenAI"
     description: Mapped[str | None] = mapped_column(String, nullable=True)
+    # The name of the secret holding the key. Resolution goes through this, here
+    # and in the worker's execution activities.
     api_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    # The same secret as a relationship. Carries what a name cannot: the
+    # database refuses to delete a secret while a config still points at it,
+    # and the catalog can list the configs using one without parsing names.
+    api_key_secret_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("encrypted_secrets.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
     endpoint_url: Mapped[str | None] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -77,10 +96,10 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     model_name: Mapped[str] = mapped_column(String, nullable=False)  # gpt-4, claude-3-opus
     display_name: Mapped[str] = mapped_column(String, nullable=False)  # GPT-4, Claude 3 Opus
     description: Mapped[str | None] = mapped_column(String, nullable=True)
-    context_window: Mapped[int] = mapped_column(Integer, nullable=False, default=4096)
-    max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True, default=4096)
-    input_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)
-    output_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)
+    context_window: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    input_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True)
+    output_cost_per_token: Mapped[float | None] = mapped_column(Float, nullable=True)
     supports_function_calling: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )

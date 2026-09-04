@@ -39,6 +39,9 @@ def _make_pool(num: int):
 
 def _wf_with_pool(num_ops: int = 50):
     wf = AgentExecutionWorkflow()
+    # Disclosure budgets the revealed schemas against the model's context
+    # window, so the state has to carry one the way a real run's does.
+    wf.state.context_window = 128000
     wf.state.searchable_tool_pool = _make_pool(num_ops)
     wf.state.available_tools = [
         {"type": "function", "function": {"name": "completion", "parameters": {}}},

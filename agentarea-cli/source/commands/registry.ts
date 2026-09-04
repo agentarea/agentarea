@@ -1703,15 +1703,6 @@ export const registry: CommandSpec[] = [
 		body: false,
 		summary: 'Remove an MCP instance from a client',
 	},
-	{
-		noun: 'clients',
-		verb: 'pull-from-project',
-		fn: 'pullFromProjectV1ClientsClientIdPullFromProjectPost',
-		method: 'POST',
-		pathParams: ['client_id'],
-		body: true,
-		summary: 'Pull skills/MCPs from a project into a client',
-	},
 
 	// apikeys
 	{

@@ -51,6 +51,11 @@ type Container struct {
 	Environment map[string]string `json:"environment,omitempty"`
 	Command     []string          `json:"command,omitempty"`
 	Isolation   Isolation         `json:"isolation,omitzero"`
+	// Per-container ceiling. Empty means the host default applies: the limit a
+	// workload gets is a property of that workload, not of the machine, so a
+	// caller that asks for a different one must be able to say so.
+	MemoryLimit string `json:"memory_limit,omitempty"`
+	CPULimit    string `json:"cpu_limit,omitempty"`
 }
 
 // VolumeMount represents a volume mount

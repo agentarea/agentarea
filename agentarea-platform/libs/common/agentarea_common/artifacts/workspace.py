@@ -71,7 +71,7 @@ def normalize_workspace_path(path: str) -> str:
     """Return a canonical POSIX relative path or reject the path explicitly."""
     if not isinstance(path, str) or not path:
         raise WorkspaceValidationError("workspace path must be a non-empty string")
-    if "\x00" in path or "\\" in path:
+    if any(ord(character) < 0x20 or ord(character) == 0x7F for character in path) or "\\" in path:
         raise WorkspaceValidationError(f"workspace path is not canonical POSIX: {path!r}")
     parsed = PurePosixPath(path)
     if parsed.is_absolute() or any(part in {"", ".", ".."} for part in parsed.parts):
@@ -1330,7 +1330,9 @@ class S3WorkspaceRepository:
         output: list[WorkspaceObject] = []
         for path in sorted(entries):
             entry = entries[path]
-            if entry.deleted or (clean_prefix and not path.startswith(clean_prefix)):
+            if entry.deleted or (
+                clean_prefix and path != clean_prefix and not path.startswith(f"{clean_prefix}/")
+            ):
                 continue
             output.append(
                 WorkspaceObject(

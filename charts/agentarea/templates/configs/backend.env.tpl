@@ -8,7 +8,6 @@ PORT: "8000"
 LOG_LEVEL: "info"
 MCP_MANAGER_URL: "http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}"
 MCP_CLIENT_TIMEOUT: "30"
-MCP_LAZY_PROVISIONING_ENABLED: "{{ .Values.mcpManager.serverless.enabled }}"
 API_HOST: "{{ .Values.global.api.host }}"
 API_PORT: "{{ .Values.global.api.port }}"
 API_BASE_URL: "{{ include "agentarea.backend.apiUrl" . }}"
@@ -43,11 +42,6 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-backend
       key: MCP_CLIENT_TIMEOUT
-- name: MCP_LAZY_PROVISIONING_ENABLED
-  valueFrom:
-    configMapKeyRef:
-      name: {{ include "agentarea.fullname" . }}-env-backend
-      key: MCP_LAZY_PROVISIONING_ENABLED
 - name: API_HOST
   valueFrom:
     configMapKeyRef:

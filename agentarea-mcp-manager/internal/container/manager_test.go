@@ -2,6 +2,8 @@ package container
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -78,16 +80,20 @@ func TestGetRunningCount(t *testing.T) {
 }
 
 // stubSecretResolver records the names it was asked to resolve and returns a
-// fixed decrypted value per name.
+// fixed decrypted value per name, or err when set.
 type stubSecretResolver struct {
 	gotInstanceID string
 	gotNames      []string
 	values        map[string]string
+	err           error
 }
 
 func (s *stubSecretResolver) ResolveInstanceEnvVars(instanceID string, names []string) (map[string]string, error) {
 	s.gotInstanceID = instanceID
 	s.gotNames = names
+	if s.err != nil {
+		return nil, s.err
+	}
 	out := make(map[string]string)
 	for _, n := range names {
 		if v, ok := s.values[n]; ok {
@@ -120,7 +126,10 @@ func TestResolveSecretEnvVars_DecryptsNamedSecrets(t *testing.T) {
 		"env_vars":    []interface{}{"TELEGRAM_API_ID", "TELEGRAM_API_HASH"},
 	}
 
-	got := manager.ResolveSecretEnvVars("inst-1", jsonSpec)
+	got, err := manager.ResolveSecretEnvVars("inst-1", jsonSpec)
+	if err != nil {
+		t.Fatalf("ResolveSecretEnvVars() error = %v, want nil", err)
+	}
 
 	if stub.gotInstanceID != "inst-1" {
 		t.Errorf("expected resolver called with instance inst-1, got %q", stub.gotInstanceID)
@@ -132,9 +141,12 @@ func TestResolveSecretEnvVars_DecryptsNamedSecrets(t *testing.T) {
 
 func TestResolveSecretEnvVars_NoResolverIsNoop(t *testing.T) {
 	manager := newTestManager(t) // no SetSecretResolver
-	got := manager.ResolveSecretEnvVars("inst-1", map[string]interface{}{
+	got, err := manager.ResolveSecretEnvVars("inst-1", map[string]interface{}{
 		"env_vars": []interface{}{"TELEGRAM_API_ID"},
 	})
+	if err != nil {
+		t.Fatalf("ResolveSecretEnvVars() error = %v, want nil", err)
+	}
 	if len(got) != 0 {
 		t.Errorf("expected empty map without a resolver, got %v", got)
 	}
@@ -143,11 +155,32 @@ func TestResolveSecretEnvVars_NoResolverIsNoop(t *testing.T) {
 func TestResolveSecretEnvVars_NoEnvVarsIsNoop(t *testing.T) {
 	manager := newTestManager(t)
 	manager.SetSecretResolver(&stubSecretResolver{values: map[string]string{"X": "y"}})
-	got := manager.ResolveSecretEnvVars("inst-1", map[string]interface{}{
+	got, err := manager.ResolveSecretEnvVars("inst-1", map[string]interface{}{
 		"environment": map[string]interface{}{"LOG_LEVEL": "info"},
 	})
+	if err != nil {
+		t.Fatalf("ResolveSecretEnvVars() error = %v, want nil", err)
+	}
 	if len(got) != 0 {
 		t.Errorf("expected empty map when json_spec has no env_vars, got %v", got)
+	}
+}
+
+// A container that starts without the secrets its spec asked for looks healthy
+// and fails somewhere downstream, against whatever the missing credential was
+// guarding. Reporting the failure is what lets the caller skip the container.
+func TestResolveSecretEnvVars_ResolverFailureIsReported(t *testing.T) {
+	manager := newTestManager(t)
+	manager.SetSecretResolver(&stubSecretResolver{err: errors.New("secret lookup failed")})
+
+	got, err := manager.ResolveSecretEnvVars("inst-1", map[string]interface{}{
+		"env_vars": []interface{}{"TELEGRAM_API_ID"},
+	})
+	if err == nil {
+		t.Fatalf("ResolveSecretEnvVars() error = nil, want the resolver failure; got env %v", got)
+	}
+	if got != nil {
+		t.Errorf("ResolveSecretEnvVars() env = %v, want nil alongside an error", got)
 	}
 }
 
@@ -223,5 +256,63 @@ func TestDeadlockPrevention(t *testing.T) {
 		// Test passed - no deadlock
 	case <-ctx.Done():
 		t.Fatal("Deadlock detected - GetRunningCount calls did not complete within timeout")
+	}
+}
+
+// A container that is stopped or failed holds no memory, no CPU and no port on
+// the host — it is a record of something that used to run. Counting it against
+// MaxContainers spends a ceiling meant to protect the host's RAM on corpses.
+//
+// This is not hypothetical. Eleven such records — every one pinned to a registry
+// deleted with the previous cluster, all stopped or error — filled the RU host's
+// eight slots for two days, and every MCP launch failed with "maximum container
+// limit reached (8)" while the machine sat idle.
+func TestOccupiedSlotsIgnoresDeadContainers(t *testing.T) {
+	cfg := &config.Config{
+		Container: config.ContainerConfig{
+			NamePrefix:    "test-",
+			MaxContainers: 8,
+		},
+		Redis: config.RedisConfig{
+			URL: "redis://localhost:6379",
+		},
+	}
+	manager := NewManager(cfg, slog.New(slog.NewTextHandler(os.Stdout, nil)))
+
+	dead := []models.ContainerStatus{
+		models.StatusStopped,
+		models.StatusError,
+		models.StatusStopped,
+	}
+	for i, status := range dead {
+		manager.containers[fmt.Sprintf("dead-%d", i)] = &models.Container{
+			Name:   fmt.Sprintf("dead-%d", i),
+			Status: status,
+		}
+	}
+
+	if got := manager.occupiedSlotsUnsafe(); got != 0 {
+		t.Fatalf("dead containers must not occupy slots, got %d", got)
+	}
+
+	// Everything else is a workload the host is actually carrying, including the
+	// states on the way up and down — admitting more while one is still starting
+	// is how a host is over-committed.
+	alive := []models.ContainerStatus{
+		models.StatusStarting,
+		models.StatusRunning,
+		models.StatusHealthy,
+		models.StatusUnhealthy,
+		models.StatusStopping,
+	}
+	for i, status := range alive {
+		manager.containers[fmt.Sprintf("alive-%d", i)] = &models.Container{
+			Name:   fmt.Sprintf("alive-%d", i),
+			Status: status,
+		}
+	}
+
+	if got, want := manager.occupiedSlotsUnsafe(), len(alive); got != want {
+		t.Fatalf("expected %d occupied slots, got %d", want, got)
 	}
 }

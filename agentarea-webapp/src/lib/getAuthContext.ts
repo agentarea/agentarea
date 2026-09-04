@@ -2,6 +2,7 @@
 
 import { cache } from "react";
 import { getAuthToken } from "./getAuthToken";
+import { getWorkspaceContext } from "./workspace-context";
 
 export interface AuthContext {
   userId: string | null;
@@ -62,9 +63,15 @@ async function getAuthContextImpl(): Promise<AuthContext> {
   const email = getStringClaim(payload, "email");
   const name = getNameClaim(payload);
   const username = getStringClaim(payload, "username");
-  // The backend falls back to user_id when the token has no workspace_id claim
-  // (each user gets their own personal workspace by default).
-  const workspaceId = (payload?.workspace_id as string) ?? userId;
+  // The token's workspace claim only names the default workspace, so it goes
+  // stale the moment the switcher points elsewhere. Callers pass workspaceId
+  // into path-scoped endpoints (members, invitations), which would then read
+  // the wrong workspace — resolve the active one instead, and fall back to the
+  // claim when the list is unavailable. The backend falls back to user_id when
+  // the token carries no claim at all (every user has a personal workspace).
+  const { active } = await getWorkspaceContext();
+  const workspaceId =
+    active?.id ?? (payload?.workspace_id as string) ?? userId;
 
   return { userId, workspaceId, email, name, username };
 }

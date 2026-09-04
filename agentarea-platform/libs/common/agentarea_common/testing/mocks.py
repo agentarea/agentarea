@@ -57,6 +57,10 @@ class TestSecretManager(BaseSecretManager):
     def __init__(self):
         self._secrets: dict[str, str] = {}
 
+    def external_ref(self, secret_name: str) -> None:
+        """Mirrors the database backend: the catalog row is the store."""
+        return None
+
     async def get_secret(self, secret_name: str) -> str | None:
         """Get a secret value."""
         return self._secrets.get(secret_name)
@@ -64,7 +68,7 @@ class TestSecretManager(BaseSecretManager):
     async def set_secret(self, secret_name: str, secret_value: str) -> None:
         """Set a secret value."""
         self._secrets[secret_name] = secret_value
-        logger.debug("Test Secret Set: %s", secret_name)
+        logger.debug("Test secret set")
 
     async def delete_secret(self, secret_name: str) -> bool:
         """Delete a secret and return True if it existed."""

@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { getTask } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
 import TaskLayoutClient from "./TaskLayoutClient";
 
 interface Props {
@@ -12,14 +13,16 @@ export default async function TaskLayout({ params, children }: Props) {
   const t = await getTranslations("TasksPage");
 
   // Fetch task server-side — no client loading spinner needed
-  const { data: task, error } = await getTask(id);
+  const result = await getTask(id);
 
   return (
     <TaskLayoutClient
       taskId={id}
       tasksTitle={t("title")}
-      initialTask={task ?? null}
-      initialError={error ? String(error) : null}
+      initialTask={result.data ?? null}
+      initialError={
+        result.error ? apiErrorMessage(result, "Failed to load task") : null
+      }
     >
       {children}
     </TaskLayoutClient>

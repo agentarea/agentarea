@@ -72,9 +72,9 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
             className={`${actionSizeClass} absolute -right-1 -top-1 flex-shrink-0 rounded-full bg-zinc-700 p-0 text-white hover:bg-zinc-900 dark:hover:bg-gray-600`}
           >
             {actionType === "remove" ? (
-              <X className="h-3 w-3" />
+              <X />
             ) : (
-              <Download className="h-3 w-3" />
+              <Download />
             )}
           </Button>
         </div>
@@ -109,9 +109,9 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
         className={`${actionSizeClass} absolute -right-1 -top-1 flex-shrink-0 rounded-full bg-zinc-700 p-0 text-white hover:bg-zinc-900 dark:hover:bg-gray-600`}
       >
         {actionType === "remove" ? (
-          <X className="h-3 w-3" />
+          <X />
         ) : (
-          <Download className="h-3 w-3" />
+          <Download />
         )}
       </Button>
     </div>

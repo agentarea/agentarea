@@ -227,12 +227,6 @@ Licensed under the Apache License 2.0 — see [LICENSE.md](LICENSE.md) for detai
 
 <div align="center">
 
-### ⭐ Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=agentarea/agentarea&type=Date)](https://star-history.com/#agentarea/agentarea&Date)
-
----
-
 **[⭐ Star us on GitHub](https://github.com/agentarea/agentarea) • [📖 Read the Docs](https://docs.agentarea.ai) • [💬 Join Discord](https://discord.gg/5tduPwheYQ) • [🐦 Follow on Twitter](https://twitter.com/agentarea_hq)**
 
 Made with ❤️ by the AgentArea community

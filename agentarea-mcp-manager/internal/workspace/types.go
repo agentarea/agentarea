@@ -63,9 +63,11 @@ type Download struct {
 }
 
 type Hydration struct {
-	Generation   int64      `json:"generation"`
-	FencingToken int64      `json:"fencing_token"`
-	Downloads    []Download `json:"downloads,omitempty"`
+	Generation     int64      `json:"generation"`
+	ManifestSHA256 string     `json:"manifest_sha256"`
+	RevisionSHA256 string     `json:"revision_sha256"`
+	FencingToken   int64      `json:"fencing_token"`
+	Downloads      []Download `json:"downloads,omitempty"`
 }
 
 type ChangeDescriptor struct {
@@ -149,6 +151,11 @@ func ValidateIdentifier(name, value string) error {
 func NormalizeRelativePath(value string) (string, error) {
 	if value == "" || strings.ContainsRune(value, '\\') || strings.HasPrefix(value, "/") {
 		return "", fmt.Errorf("path must be a POSIX relative path")
+	}
+	for _, character := range value {
+		if character < 0x20 || character == 0x7f {
+			return "", fmt.Errorf("path must not contain control characters")
+		}
 	}
 	clean := path.Clean(value)
 	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") || clean != value {

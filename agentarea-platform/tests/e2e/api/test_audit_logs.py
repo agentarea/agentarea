@@ -14,7 +14,6 @@ def test_agent_create_emits_audit_event(alice_client: httpx.Client) -> None:
             "name": "audit-agent",
             "description": "d",
             "instruction": "i",
-            "model_id": "gpt-4",
             "agent_type": "stateless",
         },
     ).raise_for_status().json()["id"]
@@ -44,7 +43,6 @@ def test_audit_logs_are_workspace_scoped(
             "name": "audit-leak-agent",
             "description": "d",
             "instruction": "i",
-            "model_id": "gpt-4",
             "agent_type": "stateless",
         },
     ).raise_for_status().json()["id"]

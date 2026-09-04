@@ -49,14 +49,16 @@ class SpendCard(BaseModel):
 class HitlBlocker(BaseModel):
     task_id: UUID
     agent_id: UUID
-    agent_name: str
+    # None when the agent no longer resolves — never a fabricated placeholder.
+    agent_name: str | None = None
     description: str
     created_at: UtcDatetime
 
 
 class WalletExhaustedBlocker(BaseModel):
     agent_id: UUID
-    agent_name: str
+    # None when the agent no longer resolves — never a fabricated placeholder.
+    agent_name: str | None = None
     budget_usd: float
     period: str
 
@@ -64,7 +66,8 @@ class WalletExhaustedBlocker(BaseModel):
 class FailedTaskBlocker(BaseModel):
     task_id: UUID
     agent_id: UUID
-    agent_name: str
+    # None when the agent no longer resolves — never a fabricated placeholder.
+    agent_name: str | None = None
     error: str | None
     occurred_at: UtcDatetime
 
@@ -203,7 +206,7 @@ async def get_dashboard(
         HitlBlocker(
             task_id=t.id,
             agent_id=t.agent_id,
-            agent_name=agent_name_by_id.get(t.agent_id, "unknown"),
+            agent_name=agent_name_by_id.get(t.agent_id),
             description=t.description,
             created_at=t.created_at,
         )
@@ -215,7 +218,7 @@ async def get_dashboard(
     wallet_exhausted = [
         WalletExhaustedBlocker(
             agent_id=w.agent_id,
-            agent_name=agent_name_by_id.get(w.agent_id, "unknown"),
+            agent_name=agent_name_by_id.get(w.agent_id),
             budget_usd=float(w.service_budget_usd),
             period=w.service_budget_period,
         )
@@ -236,7 +239,7 @@ async def get_dashboard(
         FailedTaskBlocker(
             task_id=t.id,
             agent_id=t.agent_id,
-            agent_name=agent_name_by_id.get(t.agent_id, "unknown"),
+            agent_name=agent_name_by_id.get(t.agent_id),
             error=t.error,
             occurred_at=t.completed_at or t.updated_at,
         )

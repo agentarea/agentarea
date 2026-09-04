@@ -242,7 +242,7 @@ export function EventsDisplay({
               onClick={onRefresh}
               disabled={loading}
             >
-              <Activity className="mr-1 h-3 w-3" />
+              <Activity className="mr-1" />
               Refresh
             </Button>
           )}
@@ -271,10 +271,10 @@ export function EventsDisplay({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1">
-                  <Filter className="h-3 w-3" />
+                  <Filter />
                   Level{" "}
                   {selectedLevels.length > 0 && `(${selectedLevels.length})`}
-                  <ChevronDown className="h-3 w-3" />
+                  <ChevronDown />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>

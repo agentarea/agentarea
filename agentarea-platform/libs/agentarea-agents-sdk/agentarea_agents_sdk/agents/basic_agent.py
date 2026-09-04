@@ -77,13 +77,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-tokens",
         type=int,
-        default=500,
+        required=True,
         help="Maximum tokens per response",
     )
     parser.add_argument(
         "--max-iterations",
         type=int,
-        default=10,
+        required=True,
         help="Maximum reasoning/acting iterations",
     )
     return parser.parse_args()

@@ -8,8 +8,9 @@
 # (subject_type=workspace, subject_id=<workspace id>). subject_type/subject_id
 # are stamped at provisioning time, so they are intentionally absent here.
 #
-# Provisioning is idempotent: a workspace that already has any workspace-scoped
-# policy is left untouched, so editing this file never overwrites a user's edits.
+# Provisioning is idempotent per policy dimension: an existing workspace rule
+# for that dimension is never overwritten, while newly introduced dimensions
+# can be backfilled as additional rows.
 version: 1
 policies:
   # Spend ceiling per calendar month.
@@ -32,6 +33,15 @@ policies:
     params:
       max_tokens: 20000000
       max_tokens_per_call: 100000
+
+  # Agent-loop ceilings. These are persisted as workspace policy rows and may
+  # be tightened per agent/task; runtime code has no numeric fallback.
+  - target: execution
+    effect: cap
+    params:
+      max_model_turns: 100
+      max_tool_calls_per_turn: 10
+      max_tool_calls_total: 1000
 
   # Content safety filters on by default.
   - target: content

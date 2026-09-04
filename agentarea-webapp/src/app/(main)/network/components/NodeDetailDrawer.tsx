@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { formatApiError } from "@/lib/api-errors";
 import { listAgentTasksAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 import type { NetworkNodeData, TopologyResponse } from "../types";
@@ -183,7 +184,7 @@ function AgentSections({ agentId }: { agentId: string }) {
       })
       .catch((e) => {
         if (cancelled) return;
-        setError(String(e));
+        setError(formatApiError(e));
       });
     return () => {
       cancelled = true;
@@ -476,7 +477,7 @@ export default function NodeDetailDrawer({
             className="h-7 w-7 -mr-1 shrink-0"
             onClick={onClose}
           >
-            <X className="h-3.5 w-3.5" />
+            <X />
           </Button>
         </div>
 

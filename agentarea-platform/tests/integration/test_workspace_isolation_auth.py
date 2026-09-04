@@ -38,7 +38,6 @@ class TestWorkspaceIsolation:
             "/v1/agents",
             json={
                 "name": "Test Agent",
-                "model_id": "gpt-4",
                 "instructions": "Test instructions",
             },
             headers={"Authorization": f"Bearer {token1}", "X-Workspace-ID": "workspace-1"},
@@ -87,7 +86,7 @@ class TestEndpointAuthRequirements:
     """Test that all endpoints require authentication."""
 
     PROTECTED_ENDPOINTS = [
-        ("POST", "/v1/agents/", {"name": "Test", "model_id": "gpt-4", "instructions": "test"}),
+        ("POST", "/v1/agents/", {"name": "Test", "instructions": "test"}),
         ("GET", "/v1/agents", None),
         ("GET", f"/v1/agents/{uuid4()}", None),
         ("PATCH", f"/v1/agents/{uuid4()}", {"name": "Updated"}),
@@ -176,7 +175,7 @@ class TestCrossWorkspaceDataLeakage:
 
         client.post(
             "/v1/agents",
-            json={"name": "Agent 1", "model_id": "gpt-4", "instructions": "test"},
+            json={"name": "Agent 1", "instructions": "test"},
             headers={"Authorization": f"Bearer {token1}", "X-Workspace-ID": "workspace-1"},
         )
 
@@ -185,7 +184,7 @@ class TestCrossWorkspaceDataLeakage:
 
         client.post(
             "/v1/agents",
-            json={"name": "Agent 2", "model_id": "gpt-4", "instructions": "test"},
+            json={"name": "Agent 2", "instructions": "test"},
             headers={"Authorization": f"Bearer {token2}", "X-Workspace-ID": "workspace-2"},
         )
 

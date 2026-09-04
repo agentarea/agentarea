@@ -82,6 +82,8 @@ class LLMModel:
         model_name: str,
         api_key: str | None = None,
         endpoint_url: str | None = None,
+        input_cost_per_token: float | None = None,
+        output_cost_per_token: float | None = None,
     ):
         """Initialize LLM model with explicit parameters.
 
@@ -90,11 +92,28 @@ class LLMModel:
             model_name: The model name (e.g., "gpt-3.5-turbo", "claude-3-opus")
             api_key: API key for the provider (optional for local models)
             endpoint_url: Custom endpoint URL (optional, uses provider defaults)
+            input_cost_per_token: Persisted input-token price; zero means explicitly free.
+            output_cost_per_token: Persisted output-token price; zero means explicitly free.
         """
         self.provider_type = provider_type
         self.model_name = model_name
         self.api_key = api_key
         self.endpoint_url = endpoint_url
+        self.input_cost_per_token = input_cost_per_token
+        self.output_cost_per_token = output_cost_per_token
+
+    def _configured_cost(self, usage: LLMUsage) -> float:
+        """Calculate cost from the persisted model spec.
+
+        ``None`` means pricing is unknown. Zero is accepted as an explicit free
+        model price; callers decide whether unknown pricing is admissible.
+        """
+        if self.input_cost_per_token is None or self.output_cost_per_token is None:
+            return 0.0
+        return (
+            usage.prompt_tokens * self.input_cost_per_token
+            + usage.completion_tokens * self.output_cost_per_token
+        )
 
     def _safe_json_serialize(self, obj: Any) -> str:
         """Convert any Python object to JSON-serializable string safely."""
@@ -292,6 +311,7 @@ class LLMModel:
             "model": self.model_name,
             "messages": normalized_messages,
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
         if request.tools:
             payload["tools"] = request.tools
@@ -306,6 +326,7 @@ class LLMModel:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         tool_calls_buffer: dict[int, dict[str, Any]] = {}
+        final_usage: LLMUsage | None = None
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
             # Try with thinking enabled first; fall back without if provider rejects it
@@ -336,8 +357,23 @@ class LLMModel:
                     except json.JSONDecodeError:
                         continue
 
+                    usage_data = chunk.get("usage")
+                    if usage_data:
+                        final_usage = LLMUsage(
+                            prompt_tokens=usage_data.get("prompt_tokens", 0),
+                            completion_tokens=usage_data.get("completion_tokens", 0),
+                            total_tokens=usage_data.get("total_tokens", 0),
+                        )
+
                     choices = chunk.get("choices", [])
                     if not choices:
+                        if final_usage is not None:
+                            yield LLMResponse(
+                                content="",
+                                role="assistant",
+                                cost=self._configured_cost(final_usage),
+                                usage=final_usage,
+                            )
                         continue
 
                     delta = choices[0].get("delta", {})
@@ -376,15 +412,7 @@ class LLMModel:
                             tool_calls_buffer[i] for i in sorted(tool_calls_buffer.keys())
                         ]
 
-                    # Extract usage from final chunk
-                    usage_delta = None
-                    usage_data = chunk.get("usage")
-                    if usage_data:
-                        usage_delta = LLMUsage(
-                            prompt_tokens=usage_data.get("prompt_tokens", 0),
-                            completion_tokens=usage_data.get("completion_tokens", 0),
-                            total_tokens=usage_data.get("total_tokens", 0),
-                        )
+                    usage_delta = final_usage if usage_data else None
 
                     if delta_content or delta_reasoning or delta_tool_calls or usage_delta:
                         yield LLMResponse(
@@ -392,6 +420,9 @@ class LLMModel:
                             role="assistant",
                             tool_calls=delta_tool_calls,
                             reasoning_content=delta_reasoning,
+                            cost=self._configured_cost(usage_delta)
+                            if usage_delta is not None
+                            else 0.0,
                             usage=usage_delta,
                         )
             finally:
@@ -447,13 +478,8 @@ class LLMModel:
                 cost += getattr(response_usage, "completion_tokens_cost", 0.0)
             if hasattr(response_usage, "prompt_tokens_cost"):
                 cost += getattr(response_usage, "prompt_tokens_cost", 0.0)
-            # Fallback: calculate cost using token counts if available
-            elif hasattr(response_usage, "total_tokens"):
-                # This is a rough estimate - actual costs vary by model
-                # For production, should use model-specific pricing
-                cost = (
-                    getattr(response_usage, "total_tokens", 0) * 0.00001
-                )  # $0.01 per 1K tokens estimate
+            if cost == 0.0:
+                cost = self._configured_cost(usage)
 
         # Follow OpenAI standard: when tool_calls are present, content should be minimal
         content = message.content or ""
@@ -506,6 +532,7 @@ class LLMModel:
             # Build parameters for streaming
             params = self._build_litellm_params(request)
             params["stream"] = True
+            params["stream_options"] = {"include_usage": True}
 
             logger.info(f"Calling LLM with streaming for model {params['model']}")
 
@@ -650,8 +677,6 @@ class LLMModel:
                             cost += getattr(usage_info, "completion_tokens_cost", 0.0)
                             if hasattr(usage_info, "prompt_tokens_cost"):
                                 cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
-                        elif hasattr(usage_info, "total_tokens"):
-                            cost = getattr(usage_info, "total_tokens", 0) * 0.00001
 
             # Convert tool calls buffer to final format
             if tool_calls_buffer:
@@ -669,9 +694,13 @@ class LLMModel:
                     completion_tokens=getattr(usage_info, "completion_tokens", 0),
                     total_tokens=getattr(usage_info, "total_tokens", 0),
                 )
+                if cost == 0.0:
+                    cost = self._configured_cost(usage)
 
             # Use litellm.completion_cost() for accurate cost calculation
-            if cost == 0.0:
+            if cost == 0.0 and (
+                self.input_cost_per_token is None or self.output_cost_per_token is None
+            ):
                 try:
                     import litellm
 
@@ -931,8 +960,6 @@ class LLMModel:
                             cost += getattr(usage_info, "completion_tokens_cost", 0.0)
                             if hasattr(usage_info, "prompt_tokens_cost"):
                                 cost += getattr(usage_info, "prompt_tokens_cost", 0.0)
-                        elif hasattr(usage_info, "total_tokens"):
-                            cost = getattr(usage_info, "total_tokens", 0) * 0.00001
 
                 # Provide current tool call state if updated this chunk
                 if tool_calls_updated:
@@ -955,6 +982,9 @@ class LLMModel:
                             completion_tokens=getattr(chunk.usage, "completion_tokens", 0),
                             total_tokens=getattr(chunk.usage, "total_tokens", 0),
                         )
+                        usage = usage_delta
+                        if cost == 0.0:
+                            cost = self._configured_cost(usage_delta)
                     yield LLMResponse(
                         content=delta_content,
                         role="assistant",
@@ -966,7 +996,9 @@ class LLMModel:
 
             # Calculate cost after streaming ends using litellm.completion_cost()
             # _hidden_params.response_cost is NOT available on streaming chunks
-            if cost == 0.0:
+            if cost == 0.0 and (
+                self.input_cost_per_token is None or self.output_cost_per_token is None
+            ):
                 try:
                     model_str = (
                         f"{self.provider_type}/{self.model_name}"

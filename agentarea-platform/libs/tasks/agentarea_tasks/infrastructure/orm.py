@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, DateTime, String, Text
+from sqlalchemy import JSON, DateTime, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -18,6 +18,14 @@ class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out
     """Task ORM model with workspace awareness."""
 
     __tablename__ = "tasks"
+    __table_args__ = (
+        Index(
+            "ix_tasks_due",
+            "workspace_id",
+            "scheduled_at",
+            postgresql_where=text("status = 'scheduled'"),
+        ),
+    )
 
     agent_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -27,6 +35,9 @@ class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out
     error: Mapped[str] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    # Timezone-aware on purpose, unlike the naive columns above: a future
+    # instant that loses its offset runs at the wrong time.
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     execution_id: Mapped[str] = mapped_column(String(255), nullable=True)
     task_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=True)
     project_id: Mapped[str | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)

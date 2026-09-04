@@ -266,7 +266,7 @@ export function FileViewerContent({
           <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             <span>Preview not available for this file type.</span>
             <Button size="sm" variant="outline" onClick={handleDownload}>
-              <Download className="mr-1.5 h-3.5 w-3.5" />
+              <Download className="mr-1.5" />
               Download
             </Button>
           </div>

@@ -1,0 +1,4 @@
+interface:
+  display_name: "AgentArea Docs"
+  short_description: "Place, write, audit, or split a page under docs/"
+  default_prompt: "Use $aa-docs to place and write this documentation page."

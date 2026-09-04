@@ -76,7 +76,7 @@ class TestSecretManagerFactory:
     @patch.dict(
         "os.environ",
         {
-            "SECRET_MANAGER_TYPE": "infisical",
+            "SECRET_MANAGER_TYPE": "infisical", "SECRET_MANAGER_PROJECT_ID": "proj-1",
             "SECRET_MANAGER_ENDPOINT": "https://test.infisical.com",
             "SECRET_MANAGER_ACCESS_KEY": "test-client-id",
             "SECRET_MANAGER_SECRET_KEY": "test-client-secret",
@@ -101,7 +101,7 @@ class TestSecretManagerFactory:
             client_secret="test-client-secret",
         )
 
-    @patch.dict("os.environ", {"SECRET_MANAGER_TYPE": "infisical"}, clear=True)
+    @patch.dict("os.environ", {"SECRET_MANAGER_TYPE": "infisical", "SECRET_MANAGER_PROJECT_ID": "proj-1"}, clear=True)
     def test_get_secret_manager_infisical_missing_credentials(
         self, mock_db_session, test_user_context
     ):
@@ -116,7 +116,7 @@ class TestSecretManagerFactory:
     @patch.dict(
         "os.environ",
         {
-            "SECRET_MANAGER_TYPE": "infisical",
+            "SECRET_MANAGER_TYPE": "infisical", "SECRET_MANAGER_PROJECT_ID": "proj-1",
             "SECRET_MANAGER_ACCESS_KEY": "test-id",
             # Missing SECRET_MANAGER_SECRET_KEY
         },
@@ -183,7 +183,7 @@ class TestSecretManagerFactory:
     @patch.dict(
         "os.environ",
         {
-            "SECRET_MANAGER_TYPE": "infisical",
+            "SECRET_MANAGER_TYPE": "infisical", "SECRET_MANAGER_PROJECT_ID": "proj-1",
             "SECRET_MANAGER_ENDPOINT": "https://test.infisical.com",
             "SECRET_MANAGER_ACCESS_KEY": "test-client-id",
             "SECRET_MANAGER_SECRET_KEY": "test-client-secret",
@@ -201,7 +201,6 @@ class TestSecretManagerFactory:
 
         assert isinstance(manager, InfisicalSecretManager)
 
-    @patch("infisical_sdk.client.InfisicalSDKClient", side_effect=ImportError("No module"))
     @patch.dict(
         "os.environ",
         {
@@ -209,12 +208,18 @@ class TestSecretManagerFactory:
             "SECRET_MANAGER_ACCESS_KEY": "test-id",
             "SECRET_MANAGER_SECRET_KEY": "test-secret",
         },
+        clear=True,
     )
-    def test_get_secret_manager_infisical_sdk_not_installed(
-        self, mock_client, mock_db_session, test_user_context
+    def test_get_secret_manager_infisical_requires_project_id(
+        self, mock_db_session, test_user_context
     ):
-        """Test error message when Infisical SDK is not installed."""
-        with pytest.raises(ValueError, match="Infisical SDK not installed"):
+        """A project id is not optional: without one there is no project to address.
+
+        Replaces a test for the removed "Infisical SDK not installed" branch —
+        infisicalsdk is a hard dependency of this package, so the import it
+        guarded cannot fail.
+        """
+        with pytest.raises(ValueError, match="SECRET_MANAGER_PROJECT_ID"):
             get_secret_manager(
                 secret_manager_type="infisical",
                 session=mock_db_session,

@@ -8,6 +8,7 @@ from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.service import BaseCrudService
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.utils.slug import generate_slug
+from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 
 from agentarea_agents.application.approval_sync import (
     approval_targets_from_tools,
@@ -24,6 +25,10 @@ from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_agents.schemas.dto import AgentCreate, AgentUpdate
 
 logger = logging.getLogger(__name__)
+
+
+class InvalidModelIdError(ValueError):
+    """Raised when ``model_id`` does not resolve to a usable model instance."""
 
 
 def _project_catalog_item(item: CatalogAgentItem) -> Agent:
@@ -90,6 +95,40 @@ class AgentService(BaseCrudService[Agent]):
     def _get_agent_repository(self) -> AgentRepository:
         """Get the agent repository with proper type."""
         return self.repository_factory.create_repository(AgentRepository)
+
+    async def _validate_model_id(self, model_id: str | None) -> str | None:
+        """Resolve ``model_id`` to a model instance, or reject it.
+
+        The runtime has exactly one interpretation of ``model_id``: the UUID of a
+        ``model_instances`` row (see ``call_llm_activity``). Anything else fails
+        deep inside the workflow, so it is rejected here instead.
+
+        ``None`` is allowed and means "no model bound yet" — an agent forked from
+        the catalog starts that way, because the catalog never binds a
+        per-workspace instance. An empty string is the same state spelled badly
+        and is normalised to ``None``.
+        """
+        if model_id is None or not model_id.strip():
+            return None
+
+        try:
+            model_uuid = UUID(model_id)
+        except ValueError as exc:
+            raise InvalidModelIdError(
+                f"Invalid model_id '{model_id}': expected the UUID of a model instance. "
+                "List available instances via GET /v1/model-instances."
+            ) from exc
+
+        repo = ModelInstanceRepository(
+            session=self.repository_factory.session,
+            user_context=self._user_context,
+        )
+        if await repo.get_by_id(model_uuid) is None:
+            raise InvalidModelIdError(
+                f"Model instance '{model_id}' does not exist in this workspace. "
+                "Create one via POST /v1/model-instances."
+            )
+        return model_id
 
     def _get_catalog_repository(self) -> CatalogAgentRepository:
         """Get the read-only catalog (registry_items) repository for agents."""
@@ -194,13 +233,14 @@ class AgentService(BaseCrudService[Agent]):
         events_config = payload.events_config.model_dump() if payload.events_config else None
 
         slug = await self._resolve_unique_slug(payload.name)
+        model_id = await self._validate_model_id(payload.model_id)
 
         agent = Agent(
             name=payload.name,
             slug=slug,
             description=payload.description,
             instruction=payload.instruction,
-            model_id=payload.model_id,
+            model_id=model_id,
             tools=tools,
             events_config=events_config,
             planning=payload.planning,
@@ -315,7 +355,7 @@ class AgentService(BaseCrudService[Agent]):
         if "instruction" in patch:
             agent.instruction = patch["instruction"]
         if "model_id" in patch:
-            agent.model_id = patch["model_id"]
+            agent.model_id = await self._validate_model_id(patch["model_id"])
         tools_edited = "tools" in patch and payload.tools is not None
         approval_targets: set[str] = set()
         if tools_edited:

@@ -239,7 +239,7 @@ export function ProviderModelSelector({
           disabled={disabled}
         >
           {renderDefaultTrigger()}
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronDown className="ml-2 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0" style={{ width: popoverWidth }}>
@@ -281,7 +281,7 @@ export function ProviderModelSelector({
                         onClick={onAddProvider}
                         className="h-5 w-5"
                       >
-                        <Plus className="h-3 w-3" />
+                        <Plus />
                       </Button>
                     )}
                   </div>

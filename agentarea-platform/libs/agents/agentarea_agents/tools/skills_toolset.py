@@ -269,13 +269,14 @@ async def _github_skill_package_zip(
     display_name="Skills",
     description="Manage workspace skills (multi-file authoring, GitHub import, archive upload).",
     category="platform",
+    plane="build",
 )
 class SkillsToolset(Toolset):
     """Manage skills end-to-end: create from files / archive / GitHub, edit
     metadata or content (mode-aware), browse and read package files, delete.
     """
 
-    @tool_method
+    @tool_method(effect="read")
     async def list(self) -> str:
         """List all skills in the workspace."""
         async with platform_read_context() as (_session, user_ctx, repo_factory, _broker, _secret):
@@ -285,7 +286,7 @@ class SkillsToolset(Toolset):
             skills = await service.list()
             return json.dumps([_skill_summary(s) for s in skills], default=str)
 
-    @tool_method
+    @tool_method(effect="read")
     async def get(self, skill_id: str) -> str:
         """Get details of a skill, including its primary SKILL.md content."""
         async with platform_read_context() as (_session, user_ctx, repo_factory, _broker, _secret):
@@ -299,7 +300,7 @@ class SkillsToolset(Toolset):
             payload.update({"source_url": skill.source_url, "content": skill.content})
             return json.dumps(payload, default=str)
 
-    @tool_method
+    @tool_method(effect="write")
     async def create(
         self,
         files: dict[str, str],
@@ -352,7 +353,7 @@ class SkillsToolset(Toolset):
             summary["file_count"] = len(payload.files)
             return json.dumps(summary, default=str)
 
-    @tool_method
+    @tool_method(effect="write")
     async def create_from_archive(
         self,
         zip_base64: str,
@@ -389,7 +390,7 @@ class SkillsToolset(Toolset):
             )
             return json.dumps(_skill_summary(skill), default=str)
 
-    @tool_method
+    @tool_method(effect="write")
     async def import_from_github(
         self,
         github_url: str,
@@ -511,7 +512,7 @@ class SkillsToolset(Toolset):
             return json.dumps(created[0], default=str)
         return json.dumps({"created": created, "count": len(created)}, default=str)
 
-    @tool_method
+    @tool_method(effect="write")
     async def edit_metadata(
         self,
         skill_id: str,
@@ -543,7 +544,7 @@ class SkillsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="write")
     async def edit_content(self, skill_id: str, files: dict[str, str]) -> str:
         """Edit a skill's file content. Mode-aware:
 
@@ -612,7 +613,7 @@ class SkillsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="destructive")
     async def delete(self, skill_id: str) -> str:
         """Delete a skill and its file storage."""
         async with platform_context() as (_session, user_ctx, repo_factory, _broker, _secret):
@@ -622,7 +623,7 @@ class SkillsToolset(Toolset):
             deleted = await service.delete(UUID(skill_id))
             return json.dumps({"deleted": deleted})
 
-    @tool_method
+    @tool_method(effect="read")
     async def list_files(self, skill_id: str, include_urls: bool = False) -> str:
         """List files inside a skill package. Set include_urls=True for bulk
         hydration with a presigned download URL per file (one round-trip).
@@ -640,7 +641,7 @@ class SkillsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="read")
     async def get_file(
         self,
         skill_id: str,

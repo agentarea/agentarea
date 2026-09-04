@@ -1,19 +1,18 @@
 {{- if and .Values.mcpManager.enabled .Values.mcpManager.instanceNetworkPolicy.enabled }}
-# Restricts EGRESS from spawned MCP instance pods (which may run user-supplied,
-# untrusted images). They proxy external upstreams, so they are allowed DNS +
-# public internet but denied every cluster-internal and link-local range. That
-# blocks cloud-metadata theft (169.254.169.254), kube-apiserver access, and
+# Restricts spawned MCP instance pods (which may run user-supplied, untrusted
+# images). Ingress is accepted only from the manager demand gateway. Egress is
+# allowed to DNS + public internet but denied every cluster-internal and
+# link-local range. That blocks cloud-metadata theft (169.254.169.254),
+# kube-apiserver access, and
 # lateral movement to other tenants' instance pods (which also sit on
-# cluster-internal IPs). Ingress is intentionally left open: inbound is fronted
-# by the Service/gateway, and cross-pod reachability is already cut by every
-# instance's egress deny.
+# cluster-internal IPs). Direct ingress-controller or cross-pod access cannot
+# bypass gateway authorization and request leases.
 #
 # Pods are selected by both the manager identity and the MCP-server component.
 # The component constraint is security-critical: workflow sandboxes are also
-# manager-created, but locked sandboxes must not inherit this public-egress
-# allowance. CIDRs and the DNS namespace are values-driven -- not pinned to any
-# cloud provider; override blockedEgressCIDRs for clusters whose internal ranges
-# differ.
+# manager-created, but use the separate deployment-owned sandbox egress policy.
+# CIDRs and the DNS namespace are values-driven -- not pinned to any cloud
+# provider; override blockedEgressCIDRs for clusters whose internal ranges differ.
 #
 # Requires a CNI that enforces NetworkPolicy (e.g. Cilium on DOKS); a no-op on
 # clusters without enforcement.
@@ -30,7 +29,29 @@ spec:
       app.kubernetes.io/managed-by: mcp-manager
       app.kubernetes.io/component: mcp-server
   policyTypes:
+    - Ingress
     - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: mcp-manager
+    {{- with .Values.mcpManager.instanceNetworkPolicy.probeIngressCIDRs }}
+    # Readiness is what the gateway waits on: the manager reads
+    # Deployment.Status.ReadyReplicas, which only advances when the kubelet's
+    # probe succeeds. Probes originate from the node, matching no pod selector,
+    # so on a CNI that enforces node-to-pod ingress the probe is dropped, the
+    # instance never reports ready, and every request times out and tears the
+    # workload down. These ranges are the node network, not a trust boundary --
+    # the instance port is unauthenticated either way, and what protects it is
+    # gateway authorization and request leases. Egress to the same ranges stays
+    # denied, so an instance still cannot reach another tenant's.
+    - from:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+    {{- end }}
   egress:
     # DNS resolution (CoreDNS/kube-dns).
     - to:

@@ -2,8 +2,8 @@
 
 The workspace-creation hook seeds defaults for newly created workspaces; this
 one-shot script covers workspaces that already existed before the feature
-landed. Idempotent — a workspace that already has any workspace-scoped policy
-is left untouched (so it never clobbers user edits and is safe to re-run).
+landed. Idempotent per policy dimension: existing rules are never overwritten,
+while missing baseline dimensions are inserted as additional rows.
 
 Usage::
 
@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.repository_factory import RepositoryFactory
@@ -26,6 +27,8 @@ from agentarea_governance.application import (
     provision_default_policies,
 )
 from sqlalchemy import select
+
+logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
@@ -50,9 +53,7 @@ async def main() -> None:
                 raise SystemExit(f"workspace {args.workspace_id!r} not found")
             targets = [row]
         else:
-            targets = (
-                await session.execute(select(Workspace.id, Workspace.owner_user_id))
-            ).all()
+            targets = (await session.execute(select(Workspace.id, Workspace.owner_user_id))).all()
 
         total = 0
         for ws_id, owner_user_id in targets:
@@ -65,12 +66,13 @@ async def main() -> None:
             if created:
                 await session.commit()
                 total += len(created)
-                print(f"  seeded {len(created)} policies for workspace {ws_id}")
+                logger.info("seeded %s policies for workspace %s", len(created), ws_id)
             else:
-                print(f"  skipped {ws_id} (already has policies)")
+                logger.info("skipped %s (already has policies)", ws_id)
 
-        print(f"done: {total} policies created across {len(targets)} workspace(s)")
+        logger.info("done: %s policies created across %s workspace(s)", total, len(targets))
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     asyncio.run(main())

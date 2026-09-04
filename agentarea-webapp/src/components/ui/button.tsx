@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition duration-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition duration-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -23,12 +23,15 @@ const buttonVariants = cva(
           "hover:bg-primary/10 hover:text-accent/80 dark:hover:text-accent-foreground dark:hover:bg-primary/30",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      // `[&_svg]:size-*` outranks any `h-4 w-4` a call site puts on the glyph,
+      // so icon size can only be set here. `xs` gets 14px to keep the glyph
+      // within the cap height of its 12px label.
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        xs: "h-6 rounded-sm px-1 text-xs font-normal gap-1",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        default: "h-9 px-4 py-2 [&_svg]:size-4",
+        sm: "h-8 rounded-md px-3 text-xs [&_svg]:size-4",
+        xs: "h-6 rounded-sm px-1 text-xs font-normal gap-1 [&_svg]:size-3.5",
+        lg: "h-10 rounded-md px-8 [&_svg]:size-4",
+        icon: "h-9 w-9 [&_svg]:size-4",
       },
     },
     defaultVariants: {

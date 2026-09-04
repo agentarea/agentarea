@@ -33,6 +33,11 @@ _mcp_user_context_var: ContextVar[Any] = ContextVar("mcp_user_context")
 # MCP JSON-RPC methods that are allowed without authentication.
 _UNAUTHENTICATED_METHODS = frozenset({"initialize", "ping"})
 
+# ASGI scope key a mount sets to name the resource it serves (RFC 9728), e.g.
+# ``client-mcp/<client id>``. Absent for the plain ``/mcp`` mount, whose
+# resource is the one the root metadata document already describes.
+PROTECTED_RESOURCE_SCOPE_KEY = "agentarea_protected_resource"
+
 
 def get_mcp_user_context():
     """Read the current request's UserContext from the ContextVar.
@@ -68,13 +73,23 @@ def _is_handshake_method(method: str) -> bool:
     return method in _UNAUTHENTICATED_METHODS or method.startswith("notifications/")
 
 
-def _www_authenticate_header() -> str:
-    """RFC 9728 WWW-Authenticate header for OAuth protected-resource discovery."""
+def _www_authenticate_header(resource_path: str | None = None) -> str:
+    """RFC 9728 WWW-Authenticate header for OAuth protected-resource discovery.
+
+    *resource_path* names the resource being protected (e.g.
+    ``client-mcp/<client id>``) so the client is sent to the document that
+    describes **that** resource. Pointing every mount at the root document
+    hands a client metadata whose ``resource`` disagrees with the URL it called,
+    and RFC 9728 §3.3 requires it to reject exactly that.
+    """
     try:
         from agentarea_common.config import get_settings
 
         api_base = get_settings().app.API_BASE_URL.rstrip("/")
-        return f'Bearer resource_metadata="{api_base}/.well-known/oauth-protected-resource"'
+        location = f"{api_base}/.well-known/oauth-protected-resource"
+        if resource_path:
+            location = f"{location}/{resource_path.strip('/')}"
+        return f'Bearer resource_metadata="{location}"'
     except Exception:
         return "Bearer"
 
@@ -144,7 +159,7 @@ class MCPAuthMiddleware:
                     method,
                     session_id,
                 )
-                await _send_401(send, request_id)
+                await _send_401(send, request_id, scope.get(PROTECTED_RESOURCE_SCOPE_KEY))
                 return
 
             # ---------- forward to downstream handler ----------
@@ -278,9 +293,9 @@ def _make_replay_receive(body: bytes) -> Receive:
     return replay
 
 
-async def _send_401(send: Send, request_id: Any) -> None:
+async def _send_401(send: Send, request_id: Any, resource_path: str | None = None) -> None:
     """Send an HTTP 401 response with RFC 9728 WWW-Authenticate header."""
-    www_auth = _www_authenticate_header()
+    www_auth = _www_authenticate_header(resource_path)
     error_body = json.dumps(
         {
             "jsonrpc": "2.0",

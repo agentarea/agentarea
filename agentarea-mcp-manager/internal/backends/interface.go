@@ -2,8 +2,11 @@ package backends
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+var ErrInstanceNotFound = errors.New("container instance not found")
 
 // Backend defines the interface for container management backends (Docker/Kubernetes)
 type Backend interface {

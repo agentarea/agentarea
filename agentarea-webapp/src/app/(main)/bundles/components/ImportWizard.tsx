@@ -511,7 +511,7 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
         {/* Actions */}
         <div className="flex items-center gap-3 pt-1">
           <Button onClick={handleReset} variant="outline">
-            <RotateCcw className="h-4 w-4" />
+            <RotateCcw />
             Import another
           </Button>
           <Button asChild>

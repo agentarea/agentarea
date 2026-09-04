@@ -46,7 +46,7 @@ export default function NodeDetailPanel({
           </div>
         </div>
         <Button variant="ghost" size="icon" className="h-6 w-6 -mr-1" onClick={onClose}>
-          <X className="h-3.5 w-3.5" />
+          <X />
         </Button>
       </div>
 

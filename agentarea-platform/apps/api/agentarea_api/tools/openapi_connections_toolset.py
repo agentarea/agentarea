@@ -58,11 +58,12 @@ def _build_service(repo_factory, secret_mgr):
     display_name="OpenAPI Connections",
     description="Manage OpenAPI connections that expose external APIs as tools.",
     category="platform",
+    plane="build",
 )
 class OpenAPIConnectionsToolset(Toolset):
     """Manage OpenAPI REST API connections: create, list, get, update, discover_tools, delete."""
 
-    @tool_method
+    @tool_method(effect="write")
     async def create(
         self,
         name: str,
@@ -116,7 +117,7 @@ class OpenAPIConnectionsToolset(Toolset):
             conn = await service.create_connection(payload)
             return json.dumps(_serialize(conn), default=str)
 
-    @tool_method
+    @tool_method(effect="read")
     async def list(self, search: str = "", limit: int = 100, offset: int = 0) -> str:
         """List OpenAPI connections in the workspace."""
         async with platform_read_context() as (
@@ -138,7 +139,7 @@ class OpenAPIConnectionsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method
+    @tool_method(effect="read")
     async def get(self, connection_id: str) -> str:
         """Get details of an OpenAPI connection, including discovered tools."""
         async with platform_read_context() as (
@@ -159,7 +160,7 @@ class OpenAPIConnectionsToolset(Toolset):
             ]
             return json.dumps(payload, default=str)
 
-    @tool_method
+    @tool_method(effect="write")
     async def update(
         self,
         connection_id: str,
@@ -212,7 +213,7 @@ class OpenAPIConnectionsToolset(Toolset):
                 return json.dumps({"error": "Connection not found"})
             return json.dumps(_serialize(conn), default=str)
 
-    @tool_method
+    @tool_method(effect="write")
     async def discover_tools(self, connection_id: str) -> str:
         """Re-fetch the OpenAPI spec and refresh the discovered tools list."""
         async with platform_context() as (
@@ -226,7 +227,7 @@ class OpenAPIConnectionsToolset(Toolset):
             result = await service.discover_tools(UUID(connection_id))
             return json.dumps(result, default=str)
 
-    @tool_method
+    @tool_method(effect="destructive")
     async def delete(self, connection_id: str) -> str:
         """Delete an OpenAPI connection and its stored secret headers."""
         async with platform_context() as (

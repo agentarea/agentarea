@@ -65,6 +65,8 @@ def _payload(provider_spec_id):
         "model_name": "gpt-4",
         "display_name": "GPT-4",
         "context_window": 8192,
+        "input_cost_per_token": 0.0,
+        "output_cost_per_token": 0.0,
     }
 
 

@@ -89,7 +89,7 @@ export default function DeleteButton({
       type="delete"
     >
       <Button variant="destructiveOutline" size={size}>
-        <Trash2 className="h-4 w-4" />
+        <Trash2 />
         {tCommon("delete")}
       </Button>
     </BaseModal>

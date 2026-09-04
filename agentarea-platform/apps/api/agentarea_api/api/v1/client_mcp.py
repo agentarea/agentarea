@@ -13,8 +13,10 @@ from __future__ import annotations
 import logging
 from contextvars import ContextVar
 
+from agentarea_agents_sdk.mcp_server.auth import PROTECTED_RESOURCE_SCOPE_KEY
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import TextContent, Tool
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -49,17 +51,23 @@ client_mcp_server = FastMCP(
     instructions="Scoped tool bundle for a registered client (agent-proxy).",
     streamable_http_path="/",
     stateless_http=True,
+    # Same opt-out as the platform ``/mcp`` mount (see ``create_mcp_server``):
+    # FastMCP enables DNS-rebinding protection by default with an empty
+    # ``allowed_hosts``, so every Host header is answered with 421. We run behind
+    # an ingress that owns Host validation, and without this an authenticated
+    # harness gets 421 on every call after finishing its OAuth flow.
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
 
 
 async def _resolve_client_scope(
     client_id: str,
 ) -> tuple[MCPAggregatorProxy | None, dict]:
-    """Resolve a client's effective MCP instance proxy and skill registry.
+    """Resolve a client's MCP instance proxy and skill registry.
 
-    Effective set = the client's own attachments unioned with those of its
-    source project. Returns ``(proxy, skill_registry)``; proxy is None only when
-    the client does not exist.
+    The set is exactly the client's own attachments. Returns
+    ``(proxy, skill_registry)``; proxy is None only when the client does not
+    exist.
     """
     from agentarea_agents_sdk.skills.skill_catalog_builder import SkillEntry
     from agentarea_api.tools.base import platform_read_context
@@ -78,17 +86,6 @@ async def _resolve_client_scope(
         instances = {str(i.id): i for i in client.mcp_instances}
         skills = {str(s.id): s for s in client.skills}
 
-        if client.source_project_id:
-            from agentarea_projects.infrastructure.repository import ProjectRepository
-
-            project_repo = ProjectRepository(session, user_ctx)
-            project = await project_repo.get_by_id(client.source_project_id)
-            if project is not None:
-                for inst in project.mcp_instances:
-                    instances.setdefault(str(inst.id), inst)
-                for skill in project.skills:
-                    skills.setdefault(str(skill.id), skill)
-
         skill_registry = {
             s.name: SkillEntry(
                 name=s.name,
@@ -104,17 +101,19 @@ async def _resolve_client_scope(
         instance_urls: dict[str, str] = {}
         instance_names: dict[str, str] = {}
         instance_headers: dict[str, dict[str, str]] = {}
+        instance_transports: dict[str, str | None] = {}
         for order, (iid, inst) in enumerate(instances.items()):
             full = await instance_service.repository.get_by_id(inst.id)
             if full is None:
                 continue
             try:
-                url, headers, _transport = await instance_service._resolve_mcp_url_and_headers(full)
+                url, headers, transport = await instance_service._resolve_mcp_url_and_headers(full)
             except Exception:
                 logger.exception("Failed to resolve MCP url for instance %s", iid)
                 continue
             instance_urls[iid] = url
             instance_names[iid] = full.name
+            instance_transports[iid] = transport
             if headers:
                 instance_headers[iid] = headers
             members.append(
@@ -122,6 +121,8 @@ async def _resolve_client_scope(
                     mcp_instance_id=iid,
                     order=order,
                     namespace_prefix=namespaces.get(iid),
+                    transport=instance_transports[iid],
+                    tools=full.tools,
                 )
             )
         proxy = MCPAggregatorProxy(
@@ -217,6 +218,11 @@ class ClientMCPScopeMiddleware:
             client_id = client_id or None
             scope = dict(scope)
             scope["path"] = f"/{tail}" if tail else "/"
+            if client_id:
+                # Name the resource for the auth middleware's 401: each client's
+                # endpoint is its own RFC 9728 resource, and a harness rejects
+                # metadata whose `resource` does not match the URL it called.
+                scope[PROTECTED_RESOURCE_SCOPE_KEY] = f"client-mcp/{client_id}"
         token = _client_id_var.set(client_id)
         try:
             await self.app(scope, receive, send)

@@ -8,8 +8,6 @@ the dry-run effective-policy preview and the immutable task policy snapshot.
 from typing import Annotated
 from uuid import UUID
 
-from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
-from agentarea_api.api.deps.services import get_temporal_workflow_service
 from agentarea_common.auth import UserContextDep
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
@@ -71,20 +69,13 @@ async def get_task_policy_snapshot(
     task_id: UUID,
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
-    workflow_service: Annotated[TemporalWorkflowService, Depends(get_temporal_workflow_service)],
 ) -> EffectivePolicyResponse:
-    """Read the effective governance policy for a task.
-
-    The effective policy is no longer persisted; it is served on demand by
-    querying the task's Temporal workflow, where it lives in workflow state.
-    """
+    """Read the effective governance policy persisted before workflow dispatch."""
     task_repository = RepositoryFactory(db_session, user_context).create_repository(TaskRepository)
     task = await task_repository.get_task(task_id)
-    if task is None or not task.execution_id:
-        raise HTTPException(status_code=404, detail="Task policy snapshot not found")
-
-    effective_policy = await workflow_service.get_effective_policy(task.execution_id)
-    if effective_policy is None:
+    snapshot = (task.metadata or {}).get("governance_snapshot") if task else None
+    effective_policy = snapshot.get("effective_policy") if isinstance(snapshot, dict) else None
+    if not isinstance(effective_policy, dict):
         raise HTTPException(status_code=404, detail="Task policy snapshot not found")
 
     return EffectivePolicyResponse(effective_policy=effective_policy_from_json(effective_policy))

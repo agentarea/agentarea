@@ -80,3 +80,20 @@ def test_permanent_llm_errors_fail_fast():
     assert _is_non_retryable_error(Exception("401 unauthorized: invalid api key")) is True
     assert _is_non_retryable_error(Exception("insufficient balance, please recharge")) is True
     assert _is_non_retryable_error(Exception("model gpt-x does not exist")) is True
+
+
+def test_accounting_contract_errors_fail_fast_after_paid_call():
+    assert (
+        _is_non_retryable_error(
+            RuntimeError(
+                "LLM usage accounting unavailable; token and cost policy cannot be enforced"
+            )
+        )
+        is True
+    )
+    assert (
+        _is_non_retryable_error(
+            ValueError("remote model pricing is not configured; run budget cannot be enforced")
+        )
+        is True
+    )

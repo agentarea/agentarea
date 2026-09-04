@@ -37,9 +37,10 @@ AgentTypeLiteral = Literal["stateless", "stateful"]
 class AgentCreate(BaseModel):
     """Payload for creating an agent.
 
-    ``model_id`` accepts either a model-instance UUID configured in the
-    workspace, or a recognized provider identifier (e.g. ``gpt-4o``,
-    ``claude-3-5-sonnet``, ``openrouter/qwen/qwen-2.5-72b-instruct``).
+    ``model_id`` is the UUID of a model instance configured in the workspace —
+    the runtime has no other interpretation of it. Omit it (or pass ``null``) to
+    create an agent with no model bound yet; such an agent cannot be run until a
+    model is assigned.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -59,9 +60,11 @@ class AgentCreate(BaseModel):
         max_length=20000,
         description="System prompt / behavioural instructions for the agent.",
     )
-    model_id: str = Field(
+    model_id: str | None = Field(
+        default=None,
         description=(
-            "Model instance UUID or provider model identifier (e.g. 'gpt-4o', 'claude-3-5-sonnet')."
+            "UUID of a model instance in this workspace (see GET /v1/model-instances). "
+            "Null means no model is bound yet and the agent cannot be run."
         ),
     )
     tools: list[ToolConfig] | None = Field(
@@ -86,9 +89,12 @@ class AgentCreate(BaseModel):
     )
     agent_type: AgentTypeLiteral = Field(
         default="stateless",
+        deprecated=True,
         description=(
-            "'stateless' (each request independent) or 'stateful' "
-            "(maintains conversation context across runs)."
+            "DEPRECATED — stored and echoed back, but the runtime never reads it, "
+            "so every agent behaves as 'stateless' regardless of this value. "
+            "Conversation history does not currently survive across runs. Do not "
+            "branch on this field."
         ),
     )
 
