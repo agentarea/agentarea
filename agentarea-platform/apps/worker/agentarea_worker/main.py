@@ -15,7 +15,7 @@ import dotenv
 
 # Initialize DI container with proper config injection
 from agentarea_agents.infrastructure.di_container import initialize_di_container
-from agentarea_common.config import get_settings
+from agentarea_common.config import get_app_settings, get_settings
 from agentarea_common.events.factory import create_event_broker
 from agentarea_common.logging import setup_logging
 from agentarea_common.observability import get_temporal_plugins, setup_otel
@@ -38,7 +38,10 @@ dotenv.load_dotenv()
 # Configure structured (JSON) logging. Routing every record through
 # WorkspaceContextFormatter escapes newlines, so untrusted values in log
 # messages can't forge log lines (see LogSanitizerFilter for the plain-text path).
-setup_logging(level="DEBUG", enable_structured_logging=True)
+setup_logging(
+    level="DEBUG" if get_app_settings().DEBUG else "INFO",
+    enable_structured_logging=True,
+)
 logger = logging.getLogger(__name__)
 
 
