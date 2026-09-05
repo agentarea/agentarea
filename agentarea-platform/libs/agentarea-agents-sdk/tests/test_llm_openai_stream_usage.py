@@ -132,7 +132,6 @@ async def test_litellm_stream_requests_and_preserves_usage(monkeypatch):
     model = LLMModel(
         provider_type="openrouter",
         model_name="vendor/new-model",
-        api_key="test-key",
         input_cost_per_token=0.001,
         output_cost_per_token=0.002,
     )
