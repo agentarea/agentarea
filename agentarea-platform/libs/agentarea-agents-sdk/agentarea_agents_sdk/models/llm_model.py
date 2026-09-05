@@ -804,6 +804,11 @@ class LLMModel:
             # Build parameters for streaming
             params = self._build_litellm_params(request)
             params["stream"] = True
+            # OpenAI-compatible providers emit token usage in a trailing,
+            # choices-less chunk only when explicitly requested. Without it,
+            # governed workflows must fail closed because neither token nor
+            # cost limits can be enforced.
+            params["stream_options"] = {"include_usage": True}
 
             logger.info(f"Starting streaming LLM call for model {params['model']}")
 
