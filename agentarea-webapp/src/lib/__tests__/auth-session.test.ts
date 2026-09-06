@@ -5,8 +5,13 @@ describe("isProtectedRoute", () => {
   it.each([
     ["/agents", true],
     ["/agents/123", true],
+    ["/dashboard", true],
+    ["/budgets", true],
+    ["/members", true],
     ["/", false],
     ["/auth/login", false],
+    ["/error", false],
+    ["/500/details", false],
     ["/agentsfoo", true],
     ["/settings/profile", true],
   ])("marks %s as %s", (pathname, expected) => {
