@@ -71,7 +71,7 @@ async def test_client_endpoint_binds_context_to_clients_workspace():
         skills=[],
     )
     client_repository = MagicMock()
-    client_repository.get_by_id = AsyncMock(return_value=client)
+    client_repository.get_accessible_by_id = AsyncMock(return_value=client)
     client_repository.get_instance_namespaces = AsyncMock(return_value={})
 
     session = MagicMock()
@@ -120,8 +120,34 @@ async def test_client_endpoint_binds_context_to_clients_workspace():
 
     assert proxy is not None
     assert skills == {}
+    client_repository.get_accessible_by_id.assert_awaited_once_with(CLIENT_ID)
     assert user_context.workspace_id == "client-workspace"
     get_secret_manager.assert_called_once_with(session=session, user_context=user_context)
+
+
+@pytest.mark.asyncio
+async def test_client_resource_lookup_is_limited_to_accessible_workspaces():
+    """The cross-workspace resource lookup must use only the resolved allowlist."""
+    import agentarea_agents.domain.skill_models  # noqa: F401
+    import agentarea_mcp.domain.mpc_server_instance_model  # noqa: F401
+    from agentarea_mcp.infrastructure.client_repository import ClientRepository
+
+    user_context = SimpleNamespace(
+        user_id="user-1",
+        workspace_id="personal-workspace",
+        accessible_workspaces=["personal-workspace", "client-workspace"],
+    )
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=result)
+
+    await ClientRepository(session, user_context).get_accessible_by_id(CLIENT_ID)
+
+    statement = session.execute.await_args.args[0]
+    params = statement.compile().params
+    assert CLIENT_ID in params.values()
+    assert ["personal-workspace", "client-workspace"] in params.values()
 
 
 class TestTransportSecurity:

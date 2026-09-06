@@ -35,6 +35,27 @@ class ClientRepository(WorkspaceScopedRepository[Client]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def get_accessible_by_id(self, id: UUID | str) -> Client | None:
+        """Resolve a client at the request boundary across authorized workspaces.
+
+        Repository CRUD remains bound to the active workspace. This lookup is
+        reserved for resource-addressed endpoints: it finds the resource only
+        inside the caller's already-resolved workspace allowlist, after which
+        the request binds to the resource workspace before constructing other
+        workspace-scoped dependencies.
+        """
+        accessible = self.user_context.accessible_workspaces or [self.user_context.workspace_id]
+        query = (
+            select(Client)
+            .where(Client.id == id, Client.workspace_id.in_(accessible))
+            .options(
+                selectinload(Client.skills),
+                selectinload(Client.mcp_instances),
+            )
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def list_all(
         self, limit: int | None = None, offset: int | None = None, **filters
     ) -> list[Client]:  # type: ignore[override]
