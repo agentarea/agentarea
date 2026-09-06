@@ -22,17 +22,28 @@ class ClientRepository(WorkspaceScopedRepository[Client]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, Client, user_context)
 
-    async def get_by_id(self, id: UUID | str, creator_scoped: bool = False) -> Client | None:  # type: ignore[override]
-        query = (
-            select(Client)
-            .where(Client.id == id)
-            .where(self._get_workspace_filter())
-            .options(
-                selectinload(Client.skills),
-                selectinload(Client.mcp_instances),
-            )
+    def build_get_by_id_query(self, id: UUID | str, *, any_workspace: bool = False):
+        """Build the by-id lookup, optionally without the workspace filter.
+
+        ``any_workspace`` is for callers that address a client by its own id and
+        gate access on the ReBAC `use` relation instead of workspace membership
+        (the client-scoped MCP endpoint). Everything else stays workspace-scoped.
+        """
+        query = select(Client).where(Client.id == id)
+        if not any_workspace:
+            query = query.where(self._get_workspace_filter())
+        return query.options(
+            selectinload(Client.skills),
+            selectinload(Client.mcp_instances),
         )
-        result = await self.session.execute(query)
+
+    async def get_by_id(self, id: UUID | str, creator_scoped: bool = False) -> Client | None:  # type: ignore[override]
+        result = await self.session.execute(self.build_get_by_id_query(id))
+        return result.scalar_one_or_none()
+
+    async def get_by_id_any_workspace(self, id: UUID | str) -> Client | None:
+        """Resolve a client by id regardless of the caller's current workspace."""
+        result = await self.session.execute(self.build_get_by_id_query(id, any_workspace=True))
         return result.scalar_one_or_none()
 
     async def list_all(

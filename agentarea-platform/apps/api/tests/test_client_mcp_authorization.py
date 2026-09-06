@@ -78,3 +78,61 @@ class TestTransportSecurity:
             client_mcp_server.settings.transport_security.enable_dns_rebinding_protection
             is platform.settings.transport_security.enable_dns_rebinding_protection
         )
+
+
+class TestClientResolution:
+    """A client is addressed by its own id, not by the caller's current workspace.
+
+    The MCP auth path starts every caller on their personal workspace and only
+    switches when an X-Workspace-Slug header is present. A harness connecting to
+    the ``mcp_endpoint_url`` the API hands out sends no such header, so a
+    workspace-scoped lookup silently found nothing and the harness was served an
+    empty tool list with HTTP 200. Access is decided by the ReBAC `use` relation
+    in ``_authorize_client_access``, not by which workspace the caller happens to
+    be sitting in.
+    """
+
+    def test_lookup_is_not_filtered_by_the_callers_workspace(self):
+        from unittest.mock import MagicMock
+
+        import agentarea_agents.domain.skill_models  # noqa: F401  (registers the mapper)
+        from agentarea_common.auth.context import UserContext
+        from agentarea_mcp.infrastructure.client_repository import ClientRepository
+        from sqlalchemy.dialects import postgresql
+
+        repo = ClientRepository(MagicMock(), UserContext(user_id="u1", workspace_id="personal"))
+        query = repo.build_get_by_id_query(CLIENT_ID, any_workspace=True)
+        where = str(query.compile(dialect=postgresql.dialect())).split("WHERE", 1)[1]
+
+        assert "workspace_id" not in where
+
+    def test_workspace_scoped_lookup_still_filters(self):
+        from unittest.mock import MagicMock
+
+        import agentarea_agents.domain.skill_models  # noqa: F401  (registers the mapper)
+        from agentarea_common.auth.context import UserContext
+        from agentarea_mcp.infrastructure.client_repository import ClientRepository
+        from sqlalchemy.dialects import postgresql
+
+        repo = ClientRepository(MagicMock(), UserContext(user_id="u1", workspace_id="personal"))
+        query = repo.build_get_by_id_query(CLIENT_ID, any_workspace=False)
+        where = str(query.compile(dialect=postgresql.dialect())).split("WHERE", 1)[1]
+
+        assert "workspace_id" in where
+
+
+@pytest.mark.asyncio
+async def test_list_tools_reports_an_unknown_client_instead_of_returning_none(monkeypatch):
+    """An unresolvable client must not look like a client with no tools."""
+    from agentarea_api.api.v1 import client_mcp
+
+    async def _missing(_client_id):
+        raise client_mcp.ClientNotFoundError(CLIENT_ID)
+
+    monkeypatch.setattr(client_mcp, "_resolve_client_scope", _missing)
+    token = client_mcp._client_id_var.set(CLIENT_ID)
+    try:
+        with pytest.raises(ValueError, match="not found"):
+            await client_mcp._list_tools()
+    finally:
+        client_mcp._client_id_var.reset(token)

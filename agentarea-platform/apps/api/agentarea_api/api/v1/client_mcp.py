@@ -29,6 +29,10 @@ class ClientAccessDeniedError(Exception):
     """Raised when the authenticated principal lacks `use` on the target client."""
 
 
+class ClientNotFoundError(Exception):
+    """Raised when the client id in the path matches no client."""
+
+
 async def _authorize_client_access(user_ctx, client_id: str) -> None:
     """Enforce that the authenticated principal may use this client's bundle.
 
@@ -84,25 +88,40 @@ def _tool_cache() -> RedisToolListCache:
 
 async def _resolve_client_scope(
     client_id: str,
-) -> tuple[MCPAggregatorProxy | None, dict]:
+) -> tuple[MCPAggregatorProxy, dict]:
     """Resolve a client's MCP instance proxy and skill registry.
 
-    The set is exactly the client's own attachments. Returns
-    ``(proxy, skill_registry)``; proxy is None only when the client does not
-    exist.
+    The client is addressed by its own id: the MCP auth path starts every caller
+    on their personal workspace and only moves when an X-Workspace-Slug header
+    is present, which a harness pointed at ``mcp_endpoint_url`` never sends. A
+    workspace-scoped lookup therefore found nothing and the harness was handed
+    an empty tool list. Access is decided by the ReBAC `use` relation below;
+    the client's own workspace is what scopes its attachments.
+
+    Raises:
+        ClientNotFoundError: If no client matches the id.
+        ClientAccessDeniedError: If the principal may not use the client.
     """
     from agentarea_agents_sdk.skills.skill_catalog_builder import SkillEntry
     from agentarea_api.tools.base import platform_read_context
+    from agentarea_common.auth.context import UserContext
+    from agentarea_common.base.repository_factory import RepositoryFactory
     from agentarea_mcp.application.service import MCPServerInstanceService
     from agentarea_mcp.infrastructure.client_repository import ClientRepository
 
-    async with platform_read_context() as (session, user_ctx, repo_factory, broker, secret):
+    async with platform_read_context() as (session, user_ctx, _factory, broker, secret):
         client_repo = ClientRepository(session, user_ctx)
-        client = await client_repo.get_by_id(client_id)
+        client = await client_repo.get_by_id_any_workspace(client_id)
         if client is None:
-            return None, {}
+            raise ClientNotFoundError(client_id)
 
         await _authorize_client_access(user_ctx, client_id)
+
+        # Resolve the client's attachments in the workspace that owns them.
+        repo_factory = RepositoryFactory(
+            session,
+            UserContext(user_id=user_ctx.user_id, workspace_id=client.workspace_id),
+        )
 
         namespaces = await client_repo.get_instance_namespaces(client_id)
         instances = {str(i.id): i for i in client.mcp_instances}
@@ -185,8 +204,8 @@ async def _list_tools() -> list[Tool]:
         proxy, skill_registry = await _resolve_client_scope(client_id)
     except ClientAccessDeniedError:
         raise ValueError("Not authorized for this client") from None
-    if proxy is None:
-        return []
+    except ClientNotFoundError:
+        raise ValueError("Client not found") from None
     tools = [
         Tool(name=t["name"], description=t["description"], inputSchema=t["inputSchema"])
         for t in await proxy.list_namespaced_tools()
@@ -205,8 +224,8 @@ async def _call_tool(name: str, arguments: dict) -> list[TextContent]:
         proxy, skill_registry = await _resolve_client_scope(client_id)
     except ClientAccessDeniedError:
         raise ValueError("Not authorized for this client") from None
-    if proxy is None:
-        raise ValueError("Client not found")
+    except ClientNotFoundError:
+        raise ValueError("Client not found") from None
 
     if name == "activate_skill":
         from agentarea_agents_sdk.skills.skill_toolset import SkillActivationTool
