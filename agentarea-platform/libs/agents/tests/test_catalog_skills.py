@@ -18,6 +18,7 @@ from agentarea_agents.domain.skill_models import Skill
 from agentarea_agents.infrastructure.catalog_skill_repository import (
     CatalogSkillItem,
     CatalogSkillRepository,
+    CatalogSkillSummary,
 )
 from agentarea_common.auth.context import UserContext
 
@@ -44,6 +45,31 @@ class FakeSkillRepo:
 
     async def list_all(self):
         return list(self._skills)
+
+    async def list_paginated(
+        self,
+        limit,
+        offset,
+        search=None,
+        source_type=None,
+        network_scope=None,
+        from_registry=None,
+    ):
+        rows = list(self._skills)
+        if search:
+            rows = [s for s in rows if search.lower() in (s.name or "").lower()]
+        if source_type:
+            rows = [s for s in rows if s.source_type == source_type]
+        if from_registry is True:
+            rows = [s for s in rows if getattr(s, "registry_item_id", None)]
+        elif from_registry is False:
+            rows = [s for s in rows if not getattr(s, "registry_item_id", None)]
+        return rows[offset : offset + limit], len(rows)
+
+    async def list_registry_item_ids(self):
+        return [
+            str(s.registry_item_id) for s in self._skills if getattr(s, "registry_item_id", None)
+        ]
 
     async def get_by_id(self, _id):
         return next((s for s in self._skills if str(s.id) == str(_id)), None)
@@ -80,9 +106,56 @@ class FakeCatalogRepo:
     def __init__(self, items=None):
         self._items = items or []
         self.installed = []
+        self.list_items_calls = 0
+        self.page_calls = []
 
     async def list_items(self):
+        self.list_items_calls += 1
         return list(self._items)
+
+    def _visible(self, exclude_item_ids, search, source_type, network_scope):
+        excluded = {str(i) for i in exclude_item_ids}
+        rows = [i for i in self._items if i.id not in excluded]
+        if search:
+            rows = [i for i in rows if search.lower() in (i.name or "").lower()]
+        if source_type:
+            rows = [i for i in rows if (i.spec or {}).get("source_type") == source_type]
+        if network_scope:
+            rows = [i for i in rows if (i.spec or {}).get("network_scope") == network_scope]
+        return rows
+
+    async def list_page(
+        self,
+        *,
+        limit,
+        offset,
+        exclude_item_ids,
+        search=None,
+        source_type=None,
+        network_scope=None,
+    ):
+        self.page_calls.append({"limit": limit, "offset": offset})
+        rows = self._visible(exclude_item_ids, search, source_type, network_scope)
+        page = [
+            CatalogSkillSummary(
+                id=i.id,
+                name=i.name,
+                description=i.description,
+                version=i.version,
+                source_type=(i.spec or {}).get("source_type") or "content",
+                source_url=(i.spec or {}).get("source_url"),
+                network_scope=(i.spec or {}).get("network_scope") or "private",
+                installed_version=i.installed_version,
+                created_at=i.created_at,
+                updated_at=i.updated_at,
+            )
+            for i in rows[offset : offset + limit]
+        ]
+        return page, len(rows)
+
+    async def versions_for(self, item_ids):
+        wanted = {str(i) for i in item_ids}
+        return {i.id: (i.version, i.installed_version) for i in self._items if i.id in wanted}
 
     async def get_item(self, item_id):
         return next((i for i in self._items if i.id == item_id), None)
@@ -321,3 +394,84 @@ async def test_isolation_built_in_visible_custom_from_other_workspace_not():
     assert item_builtin.id in ids
     # No foreign custom skill leaked in (only the catalog projection is present).
     assert len(result) == 1
+
+
+async def test_list_paginated_never_scans_the_whole_catalog():
+    """The list read path must page the catalog in SQL, not load every item.
+
+    Regression guard: loading all catalog items (each carrying its full spec)
+    on every request is what made /v1/skills time out on a real catalog.
+    """
+    items = [_item(name=f"Builtin {n}") for n in range(5)]
+    catalog = FakeCatalogRepo(items)
+    svc = _service(FakeSkillRepo(), catalog)
+
+    page, total = await svc.list_paginated(limit=2, offset=0)
+
+    assert catalog.list_items_calls == 0
+    assert catalog.page_calls == [{"limit": 2, "offset": 0}]
+    assert len(page) == 2
+    assert total == 5
+
+
+async def test_list_paginated_pages_across_tenant_then_catalog():
+    tenant = Skill(id=uuid4(), name="Tenant one", slug="tenant-one", source_type="content")
+    catalog_items = [_item(name=f"Builtin {n}") for n in range(3)]
+    svc = _service(FakeSkillRepo([tenant]), FakeCatalogRepo(catalog_items))
+
+    first, total = await svc.list_paginated(limit=2, offset=0)
+    assert total == 4
+    assert [s.name for s in first] == ["Tenant one", "Builtin 0"]
+
+    second, total = await svc.list_paginated(limit=2, offset=2)
+    assert total == 4
+    assert [s.name for s in second] == ["Builtin 1", "Builtin 2"]
+
+
+async def test_list_paginated_shadows_forked_catalog_items():
+    forked_item = _item(name="Forked", version="1", installed_version="1")
+    other_item = _item(name="Unforked")
+    tenant_copy = Skill(
+        id=uuid4(),
+        name="Forked copy",
+        slug="forked-copy",
+        source_type="content",
+        registry_item_id=forked_item.id,
+    )
+    catalog = FakeCatalogRepo([forked_item, other_item])
+    svc = _service(FakeSkillRepo([tenant_copy]), catalog)
+
+    page, total = await svc.list_paginated(limit=10, offset=0)
+
+    ids = [str(s.id) for s in page]
+    assert forked_item.id not in ids
+    assert other_item.id in ids
+    assert total == 2
+
+
+async def test_list_paginated_flags_update_available_on_returned_page():
+    forked_item = _item(name="Forked", version="2", installed_version="1")
+    tenant_copy = Skill(
+        id=uuid4(),
+        name="Forked copy",
+        slug="forked-copy",
+        source_type="content",
+        registry_item_id=forked_item.id,
+    )
+    svc = _service(FakeSkillRepo([tenant_copy]), FakeCatalogRepo([forked_item]))
+
+    page, _ = await svc.list_paginated(limit=10, offset=0)
+
+    assert getattr(page[0], "update_available", False) is True
+
+
+async def test_list_paginated_from_registry_false_skips_the_catalog():
+    catalog = FakeCatalogRepo([_item(name="Builtin")])
+    svc = _service(FakeSkillRepo(), catalog)
+
+    page, total = await svc.list_paginated(limit=10, offset=0, from_registry=False)
+
+    assert page == []
+    assert total == 0
+    assert catalog.page_calls == []
+    assert catalog.list_items_calls == 0
