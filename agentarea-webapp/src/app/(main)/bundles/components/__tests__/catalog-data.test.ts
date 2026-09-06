@@ -121,6 +121,19 @@ describe("catalog data normalization", () => {
     "skill: explicit display_name wins over generated title"
   );
 
+  assertEqual(
+    normalize(
+      "skills",
+      item({
+        name: "mcp-builder--anthropics-skills--abc123",
+        tags: ["repo:anthropics-skills"],
+        spec: { original_name: "mcp-builder" },
+      })
+    ).title,
+    "MCP Builder",
+    "skill: original name keeps meaningful words and common acronyms"
+  );
+
   // ── server-derived facets win over local re-derivation ──
   // Browsing is filtered, sorted and counted in SQL against the row's stored
   // category/featured columns. If a card re-derived them and disagreed, an item
@@ -129,7 +142,11 @@ describe("catalog data normalization", () => {
   assertEqual(
     normalize(
       "skills",
-      item({ name: "x--y--z", tags: ["category:design"], category: "documents" })
+      item({
+        name: "x--y--z",
+        tags: ["category:design"],
+        category: "documents",
+      })
     ).category,
     "documents",
     "facets: server category wins over the tag-derived one"
