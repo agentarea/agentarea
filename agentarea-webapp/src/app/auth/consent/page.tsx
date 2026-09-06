@@ -8,11 +8,16 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AuthLayout } from "@/components/auth/auth-layout";
+import { grantedAccessTokenAudience } from "./oauth-audience";
 
 const KNOWN_SCOPES = ["openid", "profile", "email", "offline_access"] as const;
 
 interface ConsentRequest {
-  client?: { client_name?: string; client_id?: string };
+  client?: {
+    client_name?: string;
+    client_id?: string;
+    audience?: string[];
+  };
   requested_scope?: string[];
   requested_access_token_audience?: string[];
   subject?: string;
@@ -62,8 +67,10 @@ export default function ConsentPage() {
               "profile",
               "email",
             ],
-            grant_access_token_audience:
-              consentRequest?.requested_access_token_audience || [],
+            grant_access_token_audience: grantedAccessTokenAudience(
+              consentRequest?.requested_access_token_audience,
+              consentRequest?.client?.audience
+            ),
             session: {
               id_token: {
                 email: consentRequest?.subject || "",
