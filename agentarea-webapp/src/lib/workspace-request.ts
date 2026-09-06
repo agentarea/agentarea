@@ -1,5 +1,8 @@
 import { getActiveWorkspaceSlug } from "@/lib/workspace-context";
-import { WORKSPACE_SLUG_HEADER } from "@/lib/workspaces";
+import {
+  WORKSPACE_REFERENCE_HEADER,
+  WORKSPACE_SLUG_HEADER,
+} from "@/lib/workspaces";
 
 /**
  * Resolve the active workspace for a route handler.
@@ -11,7 +14,11 @@ import { WORKSPACE_SLUG_HEADER } from "@/lib/workspaces";
 export async function resolveRequestWorkspaceSlug(
   request: Request
 ): Promise<string | null> {
-  return request.headers.get(WORKSPACE_SLUG_HEADER) ?? getActiveWorkspaceSlug();
+  return (
+    request.headers.get(WORKSPACE_REFERENCE_HEADER) ??
+    request.headers.get(WORKSPACE_SLUG_HEADER) ??
+    getActiveWorkspaceSlug()
+  );
 }
 
 /**
@@ -24,5 +31,5 @@ export async function resolveRequestWorkspaceSlug(
  */
 export async function workspaceSlugHeaders(): Promise<Record<string, string>> {
   const slug = await getActiveWorkspaceSlug();
-  return slug ? { [WORKSPACE_SLUG_HEADER]: slug } : {};
+  return slug ? { [WORKSPACE_REFERENCE_HEADER]: slug } : {};
 }

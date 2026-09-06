@@ -21,7 +21,7 @@ describe("dashboard API client", () => {
     vi.clearAllMocks();
     getAuthToken.mockResolvedValue("test-token");
     workspaceSlugHeaders.mockResolvedValue({
-      "x-workspace-slug": "team-workspace",
+      "x-agentarea-workspace": "team-workspace",
     });
     vi.stubGlobal(
       "fetch",
@@ -55,7 +55,7 @@ describe("dashboard API client", () => {
       const [, init] = vi.mocked(fetch).mock.calls[0];
       const headers = new Headers(init?.headers);
       expect(headers.get("Authorization")).toBe("Bearer test-token");
-      expect(headers.get("X-Workspace-Slug")).toBe("team-workspace");
+      expect(headers.get("X-AgentArea-Workspace")).toBe("team-workspace");
     }
   );
 });
