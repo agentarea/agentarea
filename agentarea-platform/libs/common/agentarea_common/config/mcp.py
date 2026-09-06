@@ -30,7 +30,11 @@ class MCPSettings(BaseAppSettings):
     # refused outright, so a deployment that does not run Hydra is unaffected
     # while one that does must declare which audience it accepts.
     HYDRA_AUDIENCE: str | None = None
-    MCP_OAUTH_SCOPES: str = "openid offline_access"
+    # Hydra advertises both the standard ``offline_access`` scope and its
+    # legacy ``offline`` alias. OAuth clients such as Codex request the full
+    # advertised set, so DCR clients must be registered for both or Hydra
+    # rejects authorization with ``invalid_scope`` before login begins.
+    MCP_OAUTH_SCOPES: str = "openid offline_access offline"
     # Allow OpenAPI connections to reach localhost/private IPs (self-hosted deployments)
     ALLOW_PRIVATE_URLS: bool = False
 
