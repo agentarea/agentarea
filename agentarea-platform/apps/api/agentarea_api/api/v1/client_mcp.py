@@ -106,7 +106,7 @@ async def _resolve_client_scope(
 
     async with get_database().read_session() as session:
         client_repo = ClientRepository(session, user_ctx)
-        client = await client_repo.get_by_id(client_id)
+        client = await client_repo.get_accessible_by_id(client_id)
         if client is None:
             return None, {}
 
