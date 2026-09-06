@@ -64,6 +64,16 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def list_registry_item_ids(self) -> list[str]:
+        """List the catalog item ids this workspace has already forked."""
+        query = (
+            select(self.model_class.registry_item_id)
+            .where(self.model_class.registry_item_id.is_not(None))
+            .where(self._get_workspace_filter())
+        )
+        result = await self.session.execute(query)
+        return [str(row) for row in result.scalars().all()]
+
     async def get_with_agents(self, skill_id: UUID | str) -> Skill | None:
         """Get a skill with its associated agents loaded.
 
