@@ -11,7 +11,11 @@ from agentarea_mcp.application.service import (
 )
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
-from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerInstanceCreate
+from agentarea_mcp.schemas.dto import (
+    MCPServerCreate,
+    MCPServerInstanceCreate,
+    MCPServerInstanceUpdate,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -87,6 +91,16 @@ def _make_service(
     repo.create = create
     repo.delete = delete
 
+    async def update(id_, **kwargs):
+        instance = instances.get(str(id_))
+        if instance is None:
+            return None
+        for key, value in kwargs.items():
+            setattr(instance, key, value)
+        return instance
+
+    repo.update = AsyncMock(side_effect=update)
+
     repo_factory = MagicMock()
     repo_factory.create_repository = MagicMock(return_value=repo)
 
@@ -144,6 +158,70 @@ class _RetireClient:
     async def delete(self, url: str, *, headers: dict[str, str]):
         self.calls.append((url, headers))
         return _RetireResponse(self.statuses.pop(0))
+
+
+@pytest.mark.asyncio
+async def test_update_container_config_retires_runtime_before_persisting_change():
+    instance = _make_instance("docker")
+    instance.json_spec = {"type": "docker", "environment": {"MODE": "old"}}
+    svc = _make_service({str(instance.id): instance})
+
+    async def retire_before_mutation(_instance_id):
+        assert svc.repository.update.await_count == 0
+        assert svc.env_service.set_instance_environment.await_count == 0
+
+    svc._retire_runtime_before_mutation = AsyncMock(side_effect=retire_before_mutation)
+
+    updated = await svc.update_instance(
+        instance.id,
+        MCPServerInstanceUpdate(json_spec={"environment": {"MODE": "new"}}),
+    )
+
+    assert updated is instance
+    svc._retire_runtime_before_mutation.assert_awaited_once_with(instance.id)
+    svc.repository.update.assert_awaited_once_with(
+        instance.id,
+        json_spec={"type": "docker", "environment": {"MODE": "new"}},
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_url_instance_does_not_retire_runtime():
+    instance = _make_instance("url")
+    svc = _make_service({str(instance.id): instance})
+    svc._retire_runtime_before_mutation = AsyncMock()
+
+    await svc.update_instance(
+        instance.id,
+        MCPServerInstanceUpdate(json_spec={"headers": {"X-Tenant": "new"}}),
+    )
+
+    svc._retire_runtime_before_mutation.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_secret_rotation_retires_runtime_even_when_public_spec_is_unchanged():
+    instance = _make_instance("docker")
+    instance.json_spec = {"type": "docker", "env_vars": ["TOKEN"], "environment": {}}
+    svc = _make_service({str(instance.id): instance})
+    server_spec = await svc.mcp_server_repository.get_server_by_id(instance.server_spec_id)
+    server_spec.env_schema = [{"name": "TOKEN", "isSecret": True}]
+    svc._retire_runtime_before_mutation = AsyncMock()
+
+    await svc.update_instance(
+        instance.id,
+        MCPServerInstanceUpdate(
+            json_spec={
+                "env_vars": ["TOKEN"],
+                "environment": {"TOKEN": "rotated"},
+            }
+        ),
+    )
+
+    svc._retire_runtime_before_mutation.assert_awaited_once_with(instance.id)
+    svc.env_service.set_instance_environment.assert_awaited_once_with(
+        instance.id, {"TOKEN": "rotated"}
+    )
 
 
 @pytest.mark.asyncio
