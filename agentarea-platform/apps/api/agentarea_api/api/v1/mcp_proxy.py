@@ -20,6 +20,8 @@ Dispatch by instance type:
 import json
 import logging
 from typing import Any
+from urllib.parse import urlparse
+from urllib.request import getproxies_environment, proxy_bypass_environment
 from uuid import UUID
 
 import httpx
@@ -173,6 +175,19 @@ async def _resolve_upstream_url(instance, server_spec) -> tuple[str, str | None]
     return "", instance_type
 
 
+def _egress_is_proxied(upstream_url: str) -> bool:
+    """Whether httpx will tunnel this URL through a forward proxy.
+
+    Mirrors httpx's own environment handling (``*_PROXY`` / ``NO_PROXY``) so the
+    decision matches what the transport will actually do.
+    """
+    parsed = urlparse(upstream_url)
+    proxies = getproxies_environment()
+    if parsed.scheme not in proxies and "all" not in proxies:
+        return False
+    return not proxy_bypass_environment(parsed.hostname or "", proxies)
+
+
 def _guard_and_pin_upstream(
     upstream_url: str, instance_type: str | None, *, allow_private: bool
 ) -> tuple[str | httpx.URL, str | None, dict | None]:
@@ -185,6 +200,13 @@ def _guard_and_pin_upstream(
     resolved IP to defeat DNS rebinding — the Host header and TLS SNI keep the
     original hostname.
 
+    Pinning is skipped when egress goes through a forward proxy. httpcore sets
+    the TLS ``server_hostname`` of a CONNECT tunnel from the origin host and
+    never consults the ``sni_hostname`` extension, so a pinned IP would make
+    every https upstream fail certificate verification. The pin would also buy
+    nothing there: the proxy resolves the name itself, so it — not this process
+    — is where rebinding has to be contained.
+
     Returns ``(request_target, host_header, extensions)``.
 
     Raises:
@@ -194,6 +216,9 @@ def _guard_and_pin_upstream(
         return upstream_url, None, None
 
     resolved_ips = validate_url(upstream_url, allow_private=allow_private)
+    if _egress_is_proxied(upstream_url):
+        return upstream_url, None, None
+
     target = build_pinned_target(upstream_url, resolved_ips[0] if resolved_ips else None)
     request_target = httpx.URL(
         scheme=target.scheme,
