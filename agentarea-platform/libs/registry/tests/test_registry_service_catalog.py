@@ -386,6 +386,42 @@ class TestParseDefaultAgents:
         assert "model_id" not in spec
 
 
+class TestParseSkills:
+    def test_preserves_human_name_and_popularity_provenance(self):
+        provenance = {
+            "repo": "anthropics/skills",
+            "path": "skills/pdf/SKILL.md",
+            "stars": 42_500,
+            "license": "Apache-2.0",
+            "distribution": "compatible",
+        }
+
+        items = RegistryService._parse_skills(
+            {
+                "skills": [
+                    {
+                        "name": "pdf--anthropics-skills--abc123",
+                        "original_name": "pdf",
+                        "description": "Create and edit PDF documents.",
+                        "source_url": "https://github.com/anthropics/skills",
+                        "provenance": provenance,
+                        "tags": ["category:documents", "repo:anthropics-skills"],
+                    }
+                ]
+            }
+        )
+
+        assert items[0]["spec"]["original_name"] == "pdf"
+        assert items[0]["spec"]["provenance"] == provenance
+
+    def test_omits_invalid_provenance_instead_of_exposing_source_junk(self):
+        items = RegistryService._parse_skills(
+            {"skills": [{"name": "pdf", "provenance": "not-a-mapping"}]}
+        )
+
+        assert "provenance" not in items[0]["spec"]
+
+
 class TestParseBundles:
     def _bundle(self, **over):
         base = {

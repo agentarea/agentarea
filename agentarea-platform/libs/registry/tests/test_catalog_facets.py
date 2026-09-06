@@ -14,7 +14,9 @@ from agentarea_registry.application.catalog_facets import derive_facets
 
 class TestCategory:
     def test_bundles_read_category_from_spec_metadata(self):
-        f = derive_facets("bundles", name="Support Desk", spec={"metadata": {"category": "support"}}, tags=[])
+        f = derive_facets(
+            "bundles", name="Support Desk", spec={"metadata": {"category": "support"}}, tags=[]
+        )
         assert f.category == "support"
 
     def test_agents_use_their_first_tag(self):
@@ -23,7 +25,10 @@ class TestCategory:
 
     def test_skills_read_the_category_prefixed_tag(self):
         f = derive_facets(
-            "skills", name="pdf-fill", spec={}, tags=["repo:anthropics-claude-code", "category:other"]
+            "skills",
+            name="pdf-fill",
+            spec={},
+            tags=["repo:anthropics-claude-code", "category:other"],
         )
         assert f.category == "other"
 
@@ -62,7 +67,10 @@ class TestSortKey:
 
     def test_bundles_prefer_display_name(self):
         f = derive_facets(
-            "bundles", name="support-desk", spec={"display_name": "Support Desk", "name": "sd"}, tags=[]
+            "bundles",
+            name="support-desk",
+            spec={"display_name": "Support Desk", "name": "sd"},
+            tags=[],
         )
         assert f.sort_key == "support desk"
 
@@ -87,8 +95,19 @@ class TestSortKey:
         assert f.sort_key == "frontend design"
 
     def test_skills_prefer_an_explicit_display_name(self):
-        f = derive_facets("skills", name="pdf-fill--x--1", spec={"display_name": "PDF Filler"}, tags=[])
+        f = derive_facets(
+            "skills", name="pdf-fill--x--1", spec={"display_name": "PDF Filler"}, tags=[]
+        )
         assert f.sort_key == "pdf filler"
+
+    def test_skills_use_the_original_name_before_stripping_repo_suffixes(self):
+        f = derive_facets(
+            "skills",
+            name="fix-facebook-react",
+            spec={"original_name": "fix-facebook-react"},
+            tags=["repo:facebook/react"],
+        )
+        assert f.sort_key == "fix facebook react"
 
     def test_falls_back_to_the_raw_name_when_prettifying_empties_it(self):
         f = derive_facets("skills", name="--owner-repo--9f2a", spec={}, tags=[])

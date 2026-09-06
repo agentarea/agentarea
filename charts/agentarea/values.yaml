@@ -1070,9 +1070,8 @@ jobs:
 registryReconcile:
   enabled: true
   # Each entry needs `name` + `source_url`; the catalog type is auto-detected
-  # from the fetched payload. Skills are intentionally NOT seeded by default
-  # (the public skill catalog is ~123k entries across 25 shards); add skill
-  # shards explicitly if you want them.
+  # from the fetched payload. Seed the small official/known-good skills catalog;
+  # the ~123k community mirror remains opt-in and must not drive first-run picks.
   registries:
     - name: system-llm-providers
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json
@@ -1080,6 +1079,8 @@ registryReconcile:
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json
     - name: system-mcp-servers
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json
+    - name: system-skills-curated
+      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json
 
 # Ory Kratos Identity Server
 # Ory Keto (ReBAC) — powers Govern -> Policies -> Access (the relationship graph).

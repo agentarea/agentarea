@@ -104,7 +104,10 @@ export function normalizeModelSlug(s: string): string {
 // Tolerant (substring either way) because catalog slugs are bare ("gpt-4o")
 // while real instances are provider-prefixed/variant ("openai/gpt-4o-mini").
 // Non-binding — it only drives a UI suggestion, never a backend choice.
-export function modelNameMatchesPreferred(modelName: string, preferred: string): boolean {
+export function modelNameMatchesPreferred(
+  modelName: string,
+  preferred: string
+): boolean {
   const m = normalizeModelSlug(modelName);
   const p = normalizeModelSlug(preferred);
   if (!m || !p) return false;
@@ -139,7 +142,31 @@ function prettifySkillName(name: string, repo?: string | null): string {
     }
   }
   head = head.replace(/[-_]+/g, " ").trim();
-  return head.replace(/\b\w/g, (c) => c.toUpperCase()) || name;
+  const acronyms = new Set([
+    "api",
+    "csv",
+    "docx",
+    "html",
+    "json",
+    "mcp",
+    "pdf",
+    "pptx",
+    "seo",
+    "sql",
+    "ui",
+    "ux",
+    "xlsx",
+  ]);
+  return (
+    head
+      .split(" ")
+      .map((word) =>
+        acronyms.has(word.toLowerCase())
+          ? word.toUpperCase()
+          : word.charAt(0).toUpperCase() + word.slice(1)
+      )
+      .join(" ") || name
+  );
 }
 
 export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
@@ -178,7 +205,9 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
       ...base,
       title: str(spec.display_name) || str(spec.name) || item.name,
       category: serverCategory ?? str(meta?.category),
-      integrations: arr(spec.mcps).map((m) => String(m.name ?? "")).filter(Boolean),
+      integrations: arr(spec.mcps)
+        .map((m) => String(m.name ?? ""))
+        .filter(Boolean),
       meta: counts,
     };
   }
@@ -202,11 +231,19 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
     // tags. Show the repo as the card fact (the "content" source_type is noise);
     // use it to strip the repo from the generated title too.
     const tagVal = (prefix: string) =>
-      (item.tags ?? []).find((t) => t.startsWith(prefix))?.slice(prefix.length) ?? null;
+      (item.tags ?? [])
+        .find((t) => t.startsWith(prefix))
+        ?.slice(prefix.length) ?? null;
     const repo = tagVal("repo:");
+    const originalName = str(spec.original_name);
     return {
       ...base,
-      title: str(spec.display_name) ?? prettifySkillName(item.name, repo),
+      title:
+        str(spec.display_name) ??
+        prettifySkillName(
+          originalName ?? item.name,
+          originalName ? null : repo
+        ),
       category: serverCategory ?? tagVal("category:"),
       integrations: [],
       meta: repo ? [repo] : [],
@@ -216,7 +253,9 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
   // source provides it (agentarea:category); transport (streamable-http,
   // command, sse…) is "how it connects", not a category, so we don't facet on it.
   const conn = str(spec.connection_type) ?? str(spec.transport) ?? "url";
-  const rawMeta = (spec.raw_spec as RawSpec | undefined)?.metadata as RawSpec | undefined;
+  const rawMeta = (spec.raw_spec as RawSpec | undefined)?.metadata as
+    | RawSpec
+    | undefined;
   return {
     ...base,
     title: item.name,

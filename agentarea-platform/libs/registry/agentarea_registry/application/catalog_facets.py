@@ -84,7 +84,14 @@ def _title(registry_type: str, name: str, spec: dict[str, Any], tags: list[Any])
         explicit = _text(spec.get("display_name"))
         if explicit:
             return explicit
-        return _prettify_skill_name(name, _tag_value(tags, _REPO_TAG_PREFIX)) or name
+        original_name = _text(spec.get("original_name"))
+        return (
+            _prettify_skill_name(
+                original_name or name,
+                None if original_name else _tag_value(tags, _REPO_TAG_PREFIX),
+            )
+            or name
+        )
     return name
 
 

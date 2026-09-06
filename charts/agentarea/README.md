@@ -481,6 +481,8 @@ The following table lists configurable parameters of the chart and their default
 | registryReconcile.registries[1].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json"` |  |
 | registryReconcile.registries[2].name | string | `"system-mcp-servers"` |  |
 | registryReconcile.registries[2].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"` |  |
+| registryReconcile.registries[3].name | string | `"system-skills-curated"` |  |
+| registryReconcile.registries[3].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json"` |  |
 | keto.enabled | bool | `false` |  |
 | keto.replicaCount | int | `1` |  |
 | keto.image.repository | string | `"oryd/keto"` |  |

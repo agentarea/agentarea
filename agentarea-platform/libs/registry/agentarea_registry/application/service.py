@@ -870,17 +870,40 @@ class RegistryService:
             name = entry.get("name", "")
             if not name:
                 continue
+            spec = {
+                "source_type": entry.get("source_type", "content"),
+                "content": entry.get("content"),
+                "source_url": entry.get("source_url"),
+            }
+            original_name = entry.get("original_name")
+            if isinstance(original_name, str) and original_name:
+                spec["original_name"] = original_name
+
+            raw_provenance = entry.get("provenance")
+            if isinstance(raw_provenance, dict):
+                provenance = {
+                    key: raw_provenance[key]
+                    for key in (
+                        "repo",
+                        "path",
+                        "branch",
+                        "stars",
+                        "license",
+                        "distribution",
+                        "source",
+                        "duplicate_count",
+                    )
+                    if key in raw_provenance
+                }
+                if provenance:
+                    spec["provenance"] = provenance
             items.append(
                 {
                     "external_id": name,
                     "name": name,
                     "description": entry.get("description"),
                     "version": entry.get("version") or "1.0.0",
-                    "spec": {
-                        "source_type": entry.get("source_type", "content"),
-                        "content": entry.get("content"),
-                        "source_url": entry.get("source_url"),
-                    },
+                    "spec": spec,
                     "tags": entry.get("tags", []),
                 }
             )
