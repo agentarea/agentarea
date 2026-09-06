@@ -49,7 +49,7 @@ class _Settings:
         HYDRA_PUBLIC_URL = HYDRA
         HYDRA_ADMIN_URL = HYDRA_ADMIN
         HYDRA_BROWSER_URL = HYDRA
-        MCP_OAUTH_SCOPES = "openid offline_access"
+        MCP_OAUTH_SCOPES = "openid offline_access offline"
 
 
 class _FakeResponse:
@@ -294,6 +294,14 @@ class TestDynamicClientRegistration:
         assert "refresh_token" in sent["grant_types"]
         assert "authorization_code" in sent["grant_types"]
         assert "offline_access" in sent["scope"].split()
+        assert "offline" in sent["scope"].split()
+
+    def test_default_scope_covers_every_advertised_hydra_scope(self, hydra):
+        """Codex requests the advertised set, which Hydra validates per client."""
+        hydra.post("/oauth2/register", json={"client_name": "Codex"})
+
+        registered = set(_FakeAsyncClient.sent[-1]["scope"].split())
+        assert set(HYDRA_DOC["scopes_supported"]) <= registered
 
     def test_respects_grant_types_the_client_asked_for(self, hydra):
         hydra.post(

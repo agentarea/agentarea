@@ -38,7 +38,7 @@ services:
       - HYDRA_PUBLIC_URL=http://hydra:4444
       - HYDRA_ADMIN_URL=http://hydra:4445
       - HYDRA_BROWSER_URL=http://localhost:4444
-      - MCP_OAUTH_SCOPES=openid offline_access
+      - MCP_OAUTH_SCOPES=openid offline_access offline
       # Public API base URL (used in OAuth AS metadata and WWW-Authenticate)
       - API_BASE_URL=http://localhost:8000
       # Kratos JWT authentication
