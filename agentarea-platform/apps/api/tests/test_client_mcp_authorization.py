@@ -1,13 +1,15 @@
 """Tests for the ReBAC gate on the client-scoped MCP endpoint."""
 
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import agentarea_common.di.container as di
 import pytest
 from agentarea_api.api.v1.client_mcp import (
     ClientAccessDeniedError,
     _authorize_client_access,
+    _resolve_client_scope,
 )
 
 CLIENT_ID = "11111111-1111-1111-1111-111111111111"
@@ -48,6 +50,78 @@ async def test_user_without_use_relation_is_denied(monkeypatch):
 
     with pytest.raises(ClientAccessDeniedError):
         await _authorize_client_access(_ctx(), CLIENT_ID)
+
+
+@pytest.mark.asyncio
+async def test_client_endpoint_binds_context_to_clients_workspace():
+    """The resource chooses workspace server-side; no token claim/header is needed."""
+    user_context = SimpleNamespace(
+        user_id="user-1",
+        workspace_id="personal-workspace",
+        accessible_workspaces=["personal-workspace", "client-workspace"],
+        client_id=None,
+    )
+    client = SimpleNamespace(
+        id=CLIENT_ID,
+        name="Codex",
+        description=None,
+        workspace_id="client-workspace",
+        source_project_id=None,
+        mcp_instances=[],
+        skills=[],
+    )
+    client_repository = MagicMock()
+    client_repository.get_by_id = AsyncMock(return_value=client)
+    client_repository.get_instance_namespaces = AsyncMock(return_value={})
+
+    session = MagicMock()
+
+    @asynccontextmanager
+    async def read_session():
+        yield session
+
+    database = MagicMock()
+    database.read_session = read_session
+    connection_manager = MagicMock()
+    connection_manager.get_event_broker = AsyncMock(return_value=MagicMock())
+
+    def make_secret_manager(*, session, user_context):
+        assert user_context.workspace_id == "client-workspace"
+        return MagicMock()
+
+    with (
+        patch(
+            "agentarea_agents_sdk.mcp_server.auth.get_mcp_user_context",
+            return_value=user_context,
+        ),
+        patch("agentarea_common.config.database.get_database", return_value=database),
+        patch(
+            "agentarea_common.infrastructure.connection_manager.get_connection_manager",
+            return_value=connection_manager,
+        ),
+        patch(
+            "agentarea_secrets.secret_manager_factory.get_real_secret_manager",
+            side_effect=make_secret_manager,
+        ) as get_secret_manager,
+        patch(
+            "agentarea_mcp.infrastructure.client_repository.ClientRepository",
+            return_value=client_repository,
+        ),
+        patch(
+            "agentarea_mcp.application.service.MCPServerInstanceService",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "agentarea_api.api.v1.client_mcp._authorize_client_access",
+            new=AsyncMock(),
+        ),
+    ):
+        proxy, skills = await _resolve_client_scope(CLIENT_ID)
+
+    assert proxy is not None
+    assert skills == {}
+    assert user_context.workspace_id == "client-workspace"
+    get_secret_manager.assert_called_once_with(session=session, user_context=user_context)
 
 
 class TestTransportSecurity:

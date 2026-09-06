@@ -3,6 +3,7 @@ import { env } from "@/env";
 import { formatApiError } from "@/lib/api-errors";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
+import { WORKSPACE_REFERENCE_HEADER } from "@/lib/workspaces";
 
 export async function POST(
   request: NextRequest,
@@ -26,7 +27,7 @@ export async function POST(
 
     const workspaceSlug = await resolveRequestWorkspaceSlug(request);
     if (workspaceSlug) {
-      backendHeaders["X-Workspace-Slug"] = workspaceSlug;
+      backendHeaders[WORKSPACE_REFERENCE_HEADER] = workspaceSlug;
     }
 
     // Task creation is JSON. Files are pre-staged via POST /v1/files/upload-url

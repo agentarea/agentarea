@@ -209,8 +209,8 @@ class MCPAuthMiddleware:
             auth_result = await auth_provider.verify_token(bearer_token)
 
             if auth_result.is_authenticated and auth_result.token:
-                # Start on the caller's own workspace; an X-Workspace-ID/-Slug
-                # override is applied only after the membership check below.
+                # Start on the caller's own workspace; an explicit workspace
+                # reference is applied only after the membership check below.
                 user_context = UserContext(
                     user_id=auth_result.token.user_id,
                     workspace_id=auth_result.token.user_id,
@@ -225,6 +225,8 @@ class MCPAuthMiddleware:
             hydra_context = await _try_hydra_token(bearer_token, request)
             if hydra_context is not None:
                 await _resolve_accessible_workspaces(hydra_context)
+                if not await _select_workspace(hydra_context, request):
+                    return
                 _mcp_user_context_var.set(hydra_context)
                 return
 
@@ -240,7 +242,7 @@ class MCPAuthMiddleware:
 
 
 async def _select_workspace(user_context: Any, request: Request) -> bool:
-    """Authorize an X-Workspace-ID/-Slug override, reusing the REST guard.
+    """Authorize an explicit workspace reference, reusing the REST guard.
 
     `/mcp` is a second authentication path alongside the `/v1` router. It must
     not re-implement the membership check, or the two drift and only one of them
@@ -258,7 +260,9 @@ async def _select_workspace(user_context: Any, request: Request) -> bool:
         logger.warning(
             "MCP auth: rejected workspace override user=%s requested=%s accessible=%s",
             user_context.user_id,
-            request.headers.get("X-Workspace-ID") or request.headers.get("X-Workspace-Slug"),
+            request.headers.get("X-AgentArea-Workspace")
+            or request.headers.get("X-Workspace-ID")
+            or request.headers.get("X-Workspace-Slug"),
             user_context.accessible_workspaces,
             exc_info=True,
         )

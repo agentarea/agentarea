@@ -146,3 +146,12 @@ class WorkspaceRepository:
             .order_by(Workspace.created_at.asc())
         )
         return list(result.scalars().all())
+
+    async def list_owned_by_user(self, user_id: str) -> list[Workspace]:
+        """List workspaces whose authoritative owner is ``user_id``."""
+        result = await self.session.execute(
+            select(Workspace)
+            .where(Workspace.owner_user_id == user_id)
+            .order_by(Workspace.created_at.asc())
+        )
+        return list(result.scalars().all())

@@ -85,6 +85,34 @@ async def _authenticate_jwt(request, *, granted: tuple[str, ...]) -> UserContext
         _mcp_user_context_var.reset(token)
 
 
+async def _authenticate_hydra(request, *, granted: tuple[str, ...]) -> UserContext | None:
+    """Run the Hydra fallback path with a fixed OAuth subject and grant set."""
+    middleware = MCPAuthMiddleware(MagicMock())
+    token = _mcp_user_context_var.set(None)
+    hydra_context = UserContext(user_id="alice", workspace_id="alice")
+    rejected = MagicMock(is_authenticated=False, token=None)
+    try:
+        with (
+            patch(
+                "agentarea_common.auth.dependencies._resolve_accessible_workspaces",
+                new=_grant(*granted),
+            ),
+            patch(
+                "agentarea_common.auth.dependencies._try_hydra_token",
+                new=AsyncMock(return_value=hydra_context),
+            ),
+            patch("agentarea_common.auth.dependencies.get_auth_provider") as get_auth_provider,
+        ):
+            auth_provider = MagicMock()
+            auth_provider.verify_token = AsyncMock(return_value=rejected)
+            get_auth_provider.return_value = auth_provider
+
+            await middleware._try_authenticate("hydra-token", request)
+        return _mcp_user_context_var.get(None)
+    finally:
+        _mcp_user_context_var.reset(token)
+
+
 class TestMCPWorkspaceOverrideIsAuthorized:
     """`/mcp` must not accept an X-Workspace-ID the caller is not a member of.
 
@@ -150,6 +178,28 @@ class TestMCPWorkspaceOverrideIsAuthorized:
             assert _mcp_user_context_var.get(None) is None
         finally:
             _mcp_user_context_var.reset(token)
+
+    @pytest.mark.asyncio
+    async def test_hydra_member_workspace_header_is_applied(self):
+        request = MagicMock()
+        request.headers = {"X-AgentArea-Workspace": "shared-workspace"}
+
+        context = await _authenticate_hydra(
+            request,
+            granted=("alice", "shared-workspace"),
+        )
+
+        assert context is not None
+        assert context.workspace_id == "shared-workspace"
+
+    @pytest.mark.asyncio
+    async def test_hydra_foreign_workspace_header_is_rejected(self):
+        request = MagicMock()
+        request.headers = {"X-Workspace-ID": "bob-workspace"}
+
+        context = await _authenticate_hydra(request, granted=("alice",))
+
+        assert context is None
 
 
 class TestUnauthenticatedChallenge:

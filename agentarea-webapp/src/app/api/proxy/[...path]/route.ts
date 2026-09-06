@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
+import { WORKSPACE_REFERENCE_HEADER } from "@/lib/workspaces";
 
 /**
  * API Proxy Route Handler
@@ -46,7 +47,7 @@ async function handleRequest(
 
     const workspaceSlug = await resolveRequestWorkspaceSlug(request);
     if (workspaceSlug) {
-      headers.set("X-Workspace-Slug", workspaceSlug);
+      headers.set(WORKSPACE_REFERENCE_HEADER, workspaceSlug);
     }
 
     // Get request body if present
