@@ -274,8 +274,11 @@ class EffectivePolicy(PolicyDocument):
             state["execution_limits"] = self.execution.model_dump(exclude_none=True)
 
         if self.tools:
+            # `None` (no allowlist) and `[]` (no tool permitted) are opposite
+            # settings; collapsing them here would republish the conflation the
+            # resolver and the tool PDP both avoid.
             state["tools_config"] = {
-                "allowed": self.tools.allowed or [],
+                "allowed": self.tools.allowed,
                 "denied": self.tools.denied,
             }
 

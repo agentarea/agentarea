@@ -64,10 +64,15 @@ def decide_tool_policy(
 
     Default-allow: this function only ever judges a tool the agent is already
     composed with (that is why it is being asked about), so composition is the
-    allow. Policy subtracts from it — a ``denied`` match, or a non-empty
-    ``allowed`` allowlist the tool falls outside of, or an approval requirement.
-    An absent/empty allowlist is "no allowlist in use", not "deny everything";
-    restriction is expressed by composing fewer tools or by DENY rules.
+    allow. Policy subtracts from it — a ``denied`` match, or an ``allowed``
+    allowlist the tool falls outside of, or an approval requirement.
+
+    An *absent* allowlist is "no allowlist in use"; an *empty* one is "no tool
+    is permitted". They are distinct values all the way down: the resolver
+    treats ``[]`` as a narrowing a lower scope may not widen, and
+    ``to_json_dict`` drops ``None`` while keeping ``[]``. Testing truthiness
+    here would collapse them again and make the strictest allowlist the one
+    that restricts nothing.
     """
     tools = (effective_policy or {}).get("tools") or {}
 
@@ -79,7 +84,7 @@ def decide_tool_policy(
         )
 
     allowed = tools.get("allowed")
-    if allowed and not _matches_any(tool_name, allowed):
+    if allowed is not None and not _matches_any(tool_name, allowed):
         return ToolAuthorizationDecision(
             ToolAuthorizationAction.DENY,
             f"tool '{tool_name}' is not permitted by the policy allowlist",

@@ -1,6 +1,10 @@
 """Tests for typed governance policy resolution."""
 
 import pytest
+from agentarea_common.auth.tool_authorization import (
+    ToolAuthorizationAction,
+    decide_tool_policy,
+)
 from agentarea_governance.domain.policies import (
     ApprovalPolicy,
     BudgetPolicy,
@@ -446,3 +450,59 @@ def test_a_lower_scope_may_still_narrow_to_the_empty_allowlist():
     )
 
     assert effective.tools.allowed == []
+
+
+def test_the_empty_allowlist_reaches_the_tool_pdp_as_deny_all():
+    """The narrowing has to survive serialization, or it protects nothing.
+
+    ``to_json_dict`` is what the task carries into execution, and
+    ``decide_tool_policy`` is the single runtime PDP that reads it. Testing the
+    resolver alone would pass while every tool still ran.
+    """
+    effective = PolicyResolver().resolve([PolicyDocument(tools=ToolsPolicy(allowed=[]))])
+
+    snapshot = effective.to_json_dict()
+
+    assert snapshot["tools"]["allowed"] == []
+    assert decide_tool_policy(snapshot, "web_search").action is ToolAuthorizationAction.DENY
+
+
+def test_no_allowlist_reaches_the_tool_pdp_as_allow_all():
+    effective = PolicyResolver().resolve([PolicyDocument(tools=ToolsPolicy(denied=["payment_*"]))])
+
+    snapshot = effective.to_json_dict()
+
+    assert "allowed" not in snapshot["tools"]
+    assert decide_tool_policy(snapshot, "web_search").action is ToolAuthorizationAction.ALLOW
+    assert decide_tool_policy(snapshot, "payment_charge").action is ToolAuthorizationAction.DENY
+
+
+def test_narrowing_to_the_empty_allowlist_does_not_widen_the_parent():
+    """The escalation the empty-allowlist reading created, end to end.
+
+    ``_merge_tools`` replaces ``allowed`` whenever the lower scope sets it, so
+    an agent scope of ``[]`` drops the workspace's ``github_*``. If the PDP then
+    read ``[]`` as "no allowlist", that narrowing would hand the agent every
+    tool instead of none.
+    """
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(tools=ToolsPolicy(allowed=["github_*"])),
+            PolicyDocument(tools=ToolsPolicy(allowed=[])),
+        ]
+    )
+
+    snapshot = effective.to_json_dict()
+
+    assert decide_tool_policy(snapshot, "shell_exec").action is ToolAuthorizationAction.DENY
+    assert decide_tool_policy(snapshot, "github_issue_create").action is (
+        ToolAuthorizationAction.DENY
+    )
+
+
+def test_execution_state_keeps_no_allowlist_distinct_from_the_empty_one():
+    no_allowlist = PolicyResolver().resolve([PolicyDocument(tools=ToolsPolicy(denied=["a_*"]))])
+    deny_all = PolicyResolver().resolve([PolicyDocument(tools=ToolsPolicy(allowed=[]))])
+
+    assert no_allowlist.to_execution_state()["tools_config"]["allowed"] is None
+    assert deny_all.to_execution_state()["tools_config"]["allowed"] == []
