@@ -16,11 +16,12 @@ import {
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { previewNetworkPolicyAction } from "./actions";
 import NodeDetailDrawer from "./components/NodeDetailDrawer";
 import { useNetwork } from "./NetworkProvider";
 import type { NetworkNodeData, TopologyResponse } from "./types";
 import AccessGraphView from "./views/AccessGraphView";
-import CytoscapeTopologyView from "./views/CytoscapeTopologyView";
+import NetworkMapView from "./views/NetworkMapView";
 import OrgChartView from "./views/OrgChartView";
 
 export function NetworkHeaderTabs() {
@@ -82,7 +83,8 @@ export function NetworkHeaderControls() {
 }
 
 export default function NetworkClient() {
-  const { topology, loading, view } = useNetwork();
+  const { topology, loading, error, fetchTopology, view } = useNetwork();
+  const t = useTranslations("NetworkPage.integration");
   const [selectedNode, setSelectedNode] = useState<NetworkNodeData | null>(
     null
   );
@@ -95,6 +97,25 @@ export default function NetworkClient() {
     return <NetworkGraphSkeleton />;
   }
 
+  if (error && !topology) {
+    return (
+      <div
+        className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center"
+        role="alert"
+      >
+        <p className="text-sm font-medium">{t("loadError")}</p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={fetchTopology}
+          disabled={loading}
+        >
+          {t("retry")}
+        </Button>
+      </div>
+    );
+  }
+
   if (!topology || topology.nodes.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-[#f4f7fb] px-6 text-center dark:bg-zinc-950">
@@ -102,11 +123,10 @@ export default function NetworkClient() {
           <Route className="h-6 w-6" />
         </div>
         <p className="mt-4 text-sm font-semibold text-foreground">
-          Your topology starts with an agent
+          {t("emptyTitle")}
         </p>
         <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
-          Add an agent, trigger, or external connection. Relationships will
-          appear here automatically as a live network map.
+          {t("emptyDescription")}
         </p>
       </div>
     );
@@ -116,6 +136,22 @@ export default function NetworkClient() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-[#f4f7fb] dark:bg-zinc-950">
+      {error && (
+        <div
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 py-2 text-xs"
+          role="alert"
+        >
+          <span>{t("refreshError")}</span>
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={fetchTopology}
+            disabled={loading}
+          >
+            {t("retry")}
+          </Button>
+        </div>
+      )}
       <div className="relative min-h-0 flex-1">
         {view === "access" ? (
           <AccessGraphView
@@ -132,15 +168,16 @@ export default function NetworkClient() {
             onPaneClick={() => handleSelect(null)}
           />
         ) : (
-          <CytoscapeTopologyView
+          <NetworkMapView
             topology={topology}
+            loadPolicy={previewNetworkPolicyAction}
             onNodeClick={handleSelect}
             highlightId={highlightId}
             onPaneClick={() => handleSelect(null)}
           />
         )}
 
-        {selectedNode && (
+        {selectedNode && (view === "access" || view === "org") && (
           <NodeDetailDrawer
             node={selectedNode}
             topology={topology}
@@ -148,7 +185,7 @@ export default function NetworkClient() {
           />
         )}
       </div>
-      <TopologyStatusBar topology={topology} />
+      {view === "access" && <TopologyStatusBar topology={topology} />}
     </div>
   );
 }
