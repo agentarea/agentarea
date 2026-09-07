@@ -44,6 +44,12 @@ members = [
 ]
 
 [tool.uv]
+# uv.lock is at lockfile revision 3. An older uv silently rewrites it back to
+# revision 1, which shows up as a ~2000-line diff of pure format churn on anyone
+# who runs `uv sync` or `uv run`. Failing loudly on an old uv is better than that
+# diff appearing in unrelated pull requests.
+required-version = ">=0.8.22"
+
 constraint-dependencies = [
     "cryptography>=48.0.1",
     "idna>=3.15",
