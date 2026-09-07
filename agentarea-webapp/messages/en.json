@@ -859,6 +859,7 @@
     "testAndDiscoverTooltip": "Validate API key and discover models from provider",
     "discoveredCount": "Discovered {totalCount} models ({newCount} new)",
     "discoveredCountNoNew": "Discovered {totalCount} models (no new models)",
+    "discoveredSkipped": "{skippedCount} skipped — no context window or pricing published, so they cannot be run: {names}",
     "failedToDiscover": "Failed to discover models",
     "failedToDiscoverCheckKey": "Failed to discover models. Check API key.",
     "selectProviderFirst": "Select a provider first",
