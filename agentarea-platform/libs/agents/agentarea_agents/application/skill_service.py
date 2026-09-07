@@ -18,6 +18,7 @@ from agentarea_agents.domain.skill_models import Skill, SkillMember, SkillSource
 from agentarea_agents.infrastructure.catalog_skill_repository import (
     CatalogSkillItem,
     CatalogSkillRepository,
+    CatalogSkillSummary,
 )
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubSkillImporter,
@@ -71,6 +72,29 @@ def _project_catalog_skill(item: CatalogSkillItem) -> Skill:
         updated_at=item.updated_at,
     )
     # Read-only catalog projection markers consumed by the API DTO.
+    skill.is_catalog = True  # type: ignore[attr-defined]
+    skill.update_available = False  # type: ignore[attr-defined]
+    return skill
+
+
+def _project_catalog_summary(row: CatalogSkillSummary) -> Skill:
+    """Project a catalog list row into a transient, read-only ``Skill``.
+
+    List rows carry metadata only: ``SkillResponse`` has no content field, so
+    the body is left unset rather than read out of the catalog.
+    """
+    skill = Skill(
+        id=UUID(row.id),
+        name=row.name,
+        slug=generate_slug(row.name),
+        description=row.description,
+        source_type=row.source_type,
+        source_url=row.source_url,
+        network_scope=row.network_scope,
+        registry_item_id=row.id,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
     skill.is_catalog = True  # type: ignore[attr-defined]
     skill.update_available = False  # type: ignore[attr-defined]
     return skill
@@ -481,58 +505,51 @@ class SkillService:
     ) -> tuple[list[Skill], int]:
         """List skills with pagination metadata, merging catalog projections.
 
-        Tenant rows and read-only catalog projections are merged into a single
-        ordered list (tenant rows first), then paginated in memory. Forked
-        catalog items are shadowed by their tenant copy. The optional filters are
-        applied to projections too so the merged view stays consistent.
+        The merged view is tenant rows first, then read-only catalog
+        projections; forked catalog items are shadowed by their tenant copy.
+        Both halves are filtered and paginated in SQL — the catalog is global
+        and large, so it must never be materialized per request.
         """
         repo = self._get_repository()
-        # Pull the full tenant set so we can dedup catalog items against forks
-        # and paginate the merged view consistently.
-        tenant_skills = await repo.list_all()
-        projections = await self._catalog_projections(tenant_skills)
-
-        merged = [*tenant_skills, *projections]
-        merged = self._filter_skills(
-            merged,
+        tenant_page, tenant_total = await repo.list_paginated(
+            limit=limit,
+            offset=offset,
             search=search,
             source_type=source_type,
             network_scope=network_scope,
             from_registry=from_registry,
         )
-        total = len(merged)
-        page = merged[offset : offset + limit]
-        return page, total
+        await self._flag_outdated_forks(tenant_page)
 
-    @staticmethod
-    def _filter_skills(
-        skills: list[Skill],
-        *,
-        search: str | None,
-        source_type: str | None,
-        network_scope: str | None,
-        from_registry: bool | None,
-    ) -> list[Skill]:
-        """Apply list filters to a merged tenant + catalog skill list."""
-        result = skills
-        if search:
-            term = search.strip().lower()
-            result = [
-                s
-                for s in result
-                if term in (s.name or "").lower()
-                or term in (s.description or "").lower()
-                or term in (s.source_url or "").lower()
-            ]
-        if source_type:
-            result = [s for s in result if s.source_type == source_type]
-        if network_scope:
-            result = [s for s in result if s.network_scope == network_scope]
-        if from_registry is True:
-            result = [s for s in result if getattr(s, "registry_item_id", None) is not None]
-        elif from_registry is False:
-            result = [s for s in result if getattr(s, "registry_item_id", None) is None]
-        return result
+        # Catalog items are registry-backed by definition, so an explicit
+        # "not from a registry" filter excludes the whole catalog half.
+        if from_registry is False:
+            return tenant_page, tenant_total
+
+        catalog_rows, catalog_total = await self._get_catalog_repository().list_page(
+            limit=max(0, limit - len(tenant_page)),
+            offset=max(0, offset - tenant_total),
+            exclude_item_ids=await repo.list_registry_item_ids(),
+            search=search,
+            source_type=source_type,
+            network_scope=network_scope,
+        )
+        page = [*tenant_page, *(_project_catalog_summary(row) for row in catalog_rows)]
+        return page, tenant_total + catalog_total
+
+    async def _flag_outdated_forks(self, skills: list[Skill]) -> None:
+        """Mark forked skills on this page whose catalog item moved on."""
+        forked = {str(s.registry_item_id) for s in skills if getattr(s, "registry_item_id", None)}
+        if not forked:
+            return
+        versions = await self._get_catalog_repository().versions_for(forked)
+        for skill in skills:
+            item_id = getattr(skill, "registry_item_id", None)
+            if item_id is None:
+                continue
+            catalog_version, installed_version = versions.get(str(item_id), (None, None))
+            if catalog_version and catalog_version != installed_version:
+                skill.update_available = True  # type: ignore[attr-defined]
 
     async def get_with_catalog(self, skill_id: UUID | str) -> Skill | None:
         """Get a tenant skill by id, falling back to a catalog projection.
