@@ -247,10 +247,16 @@ class DiscoverPreviewResponse(BaseModel):
     discovered: int
     new_models: int
     models: list[DiscoverPreviewModelResponse]
+    skipped: list["SkippedModelResponse"] = []
 
 
-def _require_discovered_runtime_metadata(model: DiscoveredModel) -> int:
-    """Return the required context window or reject an incomplete catalog entry."""
+class SkippedModelResponse(BaseModel):
+    model_name: str
+    missing: list[str]
+
+
+def _missing_runtime_metadata(model: DiscoveredModel) -> list[str]:
+    """Names of the runtime fields a model must carry before it can be run."""
     missing = []
     if (
         isinstance(model.context_window, bool)
@@ -262,16 +268,57 @@ def _require_discovered_runtime_metadata(model: DiscoveredModel) -> int:
         missing.append("input_cost_per_token")
     if model.output_cost_per_token is None:
         missing.append("output_cost_per_token")
-    if missing:
+    return missing
+
+
+def _partition_discovered(
+    models: list[DiscoveredModel],
+) -> tuple[list[DiscoveredModel], list[SkippedModelResponse]]:
+    """Split a discovery batch into runnable models and reported rejects.
+
+    An entry without pricing or a context window still must not become a spec —
+    it would fail at execution time. But it must not take the rest of the
+    provider down with it either: OpenRouter publishes router meta-models
+    (``openrouter/auto-beta``) that carry no pricing by design, and failing the
+    whole batch on the first of them made discovery impossible for the provider.
+
+    Rejects are returned rather than dropped, so the caller reports what it
+    refused instead of silently returning a shorter list.
+    """
+    usable: list[DiscoveredModel] = []
+    skipped: list[SkippedModelResponse] = []
+    for model in models:
+        missing = _missing_runtime_metadata(model)
+        if missing:
+            skipped.append(SkippedModelResponse(model_name=model.model_name, missing=missing))
+        else:
+            usable.append(model)
+    return usable, skipped
+
+
+def _log_skipped_models(provider_key: str, skipped: list[SkippedModelResponse]) -> None:
+    if skipped:
+        logger.warning(
+            "Discovery for provider %s skipped %d model(s) missing runtime metadata: %s",
+            provider_key,
+            len(skipped),
+            ", ".join(f"{s.model_name} ({', '.join(s.missing)})" for s in skipped),
+        )
+
+
+def _require_any_usable_model(
+    provider_key: str, usable: list[DiscoveredModel], skipped: list[SkippedModelResponse]
+) -> None:
+    """Refuse a batch in which nothing is runnable rather than report success."""
+    if not usable:
         raise HTTPException(
             status_code=422,
             detail=(
-                f"Discovered model '{model.model_name}' is missing required runtime metadata: "
-                + ", ".join(missing)
-                + ". Configure the model spec explicitly before execution."
+                f"No model discovered for provider '{provider_key}' carries the runtime metadata "
+                f"required to execute it ({len(skipped)} skipped). "
+                "Configure the model specs explicitly."
             ),
         )
-    return cast(int, model.context_window)
 
 
 @router.post("/discover-preview", response_model=DiscoverPreviewResponse)
@@ -304,10 +351,14 @@ async def discover_models_preview(
             "The provider may not support model listing or the API key may be invalid.",
         )
 
+    usable, skipped = _partition_discovered(discovered)
+    _log_skipped_models(data.provider_key, skipped)
+    _require_any_usable_model(data.provider_key, usable, skipped)
+
     results = []
     new_count = 0
-    for model in discovered:
-        context_window = _require_discovered_runtime_metadata(model)
+    for model in usable:
+        context_window = cast(int, model.context_window)
         existing = await model_spec_repo.get_by_provider_and_model(
             UUID(str(provider_spec_id)), model.model_name
         )
@@ -358,6 +409,7 @@ async def discover_models_preview(
         discovered=len(results),
         new_models=new_count,
         models=results,
+        skipped=skipped,
     )
 
 
@@ -440,6 +492,7 @@ class DiscoveryResponse(BaseModel):
     discovered: int
     new_models: int
     models: list[DiscoveredModelResponse]
+    skipped: list[SkippedModelResponse] = []
 
 
 @router.post("/{config_id}/discover", response_model=DiscoveryResponse)
@@ -475,11 +528,15 @@ async def discover_models(
             "The provider may not support model listing or the API key may be invalid.",
         )
 
+    usable, skipped = _partition_discovered(discovered)
+    _log_skipped_models(provider_key, skipped)
+    _require_any_usable_model(provider_key, usable, skipped)
+
     # Upsert discovered models as ModelSpec entries
     results = []
     new_count = 0
-    for model in discovered:
-        context_window = _require_discovered_runtime_metadata(model)
+    for model in usable:
+        context_window = cast(int, model.context_window)
         # Check if model already exists
         existing = await model_spec_repo.get_by_provider_and_model(
             UUID(str(provider_spec_id)), model.model_name
@@ -530,6 +587,7 @@ async def discover_models(
         discovered=len(results),
         new_models=new_count,
         models=results,
+        skipped=skipped,
     )
 
 

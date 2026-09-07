@@ -3253,6 +3253,14 @@
           "new_models": {
             "title": "New Models",
             "type": "integer"
+          },
+          "skipped": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SkippedModelResponse"
+            },
+            "title": "Skipped",
+            "type": "array"
           }
         },
         "required": [
@@ -3366,6 +3374,14 @@
           "new_models": {
             "title": "New Models",
             "type": "integer"
+          },
+          "skipped": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SkippedModelResponse"
+            },
+            "title": "Skipped",
+            "type": "array"
           }
         },
         "required": [
@@ -9778,6 +9794,27 @@
           }
         },
         "title": "SkillUpdateRequest",
+        "type": "object"
+      },
+      "SkippedModelResponse": {
+        "properties": {
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_name",
+          "missing"
+        ],
+        "title": "SkippedModelResponse",
         "type": "object"
       },
       "SpecPreviewRequest": {
