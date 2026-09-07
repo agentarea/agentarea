@@ -1513,6 +1513,7 @@ export type {
   SkillRef,
   SkillResponse,
   SkillUpdateRequest,
+  SkippedModelResponse,
   SpecPreviewRequest,
   SpecPreviewResponse,
   SpendCard,

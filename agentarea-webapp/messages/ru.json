@@ -860,6 +860,7 @@
     "testAndDiscoverTooltip": "Проверить API-ключ и обнаружить модели у провайдера",
     "discoveredCount": "Обнаружено {totalCount} моделей ({newCount} новых)",
     "discoveredCountNoNew": "Обнаружено {totalCount} моделей (новых нет)",
+    "discoveredSkipped": "Пропущено: {skippedCount}. У этих моделей не опубликованы контекстное окно или цены, запустить их нельзя: {names}",
     "failedToDiscover": "Не удалось обнаружить модели",
     "failedToDiscoverCheckKey": "Не удалось обнаружить модели. Проверьте API-ключ.",
     "selectProviderFirst": "Сначала выберите провайдера",

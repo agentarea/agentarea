@@ -664,15 +664,6 @@ export const zDiscoverPreviewRequest = z.object({
 });
 
 /**
- * DiscoverPreviewResponse
- */
-export const zDiscoverPreviewResponse = z.object({
-  discovered: z.number().int(),
-  models: z.array(zDiscoverPreviewModelResponse),
-  new_models: z.number().int(),
-});
-
-/**
  * DiscoveredModelResponse
  */
 export const zDiscoveredModelResponse = z.object({
@@ -687,15 +678,6 @@ export const zDiscoveredModelResponse = z.object({
   supports_function_calling: z.boolean().optional().default(false),
   supports_reasoning: z.boolean().optional().default(false),
   supports_vision: z.boolean().optional().default(false),
-});
-
-/**
- * DiscoveryResponse
- */
-export const zDiscoveryResponse = z.object({
-  discovered: z.number().int(),
-  models: z.array(zDiscoveredModelResponse),
-  new_models: z.number().int(),
 });
 
 /**
@@ -2422,6 +2404,34 @@ export const zSkillUpdateRequest = z.object({
   content: z.string().nullish(),
   description: z.string().nullish(),
   name: z.string().nullish(),
+});
+
+/**
+ * SkippedModelResponse
+ */
+export const zSkippedModelResponse = z.object({
+  missing: z.array(z.string()),
+  model_name: z.string(),
+});
+
+/**
+ * DiscoverPreviewResponse
+ */
+export const zDiscoverPreviewResponse = z.object({
+  discovered: z.number().int(),
+  models: z.array(zDiscoverPreviewModelResponse),
+  new_models: z.number().int(),
+  skipped: z.array(zSkippedModelResponse).optional().default([]),
+});
+
+/**
+ * DiscoveryResponse
+ */
+export const zDiscoveryResponse = z.object({
+  discovered: z.number().int(),
+  models: z.array(zDiscoveredModelResponse),
+  new_models: z.number().int(),
+  skipped: z.array(zSkippedModelResponse).optional().default([]),
 });
 
 /**

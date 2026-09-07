@@ -1869,6 +1869,10 @@ export type DiscoverPreviewResponse = {
    * New Models
    */
   new_models: number;
+  /**
+   * Skipped
+   */
+  skipped?: Array<SkippedModelResponse>;
 };
 
 /**
@@ -1937,6 +1941,10 @@ export type DiscoveryResponse = {
    * New Models
    */
   new_models: number;
+  /**
+   * Skipped
+   */
+  skipped?: Array<SkippedModelResponse>;
 };
 
 /**
@@ -5791,6 +5799,20 @@ export type SkillUpdateRequest = {
    * New name
    */
   name?: string | null;
+};
+
+/**
+ * SkippedModelResponse
+ */
+export type SkippedModelResponse = {
+  /**
+   * Missing
+   */
+  missing: Array<string>;
+  /**
+   * Model Name
+   */
+  model_name: string;
 };
 
 /**
