@@ -773,6 +773,13 @@ class MCPServerInstanceService:
         """
         verification_payload = await self.verify_instance(instance_id)
         instance = await self.repository.get_by_id(instance_id)
+        if instance is not None:
+            # verify() persists discovered tools in its own short-lived session.
+            # get_by_id() may therefore return the already-loaded identity from
+            # this service's session with its pre-verification tools collection.
+            # Refresh only that column so this response reflects the discovery
+            # which just completed, rather than requiring a second HTTP request.
+            await self.repository.session.refresh(instance, attribute_names=["tools"])
         tools = (instance.tools if instance else None) or []
         return {"tools": tools, "verification": verification_payload}
 
