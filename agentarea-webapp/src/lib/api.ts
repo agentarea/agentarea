@@ -9,6 +9,7 @@ import type {
   AnalyzeRequest,
   AgentCard as ApiAgentCard,
   TaskResponse as ApiTaskResponse,
+  CatalogConnectionRequest,
   CreateInvitationBody,
   CreateWalletRequest,
   FundWalletRequest,
@@ -186,6 +187,19 @@ export const getCatalogItem = async (itemId: string) => {
       path: { item_id: itemId },
     });
   return { data, error };
+};
+
+export const connectCatalogItem = async (
+  itemId: string,
+  body: CatalogConnectionRequest
+) => {
+  const result =
+    await sdk.connectCatalogItemV1ConnectionsCatalogItemIdConnectPost({
+      client: serverClient,
+      path: { item_id: itemId },
+      body,
+    });
+  return withStatus(result);
 };
 
 export const analyzeBundle = async (body: AnalyzeRequest) => {
@@ -1356,12 +1370,11 @@ export const removeWorkspaceMember = async (
   workspaceId: string,
   userId: string
 ) => {
-  const result = await sdk.removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete(
-    {
+  const result =
+    await sdk.removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete({
       client: serverClient,
       path: { workspace_id: workspaceId, user_id: userId },
-    }
-  );
+    });
   return withStatus(result);
 };
 
@@ -1378,13 +1391,12 @@ export const createWorkspaceInvitation = async (
   workspaceId: string,
   body: CreateInvitationBody
 ) => {
-  const result = await sdk.createInvitationV1WorkspacesWorkspaceIdInvitationsPost(
-    {
+  const result =
+    await sdk.createInvitationV1WorkspacesWorkspaceIdInvitationsPost({
       client: serverClient,
       path: { workspace_id: workspaceId },
       body,
-    }
-  );
+    });
   return withStatus(result);
 };
 
@@ -2281,7 +2293,12 @@ export const browseCatalog = async (params: {
     },
   });
   if (error || !data) {
-    return { items: [], total: 0, categories: [], error: error ?? "Failed to load catalog" };
+    return {
+      items: [],
+      total: 0,
+      categories: [],
+      error: error ?? "Failed to load catalog",
+    };
   }
   return {
     items: data.items,

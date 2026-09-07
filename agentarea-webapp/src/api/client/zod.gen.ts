@@ -463,6 +463,26 @@ export const zBundleSkill = z.object({
 });
 
 /**
+ * CatalogConnectionRequest
+ *
+ * Connect with AgentArea credentials, or override them from Advanced.
+ */
+export const zCatalogConnectionRequest = z.object({
+  client_id: z.string().min(1).max(512).nullish(),
+  client_secret: z.string().min(1).max(4096).nullish(),
+  credential_mode: z.enum(["managed", "custom"]).optional().default("managed"),
+  return_to: z.string().max(2048).optional().default(""),
+});
+
+/**
+ * CatalogConnectionResponse
+ */
+export const zCatalogConnectionResponse = z.object({
+  authorize_url: z.string(),
+  connection_id: z.string().uuid(),
+});
+
+/**
  * CategoryFacet
  */
 export const zCategoryFacet = z.object({
@@ -1200,6 +1220,22 @@ export const zMppConfigSchema = z.object({
 });
 
 /**
+ * ManagedOAuthAppRequest
+ */
+export const zManagedOAuthAppRequest = z.object({
+  client_id: z.string().min(1).max(512),
+  client_secret: z.string().min(1).max(4096),
+});
+
+/**
+ * ManagedOAuthAppResponse
+ */
+export const zManagedOAuthAppResponse = z.object({
+  configured: z.boolean(),
+  provider_key: z.string(),
+});
+
+/**
  * McpInstanceAssociationBody
  */
 export const zMcpInstanceAssociationBody = z.object({
@@ -1456,23 +1492,6 @@ export const zOpenApiConnectionCreate = z.object({
 });
 
 /**
- * OpenAPIConnectionResponse
- */
-export const zOpenApiConnectionResponse = z.object({
-  auth_config_id: z.string().uuid().nullish(),
-  available_tools: z.array(z.record(z.unknown())).optional().default([]),
-  base_url: z.string(),
-  created_at: z.unknown(),
-  custom_headers: z.array(zHeaderOutput).nullish(),
-  description: z.string().nullish(),
-  id: z.string().uuid(),
-  name: z.string(),
-  spec_url: z.string().nullish(),
-  status: z.string(),
-  updated_at: z.unknown(),
-});
-
-/**
  * OpenAPIConnectionUpdate
  *
  * Patch payload for an OpenAPI connection. All fields optional — unset = unchanged.
@@ -1485,6 +1504,33 @@ export const zOpenApiConnectionUpdate = z.object({
   name: z.string().min(1).max(255).nullish(),
   spec_content: z.record(z.unknown()).nullish(),
   spec_url: z.string().nullish(),
+});
+
+/**
+ * OpenAPIToolResponse
+ */
+export const zOpenApiToolResponse = z.object({
+  description: z.string(),
+  inputSchema: z.record(z.unknown()),
+  name: z.string(),
+});
+
+/**
+ * OpenAPIConnectionResponse
+ */
+export const zOpenApiConnectionResponse = z.object({
+  auth_config_id: z.string().uuid().nullish(),
+  available_tools: z.array(zOpenApiToolResponse),
+  base_url: z.string(),
+  created_at: z.string(),
+  custom_headers: z.array(zHeaderOutput).nullish(),
+  description: z.string().nullish(),
+  id: z.string().uuid(),
+  name: z.string(),
+  registry_item_id: z.string().uuid().nullish(),
+  spec_url: z.string().nullish(),
+  status: z.string(),
+  updated_at: z.string(),
 });
 
 /**
@@ -3846,6 +3892,41 @@ export const zRemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeletePath =
  */
 export const zRemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponse =
   z.void();
+
+export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostBody =
+  zCatalogConnectionRequest;
+
+export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostPath =
+  z.object({
+    item_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponse =
+  zCatalogConnectionResponse;
+
+export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutBody =
+  zManagedOAuthAppRequest;
+
+export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutPath =
+  z.object({
+    provider_key: z.string(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponse =
+  zManagedOAuthAppResponse;
+
+export const zOauthCallbackV1ConnectionsOauthCallbackGetQuery = z.object({
+  code: z.string().nullish(),
+  state: z.string().nullish(),
+  error: z.string().nullish(),
+  error_description: z.string().nullish(),
+});
 
 /**
  * Successful Response

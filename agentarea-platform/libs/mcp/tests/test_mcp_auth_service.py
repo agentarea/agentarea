@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from agentarea_mcp.application.auth_resolver import build_auth_header_resolver
 from agentarea_mcp.application.auth_service import (
     MCPAuthService,
     MissingCredentialsError,
@@ -51,7 +52,7 @@ class _FakeClient:
 
 
 def _oauth_config(**cfg) -> MCPAuthConfig:
-    c = _make_config(AUTH_TYPE_OAUTH2, secret_key="k")
+    c = _make_config(AUTH_TYPE_OAUTH2, secret_key="k")  # noqa: S106
     c.config = {"token_url": "https://as/token", "client_id": "cid", **cfg}
     return c
 
@@ -97,7 +98,7 @@ class TestValidateCredentials:
         MCPAuthService.validate_credentials(AUTH_TYPE_BEARER, {"token": "tok123"})
 
     def test_oauth2_requires_client_secret_or_access_token(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="client_secret"):
             MCPAuthService.validate_credentials(AUTH_TYPE_OAUTH2, {})
 
     def test_oauth2_passes_with_client_secret(self):
@@ -114,6 +115,28 @@ class TestValidateCredentials:
 
 @pytest.mark.asyncio
 class TestGetAuthHeaders:
+    async def test_managed_auth_cannot_be_attached_to_an_untrusted_connection(self):
+        repo = AsyncMock()
+        repo.get_by_id.return_value = _oauth_config(
+            credential_mode="managed",
+            managed_credentials_key="connection_oauth_client:yandex-metrica",
+        )
+        repo_factory = MagicMock()
+        repo_factory.create_repository.return_value = repo
+        workspace_sm = AsyncMock()
+        managed_sm = AsyncMock()
+        resolver = build_auth_header_resolver(repo_factory, workspace_sm, managed_sm)
+
+        with pytest.raises(ValueError, match="trusted catalog connection"):
+            await resolver(
+                repo.get_by_id.return_value.id,
+                "https://attacker.example",
+                None,
+            )
+
+        workspace_sm.get_secret.assert_not_awaited()
+        managed_sm.get_secret.assert_not_awaited()
+
     async def test_api_key_injects_custom_header(self):
         svc, _, sm = _make_service()
         sm.get_secret.return_value = json.dumps({"header_value": "MY_SECRET"})
@@ -121,7 +144,7 @@ class TestGetAuthHeaders:
         config = _make_config(
             AUTH_TYPE_API_KEY,
             config={"header_name": "X-My-Key"},
-            secret_key="some_key",
+            secret_key="some_key",  # noqa: S106
         )
         headers = await svc.get_auth_headers(config)
         assert headers == {"X-My-Key": "MY_SECRET"}
@@ -130,7 +153,7 @@ class TestGetAuthHeaders:
         svc, _, sm = _make_service()
         sm.get_secret.return_value = json.dumps({"header_value": "VAL"})
 
-        config = _make_config(AUTH_TYPE_API_KEY, config={}, secret_key="k")
+        config = _make_config(AUTH_TYPE_API_KEY, config={}, secret_key="k")  # noqa: S106
         headers = await svc.get_auth_headers(config)
         assert "X-API-Key" in headers
 
@@ -138,9 +161,18 @@ class TestGetAuthHeaders:
         svc, _, sm = _make_service()
         sm.get_secret.return_value = json.dumps({"token": "abc123"})
 
-        config = _make_config(AUTH_TYPE_BEARER, secret_key="k")
+        config = _make_config(AUTH_TYPE_BEARER, secret_key="k")  # noqa: S106
         headers = await svc.get_auth_headers(config)
         assert headers == {"Authorization": "Bearer abc123"}
+
+    async def test_oauth_supports_provider_scheme_and_non_expiring_token(self):
+        svc, _, sm = _make_service()
+        config = _oauth_config(authorization_scheme="OAuth")
+        sm.get_secret.return_value = json.dumps({"access_token": "ya-token"})
+
+        headers = await svc.get_auth_headers(config)
+
+        assert headers == {"Authorization": "OAuth ya-token"}
 
     async def test_missing_secret_is_reported_not_sent_empty(self):
         """A vanished secret must not become an empty header.
@@ -196,6 +228,33 @@ class TestOAuth2Refresh:
         assert "client_secret" not in client.posted
         sm.set_secret.assert_called()  # persisted the rotated creds
 
+    async def test_managed_refresh_reads_platform_secret(self):
+        repo = AsyncMock()
+        workspace_sm = AsyncMock()
+        managed_sm = AsyncMock()
+        svc = MCPAuthService(repo, workspace_sm, managed_sm)
+        managed_key = "connection_oauth_client:yandex-metrica"
+        expected_credential = "credential-value"
+        config = _oauth_config(
+            credential_mode="managed",
+            managed_credentials_key=managed_key,
+        )
+        workspace_sm.get_secret.return_value = json.dumps(
+            {"refresh_token": "refresh", "expires_at": 0}
+        )
+        managed_sm.get_secret.return_value = json.dumps(
+            {"client_id": "managed-id", "client_secret": expected_credential}
+        )
+        client = _FakeClient(_FakeResp(200, {"access_token": "fresh", "expires_in": 3600}))
+
+        with patch("httpx.AsyncClient", lambda *a, **k: client):
+            headers = await svc.get_auth_headers(config)
+
+        assert headers == {"Authorization": "Bearer fresh"}
+        assert client.posted["client_id"] == "managed-id"
+        assert client.posted["client_secret"] == expected_credential
+        managed_sm.get_secret.assert_awaited_once_with(managed_key)
+
     async def test_force_refresh_refreshes_even_when_unexpired(self):
         svc, _, sm = _make_service()
         import time
@@ -232,6 +291,46 @@ class TestOAuth2Refresh:
 
 @pytest.mark.asyncio
 class TestCreateDelete:
+    async def test_public_create_cannot_claim_managed_platform_credentials(self):
+        svc, repo, _ = _make_service()
+        placeholder_credential = "decoy"
+
+        with pytest.raises(ValueError, match="only be created by a catalog connection"):
+            await svc.create(
+                name="Forged managed config",
+                auth_type=AUTH_TYPE_OAUTH2,
+                config={
+                    "token_url": "https://attacker.example/token",
+                    "client_id": "ignored",
+                    "credential_mode": "managed",
+                    "managed_credentials_key": "connection_oauth_client:yandex-metrica",
+                },
+                credentials={"client_secret": placeholder_credential},
+            )
+
+        repo.create.assert_not_awaited()
+
+    async def test_public_update_cannot_redirect_managed_token_exchange(self):
+        svc, repo, sm = _make_service()
+        config_id = uuid4()
+        managed = _oauth_config(
+            credential_mode="managed",
+            managed_credentials_key="connection_oauth_client:yandex-metrica",
+        )
+        repo.get.return_value = managed
+
+        with pytest.raises(ValueError, match="only be changed by reconnecting"):
+            await svc.update(
+                config_id,
+                config={
+                    **managed.config,
+                    "token_url": "https://attacker.example/token",
+                },
+            )
+
+        repo.update.assert_not_awaited()
+        sm.set_secret.assert_not_awaited()
+
     async def test_create_stores_credentials(self):
         svc, repo, sm = _make_service()
 
@@ -254,8 +353,18 @@ class TestCreateDelete:
         svc, repo, _ = _make_service()
         config_id = uuid4()
         repo.get_linked_instance_ids.return_value = ["inst-1", "inst-2"]
+        repo.get_linked_openapi_connection_ids.return_value = []
 
-        with pytest.raises(ValueError, match="linked to instances"):
+        with pytest.raises(ValueError, match="linked to connections"):
+            await svc.delete(config_id)
+
+    async def test_delete_raises_if_linked_openapi_connection(self):
+        svc, repo, _ = _make_service()
+        config_id = uuid4()
+        repo.get_linked_instance_ids.return_value = []
+        repo.get_linked_openapi_connection_ids.return_value = ["conn-1"]
+
+        with pytest.raises(ValueError, match="conn-1"):
             await svc.delete(config_id)
 
     async def test_delete_removes_credentials(self):
@@ -263,8 +372,9 @@ class TestCreateDelete:
         config_id = uuid4()
 
         cfg = _make_config(AUTH_TYPE_BEARER)
-        cfg.secret_key = "mcp_auth_cred:some-id"
+        cfg.secret_key = "mcp_auth_cred:some-id"  # noqa: S105
         repo.get_linked_instance_ids.return_value = []
+        repo.get_linked_openapi_connection_ids.return_value = []
         repo.get.return_value = cfg
         repo.delete.return_value = True
 

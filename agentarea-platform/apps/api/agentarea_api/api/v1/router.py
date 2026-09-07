@@ -19,6 +19,7 @@ from . import (
     audit,
     bundles,
     clients,
+    connection_oauth,
     dashboard,
     files,
     governance,
@@ -56,6 +57,7 @@ public_v1_router = APIRouter(prefix="/v1", tags=["public"])
 
 # MCP OAuth callback (public — user is mid-redirect from external AS)
 public_v1_router.include_router(mcp_oauth_connect.public_router)
+public_v1_router.include_router(connection_oauth.public_router)
 
 # Trigger execute endpoint (public — called by internal Go event-service)
 public_v1_router.include_router(triggers.public_router)
@@ -126,6 +128,7 @@ protected_v1_router.include_router(mcp_oauth_links.router)
 
 # MCP OAuth Connect (client-side) - PROTECTED for /authorize, callback is public
 protected_v1_router.include_router(mcp_oauth_connect.router)
+protected_v1_router.include_router(connection_oauth.router)
 
 # MCP API Keys management - PROTECTED
 protected_v1_router.include_router(api_keys.router)

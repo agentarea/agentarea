@@ -1406,6 +1406,44 @@ export type CatalogBrowseResponse = {
 };
 
 /**
+ * CatalogConnectionRequest
+ *
+ * Connect with AgentArea credentials, or override them from Advanced.
+ */
+export type CatalogConnectionRequest = {
+  /**
+   * Client Id
+   */
+  client_id?: string | null;
+  /**
+   * Client Secret
+   */
+  client_secret?: string | null;
+  /**
+   * Credential Mode
+   */
+  credential_mode?: "managed" | "custom";
+  /**
+   * Return To
+   */
+  return_to?: string;
+};
+
+/**
+ * CatalogConnectionResponse
+ */
+export type CatalogConnectionResponse = {
+  /**
+   * Authorize Url
+   */
+  authorize_url: string;
+  /**
+   * Connection Id
+   */
+  connection_id: string;
+};
+
+/**
  * CategoryFacet
  */
 export type CategoryFacet = {
@@ -3300,6 +3338,34 @@ export type MppConfigSchema = {
 };
 
 /**
+ * ManagedOAuthAppRequest
+ */
+export type ManagedOAuthAppRequest = {
+  /**
+   * Client Id
+   */
+  client_id: string;
+  /**
+   * Client Secret
+   */
+  client_secret: string;
+};
+
+/**
+ * ManagedOAuthAppResponse
+ */
+export type ManagedOAuthAppResponse = {
+  /**
+   * Configured
+   */
+  configured: boolean;
+  /**
+   * Provider Key
+   */
+  provider_key: string;
+};
+
+/**
  * McpInstanceAssociationBody
  */
 export type McpInstanceAssociationBody = {
@@ -3907,9 +3973,7 @@ export type OpenApiConnectionResponse = {
   /**
    * Available Tools
    */
-  available_tools?: Array<{
-    [key: string]: unknown;
-  }>;
+  available_tools: Array<OpenApiToolResponse>;
   /**
    * Base Url
    */
@@ -3917,7 +3981,7 @@ export type OpenApiConnectionResponse = {
   /**
    * Created At
    */
-  created_at: unknown;
+  created_at: string;
   /**
    * Custom Headers
    */
@@ -3935,6 +3999,10 @@ export type OpenApiConnectionResponse = {
    */
   name: string;
   /**
+   * Registry Item Id
+   */
+  registry_item_id?: string | null;
+  /**
    * Spec Url
    */
   spec_url?: string | null;
@@ -3945,7 +4013,7 @@ export type OpenApiConnectionResponse = {
   /**
    * Updated At
    */
-  updated_at: unknown;
+  updated_at: string;
 };
 
 /**
@@ -3988,6 +4056,26 @@ export type OpenApiConnectionUpdate = {
    * Spec Url
    */
   spec_url?: string | null;
+};
+
+/**
+ * OpenAPIToolResponse
+ */
+export type OpenApiToolResponse = {
+  /**
+   * Description
+   */
+  description: string;
+  /**
+   * Inputschema
+   */
+  inputSchema: {
+    [key: string]: unknown;
+  };
+  /**
+   * Name
+   */
+  name: string;
 };
 
 /**
@@ -9769,6 +9857,113 @@ export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses =
 
 export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponse =
   RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses[keyof RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses];
+
+export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostData = {
+  body: CatalogConnectionRequest;
+  path: {
+    /**
+     * Item Id
+     */
+    item_id: string;
+  };
+  query?: never;
+  url: "/v1/connections/catalog/{item_id}/connect";
+};
+
+export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostError =
+  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors[keyof ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors];
+
+export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: CatalogConnectionResponse;
+};
+
+export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponse =
+  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses[keyof ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses];
+
+export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutData = {
+  body: ManagedOAuthAppRequest;
+  path: {
+    /**
+     * Provider Key
+     */
+    provider_key: string;
+  };
+  query?: never;
+  url: "/v1/connections/oauth/apps/{provider_key}";
+};
+
+export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutError =
+  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors[keyof ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors];
+
+export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses =
+  {
+    /**
+     * Successful Response
+     */
+    200: ManagedOAuthAppResponse;
+  };
+
+export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponse =
+  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses[keyof ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses];
+
+export type OauthCallbackV1ConnectionsOauthCallbackGetData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Code
+     */
+    code?: string | null;
+    /**
+     * State
+     */
+    state?: string | null;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Error Description
+     */
+    error_description?: string | null;
+  };
+  url: "/v1/connections/oauth/callback";
+};
+
+export type OauthCallbackV1ConnectionsOauthCallbackGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type OauthCallbackV1ConnectionsOauthCallbackGetError =
+  OauthCallbackV1ConnectionsOauthCallbackGetErrors[keyof OauthCallbackV1ConnectionsOauthCallbackGetErrors];
+
+export type OauthCallbackV1ConnectionsOauthCallbackGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: unknown;
+};
 
 export type ListWorkspaceFilesV1FilesGetData = {
   body?: never;

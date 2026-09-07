@@ -308,12 +308,30 @@ async def get_workspace_import_export_service(
 async def get_openapi_connection_service(
     repository_factory: RepositoryFactoryDep,
     secret_manager: BaseSecretManagerDep,
+    db_session: DatabaseSessionDep,
+    user_context: UserContextDep,
 ) -> OpenAPIConnectionService:
     """Get an OpenAPIConnectionService instance for the current request."""
+    from agentarea_common.auth.context import UserContext
+    from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
+    from agentarea_mcp.application.auth_resolver import build_auth_header_resolver
+
     settings = get_settings()
+    managed_secret_manager = get_real_secret_manager(
+        session=db_session,
+        user_context=UserContext(
+            user_id=PLATFORM_PRINCIPAL_ID,
+            workspace_id=PLATFORM_WORKSPACE_ID,
+        ),
+    )
     return OpenAPIConnectionService(
         repository_factory=repository_factory,
         secret_manager=secret_manager,
+        auth_header_resolver=build_auth_header_resolver(
+            repository_factory,
+            secret_manager,
+            managed_secret_manager,
+        ),
         allow_private_urls=settings.mcp.ALLOW_PRIVATE_URLS,
     )
 

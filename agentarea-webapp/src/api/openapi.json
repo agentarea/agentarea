@@ -2447,6 +2447,74 @@
         "title": "CatalogBrowseResponse",
         "type": "object"
       },
+      "CatalogConnectionRequest": {
+        "additionalProperties": false,
+        "description": "Connect with AgentArea credentials, or override them from Advanced.",
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
+          "credential_mode": {
+            "default": "managed",
+            "enum": [
+              "managed",
+              "custom"
+            ],
+            "title": "Credential Mode",
+            "type": "string"
+          },
+          "return_to": {
+            "default": "",
+            "maxLength": 2048,
+            "title": "Return To",
+            "type": "string"
+          }
+        },
+        "title": "CatalogConnectionRequest",
+        "type": "object"
+      },
+      "CatalogConnectionResponse": {
+        "properties": {
+          "authorize_url": {
+            "title": "Authorize Url",
+            "type": "string"
+          },
+          "connection_id": {
+            "format": "uuid",
+            "title": "Connection Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_id",
+          "authorize_url"
+        ],
+        "title": "CatalogConnectionResponse",
+        "type": "object"
+      },
       "CategoryFacet": {
         "properties": {
           "count": {
@@ -5578,6 +5646,47 @@
         "title": "MPPConfigSchema",
         "type": "object"
       },
+      "ManagedOAuthAppRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "client_id": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_secret": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Client Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "client_secret"
+        ],
+        "title": "ManagedOAuthAppRequest",
+        "type": "object"
+      },
+      "ManagedOAuthAppResponse": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "provider_key": {
+            "title": "Provider Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_key",
+          "configured"
+        ],
+        "title": "ManagedOAuthAppResponse",
+        "type": "object"
+      },
       "McpInstanceAssociationBody": {
         "properties": {
           "id": {
@@ -6641,10 +6750,8 @@
             "title": "Auth Config Id"
           },
           "available_tools": {
-            "default": [],
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/OpenAPIToolResponse"
             },
             "title": "Available Tools",
             "type": "array"
@@ -6654,7 +6761,8 @@
             "type": "string"
           },
           "created_at": {
-            "title": "Created At"
+            "title": "Created At",
+            "type": "string"
           },
           "custom_headers": {
             "anyOf": [
@@ -6690,6 +6798,18 @@
             "title": "Name",
             "type": "string"
           },
+          "registry_item_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Item Id"
+          },
           "spec_url": {
             "anyOf": [
               {
@@ -6706,13 +6826,15 @@
             "type": "string"
           },
           "updated_at": {
-            "title": "Updated At"
+            "title": "Updated At",
+            "type": "string"
           }
         },
         "required": [
           "id",
           "name",
           "base_url",
+          "available_tools",
           "status",
           "created_at",
           "updated_at"
@@ -6813,6 +6935,30 @@
           }
         },
         "title": "OpenAPIConnectionUpdate",
+        "type": "object"
+      },
+      "OpenAPIToolResponse": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "inputSchema": {
+            "additionalProperties": true,
+            "title": "Inputschema",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "inputSchema"
+        ],
+        "title": "OpenAPIToolResponse",
         "type": "object"
       },
       "OpenApiToolConfig": {
@@ -16673,6 +16819,230 @@
           "v1",
           "protected",
           "clients"
+        ]
+      }
+    },
+    "/v1/connections/catalog/{item_id}/connect": {
+      "post": {
+        "description": "Materialize a trusted OpenAPI template and start its OAuth flow.",
+        "operationId": "connect_catalog_item_v1_connections_catalog__item_id__connect_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogConnectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogConnectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Connect Catalog Item",
+        "tags": [
+          "v1",
+          "protected",
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/oauth/apps/{provider_key}": {
+      "put": {
+        "description": "Configure one platform-wide OAuth app without exposing it to tenants.",
+        "operationId": "configure_managed_oauth_app_v1_connections_oauth_apps__provider_key__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_key",
+            "required": true,
+            "schema": {
+              "title": "Provider Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagedOAuthAppRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedOAuthAppResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Configure Managed Oauth App",
+        "tags": [
+          "v1",
+          "protected",
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/oauth/callback": {
+      "get": {
+        "description": "Exchange an authorization code and attach tokens to the connection.",
+        "operationId": "oauth_callback_v1_connections_oauth_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error_description",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error Description"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Oauth Callback",
+        "tags": [
+          "v1",
+          "public",
+          "connections"
         ]
       }
     },

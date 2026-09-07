@@ -5,6 +5,8 @@ DB-coupled entity creation is verified in operator handler tests and the
 end-to-end minikube smoke test.
 """
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 from agentarea_registry.application.service import (
     TYPE_BY_TOPLEVEL_KEY,
@@ -164,6 +166,22 @@ class TestParseMCPServers:
                 "tags": ["remote", "streamable-http"],
             }
         ]
+
+    @pytest.mark.asyncio
+    async def test_openapi_connector_stays_catalog_only(self):
+        service = RegistryService(
+            registry_repo=AsyncMock(),
+            item_repo=AsyncMock(),
+            server_repo=AsyncMock(),
+        )
+        service._create_mcp_server = AsyncMock()
+        item = MagicMock()
+        item.spec = {"connection_type": "openapi"}
+
+        result = await service._create_entity("mcp_servers", item)
+
+        assert result is None
+        service._create_mcp_server.assert_not_awaited()
 
     def test_unrecognized_format_raises(self):
         with pytest.raises(ValueError, match="AgentArea keys"):

@@ -1,5 +1,7 @@
 """Repository for OpenAPIConnection CRUD operations."""
 
+from uuid import UUID
+
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy import func, or_, select
@@ -11,6 +13,13 @@ from agentarea_openapi.domain.models import OpenAPIConnection
 class OpenAPIConnectionRepository(WorkspaceScopedRepository[OpenAPIConnection]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, OpenAPIConnection, user_context)
+
+    async def get_by_registry_item_id(self, registry_item_id: UUID) -> OpenAPIConnection | None:
+        query = select(self.model_class).where(
+            self._get_workspace_filter(),
+            self.model_class.registry_item_id == registry_item_id,
+        )
+        return (await self.session.execute(query)).scalar_one_or_none()
 
     async def list_connections(
         self,

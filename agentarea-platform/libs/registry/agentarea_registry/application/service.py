@@ -321,6 +321,10 @@ class RegistryService:
         self, registry_type: str, item: RegistryItem, registry_url: str | None = None
     ) -> str | None:
         if registry_type == "mcp_servers":
+            # API connectors share the user-facing Connections catalog but are
+            # workspace materializations, not global MCPServer specifications.
+            if (item.spec or {}).get("connection_type") == "openapi":
+                return None
             return await self._create_mcp_server(item, registry_url=registry_url)
         elif registry_type == "skills":
             return await self._create_skill(item)
@@ -344,6 +348,8 @@ class RegistryService:
         self, registry_type: str, item: RegistryItem, registry_url: str | None = None
     ) -> Any:
         if registry_type == "mcp_servers":
+            if (item.spec or {}).get("connection_type") == "openapi":
+                return None
             return await self._update_mcp_server(item, registry_url=registry_url)
         elif registry_type == "skills":
             return await self._update_skill(item)
@@ -434,6 +440,8 @@ class RegistryService:
         if registry_type != "mcp_servers":
             return
         spec = item.spec or {}
+        if spec.get("connection_type") == "openapi":
+            return
         raw_spec = spec.get("raw_spec")
         if not raw_spec or not item.installed_entity_id:
             return

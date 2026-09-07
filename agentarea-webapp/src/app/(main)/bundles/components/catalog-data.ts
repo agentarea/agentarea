@@ -262,6 +262,8 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
     category: serverCategory ?? str(rawMeta?.["agentarea:category"]),
     verified: rawMeta?.["agentarea:oauth_status"] === "verified",
     integrations: [],
-    meta: [conn],
+    // Protocol is an implementation detail for curated API connections. The
+    // primary catalog UI should describe the account being connected, not how.
+    meta: conn === "openapi" ? [] : [conn],
   };
 }

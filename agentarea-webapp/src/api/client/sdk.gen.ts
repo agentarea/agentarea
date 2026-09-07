@@ -49,6 +49,12 @@ import type {
   CheckPermissionV1AccessControlCheckPostData,
   CheckPermissionV1AccessControlCheckPostErrors,
   CheckPermissionV1AccessControlCheckPostResponses,
+  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutData,
+  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors,
+  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses,
+  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostData,
+  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors,
+  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses,
   ContinueTaskExecutionV1TasksTaskIdContinuePostData,
   ContinueTaskExecutionV1TasksTaskIdContinuePostErrors,
   ContinueTaskExecutionV1TasksTaskIdContinuePostResponses,
@@ -569,6 +575,9 @@ import type {
   OauthAuthorizeV1McpOauthAuthorizeGetData,
   OauthAuthorizeV1McpOauthAuthorizeGetErrors,
   OauthAuthorizeV1McpOauthAuthorizeGetResponses,
+  OauthCallbackV1ConnectionsOauthCallbackGetData,
+  OauthCallbackV1ConnectionsOauthCallbackGetErrors,
+  OauthCallbackV1ConnectionsOauthCallbackGetResponses,
   OauthCallbackV1McpOauthCallbackGetData,
   OauthCallbackV1McpOauthCallbackGetErrors,
   OauthCallbackV1McpOauthCallbackGetResponses,
@@ -3302,6 +3311,113 @@ export const removeSkillFromClientV1ClientsClientIdSkillsSkillIdDelete = <
       },
     ],
     url: "/v1/clients/{client_id}/skills/{skill_id}",
+    ...options,
+  });
+
+/**
+ * Connect Catalog Item
+ *
+ * Materialize a trusted OpenAPI template and start its OAuth flow.
+ */
+export const connectCatalogItemV1ConnectionsCatalogItemIdConnectPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses,
+  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses,
+    ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/connections/catalog/{item_id}/connect",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Configure Managed Oauth App
+ *
+ * Configure one platform-wide OAuth app without exposing it to tenants.
+ */
+export const configureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutData,
+    ThrowOnError
+  >
+): RequestResult<
+  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses,
+  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses,
+    ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/connections/oauth/apps/{provider_key}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Oauth Callback
+ *
+ * Exchange an authorization code and attach tokens to the connection.
+ */
+export const oauthCallbackV1ConnectionsOauthCallbackGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    OauthCallbackV1ConnectionsOauthCallbackGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  OauthCallbackV1ConnectionsOauthCallbackGetResponses,
+  OauthCallbackV1ConnectionsOauthCallbackGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    OauthCallbackV1ConnectionsOauthCallbackGetResponses,
+    OauthCallbackV1ConnectionsOauthCallbackGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/connections/oauth/callback",
     ...options,
   });
 
