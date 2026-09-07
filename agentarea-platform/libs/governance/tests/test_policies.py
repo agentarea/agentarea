@@ -407,3 +407,42 @@ def test_policy_validator_exposes_chain_validation_contract():
 
     assert str(effective.budget.monthly_spend_cap_usd) == "50.00"
     assert effective.source_policy_ids == ["workspace-policy", "agent-policy"]
+
+
+def test_empty_allowlist_cannot_be_widened_by_a_lower_scope():
+    """An empty allowlist means "no tool is permitted" and is the strictest setting.
+
+    It must not be the one a lower scope can override. The last layer is the
+    caller-supplied task_policy, so a widenable empty allowlist is an
+    escalation path, not just a merge quirk.
+    """
+    with pytest.raises(PolicyValidationError):
+        PolicyResolver().resolve(
+            [
+                PolicyDocument(tools=ToolsPolicy(allowed=[], denied=[])),
+                PolicyDocument(tools=ToolsPolicy(allowed=["github_*"], denied=[])),
+            ]
+        )
+
+
+def test_empty_allowlist_survives_a_lower_scope_that_sets_none():
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(tools=ToolsPolicy(allowed=[], denied=[])),
+            PolicyDocument(tools=ToolsPolicy(denied=["payment_*"])),
+        ]
+    )
+
+    assert effective.tools.allowed == []
+    assert effective.tools.denied == ["payment_*"]
+
+
+def test_a_lower_scope_may_still_narrow_to_the_empty_allowlist():
+    effective = PolicyResolver().resolve(
+        [
+            PolicyDocument(tools=ToolsPolicy(allowed=["github_*"], denied=[])),
+            PolicyDocument(tools=ToolsPolicy(allowed=[], denied=[])),
+        ]
+    )
+
+    assert effective.tools.allowed == []
