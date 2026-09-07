@@ -2418,6 +2418,36 @@ class AgentExecutionWorkflow:
             self._append_validation_feedback(completion_call, validation)
             return
 
+        # An explicit completion function call is already present in the
+        # conversation as an assistant message. Pair it before the workflow
+        # waits for another chat turn; otherwise OpenAI-compatible providers
+        # reject the next follow-up because its history contains an unresolved
+        # function call. Implicit text completion synthesizes a ToolCall only
+        # for local control flow, so it must not gain an orphan tool message.
+        call_is_in_history = any(
+            call.get("id") == completion_call.id
+            for message in self.state.messages
+            for call in (message.tool_calls or [])
+            if isinstance(call, dict)
+        )
+        if call_is_in_history:
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    name="completion",
+                    tool_call_id=completion_call.id,
+                    content=json.dumps(
+                        {
+                            "status": "completed",
+                            "result": result_text,
+                            "artifacts": declared_paths,
+                        },
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                )
+            )
+
         self.state.success = True
         self.state.final_response = result_text
         self.state.status = ExecutionStatus.COMPLETED
