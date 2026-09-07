@@ -19,9 +19,10 @@ Dispatch by instance type:
 
 import json
 import logging
+import os
 from typing import Any
 from urllib.parse import urlparse
-from urllib.request import getproxies_environment, proxy_bypass_environment
+from urllib.request import getproxies_environment
 from uuid import UUID
 
 import httpx
@@ -175,6 +176,20 @@ async def _resolve_upstream_url(instance, server_spec) -> tuple[str, str | None]
     return "", instance_type
 
 
+def _no_proxy_bypasses(host: str) -> bool:
+    """Whether ``NO_PROXY`` exempts this host, using the usual suffix rules."""
+    raw = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
+    host = host.lower().rstrip(".")
+    for entry in (e.strip().lower().lstrip(".").rstrip(".") for e in raw.split(",")):
+        if not entry:
+            continue
+        if entry == "*":
+            return True
+        if host == entry or host.endswith(f".{entry}"):
+            return True
+    return False
+
+
 def _egress_is_proxied(upstream_url: str) -> bool:
     """Whether httpx will tunnel this URL through a forward proxy.
 
@@ -185,7 +200,7 @@ def _egress_is_proxied(upstream_url: str) -> bool:
     proxies = getproxies_environment()
     if parsed.scheme not in proxies and "all" not in proxies:
         return False
-    return not proxy_bypass_environment(parsed.hostname or "", proxies)
+    return not _no_proxy_bypasses(parsed.hostname or "")
 
 
 def _guard_and_pin_upstream(
