@@ -106,8 +106,12 @@ class CatalogSkillRepository:
             where.append("ri.id::text NOT IN :exclude_ids")
             params["exclude_ids"] = tuple(str(i) for i in exclude_item_ids)
         if search:
+            # Search the same description the row projects, or an item whose
+            # description lives only in `spec` is unfindable by the very text
+            # the list shows for it.
             where.append(
-                "(ri.name ILIKE :search OR ri.description ILIKE :search "
+                "(ri.name ILIKE :search "
+                "OR COALESCE(ri.description, ri.spec->>'description') ILIKE :search "
                 "OR ri.spec->>'source_url' ILIKE :search)"
             )
             params["search"] = f"%{search.strip()}%"
