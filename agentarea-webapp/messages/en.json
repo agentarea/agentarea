@@ -1505,7 +1505,8 @@
         "private": "Resource marked private in network configuration.",
         "egress": "Marked as an external resource in network configuration.",
         "unknown": "Network scope has not been specified."
-      }
+      },
+      "openFullPage": "Open full page"
     },
     "integration": {
       "loadError": "Could not load the network.",
@@ -1513,6 +1514,18 @@
       "retry": "Try again",
       "emptyTitle": "Your network starts with an agent",
       "emptyDescription": "Add an agent, trigger or connection. Configured relationships will appear here."
+    },
+    "accessView": {
+      "title": "Access graph",
+      "description": "Configured agent connections to internal and external resources.",
+      "scopeFilter": "Resource network scope",
+      "scopes": {
+        "all": "All resources",
+        "private": "Internal resources",
+        "egress": "External resources",
+        "unknown": "Unspecified scope"
+      },
+      "empty": "No agents or resources to map."
     }
   },
   "WorkspacePage": {
