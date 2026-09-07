@@ -101,6 +101,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
+          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+          version: "0.8.22"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 
@@ -143,6 +146,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
+          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+          version: "0.8.22"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 
@@ -182,6 +188,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
+          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+          version: "0.8.22"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 
@@ -219,6 +228,10 @@ jobs:
       
   #     - name: Install uv
   #       uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+  with:
+    # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+    # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+    version: "0.8.22"
   #       with:
   #         enable-cache: true
   #         cache-dependency-glob: "core/**/pyproject.toml"
@@ -270,6 +283,10 @@ jobs:
       
   #     - name: Install uv
   #       uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+  with:
+    # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+    # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+    version: "0.8.22"
   #       with:
   #         enable-cache: true
 
@@ -325,10 +342,17 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        with:
+          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+          version: "0.8.22"
 
+      # Runs unconditionally, so on real GitHub Actions it reinstalls uv over the
+      # version setup-uv just pinned. Pinned to the same version so both paths agree
+      # rather than this one silently winning with whatever is latest.
       - name: Install uv (act fallback)
         run: |
-          curl -Ls https://astral.sh/uv/install.sh | sh
+          curl -Ls https://astral.sh/uv/0.8.22/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Set up Python
@@ -746,6 +770,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
+          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+          version: "0.8.22"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 
