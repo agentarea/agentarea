@@ -20,6 +20,8 @@ import { NETWORK_RESOURCE_LIMIT } from "../../utils/networkMapLayout";
 export interface NetworkAgentData extends NetworkFlowNodeData {
   resources: { node: NetworkNodeData; sharedBy: number }[];
   expanded: boolean;
+  showResources?: boolean;
+  horizontal?: boolean;
   selectedResourceId?: string | null;
   onResourceClick: (node: NetworkNodeData) => void;
   onToggleResources: () => void;
@@ -67,7 +69,7 @@ export default function NetworkAgentNode({
     >
       <Handle
         type="target"
-        position={Position.Left}
+        position={data.horizontal === false ? Position.Top : Position.Left}
         isConnectable={false}
         className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"
       />
@@ -121,107 +123,113 @@ export default function NetworkAgentNode({
           )}
         </div>
       </div>
-      <div className="border-t border-border bg-muted/25">
-        {data.resources.length === 0 ? (
-          <p className="flex h-9 items-center px-4 text-[11px] text-muted-foreground">
-            {t("noResources")}
-          </p>
-        ) : (
-          <>
-            <div className="flex h-9 items-center justify-between px-4 text-[11px] text-muted-foreground">
-              <span>{t("resources")}</span>
-              <span className="tabular-nums">{data.resources.length}</span>
-            </div>
-            <div className="px-2">
-              {resources.map(({ node, sharedBy }) => (
+      {data.showResources !== false && (
+        <div className="border-t border-border bg-muted/25">
+          {data.resources.length === 0 ? (
+            <p className="flex h-9 items-center px-4 text-[11px] text-muted-foreground">
+              {t("noResources")}
+            </p>
+          ) : (
+            <>
+              <div className="flex h-9 items-center justify-between px-4 text-[11px] text-muted-foreground">
+                <span>{t("resources")}</span>
+                <span className="tabular-nums">{data.resources.length}</span>
+              </div>
+              <div className="px-2">
+                {resources.map(({ node, sharedBy }) => (
+                  <button
+                    key={node.id}
+                    type="button"
+                    className={cn(
+                      "nodrag nopan flex h-7 w-full items-center gap-2 rounded px-2 text-left text-[11px] text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
+                      data.selectedResourceId === node.id &&
+                        "bg-primary/10 text-primary"
+                    )}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      data.onResourceClick(node);
+                    }}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    title={`${node.label} — ${common(`types.${node.type}`)}`}
+                  >
+                    <EntityIcon
+                      kind={resourceKinds[node.type]}
+                      className={cn(
+                        "h-3.5 w-3.5 shrink-0 text-muted-foreground",
+                        node.type === "trigger" &&
+                          "text-amber-600 dark:text-amber-400",
+                        (node.type === "mcp_instance" ||
+                          node.type === "openapi_connection") &&
+                          "text-emerald-600 dark:text-emerald-400"
+                      )}
+                    />
+                    <span className="min-w-0 flex-1 truncate">
+                      {node.label}
+                    </span>
+                    {node.type !== "trigger" && (
+                      <span
+                        className="shrink-0 text-muted-foreground"
+                        title={accessText(
+                          `scopeDescription.${getNetworkScope(node)}`
+                        )}
+                        aria-label={accessText(
+                          `scope.${getNetworkScope(node)}`
+                        )}
+                      >
+                        {getNetworkScope(node) === "egress" ? (
+                          <Globe className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                        ) : getNetworkScope(node) === "private" ? (
+                          <LockKeyhole className="h-3 w-3" />
+                        ) : (
+                          <HelpCircle className="h-3 w-3" />
+                        )}
+                      </span>
+                    )}
+                    {sharedBy > 1 && (
+                      <span
+                        className="flex items-center gap-1 text-muted-foreground"
+                        title={t("sharedBy", { count: sharedBy })}
+                        aria-label={t("sharedBy", { count: sharedBy })}
+                      >
+                        <Users className="h-3 w-3" />
+                        <span className="tabular-nums">{sharedBy}</span>
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {data.resources.length > NETWORK_RESOURCE_LIMIT && (
                 <button
-                  key={node.id}
                   type="button"
-                  className={cn(
-                    "nodrag nopan flex h-7 w-full items-center gap-2 rounded px-2 text-left text-[11px] text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
-                    data.selectedResourceId === node.id &&
-                      "bg-primary/10 text-primary"
-                  )}
+                  className="nodrag nopan flex h-8 w-full items-center justify-between px-4 text-[11px] text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                  aria-expanded={data.expanded}
                   onClick={(event) => {
                     event.stopPropagation();
-                    data.onResourceClick(node);
+                    data.onToggleResources();
                   }}
                   onKeyDown={(event) => event.stopPropagation()}
-                  title={`${node.label} — ${common(`types.${node.type}`)}`}
                 >
-                  <EntityIcon
-                    kind={resourceKinds[node.type]}
-                    className={cn(
-                      "h-3.5 w-3.5 shrink-0 text-muted-foreground",
-                      node.type === "trigger" &&
-                        "text-amber-600 dark:text-amber-400",
-                      (node.type === "mcp_instance" ||
-                        node.type === "openapi_connection") &&
-                        "text-emerald-600 dark:text-emerald-400"
-                    )}
-                  />
-                  <span className="min-w-0 flex-1 truncate">{node.label}</span>
-                  {node.type !== "trigger" && (
-                    <span
-                      className="shrink-0 text-muted-foreground"
-                      title={accessText(
-                        `scopeDescription.${getNetworkScope(node)}`
-                      )}
-                      aria-label={accessText(`scope.${getNetworkScope(node)}`)}
-                    >
-                      {getNetworkScope(node) === "egress" ? (
-                        <Globe className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                      ) : getNetworkScope(node) === "private" ? (
-                        <LockKeyhole className="h-3 w-3" />
-                      ) : (
-                        <HelpCircle className="h-3 w-3" />
-                      )}
-                    </span>
-                  )}
-                  {sharedBy > 1 && (
-                    <span
-                      className="flex items-center gap-1 text-muted-foreground"
-                      title={t("sharedBy", { count: sharedBy })}
-                      aria-label={t("sharedBy", { count: sharedBy })}
-                    >
-                      <Users className="h-3 w-3" />
-                      <span className="tabular-nums">{sharedBy}</span>
-                    </span>
+                  <span>
+                    {data.expanded
+                      ? t("collapse")
+                      : t("more", {
+                          count: data.resources.length - NETWORK_RESOURCE_LIMIT,
+                        })}
+                  </span>
+                  {data.expanded ? (
+                    <ChevronUp className="h-3 w-3" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" />
                   )}
                 </button>
-              ))}
-            </div>
-            {data.resources.length > NETWORK_RESOURCE_LIMIT && (
-              <button
-                type="button"
-                className="nodrag nopan flex h-8 w-full items-center justify-between px-4 text-[11px] text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-                aria-expanded={data.expanded}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  data.onToggleResources();
-                }}
-                onKeyDown={(event) => event.stopPropagation()}
-              >
-                <span>
-                  {data.expanded
-                    ? t("collapse")
-                    : t("more", {
-                        count: data.resources.length - NETWORK_RESOURCE_LIMIT,
-                      })}
-                </span>
-                {data.expanded ? (
-                  <ChevronUp className="h-3 w-3" />
-                ) : (
-                  <ChevronDown className="h-3 w-3" />
-                )}
-              </button>
-            )}
-          </>
-        )}
-      </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
       <Handle
         type="source"
-        position={Position.Right}
+        position={data.horizontal === false ? Position.Bottom : Position.Right}
         isConnectable={false}
         className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"
       />

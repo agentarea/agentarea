@@ -26,8 +26,12 @@ import type {
   NetworkNodeData,
   TopologyResponse,
 } from "../types";
+import { getAccessTopology, type AccessScope } from "../utils/accessTopology";
 import { computeHighlightSets } from "../utils/highlight";
-import { focusAgentTopology } from "../utils/networkConnections";
+import {
+  focusAgentTopology,
+  getNetworkScope,
+} from "../utils/networkConnections";
 import {
   getAgentResources,
   NETWORK_AGENT_WIDTH,
@@ -40,7 +44,7 @@ import {
 } from "../utils/orgChartLayout";
 
 export interface NetworkMapProps {
-  mode?: "network" | "organization";
+  mode?: "network" | "organization" | "access";
   topology: TopologyResponse;
   loadPolicy?: (agentId: string) => Promise<EffectivePolicy>;
   onNodeClick?: (node: NetworkNodeData) => void;
@@ -68,21 +72,27 @@ export default function NetworkMapView({
   const t = useTranslations("NetworkPage.orgChart");
   const networkText = useTranslations("NetworkPage.networkMap");
   const isNetwork = mode === "network";
+  const isAccess = mode === "access";
+  const horizontal = mode !== "organization";
+  const accessViewText = useTranslations("NetworkPage.accessView");
+  const [accessScope, setAccessScope] = useState<AccessScope>("all");
+  const mapTopology = useMemo(
+    () => (isAccess ? getAccessTopology(topology, accessScope) : topology),
+    [topology, isAccess, accessScope]
+  );
   const accessText = useTranslations("NetworkPage.accessDetails");
   const [focusAgentId, setFocusAgentId] = useState<string | null>(null);
-  const selectedNode = isNetwork
-    ? topology.nodes.find((node) => node.id === highlightId)
-    : undefined;
+  const selectedNode = topology.nodes.find((node) => node.id === highlightId);
   const detailsOpen = !!selectedNode;
   const focusAgent = topology.nodes.find(
     (node) => node.id === focusAgentId && node.type === "agent"
   );
   const layoutTopology = useMemo(
     () =>
-      isNetwork && focusAgentId
-        ? focusAgentTopology(topology, focusAgentId)
-        : topology,
-    [topology, focusAgentId, isNetwork]
+      focusAgentId
+        ? focusAgentTopology(mapTopology, focusAgentId)
+        : mapTopology,
+    [mapTopology, focusAgentId]
   );
   const focusAgentPath = (agentId: string) => {
     setFocusAgentId(agentId);
@@ -94,7 +104,8 @@ export default function NetworkMapView({
     () => getAgentResources(topology),
     [topology]
   );
-  const [agentsOnly, setAgentsOnly] = useState(true);
+  const [agentsOnly, setAgentsOnly] = useState(!isAccess);
+  const summary = !isAccess && agentsOnly;
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [flow, setFlow] = useState<ReactFlowInstance<
@@ -108,20 +119,27 @@ export default function NetworkMapView({
       buildOrgChartLayout(
         layoutTopology,
         agentsOnly,
-        isNetwork && agentsOnly
-          ? (node) => ({
-              width: NETWORK_AGENT_WIDTH,
-              height: networkAgentHeight(
-                resourcesByAgent.get(node.id)?.length ?? 0,
-                expandedAgents.has(node.id)
-              ),
-            })
-          : undefined,
-        isNetwork ? { direction: "LR", aspectRatio: 2.4 } : undefined
+        (node) => ({
+          width: node.type === "agent" ? NETWORK_AGENT_WIDTH : ORG_NODE_WIDTH,
+          height:
+            node.type === "agent" && summary
+              ? networkAgentHeight(
+                  resourcesByAgent.get(node.id)?.length ?? 0,
+                  expandedAgents.has(node.id)
+                )
+              : ORG_NODE_HEIGHT,
+        }),
+        horizontal ? { direction: "LR", aspectRatio: 2.4 } : undefined
       ),
-    [layoutTopology, agentsOnly, isNetwork, resourcesByAgent, expandedAgents]
+    [
+      layoutTopology,
+      agentsOnly,
+      summary,
+      horizontal,
+      resourcesByAgent,
+      expandedAgents,
+    ]
   );
-  const summary = isNetwork && agentsOnly;
   const searchableNodes = useMemo(() => {
     const ids = new Set(layout.nodes.map((node) => node.id));
     if (summary)
@@ -160,10 +178,10 @@ export default function NetworkMapView({
     );
     const nodes: Node<MapNodeData>[] = layout.nodes.map((node) => ({
       id: node.id,
-      type: summary ? "networkAgent" : "organization",
+      type: node.type === "agent" ? "networkAgent" : "organization",
       position: node.position,
       style: {
-        width: summary ? NETWORK_AGENT_WIDTH : ORG_NODE_WIDTH,
+        width: node.type === "agent" ? NETWORK_AGENT_WIDTH : ORG_NODE_WIDTH,
         height: summary
           ? networkAgentHeight(
               resourcesByAgent.get(node.id)?.length ?? 0,
@@ -174,10 +192,12 @@ export default function NetworkMapView({
       ariaLabel: `${node.label}, ${t(`types.${node.type}`)}`,
       data: {
         ...node,
-        _horizontal: isNetwork,
-        ...(summary
+        _horizontal: horizontal,
+        ...(node.type === "agent"
           ? {
               resources: resourcesByAgent.get(node.id) ?? [],
+              showResources: summary,
+              horizontal,
               expanded: expandedAgents.has(node.id),
               selectedResourceId: highlightId,
               onInspect: () =>
@@ -214,8 +234,7 @@ export default function NetworkMapView({
       const delegation = edge.relation === "delegates_to";
       const relationKey = `${edge.source}:${edge.relation}`;
       const showRelation =
-        (emphasized ||
-          (isNetwork && !agentsOnly && layout.edges.length <= 16)) &&
+        (emphasized || (!agentsOnly && layout.edges.length <= 16)) &&
         !labelledRelations.has(relationKey);
       if (showRelation) labelledRelations.add(relationKey);
       const color = emphasized
@@ -264,7 +283,7 @@ export default function NetworkMapView({
     resourcesByAgent,
     expandedAgents,
     onNodeClick,
-    isNetwork,
+    horizontal,
     agentsOnly,
   ]);
 
@@ -312,19 +331,25 @@ export default function NetworkMapView({
       <div className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-4 py-3 md:px-5">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground">
-            {isNetwork ? networkText("title") : t("title")}
+            {isAccess
+              ? accessViewText("title")
+              : isNetwork
+                ? networkText("title")
+                : t("title")}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {isNetwork
-              ? agentsOnly
-                ? networkText("description")
-                : networkText("allDescription")
-              : agentsOnly
-                ? t("agentDescription")
-                : t("allDescription")}
+            {isAccess
+              ? accessViewText("description")
+              : isNetwork
+                ? agentsOnly
+                  ? networkText("description")
+                  : networkText("allDescription")
+                : agentsOnly
+                  ? t("agentDescription")
+                  : t("allDescription")}
           </p>
         </div>
-        {isNetwork && focusAgent && (
+        {focusAgent && (
           <button
             type="button"
             onClick={() => setFocusAgentId(null)}
@@ -338,44 +363,63 @@ export default function NetworkMapView({
           </button>
         )}
         <div className="flex w-full items-center gap-2 sm:w-auto">
+          {isAccess ? (
+            <select
+              value={accessScope}
+              aria-label={accessViewText("scopeFilter")}
+              onChange={(event) => {
+                setAccessScope(event.target.value as AccessScope);
+                setFocusAgentId(null);
+                setQuery("");
+                onPaneClick?.();
+              }}
+              className="h-9 min-w-0 rounded-md border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {(["all", "private", "egress", "unknown"] as const).map(
+                (scope) => (
+                  <option key={scope} value={scope}>
+                    {accessViewText(`scopes.${scope}`)}
+                  </option>
+                )
+              )}
+            </select>
+          ) : (
+            <div
+              className="flex shrink-0 rounded-md border border-border bg-muted/50 p-0.5"
+              role="group"
+              aria-label={t("scope")}
+            >
+              {[true, false].map((value) => (
+                <button
+                  key={String(value)}
+                  type="button"
+                  aria-pressed={agentsOnly === value}
+                  onClick={() => {
+                    setAgentsOnly(value);
+                    setFocusAgentId(null);
+                    setQuery("");
+                    onPaneClick?.();
+                  }}
+                  className={cn(
+                    "rounded px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    agentsOnly === value
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {isNetwork
+                    ? value
+                      ? networkText("overview")
+                      : networkText("connections")
+                    : value
+                      ? t("agentsOnly")
+                      : t("allResources")}
+                </button>
+              ))}
+            </div>
+          )}
           <div
-            className="flex shrink-0 rounded-md border border-border bg-muted/50 p-0.5"
-            role="group"
-            aria-label={t("scope")}
-          >
-            {[true, false].map((value) => (
-              <button
-                key={String(value)}
-                type="button"
-                aria-pressed={agentsOnly === value}
-                onClick={() => {
-                  setAgentsOnly(value);
-                  setFocusAgentId(null);
-                  setQuery("");
-                  onPaneClick?.();
-                }}
-                className={cn(
-                  "rounded px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                  agentsOnly === value
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {isNetwork
-                  ? value
-                    ? networkText("overview")
-                    : networkText("connections")
-                  : value
-                    ? t("agentsOnly")
-                    : t("allResources")}
-              </button>
-            ))}
-          </div>
-          <div
-            className={cn(
-              "relative min-w-0 flex-1 sm:w-48",
-              isNetwork && "sm:w-64"
-            )}
+            className="relative min-w-0 flex-1 sm:w-64"
             onBlur={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget))
                 setSearchOpen(false);
@@ -383,8 +427,8 @@ export default function NetworkMapView({
           >
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <input
-              aria-label={isNetwork ? networkText("search") : t("search")}
-              placeholder={isNetwork ? networkText("search") : t("search")}
+              aria-label={networkText("search")}
+              placeholder={networkText("search")}
               value={query}
               onFocus={() => setSearchOpen(true)}
               onChange={(event) => {
@@ -443,14 +487,18 @@ export default function NetworkMapView({
         <div ref={canvasRef} className="relative min-h-0 flex-1">
           {nodes.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-              <p className="text-sm font-medium">{t("noAgents")}</p>
-              <button
-                type="button"
-                onClick={() => setAgentsOnly(false)}
-                className="rounded text-xs text-primary underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                {t("showResources")}
-              </button>
+              <p className="text-sm font-medium">
+                {isAccess ? accessViewText("empty") : t("noAgents")}
+              </p>
+              {!isAccess && (
+                <button
+                  type="button"
+                  onClick={() => setAgentsOnly(false)}
+                  className="rounded text-xs text-primary underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {t("showResources")}
+                </button>
+              )}
             </div>
           ) : (
             <ReactFlow
@@ -477,7 +525,13 @@ export default function NetworkMapView({
                 if (original) onNodeClick?.(original);
               }}
               className="[&_.react-flow__node:focus-visible]:outline [&_.react-flow__node:focus-visible]:outline-2 [&_.react-flow__node:focus-visible]:outline-primary"
-              aria-label={isNetwork ? networkText("title") : t("title")}
+              aria-label={
+                isAccess
+                  ? accessViewText("title")
+                  : isNetwork
+                    ? networkText("title")
+                    : t("title")
+              }
             >
               <Background
                 variant={BackgroundVariant.Dots}
@@ -532,6 +586,13 @@ export default function NetworkMapView({
             topology={topology}
             onSelect={(node) => {
               if (
+                isAccess &&
+                accessScope !== "all" &&
+                node.type !== "agent" &&
+                getNetworkScope(node) !== accessScope
+              )
+                setAccessScope("all");
+              if (
                 focusAgentId &&
                 !layoutTopology.nodes.some((item) => item.id === node.id)
               )
@@ -562,9 +623,7 @@ export default function NetworkMapView({
             </span>
           )}
         </div>
-        <span className="hidden lg:inline">
-          {isNetwork ? accessText("mapHint") : t("hint")}
-        </span>
+        <span className="hidden lg:inline">{accessText("mapHint")}</span>
       </div>
     </div>
   );

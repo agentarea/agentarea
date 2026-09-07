@@ -92,6 +92,9 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
     });
     await expect(inspector).toBeVisible();
     await expect(
+      inspector.getByRole("link", { name: "Open full page", exact: true })
+    ).toHaveAttribute("href", `/agents/${agent.id}`);
+    await expect(
       inspector.getByText(agent.name, { exact: true })
     ).toBeVisible();
     await expect(
@@ -144,7 +147,7 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
     });
     await expect(clearFocus).toHaveText(`Path: ${agent.name}`);
     await expect(allConnections).toHaveAttribute("aria-pressed", "true");
-    await expect(agentNode).toHaveClass(/react-flow__node-organization/);
+    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
     await inspector
       .getByRole("button", { name: "Close details", exact: true })
       .click();
@@ -158,7 +161,7 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
     await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
     await allConnections.click();
     await expect(allConnections).toHaveAttribute("aria-pressed", "true");
-    await expect(agentNode).toHaveClass(/react-flow__node-organization/);
+    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
 
     // Existing deep links and alternate lenses remain usable with real scoped data.
     await gotoCommitted(page, "/network?view=dataflow");
@@ -173,16 +176,51 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
     await expect(
       page.getByRole("button", { name: "Full network", exact: true })
     ).toBeVisible();
-    await expect(agentNode).toHaveClass(/react-flow__node-organization/);
+    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
+    await agentNode
+      .getByRole("button", {
+        name: `Inspect permissions for ${agent.name}`,
+        exact: true,
+      })
+      .click();
+    await expect(inspector).toBeVisible();
+    await expect(
+      inspector.getByRole("link", { name: "Open full page", exact: true })
+    ).toHaveAttribute("href", `/agents/${agent.id}`);
+    await expect(
+      inspector.getByText("Tool permission rules", { exact: true })
+    ).toBeVisible();
+    await inspector
+      .getByRole("button", { name: "Close details", exact: true })
+      .click();
     await page
       .getByRole("button", { name: "Access Graph", exact: true })
       .click();
     await expect(page).toHaveURL(/\/network\?view=access$/);
+    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
     await expect(
-      page
-        .getByRole("button")
-        .filter({ has: page.getByText(agent.name, { exact: true }) })
+      page.getByRole("combobox", { name: "Resource network scope" })
     ).toBeVisible();
+    await agentNode
+      .getByRole("button", {
+        name: `Inspect permissions for ${agent.name}`,
+        exact: true,
+      })
+      .click();
+    await expect(inspector).toBeVisible();
+    await expect(
+      inspector.getByRole("link", { name: "Open full page", exact: true })
+    ).toHaveAttribute("href", `/agents/${agent.id}`);
+    await expect(
+      inspector.getByText("Tool permission rules", { exact: true })
+    ).toBeVisible();
+    await inspector
+      .getByRole("button", { name: "Close details", exact: true })
+      .click();
+    await page
+      .getByRole("combobox", { name: "Resource network scope" })
+      .selectOption("unknown");
+    await expect(agentNode).toBeVisible();
 
     await gotoCommitted(page, "/dashboard");
     await gotoCommitted(page, "/network");

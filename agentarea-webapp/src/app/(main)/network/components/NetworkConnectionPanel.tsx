@@ -39,6 +39,14 @@ const kinds: Record<NetworkNodeData["type"], EntityKind> = {
   trigger: "trigger",
 };
 
+const entityPaths: Record<NetworkNodeData["type"], string> = {
+  agent: "/agents/",
+  mcp_instance: "/connections/",
+  openapi_connection: "/connections/openapi/",
+  skill: "/skills/",
+  trigger: "/triggers/",
+};
+
 export default function NetworkConnectionPanel({
   node,
   topology,
@@ -282,6 +290,15 @@ export default function NetworkConnectionPanel({
           ))}
         </section>
       </div>
+      <footer className="shrink-0 border-t border-border px-4 py-3">
+        <Link
+          href={`${entityPaths[node.type]}${encodeURIComponent(node.id)}`}
+          className="inline-flex items-center gap-1.5 rounded text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          {t("openFullPage")}
+          <ExternalLink className="h-3 w-3" />
+        </Link>
+      </footer>
     </aside>
   );
 }
