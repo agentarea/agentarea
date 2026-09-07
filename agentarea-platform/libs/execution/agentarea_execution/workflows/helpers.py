@@ -234,11 +234,21 @@ class EventManager:
     """Manages workflow events with consistent formatting."""
 
     def __init__(
-        self, task_id: str, agent_id: str, execution_id: str, publish_immediately: bool = True
+        self,
+        task_id: str,
+        agent_id: str,
+        execution_id: str,
+        workspace_id: str | None = None,
+        publish_immediately: bool = True,
     ):
         self.task_id = task_id
         self.agent_id = agent_id
         self.execution_id = execution_id
+        # Which tenant this execution belongs to. Every consumer of the stream needs it
+        # to attribute what it sees, and without it an event is only interpretable by
+        # joining task_id back to the database. Optional so existing callers (tests,
+        # older construction sites) keep working; omitted rather than emitted as null.
+        self.workspace_id = workspace_id
         self.publish_immediately = publish_immediately
         self._events: list[dict[str, Any]] = []
         self._pending_events: list[dict[str, Any]] = []
@@ -270,10 +280,17 @@ class EventManager:
             "data": ensure_terminal_message(
                 event_type,
                 {
+                    # Payload first, identity last: identity is a fact about the
+                    # execution, not something an event's own data may restate. Spread
+                    # the other way round, any caller that happened to put a
+                    # workspace_id in its data would reattribute the event, and
+                    # attribution has to be trustworthy for anything downstream to act
+                    # on it.
+                    **data,
                     "task_id": self.task_id,
                     "agent_id": self.agent_id,
                     "execution_id": self.execution_id,
-                    **data,
+                    **({"workspace_id": self.workspace_id} if self.workspace_id else {}),
                 },
             ),
         }

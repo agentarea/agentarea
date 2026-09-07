@@ -693,6 +693,7 @@ class AgentExecutionWorkflow:
             task_id=self.state.task_id,
             agent_id=self.state.agent_id,
             execution_id=self.state.execution_id,
+            workspace_id=self.state.workspace_id,
         )
         self.budget_tracker = BudgetTracker(self.state.budget_usd)
 
@@ -1310,6 +1311,7 @@ class AgentExecutionWorkflow:
             task_id=self.state.task_id,
             agent_id=self.state.agent_id,
             execution_id=self.state.execution_id,
+            workspace_id=self.state.workspace_id,
         )
         self.budget_tracker = BudgetTracker(self.state.budget_usd)
         self.budget_tracker.add_cost(state.total_cost)
@@ -2032,6 +2034,10 @@ class AgentExecutionWorkflow:
                 EventTypes.LLM_CALL_COMPLETED,
                 {
                     "iteration": self.state.current_iteration,
+                    # Which model produced this. Token counts are meaningless without
+                    # it — the same 1000 tokens cost very different amounts depending
+                    # on the model, so no consumer can interpret `usage` without it.
+                    "model_id": self.state.agent_config.get("model_id"),
                     "cost": usage_info["cost"],
                     "total_cost": serialize_money(self._budget.cost),
                     "usage": usage_info,
