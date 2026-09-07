@@ -695,6 +695,36 @@ class TestServiceVerifyInstance:
         assert result["status"] == "succeeded"
 
 
+class TestServiceDiscoverAndStoreTools:
+    @pytest.mark.asyncio
+    async def test_returns_tools_refreshed_after_separate_verification_session(self):
+        inst = _make_instance("docker")
+        inst.tools = [{"name": "stale_tool"}]
+        svc = _make_service({str(inst.id): inst})
+        fresh_tools = [{"name": "fresh_tool"}]
+
+        async def refresh(instance, *, attribute_names=None):
+            assert attribute_names == ["tools"]
+            instance.tools = fresh_tools
+
+        svc.repository.session.refresh.side_effect = refresh
+        svc.verify_instance = AsyncMock(
+            return_value={
+                "schema_version": 1,
+                "status": "succeeded",
+                "at": "2026-09-07T00:00:00+00:00",
+                "error": None,
+            }
+        )
+
+        result = await svc.discover_and_store_tools(inst.id)
+
+        assert result["tools"] == fresh_tools
+        svc.repository.session.refresh.assert_awaited_once_with(
+            inst, attribute_names=["tools"]
+        )
+
+
 # ---------------------------------------------------------------------------
 # service.execute_tool — all failure paths have populated result
 # ---------------------------------------------------------------------------
