@@ -1455,8 +1455,8 @@
       "title": "Agent network",
       "description": "Who delegates work, and what each agent can use.",
       "allDescription": "Every agent, resource and connection in your workspace.",
-      "overview": "Overview",
-      "connections": "All connections",
+      "overview": "Grouped",
+      "connections": "Ungrouped",
       "search": "Find an agent or resource…",
       "resources": "Tools & resources",
       "noResources": "No connected tools or resources",
@@ -1464,7 +1464,8 @@
       "collapse": "Show less",
       "more": "Show {count} more",
       "visibleAgents": "{count, plural, one {# agent} other {# agents}}",
-      "hint": "Select a tool to see its connections. Expand a card to see all resources."
+      "hint": "Select a tool to see its connections. Expand a card to see all resources.",
+      "resourceCount": "{count, plural, one {# resource} other {# resources}}"
     },
     "accessDetails": {
       "panel": "Connections and permissions",
@@ -1527,6 +1528,23 @@
         "unknown": "Unspecified scope"
       },
       "empty": "No agents or resources to map."
+    },
+    "flowMap": {
+      "description": "Incoming triggers on the left, agent groups in the middle, resource calls on the right.",
+      "inputs": "Incoming",
+      "agents": "Agent groups",
+      "outputs": "Outgoing calls",
+      "inputsHint": "Configured triggers that start work",
+      "agentsHint": "Grouped by delegation connections",
+      "outputsHint": "Tools, API connections and skills",
+      "inputsEmpty": "No configured triggers",
+      "agentsEmpty": "No agents in this map",
+      "outputsEmpty": "No connected resources",
+      "agentCluster": "Delegation group",
+      "independent": "Independent agent",
+      "private": "Internal resources",
+      "egress": "External systems",
+      "unknown": "Unspecified scope"
     }
   },
   "WorkspacePage": {
