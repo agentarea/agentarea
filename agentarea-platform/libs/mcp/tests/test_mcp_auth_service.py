@@ -291,6 +291,24 @@ class TestOAuth2Refresh:
 
 @pytest.mark.asyncio
 class TestCreateDelete:
+    async def test_managed_create_requires_a_reserved_credentials_reference(self):
+        svc, repo, _ = _make_service()
+
+        with pytest.raises(ValueError, match="Invalid managed OAuth credential reference"):
+            await svc.create(
+                name="Incomplete managed config",
+                auth_type=AUTH_TYPE_OAUTH2,
+                config={
+                    "token_url": "https://provider.example/token",
+                    "client_id": "ignored",
+                    "credential_mode": "managed",
+                },
+                credentials={},
+                allow_managed_credentials=True,
+            )
+
+        repo.create.assert_not_awaited()
+
     async def test_public_create_cannot_claim_managed_platform_credentials(self):
         svc, repo, _ = _make_service()
         placeholder_credential = "decoy"
