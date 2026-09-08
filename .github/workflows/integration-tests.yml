@@ -428,6 +428,18 @@ jobs:
           # the runner before, and the app can only be as healthy as its deps.
           docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
             logs --tail=200 rustfs db app_migrations || true
+          # kratos is one of the three services this job starts and the one the
+          # tests authenticate through, but it was never dumped here — a 500
+          # from its tokenizer was invisible.
+          docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
+            logs --tail=200 kratos || true
+          # The tokenizer reads the signing key over a bind mount. Show the
+          # ownership on both sides: gen-dev-secrets.sh writes it 0600 as the
+          # runner user, and a bind mount preserves that uid on Linux.
+          ls -l config/auth/kratos/jwks.json || true
+          docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
+            exec -T kratos sh -c 'id; ls -l /etc/config/kratos/jwks.json; \
+              head -c 32 /etc/config/kratos/jwks.json || echo UNREADABLE' || true
 
       - name: Tear down
         if: always()
