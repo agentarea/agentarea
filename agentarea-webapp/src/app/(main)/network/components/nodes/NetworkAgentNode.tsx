@@ -1,7 +1,14 @@
 "use client";
 
+import { useLayoutEffect } from "react";
 import { useTranslations } from "next-intl";
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import {
+  Handle,
+  Position,
+  useUpdateNodeInternals,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
 import {
   ChevronDown,
   ChevronUp,
@@ -22,6 +29,7 @@ export interface NetworkAgentData extends NetworkFlowNodeData {
   expanded: boolean;
   showResources?: boolean;
   horizontal?: boolean;
+  clustered?: boolean;
   selectedResourceId?: string | null;
   onResourceClick: (node: NetworkNodeData) => void;
   onToggleResources: () => void;
@@ -37,8 +45,13 @@ const resourceKinds: Record<NetworkNodeData["type"], EntityKind> = {
 };
 
 export default function NetworkAgentNode({
+  id,
   data,
 }: NodeProps<Node<NetworkAgentData>>) {
+  const updateNodeInternals = useUpdateNodeInternals();
+  useLayoutEffect(() => {
+    updateNodeInternals(id);
+  }, [id, data.clustered, data.horizontal, updateNodeInternals]);
   const t = useTranslations("NetworkPage.networkMap");
   const accessText = useTranslations("NetworkPage.accessDetails");
   const common = useTranslations("NetworkPage.orgChart");
@@ -69,6 +82,7 @@ export default function NetworkAgentNode({
     >
       <Handle
         type="target"
+        id={data.clustered ? "flow-target" : undefined}
         position={data.horizontal === false ? Position.Top : Position.Left}
         isConnectable={false}
         className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"
@@ -89,7 +103,13 @@ export default function NetworkAgentNode({
         </div>
         <div className="mt-3 flex min-w-0 items-center justify-between gap-2 text-[11px] text-muted-foreground">
           <span className="truncate" title={modelName ?? undefined}>
-            {modelName ?? common("types.agent")}
+            {data.clustered
+              ? t("resourceCount", {
+                  count: data.resources.filter(
+                    (resource) => resource.node.type !== "trigger"
+                  ).length,
+                })
+              : (modelName ?? common("types.agent"))}
           </span>
           <button
             type="button"
@@ -227,8 +247,27 @@ export default function NetworkAgentNode({
           )}
         </div>
       )}
+      {data.clustered && (
+        <>
+          <Handle
+            id="delegation-target"
+            type="target"
+            position={Position.Top}
+            isConnectable={false}
+            className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"
+          />
+          <Handle
+            id="delegation-source"
+            type="source"
+            position={Position.Bottom}
+            isConnectable={false}
+            className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"
+          />
+        </>
+      )}
       <Handle
         type="source"
+        id={data.clustered ? "flow-source" : undefined}
         position={data.horizontal === false ? Position.Bottom : Position.Right}
         isConnectable={false}
         className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"

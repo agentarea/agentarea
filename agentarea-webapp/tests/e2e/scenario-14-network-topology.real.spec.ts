@@ -65,11 +65,11 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
     await gotoCommitted(page, "/network");
     const agentNode = page.locator(`.react-flow__node[data-id="${agent.id}"]`);
     const overview = page.getByRole("button", {
-      name: "Overview",
+      name: "Grouped",
       exact: true,
     });
     const allConnections = page.getByRole("button", {
-      name: "All connections",
+      name: "Ungrouped",
       exact: true,
     });
     await expect(overview).toHaveAttribute("aria-pressed", "true", {
@@ -146,7 +146,8 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
       exact: true,
     });
     await expect(clearFocus).toHaveText(`Path: ${agent.name}`);
-    await expect(allConnections).toHaveAttribute("aria-pressed", "true");
+    await expect(overview).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".react-flow__node-region")).not.toHaveCount(0);
     await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
     await inspector
       .getByRole("button", { name: "Close details", exact: true })

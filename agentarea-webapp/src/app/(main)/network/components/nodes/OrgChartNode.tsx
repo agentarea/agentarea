@@ -1,8 +1,15 @@
 "use client";
 
+import { useLayoutEffect } from "react";
 import { useTranslations } from "next-intl";
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { Globe, HelpCircle, LockKeyhole } from "lucide-react";
+import {
+  Handle,
+  Position,
+  useUpdateNodeInternals,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
+import { Globe, HelpCircle, LockKeyhole, Users } from "lucide-react";
 import { EntityIcon, type EntityKind } from "@/lib/entity-icons";
 import { cn } from "@/lib/utils";
 import type { NetworkFlowNodeData } from "../../types";
@@ -17,9 +24,15 @@ const kinds: Record<NetworkFlowNodeData["type"], EntityKind> = {
 };
 
 export default function OrgChartNode({
+  id,
   data,
 }: NodeProps<Node<NetworkFlowNodeData>>) {
+  const updateNodeInternals = useUpdateNodeInternals();
+  useLayoutEffect(() => {
+    updateNodeInternals(id);
+  }, [id, data._horizontal, data._targetTop, updateNodeInternals]);
   const t = useTranslations("NetworkPage.orgChart");
+  const networkText = useTranslations("NetworkPage.networkMap");
   const scopeText = useTranslations("NetworkPage.accessDetails");
   const scope = getNetworkScope(data);
   const status = data.status?.toLowerCase();
@@ -39,7 +52,13 @@ export default function OrgChartNode({
     >
       <Handle
         type="target"
-        position={data._horizontal ? Position.Left : Position.Top}
+        position={
+          data._targetTop
+            ? Position.Top
+            : data._horizontal
+              ? Position.Left
+              : Position.Top
+        }
         isConnectable={false}
         className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"
       />
@@ -81,6 +100,16 @@ export default function OrgChartNode({
             </span>
           ) : null}
         </span>
+        {typeof data._sharedBy === "number" && data._sharedBy > 1 && (
+          <span
+            className="flex items-center gap-1"
+            title={networkText("sharedBy", { count: data._sharedBy })}
+            aria-label={networkText("sharedBy", { count: data._sharedBy })}
+          >
+            <Users className="h-3 w-3" />
+            <span className="tabular-nums">{data._sharedBy}</span>
+          </span>
+        )}
         {status && (
           <span
             className="flex min-w-0 items-center gap-1.5"

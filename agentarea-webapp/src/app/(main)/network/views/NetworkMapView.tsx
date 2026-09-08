@@ -16,7 +16,11 @@ import { Focus, Minus, Plus, Search, X } from "lucide-react";
 import "@xyflow/react/dist/style.css";
 import type { EffectivePolicy } from "@/api/client/types.gen";
 import { cn } from "@/lib/utils";
+import DirectionalEdge from "../components/edges/DirectionalEdge";
 import NetworkConnectionPanel from "../components/NetworkConnectionPanel";
+import NetworkRegion, {
+  type NetworkRegionData,
+} from "../components/NetworkRegion";
 import NetworkAgentNode, {
   type NetworkAgentData,
 } from "../components/nodes/NetworkAgentNode";
@@ -27,6 +31,8 @@ import type {
   TopologyResponse,
 } from "../types";
 import { getAccessTopology, type AccessScope } from "../utils/accessTopology";
+import { buildDirectionalLayout } from "../utils/directionalLayout";
+import { getDirectionalRoute } from "../utils/directionalRoute";
 import { computeHighlightSets } from "../utils/highlight";
 import {
   focusAgentTopology,
@@ -52,11 +58,13 @@ export interface NetworkMapProps {
   onPaneClick?: () => void;
 }
 
-type MapNodeData = NetworkFlowNodeData | NetworkAgentData;
+type MapNodeData = NetworkFlowNodeData | NetworkAgentData | NetworkRegionData;
 const nodeTypes = {
+  region: NetworkRegion,
   organization: OrgChartNode,
   networkAgent: NetworkAgentNode,
 };
+const edgeTypes = { directional: DirectionalEdge };
 const fitOptions = { padding: 0.12, maxZoom: 1 };
 const controlClass =
   "flex h-9 w-9 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
@@ -70,6 +78,7 @@ export default function NetworkMapView({
   onPaneClick,
 }: NetworkMapProps) {
   const t = useTranslations("NetworkPage.orgChart");
+  const flowText = useTranslations("NetworkPage.flowMap");
   const networkText = useTranslations("NetworkPage.networkMap");
   const isNetwork = mode === "network";
   const isAccess = mode === "access";
@@ -96,7 +105,7 @@ export default function NetworkMapView({
   );
   const focusAgentPath = (agentId: string) => {
     setFocusAgentId(agentId);
-    setAgentsOnly(false);
+    if (!isNetwork) setAgentsOnly(false);
     setQuery("");
   };
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
@@ -105,7 +114,8 @@ export default function NetworkMapView({
     [topology]
   );
   const [agentsOnly, setAgentsOnly] = useState(!isAccess);
-  const summary = !isAccess && agentsOnly;
+  const clustered = isNetwork && agentsOnly;
+  const summary = mode === "organization" && agentsOnly;
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [flow, setFlow] = useState<ReactFlowInstance<
@@ -116,30 +126,44 @@ export default function NetworkMapView({
   const canvasRef = useRef<HTMLDivElement>(null);
   const layout = useMemo(
     () =>
-      buildOrgChartLayout(
-        layoutTopology,
-        agentsOnly,
-        (node) => ({
-          width: node.type === "agent" ? NETWORK_AGENT_WIDTH : ORG_NODE_WIDTH,
-          height:
-            node.type === "agent" && summary
-              ? networkAgentHeight(
-                  resourcesByAgent.get(node.id)?.length ?? 0,
-                  expandedAgents.has(node.id)
-                )
-              : ORG_NODE_HEIGHT,
-        }),
-        horizontal ? { direction: "LR", aspectRatio: 2.4 } : undefined
-      ),
+      clustered
+        ? buildDirectionalLayout(layoutTopology)
+        : {
+            regions: [],
+            ...buildOrgChartLayout(
+              layoutTopology,
+              agentsOnly,
+              (node) => ({
+                width:
+                  node.type === "agent" ? NETWORK_AGENT_WIDTH : ORG_NODE_WIDTH,
+                height:
+                  node.type === "agent" && summary
+                    ? networkAgentHeight(
+                        resourcesByAgent.get(node.id)?.length ?? 0,
+                        expandedAgents.has(node.id)
+                      )
+                    : ORG_NODE_HEIGHT,
+              }),
+              horizontal ? { direction: "LR", aspectRatio: 2.4 } : undefined
+            ),
+          },
     [
       layoutTopology,
       agentsOnly,
+      clustered,
       summary,
       horizontal,
       resourcesByAgent,
       expandedAgents,
     ]
   );
+  const resourceConsumers = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const resources of resourcesByAgent.values())
+      for (const resource of resources)
+        counts.set(resource.node.id, resource.sharedBy);
+    return counts;
+  }, [resourcesByAgent]);
   const searchableNodes = useMemo(() => {
     const ids = new Set(layout.nodes.map((node) => node.id));
     if (summary)
@@ -176,7 +200,7 @@ export default function NetworkMapView({
         : visibleSelection,
       summary ? topology.edges : layout.edges
     );
-    const nodes: Node<MapNodeData>[] = layout.nodes.map((node) => ({
+    const entityNodes: Node<MapNodeData>[] = layout.nodes.map((node) => ({
       id: node.id,
       type: node.type === "agent" ? "networkAgent" : "organization",
       position: node.position,
@@ -193,10 +217,13 @@ export default function NetworkMapView({
       data: {
         ...node,
         _horizontal: horizontal,
+        _sharedBy: clustered ? resourceConsumers.get(node.id) : undefined,
+        _targetTop: clustered,
         ...(node.type === "agent"
           ? {
               resources: resourcesByAgent.get(node.id) ?? [],
               showResources: summary,
+              clustered,
               horizontal,
               expanded: expandedAgents.has(node.id),
               selectedResourceId: highlightId,
@@ -228,10 +255,35 @@ export default function NetworkMapView({
           : !!highlight && !highlight.nodes.has(node.id),
       },
     }));
+    const regions: Node<MapNodeData>[] = layout.regions.map((region) => ({
+      id: region.id,
+      type: "region",
+      position: region.position,
+      data: { kind: region.kind, count: region.count, label: region.label },
+      style: {
+        width: region.width,
+        height: region.height,
+        pointerEvents: "none",
+      },
+      selectable: false,
+      focusable: false,
+      draggable: false,
+      connectable: false,
+      zIndex:
+        region.kind === "inputs" ||
+        region.kind === "agents" ||
+        region.kind === "outputs"
+          ? -3
+          : -2,
+    }));
+    const nodes = [...regions, ...entityNodes];
     const labelledRelations = new Set<string>();
     const edges: Edge[] = layout.edges.map((edge) => {
       const emphasized = !!highlight?.edges.has(edge.id);
       const delegation = edge.relation === "delegates_to";
+      const route = clustered
+        ? getDirectionalRoute(edge, layout.nodes, layout.regions)
+        : undefined;
       const relationKey = `${edge.source}:${edge.relation}`;
       const showRelation =
         (emphasized || (!agentsOnly && layout.edges.length <= 16)) &&
@@ -244,7 +296,12 @@ export default function NetworkMapView({
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        type: "smoothstep",
+        sourceHandle: route?.sourceHandle,
+        targetHandle: route?.targetHandle,
+        data: route
+          ? { points: route.points, labelPosition: route.label }
+          : undefined,
+        type: route ? "directional" : "smoothstep",
         pathOptions: { borderRadius: 12, offset: 24 },
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -285,6 +342,8 @@ export default function NetworkMapView({
     onNodeClick,
     horizontal,
     agentsOnly,
+    clustered,
+    resourceConsumers,
   ]);
 
   useEffect(() => {
@@ -342,7 +401,7 @@ export default function NetworkMapView({
               ? accessViewText("description")
               : isNetwork
                 ? agentsOnly
-                  ? networkText("description")
+                  ? flowText("description")
                   : networkText("allDescription")
                 : agentsOnly
                   ? t("agentDescription")
@@ -505,6 +564,7 @@ export default function NetworkMapView({
               nodes={nodes}
               edges={edges}
               nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
               onInit={setFlow}
               nodesDraggable={false}
               nodesConnectable={false}
@@ -609,14 +669,14 @@ export default function NetworkMapView({
         <div className="flex items-center gap-4">
           <span className="tabular-nums">
             {summary
-              ? networkText("visibleAgents", { count: nodes.length })
-              : t("visibleNodes", { count: nodes.length })}
+              ? networkText("visibleAgents", { count: layout.nodes.length })
+              : t("visibleNodes", { count: layout.nodes.length })}
           </span>
           <span className="flex items-center gap-2">
             <span className="h-px w-5 bg-muted-foreground" />
             {t("delegation")}
           </span>
-          {!agentsOnly && (
+          {(!agentsOnly || clustered) && (
             <span className="flex items-center gap-2">
               <span className="w-5 border-t border-dashed border-muted-foreground" />
               {t("resourceLink")}
