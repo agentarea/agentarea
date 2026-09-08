@@ -321,10 +321,18 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Prepare env file
-        # .env.example is a complete, ready-to-run config (signing JWKS +
-        # encryption key filled). The compose stack reads it via the default
-        # `.env` lookup.
-        run: cp .env.example .env
+        # .env.example carries the non-secret defaults but leaves the Ory
+        # secrets and the Kratos signing key blank on purpose: they are
+        # generated per install and never committed. compose declares them
+        # `${VAR:?}`, which also rejects an empty value, so copying the
+        # example alone leaves the stack unable to start.
+        #
+        # --force is load-bearing: a plain run sees the example's empty
+        # `KRATOS_JWKS_B64=` line, concludes the secrets are already present,
+        # and exits without writing any.
+        run: |
+          cp .env.example .env
+          ./scripts/gen-dev-secrets.sh --force
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
