@@ -2,12 +2,11 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
-import SearchInput from "@/components/SearchInput";
 import TriggersContent from "./components/TriggersContent";
+import TriggersDisplayMenu from "./components/TriggersDisplayMenu";
 import TriggersHeaderTabs from "./components/TriggersHeaderTabs";
 import TriggersSkeleton from "./components/TriggersSkeleton";
-import TriggersGroupSelect from "./components/TriggersGroupSelect";
-import TriggersTypeFilterSection from "./components/TriggersTypeFilterSection";
+import TriggersToolbar from "./components/TriggersToolbar";
 import CreateTriggerButton from "./components/CreateTriggerButton";
 
 export const metadata = {
@@ -22,7 +21,6 @@ export default async function TriggersPage({
   const t = await getTranslations("TriggersPage");
   const resolvedSearchParams = await searchParams;
 
-  // Read tab from URL or fallback to cookie
   const cookieStore = await cookies();
   const cookieTab = cookieStore.get("tab_triggers")?.value;
   const viewMode =
@@ -35,15 +33,15 @@ export default async function TriggersPage({
       ? resolvedSearchParams.search
       : "";
 
-  const typeFilter =
-    typeof resolvedSearchParams.type === "string"
-      ? resolvedSearchParams.type
-      : "all";
-
   const groupBy =
     resolvedSearchParams.group === "none"
       ? ("none" as const)
       : ("channel" as const);
+
+  const orderBy =
+    resolvedSearchParams.order === "created"
+      ? ("created" as const)
+      : ("name" as const);
 
   return (
     <ContentBlock
@@ -51,34 +49,35 @@ export default async function TriggersPage({
         breadcrumb: [{ label: t("title") }],
         controls: <CreateTriggerButton />,
       }}
-      subheader={
-        <>
-          <Suspense fallback={<div className="h-7" />}>
-            <TriggersTypeFilterSection currentType={typeFilter} />
-          </Suspense>
-          <div className="flex flex-1 items-center justify-end gap-3">
-            <SearchInput
-              urlParamName="search"
-              urlPath="/triggers"
-              placeholder={t("searchPlaceholder")}
-            />
-            <TriggersGroupSelect currentGroup={groupBy} />
-            <TriggersHeaderTabs currentTab={viewMode} />
-          </div>
-        </>
-      }
+      className="p-0 overflow-hidden"
     >
-      <Suspense
-        key={`${viewMode}-${searchQuery}-${typeFilter}-${groupBy}`}
-        fallback={<TriggersSkeleton viewMode={viewMode} />}
-      >
-        <TriggersContent
-          viewMode={viewMode}
-          searchQuery={searchQuery}
-          typeFilter={typeFilter}
-          groupBy={groupBy}
+      <div className="flex h-full w-full flex-col">
+        <TriggersToolbar
+          tabsSlot={
+            <div className="flex items-center gap-2">
+              <TriggersDisplayMenu
+                currentGroup={groupBy}
+                currentOrder={orderBy}
+              />
+              <TriggersHeaderTabs currentTab={viewMode} />
+            </div>
+          }
         />
-      </Suspense>
+
+        <div className="min-h-0 flex-1 overflow-auto">
+          <Suspense
+            key={`${viewMode}-${searchQuery}-${groupBy}-${orderBy}`}
+            fallback={<TriggersSkeleton viewMode={viewMode} />}
+          >
+            <TriggersContent
+              viewMode={viewMode}
+              searchQuery={searchQuery}
+              groupBy={groupBy}
+              orderBy={orderBy}
+            />
+          </Suspense>
+        </div>
+      </div>
     </ContentBlock>
   );
 }
