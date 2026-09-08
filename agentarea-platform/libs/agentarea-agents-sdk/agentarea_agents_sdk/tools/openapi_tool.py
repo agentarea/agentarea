@@ -114,7 +114,7 @@ class OpenAPITool(BaseTool):
                 "status_code": None,
             }
 
-        # Resolve headers (plaintext + secrets); skip auth_config_id for now
+        # Resolve plaintext/secret headers plus the linked auth config.
         try:
             resolved_headers = await self._service.resolve_headers(connection)
         except Exception as e:
@@ -131,9 +131,6 @@ class OpenAPITool(BaseTool):
                 "tool_name": self.name,
                 "status_code": None,
             }
-
-        # TODO(#113): resolve auth_config_id via shared MCP auth resolver
-        # if connection.auth_config_id is set, static custom_headers are used as-is above.
 
         # Build URL: substitute path params
         path = self._operation["path"]

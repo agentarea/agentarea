@@ -8,6 +8,7 @@ from uuid import UUID
 import httpx
 from agentarea_api.api.deps.services import get_openapi_connection_service
 from agentarea_common.config import get_settings
+from agentarea_common.utils.types import UtcDatetime
 from agentarea_openapi.application.service import OpenAPIConnectionService, fetch_and_parse_spec
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import validate_url
@@ -17,11 +18,19 @@ from agentarea_openapi.schemas.dto import (
     OpenAPIConnectionUpdate,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/openapi-connections", tags=["openapi-connections"])
+
+
+class OpenAPIToolResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    description: str
+    input_schema: dict[str, Any] = Field(alias="inputSchema")
 
 
 class OpenAPIConnectionResponse(BaseModel):
@@ -31,11 +40,12 @@ class OpenAPIConnectionResponse(BaseModel):
     description: str | None = None
     spec_url: str | None = None
     auth_config_id: UUID | None = None
+    registry_item_id: UUID | None = None
     custom_headers: list[HeaderOutput] | None = None
-    available_tools: list[dict[str, Any]] = []
+    available_tools: list[OpenAPIToolResponse]
     status: str
-    created_at: Any
-    updated_at: Any
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
     model_config = {"from_attributes": True}
 

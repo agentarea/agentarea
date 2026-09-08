@@ -34,6 +34,11 @@ import {
   Star,
   Telescope,
 } from "lucide-react";
+import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
+import { Streamdown } from "streamdown";
+import { AgentAvatar } from "@/components/AgentAvatar";
+import EmptyState from "@/components/EmptyState";
+import HeaderTabs from "@/components/HeaderTabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,19 +49,15 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import { HoverLink } from "@/components/ui/hover-link";
 import { Input } from "@/components/ui/input";
+import ModelBadge from "@/components/ui/model-badge";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { StartAgentButton } from "@/components/ui/start-agent-button";
-import { Streamdown } from "streamdown";
-import { AgentAvatar } from "@/components/AgentAvatar";
-import ModelBadge from "@/components/ui/model-badge";
-import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
-import { HoverLink } from "@/components/ui/hover-link";
-import HeaderTabs from "@/components/HeaderTabs";
 import {
   Select,
   SelectContent,
@@ -64,23 +65,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import EmptyState from "@/components/EmptyState";
-import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
+import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { cn } from "@/lib/utils";
 import { getCookie, setCookie } from "@/utils/cookies";
 import {
+  addCatalogSkillToAgentAction,
+  connectCatalogConnectionAction,
+  fetchCatalogItemAction,
+  fetchCatalogPageAction,
+  getSkillFileUrlAction,
+  getSkillMarkdownAction,
+  installCatalogAgentAction,
+  installCatalogSkillAction,
+  listActiveModelInstancesAction,
+  listSkillFilesAction,
+  listWorkspaceAgentsAction,
+  type AgentLite,
+  type WorkspaceModel,
+} from "./actions";
+import { BundleInstallWizard } from "./BundleInstallWizard";
+import {
   ALL,
+  arr,
   DEFAULT_SORT,
   EXPLORE_VIEW_COOKIE,
   FEATURED_TAG,
-  SORT_KEYS,
-  SORT_LABELS,
-  TYPE_KEYS,
-  arr,
   modelNameMatchesPreferred,
   normalize,
+  SORT_KEYS,
+  SORT_LABELS,
   str,
   strArr,
+  TYPE_KEYS,
   type CatalogEntry,
   type CatalogType,
   type RawSpec,
@@ -94,21 +110,6 @@ import {
   initialPaging,
   type CategoryFacet,
 } from "./catalog-paging";
-import {
-  addCatalogSkillToAgentAction,
-  fetchCatalogItemAction,
-  fetchCatalogPageAction,
-  installCatalogAgentAction,
-  installCatalogSkillAction,
-  getSkillFileUrlAction,
-  getSkillMarkdownAction,
-  listSkillFilesAction,
-  listActiveModelInstancesAction,
-  listWorkspaceAgentsAction,
-  type AgentLite,
-  type WorkspaceModel,
-} from "./actions";
-import { BundleInstallWizard } from "./BundleInstallWizard";
 
 // ── Registry types ──────────────────────────────────────────────────────────
 // One gallery for every catalog type. The look-and-feel is shared; the type is
@@ -207,7 +208,12 @@ export function ExplorePendingProvider({
   );
 
   const value = useMemo(
-    () => ({ isPending, pendingKind, startTypeTransition, startFilterTransition }),
+    () => ({
+      isPending,
+      pendingKind,
+      startTypeTransition,
+      startFilterTransition,
+    }),
     [isPending, pendingKind, startTypeTransition, startFilterTransition]
   );
   return (
@@ -238,7 +244,10 @@ export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
       startTransition: pending?.startTypeTransition,
     })
   );
-  const [, setCategory] = useQueryState("category", parseAsString.withDefault(ALL));
+  const [, setCategory] = useQueryState(
+    "category",
+    parseAsString.withDefault(ALL)
+  );
   const [, setItemId] = useQueryState("item", parseAsString);
 
   return (
@@ -423,13 +432,17 @@ export default function CatalogGallery({
   // Paging bookkeeping, seeded from the server-rendered first page (no initial
   // client fetch / flash). Kept in a reducer so the append/retry/exhaustion
   // rules are testable apart from the component — see catalog-paging.ts.
-  const [paging, dispatch] = useReducer(catalogPagingReducer, undefined, () => ({
-    ...initialPaging(),
-    entries: initialEntries,
-    total: initialTotal,
-    categories: initialCategories,
-    error: initialError,
-  }));
+  const [paging, dispatch] = useReducer(
+    catalogPagingReducer,
+    undefined,
+    () => ({
+      ...initialPaging(),
+      entries: initialEntries,
+      total: initialTotal,
+      categories: initialCategories,
+      error: initialError,
+    })
+  );
 
   // Typing shouldn't round-trip the server on every keystroke, so the input is
   // local and the URL follows it on a short debounce.
@@ -482,7 +495,10 @@ export default function CatalogGallery({
         categories: page.categories,
       });
     } catch (e) {
-      dispatch({ type: "fail", error: e instanceof Error ? e.message : "Failed to load" });
+      dispatch({
+        type: "fail",
+        error: e instanceof Error ? e.message : "Failed to load",
+      });
     }
   }, [type, query, category, sort, paging.entries]);
 
@@ -559,148 +575,162 @@ export default function CatalogGallery({
 
   return (
     <div className="flex gap-6">
-        {/* Facet sidebar — reserved (fixed width) while a type switch is in
+      {/* Facet sidebar — reserved (fixed width) while a type switch is in
             flight or when the type has categories, so the layout doesn't shift
             as they arrive. Omitted entirely for category-less types so the grid
             isn't left with an empty left gutter. Counts come from the server and
             cover the whole catalog, so they don't drift as more pages load. */}
-        {(busy || categories.length > 0) && (
-          <aside className="hidden w-52 shrink-0 lg:block">
-            {busy ? (
-              <FacetSkeleton />
+      {(busy || categories.length > 0) && (
+        <aside className="hidden w-52 shrink-0 lg:block">
+          {busy ? (
+            <FacetSkeleton />
+          ) : (
+            <FacetGroup
+              label="Category"
+              options={categories}
+              selected={category}
+              onSelect={(v) => {
+                void setCategory(v === ALL ? null : v);
+                void setItemId(null);
+              }}
+            />
+          )}
+        </aside>
+      )}
+
+      {/* Main */}
+      <div className="min-w-0 flex-1 space-y-4">
+        {active ? (
+          <DetailView entry={active} onBack={() => void setItemId(null)} />
+        ) : itemId ? (
+          <DeepItemStatus onBack={() => void setItemId(null)}>
+            {deepLoading ? (
+              <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading…
+              </span>
             ) : (
-              <FacetGroup
-                label="Category"
-                options={categories}
-                selected={category}
-                onSelect={(v) => {
-                  void setCategory(v === ALL ? null : v);
-                  void setItemId(null);
-                }}
+              <EmptyState
+                title="Item not found"
+                description={
+                  deepError ??
+                  "This item may have been removed or isn't available."
+                }
+                iconsType="404"
               />
             )}
-          </aside>
-        )}
+          </DeepItemStatus>
+        ) : (
+          <>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={draftQuery}
+                onChange={(e) => setDraftQuery(e.target.value)}
+                placeholder={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}…`}
+                aria-label={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}`}
+                className="pl-9"
+              />
+            </div>
 
-        {/* Main */}
-        <div className="min-w-0 flex-1 space-y-4">
-          {active ? (
-            <DetailView entry={active} onBack={() => void setItemId(null)} />
-          ) : itemId ? (
-            <DeepItemStatus onBack={() => void setItemId(null)}>
-              {deepLoading ? (
-                <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading…
+            {paging.error && (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  {paging.error}
                 </span>
-              ) : (
+                {/* A failed page used to end infinite scroll for good. It's a
+                  retry, not the end of the catalog. */}
+                {moreAvailable && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void loadMore()}
+                  >
+                    Retry
+                  </Button>
+                )}
+              </div>
+            )}
+            {busy && <ContentSkeleton view={view} />}
+            {!busy &&
+              !refreshing &&
+              paging.entries.length === 0 &&
+              !paging.error && (
                 <EmptyState
-                  title="Item not found"
+                  title={hasFilters ? "No matches" : "Nothing here"}
                   description={
-                    deepError ??
-                    "This item may have been removed or isn't available."
+                    hasFilters
+                      ? "Nothing matches your search and filters."
+                      : "Nothing to show for this type yet."
                   }
-                  iconsType="404"
+                  icons={hasFilters ? [Telescope, Compass, Search] : undefined}
+                  action={
+                    hasFilters
+                      ? {
+                          label: "Clear filters",
+                          onClick: () => {
+                            setDraftQuery("");
+                            void setQuery(null);
+                            void setCategory(null);
+                          },
+                        }
+                      : undefined
+                  }
                 />
               )}
-            </DeepItemStatus>
-          ) : (
-          <>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={draftQuery}
-              onChange={(e) => setDraftQuery(e.target.value)}
-              placeholder={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}…`}
-              aria-label={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}`}
-              className="pl-9"
-            />
-          </div>
 
-          {paging.error && (
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
-              <span className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                {paging.error}
-              </span>
-              {/* A failed page used to end infinite scroll for good. It's a
-                  retry, not the end of the catalog. */}
-              {moreAvailable && (
-                <Button variant="outline" size="sm" onClick={() => void loadMore()}>
-                  Retry
-                </Button>
-              )}
-            </div>
-          )}
-          {busy && <ContentSkeleton view={view} />}
-          {!busy && !refreshing && paging.entries.length === 0 && !paging.error && (
-            <EmptyState
-              title={hasFilters ? "No matches" : "Nothing here"}
-              description={
-                hasFilters
-                  ? "Nothing matches your search and filters."
-                  : "Nothing to show for this type yet."
-              }
-              icons={hasFilters ? [Telescope, Compass, Search] : undefined}
-              action={
-                hasFilters
-                  ? {
-                      label: "Clear filters",
-                      onClick: () => {
-                        setDraftQuery("");
-                        void setQuery(null);
-                        void setCategory(null);
-                      },
-                    }
-                  : undefined
-              }
-            />
-          )}
+            {!busy && paging.entries.length > 0 && (
+              <div
+                className={cn(
+                  "transition-opacity",
+                  refreshing && "pointer-events-none opacity-50"
+                )}
+                aria-busy={refreshing}
+              >
+                {view === "grid" ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                    {paging.entries.map((e) => (
+                      <CatalogCard
+                        key={e.id}
+                        entry={e}
+                        onOpen={() => void setItemId(e.id)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <CatalogTable
+                    entries={paging.entries}
+                    onOpen={(e) => void setItemId(e.id)}
+                  />
+                )}
+              </div>
+            )}
 
-          {!busy && paging.entries.length > 0 && (
-            <div
-              className={cn(
-                "transition-opacity",
-                refreshing && "pointer-events-none opacity-50"
-              )}
-              aria-busy={refreshing}
-            >
-              {view === "grid" ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                  {paging.entries.map((e) => (
-                    <CatalogCard key={e.id} entry={e} onOpen={() => void setItemId(e.id)} />
-                  ))}
-                </div>
-              ) : (
-                <CatalogTable entries={paging.entries} onOpen={(e) => void setItemId(e.id)} />
-              )}
-            </div>
-          )}
-
-          {/* Infinite-scroll sentinel + manual fallback. Mounted whenever the
+            {/* Infinite-scroll sentinel + manual fallback. Mounted whenever the
               catalog has more, including when this page rendered nothing — a
               filter whose matches all sit further in used to render "No matches"
               here and strand the rest of the catalog. */}
-          {!busy && !refreshing && moreAvailable && (
-            <>
-              <div ref={sentinelRef} className="h-px" aria-hidden />
-              <div className="flex justify-center pt-2">
-                {paging.status === "appending" ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                ) : (
-                  !paging.error && (
-                    <Button variant="outline" onClick={() => void loadMore()}>
-                      Load more
-                    </Button>
-                  )
-                )}
-              </div>
-            </>
-          )}
+            {!busy && !refreshing && moreAvailable && (
+              <>
+                <div ref={sentinelRef} className="h-px" aria-hidden />
+                <div className="flex justify-center pt-2">
+                  {paging.status === "appending" ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  ) : (
+                    !paging.error && (
+                      <Button variant="outline" onClick={() => void loadMore()}>
+                        Load more
+                      </Button>
+                    )
+                  )}
+                </div>
+              </>
+            )}
           </>
-          )}
-        </div>
+        )}
       </div>
+    </div>
   );
 }
 
@@ -752,7 +782,9 @@ function CatalogTable({
                     `shrink-0` so they're never clipped. */}
                 <td className="max-w-[160px] py-2 pl-2 pr-3 align-middle sm:max-w-[240px] lg:max-w-[340px]">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 truncate font-medium">{e.title}</span>
+                    <span className="min-w-0 truncate font-medium">
+                      {e.title}
+                    </span>
                     {e.verified && (
                       <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
                     )}
@@ -836,7 +868,9 @@ function FacetGroup({
               {value === ALL ? "All" : value}
             </span>
             {count !== null && (
-              <span className="text-[10px] tabular-nums text-muted-foreground">{count}</span>
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                {count}
+              </span>
             )}
           </button>
         ))}
@@ -879,7 +913,9 @@ function BrandLogo({
           small ? "h-6 w-6" : "h-9 w-9"
         )}
       >
-        <Fallback className={cn("text-zinc-400", small ? "h-3.5 w-3.5" : "h-4 w-4")} />
+        <Fallback
+          className={cn("text-zinc-400", small ? "h-3.5 w-3.5" : "h-4 w-4")}
+        />
       </span>
     );
   }
@@ -898,14 +934,23 @@ function BrandLogo({
         width={40}
         height={40}
         loading="lazy"
-        className={cn("h-full w-full", cover ? "object-cover" : "object-contain")}
+        className={cn(
+          "h-full w-full",
+          cover ? "object-cover" : "object-contain"
+        )}
         onError={() => setFailed(true)}
       />
     </span>
   );
 }
 
-function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => void }) {
+function CatalogCard({
+  entry,
+  onOpen,
+}: {
+  entry: CatalogEntry;
+  onOpen: () => void;
+}) {
   const TypeIcon = TYPE_ICON[entry.type];
   return (
     <button
@@ -968,7 +1013,12 @@ function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => voi
         {entry.meta.length > 0 && (
           <div className="mt-auto flex flex-wrap gap-1 pt-1.5">
             {entry.meta.map((m) => (
-              <Badge key={m} variant="secondary" size="sm" className="font-normal">
+              <Badge
+                key={m}
+                variant="secondary"
+                size="sm"
+                className="font-normal"
+              >
                 {m}
               </Badge>
             ))}
@@ -998,16 +1048,27 @@ type SetupTier =
   | "needs_tenant_config"
   | "unverified";
 
-function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void }) {
+function DetailView({
+  entry,
+  onBack,
+}: {
+  entry: CatalogEntry;
+  onBack: () => void;
+}) {
   const [state, setState] = useState<InstallState>({ phase: "idle" });
   // Bundles open an inline configure-then-install step rather than installing on
   // the first click (pick model, skip connections, tune policies, then commit).
   const [configuring, setConfiguring] = useState(false);
 
   const spec = entry.spec;
-  const rawMeta = (spec.raw_spec as RawSpec | undefined)?.metadata as RawSpec | undefined;
-  const tier = (str(rawMeta?.["agentarea:setup_tier"]) ?? "unverified") as SetupTier;
+  const rawMeta = (spec.raw_spec as RawSpec | undefined)?.metadata as
+    | RawSpec
+    | undefined;
+  const tier = (str(rawMeta?.["agentarea:setup_tier"]) ??
+    "unverified") as SetupTier;
   const TypeIcon = TYPE_ICON[entry.type];
+  const isCatalogApi =
+    entry.type === "mcp_servers" && str(spec.connection_type) === "openapi";
 
   // Machine tags ("category:x", "repo:y", "featured"…) are provenance, not
   // topical labels — keep them out of the chip row (surfaced elsewhere instead).
@@ -1037,11 +1098,37 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
       await installCatalogAgentAction(entry.id);
       setState({ phase: "done", created: 1 });
     } catch (e) {
-      setState({ phase: "error", message: e instanceof Error ? e.message : "Install failed" });
+      setState({
+        phase: "error",
+        message: e instanceof Error ? e.message : "Install failed",
+      });
+    }
+  }
+
+  async function connectCatalogApi(
+    credentialMode: "managed" | "custom",
+    custom?: { clientId: string; clientSecret: string }
+  ) {
+    setState({ phase: "connecting" });
+    try {
+      const result = await connectCatalogConnectionAction(entry.id, {
+        credential_mode: credentialMode,
+        client_id: custom?.clientId,
+        client_secret: custom?.clientSecret,
+        return_to: window.location.origin,
+      });
+      window.location.assign(result.authorize_url);
+    } catch (e) {
+      setState({
+        phase: "error",
+        message:
+          e instanceof Error ? e.message : "Could not connect this account",
+      });
     }
   }
 
   const installing = state.phase === "loading";
+  const connecting = state.phase === "connecting";
 
   // Bundles route through the configure-then-install wizard in place of the
   // detail view; everything else keeps the look-first detail layout.
@@ -1084,7 +1171,9 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
           )}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-semibold tracking-tight">{entry.title}</h2>
+              <h2 className="text-xl font-semibold tracking-tight">
+                {entry.title}
+              </h2>
               {entry.verified && (
                 <Badge variant="blue" size="sm" className="gap-1">
                   <BadgeCheck className="h-3 w-3" />
@@ -1112,18 +1201,30 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
               <Link href="/agents">Go to Agents</Link>
             </Button>
           ) : entry.type === "mcp_servers" ? (
-            <StartAgentButton asChild size="xs">
-              <Link href={connectHref}>
+            isCatalogApi ? (
+              <StartAgentButton
+                size="xs"
+                isLoading={connecting}
+                onClick={() => void connectCatalogApi("managed")}
+              >
                 Connect
-              </Link>
-            </StartAgentButton>
+              </StartAgentButton>
+            ) : (
+              <StartAgentButton asChild size="xs">
+                <Link href={connectHref}>Connect</Link>
+              </StartAgentButton>
+            )
           ) : (
             <StartAgentButton
               size="xs"
-              onClick={() => (entry.type === "bundles" ? setConfiguring(true) : installAgent())}
+              onClick={() =>
+                entry.type === "bundles" ? setConfiguring(true) : installAgent()
+              }
               isLoading={installing}
             >
-              {entry.type === "bundles" ? "Use this bundle" : "Add to workspace"}
+              {entry.type === "bundles"
+                ? "Use this bundle"
+                : "Add to workspace"}
             </StartAgentButton>
           )}
         </CatalogActionSlot>
@@ -1159,7 +1260,19 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
       <div className="space-y-5 border-t border-border/60 pt-6">
         {entry.type === "bundles" && <BundleContents spec={spec} />}
         {entry.type === "agents" && <PreferredModels models={entry.meta} />}
-        {entry.type === "mcp_servers" && <ConnectionSetup tier={tier} />}
+        {entry.type === "mcp_servers" && (
+          <>
+            <ConnectionSetup tier={tier} />
+            {isCatalogApi && (
+              <CustomOAuthApp
+                connecting={connecting}
+                onConnect={(credentials) =>
+                  void connectCatalogApi("custom", credentials)
+                }
+              />
+            )}
+          </>
+        )}
         {entry.type === "skills" && (
           <>
             <SkillContent
@@ -1199,7 +1312,8 @@ function PreferredModels({ models }: { models: string[] }) {
     (instances ?? []).filter((mi) =>
       modelNameMatchesPreferred(str(mi.model_name) ?? "", slug)
     );
-  const anyMatch = instances != null && models.some((s) => matchFor(s).length > 0);
+  const anyMatch =
+    instances != null && models.some((s) => matchFor(s).length > 0);
 
   return (
     <div>
@@ -1234,7 +1348,11 @@ function PreferredModels({ models }: { models: string[] }) {
                   </Badge>
                 </span>
               ) : (
-                <Badge variant="light" size="sm" className="shrink-0 text-muted-foreground">
+                <Badge
+                  variant="light"
+                  size="sm"
+                  className="shrink-0 text-muted-foreground"
+                >
                   Not configured
                 </Badge>
               )}
@@ -1254,7 +1372,10 @@ function PreferredModels({ models }: { models: string[] }) {
 }
 
 function ConnectionSetup({ tier }: { tier: SetupTier }) {
-  const COPY: Record<SetupTier, { icon: LucideIcon; title: string; detail: string }> = {
+  const COPY: Record<
+    SetupTier,
+    { icon: LucideIcon; title: string; detail: string }
+  > = {
     one_click: {
       icon: BadgeCheck,
       title: "One-click connect",
@@ -1262,8 +1383,8 @@ function ConnectionSetup({ tier }: { tier: SetupTier }) {
     },
     oauth: {
       icon: BadgeCheck,
-      title: "Connect with OAuth",
-      detail: "You'll authorize access in the next step.",
+      title: "Ready to connect",
+      detail: "Click Connect, then sign in and approve access.",
     },
     needs_oauth_app: {
       icon: AlertTriangle,
@@ -1274,7 +1395,8 @@ function ConnectionSetup({ tier }: { tier: SetupTier }) {
     needs_tenant_config: {
       icon: Plug,
       title: "Enter your workspace URL",
-      detail: "This connection is hosted in your own tenant — paste your full MCP URL.",
+      detail:
+        "This connection is hosted in your own tenant — paste your full MCP URL.",
     },
     unverified: {
       icon: AlertTriangle,
@@ -1294,6 +1416,54 @@ function ConnectionSetup({ tier }: { tier: SetupTier }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function CustomOAuthApp({
+  connecting,
+  onConnect,
+}: {
+  connecting: boolean;
+  onConnect: (credentials: { clientId: string; clientSecret: string }) => void;
+}) {
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const ready = clientId.trim().length > 0 && clientSecret.length > 0;
+
+  return (
+    <details className="group rounded-lg border border-border/60">
+      <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground">
+        Advanced
+      </summary>
+      <div className="space-y-3 border-t border-border/60 px-3 py-3">
+        <p className="text-xs text-muted-foreground">
+          Use your own OAuth app credentials instead of the AgentArea app.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Input
+            value={clientId}
+            onChange={(event) => setClientId(event.target.value)}
+            placeholder="Client ID"
+            autoComplete="off"
+          />
+          <Input
+            value={clientSecret}
+            onChange={(event) => setClientSecret(event.target.value)}
+            placeholder="Client secret"
+            type="password"
+            autoComplete="new-password"
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!ready || connecting}
+          onClick={() => onConnect({ clientId: clientId.trim(), clientSecret })}
+        >
+          Connect with custom app
+        </Button>
+      </div>
+    </details>
   );
 }
 
@@ -1318,7 +1488,10 @@ function Inside({
       </div>
       <ul className="space-y-1">
         {rows.map((r) => (
-          <li key={r} className="truncate rounded bg-muted/50 px-2 py-1 text-sm">
+          <li
+            key={r}
+            className="truncate rounded bg-muted/50 px-2 py-1 text-sm"
+          >
             {r}
           </li>
         ))}
@@ -1397,7 +1570,9 @@ function BundleSection({
         <span className="tabular-nums">({count})</span>
       </div>
       <div className="space-y-2">{children}</div>
-      {hint && <p className="mt-1.5 text-[11px] text-muted-foreground">{hint}</p>}
+      {hint && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">{hint}</p>
+      )}
     </div>
   );
 }
@@ -1449,7 +1624,12 @@ function BundleContents({ spec }: { spec: RawSpec }) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {capabilities.map((c) => (
-              <Badge key={c} variant="light" size="sm" className="gap-1 capitalize">
+              <Badge
+                key={c}
+                variant="light"
+                size="sm"
+                className="gap-1 capitalize"
+              >
                 <Sparkles className="h-3 w-3" />
                 {c.replace(/[-_]+/g, " ")}
               </Badge>
@@ -1460,7 +1640,9 @@ function BundleContents({ spec }: { spec: RawSpec }) {
 
       <BundleSection icon={Bot} label="Agents" count={agents.length}>
         {agents.map((a, i) => {
-          const usesSkills = strArr(a.skills).map((k) => bundleRefName(skills, k));
+          const usesSkills = strArr(a.skills).map((k) =>
+            bundleRefName(skills, k)
+          );
           const usesMcps = strArr(a.mcps).map((k) => bundleRefName(mcps, k));
           const model = resolveBundleModel(str(a.model), setup);
           const instruction = str(a.instruction);
@@ -1471,14 +1653,21 @@ function BundleContents({ spec }: { spec: RawSpec }) {
             >
               <div className="flex items-center gap-2">
                 <AgentAvatar
-                  agent={{ id: String(a.key ?? a.name ?? i), name: str(a.name) }}
+                  agent={{
+                    id: String(a.key ?? a.name ?? i),
+                    name: str(a.name),
+                  }}
                   size="sm"
                 />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">
                   {String(a.name ?? a.key)}
                 </span>
                 {model && (
-                  <ModelBadge modelDisplayName={model} size="sm" className="shrink-0" />
+                  <ModelBadge
+                    modelDisplayName={model}
+                    size="sm"
+                    className="shrink-0"
+                  />
                 )}
               </div>
               {instruction && (
@@ -1502,7 +1691,8 @@ function BundleContents({ spec }: { spec: RawSpec }) {
                 return (
                   <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
                     <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-                    Tools locked to <span className="font-medium">{allowed.join(", ")}</span>
+                    Tools locked to{" "}
+                    <span className="font-medium">{allowed.join(", ")}</span>
                   </p>
                 );
               })()}
@@ -1515,7 +1705,9 @@ function BundleContents({ spec }: { spec: RawSpec }) {
         {skills.map((s, i) => {
           const source = str(s.source_type) ?? "content";
           const preview =
-            source === "github" ? str(s.source_url) : skillPreview(str(s.content));
+            source === "github"
+              ? str(s.source_url)
+              : skillPreview(str(s.content));
           return (
             <div
               key={str(s.key) ?? i}
@@ -1530,7 +1722,9 @@ function BundleContents({ spec }: { spec: RawSpec }) {
                 </Badge>
               </div>
               {preview && (
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{preview}</p>
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                  {preview}
+                </p>
               )}
             </div>
           );
@@ -1590,7 +1784,8 @@ function BundleContents({ spec }: { spec: RawSpec }) {
         icon={Clock}
         label="Automations"
         rows={automations.map((a) => {
-          const kind = str(a.type) ?? str(a.trigger) ?? str(a.kind) ?? str(a.cron);
+          const kind =
+            str(a.type) ?? str(a.trigger) ?? str(a.kind) ?? str(a.cron);
           const name = String(a.name ?? a.key ?? "automation");
           return kind ? `${name} · ${kind}` : name;
         })}
@@ -1604,7 +1799,9 @@ function BundleContents({ spec }: { spec: RawSpec }) {
           if (msg) return msg;
           const effect = str(p.effect);
           const target = str(p.target);
-          return effect && target ? `${effect} · ${target}` : String(p.key ?? "policy");
+          return effect && target
+            ? `${effect} · ${target}`
+            : String(p.key ?? "policy");
         })}
         hint="Govern this bundle at runtime"
       />
@@ -1620,9 +1817,13 @@ function BundleContents({ spec }: { spec: RawSpec }) {
 function AddSkillToAgent({ skillId }: { skillId: string }) {
   const [open, setOpen] = useState(false);
   const [agents, setAgents] = useState<AgentLite[] | null>(null);
-  const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">(
+    "idle"
+  );
   const [message, setMessage] = useState("");
-  const [result, setResult] = useState<{ label: string; href: string } | null>(null);
+  const [result, setResult] = useState<{ label: string; href: string } | null>(
+    null
+  );
 
   // Lazy-load the workspace agents the first time the picker opens.
   useEffect(() => {
@@ -1710,7 +1911,11 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
                   </CommandEmpty>
                   <CommandGroup>
                     {agents.map((a) => (
-                      <CommandItem key={a.id} value={a.name} onSelect={() => addToAgent(a)}>
+                      <CommandItem
+                        key={a.id}
+                        value={a.name}
+                        onSelect={() => addToAgent(a)}
+                      >
                         <Bot className="mr-2 h-4 w-4 text-muted-foreground" />
                         <span className="truncate">{a.name}</span>
                       </CommandItem>
@@ -1758,9 +1963,28 @@ type FileBody =
 // Extensions we can safely preview inline as text. Anything else gets an
 // "open" link to its presigned URL instead of a garbled inline dump.
 const TEXT_EXT = new Set([
-  "md", "markdown", "txt", "py", "js", "ts", "tsx", "jsx", "json", "yaml",
-  "yml", "sh", "bash", "toml", "ini", "cfg", "csv", "html", "css", "xml",
-  "sql", "env",
+  "md",
+  "markdown",
+  "txt",
+  "py",
+  "js",
+  "ts",
+  "tsx",
+  "jsx",
+  "json",
+  "yaml",
+  "yml",
+  "sh",
+  "bash",
+  "toml",
+  "ini",
+  "cfg",
+  "csv",
+  "html",
+  "css",
+  "xml",
+  "sql",
+  "env",
 ]);
 
 function isTextFile(path: string): boolean {
@@ -1821,7 +2045,12 @@ function SkillSourceLink({ sourceUrl }: { sourceUrl: string | null }) {
         <p className="text-xs text-muted-foreground">
           The skill files are fetched from{" "}
           {sourceUrl ? (
-            <a href={sourceUrl} target="_blank" rel="noreferrer" className="break-all underline">
+            <a
+              href={sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="break-all underline"
+            >
               {sourceUrl}
             </a>
           ) : (
@@ -1868,7 +2097,8 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
         if (!active) return;
         const fs = Array.isArray(skillFiles) ? skillFiles : [];
         setFiles(fs);
-        const def = fs.find((f) => f.path.toLowerCase() === "skill.md") ?? fs[0] ?? null;
+        const def =
+          fs.find((f) => f.path.toLowerCase() === "skill.md") ?? fs[0] ?? null;
         setSelected(def?.path ?? null);
       })
       .catch((e) => {
@@ -1885,7 +2115,8 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
   // Lazily load the selected file's body. SKILL.md comes from /content; other
   // files resolve to a presigned URL we then fetch (text) or link to.
   useEffect(() => {
-    if (!selected || bodies[selected] || requested.current.has(selected)) return;
+    if (!selected || bodies[selected] || requested.current.has(selected))
+      return;
     requested.current.add(selected);
     let active = true;
     void (async () => {
@@ -1905,15 +2136,24 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
             const res = await fetch(url);
             if (!res.ok) throw new Error();
             const text = await res.text();
-            if (active) setBodies((b) => ({ ...b, [selected]: { kind: "text", value: text } }));
+            if (active)
+              setBodies((b) => ({
+                ...b,
+                [selected]: { kind: "text", value: text },
+              }));
             return;
           } catch {
             // Cross-origin / unreadable — fall through to a plain open link.
           }
         }
-        if (active) setBodies((b) => ({ ...b, [selected]: { kind: "link", value: url } }));
+        if (active)
+          setBodies((b) => ({
+            ...b,
+            [selected]: { kind: "link", value: url },
+          }));
       } catch {
-        if (active) setBodies((b) => ({ ...b, [selected]: { kind: "link", value: "" } }));
+        if (active)
+          setBodies((b) => ({ ...b, [selected]: { kind: "link", value: "" } }));
       }
     })();
     return () => {
@@ -1930,10 +2170,13 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
     );
   }
   if (files.length === 0) {
-    return error ? <p className="text-sm text-muted-foreground">{error}</p> : null;
+    return error ? (
+      <p className="text-sm text-muted-foreground">{error}</p>
+    ) : null;
   }
 
-  const single = files.length === 1 && files[0].path.toLowerCase() === "skill.md";
+  const single =
+    files.length === 1 && files[0].path.toLowerCase() === "skill.md";
   const body = selected ? bodies[selected] : undefined;
 
   const pane = (
@@ -1948,7 +2191,9 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
           {body.value}
         </Streamdown>
       ) : body.kind === "text" ? (
-        <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed">{body.value}</pre>
+        <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed">
+          {body.value}
+        </pre>
       ) : body.value ? (
         <a
           href={body.value}
@@ -2121,7 +2366,10 @@ function CatalogCardSkeleton() {
 // Mirrors CatalogTable rows: icon + title + (md) description.
 function CatalogTableSkeleton() {
   return (
-    <div className="overflow-hidden rounded-lg border border-border/60" aria-hidden="true">
+    <div
+      className="overflow-hidden rounded-lg border border-border/60"
+      aria-hidden="true"
+    >
       <table className="w-full text-sm">
         <tbody>
           {Array.from({ length: 8 }).map((_, i) => (

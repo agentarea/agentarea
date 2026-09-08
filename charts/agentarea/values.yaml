@@ -1079,6 +1079,8 @@ registryReconcile:
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json
     - name: system-mcp-servers
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json
+    - name: system-openapi-connections
+      source_url: agentarea_api/data/openapi-connectors.json
     - name: system-skills-curated
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json
 

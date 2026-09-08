@@ -2,6 +2,8 @@
 
 import json
 import logging
+import urllib.parse
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -129,15 +131,26 @@ class OpenAPIConnectionService:
         self,
         repository_factory: Any,
         secret_manager: BaseSecretManager,
+        auth_header_resolver: (
+            Callable[[UUID, str, list[str] | None], Awaitable[dict[str, str]]] | None
+        ) = None,
         allow_private_urls: bool = False,
     ) -> None:
         self._repo: OpenAPIConnectionRepository = repository_factory.create_repository(
             OpenAPIConnectionRepository
         )
         self._secret_manager = secret_manager
+        self._auth_header_resolver = auth_header_resolver
         self._allow_private_urls = allow_private_urls
 
-    async def create_connection(self, payload: OpenAPIConnectionCreate) -> OpenAPIConnection:
+    async def create_connection(
+        self,
+        payload: OpenAPIConnectionCreate,
+        *,
+        registry_item_id: UUID | None = None,
+        allowed_auth_origins: list[str] | None = None,
+        status: str = "active",
+    ) -> OpenAPIConnection:
         # Validate URLs at creation time (SSRF protection)
         validate_url(payload.base_url, allow_private=self._allow_private_urls)
         if payload.spec_url:
@@ -180,8 +193,11 @@ class OpenAPIConnectionService:
             spec_url=payload.spec_url,
             spec_content=resolved_spec,
             auth_config_id=payload.auth_config_id,
+            registry_item_id=registry_item_id,
+            allowed_auth_origins=allowed_auth_origins,
             custom_headers=processed_headers,
             available_tools=available_tools,
+            status=status,
         )
 
         return conn
@@ -249,12 +265,9 @@ class OpenAPIConnectionService:
                 await self._secret_manager.delete_secret(key)
 
     async def resolve_headers(self, conn: OpenAPIConnection) -> dict[str, str]:
-        """Build the actual HTTP headers dict by resolving secrets."""
-        if not conn.custom_headers:
-            return {}
-
+        """Build request headers, including the connection's linked auth config."""
         headers: dict[str, str] = {}
-        for h in conn.custom_headers:
+        for h in conn.custom_headers or []:
             name = h["name"]
             if h.get("secret"):
                 if self._secret_manager is None:
@@ -276,7 +289,32 @@ class OpenAPIConnectionService:
                 value = h.get("value", "")
                 if value:
                     headers[name] = value
+
+        if conn.auth_config_id:
+            parsed = urllib.parse.urlparse(conn.base_url)
+            origin = f"{parsed.scheme}://{parsed.netloc}"
+            if conn.allowed_auth_origins:
+                if origin not in conn.allowed_auth_origins:
+                    raise MissingHeaderSecretError(
+                        f"Connection {conn.id} cannot send OAuth credentials to origin '{origin}'."
+                    )
+            if self._auth_header_resolver is None:
+                raise MissingHeaderSecretError(
+                    f"Connection {conn.id} has auth_config_id but no auth resolver is configured."
+                )
+            # Managed auth wins over hand-entered Authorization headers. A stale
+            # custom header must never shadow a freshly rotated OAuth token.
+            headers.update(
+                await self._auth_header_resolver(
+                    conn.auth_config_id,
+                    origin,
+                    conn.allowed_auth_origins,
+                )
+            )
         return headers
+
+    async def get_by_registry_item_id(self, registry_item_id: UUID) -> OpenAPIConnection | None:
+        return await self._repo.get_by_registry_item_id(registry_item_id)
 
     async def get_connection(self, connection_id: UUID) -> OpenAPIConnection | None:
         return await self._repo.get_by_id(str(connection_id))
@@ -311,6 +349,14 @@ class OpenAPIConnectionService:
         # Validate URLs on update (SSRF protection)
         if patch.get("base_url"):
             validate_url(patch["base_url"], allow_private=self._allow_private_urls)
+            current = await self._repo.get_by_id(str(connection_id))
+            if current and current.allowed_auth_origins:
+                parsed = urllib.parse.urlparse(patch["base_url"])
+                origin = f"{parsed.scheme}://{parsed.netloc}"
+                if origin not in current.allowed_auth_origins:
+                    raise ValueError(
+                        "Catalog OAuth connections cannot be pointed at a different API origin."
+                    )
         if patch.get("spec_url"):
             validate_url(patch["spec_url"], allow_private=self._allow_private_urls)
 

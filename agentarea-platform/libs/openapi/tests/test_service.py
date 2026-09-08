@@ -1,10 +1,11 @@
 """Tests for OpenAPIConnectionService."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from agentarea_common.testing.flows import MainFlow
-from agentarea_openapi.application.service import OpenAPIConnectionService
+from agentarea_openapi.application.service import MissingHeaderSecretError, OpenAPIConnectionService
 from agentarea_openapi.domain.models import OpenAPIConnection
 from agentarea_openapi.schemas.dto import (
     OpenAPIConnectionCreate,
@@ -28,7 +29,7 @@ SAMPLE_SPEC = {
 class TestDiscoverTools:
     @pytest.fixture
     def service(self):
-        mock_factory = AsyncMock()
+        mock_factory = MagicMock()
         mock_factory.create_repository.return_value = AsyncMock()
         return OpenAPIConnectionService(repository_factory=mock_factory, secret_manager=AsyncMock())
 
@@ -89,6 +90,62 @@ class TestDiscoverTools:
 
         with pytest.raises(ValueError, match="not found"):
             await service.discover_tools("nonexistent-id")
+
+
+class TestResolveHeaders:
+    @pytest.mark.asyncio
+    async def test_auth_config_overrides_static_authorization(self):
+        mock_factory = MagicMock()
+        mock_factory.create_repository.return_value = AsyncMock()
+        resolver = AsyncMock(return_value={"Authorization": "OAuth fresh-token"})
+        service = OpenAPIConnectionService(
+            repository_factory=mock_factory,
+            secret_manager=AsyncMock(),
+            auth_header_resolver=resolver,
+        )
+        conn = OpenAPIConnection(
+            name="Metrica",
+            base_url="https://api-metrika.yandex.net",
+            auth_config_id=uuid4(),
+            custom_headers=[
+                {"name": "Accept", "secret": False, "value": "application/json"},
+                {"name": "Authorization", "secret": False, "value": "Bearer stale"},
+            ],
+            allowed_auth_origins=["https://api-metrika.yandex.net"],
+        )
+
+        headers = await service.resolve_headers(conn)
+
+        assert headers == {
+            "Accept": "application/json",
+            "Authorization": "OAuth fresh-token",
+        }
+        resolver.assert_awaited_once_with(
+            conn.auth_config_id,
+            "https://api-metrika.yandex.net",
+            ["https://api-metrika.yandex.net"],
+        )
+
+    @pytest.mark.asyncio
+    async def test_auth_config_is_not_sent_to_another_origin(self):
+        mock_factory = MagicMock()
+        mock_factory.create_repository.return_value = AsyncMock()
+        resolver = AsyncMock(return_value={"Authorization": "OAuth token"})
+        service = OpenAPIConnectionService(
+            repository_factory=mock_factory,
+            secret_manager=AsyncMock(),
+            auth_header_resolver=resolver,
+        )
+        conn = OpenAPIConnection(
+            name="Metrica",
+            base_url="https://attacker.example",
+            auth_config_id=uuid4(),
+            allowed_auth_origins=["https://api-metrika.yandex.net"],
+        )
+
+        with pytest.raises(MissingHeaderSecretError, match="cannot send OAuth credentials"):
+            await service.resolve_headers(conn)
+        resolver.assert_not_awaited()
 
 
 class TestCreateConnection:
@@ -185,9 +242,7 @@ class TestSpecParser:
                 "/items": {
                     "get": {
                         "operationId": "listItems",
-                        "parameters": [
-                            {"$ref": "#/components/parameters/LimitParam"}
-                        ],
+                        "parameters": [{"$ref": "#/components/parameters/LimitParam"}],
                     }
                 }
             },
@@ -216,7 +271,12 @@ class TestSpecParser:
             "paths": {
                 "/items/{item_id}": {
                     "parameters": [
-                        {"name": "item_id", "in": "path", "required": True, "schema": {"type": "string"}}
+                        {
+                            "name": "item_id",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"},
+                        }
                     ],
                     "get": {
                         "operationId": "getItem",

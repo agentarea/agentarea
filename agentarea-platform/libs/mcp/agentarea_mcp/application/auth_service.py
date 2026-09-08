@@ -19,6 +19,17 @@ logger = logging.getLogger(__name__)
 
 # Secret manager key prefix so auth creds are grouped
 _SECRET_PREFIX = "mcp_auth_cred"  # noqa: S105
+_MANAGED_CREDENTIALS_PREFIX = "connection_oauth_client:"
+
+
+def _managed_credentials_key(config: dict[str, Any]) -> str | None:
+    """Return a valid internal managed-app key, if this is a managed config."""
+    if config.get("credential_mode") != "managed":
+        return None
+    key = str(config.get("managed_credentials_key") or "")
+    if not key.startswith(_MANAGED_CREDENTIALS_PREFIX):
+        raise ValueError("Invalid managed OAuth credential reference")
+    return key
 
 
 class MissingCredentialsError(Exception):
@@ -56,9 +67,11 @@ class MCPAuthService:
         self,
         repository: MCPAuthConfigRepository,
         secret_manager: BaseSecretManager,
+        managed_secret_manager: BaseSecretManager | None = None,
     ) -> None:
         self._repo = repository
         self._secret_manager = secret_manager
+        self._managed_secret_manager = managed_secret_manager
 
     # ------------------------------------------------------------------
     # Credential helpers
@@ -91,6 +104,41 @@ class MCPAuthService:
     async def _delete_credentials(self, config: MCPAuthConfig) -> None:
         if config.secret_key:
             await self._secret_manager.delete_secret(config.secret_key)
+
+    async def get_oauth_client_credentials(
+        self, config: MCPAuthConfig, *, require_secret: bool = False
+    ) -> tuple[str, str, dict[str, Any]]:
+        """Return OAuth client credentials without copying managed secrets.
+
+        The returned credential dict is the workspace-owned token payload and
+        can be extended with tokens after an authorization-code exchange.
+        """
+        if config.auth_type != AUTH_TYPE_OAUTH2:
+            raise ValueError(f"Auth config {config.id} is not OAuth2")
+
+        creds = await self._load_credentials(config)
+        client_id = str(config.config.get("client_id") or "")
+        client_secret = str(creds.get("client_secret") or "")
+        managed_key = _managed_credentials_key(config.config)
+        if managed_key is not None:
+            if self._managed_secret_manager is None:
+                raise MissingCredentialsError(
+                    f"Auth config {config.id} has no managed OAuth credential resolver."
+                )
+            raw_managed = await self._managed_secret_manager.get_secret(managed_key)
+            if not raw_managed:
+                raise MissingCredentialsError(
+                    f"Managed OAuth app '{managed_key}' is not configured."
+                )
+            managed = json.loads(raw_managed)
+            client_id = str(managed.get("client_id") or "")
+            client_secret = str(managed.get("client_secret") or "")
+
+        if not client_id or (require_secret and not client_secret):
+            raise MissingCredentialsError(
+                f"OAuth client credentials are incomplete for auth config {config.id}."
+            )
+        return client_id, client_secret, creds
 
     # ------------------------------------------------------------------
     # Auth header injection helpers (used by proxy layer)
@@ -132,7 +180,8 @@ class MCPAuthService:
 
         if config.auth_type == AUTH_TYPE_OAUTH2:
             access_token = await self._get_oauth2_token(config, creds, force_refresh=force_refresh)
-            return {"Authorization": f"Bearer {access_token}"}
+            scheme = str(config.config.get("authorization_scheme") or "Bearer")
+            return {"Authorization": f"{scheme} {access_token}"}
 
         return {}
 
@@ -143,10 +192,14 @@ class MCPAuthService:
         import time
 
         access_token = creds.get("access_token", "")
-        expires_at = creds.get("expires_at", 0)
+        expires_at = creds.get("expires_at")
 
         # Refresh if forced, missing, or expired (with 30 s buffer).
-        if force_refresh or not access_token or time.time() >= expires_at - 30:
+        if (
+            force_refresh
+            or not access_token
+            or (expires_at is not None and time.time() >= float(expires_at) - 30)
+        ):
             access_token = await self._refresh_oauth2_token(config, creds)
 
         return access_token
@@ -163,8 +216,7 @@ class MCPAuthService:
         import httpx
 
         token_url: str = config.config.get("token_url", "")
-        client_id: str = config.config.get("client_id", "")
-        client_secret: str = creds.get("client_secret", "")
+        client_id, client_secret, _ = await self.get_oauth_client_credentials(config)
         refresh_token: str = creds.get("refresh_token", "")
         scopes: list[str] = config.config.get("scopes", [])
 
@@ -196,7 +248,16 @@ class MCPAuthService:
 
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.post(token_url, data=payload, timeout=10)
+                if config.config.get("client_auth_method") == "client_secret_basic":
+                    payload.pop("client_secret", None)
+                    resp = await client.post(
+                        token_url,
+                        data=payload,
+                        auth=(client_id, client_secret),
+                        timeout=10,
+                    )
+                else:
+                    resp = await client.post(token_url, data=payload, timeout=10)
                 resp.raise_for_status()
                 data = resp.json()
         except httpx.HTTPStatusError as exc:
@@ -210,11 +271,14 @@ class MCPAuthService:
             raise
 
         access_token: str = data["access_token"]
-        expires_in: int = data.get("expires_in", 900)
+        expires_in_raw = data.get("expires_in")
 
         # Persist updated tokens
         creds["access_token"] = access_token
-        creds["expires_at"] = time.time() + expires_in
+        if expires_in_raw is not None:
+            creds["expires_at"] = time.time() + int(expires_in_raw)
+        else:
+            creds.pop("expires_at", None)
         if "refresh_token" in data:
             creds["refresh_token"] = data["refresh_token"]
 
@@ -233,8 +297,12 @@ class MCPAuthService:
         config: dict[str, Any],
         credentials: dict[str, Any],
         description: str | None = None,
+        *,
+        allow_managed_credentials: bool = False,
     ) -> MCPAuthConfig:
         """Create and persist a new auth config, storing creds encrypted."""
+        if _managed_credentials_key(config) is not None and not allow_managed_credentials:
+            raise ValueError("Managed OAuth configs can only be created by a catalog connection")
         auth_config = MCPAuthConfig(
             name=name,
             auth_type=auth_type,
@@ -274,8 +342,21 @@ class MCPAuthService:
         config: dict[str, Any] | None = None,
         credentials: dict[str, Any] | None = None,
         description: str | None = None,
+        *,
+        allow_managed_credentials: bool = False,
     ) -> MCPAuthConfig | None:
         """Update config fields and optionally rotate credentials."""
+        existing = await self._repo.get(config_id)
+        if existing is None:
+            return None
+        existing_is_managed = _managed_credentials_key(existing.config) is not None
+        incoming_is_managed = config is not None and _managed_credentials_key(config) is not None
+        if (existing_is_managed or incoming_is_managed) and not allow_managed_credentials:
+            if config is not None or credentials is not None:
+                raise ValueError(
+                    "Managed OAuth credentials can only be changed by reconnecting the catalog connection"
+                )
+
         updates: dict[str, Any] = {}
         if name is not None:
             updates["name"] = name
@@ -288,9 +369,6 @@ class MCPAuthService:
             await self._repo.update(config_id, **updates)
 
         if credentials is not None:
-            existing = await self._repo.get(config_id)
-            if existing is None:
-                return None
             key = await self._store_credentials(config_id, credentials)
             await self._repo.update(config_id, secret_key=key)
 
@@ -302,8 +380,12 @@ class MCPAuthService:
     async def delete(self, config_id: UUID) -> bool:
         """Delete auth config, checking for linked instances first."""
         linked = await self._repo.get_linked_instance_ids(config_id)
-        if linked:
-            raise ValueError(f"Cannot delete auth config {config_id}: linked to instances {linked}")
+        linked_openapi = await self._repo.get_linked_openapi_connection_ids(config_id)
+        if linked or linked_openapi:
+            raise ValueError(
+                f"Cannot delete auth config {config_id}: linked to connections "
+                f"{linked + linked_openapi}"
+            )
 
         existing = await self._repo.get(config_id)
         if existing is None:

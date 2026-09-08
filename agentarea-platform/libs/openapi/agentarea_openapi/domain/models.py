@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, ForeignKey, String, Text
+from sqlalchemy import JSON, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -17,6 +17,13 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
     """
 
     __tablename__ = "openapi_connections"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "registry_item_id",
+            name="uq_openapi_conn_workspace_registry",
+        ),
+    )
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -28,6 +35,17 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
         ForeignKey("mcp_auth_configs.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Trusted catalog template this workspace connection was materialized from.
+    # Manual connections have no registry_item_id.
+    registry_item_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("registry_items.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # Exact HTTPS origins allowed to receive this catalog connection's auth
+    # header. This binds OAuth tokens to their intended upstream API.
+    allowed_auth_origins: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     # Each entry: {"name": "Header-Name", "secret": bool, "value": "plaintext-or-null"}
     # Secret header values are stored in the secret manager, not here.
     custom_headers: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
@@ -44,6 +62,8 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
         spec_url: str | None = None,
         spec_content: dict[str, Any] | None = None,
         auth_config_id: UUID | None = None,
+        registry_item_id: UUID | None = None,
+        allowed_auth_origins: list[str] | None = None,
         custom_headers: list[dict[str, Any]] | None = None,
         available_tools: list[dict[str, Any]] | None = None,
         status: str = "active",
@@ -56,6 +76,8 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
         self.spec_url = spec_url
         self.spec_content = spec_content
         self.auth_config_id = auth_config_id
+        self.registry_item_id = registry_item_id
+        self.allowed_auth_origins = allowed_auth_origins
         self.custom_headers = custom_headers
         self.available_tools = available_tools or []
         self.status = status
