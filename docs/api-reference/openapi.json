@@ -2464,6 +2464,19 @@
             ],
             "title": "Client Id"
           },
+          "client_id_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Existing user-owned workspace secret containing the OAuth client ID.",
+            "title": "Client Id Secret Id"
+          },
           "client_secret": {
             "anyOf": [
               {
@@ -2476,6 +2489,19 @@
               }
             ],
             "title": "Client Secret"
+          },
+          "client_secret_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Existing user-owned workspace secret containing the OAuth client secret.",
+            "title": "Client Secret Secret Id"
           },
           "credential_mode": {
             "default": "managed",

@@ -255,6 +255,29 @@ class TestOAuth2Refresh:
         assert client.posted["client_secret"] == expected_credential
         managed_sm.get_secret.assert_awaited_once_with(managed_key)
 
+    async def test_custom_refresh_resolves_workspace_secret_references(self):
+        svc, _, workspace_sm = _make_service()
+        config = _oauth_config(
+            client_id=None,
+            client_id_secret_name="metrika_client_id",  # noqa: S106
+            client_secret_secret_name="metrika_client_secret",  # noqa: S106  # pragma: allowlist secret
+        )
+        workspace_sm.get_secret.side_effect = lambda key: {
+            "k": json.dumps({"refresh_token": "refresh", "expires_at": 0}),
+            "metrika_client_id": "workspace-client-id",
+            "metrika_client_secret": "workspace-client-secret",  # pragma: allowlist secret
+        }.get(key)
+        client = _FakeClient(_FakeResp(200, {"access_token": "fresh", "expires_in": 3600}))
+
+        with patch("httpx.AsyncClient", lambda *a, **k: client):
+            headers = await svc.get_auth_headers(config)
+
+        assert headers == {"Authorization": "Bearer fresh"}
+        assert client.posted["client_id"] == "workspace-client-id"
+        assert (
+            client.posted["client_secret"] == "workspace-client-secret"  # noqa: S105  # pragma: allowlist secret
+        )
+
     async def test_force_refresh_refreshes_even_when_unexpired(self):
         svc, _, sm = _make_service()
         import time
@@ -328,6 +351,23 @@ class TestCreateDelete:
 
         repo.create.assert_not_awaited()
 
+    async def test_public_create_cannot_reference_workspace_secrets(self):
+        svc, repo, _ = _make_service()
+
+        with pytest.raises(ValueError, match="only be created by a catalog connection"):
+            await svc.create(
+                name="Forged workspace reference",
+                auth_type=AUTH_TYPE_OAUTH2,
+                config={
+                    "token_url": "https://attacker.example/token",
+                    "client_id": "attacker-id",
+                    "client_secret_secret_name": "valuable_workspace_secret",  # pragma: allowlist secret
+                },
+                credentials={},
+            )
+
+        repo.create.assert_not_awaited()
+
     async def test_public_update_cannot_redirect_managed_token_exchange(self):
         svc, repo, sm = _make_service()
         config_id = uuid4()
@@ -342,6 +382,28 @@ class TestCreateDelete:
                 config_id,
                 config={
                     **managed.config,
+                    "token_url": "https://attacker.example/token",
+                },
+            )
+
+        repo.update.assert_not_awaited()
+        sm.set_secret.assert_not_awaited()
+
+    async def test_public_update_cannot_redirect_workspace_secret_exchange(self):
+        svc, repo, sm = _make_service()
+        config_id = uuid4()
+        referenced = _oauth_config(
+            client_id=None,
+            client_id_secret_name="metrika_client_id",  # noqa: S106
+            client_secret_secret_name="metrika_client_secret",  # noqa: S106  # pragma: allowlist secret
+        )
+        repo.get.return_value = referenced
+
+        with pytest.raises(ValueError, match="only be changed by reconnecting"):
+            await svc.update(
+                config_id,
+                config={
+                    **referenced.config,
                     "token_url": "https://attacker.example/token",
                 },
             )

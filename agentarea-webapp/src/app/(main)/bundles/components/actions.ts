@@ -11,6 +11,7 @@ import type {
   InstallResult,
   ModelInstanceResponse,
   RegistryItemResponse,
+  SecretResponse,
   SkillFileResponse,
 } from "@/api/client/types.gen";
 import {
@@ -29,6 +30,7 @@ import {
   zInstallSkillV1SkillsSkillIdInstallPostResponse,
   zListAgentsV1AgentsGetResponse,
   zListModelInstancesV1ModelInstancesGetResponse,
+  zListSecretsV1SecretsGetResponse,
   zListSkillFilesV1SkillsSkillIdFilesGetResponse,
   zUpdateAgentV1AgentsAgentIdPatchResponse,
 } from "@/api/client/zod.gen";
@@ -46,6 +48,7 @@ import {
   installSkill,
   listAgents,
   listModelInstances,
+  listSecrets,
   updateAgent,
 } from "@/lib/api";
 import { PAGE, TYPE_KEYS, type CatalogType } from "./catalog-data";
@@ -59,6 +62,14 @@ export type WorkspaceModel = Pick<
   | "provider_name"
   | "provider_icon_url"
 >;
+
+export async function listWorkspaceSecretsAction(): Promise<SecretResponse[]> {
+  const { data, error } = await listSecrets();
+  if (error || !data) {
+    throw new Error(errorMessage(error, "Failed to load workspace secrets"));
+  }
+  return zListSecretsV1SecretsGetResponse.parse(data);
+}
 
 function errorMessage(error: unknown, fallback: string): string {
   if (!error) return fallback;

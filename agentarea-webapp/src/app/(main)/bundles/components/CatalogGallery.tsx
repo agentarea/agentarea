@@ -36,6 +36,10 @@ import {
 } from "lucide-react";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { Streamdown } from "streamdown";
+import type {
+  CatalogConnectionRequest,
+  SecretResponse,
+} from "@/api/client/types.gen";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import EmptyState from "@/components/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
@@ -80,6 +84,7 @@ import {
   listActiveModelInstancesAction,
   listSkillFilesAction,
   listWorkspaceAgentsAction,
+  listWorkspaceSecretsAction,
   type AgentLite,
   type WorkspaceModel,
 } from "./actions";
@@ -1048,6 +1053,14 @@ type SetupTier =
   | "needs_tenant_config"
   | "unverified";
 
+type CustomOAuthAppInput = Pick<
+  CatalogConnectionRequest,
+  | "client_id"
+  | "client_secret"
+  | "client_id_secret_id"
+  | "client_secret_secret_id"
+>;
+
 function DetailView({
   entry,
   onBack,
@@ -1107,14 +1120,13 @@ function DetailView({
 
   async function connectCatalogApi(
     credentialMode: "managed" | "custom",
-    custom?: { clientId: string; clientSecret: string }
+    custom?: CustomOAuthAppInput
   ) {
     setState({ phase: "connecting" });
     try {
       const result = await connectCatalogConnectionAction(entry.id, {
         credential_mode: credentialMode,
-        client_id: custom?.clientId,
-        client_secret: custom?.clientSecret,
+        ...custom,
         return_to: window.location.origin,
       });
       window.location.assign(result.authorize_url);
@@ -1424,14 +1436,54 @@ function CustomOAuthApp({
   onConnect,
 }: {
   connecting: boolean;
-  onConnect: (credentials: { clientId: string; clientSecret: string }) => void;
+  onConnect: (credentials: CustomOAuthAppInput) => void;
 }) {
+  const manual = "manual";
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
-  const ready = clientId.trim().length > 0 && clientSecret.length > 0;
+  const [clientIdSource, setClientIdSource] = useState(manual);
+  const [clientSecretSource, setClientSecretSource] = useState(manual);
+  const [secrets, setSecrets] = useState<SecretResponse[] | null>(null);
+  const [secretsError, setSecretsError] = useState<string | null>(null);
+  const loadingSecrets = useRef(false);
+  const reusableSecrets = (secrets ?? []).filter((secret) => !secret.owner);
+  const ready =
+    (clientIdSource !== manual || clientId.trim().length > 0) &&
+    (clientSecretSource !== manual || clientSecret.length > 0);
+
+  async function loadSecrets() {
+    if (secrets !== null || loadingSecrets.current) return;
+    loadingSecrets.current = true;
+    setSecretsError(null);
+    try {
+      setSecrets(await listWorkspaceSecretsAction());
+    } catch (error) {
+      setSecretsError(
+        error instanceof Error ? error.message : "Failed to load workspace secrets"
+      );
+    } finally {
+      loadingSecrets.current = false;
+    }
+  }
+
+  function connect() {
+    onConnect({
+      client_id: clientIdSource === manual ? clientId.trim() : undefined,
+      client_secret: clientSecretSource === manual ? clientSecret : undefined,
+      client_id_secret_id:
+        clientIdSource === manual ? undefined : clientIdSource,
+      client_secret_secret_id:
+        clientSecretSource === manual ? undefined : clientSecretSource,
+    });
+  }
 
   return (
-    <details className="group rounded-lg border border-border/60">
+    <details
+      className="group rounded-lg border border-border/60"
+      onToggle={(event) => {
+        if (event.currentTarget.open) void loadSecrets();
+      }}
+    >
       <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground">
         Advanced
       </summary>
@@ -1439,28 +1491,71 @@ function CustomOAuthApp({
         <p className="text-xs text-muted-foreground">
           Use your own OAuth app credentials instead of the AgentArea app.
         </p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Input
-            value={clientId}
-            onChange={(event) => setClientId(event.target.value)}
-            aria-label="OAuth client ID"
-            placeholder="Client ID"
-            autoComplete="off"
-          />
-          <Input
-            value={clientSecret}
-            onChange={(event) => setClientSecret(event.target.value)}
-            aria-label="OAuth client secret"
-            placeholder="Client secret"
-            type="password"
-            autoComplete="new-password"
-          />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Select value={clientIdSource} onValueChange={setClientIdSource}>
+              <SelectTrigger aria-label="OAuth client ID source">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={manual}>Enter client ID</SelectItem>
+                {reusableSecrets.map((secret) => (
+                  <SelectItem key={secret.id} value={secret.id}>
+                    {secret.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {clientIdSource === manual && (
+              <Input
+                value={clientId}
+                onChange={(event) => setClientId(event.target.value)}
+                aria-label="OAuth client ID"
+                placeholder="Client ID"
+                autoComplete="off"
+              />
+            )}
+          </div>
+          <div className="space-y-2">
+            <Select
+              value={clientSecretSource}
+              onValueChange={setClientSecretSource}
+            >
+              <SelectTrigger aria-label="OAuth client secret source">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={manual}>Enter client secret</SelectItem>
+                {reusableSecrets.map((secret) => (
+                  <SelectItem key={secret.id} value={secret.id}>
+                    {secret.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {clientSecretSource === manual && (
+              <Input
+                value={clientSecret}
+                onChange={(event) => setClientSecret(event.target.value)}
+                aria-label="OAuth client secret"
+                placeholder="Client secret"
+                type="password"
+                autoComplete="new-password"
+              />
+            )}
+          </div>
         </div>
+        {secretsError && <p className="text-xs text-red-600">{secretsError}</p>}
+        {secrets !== null && reusableSecrets.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            No reusable workspace secrets yet. You can enter both values here.
+          </p>
+        )}
         <Button
           size="sm"
           variant="outline"
           disabled={!ready || connecting}
-          onClick={() => onConnect({ clientId: clientId.trim(), clientSecret })}
+          onClick={connect}
         >
           Connect with custom app
         </Button>

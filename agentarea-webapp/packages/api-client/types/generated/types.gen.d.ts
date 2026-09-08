@@ -1362,9 +1362,21 @@ export type CatalogConnectionRequest = {
      */
     client_id?: string | null;
     /**
+     * Client Id Secret Id
+     *
+     * Existing user-owned workspace secret containing the OAuth client ID.
+     */
+    client_id_secret_id?: string | null;
+    /**
      * Client Secret
      */
     client_secret?: string | null;
+    /**
+     * Client Secret Secret Id
+     *
+     * Existing user-owned workspace secret containing the OAuth client secret.
+     */
+    client_secret_secret_id?: string | null;
     /**
      * Credential Mode
      */

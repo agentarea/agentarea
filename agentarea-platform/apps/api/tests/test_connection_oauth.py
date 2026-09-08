@@ -2,7 +2,7 @@
 
 import urllib.parse
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 from uuid import uuid4
 
 import pytest
@@ -34,7 +34,10 @@ def test_catalog_oauth_rejects_unreserved_platform_secret_reference(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_managed_connect_is_one_click_and_state_contains_no_secret(monkeypatch):
+@pytest.mark.parametrize("credential_source", ["managed", "inline", "workspace_secrets"])
+async def test_connect_uses_requested_credential_source_without_secret_in_state(
+    monkeypatch, credential_source
+):
     item_id = uuid4()
     connection_id = uuid4()
     auth_config_id = uuid4()
@@ -92,7 +95,31 @@ async def test_managed_connect_is_one_click_and_state_contains_no_secret(monkeyp
     monkeypatch.setattr(connection_oauth, "OpenAPIConnectionService", _ConnectionService)
     monkeypatch.setattr(connection_oauth, "MCPAuthService", _AuthService)
     monkeypatch.setattr(connection_oauth, "RepositoryFactory", lambda *_args: object())
-    monkeypatch.setattr(connection_oauth, "get_real_secret_manager", lambda **_kwargs: object())
+    client_id_secret = SimpleNamespace(
+        id=uuid4(),
+        secret_name="metrika_client_id",  # noqa: S106  # pragma: allowlist secret
+        owner_type=None,
+    )
+    client_secret_secret = SimpleNamespace(
+        id=uuid4(),
+        secret_name="metrika_client_secret",  # noqa: S106  # pragma: allowlist secret
+        owner_type=None,
+    )
+    workspace_manager = SimpleNamespace(
+        get_secret=AsyncMock(
+            side_effect=lambda name: {
+                "metrika_client_id": "workspace-client-id",
+                "metrika_client_secret": "workspace-client-secret",  # pragma: allowlist secret
+            }.get(name)
+        )
+    )
+    secret_catalog = SimpleNamespace(
+        get=AsyncMock(side_effect=[client_id_secret, client_secret_secret]),
+        add_reference=AsyncMock(),
+    )
+    monkeypatch.setattr(
+        connection_oauth, "get_real_secret_manager", lambda **_kwargs: workspace_manager
+    )
     monkeypatch.setattr(connection_oauth, "_managed_secret_manager", lambda _session: object())
     monkeypatch.setattr(
         connection_oauth,
@@ -107,23 +134,116 @@ async def test_managed_connect_is_one_click_and_state_contains_no_secret(monkeyp
         lambda: "https://api.agentarea.ru/v1/connections/oauth/callback",
     )
 
+    if credential_source == "managed":
+        body = connection_oauth.CatalogConnectionRequest(return_to="https://app.agentarea.ru")
+    elif credential_source == "inline":
+        body = connection_oauth.CatalogConnectionRequest(
+            credential_mode="custom",
+            client_id="inline-client-id",
+            client_secret="inline-client-secret",  # noqa: S106  # pragma: allowlist secret
+            return_to="https://app.agentarea.ru",
+        )
+    else:
+        body = connection_oauth.CatalogConnectionRequest(
+            credential_mode="custom",
+            client_id_secret_id=client_id_secret.id,
+            client_secret_secret_id=client_secret_secret.id,
+            return_to="https://app.agentarea.ru",
+        )
+
     response = await connection_oauth.connect_catalog_item(
         item_id,
-        connection_oauth.CatalogConnectionRequest(return_to="https://app.agentarea.ru"),
+        body,
         UserContext(user_id=str(uuid4()), workspace_id=str(uuid4())),
         AsyncMock(),
+        secret_catalog,
     )
 
     assert response.connection_id == connection_id
     query = urllib.parse.parse_qs(urllib.parse.urlparse(response.authorize_url).query)
-    assert query["client_id"] == ["managed-client-id"]
+    expected_client_id = {
+        "managed": "managed-client-id",
+        "inline": "inline-client-id",
+        "workspace_secrets": "workspace-client-id",  # pragma: allowlist secret
+    }[credential_source]
+    assert query["client_id"] == [expected_client_id]
     assert query["redirect_uri"] == ["https://api.agentarea.ru/v1/connections/oauth/callback"]
     assert query["scope"] == ["metrika:read"]
     assert query["code_challenge_method"] == ["S256"]
 
     auth_kwargs = auth_create.await_args.kwargs
     assert auth_kwargs["allow_managed_credentials"] is True
-    assert auth_kwargs["credentials"] == {}
+    if credential_source == "managed":
+        assert auth_kwargs["credentials"] == {}
+        assert auth_kwargs["config"]["client_id"] == "managed-client-id"
+        secret_catalog.add_reference.assert_not_awaited()
+    elif credential_source == "inline":
+        assert auth_kwargs["config"]["client_id"] == "inline-client-id"
+        assert auth_kwargs["credentials"] == {  # pragma: allowlist secret
+            "client_secret": "inline-client-secret"  # pragma: allowlist secret
+        }
+        secret_catalog.add_reference.assert_not_awaited()
+    else:
+        assert auth_kwargs["credentials"] == {}
+        assert "client_id" not in auth_kwargs["config"]
+        assert (
+            auth_kwargs["config"]["client_id_secret_name"] == "metrika_client_id"  # noqa: S105
+        )
+        assert (
+            auth_kwargs["config"]["client_secret_secret_name"] == "metrika_client_secret"  # noqa: S105  # pragma: allowlist secret
+        )
+        assert secret_catalog.add_reference.await_args_list == [
+            call(client_id_secret.id, "mcp_auth_config", str(auth_config_id), "client_id"),
+            call(
+                client_secret_secret.id,
+                "mcp_auth_config",
+                str(auth_config_id),
+                "client_secret",
+            ),
+        ]
     state_payload = stored_state.await_args.args[1]
     assert "client_secret" not in state_payload
     assert state_payload["connection_id"] == str(connection_id)
+
+
+def test_custom_connect_requires_exactly_one_source_per_credential():
+    secret_id = uuid4()
+
+    with pytest.raises(ValueError, match="client ID must be entered or selected"):
+        connection_oauth.CatalogConnectionRequest(
+            credential_mode="custom",
+            client_secret="secret",  # noqa: S106  # pragma: allowlist secret
+        )
+
+    with pytest.raises(ValueError, match="client secret must be entered or selected"):
+        connection_oauth.CatalogConnectionRequest(
+            credential_mode="custom",
+            client_id="id",
+            client_secret="secret",  # noqa: S106  # pragma: allowlist secret
+            client_secret_secret_id=secret_id,
+        )
+
+
+@pytest.mark.asyncio
+async def test_workspace_secret_source_rejects_connection_owned_secret():
+    secret_id = uuid4()
+    catalog = SimpleNamespace(
+        get=AsyncMock(
+            return_value=SimpleNamespace(
+                id=secret_id,
+                secret_name="mcp_auth_cred:managed",  # noqa: S106  # pragma: allowlist secret
+                owner_type="mcp_auth_config",
+            )
+        )
+    )
+    manager = SimpleNamespace(get_secret=AsyncMock(return_value="must-not-be-read"))
+
+    with pytest.raises(HTTPException, match="must be a user-owned workspace secret"):
+        await connection_oauth._workspace_secret_value(
+            catalog,
+            manager,
+            secret_id,
+            "client secret",
+        )
+
+    manager.get_secret.assert_not_awaited()
