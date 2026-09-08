@@ -1443,12 +1443,14 @@ function CustomOAuthApp({
           <Input
             value={clientId}
             onChange={(event) => setClientId(event.target.value)}
+            aria-label="OAuth client ID"
             placeholder="Client ID"
             autoComplete="off"
           />
           <Input
             value={clientSecret}
             onChange={(event) => setClientSecret(event.target.value)}
+            aria-label="OAuth client secret"
             placeholder="Client secret"
             type="password"
             autoComplete="new-password"

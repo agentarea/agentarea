@@ -143,7 +143,10 @@ def _oauth_profile(spec: dict[str, Any]) -> dict[str, Any]:
         )
     managed_key = str(oauth["managed_credentials_key"])
     if not managed_key.startswith(_MANAGED_CREDENTIALS_PREFIX):
-        raise HTTPException(status_code=500, detail="Invalid managed OAuth secret key")
+        raise HTTPException(
+            status_code=500,
+            detail="Invalid managed OAuth credential reference",
+        )
 
     for url_field in ("authorization_url", "token_url"):
         url = str(oauth[url_field])
