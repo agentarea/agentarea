@@ -69,6 +69,8 @@ def discover_models(
         logger.warning("No base URL for provider %s, skipping discovery", provider_key)
         return []
 
+    # OpenAI-compatible routers are configured with the version already in the
+    # URL; appending it unconditionally produced /v1/v1 and a swallowed 404.
     base = base.rstrip("/")
     url = f"{base}/models" if base.endswith("/v1") else f"{base}/v1/models"
     headers = {"Authorization": f"Bearer {api_key}"}
