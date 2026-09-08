@@ -321,10 +321,24 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Prepare env file
-        # .env.example is a complete, ready-to-run config (signing JWKS +
-        # encryption key filled). The compose stack reads it via the default
-        # `.env` lookup.
-        run: cp .env.example .env
+        # .env.example carries the non-secret defaults but leaves the Ory
+        # secrets and the Kratos signing key blank on purpose: they are
+        # generated per install and never committed. compose declares them
+        # `${VAR:?}`, which also rejects an empty value, so copying the
+        # example alone leaves the stack unable to start.
+        #
+        # --force is load-bearing: a plain run sees the example's empty
+        # `KRATOS_JWKS_B64=` line, concludes the secrets are already present,
+        # and exits without writing any.
+        run: |
+          cp .env.example .env
+          ./scripts/gen-dev-secrets.sh --force
+          # kratos reads the signing key over a bind mount as uid 10000, while
+          # the runner writes it as uid 1001. 0600 is right on a developer's
+          # machine and unreadable in the container, which surfaced only as a
+          # 500 from /sessions/whoami. This key is generated per run and dies
+          # with the job, so widening it here gives nothing away.
+          chmod 644 config/auth/kratos/jwks.json
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -395,10 +409,21 @@ jobs:
           KRATOS_ADMIN_URL: http://localhost:4434
           KRATOS_PUBLIC_URL: http://localhost:4433
         run: |
+          # -rs prints why a module skipped. Both fuzz modules skip themselves
+          # at import when the stack is unreachable, and pytest then exits 5
+          # ("no tests collected") — which reads as an unexplained failure.
+          set +e
           uv run python -m pytest \
             tests/e2e/api/test_openapi_fuzz.py \
             tests/e2e/api/test_stateful_fuzz.py \
-            -m "" -p no:cacheprovider -o addopts="" --tb=short
+            -m "" -p no:cacheprovider -o addopts="" --tb=short -rs
+          status=$?
+          set -e
+          if [ "$status" -eq 5 ]; then
+            echo "::error::The fuzz suite collected nothing: both modules skipped at import (reason above). A silently skipped fuzz suite is indistinguishable from no coverage, so this is a failure, not a pass."
+            exit 1
+          fi
+          exit $status
 
       - name: Stack logs (always)
         if: always()
@@ -409,6 +434,11 @@ jobs:
           # the runner before, and the app can only be as healthy as its deps.
           docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
             logs --tail=200 rustfs db app_migrations || true
+          # kratos is one of the three services this job starts and the one the
+          # tests authenticate through, but it was never dumped here — a 500
+          # from its tokenizer was invisible.
+          docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
+            logs --tail=200 kratos || true
 
       - name: Tear down
         if: always()
