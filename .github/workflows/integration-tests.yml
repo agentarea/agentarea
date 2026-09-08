@@ -50,7 +50,6 @@ jobs:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
           version: "0.8.22"
-          version: "latest"
 
       - name: Cache uv
         uses: actions/cache@v3
@@ -106,7 +105,6 @@ jobs:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
           version: "0.8.22"
-          version: "latest"
 
       - name: Cache uv
         uses: actions/cache@v3
@@ -204,7 +202,6 @@ jobs:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
           version: "0.8.22"
-          version: "latest"
 
       - name: Cache uv
         uses: actions/cache@v3
@@ -300,7 +297,6 @@ jobs:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
           version: "0.8.22"
-          version: "latest"
 
       - name: Run module integration tests
         if: steps.changed.outputs.module == 'true'
@@ -381,7 +377,6 @@ jobs:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
           version: "0.8.22"
-          version: "latest"
 
       - name: Cache uv
         uses: actions/cache@v3
