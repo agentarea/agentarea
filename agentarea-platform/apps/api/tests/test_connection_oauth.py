@@ -29,7 +29,7 @@ def test_catalog_oauth_rejects_unreserved_platform_secret_reference(monkeypatch)
     profile = _oauth_profile()
     profile["managed_credentials_key"] = "unrelated-platform-key"
 
-    with pytest.raises(HTTPException, match="Invalid managed OAuth secret key"):
+    with pytest.raises(HTTPException, match="Invalid managed OAuth credential reference"):
         connection_oauth._oauth_profile({"oauth": profile})
 
 
