@@ -403,10 +403,21 @@ jobs:
           KRATOS_ADMIN_URL: http://localhost:4434
           KRATOS_PUBLIC_URL: http://localhost:4433
         run: |
+          # -rs prints why a module skipped. Both fuzz modules skip themselves
+          # at import when the stack is unreachable, and pytest then exits 5
+          # ("no tests collected") — which reads as an unexplained failure.
+          set +e
           uv run python -m pytest \
             tests/e2e/api/test_openapi_fuzz.py \
             tests/e2e/api/test_stateful_fuzz.py \
-            -m "" -p no:cacheprovider -o addopts="" --tb=short
+            -m "" -p no:cacheprovider -o addopts="" --tb=short -rs
+          status=$?
+          set -e
+          if [ "$status" -eq 5 ]; then
+            echo "::error::The fuzz suite collected nothing: both modules skipped at import (reason above). A silently skipped fuzz suite is indistinguishable from no coverage, so this is a failure, not a pass."
+            exit 1
+          fi
+          exit $status
 
       - name: Stack logs (always)
         if: always()
