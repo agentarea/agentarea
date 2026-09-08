@@ -14,7 +14,11 @@ from typing import Any, Literal
 from uuid import UUID
 
 import httpx
-from agentarea_api.api.deps.services import DatabaseSessionDep, get_real_secret_manager
+from agentarea_api.api.deps.services import (
+    DatabaseSessionDep,
+    SecretCatalogServiceDep,
+    get_real_secret_manager,
+)
 from agentarea_api.api.v1.registries import require_platform_catalog_write
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
@@ -22,6 +26,7 @@ from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
+from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_mcp.application.auth_service import MCPAuthService, MissingCredentialsError
 from agentarea_mcp.application.oauth_client_service import PKCEPair
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
@@ -30,9 +35,11 @@ from agentarea_openapi.application.url_validator import validate_url
 from agentarea_openapi.infrastructure.repository import OpenAPIConnectionRepository
 from agentarea_openapi.schemas.dto import OpenAPIConnectionCreate
 from agentarea_registry.infrastructure.repository import RegistryItemRepository, RegistryRepository
+from agentarea_secrets.catalog_service import SecretCatalogService, SecretNotFoundError
+from agentarea_secrets.models import EncryptedSecret
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -53,7 +60,38 @@ class CatalogConnectionRequest(BaseModel):
     credential_mode: Literal["managed", "custom"] = "managed"
     client_id: str | None = Field(default=None, min_length=1, max_length=512)
     client_secret: str | None = Field(default=None, min_length=1, max_length=4096)
+    client_id_secret_id: UUID | None = Field(
+        default=None,
+        description="Existing user-owned workspace secret containing the OAuth client ID.",
+    )
+    client_secret_secret_id: UUID | None = Field(
+        default=None,
+        description="Existing user-owned workspace secret containing the OAuth client secret.",
+    )
     return_to: str = Field(default="", max_length=2048)
+
+    @model_validator(mode="after")
+    def validate_credential_sources(self) -> "CatalogConnectionRequest":
+        fields = (
+            self.client_id,
+            self.client_secret,
+            self.client_id_secret_id,
+            self.client_secret_secret_id,
+        )
+        if self.credential_mode == "managed":
+            if any(value is not None for value in fields):
+                raise ValueError("Managed connections do not accept custom OAuth credentials.")
+            return self
+
+        for label, value, secret_id in (
+            ("client ID", self.client_id, self.client_id_secret_id),
+            ("client secret", self.client_secret, self.client_secret_secret_id),
+        ):
+            if (value is None) == (secret_id is None):
+                raise ValueError(
+                    f"Custom OAuth {label} must be entered or selected from workspace secrets."
+                )
+        return self
 
 
 class CatalogConnectionResponse(BaseModel):
@@ -195,6 +233,34 @@ async def _managed_credentials(manager, key: str) -> tuple[str, str]:
     return client_id, client_secret
 
 
+async def _workspace_secret_value(
+    catalog: SecretCatalogService,
+    manager: BaseSecretManager,
+    secret_id: UUID,
+    label: str,
+) -> tuple[EncryptedSecret, str]:
+    """Resolve a stable, workspace-checked reference without exposing its value."""
+    try:
+        secret = await catalog.get(secret_id)
+    except SecretNotFoundError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Selected OAuth {label} secret is not available in this workspace.",
+        ) from exc
+    if secret.owner_type is not None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Selected OAuth {label} must be a user-owned workspace secret.",
+        )
+    value = await manager.get_secret(secret.secret_name)
+    if not value:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Selected OAuth {label} secret has no value.",
+        )
+    return secret, value
+
+
 @router.put(
     "/oauth/apps/{provider_key}",
     response_model=ManagedOAuthAppResponse,
@@ -225,6 +291,7 @@ async def connect_catalog_item(
     body: CatalogConnectionRequest,
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
+    secret_catalog: SecretCatalogServiceDep,
 ) -> CatalogConnectionResponse:
     """Materialize a trusted OpenAPI template and start its OAuth flow."""
     item_repo = RegistryItemRepository(db_session, user_context)
@@ -257,19 +324,40 @@ async def connect_catalog_item(
     )
     platform_secret_manager = _managed_secret_manager(db_session)
     repository_factory = RepositoryFactory(db_session, user_context)
+    credential_config: dict[str, Any] = {}
+    credential_references: list[tuple[UUID, str]] = []
     if body.credential_mode == "managed":
         client_id, _ = await _managed_credentials(
             platform_secret_manager, str(oauth["managed_credentials_key"])
         )
+        credential_config["client_id"] = client_id
         credentials: dict[str, Any] = {}
     else:
-        if not body.client_id or not body.client_secret:
-            raise HTTPException(
-                status_code=422,
-                detail="Custom OAuth app requires both client ID and client secret.",
+        if body.client_id_secret_id is not None:
+            client_id_secret, client_id = await _workspace_secret_value(
+                secret_catalog,
+                workspace_secret_manager,
+                body.client_id_secret_id,
+                "client ID",
             )
-        client_id = body.client_id
-        credentials = {"client_secret": body.client_secret}
+            credential_config["client_id_secret_name"] = client_id_secret.secret_name
+            credential_references.append((client_id_secret.id, "client_id"))
+        else:
+            client_id = str(body.client_id)
+            credential_config["client_id"] = client_id
+
+        if body.client_secret_secret_id is not None:
+            client_secret, _ = await _workspace_secret_value(
+                secret_catalog,
+                workspace_secret_manager,
+                body.client_secret_secret_id,
+                "client secret",
+            )
+            credential_config["client_secret_secret_name"] = client_secret.secret_name
+            credential_references.append((client_secret.id, "client_secret"))
+            credentials = {}
+        else:
+            credentials = {"client_secret": body.client_secret}
 
     connection_service = OpenAPIConnectionService(
         repository_factory=repository_factory,
@@ -303,7 +391,7 @@ async def connect_catalog_item(
             "provider": oauth["provider_key"],
             "authorization_url": oauth["authorization_url"],
             "token_url": oauth["token_url"],
-            "client_id": client_id,
+            **credential_config,
             "scopes": oauth["scopes"],
             "authorization_scheme": oauth["authorization_scheme"],
             "client_auth_method": oauth["client_auth_method"],
@@ -313,6 +401,13 @@ async def connect_catalog_item(
         credentials=credentials,
         allow_managed_credentials=True,
     )
+    for secret_id, field in credential_references:
+        await secret_catalog.add_reference(
+            secret_id,
+            "mcp_auth_config",
+            str(auth_config.id),
+            field,
+        )
 
     pkce = PKCEPair.generate()
     state = secrets.token_urlsafe(32)

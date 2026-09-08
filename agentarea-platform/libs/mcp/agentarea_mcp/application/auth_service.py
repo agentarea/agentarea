@@ -32,6 +32,13 @@ def _managed_credentials_key(config: dict[str, Any]) -> str | None:
     return key
 
 
+def _uses_workspace_secret_references(config: dict[str, Any]) -> bool:
+    """Whether trusted catalog code attached existing workspace credentials."""
+    return any(
+        config.get(field) for field in ("client_id_secret_name", "client_secret_secret_name")
+    )
+
+
 class MissingCredentialsError(Exception):
     """The auth config names credentials that are not there.
 
@@ -119,6 +126,14 @@ class MCPAuthService:
         creds = await self._load_credentials(config)
         client_id = str(config.config.get("client_id") or "")
         client_secret = str(creds.get("client_secret") or "")
+        client_id_secret_name = str(config.config.get("client_id_secret_name") or "")
+        client_secret_secret_name = str(config.config.get("client_secret_secret_name") or "")
+        if client_id_secret_name:
+            client_id = str(await self._secret_manager.get_secret(client_id_secret_name) or "")
+        if client_secret_secret_name:
+            client_secret = str(
+                await self._secret_manager.get_secret(client_secret_secret_name) or ""
+            )
         managed_key = _managed_credentials_key(config.config)
         if managed_key is not None:
             if self._managed_secret_manager is None:
@@ -303,6 +318,10 @@ class MCPAuthService:
         """Create and persist a new auth config, storing creds encrypted."""
         if _managed_credentials_key(config) is not None and not allow_managed_credentials:
             raise ValueError("Managed OAuth configs can only be created by a catalog connection")
+        if _uses_workspace_secret_references(config) and not allow_managed_credentials:
+            raise ValueError(
+                "Workspace OAuth secret references can only be created by a catalog connection"
+            )
         auth_config = MCPAuthConfig(
             name=name,
             auth_type=auth_type,
@@ -351,10 +370,17 @@ class MCPAuthService:
             return None
         existing_is_managed = _managed_credentials_key(existing.config) is not None
         incoming_is_managed = config is not None and _managed_credentials_key(config) is not None
-        if (existing_is_managed or incoming_is_managed) and not allow_managed_credentials:
+        existing_has_references = _uses_workspace_secret_references(existing.config)
+        incoming_has_references = config is not None and _uses_workspace_secret_references(config)
+        if (
+            existing_is_managed
+            or incoming_is_managed
+            or existing_has_references
+            or incoming_has_references
+        ) and not allow_managed_credentials:
             if config is not None or credentials is not None:
                 raise ValueError(
-                    "Managed OAuth credentials can only be changed by reconnecting the catalog connection"
+                    "Catalog OAuth credentials can only be changed by reconnecting the catalog connection"
                 )
 
         updates: dict[str, Any] = {}

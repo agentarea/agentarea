@@ -469,7 +469,9 @@ export const zBundleSkill = z.object({
  */
 export const zCatalogConnectionRequest = z.object({
   client_id: z.string().min(1).max(512).nullish(),
+  client_id_secret_id: z.string().uuid().nullish(),
   client_secret: z.string().min(1).max(4096).nullish(),
+  client_secret_secret_id: z.string().uuid().nullish(),
   credential_mode: z.enum(["managed", "custom"]).optional().default("managed"),
   return_to: z.string().max(2048).optional().default(""),
 });

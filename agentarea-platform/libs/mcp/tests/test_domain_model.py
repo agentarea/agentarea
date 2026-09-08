@@ -1,5 +1,6 @@
 import pytest
 from agentarea_common.base.models import BaseModel
+from agentarea_mcp.domain.auth_models import AUTH_TYPE_OAUTH2, MCPAuthConfig
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.domain.verification_types import (
     DEFAULT_VERIFICATION,
@@ -28,6 +29,34 @@ class TestVerificationTypes:
         d2 = dict(DEFAULT_VERIFICATION)
         d1["status"] = "succeeded"
         assert d2["status"] == "never_attempted"
+
+
+class TestMCPAuthConfigModel:
+    def test_oauth_client_id_can_reference_a_workspace_secret(self):
+        config = MCPAuthConfig(
+            name="Metrika",
+            auth_type=AUTH_TYPE_OAUTH2,
+            config={
+                "token_url": "https://oauth.example/token",
+                "client_id_secret_name": "metrika_client_id",
+            },
+        )
+
+        config.validate_config()
+
+    def test_oauth_client_id_rejects_ambiguous_sources(self):
+        config = MCPAuthConfig(
+            name="Metrika",
+            auth_type=AUTH_TYPE_OAUTH2,
+            config={
+                "token_url": "https://oauth.example/token",
+                "client_id": "inline-id",
+                "client_id_secret_name": "metrika_client_id",
+            },
+        )
+
+        with pytest.raises(ValueError, match="exactly one"):
+            config.validate_config()
 
 
 class TestMCPServerInstanceModel:
