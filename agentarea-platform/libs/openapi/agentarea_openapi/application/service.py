@@ -313,9 +313,6 @@ class OpenAPIConnectionService:
             )
         return headers
 
-    async def get_by_registry_item_id(self, registry_item_id: UUID) -> OpenAPIConnection | None:
-        return await self._repo.get_by_registry_item_id(registry_item_id)
-
     async def get_connection(self, connection_id: UUID) -> OpenAPIConnection | None:
         return await self._repo.get_by_id(str(connection_id))
 

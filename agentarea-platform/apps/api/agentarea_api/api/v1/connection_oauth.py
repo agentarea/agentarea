@@ -130,10 +130,11 @@ async def _store_state(state: str, payload: dict[str, Any]) -> None:
 async def _pop_state(state: str) -> dict[str, Any] | None:
     redis = await _redis()
     key = f"{_STATE_PREFIX}:{state}"
-    raw = await redis.get(key)
+    # Consume state in one operation so concurrent/replayed callbacks cannot
+    # both exchange the same authorization code.
+    raw = await redis.getdel(key)
     if raw is None:
         return None
-    await redis.delete(key)
     return json.loads(raw)
 
 
@@ -364,20 +365,20 @@ async def connect_catalog_item(
         secret_manager=workspace_secret_manager,
         allow_private_urls=get_settings().mcp.ALLOW_PRIVATE_URLS,
     )
-    connection = await connection_service.get_by_registry_item_id(item_id)
-    if connection is None:
-        connection = await connection_service.create_connection(
-            OpenAPIConnectionCreate(
-                name=item.name,
-                description=item.description,
-                base_url=base_url,
-                spec_url=spec.get("spec_url"),
-                spec_content=spec.get("spec_content"),
-            ),
-            registry_item_id=item_id,
-            allowed_auth_origins=[str(origin) for origin in allowed_origins],
-            status="pending",
-        )
+    # A catalog item is a reusable connection definition, not a singleton.
+    # Each authorization creates an independently governable account instance.
+    connection = await connection_service.create_connection(
+        OpenAPIConnectionCreate(
+            name=item.name,
+            description=item.description,
+            base_url=base_url,
+            spec_url=spec.get("spec_url"),
+            spec_content=spec.get("spec_content"),
+        ),
+        registry_item_id=item_id,
+        allowed_auth_origins=[str(origin) for origin in allowed_origins],
+        status="pending",
+    )
 
     auth_service = MCPAuthService(
         MCPAuthConfigRepository(db_session, user_context),

@@ -1,5 +1,6 @@
 """Contract and trust-boundary tests for one-click connection OAuth."""
 
+import json
 import urllib.parse
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, call
@@ -74,10 +75,6 @@ async def test_connect_uses_requested_credential_source_without_secret_in_state(
     class _ConnectionService:
         def __init__(self, *_args, **_kwargs):
             pass
-
-        async def get_by_registry_item_id(self, requested_id):
-            assert requested_id == item_id
-            return None
 
         create_connection = connection_create
 
@@ -160,6 +157,8 @@ async def test_connect_uses_requested_credential_source_without_secret_in_state(
     )
 
     assert response.connection_id == connection_id
+    connection_create.assert_awaited_once()
+    assert connection_create.await_args.kwargs["registry_item_id"] == item_id
     query = urllib.parse.parse_qs(urllib.parse.urlparse(response.authorize_url).query)
     expected_client_id = {
         "managed": "managed-client-id",
@@ -204,6 +203,16 @@ async def test_connect_uses_requested_credential_source_without_secret_in_state(
     state_payload = stored_state.await_args.args[1]
     assert "client_secret" not in state_payload
     assert state_payload["connection_id"] == str(connection_id)
+
+
+@pytest.mark.asyncio
+async def test_oauth_state_is_consumed_atomically(monkeypatch):
+    payload = {"connection_id": str(uuid4())}
+    redis = SimpleNamespace(getdel=AsyncMock(return_value=json.dumps(payload)))
+    monkeypatch.setattr(connection_oauth, "_redis", AsyncMock(return_value=redis))
+
+    assert await connection_oauth._pop_state("one-time-state") == payload
+    redis.getdel.assert_awaited_once_with("connection_oauth_state:one-time-state")
 
 
 def test_custom_connect_requires_exactly_one_source_per_credential():
