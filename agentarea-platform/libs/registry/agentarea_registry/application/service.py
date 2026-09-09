@@ -44,7 +44,7 @@ VALID_REGISTRY_TYPES = (
     "agents",
     "bundles",
 )
-VALID_SOURCE_TYPES = ("url", "github", "api")
+VALID_SOURCE_TYPES = ("url", "github", "api", "managed")
 
 # Top-level catalog key -> registry type. Each catalog document carries exactly
 # one of these keys, so the registry type can be inferred from the payload shape
@@ -57,6 +57,18 @@ TYPE_BY_TOPLEVEL_KEY = {
     "agents": "agents",
     "bundles": "bundles",
 }
+
+
+class RegistryNotFoundError(ValueError):
+    """A requested catalog registry does not exist."""
+
+
+class CatalogItemNotFoundError(ValueError):
+    """A requested catalog item does not exist."""
+
+
+class CatalogItemAlreadyExistsError(ValueError):
+    """A registry already contains the requested external identifier."""
 
 
 class RegistryService:
@@ -87,7 +99,7 @@ class RegistryService:
         name: str,
         registry_type: str,
         source_type: str,
-        source_url: str,
+        source_url: str | None,
         description: str | None = None,
         sync_mode: str = "manual",
     ) -> Registry:
@@ -95,6 +107,10 @@ class RegistryService:
             raise ValueError(f"registry_type must be one of {VALID_REGISTRY_TYPES}")
         if source_type not in VALID_SOURCE_TYPES:
             raise ValueError(f"source_type must be one of {VALID_SOURCE_TYPES}")
+        if source_type == "managed":
+            source_url = source_url or "managed://catalog"
+        elif not source_url:
+            raise ValueError("source_url is required for synchronized registries")
         return await self.registry_repo.create(
             name=name,
             registry_type=registry_type,
@@ -174,13 +190,120 @@ class RegistryService:
     async def get_item(self, item_id: UUID) -> RegistryItem | None:
         return await self.item_repo.get_by_id(item_id)
 
+    async def create_catalog_item(
+        self,
+        registry_id: UUID,
+        *,
+        external_id: str,
+        name: str,
+        description: str | None = None,
+        version: str | None = None,
+        spec: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+    ) -> RegistryItem:
+        """Create one platform-managed catalog definition.
+
+        Directly managed items stay as catalog projections. Workspace entities
+        are materialized only when a user installs or connects them; publishing
+        a connector must not create a tenant-shaped global entity.
+        """
+        registry = await self.registry_repo.get_by_id(registry_id)
+        if not registry:
+            raise RegistryNotFoundError(f"Registry {registry_id} not found")
+        if registry.source_type != "managed":
+            raise ValueError("Catalog items can only be written to a managed registry")
+
+        existing = await self.item_repo.get_by_external_id(registry_id, external_id)
+        if existing:
+            raise CatalogItemAlreadyExistsError(
+                f"Catalog item {external_id!r} already exists in registry {registry_id}"
+            )
+
+        item_spec = spec or {}
+        item_tags = tags or []
+        facets = derive_facets(registry.registry_type, name, item_spec, item_tags)
+        item = await self.item_repo.create(
+            registry_id=registry_id,
+            external_id=external_id,
+            name=name,
+            description=description,
+            version=version,
+            spec=item_spec,
+            tags=item_tags,
+            category=facets.category,
+            sort_key=facets.sort_key,
+            featured=facets.featured,
+        )
+        await self.registry_repo.update(
+            registry_id,
+            item_count=await self.item_repo.count_by_registry(registry_id),
+        )
+        return item
+
+    async def update_catalog_item(
+        self,
+        item_id: UUID,
+        **fields: Any,
+    ) -> RegistryItem:
+        """Update one item in a managed registry and recompute browse facets."""
+        item = await self.item_repo.get_by_id(item_id)
+        if not item:
+            raise CatalogItemNotFoundError(f"Catalog item {item_id} not found")
+        registry = await self.registry_repo.get_by_id(item.registry_id)
+        if not registry:
+            raise RegistryNotFoundError(f"Registry {item.registry_id} not found")
+        if registry.source_type != "managed":
+            raise ValueError("Catalog items can only be written in a managed registry")
+
+        external_id = fields.get("external_id", item.external_id)
+        if external_id != item.external_id:
+            existing = await self.item_repo.get_by_external_id(item.registry_id, external_id)
+            if existing:
+                raise CatalogItemAlreadyExistsError(
+                    f"Catalog item {external_id!r} already exists in registry {item.registry_id}"
+                )
+
+        name = fields.get("name", item.name)
+        spec = fields.get("spec", item.spec)
+        tags = fields.get("tags", item.tags)
+        facets = derive_facets(registry.registry_type, name, spec, tags)
+        fields.update(
+            category=facets.category,
+            sort_key=facets.sort_key,
+            featured=facets.featured,
+        )
+        updated = await self.item_repo.update(item_id, **fields)
+        if updated is None:  # Defensive against a concurrent delete.
+            raise CatalogItemNotFoundError(f"Catalog item {item_id} not found")
+        return updated
+
+    async def delete_catalog_item(self, item_id: UUID) -> None:
+        """Remove one item from a managed registry."""
+        item = await self.item_repo.get_by_id(item_id)
+        if not item:
+            raise CatalogItemNotFoundError(f"Catalog item {item_id} not found")
+        registry = await self.registry_repo.get_by_id(item.registry_id)
+        if not registry:
+            raise RegistryNotFoundError(f"Registry {item.registry_id} not found")
+        if registry.source_type != "managed":
+            raise ValueError("Catalog items can only be written in a managed registry")
+
+        if not await self.item_repo.delete(item_id):
+            raise CatalogItemNotFoundError(f"Catalog item {item_id} not found")
+        await self.registry_repo.update(
+            registry.id,
+            item_count=await self.item_repo.count_by_registry(registry.id),
+        )
+
     # ── Sync ──
 
     async def sync_registry(self, registry_id: UUID) -> dict[str, Any]:
         """Sync: fetch source, upsert catalog, auto-create entities for new items."""
         registry = await self.registry_repo.get_by_id(registry_id)
         if not registry:
-            raise ValueError(f"Registry {registry_id} not found")
+            raise RegistryNotFoundError(f"Registry {registry_id} not found")
+        if registry.source_type == "managed":
+            raise ValueError("Managed registry items are changed through the catalog item API")
 
         try:
             raw_data = self._fetch_source(registry.source_url)

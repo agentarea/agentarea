@@ -31,6 +31,7 @@ class Registry(BaseModel):
         - "url": JSON or YAML bundle at a URL
         - "github": GitHub repo with a known registry format
         - "api": REST API endpoint
+        - "managed": items are published through the platform catalog API
     """
 
     __tablename__ = "registries"

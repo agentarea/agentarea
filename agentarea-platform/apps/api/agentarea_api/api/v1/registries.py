@@ -9,7 +9,13 @@ from uuid import UUID
 from agentarea_api.api.deps.services import get_registry_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.utils.types import UtcDatetime
-from agentarea_registry.application.service import VALID_REGISTRY_TYPES, RegistryService
+from agentarea_registry.application.service import (
+    VALID_REGISTRY_TYPES,
+    CatalogItemAlreadyExistsError,
+    CatalogItemNotFoundError,
+    RegistryNotFoundError,
+    RegistryService,
+)
 from agentarea_registry.domain.models import Registry, RegistryItem
 from agentarea_registry.infrastructure.repository import CATALOG_SORTS
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -24,9 +30,18 @@ router = APIRouter(prefix="/registries", tags=["registries"])
 class RegistryCreate(BaseModel):
     name: str = Field(..., description="Human-readable registry name")
     description: str | None = Field(None)
-    registry_type: str = Field(..., description="Entity type: 'mcp_servers' or 'skills'")
-    source_type: str = Field(..., description="Fetch method: 'url', 'github', or 'api'")
-    source_url: str = Field(..., description="URL to the registry source (JSON or YAML)")
+    registry_type: str = Field(
+        ...,
+        description=f"Catalog entity type: one of {VALID_REGISTRY_TYPES}",
+    )
+    source_type: str = Field(
+        ...,
+        description="Source mode: 'url', 'github', 'api', or platform-managed 'managed'",
+    )
+    source_url: str | None = Field(
+        None,
+        description="Registry source URL; omitted when source_type is 'managed'",
+    )
     sync_mode: str = Field(default="manual", description="'auto' or 'manual'")
 
 
@@ -112,6 +127,26 @@ class RegistryItemResponse(BaseModel):
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
+
+
+class CatalogItemCreate(BaseModel):
+    """Definition published directly into a platform-managed catalog."""
+
+    external_id: str = Field(..., min_length=1, max_length=500)
+    name: str = Field(..., min_length=1, max_length=255)
+    description: str | None = None
+    version: str | None = Field(None, max_length=100)
+    spec: dict[str, Any] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+
+
+class CatalogItemUpdate(BaseModel):
+    external_id: str | None = Field(None, min_length=1, max_length=500)
+    name: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = None
+    version: str | None = Field(None, max_length=100)
+    spec: dict[str, Any] | None = None
+    tags: list[str] | None = None
 
 
 class SyncResponse(BaseModel):
@@ -328,8 +363,10 @@ async def sync_registry(
     try:
         stats = await service.sync_registry(registry_id)
         return SyncResponse(**stats)
-    except ValueError as e:
+    except RegistryNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Sync failed: {e}") from e
 
@@ -349,6 +386,33 @@ async def list_registry_items(
     return [RegistryItemResponse.from_domain(i) for i in items]
 
 
+@router.post(
+    "/{registry_id}/items",
+    response_model=RegistryItemResponse,
+    status_code=201,
+    dependencies=[Depends(require_platform_catalog_write)],
+)
+async def create_catalog_item(
+    registry_id: UUID,
+    data: CatalogItemCreate,
+    user_context: UserContextDep,
+    service: RegistryService = Depends(get_registry_service),
+):
+    """Publish one definition without putting catalog data in the OSS image."""
+    try:
+        item = await service.create_catalog_item(
+            registry_id,
+            **data.model_dump(),
+        )
+    except RegistryNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CatalogItemAlreadyExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RegistryItemResponse.from_domain(item)
+
+
 @router.get("/catalog/items/{item_id}", response_model=RegistryItemResponse)
 async def get_catalog_item(
     item_id: UUID,
@@ -359,6 +423,51 @@ async def get_catalog_item(
     if not item:
         raise HTTPException(status_code=404, detail="Catalog item not found")
     return RegistryItemResponse.from_domain(item)
+
+
+@router.patch(
+    "/catalog/items/{item_id}",
+    response_model=RegistryItemResponse,
+    dependencies=[Depends(require_platform_catalog_write)],
+)
+async def update_catalog_item(
+    item_id: UUID,
+    data: CatalogItemUpdate,
+    user_context: UserContextDep,
+    service: RegistryService = Depends(get_registry_service),
+):
+    """Change a directly managed definition in place."""
+    fields = data.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    try:
+        item = await service.update_catalog_item(item_id, **fields)
+    except (CatalogItemNotFoundError, RegistryNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CatalogItemAlreadyExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RegistryItemResponse.from_domain(item)
+
+
+@router.delete(
+    "/catalog/items/{item_id}",
+    status_code=204,
+    dependencies=[Depends(require_platform_catalog_write)],
+)
+async def delete_catalog_item(
+    item_id: UUID,
+    user_context: UserContextDep,
+    service: RegistryService = Depends(get_registry_service),
+) -> None:
+    """Remove a directly managed catalog definition."""
+    try:
+        await service.delete_catalog_item(item_id)
+    except (CatalogItemNotFoundError, RegistryNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # ── Update specs ──

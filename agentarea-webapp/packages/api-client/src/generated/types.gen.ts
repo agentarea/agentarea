@@ -1450,6 +1450,72 @@ export type CatalogConnectionResponse = {
 };
 
 /**
+ * CatalogItemCreate
+ *
+ * Definition published directly into a platform-managed catalog.
+ */
+export type CatalogItemCreate = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Spec
+     */
+    spec?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Tags
+     */
+    tags?: Array<string>;
+    /**
+     * Version
+     */
+    version?: string | null;
+};
+
+/**
+ * CatalogItemUpdate
+ */
+export type CatalogItemUpdate = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * External Id
+     */
+    external_id?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Spec
+     */
+    spec?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Tags
+     */
+    tags?: Array<string> | null;
+    /**
+     * Version
+     */
+    version?: string | null;
+};
+
+/**
  * CategoryFacet
  */
 export type CategoryFacet = {
@@ -5022,21 +5088,21 @@ export type RegistryCreate = {
     /**
      * Registry Type
      *
-     * Entity type: 'mcp_servers' or 'skills'
+     * Catalog entity type: one of ('mcp_servers', 'skills', 'llm_providers', 'llm_models', 'agents', 'bundles')
      */
     registry_type: string;
     /**
      * Source Type
      *
-     * Fetch method: 'url', 'github', or 'api'
+     * Source mode: 'url', 'github', 'api', or platform-managed 'managed'
      */
     source_type: string;
     /**
      * Source Url
      *
-     * URL to the registry source (JSON or YAML)
+     * Registry source URL; omitted when source_type is 'managed'
      */
-    source_url: string;
+    source_url?: string | null;
     /**
      * Sync Mode
      *
@@ -13169,6 +13235,36 @@ export type BrowseCatalogV1RegistriesCatalogBrowseGetResponses = {
 
 export type BrowseCatalogV1RegistriesCatalogBrowseGetResponse = BrowseCatalogV1RegistriesCatalogBrowseGetResponses[keyof BrowseCatalogV1RegistriesCatalogBrowseGetResponses];
 
+export type DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Item Id
+         */
+        item_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/catalog/items/{item_id}';
+};
+
+export type DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteError = DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors[keyof DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors];
+
+export type DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponse = DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses[keyof DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses];
+
 export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetData = {
     body?: never;
     path: {
@@ -13198,6 +13294,36 @@ export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses = {
 };
 
 export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse = GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses[keyof GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses];
+
+export type UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchData = {
+    body: CatalogItemUpdate;
+    path: {
+        /**
+         * Item Id
+         */
+        item_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/catalog/items/{item_id}';
+};
+
+export type UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchError = UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors[keyof UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors];
+
+export type UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: RegistryItemResponse;
+};
+
+export type UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponse = UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses[keyof UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses];
 
 export type UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostData = {
     body?: never;
@@ -13405,6 +13531,36 @@ export type ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses = {
 };
 
 export type ListRegistryItemsV1RegistriesRegistryIdItemsGetResponse = ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses[keyof ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses];
+
+export type CreateCatalogItemV1RegistriesRegistryIdItemsPostData = {
+    body: CatalogItemCreate;
+    path: {
+        /**
+         * Registry Id
+         */
+        registry_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/{registry_id}/items';
+};
+
+export type CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateCatalogItemV1RegistriesRegistryIdItemsPostError = CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors[keyof CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors];
+
+export type CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: RegistryItemResponse;
+};
+
+export type CreateCatalogItemV1RegistriesRegistryIdItemsPostResponse = CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses[keyof CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses];
 
 export type SyncRegistryV1RegistriesRegistryIdSyncPostData = {
     body?: never;
