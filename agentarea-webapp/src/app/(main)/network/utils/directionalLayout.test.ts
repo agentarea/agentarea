@@ -55,11 +55,11 @@ function card(item: Layout["nodes"][number]) {
 }
 
 describe("buildDirectionalLayout", () => {
-  it("places triggers, agents, and outputs in distinct top-aligned lanes and reverses activation", () => {
+  it("places inputs, workspace, and explicitly external resources in top-aligned regions", () => {
     const activation = edge("a", "t", "has_trigger");
     const result = buildDirectionalLayout(
       topology(
-        [node("t", "trigger"), node("a"), node("m", "mcp_instance")],
+        [node("t", "trigger"), node("a"), node("m", "mcp_instance", "egress")],
         [activation, edge("a", "m", "uses_mcp")]
       )
     );
@@ -73,7 +73,9 @@ describe("buildDirectionalLayout", () => {
       required(positions.get("m")).x
     );
     expect(
-      result.regions.slice(0, 3).map(({ position }) => position.y)
+      result.regions
+        .filter(({ kind }) => ["inputs", "workspace", "egress"].includes(kind))
+        .map(({ position }) => position.y)
     ).toEqual([0, 0, 0]);
     expect(result.edges).toContainEqual({
       ...activation,
@@ -167,7 +169,7 @@ describe("buildDirectionalLayout", () => {
     }
   });
 
-  it("separates explicit private, egress, and unknown scopes including the OpenAPI fallback", () => {
+  it("puts only explicit private resources inside the workspace and keeps missing OpenAPI scope unknown", () => {
     const result = buildDirectionalLayout(
       topology([
         node("private", "skill", "private"),
@@ -182,20 +184,41 @@ describe("buildDirectionalLayout", () => {
         .map(({ kind, count }) => [kind, count])
     ).toEqual([
       ["private", 1],
-      ["egress", 2],
-      ["unknown", 1],
+      ["egress", 1],
+      ["unknown", 2],
     ]);
     for (const item of result.nodes) {
-      const scope = item.id === "api" ? "egress" : item.id;
+      const scope = item.id === "api" ? "unknown" : item.id;
       contains(
         required(result.regions.find(({ kind }) => kind === scope)),
         card(item)
       );
     }
-    const egress = required(result.nodes.find(({ id }) => id === "egress"));
+    const unknown = required(result.nodes.find(({ id }) => id === "unknown"));
     const api = required(result.nodes.find(({ id }) => id === "api"));
-    expect(egress.position.y).toBe(api.position.y);
-    expect(egress.position.x).not.toBe(api.position.x);
+    expect(unknown.position.y).not.toBe(api.position.y);
+    expect(unknown.position.x).toBe(api.position.x);
+    const workspace = required(
+      result.regions.find(({ kind }) => kind === "workspace")
+    );
+    const privateRegion = required(
+      result.regions.find(({ kind }) => kind === "private")
+    );
+    const egressRegion = required(
+      result.regions.find(({ kind }) => kind === "egress")
+    );
+    const unknownRegion = required(
+      result.regions.find(({ kind }) => kind === "unknown")
+    );
+    contains(workspace, privateRegion);
+    expect(egressRegion.position.x).toBeGreaterThan(
+      workspace.position.x + workspace.width
+    );
+    expect(unknownRegion.position.y).toBeGreaterThan(
+      egressRegion.position.y + egressRegion.height
+    );
+    expect(unknownRegion.position.x).toBe(egressRegion.position.x);
+    expect(workspace.count).toBe(1);
   });
 
   it("fits cards and child regions with header clearance and no overlaps in dense groups", () => {
@@ -220,11 +243,13 @@ describe("buildDirectionalLayout", () => {
     const agentLane = required(
       result.regions.find(({ kind }) => kind === "agents")
     );
-    const outputLane = required(
-      result.regions.find(({ kind }) => kind === "outputs")
+    const workspace = required(
+      result.regions.find(({ kind }) => kind === "workspace")
     );
     contains(agentLane, cluster);
-    contains(outputLane, resources);
+    contains(workspace, resources);
+    contains(workspace, agentLane);
+    expect(workspace.count).toBe(16);
     const agentCards = result.nodes.filter(({ type }) => type === "agent");
     const resourceCards = result.nodes.filter(
       ({ type }) => type === "mcp_instance"
@@ -261,7 +286,7 @@ describe("buildDirectionalLayout", () => {
     }
   });
 
-  it("keeps stacked clusters and scope groups apart inside their lane", () => {
+  it("keeps agent clusters apart and internal resources beside them inside the workspace", () => {
     const result = buildDirectionalLayout(
       topology([
         node("a"),
@@ -272,16 +297,24 @@ describe("buildDirectionalLayout", () => {
         node("u", "skill"),
       ])
     );
-    for (const kinds of [["agentCluster"], ["private", "egress", "unknown"]]) {
-      const groups = result.regions.filter(({ kind }) => kinds.includes(kind));
-      groups
-        .slice(1)
-        .forEach((group, index) =>
-          expect(group.position.y).toBeGreaterThanOrEqual(
-            groups[index].position.y + groups[index].height + 32
-          )
-        );
-    }
+    const groups = result.regions.filter(({ kind }) => kind === "agentCluster");
+    groups
+      .slice(1)
+      .forEach((group, index) =>
+        expect(group.position.y).toBeGreaterThanOrEqual(
+          groups[index].position.y + groups[index].height + 32
+        )
+      );
+    const agents = required(
+      result.regions.find(({ kind }) => kind === "agents")
+    );
+    const privateRegion = required(
+      result.regions.find(({ kind }) => kind === "private")
+    );
+    expect(privateRegion.position.y).toBe(agents.position.y);
+    expect(privateRegion.position.x).toBeGreaterThanOrEqual(
+      agents.position.x + agents.width + 32
+    );
   });
 
   it("is deterministic under reordered input and does not mutate source data", () => {
@@ -339,7 +372,7 @@ describe("buildDirectionalLayout", () => {
       topology([
         node("__network_region__:inputs"),
         node("__network_region__:agents"),
-        node("__network_region__:outputs"),
+        node("__network_region__:workspace"),
       ])
     );
     const ids = [...result.nodes, ...result.regions].map(({ id }) => id);
@@ -352,8 +385,10 @@ describe("buildDirectionalLayout", () => {
     expect(empty.edges).toEqual([]);
     expect(empty.regions.map(({ kind, count }) => [kind, count])).toEqual([
       ["inputs", 0],
+      ["workspace", 0],
       ["agents", 0],
-      ["outputs", 0],
+      ["private", 0],
+      ["egress", 0],
     ]);
     empty.regions.forEach((region) => {
       expect(region.height).toBeGreaterThanOrEqual(192);

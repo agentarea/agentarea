@@ -63,8 +63,8 @@ describe("getNetworkScope", () => {
     expect(getNetworkScope(node("agent"))).toBe("unknown");
   });
 
-  it("uses the OpenAPI contract as its only inferred scope", () => {
-    expect(getNetworkScope(node("api", "openapi_connection"))).toBe("egress");
+  it("does not infer scope from an OpenAPI resource type", () => {
+    expect(getNetworkScope(node("api", "openapi_connection"))).toBe("unknown");
     expect(
       getNetworkScope(
         node("api", "openapi_connection", { network_scope: "private" })

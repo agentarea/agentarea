@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 
 export interface NetworkRegionData extends Record<string, unknown> {
   kind:
+    | "workspace"
     | "inputs"
     | "agents"
     | "outputs"
@@ -26,6 +27,7 @@ export interface NetworkRegionData extends Record<string, unknown> {
 }
 
 const icons = {
+  workspace: LockKeyhole,
   inputs: ArrowDownToLine,
   agents: GitBranch,
   outputs: ArrowUpRight,
@@ -40,14 +42,21 @@ export default function NetworkRegion({
 }: NodeProps<Node<NetworkRegionData>>) {
   const t = useTranslations("NetworkPage.flowMap");
   const lane =
-    data.kind === "inputs" || data.kind === "agents" || data.kind === "outputs";
+    data.kind === "workspace" ||
+    data.kind === "inputs" ||
+    data.kind === "agents" ||
+    data.kind === "outputs";
   const Icon = icons[data.kind];
   return (
     <section
       aria-hidden="true"
       className={cn(
         "h-full w-full rounded-xl border border-border/70",
-        lane ? "bg-background/40" : "border-dashed bg-background/70"
+        data.kind === "workspace"
+          ? "border-primary/25 bg-primary/[0.025]"
+          : lane
+            ? "bg-background/40"
+            : "border-dashed bg-background/70"
       )}
     >
       <header

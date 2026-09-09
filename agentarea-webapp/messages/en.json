@@ -1475,8 +1475,8 @@
       "focusedOn": "Path: {name}",
       "connections": "Configured connections",
       "configuredOnly": "Configured routes. Permission is evaluated for each tool call.",
-      "incoming": "Incoming",
-      "outgoing": "Outgoing",
+      "incoming": "Receives from",
+      "outgoing": "Connects to",
       "noConnections": "No configured connections",
       "policyTitle": "Tool permission rules",
       "permissions": "Access",
@@ -1497,7 +1497,7 @@
       "sources": "{count, plural, one {# source policy} other {# source policies}}",
       "previewLimit": "User-specific and task-specific restrictions are not included in this preview.",
       "openPolicies": "Open policies",
-      "mapHint": "Configured call routes. Select Access on an agent to inspect its rules.",
+      "mapHint": "Select an arrow to explain a connection. Permissions shows agent rules.",
       "scope": {
         "private": "Internal",
         "egress": "External",
@@ -1530,13 +1530,13 @@
       "empty": "No agents or resources to map."
     },
     "flowMap": {
-      "description": "Incoming triggers on the left, agent groups in the middle, resource calls on the right.",
-      "inputs": "Incoming",
+      "description": "Select a connection to see its source, destination, and basis.",
+      "inputs": "Request sources",
       "agents": "Agent groups",
-      "outputs": "Outgoing calls",
-      "inputsHint": "People and configured triggers",
+      "outputs": "Resources",
+      "inputsHint": "Members and configured triggers",
       "agentsHint": "Grouped by delegation connections",
-      "outputsHint": "Tools, API connections and skills",
+      "outputsHint": "Connected tools, APIs, and skills",
       "inputsEmpty": "No configured triggers",
       "agentsEmpty": "No agents in this map",
       "outputsEmpty": "No connected resources",
@@ -1544,11 +1544,14 @@
       "independent": "Independent agent",
       "private": "Internal resources",
       "egress": "External systems",
-      "unknown": "Unspecified scope"
+      "unknown": "Unspecified scope",
+      "workspace": "Workspace",
+      "workspaceHint": "Agents and internal resources",
+      "workspaceEmpty": "No agents or internal resources yet"
     },
     "people": {
-      "title": "People",
-      "panel": "People and agent access",
+      "title": "Members",
+      "panel": "Members and agent access",
       "unnamed": "Member {id}",
       "loading": "Loading participants…",
       "unavailableShort": "Participant list unavailable",
@@ -1577,6 +1580,32 @@
       "unknownRoster": "Full participant list unknown",
       "directoryDisabled": "The participant directory is disabled. Only the confirmed workspace owner is shown when available; other participants are unknown.",
       "knownCount": "{count, plural, one {# confirmed participant} other {# confirmed participants}}"
+    },
+    "routeDetails": {
+      "title": "Connection basis",
+      "source": "From",
+      "target": "To",
+      "why": "Why this connection exists",
+      "configured": "Configured connection. Actual request activity is not shown here.",
+      "requestAccess": "An access decision, not evidence that a request was sent.",
+      "allowed": "Can send requests",
+      "denied": "Cannot send requests",
+      "explanation": {
+        "has_trigger": "This trigger is configured to start the selected agent.",
+        "delegates_to": "The source agent is configured to delegate to this agent.",
+        "uses_mcp": "This MCP resource is connected to the source agent. Access to a specific tool depends on the execution rules.",
+        "uses_openapi": "This API connection is attached to the source agent. Access to a specific operation depends on the execution rules.",
+        "has_skill": "This skill is attached to the source agent configuration.",
+        "person_access": "Request access to this agent was evaluated against the current admission rules."
+      },
+      "unknownRelation": "This connection is present in the network configuration.",
+      "scope": {
+        "private": "Resource inside the workspace",
+        "egress": "Connection to an external system",
+        "unknown": "Resource scope is unspecified"
+      },
+      "openTarget": "Open destination",
+      "close": "Close connection explanation"
     }
   },
   "WorkspacePage": {
