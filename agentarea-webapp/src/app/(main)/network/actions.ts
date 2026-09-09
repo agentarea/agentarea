@@ -1,11 +1,15 @@
 "use server";
 
-import type { EffectivePolicy } from "@/api/client/types.gen";
+import type {
+  EffectivePolicy,
+  NetworkPeopleAccessResponse,
+} from "@/api/client/types.gen";
 import {
+  zGetNetworkPeopleAccessV1NetworkPeopleAccessGetResponse,
   zPreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostBody,
   zPreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponse,
 } from "@/api/client/zod.gen";
-import { previewEffectivePolicy } from "@/lib/api";
+import { getNetworkPeopleAccess, previewEffectivePolicy } from "@/lib/api";
 
 export async function previewNetworkPolicyAction(
   agentId: string
@@ -32,4 +36,10 @@ export async function previewNetworkPolicyAction(
   } catch {
     throw new Error("Unable to load agent policy preview");
   }
+}
+
+export async function getNetworkPeopleAccessAction(): Promise<NetworkPeopleAccessResponse> {
+  const { data, error } = await getNetworkPeopleAccess();
+  if (error || !data) throw new Error("Unable to load workspace people access");
+  return zGetNetworkPeopleAccessV1NetworkPeopleAccessGetResponse.parse(data);
 }

@@ -3668,6 +3668,81 @@ export type NetworkNode = {
     type: 'agent' | 'mcp_instance' | 'openapi_connection' | 'skill' | 'trigger';
 };
 /**
+ * NetworkPeopleAccessResponse
+ */
+export type NetworkPeopleAccessResponse = {
+    /**
+     * Access
+     */
+    access: Array<NetworkPersonAgentAccess>;
+    /**
+     * Complete
+     */
+    complete: boolean;
+    /**
+     * Decision Source
+     */
+    decision_source?: 'agent_edge_admission';
+    /**
+     * Directory Status
+     */
+    directory_status?: 'available' | 'disabled';
+    /**
+     * People
+     */
+    people: Array<NetworkPerson>;
+    /**
+     * Total Agents
+     */
+    total_agents: number;
+    /**
+     * Total People
+     */
+    total_people: number | null;
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
+};
+/**
+ * NetworkPerson
+ */
+export type NetworkPerson = {
+    /**
+     * Display Name
+     */
+    display_name?: string | null;
+    /**
+     * Email
+     */
+    email?: string | null;
+    /**
+     * User Id
+     */
+    user_id: string;
+};
+/**
+ * NetworkPersonAgentAccess
+ */
+export type NetworkPersonAgentAccess = {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Allowed
+     */
+    allowed: boolean;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * User Id
+     */
+    user_id: string;
+};
+/**
  * NetworkTopologyResponse
  */
 export type NetworkTopologyResponse = {
@@ -10743,6 +10818,19 @@ export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses = {
     200: AgentareaApiApiV1ModelSpecsModelSpecResponse;
 };
 export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponse = UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses[keyof UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses];
+export type GetNetworkPeopleAccessV1NetworkPeopleAccessGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/network/people-access';
+};
+export type GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: NetworkPeopleAccessResponse;
+};
+export type GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponse = GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponses[keyof GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponses];
 export type GetNetworkTopologyV1NetworkTopologyGetData = {
     body?: never;
     path?: never;

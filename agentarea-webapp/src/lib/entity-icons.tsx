@@ -5,6 +5,7 @@ import {
   Plug,
   Server,
   Sparkles,
+  UserRound,
   Wrench,
   Zap,
   type LucideIcon,
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils";
  */
 export const ENTITY_ICONS = {
   agent: Bot,
+  person: UserRound,
   mcp: Server,
   skill: Sparkles,
   project: FolderTree,

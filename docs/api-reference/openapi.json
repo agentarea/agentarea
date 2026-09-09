@@ -6527,6 +6527,137 @@
         "title": "NetworkNode",
         "type": "object"
       },
+      "NetworkPeopleAccessResponse": {
+        "properties": {
+          "access": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkPersonAgentAccess"
+            },
+            "title": "Access",
+            "type": "array"
+          },
+          "complete": {
+            "title": "Complete",
+            "type": "boolean"
+          },
+          "decision_source": {
+            "const": "agent_edge_admission",
+            "default": "agent_edge_admission",
+            "title": "Decision Source",
+            "type": "string"
+          },
+          "directory_status": {
+            "default": "available",
+            "enum": [
+              "available",
+              "disabled"
+            ],
+            "title": "Directory Status",
+            "type": "string"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkPerson"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "total_agents": {
+            "minimum": 0.0,
+            "title": "Total Agents",
+            "type": "integer"
+          },
+          "total_people": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total People"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "people",
+          "access",
+          "complete",
+          "total_people",
+          "total_agents"
+        ],
+        "title": "NetworkPeopleAccessResponse",
+        "type": "object"
+      },
+      "NetworkPerson": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "NetworkPerson",
+        "type": "object"
+      },
+      "NetworkPersonAgentAccess": {
+        "properties": {
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "agent_id",
+          "allowed",
+          "reason"
+        ],
+        "title": "NetworkPersonAgentAccess",
+        "type": "object"
+      },
       "NetworkTopologyResponse": {
         "properties": {
           "deployment_mode": {
@@ -20427,6 +20558,35 @@
           "v1",
           "protected",
           "model-specs"
+        ]
+      }
+    },
+    "/v1/network/people-access": {
+      "get": {
+        "description": "Inspect current-workspace people's ``agent:execute`` admission.\n\nUses the existing workspace-management authorization gate. Membership and\nownership establish evaluation subjects; this never acts as those users.\nAt most 100 people and 100 agents are evaluated, with ``complete=False``\nwhen either list is truncated. Results assume an authenticated participant\nand do not represent the restrictions of a particular token or task.\n\nAn intentionally disabled membership directory exposes only the persisted\nworkspace owner, with ``directory_status=disabled``, ``total_people=None``\nand ``complete=False``. An enabled directory that fails still returns 503.",
+        "operationId": "get_network_people_access_v1_network_people_access_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkPeopleAccessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Network People Access",
+        "tags": [
+          "v1",
+          "protected",
+          "network"
         ]
       }
     },

@@ -13,9 +13,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from .network_people import router as network_people_router
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/network", tags=["network"])
+router.include_router(network_people_router)
 
 
 # --- Response Models ---
