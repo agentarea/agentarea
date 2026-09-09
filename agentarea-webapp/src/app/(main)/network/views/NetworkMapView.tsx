@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { useTranslations } from "next-intl";
 import {
   Background,
@@ -8,6 +15,7 @@ import {
   MarkerType,
   Panel,
   ReactFlow,
+  useReactFlow,
   type Edge,
   type Node,
   type ReactFlowInstance,
@@ -17,6 +25,7 @@ import "@xyflow/react/dist/style.css";
 import type {
   EffectivePolicy,
   NetworkPeopleAccessResponse,
+  NetworkPersonAgentAccess,
 } from "@/api/client/types.gen";
 import { cn } from "@/lib/utils";
 import DirectionalEdge from "../components/edges/DirectionalEdge";
@@ -30,6 +39,7 @@ import NetworkPeoplePanel from "../components/NetworkPeoplePanel";
 import NetworkRegion, {
   type NetworkRegionData,
 } from "../components/NetworkRegion";
+import NetworkRoutePanel from "../components/NetworkRoutePanel";
 import NetworkAgentNode, {
   type NetworkAgentData,
 } from "../components/nodes/NetworkAgentNode";
@@ -86,12 +96,59 @@ const fitOptions = { padding: 0.12, maxZoom: 1 };
 const controlClass =
   "flex h-9 w-9 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
 
+function FitLayout({
+  nodes,
+  detailsOpen,
+  canvasRef,
+  focused,
+}: {
+  nodes: Node<MapNodeData>[];
+  detailsOpen: boolean;
+  canvasRef: RefObject<HTMLDivElement | null>;
+  focused: boolean;
+}) {
+  const { fitBounds, getNodesBounds, viewportInitialized } = useReactFlow();
+  const { x, y, width, height } = getNodesBounds(nodes);
+  useEffect(() => {
+    if (!viewportInitialized || !width || !height) return;
+    let frame = 0;
+    const fit = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(
+        () =>
+          void fitBounds(
+            { x, y, width, height },
+            { ...fitOptions, padding: focused ? 0.8 : fitOptions.padding }
+          )
+      );
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    if (canvasRef.current) observer.observe(canvasRef.current);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [
+    x,
+    y,
+    width,
+    height,
+    focused,
+    detailsOpen,
+    viewportInitialized,
+    fitBounds,
+    canvasRef,
+  ]);
+  return null;
+}
+
 export default function NetworkMapView({
   mode = "network",
   topology,
   loadPolicy,
   loadPeopleAccess,
-  onNodeClick,
+  onNodeClick: onEntityClick,
   highlightId,
   onPaneClick,
 }: NetworkMapProps) {
@@ -101,6 +158,16 @@ export default function NetworkMapView({
   const isNetwork = mode === "network";
   const peopleText = useTranslations("NetworkPage.people");
   const peopleState = useNetworkPeople(true, loadPeopleAccess, topology);
+  const [viewportTargets, setViewportTargets] = useState<string[] | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const onNodeClick = useCallback(
+    (node: NetworkNodeData) => {
+      setViewportTargets(null);
+      setSelectedEdgeId(null);
+      onEntityClick?.(node);
+    },
+    [onEntityClick]
+  );
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [peoplePanelOpen, setPeoplePanelOpen] = useState(false);
   const selectedPerson = peopleState.data?.people.find(
@@ -113,6 +180,8 @@ export default function NetworkMapView({
   const rosterHeight = peopleRosterHeight(rosterPeople.length);
   const selectPerson = useCallback(
     (id: string) => {
+      setViewportTargets(null);
+      setSelectedEdgeId(null);
       setSelectedPersonId(id);
       setPeoplePanelOpen(true);
       setFocusAgentId(null);
@@ -131,7 +200,7 @@ export default function NetworkMapView({
   const accessText = useTranslations("NetworkPage.accessDetails");
   const [focusAgentId, setFocusAgentId] = useState<string | null>(null);
   const selectedNode = topology.nodes.find((node) => node.id === highlightId);
-  const detailsOpen = !!selectedNode || peoplePanelOpen;
+  const detailsOpen = !!selectedNode || peoplePanelOpen || !!selectedEdgeId;
   const focusAgent = topology.nodes.find(
     (node) => node.id === focusAgentId && node.type === "agent"
   );
@@ -143,6 +212,7 @@ export default function NetworkMapView({
     [mapTopology, focusAgentId]
   );
   const focusAgentPath = (agentId: string) => {
+    setViewportTargets(null);
     setFocusAgentId(agentId);
     if (!isNetwork) setAgentsOnly(false);
     setQuery("");
@@ -253,25 +323,29 @@ export default function NetworkMapView({
     )
       ? highlightId
       : null;
-    const highlight = computeHighlightSets(
-      summary && topology.nodes.some((node) => node.id === highlightId)
-        ? highlightId
-        : visibleSelection,
-      summary ? topology.edges : layout.edges
-    );
+    const chosenEdge = layout.edges.find((edge) => edge.id === selectedEdgeId);
+    const highlight = chosenEdge
+      ? {
+          nodes: new Set([chosenEdge.source, chosenEdge.target]),
+          edges: new Set([chosenEdge.id]),
+        }
+      : computeHighlightSets(
+          summary && topology.nodes.some((node) => node.id === highlightId)
+            ? highlightId
+            : visibleSelection,
+          summary ? topology.edges : layout.edges
+        );
     const entityNodes: Node<MapNodeData>[] = layout.nodes.map((node) => ({
       id: node.id,
       type: node.type === "agent" ? "networkAgent" : "organization",
       position: node.position,
-      style: {
-        width: node.type === "agent" ? NETWORK_AGENT_WIDTH : ORG_NODE_WIDTH,
-        height: summary
-          ? networkAgentHeight(
-              resourcesByAgent.get(node.id)?.length ?? 0,
-              expandedAgents.has(node.id)
-            )
-          : ORG_NODE_HEIGHT,
-      },
+      width: node.type === "agent" ? NETWORK_AGENT_WIDTH : ORG_NODE_WIDTH,
+      height: summary
+        ? networkAgentHeight(
+            resourcesByAgent.get(node.id)?.length ?? 0,
+            expandedAgents.has(node.id)
+          )
+        : ORG_NODE_HEIGHT,
       ariaLabel: `${node.label}, ${t(`types.${node.type}`)}`,
       data: {
         ...node,
@@ -329,9 +403,9 @@ export default function NetworkMapView({
             : 0),
         label: region.label,
       },
+      width: region.width,
+      height: region.height,
       style: {
-        width: region.width,
-        height: region.height,
         pointerEvents: "none",
       },
       selectable: false,
@@ -339,11 +413,13 @@ export default function NetworkMapView({
       draggable: false,
       connectable: false,
       zIndex:
-        region.kind === "inputs" ||
-        region.kind === "agents" ||
-        region.kind === "outputs"
-          ? -3
-          : -2,
+        region.kind === "workspace"
+          ? -4
+          : region.kind === "inputs" ||
+              region.kind === "agents" ||
+              region.kind === "egress"
+            ? -3
+            : -2,
     }));
     const peopleNodes: Node<MapNodeData>[] = layout.peoplePosition
       ? [
@@ -351,7 +427,8 @@ export default function NetworkMapView({
             id: peopleNodeId,
             type: "people",
             position: layout.peoplePosition,
-            style: { width: 240, height: rosterHeight },
+            width: 240,
+            height: rosterHeight,
             focusable: false,
             draggable: false,
             data: {
@@ -367,6 +444,8 @@ export default function NetworkMapView({
               selectedId: selectedPersonId,
               onSelect: selectPerson,
               onDirectory: () => {
+                setViewportTargets(null);
+                setSelectedEdgeId(null);
                 setPeoplePanelOpen(true);
                 onPaneClick?.();
               },
@@ -378,7 +457,8 @@ export default function NetworkMapView({
     const nodes = [...regions, ...entityNodes, ...peopleNodes];
     const labelledRelations = new Set<string>();
     const edges: Edge[] = layout.edges.map((edge) => {
-      const emphasized = !!highlight?.edges.has(edge.id);
+      const emphasized =
+        edge.id === selectedEdgeId || !!highlight?.edges.has(edge.id);
       const delegation = edge.relation === "delegates_to";
       const route = clustered
         ? getDirectionalRoute(edge, layout.nodes, layout.regions)
@@ -397,9 +477,14 @@ export default function NetworkMapView({
         target: edge.target,
         sourceHandle: route?.sourceHandle,
         targetHandle: route?.targetHandle,
-        data: route
-          ? { points: route.points, labelPosition: route.label }
-          : undefined,
+        data: {
+          relation: edge.relation,
+          ...(route
+            ? { points: route.points, labelPosition: route.label }
+            : {}),
+        },
+        ariaLabel: `${layout.nodes.find((node) => node.id === edge.source)?.label} → ${layout.nodes.find((node) => node.id === edge.target)?.label}`,
+        selected: edge.id === selectedEdgeId,
         type: route ? "directional" : "smoothstep",
         pathOptions: { borderRadius: 12, offset: 24 },
         markerEnd: {
@@ -463,12 +548,18 @@ export default function NetworkMapView({
           sourceHandle,
           targetHandle: route?.targetHandle,
           type: route ? "directional" : "smoothstep",
-          data: route
-            ? { points: route.points, labelPosition: route.label }
-            : undefined,
+          data: {
+            relation: "person_access",
+            decision,
+            ...(route
+              ? { points: route.points, labelPosition: route.label }
+              : {}),
+          },
+          selected: id === selectedEdgeId,
           style: {
             stroke: color,
-            strokeWidth: 1.75,
+            strokeWidth: id === selectedEdgeId ? 3 : 1.75,
+            opacity: selectedEdgeId && id !== selectedEdgeId ? 0.18 : 1,
             strokeDasharray: decision.allowed ? undefined : "3 4",
           },
           markerEnd: {
@@ -482,9 +573,31 @@ export default function NetworkMapView({
         });
       }
     }
-    return { nodes, edges };
+    return {
+      nodes,
+      edges: edges.map(
+        (edge): Edge => ({
+          ...edge,
+          domAttributes: {
+            onKeyDown: (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setViewportTargets(null);
+                setSelectedEdgeId(edge.id);
+                setPeoplePanelOpen(false);
+                setQuery("");
+                onPaneClick?.();
+              } else if (event.key === "Escape") {
+                setSelectedEdgeId(null);
+              }
+            },
+          },
+        })
+      ),
+    };
   }, [
     layout,
+    selectedEdgeId,
     highlightId,
     matchIds,
     search,
@@ -512,29 +625,29 @@ export default function NetworkMapView({
     peopleText,
   ]);
 
+  const selectedRoute = edges.find((edge) => edge.id === selectedEdgeId);
+  const routeTarget = topology.nodes.find(
+    (node) => node.id === selectedRoute?.target
+  );
+  const routeSource =
+    selectedRoute?.source === peopleNodeId && selectedPerson
+      ? {
+          label:
+            selectedPerson.display_name ||
+            selectedPerson.email ||
+            peopleText("unnamed", { id: selectedPerson.user_id.slice(0, 8) }),
+          type: "person" as const,
+        }
+      : topology.nodes.find((node) => node.id === selectedRoute?.source);
   useEffect(() => {
-    if (!flow || !layout.nodes.length) return;
-    const frame = requestAnimationFrame(() => {
-      void flow.fitView(fitOptions);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [flow, layout, detailsOpen]);
+    if (selectedEdgeId && !edges.some((edge) => edge.id === selectedEdgeId))
+      setSelectedEdgeId(null);
+  }, [edges, selectedEdgeId]);
 
-  useEffect(() => {
-    if (!flow || !canvasRef.current) return;
-    let frame = 0;
-    const observer = new ResizeObserver(() => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        void flow.fitView(fitOptions);
-      });
-    });
-    observer.observe(canvasRef.current);
-    return () => {
-      observer.disconnect();
-      cancelAnimationFrame(frame);
-    };
-  }, [flow]);
+  const targetNodes = viewportTargets
+    ? nodes.filter((node) => viewportTargets.includes(node.id))
+    : [];
+  const viewportNodes = targetNodes.length ? targetNodes : nodes;
 
   const selectResult = (node: NetworkNodeData) => {
     setQuery("");
@@ -546,9 +659,9 @@ export default function NetworkMapView({
             .filter(([, resources]) =>
               resources.some((resource) => resource.node.id === node.id)
             )
-            .map(([id]) => ({ id }))
-        : [{ id: node.id }];
-    void flow?.fitView({ nodes: focusIds, padding: 0.8, maxZoom: 1 });
+            .map(([id]) => id)
+        : [node.id];
+    setViewportTargets(focusIds);
   };
 
   return (
@@ -612,6 +725,8 @@ export default function NetworkMapView({
             <button
               type="button"
               onClick={() => {
+                setViewportTargets(null);
+                setSelectedEdgeId(null);
                 setPeoplePanelOpen(true);
                 onPaneClick?.();
               }}
@@ -626,6 +741,7 @@ export default function NetworkMapView({
               value={accessScope}
               aria-label={accessViewText("scopeFilter")}
               onChange={(event) => {
+                setViewportTargets(null);
                 setAccessScope(event.target.value as AccessScope);
                 setFocusAgentId(null);
                 setQuery("");
@@ -653,6 +769,7 @@ export default function NetworkMapView({
                   type="button"
                   aria-pressed={agentsOnly === value}
                   onClick={() => {
+                    setViewportTargets(null);
                     setAgentsOnly(value);
                     setFocusAgentId(null);
                     setQuery("");
@@ -767,7 +884,14 @@ export default function NetworkMapView({
               onInit={setFlow}
               nodesDraggable={false}
               nodesConnectable={false}
-              edgesFocusable={false}
+              edgesFocusable
+              onEdgeClick={(_, edge) => {
+                setViewportTargets(null);
+                setSelectedEdgeId(edge.id);
+                setPeoplePanelOpen(false);
+                setQuery("");
+                onPaneClick?.();
+              }}
               fitView
               fitViewOptions={fitOptions}
               minZoom={0.1}
@@ -775,6 +899,8 @@ export default function NetworkMapView({
               onMove={(_, viewport) => setZoom(viewport.zoom)}
               onPaneClick={() => {
                 setSearchOpen(false);
+                setViewportTargets(null);
+                setSelectedEdgeId(null);
                 setPeoplePanelOpen(false);
                 setSelectedPersonId(null);
                 onPaneClick?.();
@@ -794,6 +920,12 @@ export default function NetworkMapView({
                     : t("title")
               }
             >
+              <FitLayout
+                nodes={viewportNodes}
+                detailsOpen={detailsOpen}
+                canvasRef={canvasRef}
+                focused={targetNodes.length > 0}
+              />
               <Background
                 variant={BackgroundVariant.Dots}
                 gap={24}
@@ -830,7 +962,14 @@ export default function NetworkMapView({
                 <button
                   type="button"
                   className={controlClass}
-                  onClick={() => void flow?.fitView(fitOptions)}
+                  onClick={() => {
+                    setViewportTargets(null);
+                    if (flow)
+                      void flow.fitBounds(
+                        flow.getNodesBounds(nodes),
+                        fitOptions
+                      );
+                  }}
                   aria-label={t("fitView")}
                   title={t("fitView")}
                 >
@@ -840,7 +979,21 @@ export default function NetworkMapView({
             </ReactFlow>
           )}
         </div>
-        {selectedNode && (
+        {selectedRoute && routeSource && routeTarget && (
+          <NetworkRoutePanel
+            source={routeSource}
+            target={routeTarget}
+            relation={String(selectedRoute.data?.relation ?? "")}
+            decision={
+              selectedRoute.data?.decision as
+                | NetworkPersonAgentAccess
+                | undefined
+            }
+            onClose={() => setSelectedEdgeId(null)}
+            onSelect={onNodeClick}
+          />
+        )}
+        {!selectedRoute && selectedNode && (
           <NetworkConnectionPanel
             key={selectedNode.id}
             node={selectedNode}
@@ -865,7 +1018,7 @@ export default function NetworkMapView({
             loadPolicy={loadPolicy}
           />
         )}
-        {peoplePanelOpen && !selectedNode && (
+        {peoplePanelOpen && !selectedNode && !selectedRoute && (
           <NetworkPeoplePanel
             data={peopleState.data}
             status={peopleState.status}

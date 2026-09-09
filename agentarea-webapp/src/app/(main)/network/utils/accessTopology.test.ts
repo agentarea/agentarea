@@ -89,13 +89,13 @@ describe("getAccessTopology", () => {
     },
     {
       scope: "egress",
-      ids: ["a", "b", "egress", "api"],
-      edgeIndexes: [2, 3, 5],
+      ids: ["a", "b", "egress"],
+      edgeIndexes: [2, 3],
     },
     {
       scope: "unknown",
-      ids: ["a", "b", "unknown", "unsupported"],
-      edgeIndexes: [2, 4, 7],
+      ids: ["a", "b", "unknown", "api", "unsupported"],
+      edgeIndexes: [2, 4, 5, 7],
     },
   ])(
     "filters $scope resources while retaining every agent and delegation",
@@ -109,7 +109,7 @@ describe("getAccessTopology", () => {
     }
   );
 
-  it("keeps unknown scopes distinct from private and uses the OpenAPI egress fallback", () => {
+  it("keeps resources without explicit scope unclassified regardless of type", () => {
     const input = fixture();
     const privateIds = getAccessTopology(input, "private").nodes.map(
       ({ id }) => id
@@ -117,7 +117,7 @@ describe("getAccessTopology", () => {
     expect(privateIds).not.toContain("unknown");
     expect(privateIds).not.toContain("unsupported");
     expect(privateIds).not.toContain("api");
-    expect(getAccessTopology(input, "egress").nodes).toContain(input.nodes[6]);
+    expect(getAccessTopology(input, "unknown").nodes).toContain(input.nodes[6]);
   });
 
   it("retains isolated agents and their delegation when no resources match", () => {

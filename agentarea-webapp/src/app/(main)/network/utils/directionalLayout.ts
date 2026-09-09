@@ -11,7 +11,7 @@ type Region = {
   kind:
     | "inputs"
     | "agents"
-    | "outputs"
+    | "workspace"
     | "agentCluster"
     | "private"
     | "egress"
@@ -175,18 +175,18 @@ export function buildDirectionalLayout(topology: TopologyResponse): {
       compareNodes(a.nodes[0], b.nodes[0])
   );
 
-  const groups = (["private", "egress", "unknown"] as const)
-    .map((scope) => {
-      const nodes = outputs.filter((node) => getNetworkScope(node) === scope);
-      const columns = nodes.length >= 2 ? 2 : 1;
-      return {
-        scope,
-        nodes,
-        columns,
-        ...gridSize(nodes.length, RESOURCE_WIDTH, columns),
-      };
-    })
-    .filter((group) => group.nodes.length > 0);
+  const [privateGroup, egressGroup, unknownGroup] = (
+    ["private", "egress", "unknown"] as const
+  ).map((scope) => {
+    const nodes = outputs.filter((node) => getNetworkScope(node) === scope);
+    const columns = nodes.length >= 4 ? 2 : 1;
+    return {
+      scope,
+      nodes,
+      columns,
+      ...gridSize(nodes.length, RESOURCE_WIDTH, columns),
+    };
+  });
 
   const inputSize = gridSize(inputs.length, RESOURCE_WIDTH, 1);
   const agentWidth =
@@ -195,14 +195,11 @@ export function buildDirectionalLayout(topology: TopologyResponse): {
       ...clusters.map((cluster) => cluster.width)
     ) +
     2 * PADDING;
-  const outputWidth =
-    Math.max(
-      RESOURCE_WIDTH + 2 * PADDING,
-      ...groups.map((group) => group.width)
-    ) +
-    2 * PADDING;
-  const agentX = inputSize.width + LANE_GAP;
-  const outputX = agentX + agentWidth + LANE_GAP;
+  const workspaceWidth =
+    agentWidth + LANE_GAP + privateGroup.width + 2 * PADDING;
+  const workspaceX = inputSize.width + LANE_GAP;
+  const agentX = workspaceX + PADDING;
+  const egressX = workspaceX + workspaceWidth + LANE_GAP;
   const regions: Region[] = [];
   const nodes: PositionedNode[] = [];
   const reservedIds = new Set([...byId.keys(), ...edgeIds]);
@@ -236,25 +233,25 @@ export function buildDirectionalLayout(topology: TopologyResponse): {
     ...inputSize,
     count: inputs.length,
   };
+  const workspaceRegion: Region = {
+    id: regionId("workspace"),
+    kind: "workspace",
+    position: { x: workspaceX, y: 0 },
+    width: workspaceWidth,
+    height: 0,
+    count: agents.length + privateGroup.nodes.length,
+  };
   const agentRegion: Region = {
     id: regionId("agents"),
     kind: "agents",
-    position: { x: agentX, y: 0 },
+    position: { x: agentX, y: HEADER },
     width: agentWidth,
-    height: inputSize.height,
+    height: gridSize(0, AGENT_WIDTH, 1).height,
     count: agents.length,
   };
-  const outputRegion: Region = {
-    id: regionId("outputs"),
-    kind: "outputs",
-    position: { x: outputX, y: 0 },
-    width: outputWidth,
-    height: inputSize.height,
-    count: outputs.length,
-  };
-  regions.push(inputRegion, agentRegion, outputRegion);
+  regions.push(inputRegion, workspaceRegion, agentRegion);
 
-  let clusterY = HEADER;
+  let clusterY = agentRegion.position.y + HEADER;
   for (const cluster of clusters) {
     const x = agentX + PADDING;
     regions.push({
@@ -305,25 +302,66 @@ export function buildDirectionalLayout(topology: TopologyResponse): {
     nextInputY = y + HEIGHT + GAP;
   }
   if (inputs.length) inputRegion.height = nextInputY - GAP + PADDING;
-  let groupY = HEADER;
-  for (const group of groups) {
-    const x = outputX + PADDING;
-    regions.push({
-      id: regionId(`outputs:${group.scope}`),
-      kind: group.scope,
-      position: { x, y: groupY },
-      width: group.width,
-      height: group.height,
-      count: group.nodes.length,
-    });
-    placeNodes(group.nodes, x, groupY, RESOURCE_WIDTH, group.columns);
-    groupY += group.height + GAP;
-  }
   agentRegion.height = clusters.length
-    ? clusterY - GAP + PADDING
+    ? clusterY - GAP + PADDING - agentRegion.position.y
     : gridSize(0, AGENT_WIDTH, 1).height;
-  outputRegion.height = groups.length
-    ? groupY - GAP + PADDING
-    : gridSize(0, RESOURCE_WIDTH, 1).height;
+  const privateY = HEADER;
+  const privateRegion: Region = {
+    id: regionId("resources:private"),
+    kind: "private",
+    position: { x: agentX + agentWidth + LANE_GAP, y: privateY },
+    width: privateGroup.width,
+    height: privateGroup.height,
+    count: privateGroup.nodes.length,
+  };
+  regions.push(privateRegion);
+  placeNodes(
+    privateGroup.nodes,
+    privateRegion.position.x,
+    privateY,
+    RESOURCE_WIDTH,
+    privateGroup.columns
+  );
+  workspaceRegion.height =
+    Math.max(
+      agentRegion.position.y + agentRegion.height,
+      privateY + privateRegion.height
+    ) + PADDING;
+
+  const egressRegion: Region = {
+    id: regionId("resources:egress"),
+    kind: "egress",
+    position: { x: egressX, y: 0 },
+    width: egressGroup.width,
+    height: egressGroup.height,
+    count: egressGroup.nodes.length,
+  };
+  regions.push(egressRegion);
+  placeNodes(
+    egressGroup.nodes,
+    egressX,
+    0,
+    RESOURCE_WIDTH,
+    egressGroup.columns
+  );
+
+  if (unknownGroup.nodes.length) {
+    const unknownY = egressRegion.height + LANE_GAP;
+    regions.push({
+      id: regionId("resources:unknown"),
+      kind: "unknown",
+      position: { x: egressX, y: unknownY },
+      width: unknownGroup.width,
+      height: unknownGroup.height,
+      count: unknownGroup.nodes.length,
+    });
+    placeNodes(
+      unknownGroup.nodes,
+      egressX,
+      unknownY,
+      RESOURCE_WIDTH,
+      unknownGroup.columns
+    );
+  }
   return { nodes, edges, regions };
 }

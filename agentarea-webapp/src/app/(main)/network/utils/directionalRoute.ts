@@ -1,5 +1,6 @@
 import type { NetworkEdgeData } from "../types";
 import type { buildDirectionalLayout } from "./directionalLayout";
+import { getNetworkScope } from "./networkConnections";
 
 type Layout = ReturnType<typeof buildDirectionalLayout>;
 type Point = { x: number; y: number };
@@ -55,7 +56,9 @@ export function getDirectionalRoute(
 
   const agentLane = regions.find(({ kind }) => kind === "agents");
   const inputLane = regions.find(({ kind }) => kind === "inputs");
-  const outputLane = regions.find(({ kind }) => kind === "outputs");
+  const workspace = regions.find(({ kind }) => kind === "workspace");
+  const egress = regions.find(({ kind }) => kind === "egress");
+  const privateRegion = regions.find(({ kind }) => kind === "private");
   const targetTop = {
     x: target.position.x + width(target) / 2,
     y: target.position.y,
@@ -143,17 +146,50 @@ export function getDirectionalRoute(
     );
   }
 
-  const corridorX =
-    source.type === "agent" && agentLane && outputLane
-      ? (agentLane.position.x + agentLane.width + outputLane.position.x) / 2
-      : (outputLane?.position.x ??
-          Math.min(source.position.x, target.position.x)) - 32;
+  const workspaceRight = workspace
+    ? workspace.position.x + workspace.width
+    : (agentLane?.position.x ?? source.position.x) +
+      (agentLane?.width ?? width(source)) +
+      32;
+  const internalCorridor =
+    agentLane && privateRegion
+      ? (agentLane.position.x + agentLane.width + privateRegion.position.x) / 2
+      : workspaceRight - 12;
+  const outsideCorridor = egress
+    ? (workspaceRight + egress.position.x) / 2
+    : workspaceRight + 32;
+  const sourceInside =
+    source.type === "agent" || getNetworkScope(source) === "private";
+  const targetInside =
+    target.type === "agent" || getNetworkScope(target) === "private";
+  const corridorX = targetInside ? internalCorridor : outsideCorridor;
+  const crossings: Point[] = [];
+  // The two internal groups have independent rows. Cross the resource column
+  // below its last card instead of drawing through it at an agent's row gap.
+  const bridgeY = privateRegion
+    ? privateRegion.position.y + privateRegion.height + CLEARANCE
+    : sourceBottomY + CLEARANCE;
+  if (source.type === "agent" && !targetInside) {
+    crossings.push(
+      { x: internalCorridor, y: sourceBottomY + CLEARANCE },
+      { x: internalCorridor, y: bridgeY },
+      { x: outsideCorridor, y: bridgeY }
+    );
+  } else if (!sourceInside && targetInside) {
+    crossings.push(
+      { x: outsideCorridor, y: sourceBottomY + CLEARANCE },
+      { x: outsideCorridor, y: bridgeY },
+      { x: internalCorridor, y: bridgeY }
+    );
+  } else {
+    crossings.push({ x: corridorX, y: sourceBottomY + CLEARANCE });
+  }
   return finishRoute(
     [
       sourceRight,
       { x: sourceRight.x + CLEARANCE, y: sourceRight.y },
       { x: sourceRight.x + CLEARANCE, y: sourceBottomY + CLEARANCE },
-      { x: corridorX, y: sourceBottomY + CLEARANCE },
+      ...crossings,
       { x: corridorX, y: approachY },
       { x: targetTop.x, y: approachY },
       targetTop,

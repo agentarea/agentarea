@@ -14,8 +14,7 @@ export function getNetworkScope(
 ): "private" | "egress" | "unknown" {
   const scope = node.metadata.network_scope;
   if (scope === "private" || scope === "egress") return scope;
-  // The topology API defines OpenAPI connections as external resources.
-  return node.type === "openapi_connection" ? "egress" : "unknown";
+  return "unknown";
 }
 
 export function getAgentConnections(

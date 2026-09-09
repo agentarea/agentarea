@@ -38,7 +38,7 @@ function sample(): TopologyResponse {
   const resources = [
     node("private-a", "mcp_instance", "private"),
     node("private-b", "skill", "private"),
-    node("external-a", "openapi_connection"),
+    node("external-a", "openapi_connection", "egress"),
     node("external-b", "mcp_instance", "egress"),
     node("external-c", "skill", "egress"),
     node("external-d", "mcp_instance", "egress"),
@@ -147,6 +147,54 @@ function verifyRoutes(input: TopologyResponse) {
 describe("getDirectionalRoute", () => {
   it("avoids unrelated cards across fork, grandchild, independent, shared, and resource routes", () => {
     verifyRoutes(sample());
+  });
+
+  it("keeps private-resource routes inside the workspace and routes egress beyond its right boundary", () => {
+    const layout = buildDirectionalLayout(sample());
+    const workspace = layout.regions.find(({ kind }) => kind === "workspace");
+    if (!workspace) throw new Error("Missing workspace boundary");
+    const workspaceRight = workspace.position.x + workspace.width;
+    const workspaceBottom = workspace.position.y + workspace.height;
+    for (const connection of layout.edges) {
+      const source = layout.nodes.find(({ id }) => id === connection.source);
+      const target = layout.nodes.find(({ id }) => id === connection.target);
+      if (source?.type !== "agent" || !target) continue;
+      const route = getDirectionalRoute(
+        connection,
+        layout.nodes,
+        layout.regions
+      );
+      if (target.metadata.network_scope === "private") {
+        for (const point of route.points) {
+          expect(point.x).toBeGreaterThanOrEqual(workspace.position.x);
+          expect(point.x).toBeLessThanOrEqual(workspaceRight);
+          expect(point.y).toBeGreaterThanOrEqual(workspace.position.y);
+          expect(point.y).toBeLessThanOrEqual(workspaceBottom);
+        }
+      } else if (target.metadata.network_scope === "egress") {
+        expect(route.points.some(({ x }) => x > workspaceRight)).toBe(true);
+      }
+    }
+  });
+
+  it("avoids wide unknown groups alongside tall external groups", () => {
+    const agents = [node("agent")];
+    const resources = [
+      ...Array.from({ length: 12 }, (_, index) =>
+        node(`external-${index}`, "mcp_instance", "egress")
+      ),
+      node("unknown-a", "mcp_instance"),
+      node("unknown-b", "openapi_connection"),
+      node("internal", "skill", "private"),
+    ];
+    verifyRoutes({
+      nodes: [...agents, ...resources],
+      edges: resources.map((resource) =>
+        edge("agent", resource.id, "uses_mcp")
+      ),
+      governance: [],
+      deployment_mode: "oss",
+    });
   });
 
   it("uses explicit bottom-to-top delegation and right-to-top capability handles", () => {
