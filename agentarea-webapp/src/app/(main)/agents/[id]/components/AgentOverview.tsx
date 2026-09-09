@@ -30,6 +30,7 @@ import {
 } from "@/lib/agent-identity";
 import {
   getAgent,
+  getModelInstance,
   listAgentTasks,
   listMCPServerInstances,
   listMCPServers,
@@ -100,6 +101,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     mcpInstancesRes,
     mcpServersRes,
     policiesRes,
+    modelInstanceRes,
   ] = await Promise.all([
     getAgentOverview(realId).catch(() => null),
     listAgentTasks(realId).catch(() => ({ data: null, error: "load failed" })),
@@ -109,6 +111,9 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     listPolicies({ subject_type: "agent", subject_id: realId }).catch(() => ({
       data: [],
     })),
+    agent.model_id
+      ? getModelInstance(agent.model_id).catch(() => ({ data: undefined }))
+      : Promise.resolve({ data: undefined }),
   ]);
   const tasks = (tasksRes?.data as TaskResponse[]) || [];
 
@@ -173,18 +178,21 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
   const HeroIcon = getAgentIconComponent(iconKey);
   const agentStatus = getAgentStatusPresentation(agent.status || "inactive");
 
+  const modelInstance = modelInstanceRes.data;
   const modelLabel =
-    agent.model_info?.config_name ||
     agent.model_info?.model_display_name ||
+    modelInstance?.model_display_name ||
+    modelInstance?.name ||
+    agent.model_info?.config_name ||
+    modelInstance?.config_name ||
     agent.model_id ||
     null;
-  const modelSub =
-    agent.model_info?.model_display_name &&
-    agent.model_info?.model_display_name !== modelLabel
-      ? agent.model_info.model_display_name
-      : agent.model_info?.provider_name || null;
-  const providerName = agent.model_info?.provider_name || null;
-  const providerIconUrl = agent.model_info?.provider_icon_url || null;
+  const providerName =
+    agent.model_info?.provider_name || modelInstance?.provider_name || null;
+  const providerIconUrl =
+    agent.model_info?.provider_icon_url ||
+    modelInstance?.provider_icon_url ||
+    null;
 
   const triggers = (overview?.upcoming ?? []).filter(
     (u) => u.kind === "trigger"
@@ -389,14 +397,12 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
                     className="grid h-7 w-7 place-items-center rounded-lg text-[11px] font-bold text-white"
                     style={{ background: agentColorVar(colorToken) }}
                   >
-                    {(
-                      agent.model_info?.provider_name?.[0] ?? "M"
-                    ).toUpperCase()}
+                    {(providerName?.[0] ?? "M").toUpperCase()}
                   </span>
                 )
               }
               title={modelLabel || "No model set"}
-              sub={modelSub || "Model"}
+              sub={providerName || "Model"}
             />
             <ConfigSection
               icon={<Sparkles className="h-3.5 w-3.5" />}
