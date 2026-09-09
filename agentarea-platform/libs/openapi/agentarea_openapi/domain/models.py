@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import JSON, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -17,14 +17,6 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
     """
 
     __tablename__ = "openapi_connections"
-    __table_args__ = (
-        UniqueConstraint(
-            "workspace_id",
-            "registry_item_id",
-            name="uq_openapi_conn_workspace_registry",
-        ),
-    )
-
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     spec_url: Mapped[str | None] = mapped_column(Text, nullable=True)
