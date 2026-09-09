@@ -7,7 +7,10 @@ import { CircleDot, RefreshCw, Route } from "lucide-react";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { previewNetworkPolicyAction } from "./actions";
+import {
+  getNetworkPeopleAccessAction,
+  previewNetworkPolicyAction,
+} from "./actions";
 import { useNetwork } from "./NetworkProvider";
 import type { NetworkNodeData } from "./types";
 import AccessGraphView from "./views/AccessGraphView";
@@ -103,7 +106,7 @@ export default function NetworkClient() {
     );
   }
 
-  if (!topology || topology.nodes.length === 0) {
+  if (!topology) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-[#f4f7fb] px-6 text-center dark:bg-zinc-950">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-dashed border-blue-300 bg-white text-blue-600 shadow-sm dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-300">
@@ -143,6 +146,7 @@ export default function NetworkClient() {
         {view === "access" ? (
           <AccessGraphView
             topology={topology}
+            loadPeopleAccess={getNetworkPeopleAccessAction}
             loadPolicy={previewNetworkPolicyAction}
             onNodeClick={handleSelect}
             highlightId={highlightId}
@@ -151,6 +155,7 @@ export default function NetworkClient() {
         ) : view === "org" ? (
           <OrgChartView
             topology={topology}
+            loadPeopleAccess={getNetworkPeopleAccessAction}
             loadPolicy={previewNetworkPolicyAction}
             onNodeClick={handleSelect}
             highlightId={highlightId}
@@ -159,6 +164,7 @@ export default function NetworkClient() {
         ) : (
           <NetworkMapView
             topology={topology}
+            loadPeopleAccess={getNetworkPeopleAccessAction}
             loadPolicy={previewNetworkPolicyAction}
             onNodeClick={handleSelect}
             highlightId={highlightId}

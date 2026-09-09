@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   Background,
@@ -12,12 +12,21 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Focus, Minus, Plus, Search, X } from "lucide-react";
+import { Focus, Minus, Plus, Search, Users, X } from "lucide-react";
 import "@xyflow/react/dist/style.css";
-import type { EffectivePolicy } from "@/api/client/types.gen";
+import type {
+  EffectivePolicy,
+  NetworkPeopleAccessResponse,
+} from "@/api/client/types.gen";
 import { cn } from "@/lib/utils";
 import DirectionalEdge from "../components/edges/DirectionalEdge";
 import NetworkConnectionPanel from "../components/NetworkConnectionPanel";
+import NetworkPeopleNode, {
+  peopleRosterHeight,
+  visiblePeople,
+  type NetworkPeopleNodeData,
+} from "../components/NetworkPeopleNode";
+import NetworkPeoplePanel from "../components/NetworkPeoplePanel";
 import NetworkRegion, {
   type NetworkRegionData,
 } from "../components/NetworkRegion";
@@ -30,6 +39,7 @@ import type {
   NetworkNodeData,
   TopologyResponse,
 } from "../types";
+import { useNetworkPeople } from "../useNetworkPeople";
 import { getAccessTopology, type AccessScope } from "../utils/accessTopology";
 import { buildDirectionalLayout } from "../utils/directionalLayout";
 import { getDirectionalRoute } from "../utils/directionalRoute";
@@ -48,18 +58,25 @@ import {
   ORG_NODE_HEIGHT,
   ORG_NODE_WIDTH,
 } from "../utils/orgChartLayout";
+import { getPersonRoute, withPeopleRoster } from "../utils/peopleLayout";
 
 export interface NetworkMapProps {
   mode?: "network" | "organization" | "access";
   topology: TopologyResponse;
   loadPolicy?: (agentId: string) => Promise<EffectivePolicy>;
+  loadPeopleAccess?: () => Promise<NetworkPeopleAccessResponse>;
   onNodeClick?: (node: NetworkNodeData) => void;
   highlightId?: string | null;
   onPaneClick?: () => void;
 }
 
-type MapNodeData = NetworkFlowNodeData | NetworkAgentData | NetworkRegionData;
+type MapNodeData =
+  | NetworkFlowNodeData
+  | NetworkAgentData
+  | NetworkRegionData
+  | NetworkPeopleNodeData;
 const nodeTypes = {
+  people: NetworkPeopleNode,
   region: NetworkRegion,
   organization: OrgChartNode,
   networkAgent: NetworkAgentNode,
@@ -73,6 +90,7 @@ export default function NetworkMapView({
   mode = "network",
   topology,
   loadPolicy,
+  loadPeopleAccess,
   onNodeClick,
   highlightId,
   onPaneClick,
@@ -81,6 +99,27 @@ export default function NetworkMapView({
   const flowText = useTranslations("NetworkPage.flowMap");
   const networkText = useTranslations("NetworkPage.networkMap");
   const isNetwork = mode === "network";
+  const peopleText = useTranslations("NetworkPage.people");
+  const peopleState = useNetworkPeople(true, loadPeopleAccess, topology);
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+  const [peoplePanelOpen, setPeoplePanelOpen] = useState(false);
+  const selectedPerson = peopleState.data?.people.find(
+    (person) => person.user_id === selectedPersonId
+  );
+  const rosterPeople = useMemo(
+    () => visiblePeople(peopleState.data?.people ?? [], selectedPersonId),
+    [peopleState.data?.people, selectedPersonId]
+  );
+  const rosterHeight = peopleRosterHeight(rosterPeople.length);
+  const selectPerson = useCallback(
+    (id: string) => {
+      setSelectedPersonId(id);
+      setPeoplePanelOpen(true);
+      setFocusAgentId(null);
+      onPaneClick?.();
+    },
+    [onPaneClick]
+  );
   const isAccess = mode === "access";
   const horizontal = mode !== "organization";
   const accessViewText = useTranslations("NetworkPage.accessView");
@@ -92,7 +131,7 @@ export default function NetworkMapView({
   const accessText = useTranslations("NetworkPage.accessDetails");
   const [focusAgentId, setFocusAgentId] = useState<string | null>(null);
   const selectedNode = topology.nodes.find((node) => node.id === highlightId);
-  const detailsOpen = !!selectedNode;
+  const detailsOpen = !!selectedNode || peoplePanelOpen;
   const focusAgent = topology.nodes.find(
     (node) => node.id === focusAgentId && node.type === "agent"
   );
@@ -124,7 +163,7 @@ export default function NetworkMapView({
   > | null>(null);
   const [zoom, setZoom] = useState(1);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const layout = useMemo(
+  const baseLayout = useMemo(
     () =>
       clustered
         ? buildDirectionalLayout(layoutTopology)
@@ -157,6 +196,26 @@ export default function NetworkMapView({
       expandedAgents,
     ]
   );
+  const layout = useMemo(() => {
+    if (clustered) return withPeopleRoster(baseLayout, rosterHeight);
+    return {
+      ...baseLayout,
+      peoplePosition: {
+        x:
+          Math.min(0, ...baseLayout.nodes.map((node) => node.position.x)) - 304,
+        y: 0,
+      },
+    };
+  }, [baseLayout, clustered, rosterHeight]);
+  const peopleNodeId = useMemo(() => {
+    const reserved = new Set([
+      ...layout.nodes.map((node) => node.id),
+      ...layout.regions.map((region) => region.id),
+    ]);
+    let id = "__network_people__";
+    while (reserved.has(id)) id += ":people";
+    return id;
+  }, [layout]);
   const resourceConsumers = useMemo(() => {
     const counts = new Map<string, number>();
     for (const resources of resourcesByAgent.values())
@@ -259,7 +318,17 @@ export default function NetworkMapView({
       id: region.id,
       type: "region",
       position: region.position,
-      data: { kind: region.kind, count: region.count, label: region.label },
+      data: {
+        kind: region.kind,
+        count:
+          region.count +
+          (region.kind === "inputs"
+            ? (peopleState.data?.total_people ??
+              peopleState.data?.people.length ??
+              0)
+            : 0),
+        label: region.label,
+      },
       style: {
         width: region.width,
         height: region.height,
@@ -276,7 +345,37 @@ export default function NetworkMapView({
           ? -3
           : -2,
     }));
-    const nodes = [...regions, ...entityNodes];
+    const peopleNodes: Node<MapNodeData>[] = layout.peoplePosition
+      ? [
+          {
+            id: peopleNodeId,
+            type: "people",
+            position: layout.peoplePosition,
+            style: { width: 240, height: rosterHeight },
+            focusable: false,
+            draggable: false,
+            data: {
+              status: peopleState.status,
+              people: peopleState.data?.people ?? [],
+              total:
+                peopleState.data?.total_people ??
+                peopleState.data?.people.length ??
+                0,
+              totalKnown: peopleState.data?.total_people !== null,
+              directoryDisabled:
+                peopleState.data?.directory_status === "disabled",
+              selectedId: selectedPersonId,
+              onSelect: selectPerson,
+              onDirectory: () => {
+                setPeoplePanelOpen(true);
+                onPaneClick?.();
+              },
+              onRetry: peopleState.reload,
+            },
+          },
+        ]
+      : [];
+    const nodes = [...regions, ...entityNodes, ...peopleNodes];
     const labelledRelations = new Set<string>();
     const edges: Edge[] = layout.edges.map((edge) => {
       const emphasized = !!highlight?.edges.has(edge.id);
@@ -327,6 +426,62 @@ export default function NetworkMapView({
         zIndex: emphasized ? 2 : 0,
       };
     });
+    if (selectedPerson && layout.peoplePosition) {
+      const sourceIndex = rosterPeople.findIndex(
+        (person) => person.user_id === selectedPerson.user_id
+      );
+      const existingEdges = new Set(edges.map((edge) => edge.id));
+      for (const decision of peopleState.data?.access.filter(
+        (item) => item.user_id === selectedPerson.user_id
+      ) ?? []) {
+        const target = layout.nodes.find(
+          (node) => node.id === decision.agent_id && node.type === "agent"
+        );
+        if (!target || sourceIndex < 0) continue;
+        const sourceHandle = `person:${selectedPerson.user_id}`;
+        const route = clustered
+          ? getPersonRoute(
+              {
+                position: layout.peoplePosition,
+                sourceOffset: 48 + sourceIndex * 44 + 22,
+                sourceId: sourceHandle,
+              },
+              target,
+              layout
+            )
+          : undefined;
+        const color = decision.allowed
+          ? "hsl(var(--primary))"
+          : "hsl(var(--destructive))";
+        let id = `__person_access__:${encodeURIComponent(selectedPerson.user_id)}:${encodeURIComponent(target.id)}`;
+        while (existingEdges.has(id)) id += ":access";
+        existingEdges.add(id);
+        edges.push({
+          id,
+          source: peopleNodeId,
+          target: target.id,
+          sourceHandle,
+          targetHandle: route?.targetHandle,
+          type: route ? "directional" : "smoothstep",
+          data: route
+            ? { points: route.points, labelPosition: route.label }
+            : undefined,
+          style: {
+            stroke: color,
+            strokeWidth: 1.75,
+            strokeDasharray: decision.allowed ? undefined : "3 4",
+          },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color,
+            width: 14,
+            height: 14,
+          },
+          zIndex: 1,
+          ariaLabel: peopleText(decision.allowed ? "allowed" : "denied"),
+        });
+      }
+    }
     return { nodes, edges };
   }, [
     layout,
@@ -344,6 +499,17 @@ export default function NetworkMapView({
     agentsOnly,
     clustered,
     resourceConsumers,
+    peopleNodeId,
+    rosterHeight,
+    peopleState.status,
+    peopleState.data,
+    peopleState.reload,
+    selectedPersonId,
+    selectedPerson,
+    rosterPeople,
+    selectPerson,
+    onPaneClick,
+    peopleText,
   ]);
 
   useEffect(() => {
@@ -421,7 +587,40 @@ export default function NetworkMapView({
             <X className="h-3.5 w-3.5 shrink-0" />
           </button>
         )}
+        {selectedPerson && (
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedPersonId(null);
+              setPeoplePanelOpen(false);
+            }}
+            aria-label={peopleText("clearPerson")}
+            className="flex max-w-full items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs text-primary"
+          >
+            <span className="truncate">
+              {selectedPerson.display_name ||
+                selectedPerson.email ||
+                peopleText("unnamed", {
+                  id: selectedPerson.user_id.slice(0, 8),
+                })}
+            </span>
+            <X className="h-3.5 w-3.5 shrink-0" />
+          </button>
+        )}
         <div className="flex w-full items-center gap-2 sm:w-auto">
+          {
+            <button
+              type="button"
+              onClick={() => {
+                setPeoplePanelOpen(true);
+                onPaneClick?.();
+              }}
+              className="flex h-9 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Users className="h-3.5 w-3.5" />
+              {peopleText("title")}
+            </button>
+          }
           {isAccess ? (
             <select
               value={accessScope}
@@ -576,6 +775,8 @@ export default function NetworkMapView({
               onMove={(_, viewport) => setZoom(viewport.zoom)}
               onPaneClick={() => {
                 setSearchOpen(false);
+                setPeoplePanelOpen(false);
+                setSelectedPersonId(null);
                 onPaneClick?.();
               }}
               onNodeClick={(_, node) => {
@@ -664,14 +865,44 @@ export default function NetworkMapView({
             loadPolicy={loadPolicy}
           />
         )}
+        {peoplePanelOpen && !selectedNode && (
+          <NetworkPeoplePanel
+            data={peopleState.data}
+            status={peopleState.status}
+            selectedId={selectedPersonId}
+            topology={topology}
+            onSelect={selectPerson}
+            onAgentSelect={(node) => onNodeClick?.(node)}
+            onClose={() => setPeoplePanelOpen(false)}
+            onRetry={peopleState.reload}
+          />
+        )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border bg-background px-4 py-2.5 text-xs text-muted-foreground md:px-5">
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
           <span className="tabular-nums">
             {summary
               ? networkText("visibleAgents", { count: layout.nodes.length })
               : t("visibleNodes", { count: layout.nodes.length })}
           </span>
+          {peopleState.status === "ready" && peopleState.data && (
+            <span className="tabular-nums">
+              {peopleText(
+                peopleState.data.total_people === null ? "knownCount" : "count",
+                {
+                  count:
+                    peopleState.data.total_people ??
+                    peopleState.data.people.length,
+                }
+              )}
+            </span>
+          )}
+          {selectedPerson && (
+            <span className="flex items-center gap-2">
+              <span className="h-px w-5 bg-primary" />
+              {peopleText("legend")}
+            </span>
+          )}
           <span className="flex items-center gap-2">
             <span className="h-px w-5 bg-muted-foreground" />
             {t("delegation")}

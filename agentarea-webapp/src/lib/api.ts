@@ -2394,3 +2394,11 @@ export const deleteSecret = async (secretId: string) => {
   });
   return { data, error };
 };
+
+export const getNetworkPeopleAccess = async () => {
+  const { data, error } =
+    await sdk.getNetworkPeopleAccessV1NetworkPeopleAccessGet({
+      client: serverClient,
+    });
+  return { data, error };
+};

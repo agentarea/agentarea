@@ -1440,6 +1440,45 @@ export const zNetworkNode = z.object({
 });
 
 /**
+ * NetworkPerson
+ */
+export const zNetworkPerson = z.object({
+  display_name: z.string().nullish(),
+  email: z.string().nullish(),
+  user_id: z.string(),
+});
+
+/**
+ * NetworkPersonAgentAccess
+ */
+export const zNetworkPersonAgentAccess = z.object({
+  agent_id: z.string(),
+  allowed: z.boolean(),
+  reason: z.string(),
+  user_id: z.string(),
+});
+
+/**
+ * NetworkPeopleAccessResponse
+ */
+export const zNetworkPeopleAccessResponse = z.object({
+  access: z.array(zNetworkPersonAgentAccess),
+  complete: z.boolean(),
+  decision_source: z
+    .literal("agent_edge_admission")
+    .optional()
+    .default("agent_edge_admission"),
+  directory_status: z
+    .enum(["available", "disabled"])
+    .optional()
+    .default("available"),
+  people: z.array(zNetworkPerson),
+  total_agents: z.number().int().gte(0),
+  total_people: z.number().int().gte(0).nullable(),
+  workspace_id: z.string(),
+});
+
+/**
  * NetworkTopologyResponse
  */
 export const zNetworkTopologyResponse = z.object({
@@ -4470,6 +4509,12 @@ export const zUpdateModelSpecV1ModelSpecsModelSpecIdPatchPath = z.object({
  */
 export const zUpdateModelSpecV1ModelSpecsModelSpecIdPatchResponse =
   zAgentareaApiApiV1ModelSpecsModelSpecResponse;
+
+/**
+ * Successful Response
+ */
+export const zGetNetworkPeopleAccessV1NetworkPeopleAccessGetResponse =
+  zNetworkPeopleAccessResponse;
 
 /**
  * Successful Response

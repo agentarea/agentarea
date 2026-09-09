@@ -334,6 +334,8 @@ import type {
   GetModelSpecV1ModelSpecsModelSpecIdGetData,
   GetModelSpecV1ModelSpecsModelSpecIdGetErrors,
   GetModelSpecV1ModelSpecsModelSpecIdGetResponses,
+  GetNetworkPeopleAccessV1NetworkPeopleAccessGetData,
+  GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponses,
   GetNetworkTopologyV1NetworkTopologyGetData,
   GetNetworkTopologyV1NetworkTopologyGetResponses,
   GetOauthLinkV1McpOauthLinksLinkIdGetData,
@@ -5556,6 +5558,49 @@ export const updateModelSpecV1ModelSpecsModelSpecIdPatch = <
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * Get Network People Access
+ *
+ * Inspect current-workspace people's ``agent:execute`` admission.
+ *
+ * Uses the existing workspace-management authorization gate. Membership and
+ * ownership establish evaluation subjects; this never acts as those users.
+ * At most 100 people and 100 agents are evaluated, with ``complete=False``
+ * when either list is truncated. Results assume an authenticated participant
+ * and do not represent the restrictions of a particular token or task.
+ *
+ * An intentionally disabled membership directory exposes only the persisted
+ * workspace owner, with ``directory_status=disabled``, ``total_people=None``
+ * and ``complete=False``. An enabled directory that fails still returns 503.
+ */
+export const getNetworkPeopleAccessV1NetworkPeopleAccessGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    GetNetworkPeopleAccessV1NetworkPeopleAccessGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/network/people-access",
+    ...options,
   });
 
 /**
