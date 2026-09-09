@@ -144,6 +144,15 @@ class RegistryItemRepository:
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
+    async def count_by_registry(self, registry_id: UUID | str) -> int:
+        """Return the exact number of catalog items owned by a registry."""
+        query = (
+            select(func.count())
+            .select_from(RegistryItem)
+            .where(RegistryItem.registry_id == registry_id)
+        )
+        return (await self.session.execute(query)).scalar_one()
+
     async def create(self, **kwargs: Any) -> RegistryItem:
         record = RegistryItem(**kwargs)
         self.session.add(record)

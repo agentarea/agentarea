@@ -2541,6 +2541,145 @@
         "title": "CatalogConnectionResponse",
         "type": "object"
       },
+      "CatalogItemCreate": {
+        "description": "Definition published directly into a platform-managed catalog.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "external_id": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "External Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "spec": {
+            "additionalProperties": true,
+            "title": "Spec",
+            "type": "object"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "external_id",
+          "name"
+        ],
+        "title": "CatalogItemCreate",
+        "type": "object"
+      },
+      "CatalogItemUpdate": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "title": "CatalogItemUpdate",
+        "type": "object"
+      },
       "CategoryFacet": {
         "properties": {
           "count": {
@@ -8611,19 +8750,26 @@
             "type": "string"
           },
           "registry_type": {
-            "description": "Entity type: 'mcp_servers' or 'skills'",
+            "description": "Catalog entity type: one of ('mcp_servers', 'skills', 'llm_providers', 'llm_models', 'agents', 'bundles')",
             "title": "Registry Type",
             "type": "string"
           },
           "source_type": {
-            "description": "Fetch method: 'url', 'github', or 'api'",
+            "description": "Source mode: 'url', 'github', 'api', or platform-managed 'managed'",
             "title": "Source Type",
             "type": "string"
           },
           "source_url": {
-            "description": "URL to the registry source (JSON or YAML)",
-            "title": "Source Url",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Registry source URL; omitted when source_type is 'managed'",
+            "title": "Source Url"
           },
           "sync_mode": {
             "default": "manual",
@@ -8635,8 +8781,7 @@
         "required": [
           "name",
           "registry_type",
-          "source_type",
-          "source_url"
+          "source_type"
         ],
         "title": "RegistryCreate",
         "type": "object"
@@ -23230,6 +23375,48 @@
       }
     },
     "/v1/registries/catalog/items/{item_id}": {
+      "delete": {
+        "description": "Remove a directly managed catalog definition.",
+        "operationId": "delete_catalog_item_v1_registries_catalog_items__item_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Catalog Item",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      },
       "get": {
         "operationId": "get_catalog_item_v1_registries_catalog_items__item_id__get",
         "parameters": [
@@ -23272,6 +23459,65 @@
           }
         ],
         "summary": "Get Catalog Item",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      },
+      "patch": {
+        "description": "Change a directly managed definition in place.",
+        "operationId": "update_catalog_item_v1_registries_catalog_items__item_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogItemUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryItemResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Catalog Item",
         "tags": [
           "v1",
           "protected",
@@ -23670,6 +23916,65 @@
           }
         ],
         "summary": "List Registry Items",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      },
+      "post": {
+        "description": "Publish one definition without putting catalog data in the OSS image.",
+        "operationId": "create_catalog_item_v1_registries__registry_id__items_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registry_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Registry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogItemCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryItemResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Catalog Item",
         "tags": [
           "v1",
           "protected",

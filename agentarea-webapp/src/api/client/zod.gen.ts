@@ -485,6 +485,32 @@ export const zCatalogConnectionResponse = z.object({
 });
 
 /**
+ * CatalogItemCreate
+ *
+ * Definition published directly into a platform-managed catalog.
+ */
+export const zCatalogItemCreate = z.object({
+  description: z.string().nullish(),
+  external_id: z.string().min(1).max(500),
+  name: z.string().min(1).max(255),
+  spec: z.record(z.unknown()).optional(),
+  tags: z.array(z.string()).optional(),
+  version: z.string().max(100).nullish(),
+});
+
+/**
+ * CatalogItemUpdate
+ */
+export const zCatalogItemUpdate = z.object({
+  description: z.string().nullish(),
+  external_id: z.string().min(1).max(500).nullish(),
+  name: z.string().min(1).max(255).nullish(),
+  spec: z.record(z.unknown()).nullish(),
+  tags: z.array(z.string()).nullish(),
+  version: z.string().max(100).nullish(),
+});
+
+/**
  * CategoryFacet
  */
 export const zCategoryFacet = z.object({
@@ -2014,7 +2040,7 @@ export const zRegistryCreate = z.object({
   name: z.string(),
   registry_type: z.string(),
   source_type: z.string(),
-  source_url: z.string(),
+  source_url: z.string().nullish(),
   sync_mode: z.string().optional().default("manual"),
 });
 
@@ -5009,6 +5035,17 @@ export const zBrowseCatalogV1RegistriesCatalogBrowseGetQuery = z.object({
 export const zBrowseCatalogV1RegistriesCatalogBrowseGetResponse =
   zCatalogBrowseResponse;
 
+export const zDeleteCatalogItemV1RegistriesCatalogItemsItemIdDeletePath =
+  z.object({
+    item_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zDeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponse =
+  z.void();
+
 export const zGetCatalogItemV1RegistriesCatalogItemsItemIdGetPath = z.object({
   item_id: z.string().uuid(),
 });
@@ -5017,6 +5054,20 @@ export const zGetCatalogItemV1RegistriesCatalogItemsItemIdGetPath = z.object({
  * Successful Response
  */
 export const zGetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse =
+  zRegistryItemResponse;
+
+export const zUpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchBody =
+  zCatalogItemUpdate;
+
+export const zUpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchPath =
+  z.object({
+    item_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zUpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponse =
   zRegistryItemResponse;
 
 export const zUpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostPath =
@@ -5083,6 +5134,19 @@ export const zListRegistryItemsV1RegistriesRegistryIdItemsGetQuery = z.object({
 export const zListRegistryItemsV1RegistriesRegistryIdItemsGetResponse = z.array(
   zRegistryItemResponse
 );
+
+export const zCreateCatalogItemV1RegistriesRegistryIdItemsPostBody =
+  zCatalogItemCreate;
+
+export const zCreateCatalogItemV1RegistriesRegistryIdItemsPostPath = z.object({
+  registry_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zCreateCatalogItemV1RegistriesRegistryIdItemsPostResponse =
+  zRegistryItemResponse;
 
 export const zSyncRegistryV1RegistriesRegistryIdSyncPostPath = z.object({
   registry_id: z.string().uuid(),

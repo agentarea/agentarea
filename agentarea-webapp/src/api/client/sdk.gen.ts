@@ -67,6 +67,9 @@ import type {
   CreateAttachmentUploadUrlV1FilesUploadUrlPostData,
   CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors,
   CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses,
+  CreateCatalogItemV1RegistriesRegistryIdItemsPostData,
+  CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors,
+  CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses,
   CreateClientV1ClientsPostData,
   CreateClientV1ClientsPostErrors,
   CreateClientV1ClientsPostResponses,
@@ -145,6 +148,9 @@ import type {
   DeleteAgentV1AgentsAgentIdDeleteData,
   DeleteAgentV1AgentsAgentIdDeleteErrors,
   DeleteAgentV1AgentsAgentIdDeleteResponses,
+  DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteData,
+  DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors,
+  DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses,
   DeleteClientV1ClientsClientIdDeleteData,
   DeleteClientV1ClientsClientIdDeleteErrors,
   DeleteClientV1ClientsClientIdDeleteResponses,
@@ -703,6 +709,9 @@ import type {
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostData,
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors,
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses,
+  UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchData,
+  UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors,
+  UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses,
   UpdateClientV1ClientsClientIdPatchData,
   UpdateClientV1ClientsClientIdPatchErrors,
   UpdateClientV1ClientsClientIdPatchResponses,
@@ -7123,6 +7132,39 @@ export const browseCatalogV1RegistriesCatalogBrowseGet = <
   });
 
 /**
+ * Delete Catalog Item
+ *
+ * Remove a directly managed catalog definition.
+ */
+export const deleteCatalogItemV1RegistriesCatalogItemsItemIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses,
+  DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses,
+    DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/catalog/items/{item_id}",
+    ...options,
+  });
+
+/**
  * Get Catalog Item
  */
 export const getCatalogItemV1RegistriesCatalogItemsItemIdGet = <
@@ -7151,6 +7193,43 @@ export const getCatalogItemV1RegistriesCatalogItemsItemIdGet = <
     ],
     url: "/v1/registries/catalog/items/{item_id}",
     ...options,
+  });
+
+/**
+ * Update Catalog Item
+ *
+ * Change a directly managed definition in place.
+ */
+export const updateCatalogItemV1RegistriesCatalogItemsItemIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses,
+  UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses,
+    UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/catalog/items/{item_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
@@ -7333,6 +7412,43 @@ export const listRegistryItemsV1RegistriesRegistryIdItemsGet = <
     ],
     url: "/v1/registries/{registry_id}/items",
     ...options,
+  });
+
+/**
+ * Create Catalog Item
+ *
+ * Publish one definition without putting catalog data in the OSS image.
+ */
+export const createCatalogItemV1RegistriesRegistryIdItemsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    CreateCatalogItemV1RegistriesRegistryIdItemsPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses,
+  CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses,
+    CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/{registry_id}/items",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
