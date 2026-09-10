@@ -257,6 +257,7 @@ class TemporalAgentRunner(BaseAgentRunner):
                     server_instance_id=None,
                     workspace_id=workspace_id,
                     user_id=user_context_data.get("user_id"),
+                    user_context_data=user_context_data,
                     task_id=str(state.task_id) if state.task_id else None,
                     agent_id=UUID(state.agent_id) if state.agent_id else None,
                     tools=state.agent_config.get("tools"),

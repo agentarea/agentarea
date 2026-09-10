@@ -573,6 +573,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_GOVERNANCE_SNAPSHOT,
             args=[
                 UpdateTaskGovernanceSnapshotRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     workspace_id=self.state.workspace_id,
                     governance_snapshot=info.governance_snapshot,
@@ -770,6 +771,7 @@ class AgentExecutionWorkflow:
         if model_id:
             try:
                 resolve_model_request = ResolveModelRequest(
+                    user_context_data=self.state.user_context_data,
                     model_id=model_id,
                     workspace_id=self.state.workspace_id,
                     user_id=self.state.user_id,
@@ -1555,6 +1557,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status=ExecutionStatus.WAITING_FOR_CONTINUATION,
                     workspace_id=self.state.workspace_id,
@@ -1603,6 +1606,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status="running",
                     workspace_id=self.state.workspace_id,
@@ -1643,6 +1647,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status="running",
                     workspace_id=self.state.workspace_id,
@@ -2475,6 +2480,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status="completed",
                     result=json.dumps(
@@ -2567,6 +2573,7 @@ class AgentExecutionWorkflow:
                 Activities.VALIDATE_ARTIFACTS,
                 args=[
                     ArtifactValidationRequest(
+                        user_context_data=self.state.user_context_data,
                         workspace_id=self.state.workspace_id,
                         task_id=self.state.task_id,
                         workflow_id=self.state.execution_id,
@@ -2688,6 +2695,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status="waiting_for_input",
                     workspace_id=self.state.workspace_id,
@@ -2747,6 +2755,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status="running",
                     workspace_id=self.state.workspace_id,
@@ -2873,6 +2882,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status="waiting_for_approval",
                     workspace_id=self.state.workspace_id,
@@ -2941,6 +2951,7 @@ class AgentExecutionWorkflow:
                 Activities.UPDATE_TASK_STATUS,
                 args=[
                     UpdateTaskStatusRequest(
+                        user_context_data=self.state.user_context_data,
                         task_id=self.state.task_id,
                         status="running",
                         workspace_id=self.state.workspace_id,
@@ -3581,6 +3592,7 @@ class AgentExecutionWorkflow:
                 Activities.MATERIALIZE_SKILL_FILES,
                 args=[
                     MaterializeSkillFilesRequest(
+                        user_context_data=self.state.user_context_data,
                         skill_id=UUID(skill_id),
                         skill_name=skill_name,
                         workflow_id=workflow.info().workflow_id,
@@ -4127,6 +4139,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status=final_status,
                     result=json.dumps(
@@ -4201,6 +4214,7 @@ class AgentExecutionWorkflow:
                 Activities.UPDATE_TASK_STATUS,
                 args=[
                     UpdateTaskStatusRequest(
+                        user_context_data=self.state.user_context_data,
                         task_id=self.state.task_id,
                         status=status,
                         error_message=self.state.blocked_reason or error_details,

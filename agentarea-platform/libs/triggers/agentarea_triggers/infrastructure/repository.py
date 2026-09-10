@@ -27,6 +27,22 @@ def _value(value: Any) -> Any:
     return value.value if isinstance(value, Enum) else value
 
 
+async def find_trigger_by_webhook_id(session: AsyncSession, webhook_id: str) -> TriggerORM | None:
+    """Find a trigger before any tenant is known.
+
+    Deliberately unscoped: an inbound webhook carries no session, and the
+    webhook id is itself the discriminator. The caller builds the real
+    workspace context from what this returns.
+
+    Lives outside ``TriggerRepository`` on purpose. Reaching this query through
+    the repository used to require inventing a ``UserContext(user_id="system",
+    workspace_id="system")`` just to satisfy the constructor, which then sat in
+    scope for the rest of the request.
+    """
+    result = await session.execute(select(TriggerORM).where(TriggerORM.webhook_id == webhook_id))
+    return result.scalar_one_or_none()
+
+
 class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
     """Repository for trigger persistence."""
 

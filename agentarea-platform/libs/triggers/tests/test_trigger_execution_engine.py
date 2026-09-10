@@ -340,38 +340,3 @@ class TestTriggerExecutionEngine:
         assert result is True
 
 
-class TestTriggerExecutionIntegration:
-    """Integration tests for trigger execution with TaskService."""
-
-    @pytest.fixture
-    def mock_task_service(self):
-        """Create mock TaskService."""
-        task_service = AsyncMock()
-
-        # Mock task creation
-        mock_task = MagicMock()
-        mock_task.id = uuid4()
-        task_service.route_or_submit_task.return_value = mock_task
-
-        return task_service
-
-    async def test_trigger_execution_creates_task(self, mock_task_service):
-        """Test that trigger execution creates a task with correct parameters."""
-        # This would be an integration test that verifies the full flow
-        # from trigger execution to task creation
-
-        # Verify task creation was called with correct parameters
-        # This test would need actual integration setup
-        pass
-
-    async def test_webhook_trigger_execution_with_request_data(self):
-        """Test webhook trigger execution with HTTP request data."""
-        # This would test the full webhook trigger flow
-        # including request parsing and task parameter building
-        pass
-
-    async def test_cron_trigger_execution_with_schedule_data(self):
-        """Test cron trigger execution with schedule data."""
-        # This would test the full cron trigger flow
-        # including schedule information in task parameters
-        pass

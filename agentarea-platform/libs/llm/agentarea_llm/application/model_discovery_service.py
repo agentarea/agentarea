@@ -4,23 +4,9 @@ from dataclasses import dataclass, field
 import httpx
 from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
 
-logger = logging.getLogger(__name__)
+from ..domain.provider_profiles import ModelListShape, profile_for
 
-# Provider-specific base URLs for /v1/models discovery
-_PROVIDER_BASE_URLS: dict[str, str] = {
-    "openrouter": "https://openrouter.ai/api",
-    "openai": "https://api.openai.com",
-    "anthropic": "https://api.anthropic.com",
-    "mistral": "https://api.mistral.ai",
-    "groq": "https://api.groq.com/openai",
-    "together": "https://api.together.xyz",
-    "fireworks": "https://api.fireworks.ai/inference",
-    "deepseek": "https://api.deepseek.com",
-    "perplexity": "https://api.perplexity.ai",
-    "cerebras": "https://api.cerebras.ai",
-    "xai": "https://api.x.ai",
-    "zai": "https://api.z.ai/api/paas/v4",
-}
+logger = logging.getLogger(__name__)
 
 
 def _positive_int_or_none(value) -> int | None:
@@ -73,36 +59,14 @@ class ModelDiscoveryService:
         self._allow_private_endpoints = allow_private_endpoints
 
     def _build_url(self, provider_key: str, endpoint_url: str | None) -> str | None:
-        if provider_key == "ollama":
-            base = endpoint_url
-        else:
-            base = endpoint_url or _PROVIDER_BASE_URLS.get(provider_key, "")
-        if not base:
-            return None
-        base = base.rstrip("/")
-        if provider_key == "ollama":
-            return f"{base}/api/tags"
-        if provider_key == "zai":
-            return f"{base}/models"
-        if base.endswith("/v1"):
-            return f"{base}/models"
-        return f"{base}/v1/models"
+        return profile_for(provider_key).resolve_models_url(endpoint_url)
 
     def _build_headers(self, provider_key: str, api_key: str | None) -> dict[str, str]:
-        if not api_key:
-            return {}
-        if provider_key == "anthropic":
-            return {
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-            }
-        if provider_key == "ollama":
-            return {}
-        return {"Authorization": f"Bearer {api_key}"}
+        return profile_for(provider_key).build_headers(api_key)
 
     def _parse_response(self, provider_key: str, data: dict) -> list[DiscoveredModel]:
         models: list[DiscoveredModel] = []
-        if provider_key == "ollama":
+        if profile_for(provider_key).list_shape is ModelListShape.MODELS_NAME:
             for m in data.get("models", []):
                 name = m.get("name", "")
                 models.append(

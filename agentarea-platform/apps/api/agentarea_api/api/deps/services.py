@@ -545,33 +545,29 @@ async def get_public_webhook_manager(
     settings = get_settings()
     get_secret_manager_settings()
 
-    # For webhooks, we first do an unscoped DB query to find the trigger by webhook_id,
-    # then re-create the service with the correct workspace context.
-    # Start with a placeholder context — the webhook manager will update it
-    # once the trigger's workspace_id is known.
-    from agentarea_triggers.infrastructure.repository import TriggerRepository
-
-    # Trigger lookup with system context — get_by_webhook_id doesn't filter by workspace
-    system_ctx = UserContext(
-        user_id="system", workspace_id="system", accessible_workspaces=["system"]
+    # An inbound webhook carries no session, so the tenant is unknown until the
+    # trigger is found. The lookup is unscoped by design; everything after it
+    # runs as the trigger's creator.
+    from agentarea_triggers.domain.models import WebhookTrigger
+    from agentarea_triggers.infrastructure.repository import (
+        TriggerRepository,
+        find_trigger_by_webhook_id,
     )
-    trigger_repo = TriggerRepository(session=db_session, user_context=system_ctx)
 
     class WebhookManagerWithLookup:
         """Wraps DefaultWebhookManager with dynamic workspace resolution."""
 
-        def __init__(self, db_session, event_broker, settings, trigger_repo):
+        def __init__(self, db_session, event_broker, settings):
             self._db_session = db_session
             self._event_broker = event_broker
             self._settings = settings
-            self._trigger_repo = trigger_repo
 
         async def handle_webhook_request(
             self, webhook_id, method, headers, body, query_params, raw_body=None
         ):
-            # Find trigger without workspace scoping
-            trigger = await self._trigger_repo.get_by_webhook_id(webhook_id)
-            if not trigger:
+            # Deliberately unscoped: the tenant is not known until the trigger is found.
+            trigger_row = await find_trigger_by_webhook_id(self._db_session, webhook_id)
+            if not trigger_row:
                 return {
                     "status_code": 400,
                     "body": {"status": "error", "message": f"Webhook {webhook_id} not found"},
@@ -581,12 +577,16 @@ async def get_public_webhook_manager(
             from agentarea_common.config.database import get_database
 
             async with get_database().session() as fresh_session:
-                workspace_id = trigger.workspace_id or "system"
-                created_by = trigger.created_by or "system"
+                # The trigger's creator is the authority the run executes with.
+                # A trigger row without one is corrupt, not a case to default.
+                if not trigger_row.workspace_id or not trigger_row.created_by:
+                    raise ValueError(
+                        f"trigger {webhook_id} has no workspace or creator; "
+                        "refusing to execute it under a fabricated principal"
+                    )
                 ctx = UserContext(
-                    user_id=created_by,
-                    workspace_id=workspace_id,
-                    accessible_workspaces=[workspace_id, "system"],
+                    user_id=str(trigger_row.created_by),
+                    workspace_id=str(trigger_row.workspace_id),
                 )
                 repo_factory = RepositoryFactory(session=fresh_session, user_context=ctx)
                 sec_manager = get_real_secret_manager(session=fresh_session, user_context=ctx)
@@ -599,7 +599,18 @@ async def get_public_webhook_manager(
                     base_url=self._settings.triggers.WEBHOOK_BASE_URL,
                     trigger_service=svc,
                 )
-                # Pre-register the trigger so the manager doesn't need another lookup
+                # Pre-register the trigger so the manager doesn't need another lookup.
+                # Re-read through the workspace-scoped repository: the unscoped
+                # lookup above only established which tenant this webhook belongs to.
+                scoped_repo = repo_factory.create_repository(TriggerRepository)
+                trigger = await scoped_repo.get_by_webhook_id(webhook_id)
+                # Only a webhook trigger can be served here; a cron trigger that
+                # somehow carries a webhook_id is corrupt, not a thing to deliver to.
+                if not isinstance(trigger, WebhookTrigger):
+                    return {
+                        "status_code": 400,
+                        "body": {"status": "error", "message": f"Webhook {webhook_id} not found"},
+                    }
                 mgr._registered_webhooks[webhook_id] = trigger
 
                 return await mgr.handle_webhook_request(
@@ -609,7 +620,7 @@ async def get_public_webhook_manager(
         async def is_healthy(self):
             return True
 
-    return WebhookManagerWithLookup(db_session, event_broker, settings, trigger_repo)
+    return WebhookManagerWithLookup(db_session, event_broker, settings)
 
 
 async def get_trigger_health_check(

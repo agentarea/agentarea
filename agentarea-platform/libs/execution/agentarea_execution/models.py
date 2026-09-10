@@ -41,6 +41,10 @@ class ResolveModelRequest(BaseModel):
     model_id: str
     workspace_id: str
     user_id: str | None = None
+    # Principal the activity runs as. Optional only so Temporal can still
+    # deserialize payloads recorded before this field existed; the activity
+    # raises when it is absent rather than inventing a principal.
+    user_context_data: dict[str, Any] | None = None
 
 
 class WorkflowCommand(BaseModel):
@@ -326,6 +330,7 @@ class ArtifactValidationRequest(BaseModel):
     task_id: str
     workflow_id: str
     declared_paths: list[str] = Field(default_factory=list, max_length=1000)
+    user_context_data: dict[str, Any] | None = None
 
 
 class ArtifactValidationResult(BaseModel):
@@ -471,6 +476,7 @@ class MCPToolRequest(BaseModel):
     cost_used: float | None = None
     tokens_used: int | None = None
     service_cost_used: float | None = None
+    user_context_data: dict[str, Any] | None = None
 
 
 class MCPToolResult(BaseModel):
@@ -555,6 +561,7 @@ class UpdateTaskStatusRequest(BaseModel):
     workspace_id: str
     total_cost: Money | None = None
     own_cost: Money | None = None
+    user_context_data: dict[str, Any] | None = None
 
 
 class UpdateTaskStatusResult(BaseModel):
@@ -570,6 +577,7 @@ class UpdateTaskGovernanceSnapshotRequest(BaseModel):
     task_id: str
     workspace_id: str
     governance_snapshot: dict[str, Any]
+    user_context_data: dict[str, Any] | None = None
 
 
 class UpdateTaskGovernanceSnapshotResult(BaseModel):
@@ -743,6 +751,7 @@ class MaterializeSkillFilesRequest(BaseModel):
     workflow_id: str | None = None
     workspace_id: str | None = None
     task_id: str | None = None
+    user_context_data: dict[str, Any] | None = None
 
 
 class MaterializeSkillFilesResult(BaseModel):

@@ -262,10 +262,16 @@ class DefaultWebhookManager(WebhookManager):
                             if hasattr(repo, "user_context") and hasattr(
                                 repo.user_context, "workspace_id"
                             ):
+                                # Re-point the repository at the trigger's owner. Keeping
+                                # the previous principal when the trigger has none would
+                                # run someone else's trigger under this caller's authority.
+                                if not db_trigger.created_by:
+                                    raise ValueError(
+                                        f"trigger for webhook {webhook_id} has no creator; "
+                                        "refusing to run it under the calling principal"
+                                    )
                                 repo.user_context.workspace_id = db_trigger.workspace_id
-                                repo.user_context.user_id = (
-                                    db_trigger.created_by or repo.user_context.user_id
-                                )
+                                repo.user_context.user_id = db_trigger.created_by
                         logger.info(f"Loaded trigger from DB for webhook {webhook_id}")
                 except Exception as db_err:
                     logger.warning(f"DB lookup failed for webhook {webhook_id}: {db_err}")

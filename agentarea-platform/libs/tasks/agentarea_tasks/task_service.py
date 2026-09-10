@@ -252,7 +252,18 @@ class TaskService(BaseTaskService):
         ``require_model`` is set by the execution path so a run is rejected up
         front when the agent has no model configured; persist-only callers leave
         it ``False``.
+
+        Raises:
+            ValueError: If no owner is supplied. A task carries its creator's
+                authority into execution, so an unowned task must not exist.
         """
+        if not user_id:
+            raise ValueError(
+                "user_id is required to create a task; refusing to persist an unowned task"
+            )
+        if not workspace_id:
+            raise ValueError("workspace_id is required to create a task")
+
         new_task_id = task_id or uuid4()
         # Refuse before persisting: an engine without a timer would run this
         # immediately, and a half-created row for a run that can never happen
@@ -318,8 +329,8 @@ class TaskService(BaseTaskService):
             title=title or description,
             description=description,
             query=query or description,
-            user_id=user_id or "",
-            workspace_id=workspace_id or "",
+            user_id=user_id,
+            workspace_id=workspace_id,
             agent_id=agent_id,
             status=status,
             task_parameters=parameters,
@@ -519,14 +530,22 @@ class TaskService(BaseTaskService):
                     task.agent_id,
                     chat_id,
                 )
-                # Return existing task marked as routed
+                # Return existing task marked as routed. Both columns are NOT
+                # NULL in the database; a stored task missing either is corrupt,
+                # and this one is about to carry its owner's authority into a
+                # running workflow.
+                if not candidate.user_id or not candidate.workspace_id:
+                    raise ValueError(
+                        f"task {candidate.id} is stored without an owner or a workspace; "
+                        "refusing to route a follow-up into it"
+                    )
                 candidate_as_simple = AgentTask(
                     id=candidate.id,
                     title=task.title,
                     description=candidate.description,
                     query=task.query,
-                    user_id=candidate.user_id or "",
-                    workspace_id=candidate.workspace_id or "",
+                    user_id=candidate.user_id,
+                    workspace_id=candidate.workspace_id,
                     agent_id=candidate.agent_id,
                     status="routed",
                     execution_id=candidate.execution_id,
@@ -885,7 +904,7 @@ class TaskService(BaseTaskService):
             description: Task description (used as default for title/query)
             workspace_id: Workspace ID (required for multi-tenancy isolation)
             parameters: Task parameters (channel_origin.chat_id triggers routing)
-            user_id: User ID
+            user_id: Task owner; required, the run carries this principal
             requires_human_approval: Whether to gate the task on human approval
             task_id: Pre-assign the task id (A2A echoes it back in JSON-RPC reply)
             title: Override the default title (defaults to ``description``)
@@ -898,7 +917,18 @@ class TaskService(BaseTaskService):
         Returns:
             Created task with workflow execution info, or the routed-into existing
             task when ``channel_origin.chat_id`` matches an active workflow.
+
+        Raises:
+            ValueError: If no owner is supplied. The workflow executes with this
+                principal, so there is nothing safe to substitute for it.
         """
+        if not user_id:
+            raise ValueError(
+                "user_id is required to execute a task; refusing to run an unowned task"
+            )
+        if not workspace_id:
+            raise ValueError("workspace_id is required to execute a task")
+
         new_task_id = task_id or uuid4()
 
         # Try routing to an active workflow first — if a follow-up matches an
@@ -914,8 +944,8 @@ class TaskService(BaseTaskService):
                 title=title or description,
                 description=description,
                 query=query or description,
-                user_id=user_id or "",
-                workspace_id=workspace_id or "",
+                user_id=user_id,
+                workspace_id=workspace_id,
                 agent_id=agent_id,
                 status=status,
                 task_parameters=parameters or {},
@@ -964,48 +994,6 @@ class TaskService(BaseTaskService):
             stored_task.result = {"error": str(e), "error_type": "task_submission_failed"}
 
         return stored_task
-
-    async def _get_historical_events(self, task_id: UUID) -> list[dict[str, Any]]:
-        """Get historical events for a task from the database with proper session management."""
-        try:
-            from agentarea_common.config.database import get_database
-            from sqlalchemy import text
-
-            # Use proper database session management to avoid connection leaks
-            db = get_database()
-
-            async with db.get_db() as session:
-                # Query historical events from database
-                query = text("""
-                    SELECT event_type, timestamp, data, metadata
-                    FROM task_events
-                    WHERE task_id = :task_id
-                    ORDER BY timestamp ASC
-                """)
-
-                result = await session.execute(query, {"task_id": str(task_id)})
-                rows = result.fetchall()
-
-                # Convert database rows to event format
-                historical_events = []
-                for row in rows:
-                    historical_events.append(
-                        {
-                            "event_type": row.event_type,
-                            "timestamp": row.timestamp.isoformat(),
-                            "data": dict(row.data) if row.data else {},
-                        }
-                    )
-
-                logger.debug(
-                    f"Retrieved {len(historical_events)} historical events for task {task_id}"
-                )
-                return historical_events
-
-        except Exception as e:
-            logger.error(f"Failed to get historical events for task {task_id}: {e}")
-            # Return empty list on error to not break SSE streaming
-            return []
 
     def _format_protocol_event(self, event: dict[str, Any]) -> dict[str, Any]:
         """Format event using protocol structure with rich data, no metadata pollution.

@@ -76,6 +76,24 @@ class TriggersAgentToolset(Toolset):
         self._default_user_id = default_user_id
         self._event_broker = event_broker
 
+    def _require_user_id(self) -> str:
+        """The creating principal, or a loud failure.
+
+        Triggers created here fire later on their own; ``created_by`` is the
+        authority the resulting run carries, so it cannot be a placeholder.
+        """
+        if not self._default_user_id:
+            raise ValueError(
+                "no user principal in the tool's context; refusing to create a trigger "
+                "with a fabricated creator"
+            )
+        return self._default_user_id
+
+    def _require_workspace_id(self) -> str:
+        if not self._default_workspace_id:
+            raise ValueError("no workspace in the tool's context; refusing to create a trigger")
+        return self._default_workspace_id
+
     def _resolve_agent_id(self, agent_id: str | None) -> str:
         if agent_id and agent_id.strip() and agent_id.strip().upper() != "__SELF__":
             return agent_id.strip()
@@ -104,8 +122,8 @@ class TriggersAgentToolset(Toolset):
         session = database.async_session_factory()
         try:
             user_context = UserContext(
-                user_id=self._default_user_id,
-                workspace_id=self._default_workspace_id,
+                user_id=self._require_user_id(),
+                workspace_id=self._require_workspace_id(),
             )
             repo_factory = RepositoryFactory(session, user_context)
 
@@ -196,8 +214,8 @@ class TriggersAgentToolset(Toolset):
             )
             trigger = await service.create_trigger_from_payload(
                 payload,
-                created_by=self._default_user_id or "agent",
-                workspace_id=self._default_workspace_id or "",
+                created_by=self._require_user_id(),
+                workspace_id=self._require_workspace_id(),
             )
             await session.commit()
             return json.dumps(_trigger_summary(trigger), default=str)
@@ -251,8 +269,8 @@ class TriggersAgentToolset(Toolset):
             )
             trigger = await service.create_trigger_from_payload(
                 payload,
-                created_by=self._default_user_id or "agent",
-                workspace_id=self._default_workspace_id or "",
+                created_by=self._require_user_id(),
+                workspace_id=self._require_workspace_id(),
             )
             await session.commit()
             return json.dumps(_trigger_summary(trigger), default=str)

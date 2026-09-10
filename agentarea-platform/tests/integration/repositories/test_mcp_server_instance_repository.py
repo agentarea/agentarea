@@ -172,14 +172,6 @@ class TestMCPServerInstanceRepository:
         assert result is False
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="MCPServerInstance has no status field; list_by_status not applicable")
-    async def test_list_instances_by_status(
-        self, db_session: AsyncSession, user_context: UserContext
-    ):
-        """Test filtering instances by status."""
-        pass
-
-    @pytest.mark.asyncio
     async def test_list_instances_by_server_spec_id(
         self, db_session: AsyncSession, user_context: UserContext
     ):

@@ -115,7 +115,7 @@ async def run_agent(
         temperature=temperature,
         max_tokens=max_tokens,
         max_iterations=max_iterations,
-        tools=[MathToolset(), FileToolset()],
+        tools=[MathToolset(), FileToolset(workspace_id="local")],
     )
 
     logger.info("Agent: %s | Model: %s", name, model)

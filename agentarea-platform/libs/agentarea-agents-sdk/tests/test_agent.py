@@ -8,20 +8,21 @@ from agentarea_agents_sdk.agents.agent import Agent, create_agent
 class TestAgentCreation:
     """Test agent creation and configuration."""
 
-    def test_create_agent_with_valid_model(self, test_model):
+    def test_create_agent_with_valid_model(self, placeholder_model):
         """Test creating an agent with valid model specification."""
         agent = create_agent(
             name="Test Agent",
             instruction="You are a test assistant.",
-            model=test_model,
+            model=placeholder_model,
             max_tokens=500,
             max_iterations=10,
         )
 
         assert agent.name == "Test Agent"
         assert agent.instruction == "You are a test assistant."
-        assert agent.model.provider_type == "ollama_chat"
-        assert agent.model.model_name == "qwen2.5"
+        provider, _, model_name = placeholder_model.partition("/")
+        assert agent.model.provider_type == provider
+        assert agent.model.model_name == model_name
 
     def test_create_agent_invalid_model_format(self):
         """Test that invalid model format raises ValueError."""
@@ -30,13 +31,14 @@ class TestAgentCreation:
                 name="Test Agent", instruction="You are a test assistant.", model="invalid_format"
             )
 
-    def test_agent_direct_construction(self):
+    def test_agent_direct_construction(self, placeholder_model):
         """Test direct Agent construction."""
+        provider, _, model_name = placeholder_model.partition("/")
         agent = Agent(
             name="Direct Agent",
             instruction="Direct construction test.",
-            model_provider="ollama_chat",
-            model_name="qwen2.5",
+            model_provider=provider,
+            model_name=model_name,
             temperature=0.5,
             max_tokens=200,
             max_iterations=5,
@@ -47,13 +49,13 @@ class TestAgentCreation:
         assert agent.max_tokens == 200
         assert agent.max_iterations == 5
 
-    def test_agent_with_custom_tools(self, test_model, echo_tool_cls):
+    def test_agent_with_custom_tools(self, placeholder_model, echo_tool_cls):
         """Test agent creation with custom tools."""
         custom_tool = echo_tool_cls()
         agent = create_agent(
             name="Tool Agent",
             instruction="Agent with custom tools.",
-            model=test_model,
+            model=placeholder_model,
             max_tokens=500,
             max_iterations=10,
             tools=[custom_tool],
@@ -64,13 +66,14 @@ class TestAgentCreation:
         tool_names = [tool.name for tool in tools]
         assert "echo" in tool_names
 
-    def test_agent_without_default_tools(self, test_model):
+    def test_agent_without_default_tools(self, placeholder_model):
         """Test agent creation without default tools."""
+        provider, _, model_name = placeholder_model.partition("/")
         agent = Agent(
             name="No Tools Agent",
             instruction="Agent without default tools.",
-            model_provider="ollama_chat",
-            model_name="qwen2.5",
+            model_provider=provider,
+            model_name=model_name,
             max_tokens=500,
             max_iterations=10,
             include_default_tools=False,
@@ -175,12 +178,12 @@ class TestAgentExecution:
 class TestAgentUtilities:
     """Test agent utility methods."""
 
-    def test_add_tool(self, test_model, echo_tool_cls):
+    def test_add_tool(self, placeholder_model, echo_tool_cls):
         """Test adding custom tools to agent."""
         agent = create_agent(
             name="Tool Agent",
             instruction="Agent for tool testing.",
-            model=test_model,
+            model=placeholder_model,
             max_tokens=500,
             max_iterations=10,
             include_default_tools=False,
@@ -197,12 +200,12 @@ class TestAgentUtilities:
         assert len(tools) == 1
         assert tools[0].name == "echo"
 
-    def test_get_conversation_history(self, test_model):
+    def test_get_conversation_history(self, placeholder_model):
         """Test getting conversation history (currently returns empty list)."""
         agent = create_agent(
             name="History Agent",
             instruction="Agent for history testing.",
-            model=test_model,
+            model=placeholder_model,
             max_tokens=500,
             max_iterations=10,
         )
@@ -212,25 +215,28 @@ class TestAgentUtilities:
         # Currently returns empty list as it's stateless
         assert len(history) == 0
 
-    def test_reset_agent(self, test_model):
+    def test_reset_agent(self, placeholder_model):
         """Test resetting agent state."""
         agent = create_agent(
             name="Reset Agent",
             instruction="Agent for reset testing.",
-            model=test_model,
+            model=placeholder_model,
             max_tokens=500,
             max_iterations=10,
         )
 
-        # Should not raise any errors
         agent.reset()
-        assert True  # If we get here, reset worked
 
-    def test_execution_limits_are_required(self):
+        # reset() is a no-op on a stateless agent; the check is that it stays
+        # callable and leaves the agent usable.
+        assert agent.get_conversation_history() == []
+
+    def test_execution_limits_are_required(self, placeholder_model):
+        provider, _, model_name = placeholder_model.partition("/")
         with pytest.raises(ValueError, match="max_tokens"):
             Agent(
                 name="No Limits",
                 instruction="No implicit execution limits.",
-                model_provider="ollama_chat",
-                model_name="qwen2.5",
+                model_provider=provider,
+                model_name=model_name,
             )

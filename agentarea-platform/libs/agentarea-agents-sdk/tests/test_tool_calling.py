@@ -1,4 +1,4 @@
-"""Test tool calling functionality with local qwen2.5."""
+"""Test tool calling against the configured real model (``LLM_MODEL``)."""
 
 import logging
 
@@ -8,18 +8,20 @@ logger = logging.getLogger(__name__)
 
 
 class TestToolCalling:
-    """Test tool calling with qwen2.5."""
+    """Test tool calling with the configured model."""
 
     @pytest.mark.asyncio
-    async def test_single_tool_call(self):
-        """Test a single tool call with qwen2.5."""
+    async def test_single_tool_call(self, test_model, llm_endpoint_url, skip_if_no_llm):
+        """Test a single tool call."""
+        skip_if_no_llm()
         try:
             from agentarea_agents_sdk.models.llm_model import LLMModel, LLMRequest
 
+            provider, _, model_name = test_model.partition("/")
             model = LLMModel(
-                provider_type="ollama_chat",
-                model_name="qwen2.5",
-                endpoint_url="http://localhost:11434",
+                provider_type=provider,
+                model_name=model_name,
+                endpoint_url=llm_endpoint_url,
             )
 
             # Define a simple tool
@@ -59,7 +61,7 @@ class TestToolCalling:
                 max_tokens=200,
             )
 
-            logger.info("🧪 Testing single tool call with qwen2.5")
+            logger.info("🧪 Testing single tool call")
             logger.info(f"📝 Request: {request.messages[-1]['content']}")
             logger.info(f"🔧 Available tools: {[t['function']['name'] for t in tools]}")
 
@@ -110,15 +112,17 @@ class TestToolCalling:
             pytest.skip(f"Tool calling test failed - LLM not available: {e}")
 
     @pytest.mark.asyncio
-    async def test_multiple_tool_calls_sequence(self):
+    async def test_multiple_tool_calls_sequence(self, test_model, llm_endpoint_url, skip_if_no_llm):
         """Test multiple tool calls in sequence."""
+        skip_if_no_llm()
         try:
             from agentarea_agents_sdk.models.llm_model import LLMModel, LLMRequest
 
+            provider, _, model_name = test_model.partition("/")
             model = LLMModel(
-                provider_type="ollama_chat",
-                model_name="qwen2.5",
-                endpoint_url="http://localhost:11434",
+                provider_type=provider,
+                model_name=model_name,
+                endpoint_url=llm_endpoint_url,
             )
 
             # Define multiple tools
@@ -251,15 +255,17 @@ class TestToolCalling:
             pytest.skip(f"Multiple tool calls test failed - LLM not available: {e}")
 
     @pytest.mark.asyncio
-    async def test_streaming_tool_calls(self):
+    async def test_streaming_tool_calls(self, test_model, llm_endpoint_url, skip_if_no_llm):
         """Test tool calls with streaming."""
+        skip_if_no_llm()
         try:
             from agentarea_agents_sdk.models.llm_model import LLMModel, LLMRequest
 
+            provider, _, model_name = test_model.partition("/")
             model = LLMModel(
-                provider_type="ollama_chat",
-                model_name="qwen2.5",
-                endpoint_url="http://localhost:11434",
+                provider_type=provider,
+                model_name=model_name,
+                endpoint_url=llm_endpoint_url,
             )
 
             tools = [
@@ -338,15 +344,17 @@ class TestToolCalling:
             pytest.skip(f"Streaming tool calls test failed - LLM not available: {e}")
 
     @pytest.mark.asyncio
-    async def test_tool_call_format_validation(self):
+    async def test_tool_call_format_validation(self, test_model, llm_endpoint_url, skip_if_no_llm):
         """Test that tool calls have the correct format."""
+        skip_if_no_llm()
         try:
             from agentarea_agents_sdk.models.llm_model import LLMModel, LLMRequest
 
+            provider, _, model_name = test_model.partition("/")
             model = LLMModel(
-                provider_type="ollama_chat",
-                model_name="qwen2.5",
-                endpoint_url="http://localhost:11434",
+                provider_type=provider,
+                model_name=model_name,
+                endpoint_url=llm_endpoint_url,
             )
 
             tools = [

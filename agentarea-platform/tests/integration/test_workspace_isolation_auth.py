@@ -60,27 +60,6 @@ class TestWorkspaceIsolation:
             # Should be 404 (not found) or 403 (forbidden), NOT 200
             assert response.status_code in [403, 404], "Agent should not be accessible across workspaces"
 
-    def test_tasks_workspace_isolation(self, client, generate_jwt_token):
-        """Test tasks are isolated by workspace."""
-        # TODO: Implement once tasks endpoint has UserContextDep
-        pass
-
-    def test_model_instances_workspace_isolation(self, client, generate_jwt_token):
-        """Test model instances are isolated by workspace."""
-        # TODO: Implement once model_instances endpoint has UserContextDep
-        pass
-
-    def test_provider_configs_workspace_isolation(self, client, generate_jwt_token):
-        """Test provider configs are isolated by workspace."""
-        # TODO: Implement once provider_configs endpoint has UserContextDep
-        pass
-
-    def test_triggers_workspace_isolation(self, client, generate_jwt_token):
-        """Test triggers are isolated by workspace."""
-        # TODO: Implement once triggers endpoint has UserContextDep
-        pass
-
-
 @pytest.mark.integration
 class TestEndpointAuthRequirements:
     """Test that all endpoints require authentication."""
@@ -202,7 +181,3 @@ class TestCrossWorkspaceDataLeakage:
                 if "workspace_id" in agent:
                     assert agent["workspace_id"] == "workspace-1", "Data leaked from another workspace!"
 
-    def test_search_endpoints_respect_workspace(self, client, generate_jwt_token):
-        """Test search/filter endpoints respect workspace boundaries."""
-        # TODO: Implement when search endpoints exist
-        pass

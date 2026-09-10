@@ -79,42 +79,58 @@ def echo_tool_cls():
 def test_model():
     """Model under test as a litellm ``provider/model`` string.
 
-    Defaults to a local Ollama model; override with ``LLM_MODEL`` to point the
-    real-LLM tests at any provider (e.g. ``openai/gpt-4o``).
+    Deliberately no default. These tests need *a* model, not a particular
+    vendor's, and the default here silently decided which one: the gate probed
+    a local Ollama and skipped whenever it was absent, so aiming the suite
+    anywhere else meant editing the fixture. Empty means "no model configured",
+    which ``skip_if_no_llm`` turns into a skip with an actionable message.
     """
     import os
 
-    return os.getenv("LLM_MODEL", "ollama_chat/qwen2.5")
+    return os.getenv("LLM_MODEL", "")
+
+
+PLACEHOLDER_PROVIDER = "acme_chat"
+PLACEHOLDER_MODEL_NAME = "model-x"
 
 
 @pytest.fixture
-def skip_if_no_llm(test_model):
-    """Skip the real-LLM tests unless the configured model is actually served.
+def placeholder_model():
+    """A ``provider/model`` string naming no real vendor.
 
-    Only Ollama models are probed (via ``OLLAMA_API_BASE``, the same endpoint
-    litellm calls); a non-Ollama ``LLM_MODEL`` is assumed to be configured by
-    the caller and runs as-is.
+    Construction and parsing tests never reach the network. Pinning them to a
+    real provider made it look like the behaviour depended on which one, and
+    tied them to whatever the real-LLM fixture happened to default to.
     """
+    return f"{PLACEHOLDER_PROVIDER}/{PLACEHOLDER_MODEL_NAME}"
+
+
+@pytest.fixture
+def llm_endpoint_url():
+    """Base URL for a self-hosted provider (``LLM_API_BASE``), or None if hosted."""
+    import os
+
+    return os.getenv("LLM_API_BASE") or None
+
+
+@pytest.fixture
+def skip_if_no_llm(test_model, llm_endpoint_url):
+    """Skip the real-LLM tests unless a model is configured and reachable."""
 
     def _skip_if_no_llm():
-        import os
-
         import httpx
 
-        provider, _, model = test_model.partition("/")
-        if not provider.startswith("ollama"):
-            return
+        if not test_model:
+            pytest.skip("set LLM_MODEL=<provider>/<model> to run the real-LLM tests")
 
-        base = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
-        want = model if ":" in model else f"{model}:latest"
-        try:
-            resp = httpx.get(f"{base}/api/tags", timeout=1.0)
-            resp.raise_for_status()
-            served = {m["name"] for m in resp.json().get("models", [])}
-        except Exception:
-            pytest.skip(f"Ollama not reachable at {base} (set OLLAMA_API_BASE)")
-        if want not in served:
-            pytest.skip(f"model {want!r} not pulled at {base} (have: {sorted(served)})")
+        if llm_endpoint_url:
+            # Self-hosted: connectivity is the only thing checked. Any HTTP
+            # status means something answered, which is all this gate is for —
+            # a 404 on the root is not a reason to skip.
+            try:
+                httpx.get(llm_endpoint_url, timeout=1.0)
+            except httpx.RequestError as exc:
+                pytest.skip(f"LLM endpoint {llm_endpoint_url} not reachable: {exc}")
 
     return _skip_if_no_llm
 

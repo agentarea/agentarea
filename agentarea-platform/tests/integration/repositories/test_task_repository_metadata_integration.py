@@ -40,6 +40,8 @@ class TestTaskRepositoryMetadataIntegration:
 
         task_create = TaskCreate(
             agent_id=agent_id,
+            user_id=test_user_context.user_id,
+            workspace_id=test_user_context.workspace_id,
             description="Integration test task with SQLAlchemy MetaData",
             parameters={"test": "integration"},
             metadata={},  # Start with valid metadata
@@ -87,6 +89,8 @@ class TestTaskRepositoryMetadataIntegration:
 
         task_create = TaskCreate(
             agent_id=agent_id,
+            user_id=test_user_context.user_id,
+            workspace_id=test_user_context.workspace_id,
             description="Task for metadata update integration test",
             parameters={"original": "data"},
         )
@@ -157,6 +161,8 @@ class TestTaskRepositoryMetadataIntegration:
 
             task_create = TaskCreate(
                 agent_id=agent_id,
+                user_id=test_user_context.user_id,
+                workspace_id=test_user_context.workspace_id,
                 description=f"Integration test task with {test_name} metadata",
                 parameters={"test_type": test_name},
                 metadata={},  # Start with valid metadata
@@ -211,6 +217,8 @@ class TestTaskRepositoryMetadataIntegration:
 
         task_create = TaskCreate(
             agent_id=agent_id,
+            user_id=test_user_context.user_id,
+            workspace_id=test_user_context.workspace_id,
             description="Integration test task with complex valid metadata",
             parameters={"test": "complex_metadata"},
             metadata=complex_metadata,
@@ -277,6 +285,8 @@ class TestTaskRepositoryMetadataIntegration:
 
         task_create = TaskCreate(
             agent_id=agent_id,
+            user_id=test_user_context.user_id,
+            workspace_id=test_user_context.workspace_id,
             description="Task for transaction rollback test",
             parameters={"test": "rollback"},
         )

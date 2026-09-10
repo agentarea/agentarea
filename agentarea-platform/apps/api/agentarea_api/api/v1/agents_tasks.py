@@ -560,6 +560,7 @@ async def _tail_task_events_sse(
     agent_id: UUID,
     execution_id: str | None,
     *,
+    workspace_id: str,
     emit_connected: bool = True,
     include_chunks: bool = True,
 ) -> AsyncGenerator[str, None]:
@@ -591,6 +592,7 @@ async def _tail_task_events_sse(
     # llm.call.chunk events.
     async for env in open_task_event_feed(
         task_id,
+        workspace_id=workspace_id,
         terminal_types=frozenset(_TERMINAL_EVENT_TYPES),
         include_chunks=include_chunks,
     ):
@@ -723,7 +725,11 @@ async def create_task_for_agent_with_stream(
             # attach, but they are durably logged, so replay is lossless.
             if task.execution_id and task.status in ["running", "pending"]:
                 async for chunk in _tail_task_events_sse(
-                    task.id, agent_id, task.execution_id, emit_connected=False
+                    task.id,
+                    agent_id,
+                    task.execution_id,
+                    workspace_id=user_context.workspace_id,
+                    emit_connected=False,
                 ):
                     yield chunk
             else:
@@ -2034,7 +2040,11 @@ async def stream_task_events(
         async def event_stream() -> AsyncGenerator[str, None]:
             try:
                 async for chunk in _tail_task_events_sse(
-                    task_id, agent_id, task.execution_id, include_chunks=include_chunks
+                    task_id,
+                    agent_id,
+                    task.execution_id,
+                    workspace_id=user_context.workspace_id,
+                    include_chunks=include_chunks,
                 ):
                     yield chunk
 

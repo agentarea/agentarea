@@ -454,11 +454,19 @@ class TemporalTaskExecutor(TaskExecutorInterface):
         task_id: str,
         agent_id: UUID,
         description: str,
-        user_id: str | None = None,
+        user_id: str,
         task_parameters: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> str:
-        """Execute agent task using Temporal workflow."""
+        """Execute agent task using Temporal workflow.
+
+        Raises:
+            ValueError: If no principal is supplied. The workflow runs with this
+                identity, so there is nothing sensible to default it to.
+        """
+        if not user_id:
+            raise ValueError(f"user_id is required to execute task {task_id}")
+
         workflow_id = f"task-{task_id}"
 
         # Prepare workflow arguments
@@ -466,7 +474,7 @@ class TemporalTaskExecutor(TaskExecutorInterface):
             "agent_id": str(agent_id),
             "task_id": task_id,
             "query": description,
-            "user_id": user_id or "system",
+            "user_id": user_id,
             "task_parameters": task_parameters or {},
             "metadata": metadata or {},
         }

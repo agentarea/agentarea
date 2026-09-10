@@ -27,11 +27,6 @@ class AppSettings(BaseAppSettings):
     TASK_ATTACHMENT_MAX_FILE_BYTES: int = 40 * 1024 * 1024
     TASK_ATTACHMENT_MAX_TOTAL_BYTES: int = 45 * 1024 * 1024
 
-    # Shared secret for internal service-to-service calls (e.g. the Go event
-    # service calling the public trigger-execute endpoint). When set, those
-    # endpoints require a matching X-Internal-Token header. Unset = not enforced.
-    INTERNAL_API_TOKEN: str | None = None
-
     # Public base URL for this API (used in OAuth AS metadata and redirect URLs)
     API_BASE_URL: str = "http://localhost:8000"
     # Public base URL Telegram should POST bot webhooks to, as
