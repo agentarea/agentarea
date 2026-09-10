@@ -40,8 +40,20 @@ def cli():
     "--port", default=8000, envvar="PORT", show_envvar=True, help="Port to bind the server to"
 )
 @click.option("--reload/--no-reload", default=False, help="Enable/disable auto-reload")
-@click.option("--log-level", default="info", help="Logging level")
-@click.option("--workers", default=1, help="Number of worker processes")
+@click.option(
+    "--log-level",
+    default="info",
+    envvar="AGENTAREA_LOG_LEVEL",
+    show_envvar=True,
+    help="Logging level",
+)
+@click.option(
+    "--workers",
+    default=1,
+    envvar="AGENTAREA_API_WORKERS",
+    show_envvar=True,
+    help="Number of worker processes",
+)
 def serve(host: str, port: int, reload: bool, log_level: str, workers: int):
     """Start the API server."""
     click.echo(f"Starting AgentArea API server on {host}:{port}")
@@ -147,8 +159,8 @@ def status():
     click.echo("API Configuration:")
 
     settings = get_db_settings()
-    click.echo(f"Database: {settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}")
-    click.echo(f"Database Name: {settings.POSTGRES_DB}")
+    click.echo(f"Database: {settings.HOST}:{settings.PORT}")
+    click.echo(f"Database Name: {settings.NAME}")
     click.echo("Port: set via --port flag or PORT env var (default: 8000)")
 
 

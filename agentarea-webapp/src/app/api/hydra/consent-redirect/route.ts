@@ -10,8 +10,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const HYDRA_ADMIN_URL =
-  process.env.HYDRA_ADMIN_URL ||
-  process.env.ORY_HYDRA_ADMIN_URL ||
+  process.env.AGENTAREA_AUTH_HYDRA_ADMIN_URL ||
+  process.env.AGENTAREA_AUTH_HYDRA_ADMIN_URL ||
   "http://localhost:4445";
 
 export async function GET(request: NextRequest) {

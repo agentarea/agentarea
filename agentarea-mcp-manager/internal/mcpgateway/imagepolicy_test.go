@@ -12,8 +12,8 @@ import (
 
 func policyFrom(t *testing.T, repositories, packages string) (ImagePolicy, error) {
 	t.Helper()
-	t.Setenv("MCP_ALLOWED_IMAGE_REPOSITORIES", repositories)
-	t.Setenv("MCP_ALLOWED_COMMAND_PACKAGES", packages)
+	t.Setenv("AGENTAREA_MCP_ALLOWED_IMAGES", repositories)
+	t.Setenv("AGENTAREA_MCP_ALLOWED_PACKAGES", packages)
 	return LoadImagePolicyFromEnv()
 }
 
@@ -62,10 +62,10 @@ func TestArgvFromAnySpecShapeIsJudgedByAdmission(t *testing.T) {
 // Reading that as "everything" is the exact failure this gate replaces, because
 // on a cluster without a sandboxing runtime nothing else stops the image.
 func TestAbsentListsAreRefusedRatherThanReadAsAllowAll(t *testing.T) {
-	for _, absent := range []string{"MCP_ALLOWED_IMAGE_REPOSITORIES", "MCP_ALLOWED_COMMAND_PACKAGES"} {
+	for _, absent := range []string{"AGENTAREA_MCP_ALLOWED_IMAGES", "AGENTAREA_MCP_ALLOWED_PACKAGES"} {
 		t.Run(absent, func(t *testing.T) {
-			t.Setenv("MCP_ALLOWED_IMAGE_REPOSITORIES", "ghcr.io/agentarea/mcp")
-			t.Setenv("MCP_ALLOWED_COMMAND_PACKAGES", "")
+			t.Setenv("AGENTAREA_MCP_ALLOWED_IMAGES", "ghcr.io/agentarea/mcp")
+			t.Setenv("AGENTAREA_MCP_ALLOWED_PACKAGES", "")
 			// t.Setenv registers the restore; Unsetenv then makes it genuinely absent.
 			if err := os.Unsetenv(absent); err != nil {
 				t.Fatal(err)
@@ -306,8 +306,8 @@ func TestCommandArgsAreReadTheSameWayTheProviderBuildsThem(t *testing.T) {
 // The security property, stated at the level that matters: a refused instance
 // must not reach the data plane at all.
 func TestRefusedInstanceNeverReachesTheDataPlane(t *testing.T) {
-	t.Setenv("MCP_ALLOWED_IMAGE_REPOSITORIES", "ghcr.io/agentarea/allowed-mcp")
-	t.Setenv("MCP_ALLOWED_COMMAND_PACKAGES", "")
+	t.Setenv("AGENTAREA_MCP_ALLOWED_IMAGES", "ghcr.io/agentarea/allowed-mcp")
+	t.Setenv("AGENTAREA_MCP_ALLOWED_PACKAGES", "")
 	policy, err := LoadImagePolicyFromEnv()
 	if err != nil {
 		t.Fatal(err)

@@ -85,7 +85,7 @@ takes its own path.
 
 | Name | Where core resolves it | Behaviour without an extension |
 |---|---|---|
-| `permissions` | `apps/api` and `apps/worker` startup | Falls back to the backend named by `ACCESS_CONTROL_BACKEND`, or `WorkspaceScopedPermissionService` |
+| `permissions` | `apps/api` and `apps/worker` startup | Falls back to the backend named by `AGENTAREA_AUTHZ_BACKEND`, or `WorkspaceScopedPermissionService` |
 | `authorization` | `apps/api` and `apps/worker` startup | `WorkspaceScopedAuthorizationService` |
 | `audit_sink` | `AuditService`, after the event is persisted | Events are written to the database only |
 | `entitlement_guard` | `create_governance_pipeline()`, priority 120 | The gate is not registered; the pipeline runs without it |
@@ -96,16 +96,16 @@ Two properties are worth noticing.
 open-source edition is not a demo with holes in it.
 
 **An extension cannot silently override an explicit choice.** `permissions` is a
-selector: if an operator sets `ACCESS_CONTROL_BACKEND=openfga`, core wires
+selector: if an operator sets `AGENTAREA_AUTHZ_BACKEND=openfga`, core wires
 `OpenFGAPermissionService` and logs a warning that the installed extension is
 being ignored. This rule exists because the earlier order — extension first —
 meant an installed Keto extension shadowed a configured OpenFGA backend, so
 OpenFGA never enforced while the configuration claimed it did. An extension is a
 fallback for an unmade decision, never a veto over a made one.
 
-### What DEPLOYMENT_MODE does and does not do
+### What AGENTAREA_EDITION does and does not do
 
-`DEPLOYMENT_MODE` selects `DeploymentMode.OSS` or `DeploymentMode.ENTERPRISE`
+`AGENTAREA_EDITION` selects `DeploymentMode.OSS` or `DeploymentMode.ENTERPRISE`
 and configures a `FeatureService`. Its own docstring bounds its scope:
 
 > This controls UI/presentation concerns only. Implementation swapping (e.g.,
@@ -114,7 +114,7 @@ and configures a `FeatureService`. Its own docstring bounds its scope:
 
 Its properties are `show_system_entity_badge`, `system_entities_read_only_in_ui`,
 `enable_usage_metering`, `show_governance_overlay`, and `enable_network_rebac`.
-Setting `DEPLOYMENT_MODE=enterprise` without installing the enterprise package
+Setting `AGENTAREA_EDITION=enterprise` without installing the enterprise package
 changes what the interface displays. It does not add enforcement.
 
 ### Where the line currently sits
@@ -183,7 +183,7 @@ implementation chosen for every selector point.
   forwarded. If the sink raises, the failure is logged as a warning and the
   request proceeds. A reachable database with an unreachable SIEM loses forwarded
   events, not recorded ones — do not treat sink delivery as guaranteed.
-- **`DEPLOYMENT_MODE=enterprise` alone enforces nothing.** Without the package
+- **`AGENTAREA_EDITION=enterprise` alone enforces nothing.** Without the package
   installed it changes presentation only.
 - **A failed extension load does not stop startup.** `discover_extensions()`
   catches per-entry-point exceptions and continues. A broken enterprise package

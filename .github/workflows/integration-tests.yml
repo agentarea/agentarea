@@ -14,17 +14,18 @@ permissions:
   contents: read
 
 env:
-  # The app's DatabaseSettings builds the URL from POSTGRES_* (default host "db"),
-  # NOT from DATABASE_URL -- so these must be set explicitly or migrations resolve
-  # host "db" and fail. Likewise the workflow client reads WORKFLOW__TEMPORAL_SERVER_URL.
-  POSTGRES_HOST: localhost
-  POSTGRES_PORT: "5432"
-  POSTGRES_USER: postgres
-  POSTGRES_PASSWORD: postgres
-  POSTGRES_DB: agentarea_test
-  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentarea_test
-  REDIS_URL: redis://localhost:6379/0
-  WORKFLOW__TEMPORAL_SERVER_URL: localhost:7233
+  # The app's DatabaseSettings builds the URL from AGENTAREA_DB_* (default host
+  # "db"), NOT from AGENTAREA_DB_URL -- so these must be set explicitly or migrations
+  # resolve host "db" and fail. Likewise the workflow client reads
+  # AGENTAREA_WF_TEMPORAL_URL.
+  AGENTAREA_DB_HOST: localhost
+  AGENTAREA_DB_PORT: "5432"
+  AGENTAREA_DB_USER: postgres
+  AGENTAREA_DB_PASSWORD: postgres
+  AGENTAREA_DB_NAME: agentarea_test
+  AGENTAREA_DB_URL: postgresql://postgres:postgres@localhost:5432/agentarea_test
+  AGENTAREA_REDIS_URL: redis://localhost:6379/0
+  AGENTAREA_WF_TEMPORAL_URL: localhost:7233
   TEMPORAL_HOST: localhost:7233
 
 jobs:
@@ -122,15 +123,15 @@ jobs:
           cd apps/api
           uv run --package agentarea-api agentarea-api migrate
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+          AGENTAREA_DB_URL: ${{ env.AGENTAREA_DB_URL }}
 
       - name: Smoke test - Repository layer
         working-directory: ./agentarea-platform
         run: |
           uv run pytest tests/integration/repositories/ -v --tb=short -x
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-          REDIS_URL: ${{ env.REDIS_URL }}
+          AGENTAREA_DB_URL: ${{ env.AGENTAREA_DB_URL }}
+          AGENTAREA_REDIS_URL: ${{ env.AGENTAREA_REDIS_URL }}
 
       - name: Start Temporal dev server (SQLite)
         run: |
@@ -154,7 +155,7 @@ jobs:
         run: |
           uv run pytest tests/integration/test_temporal_workflow.py -v --tb=short
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+          AGENTAREA_DB_URL: ${{ env.AGENTAREA_DB_URL }}
           TEMPORAL_HOST: ${{ env.TEMPORAL_HOST }}
 
   # Full integration tests with all services
@@ -219,7 +220,7 @@ jobs:
           cd apps/api
           uv run --package agentarea-api agentarea-api migrate
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+          AGENTAREA_DB_URL: ${{ env.AGENTAREA_DB_URL }}
 
       - name: Start Temporal dev server (SQLite)
         run: |
@@ -248,8 +249,8 @@ jobs:
           uv run pytest tests/integration/ -v --tb=short \
             -m "not slow and not requires_llm and not requires_docker and not requires_server and not requires_s3 and not perf"
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-          REDIS_URL: ${{ env.REDIS_URL }}
+          AGENTAREA_DB_URL: ${{ env.AGENTAREA_DB_URL }}
+          AGENTAREA_REDIS_URL: ${{ env.AGENTAREA_REDIS_URL }}
           TEMPORAL_HOST: ${{ env.TEMPORAL_HOST }}
 
       - name: Upload test results
@@ -305,8 +306,8 @@ jobs:
           uv sync --all-extras --group dev
           uv run pytest ${{ matrix.module.test_path }} -v --tb=short
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-          REDIS_URL: ${{ env.REDIS_URL }}
+          AGENTAREA_DB_URL: ${{ env.AGENTAREA_DB_URL }}
+          AGENTAREA_REDIS_URL: ${{ env.AGENTAREA_REDIS_URL }}
 
   # OpenAPI contract + stateful CRUD fuzz against the FULL live stack (the PR's
   # API image + Kratos + Postgres + Temporal, via docker compose). This is the
@@ -406,8 +407,8 @@ jobs:
         working-directory: ./agentarea-platform
         env:
           API_URL: http://localhost:8000
-          KRATOS_ADMIN_URL: http://localhost:4434
-          KRATOS_PUBLIC_URL: http://localhost:4433
+          AGENTAREA_AUTH_KRATOS_ADMIN_URL: http://localhost:4434
+          AGENTAREA_AUTH_KRATOS_URL: http://localhost:4433
         run: |
           # -rs prints why a module skipped. Both fuzz modules skip themselves
           # at import when the stack is unreachable, and pytest then exits 5

@@ -86,15 +86,15 @@ Create a `.env` file based on `.env.example`:
 
 ```bash
 # API Configuration
-API_URL=http://localhost:3000
-API_TIMEOUT=30000
-MAX_RETRIES=3
+AGENTAREA_API_URL=http://localhost:3000
+AGENTAREA_API_TIMEOUT=30000
+AGENTAREA_MAX_RETRIES=3
 
 # Logging
-LOG_LEVEL=info
+AGENTAREA_LOG_LEVEL=info
 
 # UI
-THEME=auto
+AGENTAREA_THEME=auto
 ```
 
 ## Development
@@ -212,10 +212,10 @@ npm rebuild
 
 ### API connection errors
 
-1. Check API_URL in .env
+1. Check AGENTAREA_API_URL in .env
 2. Verify API server is running
 3. Check network connectivity
-4. Enable debug logging: `LOG_LEVEL=debug`
+4. Enable debug logging: `AGENTAREA_LOG_LEVEL=debug`
 
 ## License
 

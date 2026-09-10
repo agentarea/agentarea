@@ -43,7 +43,7 @@ export async function handleCliCommand(
 ): Promise<boolean> {
 	// Initialize config with provided API URL if specified
 	if (options.apiUrl) {
-		process.env['API_URL'] = options.apiUrl;
+		process.env['AGENTAREA_API_URL'] = options.apiUrl;
 		configManager.reinitialize();
 		apiClient.reinitialize();
 	}

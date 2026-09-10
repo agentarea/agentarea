@@ -17,26 +17,26 @@ class TestSecretManagerFactory:
 
     def test_factory_initialization_database(self):
         """Test factory initialization with database settings."""
-        settings = SecretManagerSettings(SECRET_MANAGER_TYPE="database")
+        settings = SecretManagerSettings(BACKEND="database")
         factory = SecretManagerFactory(settings)
 
-        assert factory.settings.SECRET_MANAGER_TYPE == "database"
+        assert factory.settings.BACKEND == "database"
 
     def test_factory_initialization_infisical(self):
         """Test factory initialization with infisical settings."""
         settings = SecretManagerSettings(
-            SECRET_MANAGER_TYPE="infisical",
-            SECRET_MANAGER_ACCESS_KEY="test-key",
-            SECRET_MANAGER_SECRET_KEY="test-secret",
-            SECRET_MANAGER_PROJECT_ID="proj-1",
+            BACKEND="infisical",
+            CLIENT_ID="test-key",
+            CLIENT_SECRET="test-secret",
+            PROJECT_ID="proj-1",
         )
         factory = SecretManagerFactory(settings)
 
-        assert factory.settings.SECRET_MANAGER_TYPE == "infisical"
+        assert factory.settings.BACKEND == "infisical"
 
     def test_create_database_secret_manager(self, mock_db_session, test_user_context):
         """Test creating database secret manager with factory."""
-        settings = SecretManagerSettings(SECRET_MANAGER_TYPE="database")
+        settings = SecretManagerSettings(BACKEND="database")
         factory = SecretManagerFactory(settings)
 
         manager = factory.create(session=mock_db_session, user_context=test_user_context)
@@ -52,7 +52,7 @@ class TestSecretManagerFactory:
 
         custom_key = Fernet.generate_key().decode("utf-8")
         settings = SecretManagerSettings(
-            SECRET_MANAGER_TYPE="database", SECRET_MANAGER_ENCRYPTION_KEY=custom_key
+            BACKEND="database", ENCRYPTION_KEY=custom_key
         )
         factory = SecretManagerFactory(settings)
 
@@ -65,11 +65,11 @@ class TestSecretManagerFactory:
     def test_create_infisical_secret_manager(self, mock_infisical_client, mock_db_session, test_user_context):
         """Test creating Infisical secret manager with factory."""
         settings = SecretManagerSettings(
-            SECRET_MANAGER_TYPE="infisical",
-            SECRET_MANAGER_ENDPOINT="https://test.infisical.com",
-            SECRET_MANAGER_ACCESS_KEY="test-client-id",
-            SECRET_MANAGER_SECRET_KEY="test-client-secret",
-            SECRET_MANAGER_PROJECT_ID="proj-1",
+            BACKEND="infisical",
+            ENDPOINT="https://test.infisical.com",
+            CLIENT_ID="test-client-id",
+            CLIENT_SECRET="test-client-secret",
+            PROJECT_ID="proj-1",
         )
         factory = SecretManagerFactory(settings)
 
@@ -86,10 +86,10 @@ class TestSecretManagerFactory:
     def test_create_infisical_default_endpoint(self, mock_infisical_client, mock_db_session, test_user_context):
         """Test Infisical with default endpoint when not specified."""
         settings = SecretManagerSettings(
-            SECRET_MANAGER_TYPE="infisical",
-            SECRET_MANAGER_ACCESS_KEY="test-id",
-            SECRET_MANAGER_SECRET_KEY="test-secret",
-            SECRET_MANAGER_PROJECT_ID="proj-1",
+            BACKEND="infisical",
+            CLIENT_ID="test-id",
+            CLIENT_SECRET="test-secret",
+            PROJECT_ID="proj-1",
         )
         factory = SecretManagerFactory(settings)
 
@@ -113,10 +113,10 @@ class TestSecretManagerFactory:
         value under the same name.
         """
         settings = SecretManagerSettings(
-            SECRET_MANAGER_TYPE="infisical",
-            SECRET_MANAGER_ACCESS_KEY="test-id",
-            SECRET_MANAGER_SECRET_KEY="test-secret",
-            SECRET_MANAGER_PROJECT_ID="proj-1",
+            BACKEND="infisical",
+            CLIENT_ID="test-id",
+            CLIENT_SECRET="test-secret",
+            PROJECT_ID="proj-1",
         )
         factory = SecretManagerFactory(settings)
 
@@ -127,18 +127,18 @@ class TestSecretManagerFactory:
     def test_create_infisical_requires_project_id(self, mock_db_session, test_user_context):
         """Without a project id there is no Infisical project to read or write."""
         settings = SecretManagerSettings(
-            SECRET_MANAGER_TYPE="infisical",
-            SECRET_MANAGER_ACCESS_KEY="test-id",
-            SECRET_MANAGER_SECRET_KEY="test-secret",
+            BACKEND="infisical",
+            CLIENT_ID="test-id",
+            CLIENT_SECRET="test-secret",
         )
 
-        with pytest.raises(ValueError, match="SECRET_MANAGER_PROJECT_ID"):
+        with pytest.raises(ValueError, match="AGENTAREA_SECRET_PROJECT_ID"):
             SecretManagerFactory(settings)
 
     def test_create_infisical_missing_credentials(self, mock_db_session, test_user_context):
         """Test that Infisical requires credentials."""
         settings = SecretManagerSettings(
-            SECRET_MANAGER_TYPE="infisical",
+            BACKEND="infisical",
             # Missing credentials
         )
         with pytest.raises(ValueError, match="Infisical credentials not configured"):
@@ -147,24 +147,24 @@ class TestSecretManagerFactory:
     def test_create_infisical_partial_credentials(self, mock_db_session, test_user_context):
         """Test that Infisical requires both access and secret keys."""
         settings = SecretManagerSettings(
-            SECRET_MANAGER_TYPE="infisical",
-            SECRET_MANAGER_ACCESS_KEY="test-key",
-            # Missing SECRET_MANAGER_SECRET_KEY
+            BACKEND="infisical",
+            CLIENT_ID="test-key",
+            # Missing AGENTAREA_SECRET_CLIENT_SECRET
         )
         with pytest.raises(ValueError, match="Infisical credentials not configured"):
             SecretManagerFactory(settings)
 
     def test_create_invalid_type(self, mock_db_session, test_user_context):
         """Test that invalid secret manager type raises error."""
-        settings = SecretManagerSettings(SECRET_MANAGER_TYPE="invalid_type")
+        settings = SecretManagerSettings(BACKEND="invalid_type")
         factory = SecretManagerFactory(settings)
 
-        with pytest.raises(ValueError, match="Invalid SECRET_MANAGER_TYPE"):
+        with pytest.raises(ValueError, match="Invalid AGENTAREA_SECRET_BACKEND"):
             factory.create(session=mock_db_session, user_context=test_user_context)
 
     def test_create_case_insensitive(self, mock_db_session, test_user_context):
         """Test that secret manager type is case-insensitive."""
-        settings = SecretManagerSettings(SECRET_MANAGER_TYPE="DATABASE")
+        settings = SecretManagerSettings(BACKEND="DATABASE")
         factory = SecretManagerFactory(settings)
 
         manager = factory.create(session=mock_db_session, user_context=test_user_context)
@@ -177,7 +177,7 @@ class TestSecretManagerFactory:
 
     def test_factory_reusable_for_multiple_contexts(self, mock_db_session, test_user_context, test_admin_context):
         """Test that same factory can create managers for different contexts."""
-        settings = SecretManagerSettings(SECRET_MANAGER_TYPE="database")
+        settings = SecretManagerSettings(BACKEND="database")
         factory = SecretManagerFactory(settings)
 
         # Create manager for regular user

@@ -163,7 +163,7 @@ the instance, injected the stored credential, and reached the server.
 private, loopback, or link-local address and was refused before any request was
 made. The message is deliberately generic so it cannot be used to probe which
 internal names resolve. For local development, the deployment must set
-`ALLOW_PRIVATE_URLS`.
+`AGENTAREA_MCP_ALLOW_PRIVATE_URLS`.
 
 **`Authentication failed — check your credentials`.** The server returned 401.
 The credential is wrong, expired, or the header name does not match what the

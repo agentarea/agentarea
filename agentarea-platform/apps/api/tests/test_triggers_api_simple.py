@@ -114,7 +114,7 @@ def create_mock_trigger():
 class UnreadableSecretManager(BaseSecretManager):
     """A store that still holds the credential but can no longer read it.
 
-    What a rotated ``SECRET_MANAGER_ENCRYPTION_KEY`` leaves behind: the row is
+    What a rotated ``AGENTAREA_SECRET_ENCRYPTION_KEY`` leaves behind: the row is
     still there, its ciphertext no longer decrypts. Deliberately does not
     override ``has_secret``, so the presence check falls back to reading the
     value — the worst case a backend can put the endpoint in.

@@ -128,7 +128,7 @@ func (p *BackendProvider) DeleteInstance(ctx context.Context, instanceID, name s
 // empty image + port=0 and rejected by the K8s apiserver.
 func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstance) *BackendInstanceSpec {
 	// The tier is deliberately left empty: the backend then applies the
-	// operator's DEFAULT_ISOLATION_TIER. Pinning "untrusted" here asked every MCP
+	// operator's AGENTAREA_MCP_ISOLATION. Pinning "untrusted" here asked every MCP
 	// pod for a syscall-interposing RuntimeClass, so on a cluster without one the
 	// pod stayed Pending until the gateway's startup timeout and the instance was
 	// unreachable forever.

@@ -136,6 +136,7 @@
         "pages": [
           "self-host/requirements",
           "self-host/configuration",
+          "self-host/env-migration",
           "self-host/docker-compose",
           "self-host/kubernetes",
           "self-host/mcp-data-plane",

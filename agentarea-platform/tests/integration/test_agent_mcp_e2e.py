@@ -16,7 +16,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 # Test configuration
-API_BASE_URL = "http://localhost:8000"
+AGENTAREA_API_URL = "http://localhost:8000"
 
 
 class TestAgentMCPE2E:
@@ -33,13 +33,13 @@ class TestAgentMCPE2E:
         """Clean up test resources."""
         # Clean up in reverse order
         if self.task_id:
-            requests.delete(f"{API_BASE_URL}/v1/tasks/{self.task_id}")
+            requests.delete(f"{AGENTAREA_API_URL}/v1/tasks/{self.task_id}")
         if self.agent_id:
-            requests.delete(f"{API_BASE_URL}/v1/agents/{self.agent_id}")
+            requests.delete(f"{AGENTAREA_API_URL}/v1/agents/{self.agent_id}")
         if self.mcp_instance_id:
-            requests.delete(f"{API_BASE_URL}/v1/mcp-server-instances/{self.mcp_instance_id}")
+            requests.delete(f"{AGENTAREA_API_URL}/v1/mcp-server-instances/{self.mcp_instance_id}")
         if self.mcp_server_id:
-            requests.delete(f"{API_BASE_URL}/v1/mcp-servers/{self.mcp_server_id}")
+            requests.delete(f"{AGENTAREA_API_URL}/v1/mcp-servers/{self.mcp_server_id}")
 
     def create_echo_mcp_server(self) -> dict[str, Any]:
         """Create an echo MCP server for testing."""
@@ -60,7 +60,7 @@ class TestAgentMCPE2E:
             ],
         }
 
-        response = requests.post(f"{API_BASE_URL}/v1/mcp-servers/", json=server_data)
+        response = requests.post(f"{AGENTAREA_API_URL}/v1/mcp-servers/", json=server_data)
         assert response.status_code in [200, 201]
         server = response.json()
         self.mcp_server_id = server["id"]
@@ -81,7 +81,7 @@ class TestAgentMCPE2E:
             },
         }
 
-        response = requests.post(f"{API_BASE_URL}/v1/mcp-server-instances/", json=instance_data)
+        response = requests.post(f"{AGENTAREA_API_URL}/v1/mcp-server-instances/", json=instance_data)
         assert response.status_code in [200, 201]
         instance = response.json()
         self.mcp_instance_id = instance["id"]
@@ -100,7 +100,7 @@ class TestAgentMCPE2E:
             "capabilities": ["mcp_tools"],
         }
 
-        response = requests.post(f"{API_BASE_URL}/v1/agents/", json=agent_data)
+        response = requests.post(f"{AGENTAREA_API_URL}/v1/agents/", json=agent_data)
         assert response.status_code in [200, 201]
         agent = response.json()
         self.agent_id = agent["id"]
@@ -114,7 +114,7 @@ class TestAgentMCPE2E:
             "priority": "high",
         }
 
-        response = requests.post(f"{API_BASE_URL}/v1/tasks/", json=task_data)
+        response = requests.post(f"{AGENTAREA_API_URL}/v1/tasks/", json=task_data)
         assert response.status_code in [200, 201]
         task = response.json()
         self.task_id = task["id"]
@@ -127,7 +127,7 @@ class TestAgentMCPE2E:
         """Wait for MCP instance to be ready."""
         # For now, just check that the instance exists in database
         # TODO: Fix Redis event publishing and MCP Manager communication
-        response = requests.get(f"{API_BASE_URL}/v1/mcp-server-instances/{instance_id}")
+        response = requests.get(f"{AGENTAREA_API_URL}/v1/mcp-server-instances/{instance_id}")
         if response.status_code == 200:
             instance = response.json()
             print(f"Instance created with status: {instance.get('status')}")
@@ -139,7 +139,7 @@ class TestAgentMCPE2E:
         """Wait for task to complete."""
         start_time = time.time()
         while time.time() - start_time < timeout:
-            response = requests.get(f"{API_BASE_URL}/v1/tasks/{task_id}")
+            response = requests.get(f"{AGENTAREA_API_URL}/v1/tasks/{task_id}")
             if response.status_code == 200:
                 task = response.json()
                 if task.get("status") in ["completed", "failed"]:
@@ -150,7 +150,7 @@ class TestAgentMCPE2E:
 
     def _get_task_details(self, task_id: str) -> dict:
         """Get detailed task information."""
-        response = requests.get(f"{API_BASE_URL}/v1/tasks/{task_id}")
+        response = requests.get(f"{AGENTAREA_API_URL}/v1/tasks/{task_id}")
         assert response.status_code == 200
         return response.json()
 
@@ -235,7 +235,7 @@ class TestAgentMCPE2E:
         }
 
         # This should either fail during agent creation or handle gracefully during execution
-        response = requests.post(f"{API_BASE_URL}/v1/agents/", json=agent_data)
+        response = requests.post(f"{AGENTAREA_API_URL}/v1/agents/", json=agent_data)
 
         if response.status_code == 201:
             # Agent created successfully, test task execution with broken MCP
@@ -248,7 +248,7 @@ class TestAgentMCPE2E:
                 "priority": "high",
             }
 
-            task_response = requests.post(f"{API_BASE_URL}/v1/tasks/", json=task_data)
+            task_response = requests.post(f"{AGENTAREA_API_URL}/v1/tasks/", json=task_data)
             assert task_response.status_code == 201
             task = task_response.json()
             self.task_id = task["id"]

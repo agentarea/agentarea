@@ -49,9 +49,9 @@ jobs:
         working-directory: agentarea-platform
         run: uv run python ../scripts/export-openapi.py -o /tmp/openapi.json
         env:
-          WORKFLOW__TEMPORAL_SERVER_URL: http://localhost:7233
-          WORKFLOW__TEMPORAL_NAMESPACE: default
-          WORKFLOW__TEMPORAL_TASK_QUEUE: agent-tasks
+          AGENTAREA_WF_TEMPORAL_URL: http://localhost:7233
+          AGENTAREA_WF_NAMESPACE: default
+          AGENTAREA_WF_QUEUE: agent-tasks
 
       - name: Check for spec drift
         run: |

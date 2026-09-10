@@ -101,18 +101,18 @@ kubectl run gvisor-check --rm -it --restart=Never \
 **2. Point the control plane at it.**
 
 ```
-BACKEND_TYPE=kubernetes
-KUBERNETES_KUBECONFIG=/path/to/execution-cluster.kubeconfig
-KUBERNETES_RUNTIME_CLASS=gvisor
+AGENTAREA_MCP_BACKEND=kubernetes
+AGENTAREA_K8S_KUBECONFIG=/path/to/execution-cluster.kubeconfig
+AGENTAREA_K8S_RUNTIME_CLASS=gvisor
 ```
 
-`KUBERNETES_KUBECONFIG` beats in-cluster credentials, so a control plane running
+`AGENTAREA_K8S_KUBECONFIG` beats in-cluster credentials, so a control plane running
 inside its own cluster still schedules onto this one. An unloadable file, or an
-unrecognised `BACKEND_TYPE`, stops the manager rather than silently using
+unrecognised `AGENTAREA_MCP_BACKEND`, stops the manager rather than silently using
 whatever is nearest.
 
 On Helm, put the kubeconfig in a Secret and name it. The chart mounts it into
-every process that creates workloads and sets `KUBERNETES_KUBECONFIG` to the
+every process that creates workloads and sets `AGENTAREA_K8S_KUBECONFIG` to the
 mounted path:
 
 ```bash

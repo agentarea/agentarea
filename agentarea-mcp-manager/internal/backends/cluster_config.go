@@ -28,7 +28,7 @@ func resolveClusterConfig(kubeconfig string, logger *slog.Logger) (*rest.Config,
 		if err != nil {
 			return nil, fmt.Errorf(
 				"loading the configured execution cluster kubeconfig %q: %w "+
-					"(KUBERNETES_KUBECONFIG names the cluster workloads run in; "+
+					"(AGENTAREA_K8S_KUBECONFIG names the cluster workloads run in; "+
 					"refusing to fall back to the manager's own cluster)",
 				kubeconfig, err)
 		}

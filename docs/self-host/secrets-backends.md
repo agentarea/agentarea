@@ -21,7 +21,7 @@ deployment ends up with credentials somewhere the operator did not expect.
 | Kind | Examples | Stored by | Configured by |
 |---|---|---|---|
 | Deployment secrets | database password, object-store keys, the sandbox HMAC secrets, the Kratos JWKS | Kubernetes Secrets, or `.env` under Compose | `global.secrets.*`, or the environment file |
-| Workspace secrets | LLM provider API keys, MCP server credentials, OAuth tokens | The secret manager backend | `SECRET_MANAGER_TYPE` |
+| Workspace secrets | LLM provider API keys, MCP server credentials, OAuth tokens | The secret manager backend | `AGENTAREA_SECRET_BACKEND` |
 
 This guide covers both. The secret manager backend is the choice with
 consequences; the deployment secrets are mostly about supplying your own instead
@@ -36,8 +36,8 @@ of letting the chart generate them.
 
 ### 1. Choose a workspace secret backend
 
-Two backends exist. `SECRET_MANAGER_TYPE` selects between them, and any other
-value raises `Invalid SECRET_MANAGER_TYPE` at startup rather than falling back.
+Two backends exist. `AGENTAREA_SECRET_BACKEND` selects between them, and any other
+value raises `Invalid AGENTAREA_SECRET_BACKEND` at startup rather than falling back.
 
 **`database` (default).** Secrets are encrypted with Fernet and stored in the
 `encrypted_secrets` table in the platform's own PostgreSQL database, scoped by
@@ -79,8 +79,8 @@ missing `encryption-key` leaves the API crash-looping at startup.
 Under Compose, set it in `.env`:
 
 ```bash
-SECRET_MANAGER_TYPE=database
-SECRET_MANAGER_ENCRYPTION_KEY=<the generated key>
+AGENTAREA_SECRET_BACKEND=database
+AGENTAREA_SECRET_ENCRYPTION_KEY=<the generated key>
 ```
 
 This key cannot be rotated in place. Changing it makes every secret already
@@ -94,14 +94,14 @@ you ciphertext you cannot open.
 ```yaml
 backend:
   extraEnv:
-    - name: SECRET_MANAGER_TYPE
+    - name: AGENTAREA_SECRET_BACKEND
       value: infisical
-    - name: SECRET_MANAGER_ENDPOINT
+    - name: AGENTAREA_SECRET_ENDPOINT
       value: https://infisical.example.com
-    - name: SECRET_MANAGER_ACCESS_KEY
+    - name: AGENTAREA_SECRET_CLIENT_ID
       valueFrom:
         secretKeyRef: { name: agentarea-infisical, key: client-id }
-    - name: SECRET_MANAGER_SECRET_KEY
+    - name: AGENTAREA_SECRET_CLIENT_SECRET
       valueFrom:
         secretKeyRef: { name: agentarea-infisical, key: client-secret }
 
@@ -114,8 +114,8 @@ Set the same variables on the worker. The worker resolves secrets when it runs
 agent activities, so a backend configured on the API alone leaves task execution
 unable to read provider credentials.
 
-`SECRET_MANAGER_ENDPOINT` defaults to `https://app.infisical.com` when unset.
-Both `SECRET_MANAGER_ACCESS_KEY` and `SECRET_MANAGER_SECRET_KEY` are required;
+`AGENTAREA_SECRET_ENDPOINT` defaults to `https://app.infisical.com` when unset.
+Both `AGENTAREA_SECRET_CLIENT_ID` and `AGENTAREA_SECRET_CLIENT_SECRET` are required;
 the factory raises `Infisical credentials not configured` at startup if either
 is missing, before any request is served.
 
@@ -152,9 +152,9 @@ the migration Jobs and every service still read it.
 `.env.example` ships values that are fine to develop against and not fine to
 deploy:
 
-- `SECRET_MANAGER_ENCRYPTION_KEY` — a real Fernet key, committed to the repository
-- `SANDBOX_ACTIVATION_AUTH_SECRET` and `SANDBOX_CLEANUP_AUTH_SECRET` — placeholders that say `change-in-prod`; both must be at least 32 bytes
-- `KRATOS_JWKS_B64` — a test JWKS **including the private key `d`**, so anyone with the repository can mint tokens the API will accept
+- `AGENTAREA_SECRET_ENCRYPTION_KEY` — a real Fernet key, committed to the repository
+- `AGENTAREA_SBX_ACTIVATION_SECRET` and `AGENTAREA_SBX_CLEANUP_SECRET` — placeholders that say `change-in-prod`; both must be at least 32 bytes
+- `AGENTAREA_AUTH_JWKS_B64` — a test JWKS **including the private key `d`**, so anyone with the repository can mint tokens the API will accept
 - `POSTGRES_PASSWORD=postgres`, `RUSTFS_ACCESS_KEY=minioadmin`, `RUSTFS_SECRET_KEY=minioadmin`
 
 Compose declares the two sandbox secrets with `${VAR:?...}`, so an empty value
@@ -196,7 +196,7 @@ appears in your Infisical project instead.
 
 ## Troubleshooting
 
-**API exits at startup with `SECRET_MANAGER_ENCRYPTION_KEY environment variable
+**API exits at startup with `AGENTAREA_SECRET_ENCRYPTION_KEY environment variable
 must be set`.** The `database` backend has no key. This is validated in
 `SecretManagerFactory.__init__`, so it fails at construction rather than on the
 first secret read — the process will not serve traffic in a state where secret
@@ -208,7 +208,7 @@ recovery path from the database side, and no re-encryption command; if the key
 is genuinely lost, every stored credential has to be re-entered.
 
 **Agents fail on tool calls with a missing credential, but the UI shows the
-secret saved.** The worker and the API disagree on `SECRET_MANAGER_TYPE` or on
+secret saved.** The worker and the API disagree on `AGENTAREA_SECRET_BACKEND` or on
 the key. Both processes construct their own secret manager. Compare the
 `Initialized SecretManagerFactory with type:` line in each.
 

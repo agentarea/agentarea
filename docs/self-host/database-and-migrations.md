@@ -30,7 +30,7 @@ reason.
 
 - A reachable PostgreSQL instance with the `agentarea` database created
 - For local work: Python 3.12 or later and `uv`, from a clone of the repository
-- The same `DATABASE_URL` or `POSTGRES_*` values the platform uses
+- The same `AGENTAREA_DB_URL` or `POSTGRES_*` values the platform uses
 
 ## Steps
 

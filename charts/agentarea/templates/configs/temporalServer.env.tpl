@@ -40,7 +40,7 @@ BIND_ON_IP: "0.0.0.0"
 {{- end }}
 
 {{- define "agentarea.temporalServer.secrets.envs" }}
-- name: POSTGRES_USER
+- name: AGENTAREA_DB_USER
   valueFrom:
     secretKeyRef:
       name: "{{ .Values.global.secrets.postgresql }}"

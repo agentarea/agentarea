@@ -112,17 +112,17 @@ Key environment variables for configuration:
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/agentarea
+AGENTAREA_DB_URL=postgresql://user:pass@localhost:5432/agentarea
 
 # Redis (for events and caching)
-REDIS_URL=redis://localhost:6379
+AGENTAREA_REDIS_URL=redis://localhost:6379
 
 # Infisical (secret management)
 INFISICAL_CLIENT_ID=your_client_id
 INFISICAL_CLIENT_SECRET=your_client_secret
 
 # External services
-MCP_MANAGER_URL=http://localhost:8080
+AGENTAREA_MCP_MANAGER_URL=http://localhost:8080
 TEMPORAL_HOST=localhost:7233
 ```
 

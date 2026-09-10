@@ -71,17 +71,17 @@ spec:
             {{- include "agentarea.storage.envs" . | nindent 12 }}
             {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
-            - name: SANDBOX_CONTROL_AUTH_SECRET
+            - name: AGENTAREA_SBX_CONTROL_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.application }}
                   key: sandbox-control-secret
-            - name: SANDBOX_FILE_AUTH_SECRET
+            - name: AGENTAREA_SBX_FILE_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "agentarea.sandboxFileSecretName" . }}
                   key: {{ include "agentarea.sandboxFileSecretKey" . }}
-            - name: MCP_GATEWAY_AUTH_SECRET
+            - name: AGENTAREA_MCP_GATEWAY_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "agentarea.mcpGatewaySecretName" . }}
@@ -89,29 +89,29 @@ spec:
             {{- include "agentarea.temporal.envs" . | nindent 12 }}
             {{- include "agentarea.worker.envs" . | nindent 12 }}
             {{- if .Values.keto.enabled }}
-            - name: ACCESS_CONTROL_BACKEND
+            - name: AGENTAREA_AUTHZ_BACKEND
               value: "keto"
-            - name: ACCESS_CONTROL_KETO_READ_URL
+            - name: AGENTAREA_AUTHZ_KETO_READ_URL
               value: "http://{{ include "agentarea.fullname" . }}-keto-read:4466"
-            - name: ACCESS_CONTROL_KETO_WRITE_URL
+            - name: AGENTAREA_AUTHZ_KETO_WRITE_URL
               value: "http://{{ include "agentarea.fullname" . }}-keto-write:4467"
             {{- end }}
             {{- if .Values.openfga.enabled }}
-            - name: ACCESS_CONTROL_BACKEND
+            - name: AGENTAREA_AUTHZ_BACKEND
               value: "openfga"
-            - name: ACCESS_CONTROL_OPENFGA_API_URL
+            - name: AGENTAREA_AUTHZ_FGA_URL
               value: "http://{{ include "agentarea.fullname" . }}-openfga:{{ .Values.openfga.service.httpPort | default 8080 }}"
-            - name: ACCESS_CONTROL_OPENFGA_STORE_ID
+            - name: AGENTAREA_AUTHZ_FGA_STORE_ID
               value: {{ .Values.openfga.accessControl.storeId | quote }}
-            - name: ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID
+            - name: AGENTAREA_AUTHZ_FGA_MODEL_ID
               value: {{ .Values.openfga.accessControl.authorizationModelId | quote }}
-            - name: ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP
+            - name: AGENTAREA_AUTHZ_FGA_BOOTSTRAP
               value: {{ .Values.openfga.accessControl.autoBootstrap | quote }}
-            - name: ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL
+            - name: AGENTAREA_AUTHZ_FGA_APPLY_MODEL
               value: {{ .Values.openfga.accessControl.autoApplyModel | quote }}
-            - name: ACCESS_CONTROL_OPENFGA_STORE_NAME
+            - name: AGENTAREA_AUTHZ_FGA_STORE_NAME
               value: {{ .Values.openfga.accessControl.storeName | default "agentarea" | quote }}
-            - name: ACCESS_CONTROL_OPENFGA_MODEL_PATH
+            - name: AGENTAREA_AUTHZ_FGA_MODEL_PATH
               value: "/etc/agentarea/openfga/authorization-model.json"
             {{- end }}
             {{- if or .Values.worker.envVars .Values.global.envVars }}

@@ -132,13 +132,13 @@ func TestDockerBackendDoesNotRetireWorkspaceDuringActiveTransfer(t *testing.T) {
 // executor. Sandbox paths refuse to run without it.
 func allowSharedExecutor(t *testing.T) {
 	t.Helper()
-	t.Setenv("SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT", "true")
+	t.Setenv("AGENTAREA_SBX_ALLOW_WEAK_ISOLATION", "true")
 }
 
 // The weak-isolation refusal belongs to sandbox execution, which is the thing
 // that would run under it.
 func TestSandboxExecutionRefusedWithoutExplicitDevelopmentOptIn(t *testing.T) {
-	t.Setenv("SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT", "")
+	t.Setenv("AGENTAREA_SBX_ALLOW_WEAK_ISOLATION", "")
 	cfg := &config.Config{}
 	cfg.Container.SandboxExecutorURL = "http://executor.invalid"
 	backend := NewDockerBackend(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -155,7 +155,7 @@ func TestSandboxExecutionRefusedWithoutExplicitDevelopmentOptIn(t *testing.T) {
 // with the shared executor, so the same refusal must not reach it: a host that
 // serves only MCP has no sandbox executor to opt into.
 func TestMCPLifecycleIsNotGatedByTheSharedExecutorOptIn(t *testing.T) {
-	t.Setenv("SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT", "")
+	t.Setenv("AGENTAREA_SBX_ALLOW_WEAK_ISOLATION", "")
 	cfg := &config.Config{}
 	cfg.Container.Runtime = stubContainerRuntime(t)
 	backend := NewDockerBackend(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))

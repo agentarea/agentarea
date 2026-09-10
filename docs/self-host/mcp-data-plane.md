@@ -40,7 +40,7 @@ what matters is the state it ends up in.
 - **The data-plane binary.** It is `mcp-manager` run in data-plane mode — build
   `./cmd/mcp-manager` from this repository for the host's architecture and
   install it as a service.
-- **`MCP_DATAPLANE_AUTH_TOKEN`**, at least 32 characters, the same value the
+- **`AGENTAREA_MCP_DATAPLANE_TOKEN`**, at least 32 characters, the same value the
   control plane will send. There is no default and no development bypass: a data
   plane reachable without a token hands container creation on a gVisor host to
   whoever finds the port.
@@ -81,7 +81,7 @@ mcpManager:
     tokenKey: "token"
 ```
 
-Setting `url` switches the backend; you do not set `BACKEND_TYPE` yourself. All
+Setting `url` switches the backend; you do not set `AGENTAREA_MCP_BACKEND` yourself. All
 three fields go together — a partial set stops the render rather than quietly
 running containers in the cluster after you asked for them elsewhere.
 
@@ -105,12 +105,12 @@ The manager refuses a plain-`http` data plane unless you also say the hop is
 private, so this arrangement cannot happen by accident:
 
 ```
-MCP_DATAPLANE_ALLOW_INSECURE=true
+AGENTAREA_MCP_DATAPLANE_INSECURE=true
 ```
 
 Both topologies are supported, and which one a deployment uses is not visible
 from the outside: **a private deployment has no public data-plane hostname at
-all**, so probing one tells you nothing. Check `MCP_DATAPLANE_URL` on the manager
+all**, so probing one tells you nothing. Check `AGENTAREA_MCP_DATAPLANE_URL` on the manager
 for the address actually in use, and reach it from inside the network the manager
 sits in — see [Verifying it](#verifying-it).
 
@@ -156,12 +156,12 @@ a laptop times out on a healthy host. From a control-plane cluster:
 
 ```bash
 kubectl -n agentarea exec deploy/agentarea-app-backend -- \
-  curl -s "$MCP_DATAPLANE_URL/healthz"
+  curl -s "$AGENTAREA_MCP_DATAPLANE_URL/healthz"
 ```
 
 `/healthz` is the one unauthenticated route; it answers `{"agent_id":"…","status":"ok"}`
 and settles whether the process is up before you look at anything else. Take
-`$MCP_DATAPLANE_URL` from the manager's own environment rather than from this
+`$AGENTAREA_MCP_DATAPLANE_URL` from the manager's own environment rather than from this
 page — the address here is an example.
 
 Then exercise the authenticated path:

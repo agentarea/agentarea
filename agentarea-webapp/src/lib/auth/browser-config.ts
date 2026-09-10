@@ -10,7 +10,7 @@ import { env } from "@/env";
  * during both SSR and client-side hydration.
  */
 export function getOryBrowserConfig() {
-  const browserUrl = process.env.ORY_BROWSER_URL || env.ORY_SDK_URL;
+  const browserUrl = process.env.NEXT_PUBLIC_ORY_SDK_URL || env.ORY_SDK_URL;
   return {
     ...config,
     sdk: {
@@ -25,7 +25,7 @@ export function getOryBrowserConfig() {
  * browser-accessible URL in a flow object returned by Kratos.
  */
 export function rewriteFlowForBrowser<T extends object>(flow: T): T {
-  const browserUrl = process.env.ORY_BROWSER_URL;
+  const browserUrl = process.env.NEXT_PUBLIC_ORY_SDK_URL;
   if (!browserUrl) return flow;
 
   const internalUrl = env.ORY_SDK_URL.replace(/\/$/, "");

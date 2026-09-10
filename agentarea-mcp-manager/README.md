@@ -91,9 +91,9 @@ curl -X POST http://localhost:80/instances \
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MCP_FEATURES_ENABLED` | Comma-separated feature flags | `gateway_api,state_reconciler` |
+| `AGENTAREA_MCP_FEATURES` | Comma-separated feature flags | `gateway_api,state_reconciler` |
 | `WARM_POOL_ENABLED` | Enable warm pool fast start | `false` |
-| `KUBERNETES_GATEWAY_NAME` | Gateway API gateway name | `envoy-gateway` |
+| `AGENTAREA_K8S_GATEWAY` | Gateway API gateway name | `envoy-gateway` |
 
 ## Documentation
 

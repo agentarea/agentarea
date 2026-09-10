@@ -121,8 +121,8 @@ problem rather than an agent one: check the worker's MCP manager setting and tha
 the manager is reachable from the worker.
 
 **A long command reaches its deadline.** The Go manager resolves an omitted
-timeout from `SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS` and rejects values above
-`SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS`; the data-plane provider cannot silently
+timeout from `AGENTAREA_SBX_EXEC_TIMEOUT` and rejects values above
+`AGENTAREA_SBX_MAX_EXEC_TIMEOUT`; the data-plane provider cannot silently
 shorten the persisted command contract. See [limits](/reference/limits).
 
 **Files written by one command are missing in the next.** Within a single task

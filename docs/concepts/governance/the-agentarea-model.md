@@ -233,7 +233,7 @@ project per resource, same-workspace edges only, an acyclic project graph, and
 each `role_assignment` attached to exactly one object.
 
 ## Limits
-- **The graph is off by default in code.** `ACCESS_CONTROL_BACKEND` defaults to
+- **The graph is off by default in code.** `AGENTAREA_AUTHZ_BACKEND` defaults to
   `disabled`, in which case the permission service is
   `WorkspaceScopedPermissionService`, whose `check` returns `True`
   unconditionally. The only boundary in that configuration is workspace scoping

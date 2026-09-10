@@ -34,10 +34,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestSuperviseHelperProcess(t *testing.T) {
-	if os.Getenv("AGENTAREA_SUPERVISE_HELPER") != "true" {
+	if os.Getenv("AGENTAREA_SBX_SUPERVISE_HELPER") != "true" {
 		return
 	}
-	payload, err := base64.StdEncoding.DecodeString(os.Getenv("AGENTAREA_SUPERVISE_COMMAND"))
+	payload, err := base64.StdEncoding.DecodeString(os.Getenv("AGENTAREA_SBX_SUPERVISE_COMMAND"))
 	if err != nil {
 		panic(err)
 	}
@@ -45,11 +45,11 @@ func TestSuperviseHelperProcess(t *testing.T) {
 	if err := json.Unmarshal(payload, &command); err != nil {
 		panic(err)
 	}
-	timeout, err := time.ParseDuration(os.Getenv("AGENTAREA_SUPERVISE_TIMEOUT"))
+	timeout, err := time.ParseDuration(os.Getenv("AGENTAREA_SBX_SUPERVISE_TIMEOUT"))
 	if err != nil {
 		panic(err)
 	}
-	maxFileBytes, err := strconv.ParseUint(os.Getenv("AGENTAREA_SUPERVISE_MAX_FILE_BYTES"), 10, 64)
+	maxFileBytes, err := strconv.ParseUint(os.Getenv("AGENTAREA_SBX_SUPERVISE_MAX_SIZE"), 10, 64)
 	if err != nil {
 		panic(err)
 	}
@@ -65,7 +65,7 @@ func TestSuperviseHelperProcess(t *testing.T) {
 	if err != nil {
 		output.Error = err.Error()
 	}
-	file, err := os.Create(os.Getenv("AGENTAREA_SUPERVISE_RESULT"))
+	file, err := os.Create(os.Getenv("AGENTAREA_SBX_SUPERVISE_RESULT"))
 	if err != nil {
 		panic(err)
 	}
@@ -87,11 +87,11 @@ func runSuperviseHelper(t *testing.T, command []string, timeout time.Duration, m
 	resultPath := filepath.Join(t.TempDir(), "result.json")
 	helper := exec.Command(os.Args[0], "-test.run=^TestSuperviseHelperProcess$")
 	helper.Env = append(os.Environ(),
-		"AGENTAREA_SUPERVISE_HELPER=true",
-		"AGENTAREA_SUPERVISE_COMMAND="+base64.StdEncoding.EncodeToString(payload),
-		"AGENTAREA_SUPERVISE_TIMEOUT="+timeout.String(),
-		"AGENTAREA_SUPERVISE_MAX_FILE_BYTES="+strconv.FormatUint(maxFileBytes, 10),
-		"AGENTAREA_SUPERVISE_RESULT="+resultPath,
+		"AGENTAREA_SBX_SUPERVISE_HELPER=true",
+		"AGENTAREA_SBX_SUPERVISE_COMMAND="+base64.StdEncoding.EncodeToString(payload),
+		"AGENTAREA_SBX_SUPERVISE_TIMEOUT="+timeout.String(),
+		"AGENTAREA_SBX_SUPERVISE_MAX_SIZE="+strconv.FormatUint(maxFileBytes, 10),
+		"AGENTAREA_SBX_SUPERVISE_RESULT="+resultPath,
 	)
 	if output, err := helper.CombinedOutput(); err != nil {
 		t.Fatalf("supervisor helper: %v: %s", err, output)

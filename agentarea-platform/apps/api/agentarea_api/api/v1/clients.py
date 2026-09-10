@@ -67,7 +67,7 @@ class ClientResponse(BaseModel):
 
 def client_mcp_endpoint_url(client_id: UUID) -> str:
     """URL a harness connects to. Shared with the clients toolset — one shape."""
-    base = get_app_settings().API_BASE_URL.rstrip("/")
+    base = get_app_settings().API_URL.rstrip("/")
     return f"{base}/client-mcp/{client_id}"
 
 

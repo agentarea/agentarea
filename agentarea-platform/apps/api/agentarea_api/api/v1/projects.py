@@ -257,7 +257,7 @@ def _project_path(project_id: UUID, rel: str = "") -> str:
 
 
 def _project_file_download_url(project_id: UUID, file_path: str) -> str:
-    base = get_app_settings().API_BASE_URL.rstrip("/")
+    base = get_app_settings().API_URL.rstrip("/")
     encoded_path = quote(file_path.lstrip("/"), safe="/")
     return f"{base}/v1/projects/{project_id}/files/download/{encoded_path}"
 

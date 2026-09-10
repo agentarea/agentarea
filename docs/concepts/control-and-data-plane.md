@@ -174,7 +174,7 @@ control plane never learns where it is.
 
 The cost is that the asynchronous path is harder to debug — a failure is
 distributed across a record, a stream, and a runner log, rather than visible in
-one response. `SANDBOX_EXECUTOR_URL` and other direct runner URLs are explicitly
+one response. `AGENTAREA_SBX_EXECUTOR_URL` and other direct runner URLs are explicitly
 not production extension points, precisely because they are the tempting shortcut
 back to the synchronous model.
 

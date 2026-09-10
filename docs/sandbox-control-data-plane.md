@@ -99,7 +99,7 @@ workspace snapshot, artifact manifest, and session metadata.
 ## Implemented Provider Boundary
 
 `mcp-manager` now selects one sandbox data plane per regional deployment with
-`SANDBOX_PROVIDER`. The Python worker still calls the same manager endpoints and
+`AGENTAREA_SBX_PROVIDER`. The Python worker still calls the same manager endpoints and
 does not send a provider name:
 
 - `kubernetes`, `docker`, or `agentarea` use the built-in AgentArea runtime;
@@ -165,7 +165,7 @@ identity and digest-pinned images that the manager verifies against the host
 runtime before admitting the sandbox. `kata` and `firecracker` are rejected at
 startup until OpenSandbox exposes an attestation the adapter can verify. Local
 Docker/runc validation is available only as `container-dev` together with
-`SANDBOX_OPENSANDBOX_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT=true`. This setting is
+`AGENTAREA_SBX_OSB_WEAK_ISOLATION=true`. This setting is
 an explicit development exception, not a production isolation claim. Do not use
 the development mode for untrusted customer code.
 
@@ -226,7 +226,7 @@ Fully customer-hosted:
 
 ## Non-Goals
 
-- Do not expose `SANDBOX_EXECUTOR_URL` or any direct runner URL as the production
+- Do not expose `AGENTAREA_SBX_EXECUTOR_URL` or any direct runner URL as the production
   extension point.
 - Do not use OpenAPI/HTTP tool execution as a sandbox runtime abstraction.
 - Do not put raw stdout, large logs, files, or artifacts in workflow history or

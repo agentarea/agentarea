@@ -193,7 +193,7 @@ Before any container starts, `ContainerValidator.DryRunValidation()` runs a seri
 |-------|-------------|
 | **JSON spec structure** | Validates required fields (`image`+`port` for docker, `command` for command type) |
 | **Image existence** | Verifies the image is local or can be pulled; rejects unknown images |
-| **Container limit** | Enforces `MAX_CONTAINERS` (default `50`) per manager instance |
+| **Container limit** | Enforces `AGENTAREA_MCP_MAX_CONTAINERS` (default `50`) per manager instance |
 | **Resource requirements** | Validates `memory_limit` and `cpu_limit` format if provided |
 | **Name collision** | Rejects specs that would create a container with a duplicate name |
 
@@ -271,7 +271,7 @@ Status transitions are published back to Redis so the Python API and any connect
 
 ### Network Scoping
 
-All MCP containers for a workspace are placed on the same Docker network (`MCP_NETWORK`, default `agentarea_default`). Network policies prevent cross-workspace container communication:
+All MCP containers for a workspace are placed on the same Docker network (`AGENTAREA_MCP_NETWORK`, default `agentarea_default`). Network policies prevent cross-workspace container communication:
 
 - Containers in workspace A cannot initiate connections to containers in workspace B.
 - The Traefik reverse proxy is the only ingress point; direct container-to-container access from outside the workspace network is not possible.
@@ -287,7 +287,7 @@ traefik.http.routers.<slug>.entrypoints=mcp
 traefik.http.services.<slug>.loadbalancer.server.port=<port>
 ```
 
-The manager uses the `CONTAINER_MANAGED_BY_LABEL` label (default `mcp-manager`) to identify and reclaim its own containers. On startup, containers with this label that are not in the in-memory registry are reconciled — either reattached or cleaned up.
+The manager uses the `AGENTAREA_MCP_LABEL` label (default `mcp-manager`) to identify and reclaim its own containers. On startup, containers with this label that are not in the in-memory registry are reconciled — either reattached or cleaned up.
 
 ### Orphan Cleanup
 
@@ -311,15 +311,15 @@ Pre-warmed containers follow the same security profile as on-demand containers. 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CONTAINER_RUNTIME` | `docker` | Container runtime binary (`docker` or `podman`) |
-| `MCP_NETWORK` | `agentarea_default` | Docker network for MCP containers |
-| `CONTAINER_NAME_PREFIX` | `mcp-` | Prefix applied to all managed container names |
-| `CONTAINER_MANAGED_BY_LABEL` | `mcp-manager` | Label used to identify managed containers |
-| `MAX_CONTAINERS` | `50` | Maximum concurrent containers per manager instance |
-| `DEFAULT_MEMORY_LIMIT` | `512m` | Default container memory cap |
-| `DEFAULT_CPU_LIMIT` | `1.0` | Default container CPU quota (cores) |
-| `STARTUP_TIMEOUT` | `120s` | Time allowed for a container to reach running state |
-| `SHUTDOWN_TIMEOUT` | `30s` | Graceful shutdown window before forced stop |
+| `AGENTAREA_MCP_RUNTIME` | `docker` | Container runtime binary (`docker` or `podman`) |
+| `AGENTAREA_MCP_NETWORK` | `agentarea_default` | Docker network for MCP containers |
+| `AGENTAREA_MCP_NAME_PREFIX` | `mcp-` | Prefix applied to all managed container names |
+| `AGENTAREA_MCP_LABEL` | `mcp-manager` | Label used to identify managed containers |
+| `AGENTAREA_MCP_MAX_CONTAINERS` | `50` | Maximum concurrent containers per manager instance |
+| `AGENTAREA_MCP_MEMORY` | `512m` | Default container memory cap |
+| `AGENTAREA_MCP_CPU` | `1.0` | Default container CPU quota (cores) |
+| `AGENTAREA_STARTUP_TIMEOUT` | `120s` | Time allowed for a container to reach running state |
+| `AGENTAREA_SHUTDOWN_TIMEOUT` | `30s` | Graceful shutdown window before forced stop |
 
 ### Per-instance Resource Override
 
@@ -369,7 +369,7 @@ Agent ──attaches──> Skill ──references──> MCPServerInstance
 | **Network isolation** | Per-workspace Docker networks; cross-workspace routing is blocked |
 | **Resource limits** | Hard `--memory` and `--cpus` caps on every container |
 | **Image validation** | Pre-launch check rejects unknown or unpullable images |
-| **Container quotas** | `MAX_CONTAINERS` limit enforced before creation |
+| **Container quotas** | `AGENTAREA_MCP_MAX_CONTAINERS` limit enforced before creation |
 | **Secret isolation** | Secrets stored as references; resolved to actual values only at container runtime |
 | **Orphan cleanup** | Manager-labeled containers without a DB record are removed on startup |
 | **Reverse proxy only** | Traefik is the sole ingress; MCP container ports are not exposed to the host |

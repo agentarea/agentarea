@@ -81,9 +81,9 @@ const maxActivationRequestBytes = 64 * 1024 * 1024
 // In K8s pods this is mounted as an emptyDir so it dies with the pod;
 // in compose it's a plain directory inside the container with the same
 // effect (container removed → directory gone). Overridable via
-// WORKSPACE_ROOT for tests and local dev outside containers.
+// AGENTAREA_SBX_ROOT for tests and local dev outside containers.
 var workspaceRoot = func() string {
-	if v := os.Getenv("WORKSPACE_ROOT"); v != "" {
+	if v := os.Getenv("AGENTAREA_SBX_ROOT"); v != "" {
 		return v
 	}
 	return "/workspace"
@@ -139,7 +139,7 @@ func main() {
 	http.HandleFunc("/workspace/writeback", workspaceWritebackHandler)
 	http.HandleFunc("/runtime/manifest", runtimeManifestHandler)
 
-	port := os.Getenv("ACTIVATION_PORT")
+	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
@@ -1161,10 +1161,14 @@ func isStorageCredentialEnv(name string) bool {
 		"MINIO_ROOT_PASSWORD",
 		"S3_ACCESS_KEY",
 		"S3_SECRET_KEY",
+		"AGENTAREA_S3_ACCESS_KEY",
+		"AGENTAREA_S3_SECRET_KEY",
+		"AGENTAREA_SBX_S3_ACCESS_KEY",
+		"AGENTAREA_SBX_S3_SECRET_KEY",
 		activationauth.SecretEnv:
 		return true
 	default:
-		return strings.HasPrefix(strings.ToUpper(name), "SANDBOX_WORKSPACE_S3_CREDENTIAL")
+		return strings.HasPrefix(strings.ToUpper(name), "AGENTAREA_SBX_S3_CREDENTIAL")
 	}
 }
 
@@ -2016,7 +2020,7 @@ func runtimeManifestHandler(w http.ResponseWriter, r *http.Request) {
 // because a root command could read PID1's environment (incl. the activation
 // HMAC secret) and forge tokens for any workspace/task.
 func sandboxCommandCredential() (*syscall.Credential, error) {
-	return resolveCommandCredential(os.Geteuid(), os.Getenv("SANDBOX_COMMAND_UID"), os.Getenv("SANDBOX_COMMAND_GID"))
+	return resolveCommandCredential(os.Geteuid(), os.Getenv("AGENTAREA_SBX_UID"), os.Getenv("AGENTAREA_SBX_GID"))
 }
 
 // resolveCommandCredential is the pure core of sandboxCommandCredential, split
@@ -2028,7 +2032,7 @@ func resolveCommandCredential(euid int, uidText, gidText string) (*syscall.Crede
 	uid, uidErr := strconv.ParseUint(uidText, 10, 32)
 	gid, gidErr := strconv.ParseUint(gidText, 10, 32)
 	if uidText == "" || gidText == "" || uidErr != nil || gidErr != nil || uid == 0 || gid == 0 {
-		return nil, fmt.Errorf("refusing to run untrusted command as root: SANDBOX_COMMAND_UID and SANDBOX_COMMAND_GID must be set to a non-root uid/gid")
+		return nil, fmt.Errorf("refusing to run untrusted command as root: AGENTAREA_SBX_UID and AGENTAREA_SBX_GID must be set to a non-root uid/gid")
 	}
 	return &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}, nil
 }
@@ -2095,16 +2099,16 @@ func checkedIntFromUint32(value uint32) (int, error) {
 
 // objectStoreEndpointHost returns the host:port that presigned writeback URLs
 // must target. It mirrors the endpoint the control plane presigns against
-// (SANDBOX_WORKSPACE_S3_ENDPOINT, falling back to AWS_ENDPOINT_URL) and fails
+// (AGENTAREA_SBX_S3_ENDPOINT, falling back to AGENTAREA_S3_ENDPOINT) and fails
 // hard when unset so a misconfigured runner cannot relay control-plane URLs to
 // an attacker-chosen host.
 func objectStoreEndpointHost() (string, error) {
-	endpoint := os.Getenv("SANDBOX_WORKSPACE_S3_ENDPOINT")
+	endpoint := os.Getenv("AGENTAREA_SBX_S3_ENDPOINT")
 	if endpoint == "" {
-		endpoint = os.Getenv("AWS_ENDPOINT_URL")
+		endpoint = os.Getenv("AGENTAREA_S3_ENDPOINT")
 	}
 	if endpoint == "" {
-		return "", fmt.Errorf("object store endpoint is not configured: set SANDBOX_WORKSPACE_S3_ENDPOINT or AWS_ENDPOINT_URL")
+		return "", fmt.Errorf("object store endpoint is not configured: set AGENTAREA_SBX_S3_ENDPOINT or AGENTAREA_S3_ENDPOINT")
 	}
 	parsed, err := url.Parse(strings.TrimRight(endpoint, "/"))
 	if err != nil || parsed.Host == "" {
@@ -2140,19 +2144,19 @@ func endRequest() {
 }
 
 func loadActivationPolicy() (activationPolicy, error) {
-	maxExecution, err := requiredPositiveIntEnv("MAX_EXECUTION_TIMEOUT_SECONDS")
+	maxExecution, err := requiredPositiveIntEnv("AGENTAREA_SBX_MAX_EXEC_SECONDS")
 	if err != nil {
 		return activationPolicy{}, err
 	}
-	maxFiles, err := requiredPositiveIntEnv("SANDBOX_WORKSPACE_MAX_FILES")
+	maxFiles, err := requiredPositiveIntEnv("AGENTAREA_SBX_MAX_FILES")
 	if err != nil {
 		return activationPolicy{}, err
 	}
-	maxFileBytes, err := requiredPositiveInt64Env("SANDBOX_WORKSPACE_MAX_FILE_BYTES")
+	maxFileBytes, err := requiredPositiveInt64Env("AGENTAREA_SBX_MAX_FILE_SIZE")
 	if err != nil {
 		return activationPolicy{}, err
 	}
-	maxBytes, err := requiredPositiveInt64Env("SANDBOX_WORKSPACE_MAX_BYTES")
+	maxBytes, err := requiredPositiveInt64Env("AGENTAREA_SBX_MAX_TOTAL_SIZE")
 	if err != nil {
 		return activationPolicy{}, err
 	}
@@ -2162,17 +2166,17 @@ func loadActivationPolicy() (activationPolicy, error) {
 	if err := workspaceLimits.Validate(); err != nil {
 		return activationPolicy{}, fmt.Errorf("sandbox workspace limits are invalid: %w", err)
 	}
-	idleRaw := os.Getenv("IDLE_TIMEOUT_SECONDS")
+	idleRaw := os.Getenv("AGENTAREA_SBX_IDLE_SHUTDOWN")
 	if idleRaw == "" {
-		return activationPolicy{}, fmt.Errorf("IDLE_TIMEOUT_SECONDS is required; use 0 to disable")
+		return activationPolicy{}, fmt.Errorf("AGENTAREA_SBX_IDLE_SHUTDOWN is required; use 0s to disable")
 	}
-	idleSeconds, err := strconv.Atoi(idleRaw)
-	if err != nil || idleSeconds < 0 {
-		return activationPolicy{}, fmt.Errorf("IDLE_TIMEOUT_SECONDS must be a non-negative integer")
+	idleTimeout, err := time.ParseDuration(idleRaw)
+	if err != nil || idleTimeout < 0 {
+		return activationPolicy{}, fmt.Errorf("AGENTAREA_SBX_IDLE_SHUTDOWN must be a non-negative duration (e.g. 15m, 0s)")
 	}
 	return activationPolicy{
 		MaxExecutionTimeoutSeconds: maxExecution,
-		IdleTimeout:                time.Duration(idleSeconds) * time.Second,
+		IdleTimeout:                idleTimeout,
 		WorkspaceLimits:            workspaceLimits,
 	}, nil
 }
@@ -2196,10 +2200,10 @@ func requiredPositiveInt64Env(name string) (int64, error) {
 }
 
 // startIdleWatchdog launches a goroutine that exits the process when no
-// /execute or /activate request has arrived for IDLE_TIMEOUT_SECONDS. This
+// /execute or /activate request has arrived for AGENTAREA_SBX_IDLE_SHUTDOWN. This
 // bounds the lifetime of an unused activation process. Task state is safe to
 // discard because the canonical workspace is stored in object storage.
-// Disabled when IDLE_TIMEOUT_SECONDS=0 or unset.
+// Disabled when AGENTAREA_SBX_IDLE_SHUTDOWN=0s.
 func startIdleWatchdog(timeout time.Duration) {
 	if timeout == 0 {
 		return

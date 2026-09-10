@@ -83,11 +83,11 @@ Warning fires at the ratio; denial fires at full consumption.
 | `EVENT_PUBLISH_TIMEOUT` | 5 seconds |
 | `HEARTBEAT_TIMEOUT` | 30 seconds |
 | `CONTINUATION_TIMEOUT` | 24 hours |
-| `WORKFLOW__AGENT_VALIDATION_TIMEOUT_MINUTES` | 5 |
-| `WORKFLOW__AGENT_EXECUTION_TIMEOUT_HOURS` | 24 |
-| `WORKFLOW__DYNAMIC_ACTIVITY_TIMEOUT_MINUTES` | 30 |
-| `WORKFLOW__TEMPORAL_MAX_WORKFLOW_DURATION_DAYS` | 7 |
-| `ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS` | 10.0 |
+| `AGENTAREA_WF_VALIDATE_TIMEOUT` | 5 |
+| `AGENTAREA_WF_EXEC_TIMEOUT` | 24 |
+| `AGENTAREA_WF_ACTIVITY_TIMEOUT` | 30 |
+| `AGENTAREA_WF_MAX_DURATION` | 7 |
+| `AGENTAREA_AUTHZ_FGA_TIMEOUT` | 10.0 |
 
 There is no timeout on a pending human approval.
 
@@ -106,8 +106,8 @@ quota, billing, an unknown model — fail fast via a non-retryable flag.
 
 | Limit | Value |
 |---|---|
-| `WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES` | 10 |
-| `WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS` | 5 |
+| `AGENTAREA_WF_MAX_ACTIVITIES` | 10 |
+| `AGENTAREA_WF_MAX_WORKFLOWS` | 5 |
 
 There is no per-workspace request rate limit, task concurrency quota, or tool
 call rate limit.
@@ -189,11 +189,11 @@ for a process started without the corresponding environment variable.
 
 | Setting | Code default | `docker-compose.dev.yaml` | `docker-compose.yaml` | Helm |
 |---|---|---|---|---|
-| `ACCESS_CONTROL_BACKEND` | `disabled` | `openfga` | **absent — code default applies** | `openfga` when `openfga.enabled=true`, the chart default |
-| `ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP` | `false` | `true` | absent | `true` |
-| `ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL` | `false` | `true` | absent | `true` |
-| `ACCESS_CONTROL_OPENFGA_STORE_NAME` | `agentarea` | `agentarea` | absent | — |
-| `ACCESS_CONTROL_OPENFGA_API_URL` | `http://openfga:8080` | `http://openfga:8080` | absent | — |
+| `AGENTAREA_AUTHZ_BACKEND` | `disabled` | `openfga` | **absent — code default applies** | `openfga` when `openfga.enabled=true`, the chart default |
+| `AGENTAREA_AUTHZ_FGA_BOOTSTRAP` | `false` | `true` | absent | `true` |
+| `AGENTAREA_AUTHZ_FGA_APPLY_MODEL` | `false` | `true` | absent | `true` |
+| `AGENTAREA_AUTHZ_FGA_STORE_NAME` | `agentarea` | `agentarea` | absent | — |
+| `AGENTAREA_AUTHZ_FGA_URL` | `http://openfga:8080` | `http://openfga:8080` | absent | — |
 
 `make up` runs `docker-compose.yaml` and `make up-dev` runs
 `docker-compose.dev.yaml`. On the `make up` path the graph backend is `disabled`,
@@ -202,10 +202,10 @@ in which case every permission check returns allow.
 | Setting | Code default | Override |
 |---|---|---|
 | `GOVERNANCE_DEFAULT_POLICIES_PATH` | unset, uses the packaged `config/default_policies.yaml` | Path to an alternative defaults file. A missing file means new workspaces start with no rules. |
-| `WORKFLOW__EXECUTION_ENGINE` | `temporal` | `direct` ignores the `TEMPORAL_*` settings. |
-| `WORKFLOW__TEMPORAL_SERVER_URL` | `""` | Required when the engine is `temporal`; startup validation fails if missing. |
-| `WORKFLOW__TEMPORAL_NAMESPACE` | `""` | Required when the engine is `temporal`. |
-| `WORKFLOW__TEMPORAL_TASK_QUEUE` | `""` | Required when the engine is `temporal`. |
+| `AGENTAREA_WF_ENGINE` | `temporal` | `direct` ignores the `TEMPORAL_*` settings. |
+| `AGENTAREA_WF_TEMPORAL_URL` | `""` | Required when the engine is `temporal`; startup validation fails if missing. |
+| `AGENTAREA_WF_NAMESPACE` | `""` | Required when the engine is `temporal`. |
+| `AGENTAREA_WF_QUEUE` | `""` | Required when the engine is `temporal`. |
 
 Every constant listed under [Values](#values) that is not shown with an
 environment prefix is a code constant with no override.

@@ -19,7 +19,7 @@ import (
 // cold start), and no active-lease check on delete (so it could tear a workload
 // down mid-request). Re-registering any of them reopens all three.
 func TestWorkloadMutationIsNotReachableOutsideTheGateway(t *testing.T) {
-	t.Setenv("SANDBOX_EXECUTION_RECORD_TTL", "24h")
+	t.Setenv("AGENTAREA_SBX_RECORD_TTL", "24h")
 	gin.SetMode(gin.TestMode)
 
 	handler, err := NewHandler(
@@ -73,7 +73,7 @@ func TestWorkloadMutationIsNotReachableOutsideTheGateway(t *testing.T) {
 }
 
 func TestNewHandlerRequiresCompleteSandboxControlRuntime(t *testing.T) {
-	t.Setenv("SANDBOX_EXECUTION_RECORD_TTL", "24h")
+	t.Setenv("AGENTAREA_SBX_RECORD_TTL", "24h")
 	_, err := NewHandler(
 		nil,
 		nil,

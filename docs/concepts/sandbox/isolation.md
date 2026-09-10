@@ -161,7 +161,7 @@ deployment actually gets.
 **No workload is assigned an isolation tier.** No caller outside tests sets
 `InstanceSpec.IsolationTier`. The spec assembled in `internal/api/handlers.go`
 omits the field, so resolution always falls to the configured default. That
-default is `standard` (`DEFAULT_ISOLATION_TIER`), which is not set in any chart
+default is `standard` (`AGENTAREA_MCP_ISOLATION`), which is not set in any chart
 or compose file. The tier model is implemented and its unit tests pass; nothing
 produces the input that would select `untrusted`.
 
@@ -184,7 +184,7 @@ practice today; the asymmetry sometimes described between them does not exist in
 a running system.
 
 **The operator-level lever does work, and covers everything at once.** Setting
-`mcpManager.runtimeClass` propagates to `KUBERNETES_RUNTIME_CLASS`, where it wins
+`mcpManager.runtimeClass` propagates to `AGENTAREA_K8S_RUNTIME_CLASS`, where it wins
 ahead of tier and spec, and to the warm pool DaemonSet's `runtimeClassName`. Task
 sandbox pods are built by deep-copying that template's spec, so they inherit it.
 This is a working way to confine workloads today, with one consequence: it is a
@@ -216,7 +216,7 @@ require a CNI that enforces NetworkPolicy; on a cluster without enforcement they
 are accepted by the API server and do nothing.
 
 **A separate execution cluster is not currently reachable.** Pointing
-`KUBERNETES_KUBECONFIG` at another cluster schedules workloads there
+`AGENTAREA_K8S_KUBECONFIG` at another cluster schedules workloads there
 successfully, but the addresses used to reach them do not resolve across the
 boundary: MCP instance URLs are in-cluster service DNS
 (`mcp-<name>.<ns>.svc.cluster.local`), and the sandbox file path dials raw pod

@@ -42,7 +42,7 @@ def _is_existing_tuple_error(exc: Exception) -> bool:
 def _resolve_graph_client() -> tuple[GraphClient, str] | None:
     """Return (client, backend_name) for the configured graph, or None when disabled."""
     settings = get_settings()
-    backend = settings.access_control.ACCESS_CONTROL_BACKEND
+    backend = settings.access_control.BACKEND
     if backend == "openfga":
         client_type: type[GraphClient] = OpenFGAClient
         backend_name = "OpenFGA"

@@ -139,11 +139,11 @@ async def _pop_state(state: str) -> dict[str, Any] | None:
 
 
 def _callback_uri() -> str:
-    return f"{get_settings().app.API_BASE_URL.rstrip('/')}/v1/connections/oauth/callback"
+    return f"{get_settings().app.API_URL.rstrip('/')}/v1/connections/oauth/callback"
 
 
 def _frontend_base(return_to: str) -> str:
-    default = get_settings().app.FRONTEND_BASE_URL.rstrip("/")
+    default = get_settings().app.APP_URL.rstrip("/")
     requested = urllib.parse.urlparse(return_to)
     expected = urllib.parse.urlparse(default)
     if (

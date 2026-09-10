@@ -76,7 +76,7 @@ global:
     name: agentarea
     sslMode: require
   redis:
-    existingSecret: agentarea-redis-url    # key `url`, holds the full REDIS_URL
+    existingSecret: agentarea-redis-url    # key `url`, holds the full AGENTAREA_REDIS_URL
   storage:
     type: s3
     endpoint: https://s3.us-east-1.amazonaws.com
@@ -215,7 +215,7 @@ own Gateway.
 in-cluster object store address. Set it to a URL the browser can resolve, and
 set `global.storage.cors.allowedOrigins` to your frontend origin.
 
-**The API pod crash-loops on `SECRET_MANAGER_ENCRYPTION_KEY`.** The
+**The API pod crash-loops on `AGENTAREA_SECRET_ENCRYPTION_KEY`.** The
 `agentarea-app-secrets` Secret is missing its `encryption-key` entry — usually
 because a hand-created Secret replaced the generated one without that key.
 

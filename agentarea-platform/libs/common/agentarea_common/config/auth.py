@@ -6,6 +6,8 @@ Services like the Temporal worker that don't perform auth can skip these.
 
 from functools import lru_cache
 
+from pydantic_settings import SettingsConfigDict
+
 from .base import BaseAppSettings
 
 
@@ -17,16 +19,18 @@ class AuthSettings(BaseAppSettings):
     should never instantiate this class.
     """
 
-    KRATOS_JWKS_B64: str = ""
-    KRATOS_ISSUER: str = "http://localhost:4433"
-    KRATOS_AUDIENCE: str = "agentarea-api"
+    model_config = SettingsConfigDict(env_prefix="AGENTAREA_AUTH_")
+
+    JWKS_B64: str = ""
+    ISSUER: str = "http://localhost:4433"
+    AUDIENCE: str = "agentarea-api"
 
 
 @lru_cache
 def get_auth_settings() -> AuthSettings:
     """Get authentication settings.
 
-    Raises ValidationError if KRATOS_JWKS_B64 is not set.
+    Raises ValidationError if AGENTAREA_AUTH_JWKS_B64 is not set.
     Only call this from services that need JWT verification.
     """
     return AuthSettings()

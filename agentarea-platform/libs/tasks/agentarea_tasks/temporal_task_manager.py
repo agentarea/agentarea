@@ -35,8 +35,8 @@ class TemporalTaskManager(BaseTaskManager):
         # Get settings and configure Temporal executor properly
         settings = get_settings()
         self.temporal_executor = TemporalWorkflowExecutor(
-            namespace=settings.workflow.TEMPORAL_NAMESPACE,
-            server_url=settings.workflow.TEMPORAL_SERVER_URL,
+            namespace=settings.workflow.NAMESPACE,
+            server_url=settings.workflow.TEMPORAL_URL,
         )
 
     def _task_to_agent_task(self, task) -> AgentTask:

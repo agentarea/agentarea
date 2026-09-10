@@ -81,8 +81,8 @@ Some authorization servers do not implement RFC 7591. The flow then needs a
 pre-registered OAuth app, supplied to the API as environment variables:
 
 ```
-MCP_OAUTH_CLIENT_ID=<your registered client id>
-MCP_OAUTH_CLIENT_SECRET=<your registered client secret>
+AGENTAREA_MCP_OAUTH_CLIENT_ID=<your registered client id>
+AGENTAREA_MCP_OAUTH_CLIENT_SECRET=<your registered client secret>
 ```
 
 Register the app with the provider using the callback URL of your deployment.
@@ -136,7 +136,7 @@ server](/guides/mcp/pass-secrets).
 
 **502 naming the issuer and Dynamic Client Registration.** The authorization
 server has no registration endpoint, or registration failed. Register an OAuth
-app manually and set `MCP_OAUTH_CLIENT_ID` and `MCP_OAUTH_CLIENT_SECRET`.
+app manually and set `AGENTAREA_MCP_OAUTH_CLIENT_ID` and `AGENTAREA_MCP_OAUTH_CLIENT_SECRET`.
 
 **The callback reports an invalid or expired state.** Flow state is held in Redis
 with a bounded lifetime and is consumed on first use. A stale browser tab, a

@@ -5,11 +5,12 @@ summary: Move an AgentArea deployment to a new version safely, including which i
 prerequisites:
   - /self-host/backup-and-recovery
 related:
+  - /self-host/env-migration
   - /self-host/database-and-migrations
   - /self-host/kubernetes
   - /self-host/docker-compose
   - /self-host/troubleshooting
-last_updated: 2026-07-29
+last_updated: 2026-09-10
 ---
 
 # Upgrade a deployment
@@ -86,6 +87,11 @@ Capture the database, the object store, and the encryption key. See
 [back up and restore](/self-host/backup-and-recovery).
 
 ### 3. Read what changed
+
+Every environment variable AgentArea reads was renamed to the
+`AGENTAREA_<DOMAIN>_<KEY>` scheme. Old names are ignored rather than
+honoured, so translate `.env` and your Helm values before upgrading:
+[Environment variable migration](/self-host/env-migration).
 
 Check the GitHub release notes for the target version. Look specifically for
 new required configuration — a variable added to `charts/agentarea/config.yaml`

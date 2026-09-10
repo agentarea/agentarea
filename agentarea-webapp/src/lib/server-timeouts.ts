@@ -10,7 +10,7 @@
  * Overridable via env for ops tuning; defaults are deliberately conservative.
  */
 export const KRATOS_WHOAMI_TIMEOUT_MS =
-  Number(process.env.KRATOS_WHOAMI_TIMEOUT_MS) || 5000;
+  Number(process.env.AGENTAREA_AUTH_WHOAMI_TIMEOUT) || 5000;
 
 export const SERVER_API_TIMEOUT_MS =
-  Number(process.env.SERVER_API_TIMEOUT_MS) || 8000;
+  Number(process.env.AGENTAREA_API_TIMEOUT) || 8000;

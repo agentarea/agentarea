@@ -79,7 +79,7 @@ A provider session moves through a manager-owned request lifecycle:
 |---|---|---|
 | Demand | An HTTP file or command request reaches the manager | A matching binding is found or provisioned |
 | Active | The operation runs and renews the active lease; commands heartbeat it | The operation reaches quiescence |
-| Idle | The manager renews the binding to `SANDBOX_TASK_IDLE_TTL` | Another request reactivates it, or the lease expires |
+| Idle | The manager renews the binding to `AGENTAREA_SBX_IDLE_TTL` | Another request reactivates it, or the lease expires |
 | Reclaimed | The provider releases the compute session | New demand provisions a replacement and rehydrates durable state |
 
 The durable task workspace and published artifacts are separate from compute
@@ -177,7 +177,7 @@ other provisioning failures.
 
 **The teardown endpoint is authenticated by a single shared secret.**
 `DELETE /sandbox/task/:id` requires a bearer token compared against
-`SANDBOX_CLEANUP_AUTH_SECRET` in constant time. When that variable is unset every
+`AGENTAREA_SBX_CLEANUP_SECRET` in constant time. When that variable is unset every
 request is rejected, so teardown stops rather than running unauthenticated —
 but the pods it would have retired are then reclaimed only when their leases
 expire.

@@ -237,17 +237,17 @@ class MCPServerInstanceCreated(DomainEvent):
 ### **Key Environment Variables**
 ```yaml
 # AgentArea Backend
-- REDIS_URL=redis://redis:6379          # Event bus with clustering
-- MCP_MANAGER_URL=http://mcp-manager:8000
-- DATABASE_URL=postgresql://...         # With connection pooling
+- AGENTAREA_REDIS_URL=redis://redis:6379          # Event bus with clustering
+- AGENTAREA_MCP_MANAGER_URL=http://mcp-manager:8000
+- AGENTAREA_DB_URL=postgresql://...         # With connection pooling
 - VAULT_URL=https://vault:8200          # Secret management
 - PROMETHEUS_URL=http://prometheus:9090 # Metrics collection
 - JAEGER_URL=http://jaeger:14268        # Distributed tracing
 
 # MCP Infrastructure  
-- REDIS_URL=redis://redis:6379          # Same Redis cluster!
+- AGENTAREA_REDIS_URL=redis://redis:6379          # Same Redis cluster!
 - TEMPLATES_DIR=/app/templates
-- CONTAINER_RUNTIME=podman              # Container management
+- AGENTAREA_MCP_RUNTIME=podman              # Container management
 - METRICS_ENABLED=true                  # Performance monitoring
 ```
 

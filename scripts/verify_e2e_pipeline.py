@@ -42,7 +42,7 @@ from pathlib import Path
 import httpx
 
 
-API_BASE_URL = os.getenv("AGENTAREA_API_URL", "http://localhost:8000")
+AGENTAREA_API_URL = os.getenv("AGENTAREA_API_URL", "http://localhost:8000")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 TEST_WORKSPACE = os.getenv("TEST_WORKSPACE", "e2e-test-workspace")
 
@@ -108,16 +108,16 @@ async def main():
     
     print("=" * 60)
     print("🚀 E2E Pipeline Verification")
-    print(f"   API: {API_BASE_URL}")
+    print(f"   API: {AGENTAREA_API_URL}")
     print(f"   Auth: {'Custom token' if CUSTOM_TOKEN else 'Test token (local dev)'}")
     print("=" * 60)
     
-    async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=60.0, headers=headers) as client:
+    async with httpx.AsyncClient(base_url=AGENTAREA_API_URL, timeout=60.0, headers=headers) as client:
         # Check API is running
         try:
             response = await client.get("/")
             assert response.status_code == 200
-            print(f"\n✅ API is running at {API_BASE_URL}")
+            print(f"\n✅ API is running at {AGENTAREA_API_URL}")
         except Exception as e:
             print(f"\n❌ API not accessible: {e}")
             return 1
@@ -243,7 +243,7 @@ async def main():
     
     # Cleanup
     print("\n🧹 Cleaning up...")
-    async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=30.0, headers=headers) as client:
+    async with httpx.AsyncClient(base_url=AGENTAREA_API_URL, timeout=30.0, headers=headers) as client:
         for agent_id in resources["agents"]:
             try:
                 await client.delete(f"/v1/agents/{agent_id}")

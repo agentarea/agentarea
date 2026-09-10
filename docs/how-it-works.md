@@ -80,7 +80,7 @@ policy does not retroactively change a task already in flight.
 `AgentExecutionWorkflow`. The API returns immediately with a task id. It does not
 wait for the agent.
 
-For local development, `WORKFLOW__EXECUTION_ENGINE=direct` swaps in
+For local development, `AGENTAREA_WF_ENGINE=direct` swaps in
 `DirectTaskManager`, which runs the same logic in-process with no Temporal. Same
 interface, no durability. Production uses Temporal.
 
@@ -173,9 +173,9 @@ It exposes four route groups:
 | `/sandbox/files` | Push files into a sandbox and read them back |
 | `/containers` | Lower-level container lifecycle |
 
-It runs against Kubernetes or Docker, selected by `BACKEND_TYPE`. An unrecognised
+It runs against Kubernetes or Docker, selected by `AGENTAREA_MCP_BACKEND`. An unrecognised
 value is refused at startup rather than falling back to a guess — a silent
-fallback here previously meant deployments that set `BACKEND_TYPE: kubernetes`
+fallback here previously meant deployments that set `AGENTAREA_MCP_BACKEND: kubernetes`
 ran on whatever auto-detection picked.
 
 MCP server instances and agent sandboxes run on the same isolated substrate, so
@@ -211,7 +211,7 @@ not the production contract.
 - **Policy is snapshotted at task creation.** Editing a policy does not affect
   tasks already running. If you need an immediate change to take effect, cancel
   the in-flight tasks.
-- **`WORKFLOW__EXECUTION_ENGINE=direct` has no durability.** It is for
+- **`AGENTAREA_WF_ENGINE=direct` has no durability.** It is for
   development. A crash loses the task, and nothing resumes.
 - **Determinism constrains workflow code.** Non-deterministic calls in workflow
   code produce replay failures that surface later, on the resume path, not when

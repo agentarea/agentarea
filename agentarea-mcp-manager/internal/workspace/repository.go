@@ -84,31 +84,31 @@ type hydrationRevisionRecord struct {
 }
 
 func LoadConfigFromEnv() (RepositoryConfig, error) {
-	maxFiles, err := requiredPositiveInt("SANDBOX_WORKSPACE_MAX_FILES")
+	maxFiles, err := requiredPositiveInt("AGENTAREA_SBX_MAX_FILES")
 	if err != nil {
 		return RepositoryConfig{}, err
 	}
-	maxFileBytes, err := requiredPositiveInt64("SANDBOX_WORKSPACE_MAX_FILE_BYTES")
+	maxFileBytes, err := requiredPositiveInt64("AGENTAREA_SBX_MAX_FILE_SIZE")
 	if err != nil {
 		return RepositoryConfig{}, err
 	}
-	maxBytes, err := requiredPositiveInt64("SANDBOX_WORKSPACE_MAX_BYTES")
+	maxBytes, err := requiredPositiveInt64("AGENTAREA_SBX_MAX_TOTAL_SIZE")
 	if err != nil {
 		return RepositoryConfig{}, err
 	}
-	ttl, err := time.ParseDuration(os.Getenv("SANDBOX_WORKSPACE_SIGNED_URL_TTL"))
+	ttl, err := time.ParseDuration(os.Getenv("AGENTAREA_SBX_S3_URL_TTL"))
 	if err != nil || ttl <= 0 {
-		return RepositoryConfig{}, fmt.Errorf("SANDBOX_WORKSPACE_SIGNED_URL_TTL must be a positive duration")
+		return RepositoryConfig{}, fmt.Errorf("AGENTAREA_SBX_S3_URL_TTL must be a positive duration")
 	}
-	forcePathStyle, err := strconv.ParseBool(os.Getenv("SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE"))
+	forcePathStyle, err := strconv.ParseBool(os.Getenv("AGENTAREA_SBX_S3_PATH_STYLE"))
 	if err != nil {
-		return RepositoryConfig{}, fmt.Errorf("SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE must be true or false")
+		return RepositoryConfig{}, fmt.Errorf("AGENTAREA_SBX_S3_PATH_STYLE must be true or false")
 	}
 	cfg := RepositoryConfig{
-		Bucket:         firstEnv("SANDBOX_WORKSPACE_S3_BUCKET", "ARTIFACTS_BUCKET_NAME"),
-		Prefix:         strings.Trim(os.Getenv("SANDBOX_WORKSPACE_S3_PREFIX"), "/"),
-		Region:         firstEnvOr("us-east-1", "SANDBOX_WORKSPACE_S3_REGION", "AWS_REGION"),
-		Endpoint:       strings.TrimRight(firstEnv("SANDBOX_WORKSPACE_S3_ENDPOINT", "AWS_ENDPOINT_URL"), "/"),
+		Bucket:         firstEnv("AGENTAREA_SBX_S3_BUCKET", "AGENTAREA_S3_ARTIFACTS_BUCKET"),
+		Prefix:         strings.Trim(os.Getenv("AGENTAREA_SBX_S3_PREFIX"), "/"),
+		Region:         firstEnvOr("us-east-1", "AGENTAREA_SBX_S3_REGION", "AGENTAREA_S3_REGION"),
+		Endpoint:       strings.TrimRight(firstEnv("AGENTAREA_SBX_S3_ENDPOINT", "AGENTAREA_S3_ENDPOINT"), "/"),
 		SignedURLTTL:   ttl,
 		MaxFiles:       maxFiles,
 		MaxFileBytes:   maxFileBytes,
@@ -116,7 +116,7 @@ func LoadConfigFromEnv() (RepositoryConfig, error) {
 		ForcePathStyle: forcePathStyle,
 	}
 	if cfg.Bucket == "" {
-		return RepositoryConfig{}, fmt.Errorf("workspace S3 bucket is required; set SANDBOX_WORKSPACE_S3_BUCKET or ARTIFACTS_BUCKET_NAME")
+		return RepositoryConfig{}, fmt.Errorf("workspace S3 bucket is required; set AGENTAREA_SBX_S3_BUCKET or AGENTAREA_S3_ARTIFACTS_BUCKET")
 	}
 	return cfg, nil
 }

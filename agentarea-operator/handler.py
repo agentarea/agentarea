@@ -28,7 +28,7 @@ PLATFORM_WORKSPACE_ID = "platform"
 PLATFORM_PRINCIPAL_ID = "platform"
 
 DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
+    "AGENTAREA_DB_URL",
     "postgresql+psycopg2://user:password@localhost:5432/agentarea",
 )
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)

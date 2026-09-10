@@ -91,7 +91,7 @@ async def _pop_state(redis, state: str) -> dict | None:
 def _callback_uri(request: Request) -> str:
     """Build the absolute callback URI for this request's host."""
     settings = get_settings()
-    api_base = settings.app.API_BASE_URL.rstrip("/")
+    api_base = settings.app.API_URL.rstrip("/")
     return f"{api_base}/v1/mcp-oauth/callback"
 
 
@@ -115,11 +115,11 @@ def _safe_frontend_base(return_to: str) -> str:
     """Validate and normalize frontend redirect base URL.
 
     Allows:
-    - empty return_to (falls back to FRONTEND_BASE_URL)
-    - absolute URL with same origin as FRONTEND_BASE_URL
+    - empty return_to (falls back to AGENTAREA_APP_URL)
+    - absolute URL with same origin as AGENTAREA_APP_URL
     """
     settings = get_settings()
-    default_base = settings.app.FRONTEND_BASE_URL.rstrip("/")
+    default_base = settings.app.APP_URL.rstrip("/")
     if not return_to:
         return default_base
 
@@ -204,8 +204,8 @@ async def oauth_authorize(
         # Fall back to pre-registered credentials from env vars
         import os
 
-        client_id = os.environ.get("MCP_OAUTH_CLIENT_ID", "")
-        client_secret = os.environ.get("MCP_OAUTH_CLIENT_SECRET", "")
+        client_id = os.environ.get("AGENTAREA_MCP_OAUTH_CLIENT_ID", "")
+        client_secret = os.environ.get("AGENTAREA_MCP_OAUTH_CLIENT_SECRET", "")
         if not client_id:
             raise HTTPException(
                 status_code=502,

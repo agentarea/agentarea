@@ -56,23 +56,23 @@ spec:
               containerPort: 3000
               protocol: TCP
           env:
-            - name: ACTIVATION_PORT
+            - name: PORT
               value: "8080"
             - name: MCP_PORT
               value: "3000"
-            - name: LOG_LEVEL
+            - name: AGENTAREA_LOG_LEVEL
               value: "{{ .Values.mcpManager.warmPool.logLevel }}"
-            - name: MAX_EXECUTION_TIMEOUT_SECONDS
+            - name: AGENTAREA_SBX_MAX_EXEC_SECONDS
               value: "{{ .Values.sandboxRuntime.maxExecutionTimeoutSeconds }}"
-            - name: IDLE_TIMEOUT_SECONDS
-              value: "{{ .Values.mcpManager.warmPool.idleTimeoutSeconds }}"
-            - name: SANDBOX_WORKSPACE_MAX_FILES
+            - name: AGENTAREA_SBX_IDLE_SHUTDOWN
+              value: "{{ .Values.mcpManager.warmPool.idleTimeout }}"
+            - name: AGENTAREA_SBX_MAX_FILES
               value: "{{ .Values.sandboxRuntime.workspace.maxFiles }}"
-            - name: SANDBOX_WORKSPACE_MAX_FILE_BYTES
+            - name: AGENTAREA_SBX_MAX_FILE_SIZE
               value: "{{ .Values.sandboxRuntime.workspace.maxFileBytes }}"
-            - name: SANDBOX_WORKSPACE_MAX_BYTES
+            - name: AGENTAREA_SBX_MAX_TOTAL_SIZE
               value: "{{ .Values.sandboxRuntime.workspace.maxBytes }}"
-            - name: SANDBOX_ACTIVATION_AUTH_SECRET
+            - name: AGENTAREA_SBX_ACTIVATION_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.application }}

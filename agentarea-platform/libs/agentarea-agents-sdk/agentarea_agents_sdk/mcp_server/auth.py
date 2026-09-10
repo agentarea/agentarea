@@ -85,7 +85,7 @@ def _www_authenticate_header(resource_path: str | None = None) -> str:
     try:
         from agentarea_common.config import get_settings
 
-        api_base = get_settings().app.API_BASE_URL.rstrip("/")
+        api_base = get_settings().app.API_URL.rstrip("/")
         location = f"{api_base}/.well-known/oauth-protected-resource"
         if resource_path:
             location = f"{location}/{resource_path.strip('/')}"

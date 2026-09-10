@@ -90,7 +90,7 @@ curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/" \
     \"json_spec\": {
       \"type\": \"docker\",
       \"image\": \"mcp/postgres:latest\",
-      \"environment\": {\"DATABASE_URL\": \"postgres://user:pw@host/db\"}
+      \"environment\": {\"AGENTAREA_DB_URL\": \"postgres://user:pw@host/db\"}
     }
   }"
 ```

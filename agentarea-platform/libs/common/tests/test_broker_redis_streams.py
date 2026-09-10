@@ -21,7 +21,7 @@ from agentarea_common.broker import (
 
 pytestmark = pytest.mark.asyncio
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv("AGENTAREA_REDIS_URL", "redis://localhost:6379")
 GROUP = "test-group"
 
 

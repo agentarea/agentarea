@@ -1,31 +1,31 @@
 groups:
   database:
     configVars:
-      POSTGRES_HOST: '{{ include "agentarea.database.host" . }}'
-      POSTGRES_PORT: '{{ .Values.global.database.port }}'
-      POSTGRES_DB: '{{ .Values.global.database.name }}'
-      POSTGRES_SSLMODE: '{{ .Values.global.database.sslMode }}'
+      AGENTAREA_DB_HOST: '{{ include "agentarea.database.host" . }}'
+      AGENTAREA_DB_PORT: '{{ .Values.global.database.port }}'
+      AGENTAREA_DB_NAME: '{{ .Values.global.database.name }}'
+      AGENTAREA_DB_SSLMODE: '{{ .Values.global.database.sslMode }}'
     secrets:
-      - name: POSTGRES_USER
+      - name: AGENTAREA_DB_USER
         secretName: "{{ .Values.global.secrets.postgresql }}"
         key: "username"
-      - name: POSTGRES_PASSWORD
+      - name: AGENTAREA_DB_PASSWORD
         secretName: "{{ .Values.global.secrets.postgresql }}"
         key: "password"
     envExtras:
-      - name: DATABASE_URL
-        value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode={{ .Values.global.database.sslMode }}"
+      - name: AGENTAREA_DB_URL
+        value: "postgresql://$(AGENTAREA_DB_USER):$(AGENTAREA_DB_PASSWORD)@$(AGENTAREA_DB_HOST):$(AGENTAREA_DB_PORT)/$(AGENTAREA_DB_NAME)?sslmode={{ .Values.global.database.sslMode }}"
 
   redis:
-    # REDIS_URL is emitted by the agentarea.redis.urlEnv helper
+    # AGENTAREA_REDIS_URL is emitted by the agentarea.redis.urlEnv helper
     # (templates/_redis-url.tpl) so it can support external providers via
-    # global.redis.url or global.redis.existingSecret. Do NOT add REDIS_URL
+    # global.redis.url or global.redis.existingSecret. Do NOT add AGENTAREA_REDIS_URL
     # back to envExtras here.
     configVars:
-      REDIS_HOST: '{{ include "agentarea.redis.host" . }}'
-      REDIS_PORT: '{{ .Values.global.redis.port }}'
+      AGENTAREA_REDIS_HOST: '{{ include "agentarea.redis.host" . }}'
+      AGENTAREA_REDIS_PORT: '{{ .Values.global.redis.port }}'
     secrets:
-      - name: REDIS_PASSWORD
+      - name: AGENTAREA_REDIS_PASSWORD
         secretName: "{{ .Values.global.secrets.redis }}"
         key: "redis-password"
 
@@ -33,23 +33,23 @@ groups:
     # Only include storage config when RustFS is enabled
     conditional: '{{ .Values.rustfs.enabled }}'
     configVars:
-      AWS_REGION: '{{ .Values.global.storage.region }}'
-      S3_BUCKET_NAME: '{{ .Values.global.storage.bucket }}'
-      ARTIFACTS_BUCKET_NAME: '{{ .Values.global.storage.bucket }}'
-      AWS_ENDPOINT_URL: 'http://{{ include "agentarea.rustfs.host" . }}:9000'
+      AGENTAREA_S3_REGION: '{{ .Values.global.storage.region }}'
+      AGENTAREA_S3_BUCKET: '{{ .Values.global.storage.bucket }}'
+      AGENTAREA_S3_ARTIFACTS_BUCKET: '{{ .Values.global.storage.bucket }}'
+      AGENTAREA_S3_ENDPOINT: 'http://{{ include "agentarea.rustfs.host" . }}:9000'
     secrets:
-      - name: AWS_ACCESS_KEY_ID
+      - name: AGENTAREA_S3_ACCESS_KEY
         secretName: "{{ .Values.global.secrets.rustfs }}"
         key: "root-user"
-      - name: AWS_SECRET_ACCESS_KEY
+      - name: AGENTAREA_S3_SECRET_KEY
         secretName: "{{ .Values.global.secrets.rustfs }}"
         key: "root-password"
 
   temporal:
     configVars:
-      WORKFLOW__TEMPORAL_SERVER_URL: '{{ include "agentarea.temporal.host" . }}:{{ .Values.global.temporal.port }}'
-      WORKFLOW__TEMPORAL_NAMESPACE: '{{ .Values.global.temporal.namespace }}'
-      WORKFLOW__TEMPORAL_TASK_QUEUE: '{{ .Values.global.temporal.taskQueue }}'
+      AGENTAREA_WF_TEMPORAL_URL: '{{ include "agentarea.temporal.host" . }}:{{ .Values.global.temporal.port }}'
+      AGENTAREA_WF_NAMESPACE: '{{ .Values.global.temporal.namespace }}'
+      AGENTAREA_WF_QUEUE: '{{ .Values.global.temporal.taskQueue }}'
 
   temporalServer:
     configVars:
@@ -59,7 +59,7 @@ groups:
       DBNAME: '{{ .Values.temporal.database.name | default "temporal" | quote }}'
       BIND_ON_IP: '0.0.0.0'
     secrets:
-      - name: POSTGRES_USER
+      - name: AGENTAREA_DB_USER
         secretName: "{{ .Values.global.secrets.postgresql }}"
         key: "username"
       - name: POSTGRES_PWD
@@ -70,100 +70,100 @@ groups:
     configVars:
       PORT: '3000'
       NODE_ENV: 'production'
-      API_URL: '{{ include "agentarea.backend.url" . }}'
-      ORY_ADMIN_URL: '{{ include "agentarea.kratosAdminUrl" . }}'
+      AGENTAREA_API_URL: '{{ include "agentarea.backend.url" . }}'
+      AGENTAREA_AUTH_KRATOS_ADMIN_URL: '{{ include "agentarea.kratosAdminUrl" . }}'
       ORY_SDK_URL: '{{ include "agentarea.kratosPublicUrl" . }}'
-      ORY_BROWSER_URL: '{{ include "agentarea.kratosPublicBrowserUrl" . }}'
+      NEXT_PUBLIC_ORY_SDK_URL: '{{ include "agentarea.kratosPublicBrowserUrl" . }}'
       METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
       HEALTH_CHECK_ENABLED: '{{ .Values.global.monitoring.health.enabled }}'
 
   backend:
     configVars:
       PORT: '8000'
-      LOG_LEVEL: 'info'
-      MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
-      MCP_CLIENT_TIMEOUT: '30'
+      AGENTAREA_LOG_LEVEL: 'info'
+      AGENTAREA_MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
+      AGENTAREA_MCP_TIMEOUT: '30'
       API_HOST: '{{ .Values.global.api.host }}'
       API_PORT: '{{ .Values.global.api.port }}'
-      API_BASE_URL: '{{ include "agentarea.backend.apiUrl" . }}'
+      AGENTAREA_API_URL: '{{ include "agentarea.backend.apiUrl" . }}'
       API_AUTH_ENABLED: '{{ .Values.global.api.auth.enabled }}'
-      PUBLIC_S3_ENDPOINT: '{{ .Values.global.storage.publicEndpoint }}'
+      AGENTAREA_S3_PUBLIC_ENDPOINT: '{{ .Values.global.storage.publicEndpoint }}'
       METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
       METRICS_PORT: '{{ .Values.global.monitoring.prometheus.port }}'
       HEALTH_CHECK_ENABLED: '{{ .Values.global.monitoring.health.enabled }}'
       HEALTH_CHECK_PORT: '{{ .Values.global.monitoring.health.port }}'
-      KRATOS_ISSUER: '{{ .Values.kratos.jwt.issuer }}'
-      KRATOS_AUDIENCE: '{{ .Values.kratos.jwt.audience }}'
+      AGENTAREA_AUTH_ISSUER: '{{ .Values.kratos.jwt.issuer }}'
+      AGENTAREA_AUTH_AUDIENCE: '{{ .Values.kratos.jwt.audience }}'
     secrets:
       - name: API_AUTH_HEADER_NAME
         value: "{{ .Values.global.api.auth.headerName }}"
       - name: API_AUTH_HEADER_VALUE
         secretName: "{{ .Values.global.secrets.application }}"
         key: "api-auth-header-value"
-      - name: KRATOS_JWKS_B64
+      - name: AGENTAREA_AUTH_JWKS_B64
         conditional: '{{ .Values.kratos.enabled }}'
         secretName: '{{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName | quote }}'
         key: jwks_b64
 
   mcpManager:
     configVars:
-      LOG_LEVEL: 'INFO'
-      CORE_API_URL: 'http://{{ include "agentarea.fullname" . }}-backend:8000'
-      SERVER_HOST: '0.0.0.0'
-      SERVER_PORT: '80'
+      AGENTAREA_LOG_LEVEL: 'INFO'
+      AGENTAREA_API_URL: 'http://{{ include "agentarea.fullname" . }}-backend:8000'
+      HOST: '0.0.0.0'
+      PORT: '80'
       # Derived from whether mcpManager.dataPlane names a host, so the backend
       # and the address it is given cannot disagree. Half-configuration stops
       # the render — see the helper.
-      BACKEND_TYPE: '{{ include "agentarea.mcpManager.backendType" . }}'
-      # Where MCP containers run when BACKEND_TYPE is dataplane. Empty otherwise,
+      AGENTAREA_MCP_BACKEND: '{{ include "agentarea.mcpManager.backendType" . }}'
+      # Where MCP containers run when AGENTAREA_MCP_BACKEND is dataplane. Empty otherwise,
       # which the manager reads as "no data plane declared".
-      MCP_DATAPLANE_URL: '{{ .Values.mcpManager.dataPlane.url | default "" }}'
-      MCP_DATAPLANE_ALLOW_INSECURE: '{{ .Values.mcpManager.dataPlane.allowInsecure | default false }}'
-      KUBERNETES_ENABLED: 'true'
-      KUBERNETES_NAMESPACE: '{{ .Release.Namespace }}'
-      KUBERNETES_DOMAIN: '{{ .Values.mcpManager.domain | default "mcp.local" }}'
-      KUBERNETES_GATEWAY_NAME: '{{ .Values.mcpManager.gateway.name | default "envoy-gateway" }}'
-      KUBERNETES_GATEWAY_NAMESPACE: '{{ .Values.mcpManager.gateway.namespace | default "envoy-gateway-system" }}'
-      KUBERNETES_RUNTIME_CLASS: '{{ .Values.mcpManager.runtimeClass }}'
-      DEFAULT_ISOLATION_TIER: '{{ required "mcpManager.isolationTier is required" .Values.mcpManager.isolationTier }}'
-      MCP_ALLOWED_IMAGE_REPOSITORIES: '{{ join "," .Values.mcpManager.admission.allowedImageRepositories }}'
-      MCP_ALLOWED_COMMAND_PACKAGES: '{{ join "," .Values.mcpManager.admission.allowedCommandPackages }}'
+      AGENTAREA_MCP_DATAPLANE_URL: '{{ .Values.mcpManager.dataPlane.url | default "" }}'
+      AGENTAREA_MCP_DATAPLANE_INSECURE: '{{ .Values.mcpManager.dataPlane.allowInsecure | default false }}'
+      AGENTAREA_K8S_ENABLED: 'true'
+      AGENTAREA_K8S_NAMESPACE: '{{ .Release.Namespace }}'
+      AGENTAREA_K8S_DOMAIN: '{{ .Values.mcpManager.domain | default "mcp.local" }}'
+      AGENTAREA_K8S_GATEWAY: '{{ .Values.mcpManager.gateway.name | default "envoy-gateway" }}'
+      AGENTAREA_K8S_GATEWAY_NS: '{{ .Values.mcpManager.gateway.namespace | default "envoy-gateway-system" }}'
+      AGENTAREA_K8S_RUNTIME_CLASS: '{{ .Values.mcpManager.runtimeClass }}'
+      AGENTAREA_MCP_ISOLATION: '{{ required "mcpManager.isolationTier is required" .Values.mcpManager.isolationTier }}'
+      AGENTAREA_MCP_ALLOWED_IMAGES: '{{ join "," .Values.mcpManager.admission.allowedImageRepositories }}'
+      AGENTAREA_MCP_ALLOWED_PACKAGES: '{{ join "," .Values.mcpManager.admission.allowedCommandPackages }}'
       # Names the cluster workloads are created in and WINS over the manager's
       # in-cluster credentials. Empty unless mcpManager.executionCluster names a
       # Secret, which the deployment projects at this path.
-      KUBERNETES_KUBECONFIG: '{{ include "agentarea.mcpManager.executionKubeconfigPath" . }}'
-      KUBERNETES_POD_SERVICE_ACCOUNT_NAME: '{{ include "agentarea.mcpRuntimeServiceAccountName" . }}'
-      SANDBOX_WORKSPACE_PROVIDER: 's3'
-      SANDBOX_WORKSPACE_MAX_FILES: '{{ .Values.sandboxRuntime.workspace.maxFiles }}'
-      SANDBOX_WORKSPACE_MAX_FILE_BYTES: '{{ .Values.sandboxRuntime.workspace.maxFileBytes }}'
-      SANDBOX_WORKSPACE_MAX_BYTES: '{{ .Values.sandboxRuntime.workspace.maxBytes }}'
+      AGENTAREA_K8S_KUBECONFIG: '{{ include "agentarea.mcpManager.executionKubeconfigPath" . }}'
+      AGENTAREA_K8S_SERVICE_ACCOUNT: '{{ include "agentarea.mcpRuntimeServiceAccountName" . }}'
+      AGENTAREA_SBX_STORAGE: 's3'
+      AGENTAREA_SBX_MAX_FILES: '{{ .Values.sandboxRuntime.workspace.maxFiles }}'
+      AGENTAREA_SBX_MAX_FILE_SIZE: '{{ .Values.sandboxRuntime.workspace.maxFileBytes }}'
+      AGENTAREA_SBX_MAX_TOTAL_SIZE: '{{ .Values.sandboxRuntime.workspace.maxBytes }}'
       # SANDBOX_{MAX,DEFAULT}_EXECUTION_TIMEOUT_SECONDS,
-      # SANDBOX_EXECUTION_QUEUE_TIMEOUT and SANDBOX_EXECUTION_COMPLETION_GRACE
+      # AGENTAREA_SBX_QUEUE_TIMEOUT and AGENTAREA_SBX_COMPLETION_GRACE
       # are deliberately absent here. agentarea.sandboxRuntime.envs emits them
       # from the same sandboxRuntime values to both mcp-manager and
       # sandbox-runner; declaring them again produced two env entries with one
       # name, which makes server-side apply reject the Deployment.
-      SANDBOX_WORKSPACE_SIGNED_URL_TTL: '{{ .Values.sandboxRuntime.workspace.signedUrlTTL }}'
-      SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE: '{{ .Values.sandboxRuntime.workspace.forcePathStyle }}'
-      KUBERNETES_SECURITY_RUN_AS_NON_ROOT: 'true'
-      KUBERNETES_SECURITY_READ_ONLY_ROOT_FS: 'true'
-      KUBERNETES_DEFAULT_CPU_REQUEST: '100m'
-      KUBERNETES_DEFAULT_CPU_LIMIT: '500m'
-      KUBERNETES_DEFAULT_MEMORY_REQUEST: '128Mi'
-      KUBERNETES_DEFAULT_MEMORY_LIMIT: '512Mi'
-      MCP_FEATURES_ENABLED: '{{ join "," .Values.mcpManager.features.enabled }}'
+      AGENTAREA_SBX_S3_URL_TTL: '{{ .Values.sandboxRuntime.workspace.signedUrlTTL }}'
+      AGENTAREA_SBX_S3_PATH_STYLE: '{{ .Values.sandboxRuntime.workspace.forcePathStyle }}'
+      AGENTAREA_K8S_NON_ROOT: 'true'
+      AGENTAREA_K8S_READONLY_ROOT: 'true'
+      AGENTAREA_K8S_CPU_REQUEST: '100m'
+      AGENTAREA_K8S_CPU_LIMIT: '500m'
+      AGENTAREA_K8S_MEMORY_REQUEST: '128Mi'
+      AGENTAREA_K8S_MEMORY_LIMIT: '512Mi'
+      AGENTAREA_MCP_FEATURES: '{{ join "," .Values.mcpManager.features.enabled }}'
       # The manager is always the demand boundary for container-backed MCP.
       # serverless.enabled controls only whether idle workloads are reclaimed;
       # 0 keeps an on-demand workload running after its first successful start.
-      MCP_IDLE_TIMEOUT: '{{ if .Values.mcpManager.serverless.enabled }}{{ .Values.mcpManager.serverless.idleTimeout }}{{ else }}0{{ end }}'
-      MCP_IDLE_SWEEP_INTERVAL: '{{ .Values.mcpManager.serverless.sweepInterval }}'
-      MCP_REQUEST_LEASE_TTL: '{{ .Values.mcpManager.serverless.requestLeaseTTL }}'
-      MCP_GATEWAY_STARTUP_TIMEOUT: '{{ .Values.mcpManager.serverless.startupTimeout }}'
+      AGENTAREA_MCP_IDLE_TIMEOUT: '{{ if .Values.mcpManager.serverless.enabled }}{{ .Values.mcpManager.serverless.idleTimeout }}{{ else }}0{{ end }}'
+      AGENTAREA_MCP_SWEEP_INTERVAL: '{{ .Values.mcpManager.serverless.sweepInterval }}'
+      AGENTAREA_MCP_LEASE_TTL: '{{ .Values.mcpManager.serverless.requestLeaseTTL }}'
+      AGENTAREA_MCP_STARTUP_TIMEOUT: '{{ .Values.mcpManager.serverless.startupTimeout }}'
     secrets:
       # The shared token the data plane checks on every call. Carried from a
       # Secret rather than the ConfigMap because it grants container creation on
       # that host. Absent unless a data plane is configured.
-      - name: MCP_DATAPLANE_AUTH_TOKEN
+      - name: AGENTAREA_MCP_DATAPLANE_TOKEN
         conditional: '{{ .Values.mcpManager.dataPlane.url }}'
         secretName: "{{ .Values.mcpManager.dataPlane.tokenSecret }}"
         key: "{{ .Values.mcpManager.dataPlane.tokenKey }}"
@@ -175,34 +175,32 @@ groups:
 
   worker:
     configVars:
-      WORKFLOW__USE_WORKFLOW_EXECUTION: 'true'
-      WORKFLOW__WORKFLOW_ENGINE: 'temporal'
-      WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES: '10'
-      WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS: '5'
-      TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY: 'true'
-      DEBUG: 'false'
-      ENVIRONMENT: 'production'
-      MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
+      AGENTAREA_WF_MAX_ACTIVITIES: '10'
+      AGENTAREA_WF_MAX_WORKFLOWS: '5'
+      AGENTAREA_TASK_DISCOVERY_ENABLED: 'true'
+      AGENTAREA_DEBUG: 'false'
+      AGENTAREA_ENV: 'production'
+      AGENTAREA_MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
 
   application:
     secrets:
-      - name: SECRET_MANAGER_ENCRYPTION_KEY
+      - name: AGENTAREA_SECRET_ENCRYPTION_KEY
         secretName: '{{ .Values.global.secrets.application }}'
         key: 'encryption-key'
 
   databaseJobs:
     configVars:
-      POSTGRES_HOST: '{{ include "agentarea.database.host" . }}'
-      POSTGRES_PORT: '{{ .Values.global.database.port }}'
-      POSTGRES_DB: '{{ .Values.global.database.name }}'
-      POSTGRES_SSLMODE: '{{ .Values.global.database.sslMode }}'
+      AGENTAREA_DB_HOST: '{{ include "agentarea.database.host" . }}'
+      AGENTAREA_DB_PORT: '{{ .Values.global.database.port }}'
+      AGENTAREA_DB_NAME: '{{ .Values.global.database.name }}'
+      AGENTAREA_DB_SSLMODE: '{{ .Values.global.database.sslMode }}'
     secrets:
-      - name: POSTGRES_USER
+      - name: AGENTAREA_DB_USER
         secretName: '{{ .Values.global.secrets.postgresql }}'
         key: 'username'
-      - name: POSTGRES_PASSWORD
+      - name: AGENTAREA_DB_PASSWORD
         secretName: '{{ .Values.global.secrets.postgresql }}'
         key: 'password'
     envExtras:
-      - name: DATABASE_URL
-        value: "postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode={{ .Values.global.database.sslMode }}"
+      - name: AGENTAREA_DB_URL
+        value: "postgresql+psycopg2://$(AGENTAREA_DB_USER):$(AGENTAREA_DB_PASSWORD)@$(AGENTAREA_DB_HOST):$(AGENTAREA_DB_PORT)/$(AGENTAREA_DB_NAME)?sslmode={{ .Values.global.database.sslMode }}"
