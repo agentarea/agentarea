@@ -56,17 +56,18 @@ class WorkspaceImportExportService:
         Returns:
             YAML string containing workspace configuration
         """
-        # Export skills
-        skills_yaml = await self._export_skills()
-
-        # Build skill name lookup for agent export
-        skill_id_to_name: dict[str, str] = {}
+        # Read the workspace's skills once and serve both the skills section and
+        # the agent name lookup from it. Only workspace-owned skills are
+        # exportable, so the catalog is not requested at all.
+        skills: list[Skill] = []
         if self.skill_service:
             try:
                 skills = await self.skill_service.list()
-                skill_id_to_name = {str(s.id): s.name for s in skills}
             except Exception as e:
-                logger.warning(f"Failed to build skill lookup: {e}")
+                logger.warning(f"Failed to list skills: {e}")
+
+        skills_yaml = self._skills_to_yaml(skills)
+        skill_id_to_name = {str(s.id): s.name for s in skills}
 
         # Get all workspace-scoped resources (exclude system resources).
         # Refetch each agent with its skills eager-loaded to avoid a
@@ -220,47 +221,35 @@ class WorkspaceImportExportService:
             logger.warning(f"Failed to export provider configs: {e}")
             return []
 
-    async def _export_skills(self) -> list[dict]:
-        """Export skills from the current workspace.
+    def _skills_to_yaml(self, skills: list["Skill"]) -> list[dict]:
+        """Convert already-loaded workspace skills to YAML dictionaries."""
+        result = []
 
-        Returns:
-            List of skill dictionaries in YAML format
-        """
-        if not self.skill_service:
-            return []
+        for skill in skills:
+            # Skip platform-official skills
+            if is_builtin(skill):
+                continue
 
-        try:
-            skills = await self.skill_service.list()
-            result = []
+            skill_dict: dict[str, Any] = {
+                "name": skill.name,
+            }
 
-            for skill in skills:
-                # Skip platform-official skills
-                if is_builtin(skill):
-                    continue
+            if skill.description:
+                skill_dict["description"] = skill.description
 
-                skill_dict: dict[str, Any] = {
-                    "name": skill.name,
-                }
+            # Export based on source type
+            if skill.source_url:
+                # GitHub-sourced skill
+                skill_dict["github"] = skill.source_url
+            elif skill.content:
+                # Content-only skill
+                skill_dict["content"] = skill.content
+            # Note: PATH source type skills are exported as content
+            # since the original path may not be available in target environment
 
-                if skill.description:
-                    skill_dict["description"] = skill.description
+            result.append(skill_dict)
 
-                # Export based on source type
-                if skill.source_url:
-                    # GitHub-sourced skill
-                    skill_dict["github"] = skill.source_url
-                elif skill.content:
-                    # Content-only skill
-                    skill_dict["content"] = skill.content
-                # Note: PATH source type skills are exported as content
-                # since the original path may not be available in target environment
-
-                result.append(skill_dict)
-
-            return result
-        except Exception as e:
-            logger.warning(f"Failed to export skills: {e}")
-            return []
+        return result
 
     async def import_workspace(
         self,

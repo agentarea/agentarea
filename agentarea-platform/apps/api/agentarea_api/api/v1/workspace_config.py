@@ -177,9 +177,12 @@ async def export_workspace_config(
     """
     try:
         yaml_content = await service.export_workspace()
+        # The media type stays the one the route declares (text/plain). Serving
+        # it as application/x-yaml made generated clients read the body as a
+        # binary blob -- their own types promise a string -- so the webapp wrote
+        # a file containing "{}". The .yaml filename comes from the disposition.
         return PlainTextResponse(
             content=yaml_content,
-            media_type="application/x-yaml",
             headers={"Content-Disposition": "attachment; filename=workspace_config.yaml"},
         )
 
