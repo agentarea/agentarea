@@ -28,7 +28,9 @@ class AuthStyle(StrEnum):
     BEARER = "bearer"
     """``Authorization: Bearer <key>`` — the OpenAI-compatible default."""
 
-    API_KEY_HEADER = "api_key_header"
+    # The scanner matches API_KEY in the name; the value is the name of an auth
+    # style, not a credential.
+    API_KEY_HEADER = "api_key_header"  # pragma: allowlist secret
     """A vendor header (``x-api-key``) plus a pinned API version."""
 
     NONE = "none"
