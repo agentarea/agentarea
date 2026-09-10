@@ -13,14 +13,14 @@ which. Existing rows are untouched — this changes what a future INSERT may omi
 not what is already stored.
 
 Revision ID: 20260907_1200_drop_defaults
-Revises: 20260902_1000_drop_client_src
+Revises: 20260908_1000_multi_catalog_conn
 """
 
 from alembic import op
 from sqlalchemy import text
 
 revision = "20260907_1200_drop_defaults"
-down_revision = "20260902_1000_drop_client_src"
+down_revision = "20260908_1000_multi_catalog_conn"
 branch_labels = None
 depends_on = None
 
