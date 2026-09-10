@@ -271,20 +271,20 @@ class LLMModel:
         return None
 
     def _supports_direct_streaming(self) -> bool:
-        """Check if this provider supports direct OpenAI-compatible streaming.
+        """Whether we can stream from the endpoint ourselves instead of via LiteLLM.
 
-        We use direct streaming (bypassing LiteLLM) for providers with
-        OpenAI-compatible APIs to properly capture reasoning/thinking content
-        that LiteLLM drops during streaming.
+        The only requirement is an explicit endpoint: a provider that gave us
+        a base URL is one we can speak OpenAI-compatible HTTP to directly,
+        which is how reasoning/thinking deltas survive — LiteLLM drops them
+        while streaming.
+
+        The provider's *name* says nothing about this. There used to be a
+        branch matching one vendor by substring, but ``_get_base_url()``
+        returns a URL only when ``endpoint_url`` is set, so reaching that
+        branch already implied the answer was yes; it could never change the
+        result.
         """
-        if not self._get_base_url():
-            return False
-        # Ollama and any provider with a custom endpoint (OpenAI-compatible)
-        if self.provider_type and "ollama" in self.provider_type:
-            return True
-        if self.endpoint_url:
-            return True
-        return False
+        return self._get_base_url() is not None
 
     async def _stream_openai_compatible(self, request: LLMRequest) -> AsyncIterator[LLMResponse]:
         """Stream from an OpenAI-compatible API directly via httpx.
