@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { type Node, type NodeProps } from "@xyflow/react";
 import {
   ArrowDownToLine,
   ArrowUpRight,
@@ -37,9 +36,7 @@ const icons = {
   unknown: HelpCircle,
 };
 
-export default function NetworkRegion({
-  data,
-}: NodeProps<Node<NetworkRegionData>>) {
+export default function NetworkRegion({ data }: { data: NetworkRegionData }) {
   const t = useTranslations("NetworkPage.flowMap");
   const lane =
     data.kind === "workspace" ||

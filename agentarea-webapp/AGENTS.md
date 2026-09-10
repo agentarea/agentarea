@@ -48,6 +48,8 @@ agentarea-webapp/
 - **List pages (grid+table)**: use `@/components/GridAndTableViews` — pass `data`, `columns`, `cardContent`, `itemLink`, `routeChange`, `searchParams`. Do NOT hand-roll a `<ul>`/`<div className="grid">` list or a bespoke card per page. Reference: `mcp-servers/ServerList.tsx`, `admin/providers/page.tsx`, `clients/page.tsx`, `projects/components/ProjectsContent.tsx`.
 - **Entity icons**: single source of truth in `@/lib/entity-icons` (`ENTITY_ICONS[kind]` / `<EntityIcon kind="agent" />`). Kinds: agent→Bot, mcp→Server, skill→Sparkles, project→FolderTree, client→Plug, tool→Wrench, trigger→Zap. Do NOT inline `Bot`/`Server`/`Sparkles`/`Plug` from lucide for an entity — add the kind to the map instead.
 
+- **Network renderer**: use Cytoscape for Network, Access Graph, and Organization. Keep interactive cards as ordinary React overlays when needed. Preserve this renderer during visual redesigns; do not reintroduce React Flow for card styling.
+
 ## KEY HOOKS
 
 - `useAuth()` - User authentication state
