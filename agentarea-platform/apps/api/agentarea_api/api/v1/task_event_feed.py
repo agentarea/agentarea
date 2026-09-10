@@ -20,8 +20,14 @@ from agentarea_common.events.task_stream import TaskEventEnvelope, iter_task_eve
 from sqlalchemy import text
 
 
-async def _load_snapshot(task_id: str) -> list[TaskEventEnvelope]:
-    """Full task history from the durable event log, in order (catch-up)."""
+async def _load_snapshot(task_id: str, workspace_id: str) -> list[TaskEventEnvelope]:
+    """Full task history from the durable event log, in order (catch-up).
+
+    Scoped to ``workspace_id`` as well as ``task_id``. Event payloads carry
+    message content and tool arguments, so a query keyed on the task id alone
+    reads across every tenant and depends entirely on the caller having checked
+    ownership first — see ``TaskEventRepository.list_for_task``.
+    """
     from agentarea_api.api.deps.database import get_db_session
 
     async with get_db_session() as session:
@@ -31,9 +37,10 @@ async def _load_snapshot(task_id: str) -> list[TaskEventEnvelope]:
                     "SELECT id, event_type, timestamp, data "
                     "FROM task_events "
                     "WHERE task_id = :task_id "
+                    "AND workspace_id = :workspace_id "
                     "ORDER BY timestamp ASC"
                 ),
-                {"task_id": task_id},
+                {"task_id": task_id, "workspace_id": workspace_id},
             )
         ).fetchall()
     return [
@@ -55,17 +62,23 @@ CHUNK_EVENT_TYPES = frozenset({LLM_CHUNK})
 async def open_task_event_feed(
     task_id: UUID | str,
     *,
+    workspace_id: str,
     terminal_types: frozenset[str],
     exclude_types: frozenset[str] = frozenset(),
     include_chunks: bool = True,
 ) -> AsyncIterator[TaskEventEnvelope]:
     """Yield a task's events (catch-up then live) and close the broker when done.
 
+    ``workspace_id`` scopes the durable catch-up read; it is required so that a
+    caller cannot open a feed without naming the tenant whose events it is
+    entitled to, independently of the ownership check it already made.
     ``terminal_types`` ends the feed after a terminal event; ``exclude_types``
     drops event types the caller does not want. ``include_chunks`` defaults to
     True (high-volume ``llm.call.chunk`` events are surfaced); pass False to add
     the chunk types to ``exclude_types``.
     """
+    if not workspace_id:
+        raise ValueError("workspace_id is required to open a task event feed")
     if not include_chunks:
         exclude_types = exclude_types | CHUNK_EVENT_TYPES
     tid = str(task_id)
@@ -76,7 +89,7 @@ async def open_task_event_feed(
         async for env in iter_task_event_feed(
             stream=stream,
             task_id=tid,
-            snapshot=lambda: _load_snapshot(tid),
+            snapshot=lambda: _load_snapshot(tid, workspace_id),
             terminal_types=terminal_types,
             exclude_types=exclude_types,
         ):
