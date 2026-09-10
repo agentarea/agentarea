@@ -80,6 +80,8 @@ write_env_if_missing() {
   rustfs_access_key="agentarea"
   rustfs_secret_key=$(random_token 32)
   secret_key=$(fernet_key)
+  sandbox_activation_secret=$(random_token 32)
+  sandbox_cleanup_secret=$(random_token 32)
   kratos_cookie_secret=$(random_secret_32)
   kratos_cipher_secret=$(random_secret_32)
   hydra_system_secret=$(random_secret_32)
@@ -102,6 +104,12 @@ ARTIFACTS_BUCKET=artifacts
 
 SECRET_MANAGER_TYPE=database
 SECRET_MANAGER_ENCRYPTION_KEY=$secret_key
+
+# HMAC secrets the worker uses to sign sandbox activation and cleanup calls to
+# the MCP manager. docker-compose.yaml declares both with no default, so the
+# stack refuses to start unless they are set.
+SANDBOX_ACTIVATION_AUTH_SECRET=$sandbox_activation_secret
+SANDBOX_CLEANUP_AUTH_SECRET=$sandbox_cleanup_secret
 
 ORY_BROWSER_URL=http://localhost:4433
 API_BROWSER_URL=http://localhost:8000

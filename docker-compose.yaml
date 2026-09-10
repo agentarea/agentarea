@@ -11,7 +11,7 @@ services:
       # S3 settings
       - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
-      - AWS_REGION=${RUSTFS_REGION}
+      - AWS_REGION=${RUSTFS_REGION:-us-east-1}
       - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
       - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
       - AWS_ENDPOINT_URL=http://rustfs:9000
@@ -59,7 +59,7 @@ services:
     environment:
       - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
-      - AWS_REGION=${RUSTFS_REGION}
+      - AWS_REGION=${RUSTFS_REGION:-us-east-1}
       - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
       - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
       - AWS_ENDPOINT_URL=http://rustfs:9000
