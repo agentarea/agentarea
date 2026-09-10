@@ -1,7 +1,10 @@
-.PHONY: help dev build ensure-env up up-dev down restart down-clean \
-	frontend-dev docs-dev agentarea-platform-api agentarea-platform-worker agentarea-platform-test agentarea-platform-lint \
-	k8s-setup k8s-test k8s-build-images helm-test helm-gen \
-	lint-go build-go preflight
+.PHONY: help frontend-dev docs-dev \
+	agentarea-platform-api agentarea-platform-worker agentarea-platform-test \
+	agentarea-platform-lint agentarea-platform-format agentarea-platform-sync \
+	build-go lint-go test-go \
+	build ensure-env up up-dev down down-dev down-clean restart restart-dev logs \
+	k8s-build-images helm-gen preflight validate-icons \
+	clean docker-clean full-clean
 
 .DEFAULT_GOAL := help
 
@@ -15,12 +18,12 @@ NC := \033[0m # No Color
 
 help: ## Display this help message
 	@echo "$(BLUE)Available targets:$(NC)"
-	@awk 'BEGIN {FS = ":.*##"; printf "\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(YELLOW)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "\n"} /^[a-zA-Z0-9_-]+:.*?##/ { printf "  $(GREEN)%-24s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(YELLOW)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 ##@ Development - Frontend
 
 frontend-dev: ## Start frontend development server
-	cd agentarea-webapp && npm run dev
+	cd agentarea-webapp && pnpm dev
 
 docs-dev: ## Start documentation development server
 	cd docs && npm run dev
@@ -56,11 +59,6 @@ lint-go: ## Lint Go code
 test-go: ## Run Go tests
 	cd agentarea-mcp-manager && go test ./...
 
-##@ Setup
-
-sync-registries: ## Download registry data locally (optional — bootstrap fetches from S3 automatically)
-	@bash scripts/sync-registries.sh
-
 ##@ Docker - Development Environment
 
 build: ## Build development Docker images
@@ -76,36 +74,28 @@ up: ensure-env ## Start the published-image stack — the same one users get. Do
 up-dev: ensure-env ## Start the development stack, built from your source. Use this to develop.
 	docker compose -f docker-compose.dev.yaml up
 
-down: ## Stop development environment
+down: ## Stop the published-image stack
 	docker compose -f docker-compose.yaml down
 
-down-dev: ## Stop development environment
+down-dev: ## Stop the development stack
 	docker compose -f docker-compose.dev.yaml down
 
-down-clean: ## Stop and clean development environment (removes volumes)
+down-clean: ## Stop the development stack and remove its volumes
 	docker compose -f docker-compose.dev.yaml down -v
 
-restart: ## Restart development environment
-	docker compose restart
+restart: ## Restart the published-image stack
+	docker compose -f docker-compose.yaml restart
 
-restart-dev: ## Restart development environment
+restart-dev: ## Restart the development stack
 	docker compose -f docker-compose.dev.yaml restart
 
-logs: ## Follow logs from all services
+logs: ## Follow logs from the development stack
 	docker compose -f docker-compose.dev.yaml logs -f
 
 ##@ Kubernetes
 
-k8s-setup: ## Install and setup Minikube
-	@bash scripts/install-minikube.sh
-
 k8s-build-images: ## Build and load images into Minikube
 	@bash scripts/build-images-minikube.sh
-
-k8s-test: helm-test ## Run Kubernetes tests (alias for helm-test)
-
-helm-test: ## Test Helm chart installation
-	@bash scripts/test-chart.sh
 
 helm-gen: ## Generate per-group env tpl files from config.yaml
 	python3 scripts/generate_env_tpls.py
