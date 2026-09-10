@@ -18,10 +18,16 @@ fail() {
   exit 1
 }
 
+# `curl | sh` leaves stdin holding the script, so prompts read the terminal
+# directly. A provisioning script or a CI job has no terminal at all.
+has_tty() {
+  [ -r /dev/tty ] && { : < /dev/tty; } 2>/dev/null
+}
+
 ask() {
   prompt="$1"
   default="$2"
-  if [ -r /dev/tty ] && { : < /dev/tty; } 2>/dev/null; then
+  if has_tty; then
     printf '%s ' "$prompt" > /dev/tty
     IFS= read -r answer < /dev/tty || answer=""
   else
@@ -69,26 +75,21 @@ download() {
   mv "$tmp" "$target_path"
 }
 
-write_env_if_missing() {
+# Idempotent on purpose. Seeds the non-secret configuration when .env is absent,
+# then adds any managed credential the file does not already supply, leaving
+# every value you have set alone. Re-running the installer over an existing
+# install is therefore the upgrade path: a release that starts requiring a new
+# secret fills it in instead of leaving the stack unable to boot.
+ensure_env() {
   env_file="$AGENTAREA_HOME/.env"
-  if [ -f "$env_file" ]; then
-    say "Keeping existing $env_file"
-    return
-  fi
+  jwks_file="$AGENTAREA_HOME/config/auth/kratos/jwks.json"
 
-  postgres_password=$(random_token 24)
-  rustfs_access_key="agentarea"
-  rustfs_secret_key=$(random_token 32)
-  secret_key=$(fernet_key)
-  sandbox_activation_secret=$(random_token 32)
-  sandbox_cleanup_secret=$(random_token 32)
-  kratos_cookie_secret=$(random_secret_32)
-  kratos_cipher_secret=$(random_secret_32)
-  hydra_system_secret=$(random_secret_32)
-  hydra_cookie_secret=$(random_secret_32)
-  kratos_jwks_public_b64=$(generate_jwks "$AGENTAREA_HOME/config/auth/kratos/jwks.json")
+  if [ ! -f "$env_file" ]; then
+    postgres_password=$(random_token 24)
+    rustfs_secret_key=$(random_token 32)
+    secret_key=$(fernet_key)
 
-  cat > "$env_file" <<EOF
+    cat > "$env_file" <<EOF
 VERSION=latest
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=$postgres_password
@@ -96,7 +97,7 @@ POSTGRES_DB=agentarea
 TEMPORAL_DB=temporal
 KRATOS_DB=kratos
 
-RUSTFS_ACCESS_KEY=$rustfs_access_key
+RUSTFS_ACCESS_KEY=agentarea
 RUSTFS_SECRET_KEY=$rustfs_secret_key
 RUSTFS_REGION=us-east-1
 DOCUMENTS_BUCKET=documents
@@ -104,12 +105,6 @@ ARTIFACTS_BUCKET=artifacts
 
 SECRET_MANAGER_TYPE=database
 SECRET_MANAGER_ENCRYPTION_KEY=$secret_key
-
-# HMAC secrets the worker uses to sign sandbox activation and cleanup calls to
-# the MCP manager. docker-compose.yaml declares both with no default, so the
-# stack refuses to start unless they are set.
-SANDBOX_ACTIVATION_AUTH_SECRET=$sandbox_activation_secret
-SANDBOX_CLEANUP_AUTH_SECRET=$sandbox_cleanup_secret
 
 ORY_BROWSER_URL=http://localhost:4433
 API_BROWSER_URL=http://localhost:8000
@@ -130,24 +125,28 @@ OIDC_GITHUB_CLIENT_SECRET=
 
 KRATOS_ISSUER=http://localhost:4433
 KRATOS_AUDIENCE=agentarea-api
-# Public half of the keypair generated for this install. Kratos signs with the
-# private half in config/auth/kratos/jwks.json; the backend only verifies.
-KRATOS_JWKS_B64=$kratos_jwks_public_b64
-
-KRATOS_SECRETS_COOKIE=$kratos_cookie_secret
-KRATOS_SECRETS_CIPHER=$kratos_cipher_secret
-HYDRA_SECRETS_SYSTEM=$hydra_system_secret
-HYDRA_SECRETS_COOKIE=$hydra_cookie_secret
 EOF
-  chmod 600 "$env_file"
-  say "Created $env_file"
+    chmod 600 "$env_file"
+    say "Created $env_file"
+  fi
+
+  pending=$(pending_secret_keys "$env_file" "$jwks_file")
+  if [ -z "$pending" ]; then
+    say "Credentials in $env_file are complete"
+    return
+  fi
+
+  write_secret_keys "$env_file" "$pending" "$jwks_file"
+  say "Added credentials to $env_file:"
+  for key in $pending; do
+    say "  $key"
+  done
 }
 
 install_bundle() {
   mkdir -p "$AGENTAREA_HOME"
 
   download "docker-compose.yaml" "$AGENTAREA_HOME/docker-compose.yaml"
-  download "deploy/quickstart/agentarea" "$AGENTAREA_HOME/agentarea"
   download ".env.example" "$AGENTAREA_HOME/.env.example"
   download "config/auth/kratos/kratos.yml" "$AGENTAREA_HOME/config/auth/kratos/kratos.yml"
   download "config/auth/kratos/identity.schema.json" "$AGENTAREA_HOME/config/auth/kratos/identity.schema.json"
@@ -156,13 +155,29 @@ install_bundle() {
   download "agentarea-platform/temporal-config/development-sql.yaml" "$AGENTAREA_HOME/agentarea-platform/temporal-config/development-sql.yaml"
   download "scripts/lib/secrets.sh" "$AGENTAREA_HOME/scripts/lib/secrets.sh"
 
-  # Credential generation lives in one place so the quickstart and the dev
-  # bootstrap cannot drift apart.
+  # Credential generation and the list of required keys live in one place so the
+  # quickstart and the dev bootstrap cannot drift apart.
   # shellcheck source=lib/secrets.sh
   . "$AGENTAREA_HOME/scripts/lib/secrets.sh"
 
-  chmod +x "$AGENTAREA_HOME/agentarea"
-  write_env_if_missing
+  ensure_env
+}
+
+compose() {
+  COMPOSE_PROJECT_NAME=agentarea docker compose \
+    --env-file "$AGENTAREA_HOME/.env" \
+    -f "$AGENTAREA_HOME/docker-compose.yaml" "$@"
+}
+
+open_urls() {
+  cat <<EOF
+AgentArea URLs:
+  Web app:       http://localhost:3000
+  API:           http://localhost:8000
+  API docs:      http://localhost:8000/docs
+  MCP manager:   http://localhost:7999
+  Kratos public: http://localhost:4433
+EOF
 }
 
 say "AgentArea quickstart bootstrap"
@@ -177,24 +192,40 @@ fi
 install_bundle
 
 say ""
-say "AgentArea runtime bundle is ready."
+say "AgentArea runtime bundle is ready in $AGENTAREA_HOME"
 say ""
-say "Configuration file:"
-say "  $AGENTAREA_HOME/.env"
-say ""
-say "Next commands:"
-say "  $AGENTAREA_HOME/agentarea doctor"
-say "  $AGENTAREA_HOME/agentarea pull"
-say "  $AGENTAREA_HOME/agentarea up"
-say "  $AGENTAREA_HOME/agentarea config"
+say "Your settings live in .env. Everything else in this directory is managed"
+say "by the installer and is replaced when you run it again, which is also how"
+say "you pick up a release that requires a new setting."
 say ""
 
-start_now=$(ask "Start AgentArea now? [y/N]" "N")
+if ! have docker; then
+  say "Install Docker, then start the stack with:"
+  say "  cd $AGENTAREA_HOME && docker compose up -d"
+  exit 0
+fi
+
+# Starting is the expected next step, so an interactive run defaults to yes. A
+# run with no terminal takes the opposite default and requires AGENTAREA_YES=1,
+# so piping the installer into another program never launches containers as a
+# side effect of installing them.
+if [ "${AGENTAREA_YES:-}" = "1" ]; then
+  start_now=Y
+elif has_tty; then
+  start_now=$(ask "Start AgentArea now? [Y/n]" "Y")
+else
+  start_now=N
+fi
+
 case "$start_now" in
-  y|Y|yes|YES)
-    "$AGENTAREA_HOME/agentarea" up
+  n | N | no | NO)
+    say "Skipped startup. Start it with:"
+    say "  cd $AGENTAREA_HOME && docker compose up -d"
     ;;
   *)
-    say "Skipped service startup."
+    say "Starting AgentArea (first run pulls images, which takes a few minutes)..."
+    compose up -d
+    say ""
+    open_urls
     ;;
 esac

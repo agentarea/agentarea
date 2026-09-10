@@ -75,3 +75,82 @@ generate_jwks() {
   printf '{"keys":[{"kty":"EC","kid":"%s","use":"sig","alg":"ES256","crv":"P-256","x":"%s","y":"%s"}]}' \
     "$jwks_kid" "$x_b64" "$y_b64" | openssl base64 -A
 }
+
+# Every credential the compose files declare with no default, listed once. Both
+# callers drive this list, so a key added for one path cannot go missing on the
+# other — which is exactly how the sandbox secrets came to block a fresh install
+# while the checkout path had them.
+MANAGED_SECRET_KEYS='KRATOS_JWKS_B64
+KRATOS_SECRETS_COOKIE
+KRATOS_SECRETS_CIPHER
+HYDRA_SECRETS_SYSTEM
+HYDRA_SECRETS_COOKIE
+HYDRA_PAIRWISE_SALT
+SANDBOX_ACTIVATION_AUTH_SECRET
+SANDBOX_CLEANUP_AUTH_SECRET
+SANDBOX_FILE_AUTH_SECRET
+SANDBOX_CONTROL_AUTH_SECRET
+MCP_GATEWAY_AUTH_SECRET'
+
+# $1 key, $2 path receiving the Kratos private JWKS.
+secret_value_for() {
+  case "$1" in
+    KRATOS_JWKS_B64) generate_jwks "$2" ;;
+    # HMAC keys, not Ory cipher secrets, so no 32-character constraint. The
+    # glob also covers sandbox secrets added later.
+    SANDBOX_*_AUTH_SECRET | MCP_GATEWAY_AUTH_SECRET) random_token 32 ;;
+    *) random_secret_32 ;;
+  esac
+}
+
+# A key counts as set only when it has a non-empty value: compose declares these
+# as ${VAR:?}, which rejects an empty assignment exactly like a missing one, so
+# `KEY=` must not read as "already configured".
+env_has_value() {
+  [ -f "$1" ] && grep -qE "^$2=." "$1"
+}
+
+# Managed keys that $1 does not supply, one per line; empty means nothing to do.
+# KRATOS_JWKS_B64 counts as missing when the private half at $2 is gone: the
+# variable carries only the public half, so without that file Kratos cannot
+# sign however configured the variable looks. $2 is gitignored, so a fresh
+# checkout drops it while .env keeps the stale public half.
+pending_secret_keys() {
+  for _key in $MANAGED_SECRET_KEYS; do
+    if ! env_has_value "$1" "$_key"; then
+      printf '%s\n' "$_key"
+    elif [ "$_key" = KRATOS_JWKS_B64 ] && [ ! -f "$2" ]; then
+      printf '%s\n' "$_key"
+    fi
+  done
+}
+
+# Writes the newline-separated keys in $2 into the env file $1, replacing any
+# assignment those keys already have and leaving every other line untouched.
+# $3 receives the Kratos private JWKS.
+write_secret_keys() {
+  _env="$1"
+  _keys="$2"
+  _jwks="$3"
+  [ -n "$_keys" ] || return 0
+
+  if [ -f "$_env" ]; then
+    _filter=$(printf '%s' "$_keys" | tr '\n' '|' | sed 's/|$//')
+    _tmp="$_env.tmp"
+    grep -v -E "^($_filter)=" "$_env" > "$_tmp" || true
+    mv "$_tmp" "$_env"
+  fi
+
+  {
+    printf '\n# --- generated credentials, unique to this machine; do not commit ---\n'
+    for _key in $_keys; do
+      if [ "$_key" = KRATOS_JWKS_B64 ]; then
+        printf '# Public half only. Kratos signs with the private half in\n'
+        printf '# %s.\n' "$_jwks"
+      fi
+      printf '%s=%s\n' "$_key" "$(secret_value_for "$_key" "$_jwks")"
+    done
+  } >> "$_env"
+
+  chmod 600 "$_env"
+}
