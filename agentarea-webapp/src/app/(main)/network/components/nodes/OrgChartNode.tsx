@@ -1,14 +1,6 @@
 "use client";
 
-import { useLayoutEffect } from "react";
 import { useTranslations } from "next-intl";
-import {
-  Handle,
-  Position,
-  useUpdateNodeInternals,
-  type Node,
-  type NodeProps,
-} from "@xyflow/react";
 import { Globe, HelpCircle, LockKeyhole, Users } from "lucide-react";
 import { EntityIcon, type EntityKind } from "@/lib/entity-icons";
 import { cn } from "@/lib/utils";
@@ -23,14 +15,7 @@ const kinds: Record<NetworkFlowNodeData["type"], EntityKind> = {
   trigger: "trigger",
 };
 
-export default function OrgChartNode({
-  id,
-  data,
-}: NodeProps<Node<NetworkFlowNodeData>>) {
-  const updateNodeInternals = useUpdateNodeInternals();
-  useLayoutEffect(() => {
-    updateNodeInternals(id);
-  }, [id, data._horizontal, data._targetTop, updateNodeInternals]);
+export default function OrgChartNode({ data }: { data: NetworkFlowNodeData }) {
   const t = useTranslations("NetworkPage.orgChart");
   const networkText = useTranslations("NetworkPage.networkMap");
   const scopeText = useTranslations("NetworkPage.accessDetails");
@@ -44,23 +29,20 @@ export default function OrgChartNode({
     <div
       title={data.label}
       className={cn(
-        "h-[104px] w-[240px] rounded-lg border border-border bg-background shadow-sm transition-[opacity,box-shadow,border-color] motion-reduce:transition-none",
+        "relative h-[104px] w-[240px] rounded-lg border border-border bg-background shadow-sm transition-[opacity,box-shadow,border-color] motion-reduce:transition-none",
         "hover:border-primary/50 hover:shadow-md",
         data._dimmed && "opacity-30",
         data._highlighted && "border-primary ring-2 ring-primary/20"
       )}
     >
-      <Handle
-        type="target"
-        position={
-          data._targetTop
-            ? Position.Top
-            : data._horizontal
-              ? Position.Left
-              : Position.Top
-        }
-        isConnectable={false}
-        className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"
+      <span
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute h-1.5 w-1.5 rounded-full border border-background bg-zinc-400 dark:bg-zinc-500",
+          data._targetTop || !data._horizontal
+            ? "left-1/2 top-0 -translate-x-1/2 -translate-y-1/2"
+            : "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        )}
       />
       <div className="flex items-start gap-3 px-4 pt-3.5">
         <div
@@ -130,11 +112,14 @@ export default function OrgChartNode({
           </span>
         )}
       </div>
-      <Handle
-        type="source"
-        position={data._horizontal ? Position.Right : Position.Bottom}
-        isConnectable={false}
-        className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"
+      <span
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute h-1.5 w-1.5 rounded-full border border-background bg-zinc-400 dark:bg-zinc-500",
+          data._horizontal
+            ? "right-0 top-1/2 -translate-y-1/2 translate-x-1/2"
+            : "bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2"
+        )}
       />
     </div>
   );

@@ -1,14 +1,6 @@
 "use client";
 
-import { useLayoutEffect } from "react";
 import { useTranslations } from "next-intl";
-import {
-  Handle,
-  Position,
-  useUpdateNodeInternals,
-  type Node,
-  type NodeProps,
-} from "@xyflow/react";
 import type { NetworkPerson } from "@/api/client/types.gen";
 import { EntityIcon } from "@/lib/entity-icons";
 import { cn } from "@/lib/utils";
@@ -38,18 +30,14 @@ export interface NetworkPeopleNodeData extends Record<string, unknown> {
   onRetry: () => void;
 }
 export default function NetworkPeopleNode({
-  id,
   data,
-}: NodeProps<Node<NetworkPeopleNodeData>>) {
+}: {
+  data: NetworkPeopleNodeData;
+}) {
   const t = useTranslations("NetworkPage.people");
   const people = visiblePeople(data.people, data.selectedId);
-  const update = useUpdateNodeInternals();
-  const signature = people.map((person) => person.user_id).join("|");
-  useLayoutEffect(() => {
-    update(id);
-  }, [id, signature, data.status, update]);
   return (
-    <div className="h-full w-60 rounded-lg border border-border bg-background shadow-sm">
+    <div className="relative h-full w-60 rounded-lg border border-border bg-background shadow-sm">
       <header className="flex h-[47px] items-center gap-2 border-b border-border px-3">
         <EntityIcon kind="person" className="h-4 w-4 text-primary" />
         <span className="flex-1 text-xs font-semibold">{t("title")}</span>
@@ -71,7 +59,7 @@ export default function NetworkPeopleNode({
               onKeyDown={(event) => event.stopPropagation()}
               title={person.email ?? person.user_id}
               className={cn(
-                "nodrag nopan flex h-11 w-full items-center gap-2 px-3 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
+                "flex h-11 w-full items-center gap-2 px-3 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
                 person.user_id === data.selectedId && "bg-primary/10"
               )}
             >
@@ -87,13 +75,10 @@ export default function NetworkPeopleNode({
                   t("unnamed", { id: person.user_id.slice(0, 8) })}
               </span>
             </button>
-            <Handle
-              id={`person:${person.user_id}`}
-              type="source"
-              position={Position.Right}
-              isConnectable={false}
+            <span
+              aria-hidden="true"
               style={{ top: 48 + index * 44 + 22 }}
-              className="!h-1.5 !w-1.5 !border-background !bg-primary"
+              className="pointer-events-none absolute right-0 h-1.5 w-1.5 -translate-y-1/2 translate-x-1/2 rounded-full border border-background bg-primary"
             />
           </div>
         ))
@@ -120,7 +105,7 @@ export default function NetworkPeopleNode({
           data.status === "error" ? data.onRetry() : data.onDirectory();
         }}
         onKeyDown={(event) => event.stopPropagation()}
-        className="nodrag nopan flex h-[35px] w-full items-center rounded-b-lg border-t border-border px-3 text-[11px] font-medium text-primary hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+        className="flex h-[35px] w-full items-center rounded-b-lg border-t border-border px-3 text-[11px] font-medium text-primary hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
       >
         {t(data.status === "error" ? "retry" : "directory")}
       </button>

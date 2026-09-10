@@ -1,34 +1,20 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type RefObject,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import {
-  Background,
-  BackgroundVariant,
-  MarkerType,
-  Panel,
-  ReactFlow,
-  useReactFlow,
-  type Edge,
-  type Node,
-  type ReactFlowInstance,
-} from "@xyflow/react";
 import { Focus, Minus, Plus, Search, Users, X } from "lucide-react";
-import "@xyflow/react/dist/style.css";
 import type {
   EffectivePolicy,
   NetworkPeopleAccessResponse,
   NetworkPersonAgentAccess,
 } from "@/api/client/types.gen";
 import { cn } from "@/lib/utils";
-import DirectionalEdge from "../components/edges/DirectionalEdge";
+import NetworkCanvas from "../components/NetworkCanvas";
+import type {
+  CanvasControls,
+  CanvasEdge as Edge,
+  CanvasNode as Node,
+} from "../components/networkCanvasTypes";
 import NetworkConnectionPanel from "../components/NetworkConnectionPanel";
 import NetworkPeopleNode, {
   peopleRosterHeight,
@@ -85,63 +71,8 @@ type MapNodeData =
   | NetworkAgentData
   | NetworkRegionData
   | NetworkPeopleNodeData;
-const nodeTypes = {
-  people: NetworkPeopleNode,
-  region: NetworkRegion,
-  organization: OrgChartNode,
-  networkAgent: NetworkAgentNode,
-};
-const edgeTypes = { directional: DirectionalEdge };
-const fitOptions = { padding: 0.12, maxZoom: 1 };
 const controlClass =
   "flex h-9 w-9 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
-
-function FitLayout({
-  nodes,
-  detailsOpen,
-  canvasRef,
-  focused,
-}: {
-  nodes: Node<MapNodeData>[];
-  detailsOpen: boolean;
-  canvasRef: RefObject<HTMLDivElement | null>;
-  focused: boolean;
-}) {
-  const { fitBounds, getNodesBounds, viewportInitialized } = useReactFlow();
-  const { x, y, width, height } = getNodesBounds(nodes);
-  useEffect(() => {
-    if (!viewportInitialized || !width || !height) return;
-    let frame = 0;
-    const fit = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(
-        () =>
-          void fitBounds(
-            { x, y, width, height },
-            { ...fitOptions, padding: focused ? 0.8 : fitOptions.padding }
-          )
-      );
-    };
-    fit();
-    const observer = new ResizeObserver(fit);
-    if (canvasRef.current) observer.observe(canvasRef.current);
-    return () => {
-      observer.disconnect();
-      cancelAnimationFrame(frame);
-    };
-  }, [
-    x,
-    y,
-    width,
-    height,
-    focused,
-    detailsOpen,
-    viewportInitialized,
-    fitBounds,
-    canvasRef,
-  ]);
-  return null;
-}
 
 export default function NetworkMapView({
   mode = "network",
@@ -227,12 +158,8 @@ export default function NetworkMapView({
   const summary = mode === "organization" && agentsOnly;
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [flow, setFlow] = useState<ReactFlowInstance<
-    Node<MapNodeData>,
-    Edge
-  > | null>(null);
+  const [controls, setControls] = useState<CanvasControls | null>(null);
   const [zoom, setZoom] = useState(1);
-  const canvasRef = useRef<HTMLDivElement>(null);
   const baseLayout = useMemo(
     () =>
       clustered
@@ -405,13 +332,7 @@ export default function NetworkMapView({
       },
       width: region.width,
       height: region.height,
-      style: {
-        pointerEvents: "none",
-      },
-      selectable: false,
       focusable: false,
-      draggable: false,
-      connectable: false,
       zIndex:
         region.kind === "workspace"
           ? -4
@@ -430,8 +351,8 @@ export default function NetworkMapView({
             width: 240,
             height: rosterHeight,
             focusable: false,
-            draggable: false,
             data: {
+              _horizontal: horizontal,
               status: peopleState.status,
               people: peopleState.data?.people ?? [],
               total:
@@ -475,8 +396,6 @@ export default function NetworkMapView({
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        sourceHandle: route?.sourceHandle,
-        targetHandle: route?.targetHandle,
         data: {
           relation: edge.relation,
           ...(route
@@ -485,14 +404,6 @@ export default function NetworkMapView({
         },
         ariaLabel: `${layout.nodes.find((node) => node.id === edge.source)?.label} → ${layout.nodes.find((node) => node.id === edge.target)?.label}`,
         selected: edge.id === selectedEdgeId,
-        type: route ? "directional" : "smoothstep",
-        pathOptions: { borderRadius: 12, offset: 24 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 14,
-          height: 14,
-          color,
-        },
         style: {
           stroke: color,
           strokeWidth: emphasized ? 2 : 1.25,
@@ -505,9 +416,6 @@ export default function NetworkMapView({
             ? t(`relations.${edge.relation}`)
             : edge.relation
           : undefined,
-        labelStyle: { fill: "hsl(var(--foreground))", fontSize: 11 },
-        labelBgStyle: { fill: "hsl(var(--background))" },
-        labelBgPadding: [6, 4] as [number, number],
         zIndex: emphasized ? 2 : 0,
       };
     });
@@ -545,9 +453,6 @@ export default function NetworkMapView({
           id,
           source: peopleNodeId,
           target: target.id,
-          sourceHandle,
-          targetHandle: route?.targetHandle,
-          type: route ? "directional" : "smoothstep",
           data: {
             relation: "person_access",
             decision,
@@ -562,39 +467,12 @@ export default function NetworkMapView({
             opacity: selectedEdgeId && id !== selectedEdgeId ? 0.18 : 1,
             strokeDasharray: decision.allowed ? undefined : "3 4",
           },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color,
-            width: 14,
-            height: 14,
-          },
           zIndex: 1,
           ariaLabel: peopleText(decision.allowed ? "allowed" : "denied"),
         });
       }
     }
-    return {
-      nodes,
-      edges: edges.map(
-        (edge): Edge => ({
-          ...edge,
-          domAttributes: {
-            onKeyDown: (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                setViewportTargets(null);
-                setSelectedEdgeId(edge.id);
-                setPeoplePanelOpen(false);
-                setQuery("");
-                onPaneClick?.();
-              } else if (event.key === "Escape") {
-                setSelectedEdgeId(null);
-              }
-            },
-          },
-        })
-      ),
-    };
+    return { nodes, edges };
   }, [
     layout,
     selectedEdgeId,
@@ -643,11 +521,6 @@ export default function NetworkMapView({
     if (selectedEdgeId && !edges.some((edge) => edge.id === selectedEdgeId))
       setSelectedEdgeId(null);
   }, [edges, selectedEdgeId]);
-
-  const targetNodes = viewportTargets
-    ? nodes.filter((node) => viewportTargets.includes(node.id))
-    : [];
-  const viewportNodes = targetNodes.length ? targetNodes : nodes;
 
   const selectResult = (node: NetworkNodeData) => {
     setQuery("");
@@ -859,7 +732,7 @@ export default function NetworkMapView({
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <div ref={canvasRef} className="relative min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1">
           {nodes.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
               <p className="text-sm font-medium">
@@ -876,70 +749,69 @@ export default function NetworkMapView({
               )}
             </div>
           ) : (
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              edgeTypes={edgeTypes}
-              onInit={setFlow}
-              nodesDraggable={false}
-              nodesConnectable={false}
-              edgesFocusable
-              onEdgeClick={(_, edge) => {
-                setViewportTargets(null);
-                setSelectedEdgeId(edge.id);
-                setPeoplePanelOpen(false);
-                setQuery("");
-                onPaneClick?.();
-              }}
-              fitView
-              fitViewOptions={fitOptions}
-              minZoom={0.1}
-              maxZoom={1.8}
-              onMove={(_, viewport) => setZoom(viewport.zoom)}
-              onPaneClick={() => {
-                setSearchOpen(false);
-                setViewportTargets(null);
-                setSelectedEdgeId(null);
-                setPeoplePanelOpen(false);
-                setSelectedPersonId(null);
-                onPaneClick?.();
-              }}
-              onNodeClick={(_, node) => {
-                const original = topology.nodes.find(
-                  (item) => item.id === node.id
-                );
-                if (original) onNodeClick?.(original);
-              }}
-              className="[&_.react-flow__node:focus-visible]:outline [&_.react-flow__node:focus-visible]:outline-2 [&_.react-flow__node:focus-visible]:outline-primary"
-              aria-label={
-                isAccess
-                  ? accessViewText("title")
-                  : isNetwork
-                    ? networkText("title")
-                    : t("title")
-              }
-            >
-              <FitLayout
-                nodes={viewportNodes}
+            <>
+              <NetworkCanvas
+                nodes={nodes}
+                edges={edges}
+                focusIds={viewportTargets}
+                horizontal={horizontal}
                 detailsOpen={detailsOpen}
-                canvasRef={canvasRef}
-                focused={targetNodes.length > 0}
+                onReady={setControls}
+                onZoom={setZoom}
+                renderNode={(node) => {
+                  if (node.type === "networkAgent")
+                    return (
+                      <NetworkAgentNode data={node.data as NetworkAgentData} />
+                    );
+                  if (node.type === "organization")
+                    return (
+                      <OrgChartNode data={node.data as NetworkFlowNodeData} />
+                    );
+                  if (node.type === "people")
+                    return (
+                      <NetworkPeopleNode
+                        data={node.data as NetworkPeopleNodeData}
+                      />
+                    );
+                  return (
+                    <NetworkRegion data={node.data as NetworkRegionData} />
+                  );
+                }}
+                onEdgeClick={(id) => {
+                  setViewportTargets(null);
+                  setSelectedEdgeId(id);
+                  setPeoplePanelOpen(false);
+                  setQuery("");
+                  onPaneClick?.();
+                }}
+                onEscape={() => setSelectedEdgeId(null)}
+                onPaneClick={() => {
+                  setSearchOpen(false);
+                  setViewportTargets(null);
+                  setSelectedEdgeId(null);
+                  setPeoplePanelOpen(false);
+                  setSelectedPersonId(null);
+                  onPaneClick?.();
+                }}
+                onNodeClick={(id) => {
+                  const original = topology.nodes.find(
+                    (item) => item.id === id
+                  );
+                  if (original) onNodeClick(original);
+                }}
+                ariaLabel={
+                  isAccess
+                    ? accessViewText("title")
+                    : isNetwork
+                      ? networkText("title")
+                      : t("title")
+                }
               />
-              <Background
-                variant={BackgroundVariant.Dots}
-                gap={24}
-                size={1}
-                color="hsl(var(--border))"
-              />
-              <Panel
-                position="bottom-left"
-                className="!m-4 flex items-center overflow-hidden rounded-lg border border-border bg-background shadow-sm"
-              >
+              <div className="absolute bottom-4 left-4 z-10 flex items-center overflow-hidden rounded-lg border border-border bg-background shadow-sm">
                 <button
                   type="button"
                   className={controlClass}
-                  onClick={() => void flow?.zoomOut()}
+                  onClick={() => controls?.zoomBy(1 / 1.2)}
                   aria-label={t("zoomOut")}
                 >
                   <Minus className="h-4 w-4" />
@@ -953,7 +825,7 @@ export default function NetworkMapView({
                 <button
                   type="button"
                   className={controlClass}
-                  onClick={() => void flow?.zoomIn()}
+                  onClick={() => controls?.zoomBy(1.2)}
                   aria-label={t("zoomIn")}
                 >
                   <Plus className="h-4 w-4" />
@@ -964,19 +836,15 @@ export default function NetworkMapView({
                   className={controlClass}
                   onClick={() => {
                     setViewportTargets(null);
-                    if (flow)
-                      void flow.fitBounds(
-                        flow.getNodesBounds(nodes),
-                        fitOptions
-                      );
+                    controls?.fit();
                   }}
                   aria-label={t("fitView")}
                   title={t("fitView")}
                 >
                   <Focus className="h-4 w-4" />
                 </button>
-              </Panel>
-            </ReactFlow>
+              </div>
+            </>
           )}
         </div>
         {selectedRoute && routeSource && routeTarget && (
