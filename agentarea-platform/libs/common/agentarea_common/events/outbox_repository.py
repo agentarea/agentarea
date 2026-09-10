@@ -17,7 +17,7 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from agentarea_common.auth.context import Principal
+from agentarea_common.auth.context import Principal, ServicePrincipal
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +47,15 @@ class OutboxRepository:
         the same transaction as the aggregate change. If enqueueing fails the
         exception propagates — the whole operation must fail (never swallow).
         """
+        # An outbox row records which tenant and principal produced the event,
+        # so writing one needs a real user. The relay holds a ServicePrincipal
+        # and only ever reads, which is why the constructor accepts both.
+        if isinstance(self.user_context, ServicePrincipal):
+            raise TypeError(
+                f"ServicePrincipal({self.user_context.service!r}) cannot enqueue an event: "
+                "an outbox row has to name the workspace and principal it came from"
+            )
+
         row = EventOutbox(
             event_id=event_envelope.event_id,
             event_type=event_envelope.event_type,

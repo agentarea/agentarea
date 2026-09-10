@@ -333,8 +333,13 @@ class BaseTaskService(ABC):
         Returns:
             AgentTask model for service/API layer
         """
+        # Both columns are NOT NULL in the database; the domain model still
+        # types them optional, so a row missing either is corrupt rather than a
+        # case to substitute for.
         if not task.workspace_id:
             raise ValueError(f"task {task.id} row carries no workspace; the row is corrupt")
+        if not task.user_id:
+            raise ValueError(f"task {task.id} row carries no owner; the row is corrupt")
 
         return AgentTask(
             id=task.id,

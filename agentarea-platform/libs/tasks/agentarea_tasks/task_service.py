@@ -530,7 +530,15 @@ class TaskService(BaseTaskService):
                     task.agent_id,
                     chat_id,
                 )
-                # Return existing task marked as routed
+                # Return existing task marked as routed. Both columns are NOT
+                # NULL in the database; a stored task missing either is corrupt,
+                # and this one is about to carry its owner's authority into a
+                # running workflow.
+                if not candidate.user_id or not candidate.workspace_id:
+                    raise ValueError(
+                        f"task {candidate.id} is stored without an owner or a workspace; "
+                        "refusing to route a follow-up into it"
+                    )
                 candidate_as_simple = AgentTask(
                     id=candidate.id,
                     title=task.title,

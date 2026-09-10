@@ -8996,14 +8996,18 @@ export const enableTriggerV1TriggersTriggerIdEnablePost = <
  *
  * Execute a trigger with the provided event data.
  *
- * Called by the Go event service when a polling channel receives new messages.
  * Builds trigger data from the events and channel origin, then creates and
  * submits a task for agent execution.
+ *
+ * Authorization is the caller's session plus the workspace-scoped trigger
+ * lookup: a trigger in another workspace is simply not found. This used to sit
+ * on the public router behind an ``X-Internal-Token`` check that skipped
+ * itself whenever the secret was unset — which was every deployment, since
+ * nothing ever sent that header.
  *
  * Args:
  * trigger_id: The unique identifier of the trigger
  * request: Events and channel origin data
- * http_request: Raw request, used to verify the internal service token
  * trigger_service: Injected trigger service
  *
  * Returns:

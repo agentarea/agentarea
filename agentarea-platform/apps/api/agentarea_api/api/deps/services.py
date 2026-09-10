@@ -548,6 +548,7 @@ async def get_public_webhook_manager(
     # An inbound webhook carries no session, so the tenant is unknown until the
     # trigger is found. The lookup is unscoped by design; everything after it
     # runs as the trigger's creator.
+    from agentarea_triggers.domain.models import WebhookTrigger
     from agentarea_triggers.infrastructure.repository import (
         TriggerRepository,
         find_trigger_by_webhook_id,
@@ -603,7 +604,9 @@ async def get_public_webhook_manager(
                 # lookup above only established which tenant this webhook belongs to.
                 scoped_repo = repo_factory.create_repository(TriggerRepository)
                 trigger = await scoped_repo.get_by_webhook_id(webhook_id)
-                if not trigger:
+                # Only a webhook trigger can be served here; a cron trigger that
+                # somehow carries a webhook_id is corrupt, not a thing to deliver to.
+                if not isinstance(trigger, WebhookTrigger):
                     return {
                         "status_code": 400,
                         "body": {"status": "error", "message": f"Webhook {webhook_id} not found"},
