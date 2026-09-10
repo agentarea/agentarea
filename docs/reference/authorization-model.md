@@ -246,7 +246,7 @@ kind resolved from the database.
 
 ## Defaults and overrides
 
-`ACCESS_CONTROL_BACKEND` accepts `disabled`, `keto` or `openfga`.
+`AGENTAREA_AUTHZ_BACKEND` accepts `disabled`, `keto` or `openfga`.
 
 | Source | Value |
 |---|---|
@@ -260,14 +260,14 @@ rendering if both are set.
 
 | Setting | Code default |
 |---|---|
-| `ACCESS_CONTROL_OPENFGA_API_URL` | `http://openfga:8080` |
-| `ACCESS_CONTROL_OPENFGA_STORE_ID` | `""` (resolved by bootstrap when empty) |
-| `ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID` | `None` |
-| `ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS` | `10.0` |
-| `ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP` | `false` |
-| `ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL` | `false` |
-| `ACCESS_CONTROL_OPENFGA_STORE_NAME` | `agentarea` |
-| `ACCESS_CONTROL_OPENFGA_MODEL_PATH` | `None` |
+| `AGENTAREA_AUTHZ_FGA_URL` | `http://openfga:8080` |
+| `AGENTAREA_AUTHZ_FGA_STORE_ID` | `""` (resolved by bootstrap when empty) |
+| `AGENTAREA_AUTHZ_FGA_MODEL_ID` | `None` |
+| `AGENTAREA_AUTHZ_FGA_TIMEOUT` | `10.0` |
+| `AGENTAREA_AUTHZ_FGA_BOOTSTRAP` | `false` |
+| `AGENTAREA_AUTHZ_FGA_APPLY_MODEL` | `false` |
+| `AGENTAREA_AUTHZ_FGA_STORE_NAME` | `agentarea` |
+| `AGENTAREA_AUTHZ_FGA_MODEL_PATH` | `None` |
 
 `docker-compose.dev.yaml` and the Helm chart both set `AUTO_BOOTSTRAP` and
 `AUTO_APPLY_MODEL` to `true`. Model paths differ by deployment:
@@ -279,7 +279,7 @@ rendering if both are set.
 
 With `AUTO_APPLY_MODEL` enabled the file wins and the returned model id is used
 for the process lifetime. With it disabled,
-`ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID` is used and the file is ignored.
+`AGENTAREA_AUTHZ_FGA_MODEL_ID` is used and the file is ignored.
 Bootstrap compares candidate models by normalized content ignoring ids, so an
 unchanged model is reused rather than rewritten. When several processes race a
 store create, all converge on the earliest store with that name.

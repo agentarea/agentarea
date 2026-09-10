@@ -42,7 +42,7 @@ info:
     ### Call an Instance Through the Demand Gateway
     ```bash
     curl -X POST http://localhost:8000/mcp/{instance_id}/mcp \
-      -H "X-AgentArea-Manager-Authorization: Bearer $MCP_GATEWAY_AUTH_SECRET"
+      -H "X-AgentArea-Manager-Authorization: Bearer $AGENTAREA_MCP_GATEWAY_SECRET"
     ```
     
   version: 0.1.0

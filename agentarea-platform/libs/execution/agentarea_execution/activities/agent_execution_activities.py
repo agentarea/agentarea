@@ -137,9 +137,9 @@ def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
 
 
 def _sandbox_file_auth_secret(dependencies: ActivityDependencies) -> str:
-    secret = dependencies.settings.mcp.SANDBOX_FILE_AUTH_SECRET
+    secret = dependencies.settings.mcp.SBX_FILE_SECRET
     if secret is None or not secret.get_secret_value():
-        raise ValueError("SANDBOX_FILE_AUTH_SECRET is required for sandbox file access")
+        raise ValueError("AGENTAREA_SBX_FILE_SECRET is required for sandbox file access")
     return secret.get_secret_value()
 
 
@@ -164,12 +164,12 @@ async def _record_task_config_hash(ctx: Any, task_id: UUID, config_hash: str) ->
 
 
 def _sandbox_control_auth_secret(dependencies: ActivityDependencies) -> str:
-    secret = dependencies.settings.mcp.SANDBOX_CONTROL_AUTH_SECRET
+    secret = dependencies.settings.mcp.SBX_CONTROL_SECRET
     if secret is None:
-        raise ValueError("SANDBOX_CONTROL_AUTH_SECRET is required for sandbox execution")
+        raise ValueError("AGENTAREA_SBX_CONTROL_SECRET is required for sandbox execution")
     value = secret.get_secret_value()
     if len(value.encode()) < 32:
-        raise ValueError("SANDBOX_CONTROL_AUTH_SECRET must contain at least 32 bytes")
+        raise ValueError("AGENTAREA_SBX_CONTROL_SECRET must contain at least 32 bytes")
     return value
 
 
@@ -327,7 +327,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
     @activity.defn
     async def discover_runtime_manifest_activity() -> RuntimeDiscoveryResult:
         """Discover the manifest exposed by the active sandbox data plane."""
-        return await fetch_runtime_manifest(dependencies.settings.mcp.MCP_MANAGER_URL)
+        return await fetch_runtime_manifest(dependencies.settings.mcp.MANAGER_URL)
 
     @activity.defn(name="validate_artifacts_activity")
     async def validate_artifacts_activity(
@@ -338,7 +338,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             return ArtifactValidationResult(state="passed", generation=0)
         return await validate_published_artifacts(
             request,
-            manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+            manager_url=dependencies.settings.mcp.MANAGER_URL,
             auth_secret=_sandbox_file_auth_secret(dependencies),
         )
 
@@ -479,7 +479,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Use tool manager to discover available tools (split path).
             tool_manager = ToolManager(openapi_connection_service=openapi_connection_service)
-            base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
+            base_url = f"{dependencies.settings.app.API_URL}/api/v1"
             split = await tool_manager.discover_available_tools_split(
                 agent_id=request.agent_id,
                 tools_config=_as_tool_config_list(agent.tools),
@@ -520,7 +520,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 )
 
             tool_manager = ToolManager(openapi_connection_service=openapi_connection_service)
-            base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
+            base_url = f"{dependencies.settings.app.API_URL}/api/v1"
             providers = await tool_manager.discover_tool_providers(
                 agent_id=request.agent_id,
                 tools_config=_as_tool_config_list(agent.tools),
@@ -923,7 +923,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                         extra_kwargs = {
                             "storage": SandboxFileStore(
-                                mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+                                mcp_manager_url=dependencies.settings.mcp.MANAGER_URL,
                                 workspace_id=str(request.workspace_id),
                                 task_id=str(request.task_id) if request.task_id else "",
                                 auth_secret=_sandbox_file_auth_secret(dependencies),
@@ -951,15 +951,15 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                         extra_kwargs = {
                             "storage": SandboxFileStore(
-                                mcp_manager_url=dependencies.settings.mcp.MCP_MANAGER_URL,
+                                mcp_manager_url=dependencies.settings.mcp.MANAGER_URL,
                                 workspace_id=str(request.workspace_id),
                                 task_id=str(request.task_id) if request.task_id else "",
                                 auth_secret=_sandbox_file_auth_secret(dependencies),
                             ),
                             "workspace_id": str(request.workspace_id),
                             "task_id": str(request.task_id) if request.task_id else "",
-                            "search_base_url": (dependencies.settings.app.WEB_SEARCH_BASE_URL),
-                            "fetch_base_url": (dependencies.settings.app.WEB_FETCH_BASE_URL),
+                            "search_base_url": (dependencies.settings.app.TOOL_SEARCH_URL),
+                            "fetch_base_url": (dependencies.settings.app.TOOL_FETCH_URL),
                         }
                     elif tool_name == "agentarea/triggers":
                         # The triggers tool defaults agent_id/workspace_id/user_id to
@@ -988,7 +988,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         )
 
                         extra_kwargs = {
-                            "mcp_manager_url": dependencies.settings.mcp.MCP_MANAGER_URL,
+                            "mcp_manager_url": dependencies.settings.mcp.MANAGER_URL,
                             "auth_secret": _sandbox_control_auth_secret(dependencies),
                             "ctx": ToolInvocationContext(
                                 workflow_id=wf_id or "",
@@ -1124,7 +1124,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     tc for tc in request.tools if isinstance(tc, dict) and tc.get("type") == "agent"
                 ]
                 if agent_configs:
-                    base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
+                    base_url = f"{dependencies.settings.app.API_URL}/api/v1"
                     agent_service = await ctx.get_agent_service()
 
                     # Create task service for internal delegation
@@ -1620,7 +1620,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                             event=event_with_id,
                             channel_origin=channel_origin,
                             broker=dependencies.broker_client,
-                            stream=dependencies.channel_delivery_settings.OUTBOUND_STREAM,
+                            stream=dependencies.channel_delivery_settings.OUT_STREAM,
                         )
 
                         # A2A push notifications: one delivery per registered webhook.
@@ -1640,7 +1640,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                                         "presentation": "silent",
                                     },
                                     broker=dependencies.broker_client,
-                                    stream=dependencies.channel_delivery_settings.OUTBOUND_STREAM,
+                                    stream=dependencies.channel_delivery_settings.OUT_STREAM,
                                     dedup_suffix=f"a2a:{cfg_id}",
                                 )
 

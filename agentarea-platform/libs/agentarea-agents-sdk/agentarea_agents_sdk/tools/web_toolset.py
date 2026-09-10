@@ -198,7 +198,7 @@ class WebToolset(Toolset):
             return "Error: search_web is disabled for this toolset instance"
         if self.search_base_url is None:
             return (
-                "Error: web search is not configured; set WEB_SEARCH_BASE_URL "
+                "Error: web search is not configured; set AGENTAREA_TOOL_SEARCH_URL "
                 "to a SearXNG-compatible endpoint"
             )
         if not query or not query.strip():
@@ -271,7 +271,7 @@ class WebToolset(Toolset):
             return f"Error: url must be http(s); got {url!r}"
         if self.fetch_base_url is None:
             return (
-                "Error: web fetching is not configured; set WEB_FETCH_BASE_URL "
+                "Error: web fetching is not configured; set AGENTAREA_TOOL_FETCH_URL "
                 "to an audited egress fetch service"
             )
 

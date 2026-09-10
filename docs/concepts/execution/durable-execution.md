@@ -116,7 +116,7 @@ notices.
 
 ## Why not run the loop in the API process
 
-That option exists in the codebase. Setting `WORKFLOW__EXECUTION_ENGINE=direct`
+That option exists in the codebase. Setting `AGENTAREA_WF_ENGINE=direct`
 swaps in `DirectTaskManager`, which runs the loop in-process. It is a useful
 comparison because it shows precisely what durability is worth.
 

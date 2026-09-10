@@ -48,19 +48,19 @@ type Policy struct {
 }
 
 func LoadPolicyFromEnv() (Policy, error) {
-	leaseTTL, err := requiredDuration("MCP_REQUEST_LEASE_TTL", false)
+	leaseTTL, err := requiredDuration("AGENTAREA_MCP_LEASE_TTL", false)
 	if err != nil {
 		return Policy{}, err
 	}
-	startupTimeout, err := requiredDuration("MCP_GATEWAY_STARTUP_TIMEOUT", false)
+	startupTimeout, err := requiredDuration("AGENTAREA_MCP_STARTUP_TIMEOUT", false)
 	if err != nil {
 		return Policy{}, err
 	}
-	idleTimeout, err := requiredDuration("MCP_IDLE_TIMEOUT", true)
+	idleTimeout, err := requiredDuration("AGENTAREA_MCP_IDLE_TIMEOUT", true)
 	if err != nil {
 		return Policy{}, err
 	}
-	sweepInterval, err := requiredDuration("MCP_IDLE_SWEEP_INTERVAL", false)
+	sweepInterval, err := requiredDuration("AGENTAREA_MCP_SWEEP_INTERVAL", false)
 	if err != nil {
 		return Policy{}, err
 	}
@@ -69,7 +69,7 @@ func LoadPolicyFromEnv() (Policy, error) {
 		StartupTimeout:  startupTimeout,
 		IdleTimeout:     idleTimeout,
 		SweepInterval:   sweepInterval,
-		AuthSecret:      os.Getenv("MCP_GATEWAY_AUTH_SECRET"),
+		AuthSecret:      os.Getenv("AGENTAREA_MCP_GATEWAY_SECRET"),
 	}
 	if err := policy.Validate(); err != nil {
 		return Policy{}, err

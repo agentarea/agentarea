@@ -97,7 +97,7 @@ type NetworkPolicyConfig struct {
 // withholding, runtime-class clamp) are applied AFTER these and always win, so
 // nothing here can weaken instance isolation. The JSON tags are camelCase to
 // match the Helm values keys verbatim (the chart passes this struct as a single
-// JSON-encoded env var, KUBERNETES_INSTANCE_POD).
+// JSON-encoded env var, AGENTAREA_K8S_INSTANCE_POD).
 type InstancePodConfig struct {
 	Labels            map[string]string   `json:"labels,omitempty"`
 	Annotations       map[string]string   `json:"annotations,omitempty"`

@@ -16,14 +16,14 @@ func openSelfExecutable() (*os.File, error) {
 }
 
 func enableChildSubreaper() error {
-	if os.Getenv("AGENTAREA_EXEC_SUPERVISOR_ALLOW_NON_LINUX_TEST") == "true" {
+	if os.Getenv("AGENTAREA_SBX_SUPERVISE_NON_LINUX") == "true" {
 		return nil
 	}
 	return fmt.Errorf("execution supervisor requires Linux")
 }
 
 func descendantPIDs(_ int) ([]int, error) {
-	if os.Getenv("AGENTAREA_EXEC_SUPERVISOR_ALLOW_NON_LINUX_TEST") == "true" {
+	if os.Getenv("AGENTAREA_SBX_SUPERVISE_NON_LINUX") == "true" {
 		return nil, nil
 	}
 	return nil, fmt.Errorf("execution supervisor requires Linux")

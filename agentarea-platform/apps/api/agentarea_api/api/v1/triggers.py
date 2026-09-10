@@ -333,11 +333,11 @@ def get_channel_webhook_service() -> ChannelWebhookService:
     """Composition root for inbound webhook registration.
 
     Reads the reachable ingress base (TELEGRAM_WEBHOOK_BASE_URL if set, else
-    API_BASE_URL) and hands the endpoints a service that knows nothing about any
+    AGENTAREA_API_URL) and hands the endpoints a service that knows nothing about any
     specific channel — that lives behind the WebhookRegistrar registry.
     """
     settings = get_app_settings()
-    base = getattr(settings, "TELEGRAM_WEBHOOK_BASE_URL", "") or settings.API_BASE_URL
+    base = getattr(settings, "TELEGRAM_WEBHOOK_BASE_URL", "") or settings.API_URL
     return ChannelWebhookService(base)
 
 
@@ -1118,14 +1118,14 @@ def _verify_internal_token(http_request: Request) -> None:
     """Gate an internal-only endpoint with a shared secret.
 
     The Go event service must send ``X-Internal-Token`` matching
-    ``INTERNAL_API_TOKEN``. When the token is unset the check is skipped
+    ``AGENTAREA_AUTH_INTERNAL_TOKEN``. When the token is unset the check is skipped
     (back-compat); set it to require authentication on this endpoint.
     """
     import hmac
 
     from agentarea_common.config import get_settings
 
-    expected = get_settings().app.INTERNAL_API_TOKEN
+    expected = get_settings().app.AUTH_INTERNAL_TOKEN
     if not expected:
         return
     provided = http_request.headers.get("x-internal-token", "")

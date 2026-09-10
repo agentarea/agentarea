@@ -16,8 +16,8 @@
 
 set -euo pipefail
 
-KRATOS_ADMIN="${KRATOS_ADMIN_URL:-http://localhost:4434}"
-KRATOS_PUBLIC="${KRATOS_PUBLIC_URL:-http://localhost:4433}"
+KRATOS_ADMIN="${AGENTAREA_AUTH_KRATOS_ADMIN_URL:-http://localhost:4434}"
+KRATOS_PUBLIC="${AGENTAREA_AUTH_KRATOS_URL:-http://localhost:4433}"
 API="${API_URL:-http://localhost:8000}"
 LLM_PROVIDER_KEY="${OPENAI_COMPAT_PROVIDER_KEY:-e2e-openai-compat}"
 LLM_ENDPOINT="${OPENAI_COMPAT_ENDPOINT:-http://host.docker.internal:20128/v1}"

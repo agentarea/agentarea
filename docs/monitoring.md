@@ -1031,7 +1031,7 @@ graph TB
     # Check database connectivity
     kubectl exec -it deployment/agentarea-api -- python -c "
     import psycopg2
-    conn = psycopg2.connect('$DATABASE_URL')
+    conn = psycopg2.connect('$AGENTAREA_DB_URL')
     print('DB connection OK')
     "
     

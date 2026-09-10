@@ -6,14 +6,14 @@ import (
 )
 
 func TestLoadReadsAgentareaEventsEnv(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://agentarea:test@localhost:5432/agentarea")
-	t.Setenv("REDIS_URL", "redis://localhost:6379/0")
-	t.Setenv("AGENTAREA_EVENTS_WORKER_ID", "worker-test")
-	t.Setenv("AGENTAREA_EVENTS_POLL_INTERVAL", "17s")
-	t.Setenv("AGENTAREA_EVENTS_MAX_POLLERS", "7")
-	t.Setenv("AGENTAREA_EVENTS_INBOUND_STREAM", "events.inbound.test")
-	t.Setenv("AGENTAREA_EVENTS_TELEGRAM_POLLING_ENABLED", "true")
-	t.Setenv("AGENTAREA_EVENTS_PORT", "18002")
+	t.Setenv("AGENTAREA_DB_URL", "postgres://agentarea:test@localhost:5432/agentarea")
+	t.Setenv("AGENTAREA_REDIS_URL", "redis://localhost:6379/0")
+	t.Setenv("AGENTAREA_EVT_WORKER_ID", "worker-test")
+	t.Setenv("AGENTAREA_EVT_POLL_INTERVAL", "17s")
+	t.Setenv("AGENTAREA_EVT_MAX_POLLERS", "7")
+	t.Setenv("AGENTAREA_EVT_STREAM", "events.inbound.test")
+	t.Setenv("AGENTAREA_EVT_TELEGRAM_ENABLED", "true")
+	t.Setenv("PORT", "18002")
 
 	cfg := Load()
 
@@ -44,17 +44,17 @@ func TestLoadReadsAgentareaEventsEnv(t *testing.T) {
 }
 
 func TestLoadBuildsEscapedServiceURLsFromComponentEnvs(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgresql://raw:raw@raw/raw")
-	t.Setenv("POSTGRES_HOST", "agentarea-postgresql")
-	t.Setenv("POSTGRES_PORT", "5432")
-	t.Setenv("POSTGRES_DB", "agentarea")
-	t.Setenv("POSTGRES_USER", "agentarea")
-	t.Setenv("POSTGRES_PASSWORD", "p@ss/with:chars")
-	t.Setenv("POSTGRES_SSLMODE", "disable")
-	t.Setenv("REDIS_URL", "redis://raw:6379")
-	t.Setenv("REDIS_HOST", "agentarea-valkey")
-	t.Setenv("REDIS_PORT", "6379")
-	t.Setenv("REDIS_PASSWORD", "redis@pass/with:chars")
+	t.Setenv("AGENTAREA_DB_URL", "postgresql://raw:raw@raw/raw")
+	t.Setenv("AGENTAREA_DB_HOST", "agentarea-postgresql")
+	t.Setenv("AGENTAREA_DB_PORT", "5432")
+	t.Setenv("AGENTAREA_DB_NAME", "agentarea")
+	t.Setenv("AGENTAREA_DB_USER", "agentarea")
+	t.Setenv("AGENTAREA_DB_PASSWORD", "p@ss/with:chars")
+	t.Setenv("AGENTAREA_DB_SSLMODE", "disable")
+	t.Setenv("AGENTAREA_REDIS_URL", "redis://raw:6379")
+	t.Setenv("AGENTAREA_REDIS_HOST", "agentarea-valkey")
+	t.Setenv("AGENTAREA_REDIS_PORT", "6379")
+	t.Setenv("AGENTAREA_REDIS_PASSWORD", "redis@pass/with:chars")
 
 	cfg := Load()
 
@@ -67,11 +67,11 @@ func TestLoadBuildsEscapedServiceURLsFromComponentEnvs(t *testing.T) {
 }
 
 func TestLoadEscapesPostgresConnStringValues(t *testing.T) {
-	t.Setenv("POSTGRES_HOST", "agentarea-postgresql")
-	t.Setenv("POSTGRES_PORT", "5432")
-	t.Setenv("POSTGRES_DB", "agentarea")
-	t.Setenv("POSTGRES_USER", "agent'area")
-	t.Setenv("POSTGRES_PASSWORD", `p\ass'word`)
+	t.Setenv("AGENTAREA_DB_HOST", "agentarea-postgresql")
+	t.Setenv("AGENTAREA_DB_PORT", "5432")
+	t.Setenv("AGENTAREA_DB_NAME", "agentarea")
+	t.Setenv("AGENTAREA_DB_USER", "agent'area")
+	t.Setenv("AGENTAREA_DB_PASSWORD", `p\ass'word`)
 
 	cfg := Load()
 

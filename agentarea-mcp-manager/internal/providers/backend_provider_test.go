@@ -308,7 +308,7 @@ func TestConvertToInstanceSpecCarriesAPerInstanceCeiling(t *testing.T) {
 // asked every MCP pod for a syscall-interposing RuntimeClass; on a cluster
 // without one the pod stayed Pending, the gateway's cold start timed out, and
 // the instance was unreachable no matter what it ran. Leaving the field empty
-// hands the decision to the operator's DEFAULT_ISOLATION_TIER.
+// hands the decision to the operator's AGENTAREA_MCP_ISOLATION.
 func TestConvertToInstanceSpecLeavesTheIsolationTierToTheOperator(t *testing.T) {
 	p := newTestBackendProvider()
 

@@ -11,32 +11,31 @@ services:
       # S3 settings
       - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
-      - AWS_REGION=${RUSTFS_REGION:-us-east-1}
-      - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
-      - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
-      - AWS_ENDPOINT_URL=http://rustfs:9000
+      - AGENTAREA_S3_REGION=${RUSTFS_REGION:-us-east-1}
+      - AGENTAREA_S3_BUCKET=${DOCUMENTS_BUCKET}
+      - AGENTAREA_S3_ARTIFACTS_BUCKET=${ARTIFACTS_BUCKET:-artifacts}
+      - AGENTAREA_S3_ENDPOINT=http://rustfs:9000
       # Database settings
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
+      - AGENTAREA_DB_HOST=db
+      - AGENTAREA_DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       # MCP settings
-      - MCP_MANAGER_URL=http://agentarea-mcp-manager:80/api/mcp
-      - REDIS_URL=redis://valkey:6379
-      - MCP_CLIENT_TIMEOUT=30
+      - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80/api/mcp
+      - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_MCP_TIMEOUT=30
       # Server settings
       - PORT=${PORT:-8000}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - RELOAD=${RELOAD:-false}
-      - WORKERS=${WORKERS:-1}
-      - WORKFLOW__TEMPORAL_SERVER_URL=${WORKFLOW__TEMPORAL_SERVER_URL:-temporal:7233}
-      - WORKFLOW__TEMPORAL_NAMESPACE=default
-      - WORKFLOW__TEMPORAL_TASK_QUEUE=agent-tasks
-      - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
-      - KRATOS_JWKS_B64=${KRATOS_JWKS_B64}
-      - KRATOS_ISSUER=${KRATOS_ISSUER:-http://localhost:4433}
-      - KRATOS_AUDIENCE=${KRATOS_AUDIENCE:-agentarea-api}
+      - AGENTAREA_LOG_LEVEL=${AGENTAREA_LOG_LEVEL:-info}
+      - AGENTAREA_API_WORKERS=${AGENTAREA_API_WORKERS:-false}
+      - AGENTAREA_WF_TEMPORAL_URL=${AGENTAREA_WF_TEMPORAL_URL:-1}
+      - AGENTAREA_WF_NAMESPACE=default
+      - AGENTAREA_WF_QUEUE=agent-tasks
+      - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
+      - AGENTAREA_AUTH_JWKS_B64=${AGENTAREA_AUTH_JWKS_B64}
+      - AGENTAREA_AUTH_ISSUER=${AGENTAREA_AUTH_ISSUER:-http://localhost:4433}
+      - AGENTAREA_AUTH_AUDIENCE=${AGENTAREA_AUTH_AUDIENCE:-agentarea-api}
     depends_on:
       db:
         condition: service_healthy
@@ -59,15 +58,15 @@ services:
     environment:
       - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
-      - AWS_REGION=${RUSTFS_REGION:-us-east-1}
-      - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
-      - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
-      - AWS_ENDPOINT_URL=http://rustfs:9000
+      - AGENTAREA_S3_REGION=${RUSTFS_REGION:-us-east-1}
+      - AGENTAREA_S3_BUCKET=${DOCUMENTS_BUCKET}
+      - AGENTAREA_S3_ARTIFACTS_BUCKET=${ARTIFACTS_BUCKET:-artifacts}
+      - AGENTAREA_S3_ENDPOINT=http://rustfs:9000
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
+      - AGENTAREA_DB_HOST=db
+      - AGENTAREA_DB_PORT=5432
     depends_on:
       db:
         condition: service_healthy
@@ -113,13 +112,12 @@ services:
     environment:
       # - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
-      - API_URL=${API_URL:-http://app:8000}
-      - ORY_ADMIN_URL=${ORY_ADMIN_URL:-http://kratos:4434}
+      - AGENTAREA_API_URL=${AGENTAREA_API_URL:-http://app:8000}
+      - AGENTAREA_AUTH_KRATOS_ADMIN_URL=${AGENTAREA_AUTH_KRATOS_ADMIN_URL:-http://kratos:4434}
       # ORY_SDK_URL: internal Docker URL for server-side API calls to Kratos
       - ORY_SDK_URL=${ORY_SDK_URL:-http://kratos:4433}
-      - ORY_BROWSER_URL=${ORY_BROWSER_URL:-http://localhost:4433}
-      - API_BROWSER_URL=${API_BROWSER_URL:-http://localhost:8000}
       - NEXT_PUBLIC_ORY_SDK_URL=${NEXT_PUBLIC_ORY_SDK_URL:-http://localhost:4433}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     networks:
       - default
       - auth-network
@@ -184,33 +182,33 @@ services:
       - mcp-network
       - default
     environment:
-      LOG_LEVEL: INFO
-      REDIS_URL: redis://valkey:6379
-      CORE_API_URL: http://app:8000
+      AGENTAREA_LOG_LEVEL: INFO
+      AGENTAREA_REDIS_URL: redis://valkey:6379
+      AGENTAREA_API_URL: http://app:8000
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
-      SANDBOX_EMBEDDED_RUNNER: "true"
-      SANDBOX_EXECUTOR_URL: http://sandbox-executor:8080
-      SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:?SANDBOX_ACTIVATION_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
-      SANDBOX_CLEANUP_AUTH_SECRET: ${SANDBOX_CLEANUP_AUTH_SECRET:?SANDBOX_CLEANUP_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
+      AGENTAREA_SBX_EMBEDDED_RUNNER: "true"
+      AGENTAREA_SBX_EXECUTOR_URL: http://sandbox-executor:8080
+      AGENTAREA_SBX_ACTIVATION_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:?SANDBOX_ACTIVATION_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
+      AGENTAREA_SBX_CLEANUP_SECRET: ${SANDBOX_CLEANUP_AUTH_SECRET:?SANDBOX_CLEANUP_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
       # The trusted control plane resolves immutable workspace refs in S3 and
       # gives the executor signed URLs. These credentials are not passed to the
       # executor or to task processes.
-      SANDBOX_WORKSPACE_S3_BUCKET: ${ARTIFACTS_BUCKET:-artifacts}
-      SANDBOX_WORKSPACE_S3_ENDPOINT: http://rustfs:9000
-      SANDBOX_WORKSPACE_S3_REGION: ${RUSTFS_REGION:-us-east-1}
-      SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE: "true"
+      AGENTAREA_SBX_S3_BUCKET: ${ARTIFACTS_BUCKET:-artifacts}
+      AGENTAREA_SBX_S3_ENDPOINT: http://rustfs:9000
+      AGENTAREA_SBX_S3_REGION: ${RUSTFS_REGION:-us-east-1}
+      AGENTAREA_SBX_S3_PATH_STYLE: "true"
       AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
       AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
       # Secret manager configuration
-      SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
+      AGENTAREA_SECRET_BACKEND: ${AGENTAREA_SECRET_BACKEND:-database}
       # Database secret manager settings
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
+      AGENTAREA_DB_HOST: db
+      AGENTAREA_DB_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-      SECRET_MANAGER_ENCRYPTION_KEY: ${SECRET_MANAGER_ENCRYPTION_KEY}
+      AGENTAREA_SECRET_ENCRYPTION_KEY: ${AGENTAREA_SECRET_ENCRYPTION_KEY}
 
   # Sandbox executor — isolated jail that actually runs agent code (data plane).
   # mcp-manager (control plane) delegates executions here so untrusted code
@@ -226,8 +224,8 @@ services:
       - mcp-network
       - default
     environment:
-      ACTIVATION_PORT: "8080"
-      SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:?SANDBOX_ACTIVATION_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
+      PORT: "8080"
+      AGENTAREA_SBX_ACTIVATION_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:?SANDBOX_ACTIVATION_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
 
   # Temporal Infrastructure Services
   temporal:
@@ -280,39 +278,38 @@ services:
         condition: service_healthy
     environment:
       # Database
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
+      - AGENTAREA_DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - AGENTAREA_DB_HOST=db
+      - AGENTAREA_DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       - LLM_DOCKER_HOST=host.docker.internal
       - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
-      - AWS_REGION=${RUSTFS_REGION:-us-east-1}
-      - AWS_ENDPOINT_URL=http://rustfs:9000
-      - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
-      - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
+      - AGENTAREA_S3_REGION=${RUSTFS_REGION:-us-east-1}
+      - AGENTAREA_S3_ENDPOINT=http://rustfs:9000
+      - AGENTAREA_S3_BUCKET=${DOCUMENTS_BUCKET}
+      - AGENTAREA_S3_ARTIFACTS_BUCKET=${ARTIFACTS_BUCKET:-artifacts}
 
       # Redis
-      - REDIS_URL=redis://valkey:6379
+      - AGENTAREA_REDIS_URL=redis://valkey:6379
 
       # Temporal
-      - WORKFLOW__TEMPORAL_SERVER_URL=${WORKFLOW__TEMPORAL_SERVER_URL:-temporal:7233}
-      - WORKFLOW__TEMPORAL_NAMESPACE=default
-      - WORKFLOW__TEMPORAL_TASK_QUEUE=agent-tasks
-      - WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES=10
-      - WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS=5
+      - AGENTAREA_WF_TEMPORAL_URL=${AGENTAREA_WF_TEMPORAL_URL:-temporal:7233}
+      - AGENTAREA_WF_NAMESPACE=default
+      - AGENTAREA_WF_QUEUE=agent-tasks
+      - AGENTAREA_WF_MAX_ACTIVITIES=10
+      - AGENTAREA_DEBUG=5
 
       # Task execution
-      - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
-      - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
-      - MCP_MANAGER_URL=http://agentarea-mcp-manager:80
-      - SANDBOX_CLEANUP_AUTH_SECRET=${SANDBOX_CLEANUP_AUTH_SECRET:?SANDBOX_CLEANUP_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
+      - AGENTAREA_ENV=true
+      - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
+      - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80
+      - AGENTAREA_SBX_CLEANUP_SECRET=${SANDBOX_CLEANUP_AUTH_SECRET:?SANDBOX_CLEANUP_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
 
       # Development
       # - DEBUG=true
-      - ENVIRONMENT=production
     networks:
       - temporal-network
       - default
@@ -348,10 +345,10 @@ services:
       valkey:
         condition: service_started
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
-      - REDIS_URL=redis://valkey:6379
-      - POLL_INTERVAL=30s
-      - MAX_POLLERS=10
+      - AGENTAREA_DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVT_POLL_INTERVAL=30s
+      - AGENTAREA_EVT_MAX_POLLERS=10
     networks:
       - default
     restart: unless-stopped

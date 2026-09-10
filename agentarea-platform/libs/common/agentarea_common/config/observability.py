@@ -1,17 +1,18 @@
 """Observability configuration."""
 
-from pydantic_settings import BaseSettings
+from pydantic import Field
+
+from .base import BaseAppSettings
 
 
-class ObservabilitySettings(BaseSettings):
+class ObservabilitySettings(BaseAppSettings):
     """OpenTelemetry configuration.
 
-    The OpenTelemetry SDK reads standard OTEL_* variables itself. OTEL_ENABLED
-    is AgentArea's explicit process-level gate for installing instrumentation.
+    ``OTEL_SERVICE_NAME`` and ``OTEL_EXPORTER_OTLP_PROTOCOL`` are read by the
+    OpenTelemetry SDK itself, so they keep their spec names. Only the on/off
+    switch is ours.
     """
 
-    OTEL_ENABLED: bool = False
-    OTEL_SERVICE_NAME: str = ""
-    OTEL_EXPORTER_OTLP_PROTOCOL: str = "grpc"
-
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    ENABLED: bool = Field(default=False, validation_alias="AGENTAREA_OTEL_ENABLED")
+    OTEL_SERVICE_NAME: str = "agentarea"
+    OTEL_EXPORTER_OTLP_PROTOCOL: str = "http/protobuf"

@@ -19,7 +19,7 @@ def mock_s3_client():
 @pytest.fixture
 def mock_aws_settings():
     settings = MagicMock()
-    settings.S3_BUCKET_NAME = "test-bucket"
+    settings.BUCKET = "test-bucket"
     return settings
 
 

@@ -288,7 +288,7 @@ class TestExternallyStoredValues:
 
     Only DatabaseSecretManager writes a catalog row as a side effect of storing
     a value. Assuming every backend does that left the whole catalog broken
-    under SECRET_MANAGER_TYPE=infisical: create raised after the credential had
+    under AGENTAREA_SECRET_BACKEND=infisical: create raised after the credential had
     already been written, orphaning it.
     """
 

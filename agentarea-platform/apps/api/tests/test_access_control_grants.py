@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 def _settings(backend: str):
     return SimpleNamespace(
-        access_control=SimpleNamespace(ACCESS_CONTROL_BACKEND=backend),
+        access_control=SimpleNamespace(BACKEND=backend),
     )
 
 

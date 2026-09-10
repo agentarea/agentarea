@@ -720,7 +720,7 @@ async def test_task_status_hides_raw_workflow_error(monkeypatch):
         get_workflow_status=AsyncMock(
             return_value={
                 "status": "failed",
-                "error": "upstream failure: SECRET_MANAGER_ACCESS_KEY=private-value",
+                "error": "upstream failure: AGENTAREA_SECRET_CLIENT_ID=private-value",
             }
         )
     )

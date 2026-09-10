@@ -10,13 +10,13 @@ from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
 
 def _settings(model_path: str | None = None) -> OpenFGASettings:
     return OpenFGASettings(
-        ACCESS_CONTROL_OPENFGA_API_URL="http://openfga:8080",
-        ACCESS_CONTROL_OPENFGA_STORE_ID="",
-        ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID=None,
-        ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP=True,
-        ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=model_path is not None,
-        ACCESS_CONTROL_OPENFGA_STORE_NAME="agentarea",
-        ACCESS_CONTROL_OPENFGA_MODEL_PATH=model_path,
+        URL="http://openfga:8080",
+        STORE_ID="",
+        MODEL_ID=None,
+        BOOTSTRAP=True,
+        APPLY_MODEL=model_path is not None,
+        STORE_NAME="agentarea",
+        MODEL_PATH=model_path,
     )
 
 
@@ -63,8 +63,8 @@ async def test_bootstrap_reuses_existing_store_and_writes_model(tmp_path):
 
     await bootstrap_openfga(settings, client=http)
 
-    assert settings.ACCESS_CONTROL_OPENFGA_STORE_ID == "store-1"
-    assert settings.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID == "model-2"
+    assert settings.STORE_ID == "store-1"
+    assert settings.MODEL_ID == "model-2"
     assert [entry[:2] for entry in seen] == [
         ("GET", "/stores"),
         ("GET", "/stores/store-1/authorization-models"),
@@ -103,8 +103,8 @@ async def test_bootstrap_creates_store_when_missing_and_converges_on_listed_stor
 
     await bootstrap_openfga(settings, client=http)
 
-    assert settings.ACCESS_CONTROL_OPENFGA_STORE_ID == "store-created"
-    assert settings.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID is None
+    assert settings.STORE_ID == "store-created"
+    assert settings.MODEL_ID is None
 
 
 @pytest.mark.asyncio
@@ -195,5 +195,5 @@ async def test_bootstrap_reuses_matching_authorization_model(tmp_path):
 
     await bootstrap_openfga(settings, client=http)
 
-    assert settings.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID == "model-existing"
+    assert settings.MODEL_ID == "model-existing"
     assert writes == 0

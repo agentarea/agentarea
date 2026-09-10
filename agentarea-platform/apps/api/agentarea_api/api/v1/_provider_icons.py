@@ -18,7 +18,7 @@ def build_provider_icon_url(icon: str | None) -> str | None:
     - A full URL (``http(s)://``) passes through unchanged — this is how a
       remote registry entry supplies its own icon.
     - Anything else is treated as a built-in id and resolved against
-      ``API_BASE_URL``. Note we deliberately do NOT pass through root-relative
+      ``AGENTAREA_API_URL``. Note we deliberately do NOT pass through root-relative
       paths (``/...``): the icon renders in the browser on the *frontend*
       origin, so ``/static/...`` would resolve against a host that cannot serve
       it — the exact 404/500 this function exists to avoid.
@@ -27,5 +27,5 @@ def build_provider_icon_url(icon: str | None) -> str | None:
         return None
     if icon.startswith(("http://", "https://")):
         return icon
-    base = get_app_settings().API_BASE_URL.rstrip("/")
+    base = get_app_settings().API_URL.rstrip("/")
     return f"{base}/static/icons/providers/{icon}.svg"

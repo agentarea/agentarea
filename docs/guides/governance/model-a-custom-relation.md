@@ -31,9 +31,9 @@ once. Make changes additive.
 
 - The `fga` CLI installed. Every step below depends on it.
 - Write access to `config/auth/openfga/` in the repository.
-- A dev stack you can restart: `ACCESS_CONTROL_BACKEND=openfga` with
-  `ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP=true` and
-  `ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=true`, which is what
+- A dev stack you can restart: `AGENTAREA_AUTHZ_BACKEND=openfga` with
+  `AGENTAREA_AUTHZ_FGA_BOOTSTRAP=true` and
+  `AGENTAREA_AUTHZ_FGA_APPLY_MODEL=true`, which is what
   `docker-compose.dev.yaml` sets. Start it with `make up-dev`, not `make up` —
   the latter runs `docker-compose.yaml`, which names neither the setting nor
   OpenFGA, so the backend falls through to its `disabled` default and none of
@@ -152,7 +152,7 @@ Both copies must move together. The compose stack mounts the `config/` copy at
 ### 6. Roll it out
 
 Restart the API and the worker. Both bootstrap OpenFGA at startup: they find or
-create the store named by `ACCESS_CONTROL_OPENFGA_STORE_NAME`, compare the model
+create the store named by `AGENTAREA_AUTHZ_FGA_STORE_NAME`, compare the model
 on disk against the models already in the store, write it if it is new, and use
 the returned model id for the rest of the process lifetime.
 
@@ -199,9 +199,9 @@ broke inheritance shows up here rather than in your new tests.
 models by normalized content, ignoring ids. If your edited model is byte-identical
 in structure to one already in the store, it reuses that model id and writes
 nothing — which is correct. If it genuinely differs and is still not picked up,
-check that `ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=true` and that
-`ACCESS_CONTROL_OPENFGA_MODEL_PATH` points at the file you regenerated. With
-auto-apply off, the process uses whatever `ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID`
+check that `AGENTAREA_AUTHZ_FGA_APPLY_MODEL=true` and that
+`AGENTAREA_AUTHZ_FGA_MODEL_PATH` points at the file you regenerated. With
+auto-apply off, the process uses whatever `AGENTAREA_AUTHZ_FGA_MODEL_ID`
 names and your file is ignored.
 
 **It works in compose and not in Kubernetes.** You regenerated
@@ -232,7 +232,7 @@ migration script.
 **Authorization broke everywhere after the change.** You made a destructive edit —
 renamed or removed a relation that live tuples reference. Restore the previous
 `model.fga`, regenerate both JSON copies, and restart. OpenFGA keeps prior model
-versions, so re-pinning `ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID` to the
+versions, so re-pinning `AGENTAREA_AUTHZ_FGA_MODEL_ID` to the
 last known-good id is the fastest rollback while you fix the DSL.
 
 ## Related

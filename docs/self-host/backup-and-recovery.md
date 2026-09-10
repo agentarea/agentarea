@@ -40,7 +40,7 @@ one item whose loss cannot be recovered from — the secret encryption key.
 | PostgreSQL `keto` | Authorization tuples, when `keto.enabled=true` | As above |
 | Object store: documents bucket | Uploaded files | User content |
 | Object store: artifacts bucket | Task artifacts, content-addressed | Task outputs |
-| `SECRET_MANAGER_ENCRYPTION_KEY` | The Fernet key for `encrypted_secrets` | Every stored credential, unrecoverably |
+| `AGENTAREA_SECRET_ENCRYPTION_KEY` | The Fernet key for `encrypted_secrets` | Every stored credential, unrecoverably |
 | Kubernetes Secrets | Database and object-store credentials, the Kratos JWKS, sandbox HMAC secrets | Recoverable by regenerating, except the encryption key |
 
 Valkey holds Redis Streams for sandbox execution requests and channel inbound
@@ -50,7 +50,7 @@ does not lose committed data.
 
 ### 2. Back up the encryption key first, and separately
 
-`SECRET_MANAGER_ENCRYPTION_KEY` decrypts the `encrypted_secrets` table. A
+`AGENTAREA_SECRET_ENCRYPTION_KEY` decrypts the `encrypted_secrets` table. A
 database backup without it restores ciphertext nobody can open, and there is no
 recovery path and no re-encryption command in the platform.
 
@@ -175,7 +175,7 @@ kubectl exec -n agentarea-restore deploy/agentarea-backend -- \
   python -c "
 from cryptography.fernet import Fernet
 import os
-Fernet(os.environ['SECRET_MANAGER_ENCRYPTION_KEY'])
+Fernet(os.environ['AGENTAREA_SECRET_ENCRYPTION_KEY'])
 print('key is well-formed')
 "
 ```

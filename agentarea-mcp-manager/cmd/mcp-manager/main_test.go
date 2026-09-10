@@ -32,7 +32,7 @@ func TestGetDurationEnvUsesExplicitValue(t *testing.T) {
 }
 
 func TestEmbeddedRunnerRejectsMalformedEnableFlagBeforeInitialization(t *testing.T) {
-	t.Setenv("SANDBOX_EMBEDDED_RUNNER", "sometimes")
+	t.Setenv("AGENTAREA_SBX_EMBEDDED_RUNNER", "sometimes")
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	err := startEmbeddedSandboxRunner(

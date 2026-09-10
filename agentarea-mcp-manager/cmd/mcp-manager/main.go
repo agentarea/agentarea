@@ -571,7 +571,7 @@ func getLogLevel(level string) slog.Level {
 }
 
 func startSandboxTaskGC(ctx context.Context, logger *slog.Logger, client *warmpool.Client) error {
-	interval, err := getDurationEnv("SANDBOX_TASK_GC_INTERVAL", 30*time.Second)
+	interval, err := getDurationEnv("AGENTAREA_SBX_GC_INTERVAL", 30*time.Second)
 	if err != nil {
 		return err
 	}
@@ -606,21 +606,21 @@ func startSandboxTaskGC(ctx context.Context, logger *slog.Logger, client *warmpo
 // startEmbeddedSandboxRunner runs the sandbox execution consumer in-process,
 // delegating actual execution to the backend's data plane (the docker
 // sandbox-executor). This makes code execution work in docker-compose without a
-// standalone sandbox-runner. Opt-in via SANDBOX_EMBEDDED_RUNNER=true; off by
+// standalone sandbox-runner. Opt-in via AGENTAREA_SBX_EMBEDDED_RUNNER=true; off by
 // default so Kubernetes (which runs a dedicated agentarea-sandbox-runner) keeps
 // execution work out of the more-privileged control plane.
 func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, runtime sandboxruntime.Runtime, providerName string, workspaceConfig workspace.RepositoryConfig, logger *slog.Logger) error {
-	rawEnabled := os.Getenv("SANDBOX_EMBEDDED_RUNNER")
+	rawEnabled := os.Getenv("AGENTAREA_SBX_EMBEDDED_RUNNER")
 	enabled := false
 	if rawEnabled != "" {
 		parsed, err := strconv.ParseBool(rawEnabled)
 		if err != nil {
-			return fmt.Errorf("SANDBOX_EMBEDDED_RUNNER must be a boolean: %w", err)
+			return fmt.Errorf("AGENTAREA_SBX_EMBEDDED_RUNNER must be a boolean: %w", err)
 		}
 		enabled = parsed
 	}
 	if !enabled {
-		logger.Info("Embedded sandbox runner disabled (set SANDBOX_EMBEDDED_RUNNER=true to enable)")
+		logger.Info("Embedded sandbox runner disabled (set AGENTAREA_SBX_EMBEDDED_RUNNER=true to enable)")
 		return nil
 	}
 
@@ -637,7 +637,7 @@ func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, runtime
 		Executor: runtime,
 		Capabilities: sandboxplacement.Capabilities{
 			Name:   providerName,
-			Region: os.Getenv("SANDBOX_REGION"),
+			Region: os.Getenv("AGENTAREA_SBX_REGION"),
 		},
 	})
 	if err != nil {
@@ -660,7 +660,7 @@ func startEmbeddedSandboxRunner(ctx context.Context, cfg *config.Config, runtime
 	}()
 	logger.Info("Embedded sandbox runner started",
 		slog.String("sandbox_target", providerName),
-		slog.String("sandbox_region", os.Getenv("SANDBOX_REGION")))
+		slog.String("sandbox_region", os.Getenv("AGENTAREA_SBX_REGION")))
 	return nil
 }
 

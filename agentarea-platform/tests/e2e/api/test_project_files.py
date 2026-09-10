@@ -69,10 +69,10 @@ def test_project_file_upload_list_download_delete_roundtrip(
     assert host not in ("rustfs", "minio"), (
         f"presigned URL host {host!r} is internal-only — would 404 in browser"
     )
-    public = os.environ.get("PUBLIC_S3_ENDPOINT")
+    public = os.environ.get("AGENTAREA_S3_PUBLIC_ENDPOINT")
     if public:
         assert urlparse(public).hostname == host, (
-            f"presigned URL host {host!r} != PUBLIC_S3_ENDPOINT host "
+            f"presigned URL host {host!r} != AGENTAREA_S3_PUBLIC_ENDPOINT host "
             f"{urlparse(public).hostname!r}"
         )
 

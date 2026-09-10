@@ -42,7 +42,7 @@ Request → Find Warm Pod → Assign → Activate → Route Ready
   0ms       ~100ms       ~150ms    ~1200ms    ~1300ms
 ```
 
-**Feature Flags:** `MCP_FEATURES_ENABLED=warm_pool,gateway_api,state_reconciler`
+**Feature Flags:** `AGENTAREA_MCP_FEATURES=warm_pool,gateway_api,state_reconciler`
 
 **Backends:** Kubernetes (Gateway API/Ingress), Docker (dev)
 
@@ -88,8 +88,8 @@ curl -X POST http://localhost:80/instances \
 
 | Variable | Default |
 |----------|---------|
-| `BACKEND_TYPE` | kubernetes |
-| `KUBERNETES_NAMESPACE` | agentarea |
+| `AGENTAREA_MCP_BACKEND` | kubernetes |
+| `AGENTAREA_K8S_NAMESPACE` | agentarea |
 | `WARM_POOL_ENABLED` | false |
 | `WARM_POOL_SIZE` | 10 |
-| `MCP_FEATURES_ENABLED` | gateway_api,state_reconciler |
+| `AGENTAREA_MCP_FEATURES` | gateway_api,state_reconciler |

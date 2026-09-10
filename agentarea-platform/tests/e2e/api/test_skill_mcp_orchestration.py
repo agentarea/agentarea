@@ -28,13 +28,13 @@ def _ensure_artifacts_bucket() -> None:
 
     client = boto3.client(
         "s3",
-        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "rustfsadmin"),
-        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "rustfsadmin"),
-        region_name=os.environ.get("AWS_REGION", "us-east-1"),
-        endpoint_url=os.environ.get("PUBLIC_S3_ENDPOINT", "http://localhost:9000"),
+        aws_access_key_id=os.environ.get("AGENTAREA_S3_ACCESS_KEY", "rustfsadmin"),
+        aws_secret_access_key=os.environ.get("AGENTAREA_S3_SECRET_KEY", "rustfsadmin"),
+        region_name=os.environ.get("AGENTAREA_S3_REGION", "us-east-1"),
+        endpoint_url=os.environ.get("AGENTAREA_S3_PUBLIC_ENDPOINT", "http://localhost:9000"),
         config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
     )
-    bucket = os.environ.get("ARTIFACTS_BUCKET_NAME", "artifacts")
+    bucket = os.environ.get("AGENTAREA_S3_ARTIFACTS_BUCKET", "artifacts")
     for attempt in range(3):
         try:
             client.head_bucket(Bucket=bucket)

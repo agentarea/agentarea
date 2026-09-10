@@ -216,7 +216,7 @@ class S3WorkspaceRepository:
         lease_seconds: int = DEFAULT_LEASE_SECONDS,
     ) -> None:
         self._client = client or get_s3_client()
-        self._bucket = bucket or get_aws_settings().ARTIFACTS_BUCKET_NAME
+        self._bucket = bucket or get_aws_settings().ARTIFACTS_BUCKET
         self._key_prefix = key_prefix.strip("/")
         self._recorder = recorder
         self._actor = actor

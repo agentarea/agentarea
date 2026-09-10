@@ -52,7 +52,7 @@ const sharedMetadata: Omit<Metadata, "metadataBase"> = {
 function getMetadataFallbackBase() {
   return (
     process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.APP_URL ||
+    process.env.AGENTAREA_APP_URL ||
     "https://app.agentarea.ai/"
   );
 }
@@ -89,8 +89,8 @@ const inter = Inter({
 // Uses ORY_BROWSER_URL (not NEXT_PUBLIC_*) to avoid Next.js build-time inlining
 function getRuntimeConfig() {
   return {
-    CLIENT_ORY_SDK_URL: process.env.ORY_BROWSER_URL || process.env.ORY_SDK_URL || "",
-    CLIENT_API_URL: process.env.API_BROWSER_URL || process.env.API_URL || "http://localhost:8000",
+    CLIENT_ORY_SDK_URL: process.env.NEXT_PUBLIC_ORY_SDK_URL || process.env.ORY_SDK_URL || "",
+    CLIENT_API_URL: process.env.NEXT_PUBLIC_API_URL || process.env.AGENTAREA_API_URL || "http://localhost:8000",
   };
 }
 

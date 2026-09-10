@@ -98,10 +98,10 @@ global:
   # `Chart.yaml` dependency `condition: redis.enabled`, which toggles the
   # bundled Valkey subchart on/off.
   #
-  # Precedence for REDIS_URL injection (see templates/_redis-url.tpl):
-  #   1. existingSecret set -> REDIS_URL from secretKeyRef (recommended for
+  # Precedence for AGENTAREA_REDIS_URL injection (see templates/_redis-url.tpl):
+  #   1. existingSecret set -> AGENTAREA_REDIS_URL from secretKeyRef (recommended for
   #      production: managed Redis URLs carry credentials).
-  #   2. url set            -> REDIS_URL literal value (quick-start / dev).
+  #   2. url set            -> AGENTAREA_REDIS_URL literal value (quick-start / dev).
   #   3. neither set        -> derived redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)
   #      using the in-cluster Valkey subchart (default behavior).
   redis:
@@ -110,7 +110,7 @@ global:
     # External Redis URL (full connection string, e.g. rediss://user:pass@host:6379).
     # Takes precedence over host/port when set.
     url: ""
-    # Pre-existing Secret containing the full REDIS_URL (takes precedence over url).
+    # Pre-existing Secret containing the full AGENTAREA_REDIS_URL (takes precedence over url).
     existingSecret: ""
     existingSecretKey: "url"
     database: 0
@@ -560,13 +560,13 @@ mcpManager:
 
   # Run MCP containers on a remote host instead of in this cluster.
   #
-  # That host runs this same image with MCP_MANAGER_MODE=dataplane, which builds
+  # That host runs this same image with AGENTAREA_MCP_MODE=dataplane, which builds
   # only a container backend — no database, no Redis, no secret manager. It is
   # the arrangement that keeps user-supplied MCP images off the control plane's
   # nodes without requiring a second Kubernetes cluster, and the data plane can
   # only touch instances it created itself.
   #
-  # Setting url switches BACKEND_TYPE to dataplane. All three fields go together
+  # Setting url switches AGENTAREA_MCP_BACKEND to dataplane. All three fields go together
   # or none do; a partial set stops the render rather than silently falling back
   # to running containers here.
   dataPlane:
@@ -618,7 +618,7 @@ mcpManager:
   # are optional; empty = no change. Platform security invariants (managed-by
   # label, securityContext/seccomp, withheld SA token, runtime-class clamp) are
   # always applied on top and cannot be weakened from here. Passed to the manager
-  # as a single JSON env var (KUBERNETES_INSTANCE_POD); tolerations/affinity use
+  # as a single JSON env var (AGENTAREA_K8S_INSTANCE_POD); tolerations/affinity use
   # the standard Kubernetes object shape.
   instancePod:
     labels: {}
@@ -775,7 +775,8 @@ mcpManager:
 
     # Explicit zero disables process-local idle exit; pod retirement is owned
     # by the manager's fenced task lifecycle.
-    idleTimeoutSeconds: 0
+    # Activation process exits after this long with no request. "0s" disables.
+    idleTimeout: "0s"
     
     # Number of warm pods per node
     size: 1

@@ -71,17 +71,17 @@ def config_value(rendered: str, key: str) -> str:
 
 # Unconfigured: in-cluster discovery. The variable is declared so the value is
 # visible, but empty, and nothing is mounted.
-assert config_value(unconfigured, "KUBERNETES_KUBECONFIG") == ""
+assert config_value(unconfigured, "AGENTAREA_K8S_KUBECONFIG") == ""
 assert "execution-kubeconfig" not in unconfigured
 
 # Configured: every process that builds a Kubernetes backend from this env
 # block gets both the path and the file it names.
-path = config_value(configured, "KUBERNETES_KUBECONFIG")
+path = config_value(configured, "AGENTAREA_K8S_KUBECONFIG")
 assert path == "/etc/agentarea/exec/kubeconfig", path
 
 for component in ("mcp-manager", "sandbox-runner"):
     rendered = deployment(configured, f"exec-cluster-agentarea-{component}")
-    assert "name: KUBERNETES_KUBECONFIG" in rendered, component
+    assert "name: AGENTAREA_K8S_KUBECONFIG" in rendered, component
     mount = re.search(
         r"(?s)- name: execution-kubeconfig\n\s*mountPath: (\S+)\n\s*readOnly: (\S+)",
         rendered,

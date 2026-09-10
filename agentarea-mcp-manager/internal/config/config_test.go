@@ -3,7 +3,7 @@ package config
 import "testing"
 
 func TestLoadKubernetesConfigPodServiceAccountName(t *testing.T) {
-	t.Setenv("KUBERNETES_POD_SERVICE_ACCOUNT_NAME", "agentarea-mcp-runtime")
+	t.Setenv("AGENTAREA_K8S_SERVICE_ACCOUNT", "agentarea-mcp-runtime")
 
 	cfg := loadKubernetesConfig()
 
@@ -13,10 +13,10 @@ func TestLoadKubernetesConfigPodServiceAccountName(t *testing.T) {
 }
 
 // TestLoadInstancePodFromEnv locks the chart->manager contract: the JSON the
-// Helm chart emits for KUBERNETES_INSTANCE_POD (toJson of mcpManager.instancePod)
+// Helm chart emits for AGENTAREA_K8S_INSTANCE_POD (toJson of mcpManager.instancePod)
 // must parse into InstancePodConfig with the expected k8s-shaped fields.
 func TestLoadInstancePodFromEnv(t *testing.T) {
-	t.Setenv("KUBERNETES_INSTANCE_POD", `{
+	t.Setenv("AGENTAREA_K8S_INSTANCE_POD", `{
 		"labels": {"team": "x"},
 		"annotations": {"a": "b"},
 		"nodeSelector": {"pool": "mcp"},
@@ -45,7 +45,7 @@ func TestLoadInstancePodFromEnv(t *testing.T) {
 }
 
 func TestLoadInstancePodInvalidJSONFailsClosed(t *testing.T) {
-	t.Setenv("KUBERNETES_INSTANCE_POD", "{not valid json")
+	t.Setenv("AGENTAREA_K8S_INSTANCE_POD", "{not valid json")
 	defer func() {
 		if recover() == nil {
 			t.Fatal("invalid placement JSON did not fail configuration")
@@ -55,7 +55,7 @@ func TestLoadInstancePodInvalidJSONFailsClosed(t *testing.T) {
 }
 
 func TestInvalidConfiguredDurationFailsClosed(t *testing.T) {
-	t.Setenv("STARTUP_TIMEOUT", "eventually")
+	t.Setenv("AGENTAREA_STARTUP_TIMEOUT", "eventually")
 	defer func() {
 		if recover() == nil {
 			t.Fatal("invalid duration did not fail configuration")

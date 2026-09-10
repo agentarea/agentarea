@@ -131,8 +131,8 @@ class TriggerSystemHealthCheck:
                     "message": "Temporal schedules operational",
                     "details": {
                         "active_schedules": active_schedules,
-                        "namespace": self.settings.TEMPORAL_SCHEDULE_NAMESPACE,
-                        "task_queue": self.settings.TEMPORAL_SCHEDULE_TASK_QUEUE,
+                        "namespace": self.settings.NAMESPACE,
+                        "task_queue": self.settings.QUEUE,
                     },
                 }
             else:
@@ -168,8 +168,8 @@ class TriggerSystemHealthCheck:
                     "status": "healthy",
                     "message": "Webhook manager operational",
                     "details": {
-                        "base_url": self.settings.WEBHOOK_BASE_URL,
-                        "rate_limit_per_minute": self.settings.WEBHOOK_RATE_LIMIT_PER_MINUTE,
+                        "base_url": self.settings.WEBHOOK_URL,
+                        "rate_limit_per_minute": self.settings.WEBHOOK_RATE,
                     },
                 }
             else:

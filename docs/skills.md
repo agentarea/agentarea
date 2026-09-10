@@ -206,8 +206,8 @@ Skills work with both execution engines:
 
 | Engine | Config | How skills execute |
 |--------|--------|-------------------|
-| **Temporal** (default) | `WORKFLOW__EXECUTION_ENGINE=temporal` | Via workflow activities → MCP Manager → sandbox |
-| **Direct** (dev/CLI) | `WORKFLOW__EXECUTION_ENGINE=direct` | In-process agent loop, same skill activation |
+| **Temporal** (default) | `AGENTAREA_WF_ENGINE=temporal` | Via workflow activities → MCP Manager → sandbox |
+| **Direct** (dev/CLI) | `AGENTAREA_WF_ENGINE=direct` | In-process agent loop, same skill activation |
 
 Both use the same `activate_skill` tool and skill catalog. The execution path differs but the agent experience is identical.
 
@@ -234,8 +234,8 @@ See [Skill Sandboxing](/skill-sandboxing) for container isolation details.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WORKFLOW__EXECUTION_ENGINE` | `temporal` | `temporal` or `direct` |
-| `SANDBOX_EXECUTOR_URL` | — | URL of sandbox executor (dev mode, set in MCP Manager) |
+| `AGENTAREA_WF_ENGINE` | `temporal` | `temporal` or `direct` |
+| `AGENTAREA_SBX_EXECUTOR_URL` | — | URL of sandbox executor (dev mode, set in MCP Manager) |
 
 ---
 

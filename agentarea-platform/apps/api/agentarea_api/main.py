@@ -51,7 +51,7 @@ async def initialize_services():
         discover_extensions()
 
         app_settings = get_app_settings()
-        mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
+        mode = DeploymentMode(app_settings.EDITION)
         register_singleton(FeatureService, FeatureService(mode=mode))
 
         from agentarea_common.config import get_settings
@@ -60,38 +60,38 @@ async def initialize_services():
 
         # Shared graph clients (used by the rebac API + PermissionService).
         openfga_client = None
-        if settings.access_control.ACCESS_CONTROL_BACKEND == "openfga":
+        if settings.access_control.BACKEND == "openfga":
             from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
             from agentarea_common.rebac.openfga_client import OpenFGAClient
 
             await bootstrap_openfga(settings.openfga)
             openfga_client = OpenFGAClient(
-                api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-                store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-                authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-                timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+                api_url=settings.openfga.URL,
+                store_id=settings.openfga.STORE_ID,
+                authorization_model_id=settings.openfga.MODEL_ID,
+                timeout_seconds=settings.openfga.TIMEOUT.total_seconds(),
             )
             register_singleton(OpenFGAClient, openfga_client)
 
         keto_client = None
-        if openfga_client is None and settings.access_control.ACCESS_CONTROL_BACKEND == "keto":
+        if openfga_client is None and settings.access_control.BACKEND == "keto":
             from agentarea_common.rebac.keto_client import KetoClient
 
             keto_client = KetoClient(
-                read_url=settings.keto.ACCESS_CONTROL_KETO_READ_URL,
-                write_url=settings.keto.ACCESS_CONTROL_KETO_WRITE_URL,
-                timeout_seconds=settings.keto.ACCESS_CONTROL_KETO_TIMEOUT_SECONDS,
+                read_url=settings.keto.READ_URL,
+                write_url=settings.keto.WRITE_URL,
+                timeout_seconds=settings.keto.TIMEOUT.total_seconds(),
             )
             register_singleton(KetoClient, keto_client)
 
         # PermissionService is a SELECTOR extension point: exactly one impl is
-        # active, and an EXPLICIT ACCESS_CONTROL_BACKEND must win over a merely
+        # active, and an EXPLICIT AGENTAREA_AUTHZ_BACKEND must win over a merely
         # installed "permissions" extension. (Previously the extension was checked
         # first and silently overrode the configured backend -- e.g. an installed
-        # keto extension shadowed ACCESS_CONTROL_BACKEND=openfga so OpenFGA never
+        # keto extension shadowed AGENTAREA_AUTHZ_BACKEND=openfga so OpenFGA never
         # enforced.) The extension is a FALLBACK, used only when the operator did
         # not select a concrete backend. See AGENTS.md "Extension points".
-        backend = settings.access_control.ACCESS_CONTROL_BACKEND
+        backend = settings.access_control.BACKEND
         perm_factory = ExtensionRegistry.get_factory("permissions")
         if openfga_client is not None:
             from agentarea_common.auth.openfga_permission import OpenFGAPermissionService
@@ -112,12 +112,12 @@ async def initialize_services():
 
         if perm_factory and perm_impl != "extension:permissions":
             logger.warning(
-                "Ignoring registered 'permissions' extension: ACCESS_CONTROL_BACKEND=%s "
+                "Ignoring registered 'permissions' extension: AGENTAREA_AUTHZ_BACKEND=%s "
                 "selects %s explicitly. An extension cannot override an explicit backend.",
                 backend,
                 perm_impl,
             )
-        logger.info("PermissionService=%s (ACCESS_CONTROL_BACKEND=%s)", perm_impl, backend)
+        logger.info("PermissionService=%s (BACKEND=%s)", perm_impl, backend)
 
         authz_factory = ExtensionRegistry.get_factory("authorization")
         if authz_factory:
@@ -176,10 +176,11 @@ async def cleanup_all_connections():
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     """Original application lifespan."""
-    import os
-
-    # Detect if running with uvicorn reload
-    is_reload_mode = os.getenv("RELOAD", "").lower() == "true" or "--reload" in " ".join(sys.argv)
+    # Detect if running with uvicorn reload. Reload is a local-development flag,
+    # not deployment configuration, so it is read from argv only — the RELOAD env
+    # var it also used to consult was never wired to the --reload option and so
+    # silently did nothing.
+    is_reload_mode = "--reload" in " ".join(sys.argv)
 
     # NOTE: Don't override signal handlers - let uvicorn handle them for proper reload
 
@@ -298,20 +299,20 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         BodySizeLimitMiddleware,
-        max_bytes=_get_settings().app.MAX_REQUEST_BODY_BYTES,
+        max_bytes=_get_settings().app.API_MAX_BODY,
     )
 
     # Add CORS middleware. Origins are an explicit allowlist (never "*"): with
     # allow_credentials=True a wildcard would reflect any origin for credentialed
-    # cross-site reads. Configure via CORS_ALLOWED_ORIGINS.
+    # cross-site reads. Configure via AGENTAREA_CORS_ORIGINS.
     from agentarea_common.config import get_settings
 
     _cors = get_settings().app
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors.cors_allowed_origins,
-        allow_origin_regex=_cors.CORS_ALLOWED_ORIGIN_REGEX,
-        allow_credentials=_cors.CORS_ALLOW_CREDENTIALS,
+        allow_origin_regex=_cors.CORS_ORIGIN_REGEX,
+        allow_credentials=_cors.CORS_CREDENTIALS,
         allow_methods=_cors.cors_allowed_methods,
         allow_headers=_cors.cors_allowed_headers,
         max_age=_cors.CORS_MAX_AGE,

@@ -1153,14 +1153,14 @@ async def _sandbox_manager_request(
     params: dict[str, str] | None = None,
 ) -> httpx.Response:
     settings = get_settings().mcp
-    secret = settings.SANDBOX_FILE_AUTH_SECRET
+    secret = settings.SBX_FILE_SECRET
     if secret is None or not secret.get_secret_value():
         raise HTTPException(status_code=503, detail="Sandbox file access is not configured")
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             return await client.request(
                 method,
-                f"{settings.MCP_MANAGER_URL.rstrip('/')}{path}",
+                f"{settings.MANAGER_URL.rstrip('/')}{path}",
                 params=params,
                 headers={"Authorization": f"Bearer {secret.get_secret_value()}"},
             )
@@ -1177,14 +1177,14 @@ async def _sandbox_manager_stream(
     params: dict[str, str],
 ) -> tuple[httpx.AsyncClient, httpx.Response]:
     settings = get_settings().mcp
-    secret = settings.SANDBOX_FILE_AUTH_SECRET
+    secret = settings.SBX_FILE_SECRET
     if secret is None or not secret.get_secret_value():
         raise HTTPException(status_code=503, detail="Sandbox file access is not configured")
 
     client = httpx.AsyncClient(timeout=300)
     request = client.build_request(
         "GET",
-        f"{settings.MCP_MANAGER_URL.rstrip('/')}{path}",
+        f"{settings.MANAGER_URL.rstrip('/')}{path}",
         params=params,
         headers={"Authorization": f"Bearer {secret.get_secret_value()}"},
     )

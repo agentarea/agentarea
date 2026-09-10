@@ -2,14 +2,18 @@
 
 from typing import Literal
 
+from pydantic_settings import SettingsConfigDict
+
 from .base import BaseAppSettings
 
 
 class BrokerSettings(BaseAppSettings):
     """Base broker configuration."""
 
-    BROKER_TYPE: Literal["redis", "kafka"] = "redis"
-    EVENT_BUS_BACKEND: Literal["redis", "kafka", "nats"] = "redis"
+    model_config = SettingsConfigDict(env_prefix="AGENTAREA_")
+
+    BROKER: Literal["redis", "kafka"] = "redis"
+    EVENT_BUS: Literal["redis", "kafka", "nats"] = "redis"
 
 
 class RedisSettings(BrokerSettings):
@@ -21,5 +25,5 @@ class RedisSettings(BrokerSettings):
 class KafkaSettings(BrokerSettings):
     """Kafka broker configuration."""
 
-    KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"
-    KAFKA_TOPIC_PREFIX: str = ""
+    KAFKA_SERVERS: str = "localhost:9092"
+    KAFKA_PREFIX: str = ""

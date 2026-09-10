@@ -75,7 +75,7 @@ how a delegated run is distinguished downstream.
 
 It then polls `get_task_with_workflow_status` every 2 seconds until the task
 reaches `completed`, `failed` or `cancelled`. The ceiling is 600 seconds by
-default, configurable through `AGENT_DELEGATION_POLL_TIMEOUT`. That number was
+default, configurable through `AGENTAREA_TASK_DELEGATION_TIMEOUT`. That number was
 raised deliberately: a delegated task is a full agent run, and a research
 sub-agent making web calls can legitimately need minutes, so a shorter ceiling
 abandoned sub-agents that were still working.

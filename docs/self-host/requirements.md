@@ -139,7 +139,7 @@ Only needed if you build images yourself rather than pulling published ones.
 | Pod stuck in `Pending` with `FailedScheduling: RuntimeClass ... not found` | `mcpManager.runtimeClass` names a RuntimeClass the cluster does not have | Install the runtime and its RuntimeClass, or set `runtimeClass: ""` and accept no kernel isolation |
 | MCP instances created but unreachable over HTTP | Gateway API CRDs or the named Gateway are missing | Install Envoy Gateway, or set `mcpManager.gateway.*` to your Gateway |
 | PVCs stuck in `Pending` | No default StorageClass | Set `postgresql.persistence.storageClass` and `rustfs.persistence.*`, or disable both and use managed services |
-| API exits at startup with `SECRET_MANAGER_ENCRYPTION_KEY environment variable must be set` | The default `database` secret backend has no key | See [secrets backends](/self-host/secrets-backends) |
+| API exits at startup with `AGENTAREA_SECRET_ENCRYPTION_KEY environment variable must be set` | The default `database` secret backend has no key | See [secrets backends](/self-host/secrets-backends) |
 
 ## Example
 

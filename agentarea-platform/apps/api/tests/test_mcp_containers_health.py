@@ -71,7 +71,7 @@ def _install(monkeypatch, answers, asked):
     monkeypatch.setattr(
         module,
         "get_settings",
-        lambda: SimpleNamespace(mcp=SimpleNamespace(MCP_MANAGER_URL="http://manager")),
+        lambda: SimpleNamespace(mcp=SimpleNamespace(MANAGER_URL="http://manager")),
     )
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: _Client(answers, asked))
 

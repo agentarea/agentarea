@@ -120,25 +120,25 @@ def get_graph_client() -> GraphClient | None:
     OpenFGA is preferred over Keto during the migration.
     """
     settings = get_settings()
-    if settings.access_control.ACCESS_CONTROL_BACKEND == "openfga":
+    if settings.access_control.BACKEND == "openfga":
         try:
             return get_container().get(OpenFGAClient)
         except ValueError:
             return OpenFGAClient(
-                api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-                store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-                authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-                timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+                api_url=settings.openfga.URL,
+                store_id=settings.openfga.STORE_ID,
+                authorization_model_id=settings.openfga.MODEL_ID,
+                timeout_seconds=settings.openfga.TIMEOUT.total_seconds(),
             )
-    if settings.access_control.ACCESS_CONTROL_BACKEND != "keto":
+    if settings.access_control.BACKEND != "keto":
         return None
     try:
         return get_container().get(KetoClient)
     except ValueError:
         return KetoClient(
-            read_url=settings.keto.ACCESS_CONTROL_KETO_READ_URL,
-            write_url=settings.keto.ACCESS_CONTROL_KETO_WRITE_URL,
-            timeout_seconds=settings.keto.ACCESS_CONTROL_KETO_TIMEOUT_SECONDS,
+            read_url=settings.keto.READ_URL,
+            write_url=settings.keto.WRITE_URL,
+            timeout_seconds=settings.keto.TIMEOUT.total_seconds(),
         )
 
 

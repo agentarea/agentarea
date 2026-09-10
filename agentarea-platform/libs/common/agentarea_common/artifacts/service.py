@@ -103,9 +103,9 @@ class ArtifactService:
         # Presigned URLs must be signed against a host the external caller
         # can reach; in dev that's localhost:9000, not the in-docker
         # rustfs:9000. Falls back to the internal client when
-        # PUBLIC_S3_ENDPOINT is unset (single-host setups).
+        # AGENTAREA_S3_PUBLIC_ENDPOINT is unset (single-host setups).
         self._public_client = public_client or get_s3_public_client()
-        self._bucket = bucket or get_aws_settings().ARTIFACTS_BUCKET_NAME
+        self._bucket = bucket or get_aws_settings().ARTIFACTS_BUCKET
         # Provenance is only recorded when both a recorder and an actor are
         # supplied; read-only callers construct the service without either.
         self._recorder = recorder

@@ -854,7 +854,7 @@ class MCPServerInstanceService:
         retryable = {409, 502, 503, 504}
         last_error: Exception | None = None
 
-        async with httpx.AsyncClient(timeout=settings.MCP_CLIENT_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=settings.TIMEOUT) as client:
             for attempt in range(3):
                 try:
                     response = await client.delete(url, headers=headers)

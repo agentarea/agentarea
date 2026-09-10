@@ -72,7 +72,7 @@ provider cannot attest the required isolation boundary, creation fails loudly.
 The Go manager is the lifecycle authority. A command or file request provisions
 or reuses the task binding and renews its active lease; command heartbeats keep
 that lease alive. When the operation finishes, the manager moves the binding to
-`SANDBOX_TASK_IDLE_TTL`. A later request wakes or recreates it and materializes
+`AGENTAREA_SBX_IDLE_TTL`. A later request wakes or recreates it and materializes
 the durable workspace. No Temporal activity names or invokes sandbox creation,
 retirement, or cleanup, so switching data-plane providers does not change the
 agent workflow.

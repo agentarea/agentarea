@@ -108,8 +108,8 @@ class AgentAreaWorker:
         settings = get_settings()
         setup_otel("agentarea-worker", settings.observability)
         self.client = await Client.connect(
-            settings.workflow.TEMPORAL_SERVER_URL,
-            namespace=settings.workflow.TEMPORAL_NAMESPACE,
+            settings.workflow.TEMPORAL_URL,
+            namespace=settings.workflow.NAMESPACE,
             data_converter=pydantic_data_converter,
             plugins=get_temporal_plugins(settings.observability),
         )
@@ -155,42 +155,42 @@ class AgentAreaWorker:
         discover_extensions()
 
         app_settings = get_app_settings()
-        mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
+        mode = DeploymentMode(app_settings.EDITION)
         register_singleton(FeatureService, FeatureService(mode=mode))
 
         openfga_client = None
-        if settings.access_control.ACCESS_CONTROL_BACKEND == "openfga":
+        if settings.access_control.BACKEND == "openfga":
             from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
             from agentarea_common.rebac.openfga_client import OpenFGAClient
 
             await bootstrap_openfga(settings.openfga)
             openfga_client = OpenFGAClient(
-                api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,
-                store_id=settings.openfga.ACCESS_CONTROL_OPENFGA_STORE_ID,
-                authorization_model_id=settings.openfga.ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID,
-                timeout_seconds=settings.openfga.ACCESS_CONTROL_OPENFGA_TIMEOUT_SECONDS,
+                api_url=settings.openfga.URL,
+                store_id=settings.openfga.STORE_ID,
+                authorization_model_id=settings.openfga.MODEL_ID,
+                timeout_seconds=settings.openfga.TIMEOUT.total_seconds(),
             )
             register_singleton(OpenFGAClient, openfga_client)
 
         keto_client = None
-        if openfga_client is None and settings.access_control.ACCESS_CONTROL_BACKEND == "keto":
+        if openfga_client is None and settings.access_control.BACKEND == "keto":
             from agentarea_common.rebac.keto_client import KetoClient
 
             keto_client = KetoClient(
-                read_url=settings.keto.ACCESS_CONTROL_KETO_READ_URL,
-                write_url=settings.keto.ACCESS_CONTROL_KETO_WRITE_URL,
-                timeout_seconds=settings.keto.ACCESS_CONTROL_KETO_TIMEOUT_SECONDS,
+                read_url=settings.keto.READ_URL,
+                write_url=settings.keto.WRITE_URL,
+                timeout_seconds=settings.keto.TIMEOUT.total_seconds(),
             )
             register_singleton(KetoClient, keto_client)
 
         # PermissionService is a SELECTOR extension point: exactly one impl is
-        # active, and an EXPLICIT ACCESS_CONTROL_BACKEND must win over a merely
+        # active, and an EXPLICIT AGENTAREA_AUTHZ_BACKEND must win over a merely
         # installed "permissions" extension. (Previously the extension was checked
         # first and silently overrode the configured backend -- e.g. an installed
-        # keto extension shadowed ACCESS_CONTROL_BACKEND=openfga so OpenFGA never
+        # keto extension shadowed AGENTAREA_AUTHZ_BACKEND=openfga so OpenFGA never
         # enforced.) The extension is a FALLBACK, used only when the operator did
         # not select a concrete backend. See AGENTS.md "Extension points".
-        backend = settings.access_control.ACCESS_CONTROL_BACKEND
+        backend = settings.access_control.BACKEND
         perm_factory = ExtensionRegistry.get_factory("permissions")
         if openfga_client is not None:
             from agentarea_common.auth.openfga_permission import OpenFGAPermissionService
@@ -211,12 +211,12 @@ class AgentAreaWorker:
 
         if perm_factory and perm_impl != "extension:permissions":
             logger.warning(
-                "Ignoring registered 'permissions' extension: ACCESS_CONTROL_BACKEND=%s "
+                "Ignoring registered 'permissions' extension: AGENTAREA_AUTHZ_BACKEND=%s "
                 "selects %s explicitly. An extension cannot override an explicit backend.",
                 backend,
                 perm_impl,
             )
-        logger.info("PermissionService=%s (ACCESS_CONTROL_BACKEND=%s)", perm_impl, backend)
+        logger.info("PermissionService=%s (BACKEND=%s)", perm_impl, backend)
 
         authz_factory = ExtensionRegistry.get_factory("authorization")
         if authz_factory:
@@ -239,15 +239,15 @@ class AgentAreaWorker:
 
         self.worker = Worker(
             self.client,
-            task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
+            task_queue=settings.workflow.QUEUE,
             workflows=[
                 AgentExecutionWorkflow,
             ],
             activities=activities + mcp_activities,
             interceptors=[GovernanceWorkerInterceptor(governance_pipeline)],
             workflow_runner=create_workflow_runner(),
-            max_concurrent_workflow_tasks=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
-            max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
+            max_concurrent_workflow_tasks=settings.workflow.MAX_WORKFLOWS,
+            max_concurrent_activities=settings.workflow.MAX_ACTIVITIES,
         )
 
         # Create trigger execution worker on the trigger-schedules queue
@@ -310,12 +310,12 @@ class AgentAreaWorker:
         self._dedup = DedupCache(
             redis_url,
             prefix="channel-delivery",
-            ttl_seconds=delivery_cfg.DEDUP_TTL_SECONDS,
+            ttl_seconds=int(delivery_cfg.DEDUP_TTL.total_seconds()),
         )
         self._inbound_dedup = DedupCache(
             redis_url,
             prefix="channel-inbound",
-            ttl_seconds=delivery_cfg.DEDUP_TTL_SECONDS,
+            ttl_seconds=int(delivery_cfg.DEDUP_TTL.total_seconds()),
         )
 
         # Inbound: event-service webhook/polling → Redis Streams → Python task execution
@@ -324,20 +324,20 @@ class AgentAreaWorker:
             dedup=self._inbound_dedup,
             event_broker=dependencies.event_broker,
             workflow_executor=dependencies.workflow_executor,
-            stream=delivery_cfg.INBOUND_STREAM,
-            group=delivery_cfg.INBOUND_GROUP,
-            dlq_stream=delivery_cfg.INBOUND_DLQ,
-            block_ms=delivery_cfg.CONSUMER_BLOCK_MS,
-            batch_size=delivery_cfg.CONSUMER_BATCH_SIZE,
-            max_delivery_attempts=delivery_cfg.MAX_DELIVERY_ATTEMPTS,
+            stream=delivery_cfg.IN_STREAM,
+            group=delivery_cfg.IN_GROUP,
+            dlq_stream=delivery_cfg.IN_DLQ,
+            block_ms=int(delivery_cfg.BLOCK.total_seconds() * 1000),
+            batch_size=delivery_cfg.BATCH_SIZE,
+            max_delivery_attempts=delivery_cfg.MAX_ATTEMPTS,
         )
         self.inbound_autoclaimer = StreamAutoclaimer(
             broker=self._broker,
-            stream=delivery_cfg.INBOUND_STREAM,
-            group=delivery_cfg.INBOUND_GROUP,
+            stream=delivery_cfg.IN_STREAM,
+            group=delivery_cfg.IN_GROUP,
             consumer_id="inbound-autoclaimer",
-            min_idle_ms=delivery_cfg.AUTOCLAIM_MIN_IDLE_MS,
-            interval_seconds=delivery_cfg.AUTOCLAIM_INTERVAL_SECONDS,
+            min_idle_ms=int(delivery_cfg.AUTOCLAIM_IDLE.total_seconds() * 1000),
+            interval_seconds=delivery_cfg.AUTOCLAIM_EVERY.total_seconds(),
         )
 
         # Register adapters; they raise typed Retryable/Fatal errors that the
@@ -350,20 +350,20 @@ class AgentAreaWorker:
             broker=self._broker,
             dedup=self._dedup,
             adapter_resolver=get_adapter,
-            stream=delivery_cfg.OUTBOUND_STREAM,
-            group=delivery_cfg.OUTBOUND_GROUP,
-            dlq_stream=delivery_cfg.OUTBOUND_DLQ,
-            block_ms=delivery_cfg.CONSUMER_BLOCK_MS,
-            batch_size=delivery_cfg.CONSUMER_BATCH_SIZE,
-            max_delivery_attempts=delivery_cfg.MAX_DELIVERY_ATTEMPTS,
+            stream=delivery_cfg.OUT_STREAM,
+            group=delivery_cfg.OUT_GROUP,
+            dlq_stream=delivery_cfg.OUT_DLQ,
+            block_ms=int(delivery_cfg.BLOCK.total_seconds() * 1000),
+            batch_size=delivery_cfg.BATCH_SIZE,
+            max_delivery_attempts=delivery_cfg.MAX_ATTEMPTS,
         )
         self.delivery_autoclaimer = StreamAutoclaimer(
             broker=self._broker,
-            stream=delivery_cfg.OUTBOUND_STREAM,
-            group=delivery_cfg.OUTBOUND_GROUP,
+            stream=delivery_cfg.OUT_STREAM,
+            group=delivery_cfg.OUT_GROUP,
             consumer_id="autoclaimer",
-            min_idle_ms=delivery_cfg.AUTOCLAIM_MIN_IDLE_MS,
-            interval_seconds=delivery_cfg.AUTOCLAIM_INTERVAL_SECONDS,
+            min_idle_ms=int(delivery_cfg.AUTOCLAIM_IDLE.total_seconds() * 1000),
+            interval_seconds=delivery_cfg.AUTOCLAIM_EVERY.total_seconds(),
         )
 
         # Transactional outbox relay: drains event_outbox rows (written in the

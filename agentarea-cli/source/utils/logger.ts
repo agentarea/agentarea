@@ -52,7 +52,7 @@ class Logger {
 }
 
 // Create a default logger instance
-const logLevel = (process.env['LOG_LEVEL'] as LogLevel) || 'info';
+const logLevel = (process.env['AGENTAREA_LOG_LEVEL'] as LogLevel) || 'info';
 export const logger = new Logger(logLevel);
 
 export default logger;

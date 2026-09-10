@@ -67,12 +67,12 @@ spec:
                 name: {{ include "agentarea.fullname" . }}-env-databasejobs
           env:
             # Database credentials
-            - name: POSTGRES_USER
+            - name: AGENTAREA_DB_USER
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.postgresql }}
                   key: username
-            - name: POSTGRES_PASSWORD
+            - name: AGENTAREA_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.postgresql }}

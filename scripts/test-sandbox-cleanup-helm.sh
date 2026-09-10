@@ -33,19 +33,19 @@ assert not any(
 
 contracts = {
     "mcp-manager": {
-        "SANDBOX_CLEANUP_AUTH_SECRET": "sandbox-cleanup-token",
-        "SANDBOX_INSPECTION_AUTH_SECRET": "sandbox-inspection-token",
-        "SANDBOX_FILE_AUTH_SECRET": "sandbox-file-token",
-        "MCP_GATEWAY_AUTH_SECRET": "mcp-gateway-token",
+        "AGENTAREA_SBX_CLEANUP_SECRET": "sandbox-cleanup-token",
+        "AGENTAREA_SBX_INSPECT_SECRET": "sandbox-inspection-token",
+        "AGENTAREA_SBX_FILE_SECRET": "sandbox-file-token",
+        "AGENTAREA_MCP_GATEWAY_SECRET": "mcp-gateway-token",
     },
     "worker": {
-        "SANDBOX_FILE_AUTH_SECRET": "sandbox-file-token",
-        "MCP_GATEWAY_AUTH_SECRET": "mcp-gateway-token",
+        "AGENTAREA_SBX_FILE_SECRET": "sandbox-file-token",
+        "AGENTAREA_MCP_GATEWAY_SECRET": "mcp-gateway-token",
     },
     "backend": {
-        "SANDBOX_INSPECTION_AUTH_SECRET": "sandbox-inspection-token",
-        "SANDBOX_FILE_AUTH_SECRET": "sandbox-file-token",
-        "MCP_GATEWAY_AUTH_SECRET": "mcp-gateway-token",
+        "AGENTAREA_SBX_INSPECT_SECRET": "sandbox-inspection-token",
+        "AGENTAREA_SBX_FILE_SECRET": "sandbox-file-token",
+        "AGENTAREA_MCP_GATEWAY_SECRET": "mcp-gateway-token",
     },
 }
 
@@ -84,13 +84,13 @@ for document in documents:
 # which server-side apply rejects.
 manager = find_document("Deployment", "cleanup-auth-agentarea-mcp-manager")
 assert re.search(
-    r'(?m)^\s*- name:\s*SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS\s*$\n'
+    r'(?m)^\s*- name:\s*AGENTAREA_SBX_MAX_EXEC_SECONDS\s*$\n'
     r'^\s*value:\s*"1800"\s*$',
     manager,
 ), "manager timeout policy was not rendered from sandboxRuntime.maxExecutionTimeoutSeconds"
 warm_pool = find_document("DaemonSet", "cleanup-auth-agentarea-warm-pool")
 assert re.search(
-    r'(?m)^\s*- name:\s*MAX_EXECUTION_TIMEOUT_SECONDS\s*$\n'
+    r'(?m)^\s*- name:\s*AGENTAREA_SBX_MAX_EXEC_SECONDS\s*$\n'
     r'^\s*value:\s*"1800"\s*$',
     warm_pool,
 ), "activation timeout diverged from the manager policy"

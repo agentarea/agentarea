@@ -993,7 +993,7 @@ func (p *E2BProvider) envdURL(sandboxID, domain string) (string, error) {
 		return strings.TrimRight(parsed.String(), "/"), nil
 	}
 	if domain == "" {
-		return "", fmt.Errorf("%s did not return a sandbox domain; configure SANDBOX_E2B_SANDBOX_URL", p.Name())
+		return "", fmt.Errorf("%s did not return a sandbox domain; configure AGENTAREA_SBX_E2B_SANDBOX_URL", p.Name())
 	}
 	apiURL, _ := url.Parse(p.cfg.APIURL)
 	scheme := "https"

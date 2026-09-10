@@ -36,7 +36,7 @@ def _rustfs_env_defaults() -> None:
     os.environ.setdefault("AWS_ACCESS_KEY_ID", "rustfsadmin")
     os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "rustfsadmin")
     os.environ.setdefault("AWS_REGION", "us-east-1")
-    os.environ.setdefault("ARTIFACTS_BUCKET_NAME", "artifacts")
+    os.environ.setdefault("AGENTAREA_S3_ARTIFACTS_BUCKET", "artifacts")
 
 
 def _tool_events(events: list[dict], event_type: str, tool_name: str) -> list[dict]:

@@ -52,7 +52,7 @@ before this is a deployment rather than a demo.
 
 ### 2. Generate the secrets that must not stay at their defaults
 
-`SECRET_MANAGER_ENCRYPTION_KEY` is the Fernet key that encrypts every stored
+`AGENTAREA_SECRET_ENCRYPTION_KEY` is the Fernet key that encrypts every stored
 credential — LLM provider keys, MCP server secrets — in the `agentarea`
 database. It must be a valid Fernet key, and it must not change after data
 exists, or the ciphertext already written becomes unreadable.
@@ -61,7 +61,7 @@ exists, or the ciphertext already written becomes unreadable.
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-`SANDBOX_ACTIVATION_AUTH_SECRET` and `SANDBOX_CLEANUP_AUTH_SECRET` are HMAC
+`AGENTAREA_SBX_ACTIVATION_SECRET` and `AGENTAREA_SBX_CLEANUP_SECRET` are HMAC
 shared secrets between the control plane and the sandbox runner. Both must be at
 least 32 bytes. The Compose file declares them with `:?`, so `docker compose`
 refuses to start the stack if either is empty rather than falling back to a
@@ -74,9 +74,9 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 Set all three in `.env`:
 
 ```bash
-SECRET_MANAGER_ENCRYPTION_KEY=<fernet key from above>
-SANDBOX_ACTIVATION_AUTH_SECRET=<48-byte token>
-SANDBOX_CLEANUP_AUTH_SECRET=<a different 48-byte token>
+AGENTAREA_SECRET_ENCRYPTION_KEY=<fernet key from above>
+AGENTAREA_SBX_ACTIVATION_SECRET=<48-byte token>
+AGENTAREA_SBX_CLEANUP_SECRET=<a different 48-byte token>
 POSTGRES_USER=agentarea
 POSTGRES_PASSWORD=<a real password>
 POSTGRES_DB=agentarea
@@ -84,7 +84,7 @@ RUSTFS_ACCESS_KEY=<a real access key>
 RUSTFS_SECRET_KEY=<a real secret key>
 ```
 
-`.env.example` also ships a `KRATOS_JWKS_B64` value with the private key
+`.env.example` also ships a `AGENTAREA_AUTH_JWKS_B64` value with the private key
 included. It is a published test key. Anyone can mint tokens your API will
 accept. Replace it before exposing the API to a network you do not control.
 
@@ -160,13 +160,13 @@ recorded the current head without replaying migrations.
 
 ## Troubleshooting
 
-**`docker compose` exits immediately with `SANDBOX_ACTIVATION_AUTH_SECRET must
+**`docker compose` exits immediately with `AGENTAREA_SBX_ACTIVATION_SECRET must
 be set`.** The Compose file uses `${VAR:?message}` for both sandbox secrets, so
 an empty value aborts the run rather than starting an unauthenticated sandbox
 path. Set both in `.env`.
 
 **The API container restarts in a loop with
-`SECRET_MANAGER_ENCRYPTION_KEY environment variable must be set`.** The default
+`AGENTAREA_SECRET_ENCRYPTION_KEY environment variable must be set`.** The default
 secret backend is `database`, which requires a Fernet key. `SecretManagerFactory`
 validates this at construction time and raises, so the process exits at startup
 instead of failing later on the first secret read. Generate a key as in step 2.

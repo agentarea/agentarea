@@ -10,10 +10,10 @@ export const env = createEnv({
   },
   client: {},
   runtimeEnv: {
-    ORY_ADMIN_URL: process.env.ORY_ADMIN_URL,
+    ORY_ADMIN_URL: process.env.AGENTAREA_AUTH_KRATOS_ADMIN_URL,
     ORY_SDK_URL: process.env.ORY_SDK_URL,
-    ORY_BROWSER_URL: process.env.ORY_BROWSER_URL,
-    API_URL: process.env.API_URL,
+    ORY_BROWSER_URL: process.env.NEXT_PUBLIC_ORY_SDK_URL,
+    API_URL: process.env.AGENTAREA_API_URL,
   },
   skipValidation: true,
 });

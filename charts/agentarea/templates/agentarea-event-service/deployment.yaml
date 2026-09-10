@@ -68,15 +68,15 @@ spec:
             {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.redis.envs" . | nindent 12 }}
             {{- include "agentarea.redis.urlEnv" . | nindent 12 }}
-            - name: AGENTAREA_EVENTS_PORT
+            - name: PORT
               value: {{ .Values.eventService.port | quote }}
-            - name: AGENTAREA_EVENTS_POLL_INTERVAL
+            - name: AGENTAREA_EVT_POLL_INTERVAL
               value: {{ .Values.eventService.pollInterval | quote }}
-            - name: AGENTAREA_EVENTS_MAX_POLLERS
+            - name: AGENTAREA_EVT_MAX_POLLERS
               value: {{ .Values.eventService.maxPollers | quote }}
-            - name: AGENTAREA_EVENTS_INBOUND_STREAM
+            - name: AGENTAREA_EVT_STREAM
               value: {{ .Values.eventService.inboundStream | quote }}
-            - name: AGENTAREA_EVENTS_TELEGRAM_POLLING_ENABLED
+            - name: AGENTAREA_EVT_TELEGRAM_ENABLED
               value: {{ .Values.eventService.telegramPolling.enabled | quote }}
             {{- if .Values.eventService.extraEnv }}
             {{- toYaml .Values.eventService.extraEnv | nindent 12 }}

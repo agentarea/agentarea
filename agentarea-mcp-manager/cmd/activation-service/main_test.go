@@ -37,15 +37,15 @@ func TestPrepareTaskWorkspaceDoesNotFollowAgentSymlinks(t *testing.T) {
 }
 
 func TestLoadActivationPolicyRejectsMissingOrMalformedValues(t *testing.T) {
-	t.Setenv("MAX_EXECUTION_TIMEOUT_SECONDS", "1800")
-	t.Setenv("SANDBOX_WORKSPACE_MAX_FILES", "10000")
-	t.Setenv("SANDBOX_WORKSPACE_MAX_FILE_BYTES", "268435456")
-	t.Setenv("SANDBOX_WORKSPACE_MAX_BYTES", "2147483648")
-	t.Setenv("IDLE_TIMEOUT_SECONDS", "not-a-number")
+	t.Setenv("AGENTAREA_SBX_MAX_EXEC_SECONDS", "1800")
+	t.Setenv("AGENTAREA_SBX_MAX_FILES", "10000")
+	t.Setenv("AGENTAREA_SBX_MAX_FILE_SIZE", "268435456")
+	t.Setenv("AGENTAREA_SBX_MAX_TOTAL_SIZE", "2147483648")
+	t.Setenv("AGENTAREA_SBX_IDLE_SHUTDOWN", "not-a-duration")
 	if _, err := loadActivationPolicy(); err == nil {
 		t.Fatal("malformed idle timeout unexpectedly disabled the watchdog")
 	}
-	t.Setenv("IDLE_TIMEOUT_SECONDS", "0")
+	t.Setenv("AGENTAREA_SBX_IDLE_SHUTDOWN", "0s")
 	policy, err := loadActivationPolicy()
 	if err != nil {
 		t.Fatal(err)
@@ -140,7 +140,7 @@ func postExecuteRequestWithHooks(
 	if err := os.WriteFile(runtimePath, []byte(runtimeJSON), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("RUNTIME_MANIFEST_PATH", runtimePath)
+	t.Setenv("AGENTAREA_SBX_MANIFEST_PATH", runtimePath)
 	if req.TaskID == "" {
 		req.TaskID = req.WorkflowID
 	}
@@ -579,12 +579,14 @@ func TestSandboxProcessEnvironmentRemovesStorageCredentials(t *testing.T) {
 	t.Setenv("AWS_SESSION_TOKEN", "canary-session-token")
 	t.Setenv("AWS_CONTAINER_CREDENTIALS_FULL_URI", "canary-credential-endpoint")
 	t.Setenv("RUSTFS_SECRET_KEY", "canary-rustfs-secret")
-	t.Setenv("SANDBOX_WORKSPACE_S3_CREDENTIAL_TOKEN", "canary-workspace-token")
+	t.Setenv("AGENTAREA_SBX_S3_CREDENTIAL_TOKEN", "canary-workspace-token")
+	t.Setenv("AGENTAREA_S3_ACCESS_KEY", "canary-platform-access-key")
+	t.Setenv("AGENTAREA_S3_SECRET_KEY", "canary-platform-secret-key")
 	t.Setenv(activationauth.SecretEnv, "canary-activation-auth-secret")
 	t.Setenv("WORKSPACE_NON_SECRET_CANARY", "preserved")
 
 	joined := strings.Join(sandboxProcessEnvironment(), "\n")
-	for _, forbidden := range []string{"canary-access-key", "canary-secret-key", "canary-session-token", "canary-credential-endpoint", "canary-rustfs-secret", "canary-workspace-token", "canary-activation-auth-secret"} {
+	for _, forbidden := range []string{"canary-access-key", "canary-secret-key", "canary-session-token", "canary-credential-endpoint", "canary-rustfs-secret", "canary-workspace-token", "canary-platform-access-key", "canary-platform-secret-key", "canary-activation-auth-secret"} {
 		if strings.Contains(joined, forbidden) {
 			t.Fatalf("sandbox environment contains storage credential %q", forbidden)
 		}
@@ -610,7 +612,7 @@ func TestRuntimeManifestHandlerServesValidatedManifest(t *testing.T) {
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("RUNTIME_MANIFEST_PATH", path)
+	t.Setenv("AGENTAREA_SBX_MANIFEST_PATH", path)
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/manifest", nil)
 	response := httptest.NewRecorder()
@@ -632,7 +634,7 @@ func TestRuntimeManifestHandlerFailsClosedForInvalidManifest(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"schema_version":1}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("RUNTIME_MANIFEST_PATH", path)
+	t.Setenv("AGENTAREA_SBX_MANIFEST_PATH", path)
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/manifest", nil)
 	response := httptest.NewRecorder()
@@ -644,15 +646,15 @@ func TestRuntimeManifestHandlerFailsClosedForInvalidManifest(t *testing.T) {
 
 func TestObjectStoreEndpointHost(t *testing.T) {
 	t.Run("fails hard when unset", func(t *testing.T) {
-		t.Setenv("SANDBOX_WORKSPACE_S3_ENDPOINT", "")
-		t.Setenv("AWS_ENDPOINT_URL", "")
+		t.Setenv("AGENTAREA_SBX_S3_ENDPOINT", "")
+		t.Setenv("AGENTAREA_S3_ENDPOINT", "")
 		if _, err := objectStoreEndpointHost(); err == nil {
 			t.Fatal("expected an error when no object store endpoint is configured")
 		}
 	})
 	t.Run("primary variable wins and trailing slash is trimmed", func(t *testing.T) {
-		t.Setenv("SANDBOX_WORKSPACE_S3_ENDPOINT", "http://rustfs:9000/")
-		t.Setenv("AWS_ENDPOINT_URL", "https://s3.amazonaws.com")
+		t.Setenv("AGENTAREA_SBX_S3_ENDPOINT", "http://rustfs:9000/")
+		t.Setenv("AGENTAREA_S3_ENDPOINT", "https://s3.amazonaws.com")
 		host, err := objectStoreEndpointHost()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -661,9 +663,9 @@ func TestObjectStoreEndpointHost(t *testing.T) {
 			t.Fatalf("host = %q, want rustfs:9000", host)
 		}
 	})
-	t.Run("falls back to AWS_ENDPOINT_URL", func(t *testing.T) {
-		t.Setenv("SANDBOX_WORKSPACE_S3_ENDPOINT", "")
-		t.Setenv("AWS_ENDPOINT_URL", "https://s3.amazonaws.com")
+	t.Run("falls back to AGENTAREA_S3_ENDPOINT", func(t *testing.T) {
+		t.Setenv("AGENTAREA_SBX_S3_ENDPOINT", "")
+		t.Setenv("AGENTAREA_S3_ENDPOINT", "https://s3.amazonaws.com")
 		host, err := objectStoreEndpointHost()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

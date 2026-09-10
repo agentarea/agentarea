@@ -15,7 +15,7 @@ authorization work. Keto remains supported as a fallback during migration.
   fga model test --tests model.fga.yaml   # must pass before commit
   ```
 - The `/access-control` API can operate against OpenFGA when
-  `ACCESS_CONTROL_BACKEND=openfga`.
+  `AGENTAREA_AUTHZ_BACKEND=openfga`.
 - Graph object and user refs intentionally keep the current PascalCase names
   (`Skill:<id>`, `Agent:<id>`, `Workspace:<id>#members`) so existing API payloads
   and access-explorer data do not require an immediate data migration.
@@ -33,18 +33,18 @@ bootstrap the OpenFGA store and load `authorization-model.json` before wiring th
 OpenFGA client. The default dev settings are:
 
 ```bash
-ACCESS_CONTROL_BACKEND=openfga
-ACCESS_CONTROL_OPENFGA_API_URL=http://openfga:8080
-ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP=true
-ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=true
-ACCESS_CONTROL_OPENFGA_STORE_NAME=agentarea
-ACCESS_CONTROL_OPENFGA_MODEL_PATH=/app/config/auth/openfga/authorization-model.json
+AGENTAREA_AUTHZ_BACKEND=openfga
+AGENTAREA_AUTHZ_FGA_URL=http://openfga:8080
+AGENTAREA_AUTHZ_FGA_BOOTSTRAP=true
+AGENTAREA_AUTHZ_FGA_APPLY_MODEL=true
+AGENTAREA_AUTHZ_FGA_STORE_NAME=agentarea
+AGENTAREA_AUTHZ_FGA_MODEL_PATH=/app/config/auth/openfga/authorization-model.json
 ```
 
-`ACCESS_CONTROL_OPENFGA_STORE_ID` and
-`ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID` remain optional overrides. When
-`ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=true`, the model in
-`ACCESS_CONTROL_OPENFGA_MODEL_PATH` wins and the returned model id is used in the
+`AGENTAREA_AUTHZ_FGA_STORE_ID` and
+`AGENTAREA_AUTHZ_FGA_MODEL_ID` remain optional overrides. When
+`AGENTAREA_AUTHZ_FGA_APPLY_MODEL=true`, the model in
+`AGENTAREA_AUTHZ_FGA_MODEL_PATH` wins and the returned model id is used in the
 running process. This avoids stale model ids after model changes.
 
 Concrete tool invocation authorization is fail-closed and requires OpenFGA
@@ -58,10 +58,10 @@ a ConfigMap and mounts it into the backend and worker at
 the chart sets:
 
 ```bash
-ACCESS_CONTROL_BACKEND=openfga
-ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP=true
-ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=true
-ACCESS_CONTROL_OPENFGA_MODEL_PATH=/etc/agentarea/openfga/authorization-model.json
+AGENTAREA_AUTHZ_BACKEND=openfga
+AGENTAREA_AUTHZ_FGA_BOOTSTRAP=true
+AGENTAREA_AUTHZ_FGA_APPLY_MODEL=true
+AGENTAREA_AUTHZ_FGA_MODEL_PATH=/etc/agentarea/openfga/authorization-model.json
 ```
 
 For managed OpenFGA, set `openfga.enabled=false` and provide the same

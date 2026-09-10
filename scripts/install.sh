@@ -90,9 +90,9 @@ write_env_if_missing() {
 
   cat > "$env_file" <<EOF
 VERSION=latest
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=$postgres_password
-POSTGRES_DB=agentarea
+AGENTAREA_DB_USER=postgres
+AGENTAREA_DB_PASSWORD=$postgres_password
+AGENTAREA_DB_NAME=agentarea
 TEMPORAL_DB=temporal
 KRATOS_DB=kratos
 
@@ -102,8 +102,8 @@ RUSTFS_REGION=us-east-1
 DOCUMENTS_BUCKET=documents
 ARTIFACTS_BUCKET=artifacts
 
-SECRET_MANAGER_TYPE=database
-SECRET_MANAGER_ENCRYPTION_KEY=$secret_key
+AGENTAREA_SECRET_BACKEND=database
+AGENTAREA_SECRET_ENCRYPTION_KEY=$secret_key
 
 # HMAC secrets the worker uses to sign sandbox activation and cleanup calls to
 # the MCP manager. docker-compose.yaml declares both with no default, so the
@@ -128,11 +128,11 @@ OIDC_GOOGLE_CLIENT_SECRET=
 OIDC_GITHUB_CLIENT_ID=
 OIDC_GITHUB_CLIENT_SECRET=
 
-KRATOS_ISSUER=http://localhost:4433
-KRATOS_AUDIENCE=agentarea-api
+AGENTAREA_AUTH_ISSUER=http://localhost:4433
+AGENTAREA_AUTH_AUDIENCE=agentarea-api
 # Public half of the keypair generated for this install. Kratos signs with the
 # private half in config/auth/kratos/jwks.json; the backend only verifies.
-KRATOS_JWKS_B64=$kratos_jwks_public_b64
+AGENTAREA_AUTH_JWKS_B64=$kratos_jwks_public_b64
 
 KRATOS_SECRETS_COOKIE=$kratos_cookie_secret
 KRATOS_SECRETS_CIPHER=$kratos_cipher_secret

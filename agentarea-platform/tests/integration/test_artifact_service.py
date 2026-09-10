@@ -10,7 +10,7 @@ Requires the dev stack (RustFS on :9000) and the usual AWS_* env:
     AWS_ENDPOINT_URL  http://localhost:9000
     AWS_ACCESS_KEY_ID rustfsadmin
     AWS_SECRET_ACCESS_KEY rustfsadmin
-    ARTIFACTS_BUCKET_NAME artifacts
+    AGENTAREA_S3_ARTIFACTS_BUCKET artifacts
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ def _default_env() -> None:
     os.environ.setdefault("AWS_ACCESS_KEY_ID", "rustfsadmin")
     os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "rustfsadmin")
     os.environ.setdefault("AWS_REGION", "us-east-1")
-    os.environ.setdefault("ARTIFACTS_BUCKET_NAME", "artifacts")
+    os.environ.setdefault("AGENTAREA_S3_ARTIFACTS_BUCKET", "artifacts")
 
 
 _default_env()

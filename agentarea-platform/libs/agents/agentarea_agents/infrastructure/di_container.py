@@ -57,10 +57,10 @@ class _WorkflowConfigAdapter:
 
     def __init__(self, settings: WorkflowSettings):
         # Map settings to protocol attributes
-        self.temporal_address: str = settings.TEMPORAL_SERVER_URL
-        self.task_queue: str = settings.TEMPORAL_TASK_QUEUE
-        self.max_concurrent_activities: int = settings.TEMPORAL_MAX_CONCURRENT_ACTIVITIES
-        self.max_concurrent_workflows: int = settings.TEMPORAL_MAX_CONCURRENT_WORKFLOWS
+        self.temporal_address: str = settings.TEMPORAL_URL
+        self.task_queue: str = settings.QUEUE
+        self.max_concurrent_activities: int = settings.MAX_ACTIVITIES
+        self.max_concurrent_workflows: int = settings.MAX_WORKFLOWS
 
 
 # Global DI container - initialized with proper config injection

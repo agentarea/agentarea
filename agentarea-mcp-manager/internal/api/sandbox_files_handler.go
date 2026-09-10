@@ -15,7 +15,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 )
 
-const sandboxFileAuthSecretEnv = "SANDBOX_FILE_AUTH_SECRET"
+const sandboxFileAuthSecretEnv = "AGENTAREA_SBX_FILE_SECRET"
 
 // sandboxFiles proxies the sandbox file API to the executor data plane. The file
 // tool writes here so its files land on the same filesystem bash executes in,

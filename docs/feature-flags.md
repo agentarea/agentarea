@@ -31,7 +31,7 @@ AgentArea uses a flexible feature flag system for:
 
 ```bash
 # Enable features via environment variable
-MCP_FEATURES_ENABLED=warm_pool,gateway_api,state_reconciler
+AGENTAREA_MCP_FEATURES=warm_pool,gateway_api,state_reconciler
 ```
 
 ### Configuration File
@@ -72,7 +72,7 @@ type EnvProvider struct {
 }
 
 func NewEnvProvider() *EnvProvider {
-    enabledStr := os.Getenv("MCP_FEATURES_ENABLED")
+    enabledStr := os.Getenv("AGENTAREA_MCP_FEATURES")
     enabled := make(map[string]bool)
     
     for _, feature := range strings.Split(enabledStr, ",") {
@@ -124,7 +124,7 @@ Simple on/off based on environment variables:
 
 ```go
 provider := NewEnvProvider()
-// MCP_FEATURES_ENABLED=warm_pool,gateway_api
+// AGENTAREA_MCP_FEATURES=warm_pool,gateway_api
 ```
 
 ### Config Provider

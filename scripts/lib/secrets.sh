@@ -43,7 +43,7 @@ hex_to_b64url() {
 
 # Generates a fresh ES256 keypair. The PRIVATE JWKS is written to $1 — Kratos
 # signs tokens with it. The PUBLIC JWKS is printed base64-encoded on stdout for
-# KRATOS_JWKS_B64; the backend only ever verifies, so it must not receive `d`.
+# AGENTAREA_AUTH_JWKS_B64; the backend only ever verifies, so it must not receive `d`.
 generate_jwks() {
   jwks_private_path="$1"
   jwks_kid="${2:-agentarea-jwt-key-1}"

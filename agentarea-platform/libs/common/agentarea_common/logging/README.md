@@ -195,7 +195,7 @@ custom_results = query.query_logs(
 
 ### Environment Variables
 
-- `LOG_LEVEL`: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- `AGENTAREA_LOG_LEVEL`: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 - `ENABLE_STRUCTURED_LOGGING`: Enable JSON structured logging (default: true)
 - `ENABLE_AUDIT_LOGGING`: Enable audit logging (default: true)
 - `AUDIT_LOG_FILE`: Path to audit log file (default: audit.log)

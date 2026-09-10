@@ -44,7 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Venv-first: /opt/runtime/venv owns `python` and `pip` on PATH, so agent
 # `pip install` works without --break-system-packages (no PEP 668 marker).
 ENV PATH=/opt/runtime/venv/bin:$PATH
-ENV SANDBOX_COMMAND_UID=10001 SANDBOX_COMMAND_GID=10001
+ENV AGENTAREA_SBX_UID=10001 AGENTAREA_SBX_GID=10001
 COPY runtime/requirements.txt /opt/runtime/requirements.txt
 RUN python -m venv /opt/runtime/venv \
     && pip install --no-cache-dir -r /opt/runtime/requirements.txt

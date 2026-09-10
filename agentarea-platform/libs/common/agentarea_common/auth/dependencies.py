@@ -39,7 +39,7 @@ def _www_authenticate_bearer() -> str:
     """
     from agentarea_common.config import get_settings
 
-    api_base = get_settings().app.API_BASE_URL.rstrip("/")
+    api_base = get_settings().app.API_URL.rstrip("/")
     return f'Bearer resource_metadata="{api_base}/.well-known/oauth-protected-resource"'
 
 
@@ -259,9 +259,9 @@ def get_auth_provider():
     return AuthProviderFactory.create_provider(
         "kratos",
         config={
-            "jwks_b64": settings.KRATOS_JWKS_B64,
-            "issuer": settings.KRATOS_ISSUER,
-            "audience": settings.KRATOS_AUDIENCE,
+            "jwks_b64": settings.JWKS_B64,
+            "issuer": settings.ISSUER,
+            "audience": settings.AUDIENCE,
         },
     )
 
@@ -283,7 +283,7 @@ def _get_hydra_jwks():
     from agentarea_common.config import get_settings
 
     settings = get_settings()
-    jwks_url = f"{settings.mcp.HYDRA_PUBLIC_URL.rstrip('/')}/.well-known/jwks.json"
+    jwks_url = f"{settings.mcp.HYDRA_URL.rstrip('/')}/.well-known/jwks.json"
     _hydra_jwks_client = pyjwt.PyJWKClient(jwks_url, cache_keys=True)
     logger.info(f"Hydra JWKS client initialized: {jwks_url}")
     return _hydra_jwks_client

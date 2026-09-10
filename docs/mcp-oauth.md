@@ -44,7 +44,7 @@ Client                          AgentArea API                    Hydra
   │── GET /.well-known/               │                            │
   │      oauth-protected-resource ───>│                            │
   │<─ { resource, authorization_      │                            │
-  │      servers: [API_BASE_URL] } ───│                            │
+  │      servers: [AGENTAREA_API_URL] } ───│                            │
   │                                   │                            │
   │── GET /.well-known/               │                            │
   │      oauth-authorization-server ─>│── GET /.well-known/ ──────>│

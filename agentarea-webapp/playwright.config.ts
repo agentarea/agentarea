@@ -36,7 +36,7 @@ export default defineConfig({
     ? undefined
     : {
         command:
-          `API_URL=${process.env.API_URL ?? "http://localhost:8000"} ORY_ADMIN_URL=${process.env.ORY_ADMIN_URL ?? "http://localhost:4434"} ORY_SDK_URL=${process.env.ORY_SDK_URL ?? "http://localhost:4433"} ORY_BROWSER_URL=${process.env.ORY_BROWSER_URL ?? "http://localhost:4433"} pnpm exec next dev --webpack --hostname 0.0.0.0 --port ${webPort}`,
+          `API_URL=${process.env.AGENTAREA_API_URL ?? "http://localhost:8000"} ORY_ADMIN_URL=${process.env.AGENTAREA_AUTH_KRATOS_ADMIN_URL ?? "http://localhost:4434"} ORY_SDK_URL=${process.env.ORY_SDK_URL ?? "http://localhost:4433"} ORY_BROWSER_URL=${process.env.NEXT_PUBLIC_ORY_SDK_URL ?? "http://localhost:4433"} pnpm exec next dev --webpack --hostname 0.0.0.0 --port ${webPort}`,
         url: baseURL,
         reuseExistingServer: !isCi,
         timeout: 120_000,

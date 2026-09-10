@@ -24,7 +24,7 @@ type Config struct {
 
 // Load reads configuration from environment variables with sensible defaults.
 func Load() *Config {
-	workerID := os.Getenv("AGENTAREA_EVENTS_WORKER_ID")
+	workerID := os.Getenv("AGENTAREA_EVT_WORKER_ID")
 	if workerID == "" {
 		if hostname, err := os.Hostname(); err == nil {
 			workerID = hostname
@@ -34,32 +34,32 @@ func Load() *Config {
 	}
 
 	pollInterval := 5 * time.Second
-	if v := os.Getenv("AGENTAREA_EVENTS_POLL_INTERVAL"); v != "" {
+	if v := os.Getenv("AGENTAREA_EVT_POLL_INTERVAL"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			pollInterval = d
 		}
 	}
 
 	maxPollers := 200
-	if v := os.Getenv("AGENTAREA_EVENTS_MAX_POLLERS"); v != "" {
+	if v := os.Getenv("AGENTAREA_EVT_MAX_POLLERS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			maxPollers = n
 		}
 	}
 
-	inboundStream := os.Getenv("AGENTAREA_EVENTS_INBOUND_STREAM")
+	inboundStream := os.Getenv("AGENTAREA_EVT_STREAM")
 	if inboundStream == "" {
 		inboundStream = "agentarea.channel.inbound"
 	}
 
 	enableTelegramPolling := false
-	if v := os.Getenv("AGENTAREA_EVENTS_TELEGRAM_POLLING_ENABLED"); v != "" {
+	if v := os.Getenv("AGENTAREA_EVT_TELEGRAM_ENABLED"); v != "" {
 		if parsed, err := strconv.ParseBool(v); err == nil {
 			enableTelegramPolling = parsed
 		}
 	}
 
-	port := os.Getenv("AGENTAREA_EVENTS_PORT")
+	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8002"
 	}
@@ -77,16 +77,16 @@ func Load() *Config {
 }
 
 func databaseURL() string {
-	host := os.Getenv("POSTGRES_HOST")
-	port := os.Getenv("POSTGRES_PORT")
-	db := os.Getenv("POSTGRES_DB")
-	user := os.Getenv("POSTGRES_USER")
-	password := os.Getenv("POSTGRES_PASSWORD")
+	host := os.Getenv("AGENTAREA_DB_HOST")
+	port := os.Getenv("AGENTAREA_DB_PORT")
+	db := os.Getenv("AGENTAREA_DB_NAME")
+	user := os.Getenv("AGENTAREA_DB_USER")
+	password := os.Getenv("AGENTAREA_DB_PASSWORD")
 	if host == "" || db == "" || user == "" || password == "" {
-		return os.Getenv("DATABASE_URL")
+		return os.Getenv("AGENTAREA_DB_URL")
 	}
 
-	sslMode := os.Getenv("POSTGRES_SSLMODE")
+	sslMode := os.Getenv("AGENTAREA_DB_SSLMODE")
 	if sslMode == "" {
 		sslMode = "disable"
 	}
@@ -102,12 +102,15 @@ func databaseURL() string {
 	)
 }
 
+// redisURL prefers the component variables so a password containing URL-unsafe
+// characters is escaped here rather than interpolated raw into a connection
+// string. Falls back to the whole URL when no host is given.
 func redisURL() string {
-	host := os.Getenv("REDIS_HOST")
-	port := os.Getenv("REDIS_PORT")
-	password := os.Getenv("REDIS_PASSWORD")
+	host := os.Getenv("AGENTAREA_REDIS_HOST")
+	port := os.Getenv("AGENTAREA_REDIS_PORT")
+	password := os.Getenv("AGENTAREA_REDIS_PASSWORD")
 	if host == "" {
-		return os.Getenv("REDIS_URL")
+		return os.Getenv("AGENTAREA_REDIS_URL")
 	}
 
 	dsn := url.URL{

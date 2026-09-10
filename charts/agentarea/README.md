@@ -339,7 +339,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.warmPool.image.repository | string | `"agentarea/agentarea-mcp-runner"` |  |
 | mcpManager.warmPool.image.tag | string | `"latest"` |  |
 | mcpManager.warmPool.image.pullPolicy | string | `"IfNotPresent"` |  |
-| mcpManager.warmPool.idleTimeoutSeconds | int | `0` |  |
+| mcpManager.warmPool.idleTimeout | string | `"0s"` |  |
 | mcpManager.warmPool.size | int | `1` |  |
 | mcpManager.warmPool.logLevel | string | `"info"` |  |
 | mcpManager.warmPool.resources.limits.cpu | string | `"500m"` |  |
