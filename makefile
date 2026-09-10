@@ -1,4 +1,4 @@
-.PHONY: help dev build up down restart down-clean \
+.PHONY: help dev build ensure-env up up-dev down restart down-clean \
 	frontend-dev docs-dev agentarea-platform-api agentarea-platform-worker agentarea-platform-test agentarea-platform-lint \
 	k8s-setup k8s-test k8s-build-images helm-test helm-gen \
 	lint-go build-go preflight
@@ -66,10 +66,14 @@ sync-registries: ## Download registry data locally (optional — bootstrap fetch
 build: ## Build development Docker images
 	docker compose -f docker-compose.dev.yaml build
 
-up: ## Start development environment
+ensure-env: ## Create .env and fill in any missing local credentials (idempotent)
+	@test -f .env || { cp .env.example .env; echo "Created .env from .env.example"; }
+	@./scripts/gen-dev-secrets.sh
+
+up: ensure-env ## Start the published-image stack — the same one users get. Does NOT build your source.
 	docker compose -f docker-compose.yaml up
 
-up-dev: ## Start development environment in background
+up-dev: ensure-env ## Start the development stack, built from your source. Use this to develop.
 	docker compose -f docker-compose.dev.yaml up
 
 down: ## Stop development environment

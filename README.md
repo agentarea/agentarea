@@ -119,7 +119,10 @@ curl -fsSL https://raw.githubusercontent.com/agentarea/agentarea/main/scripts/in
 sh agentarea-install.sh
 ```
 
-For local development from source, clone the repository and use `make up`.
+For local development, clone the repository and run `make up-dev` — it creates
+your `.env`, generates the credentials the stack needs, and builds the images
+from your working tree. (`make up` runs the published images instead, which is
+what the installer above gives users; it will not pick up your changes.)
 
 ### 2. Create your first agent
 
