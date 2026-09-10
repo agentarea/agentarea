@@ -1,6 +1,7 @@
 """Tests for channel adapters."""
 
 import json
+import logging
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -88,17 +89,27 @@ class TestTelegramAdapter:
             assert kwargs["json"]["text"] == "Hello"
 
     @pytest.mark.asyncio
-    async def test_send_no_secret_key_logs_error(self):
-        """Without secret_key, send logs error and returns."""
+    async def test_send_no_secret_key_logs_error(self, caplog):
+        """Without a resolvable bot token, send logs and delivers nothing."""
         adapter = TelegramAdapter()
         channel_config = {"chat_id": "12345"}
-        # Should not raise, just log
-        await adapter.send(channel_config, "Hello")
+
+        with patch("httpx.AsyncClient") as mock_client, caplog.at_level(logging.ERROR):
+            await adapter.send(channel_config, "Hello")
+
+        assert "No Telegram bot token" in caplog.text
+        mock_client.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_send_no_chat_id_logs_error(self, adapter):
+    async def test_send_no_chat_id_logs_error(self, adapter, caplog):
+        """A config with no chat_id has nowhere to deliver; say so, send nothing."""
         channel_config = {"type": "telegram", "trigger_id": "test-trigger"}
-        await adapter.send(channel_config, "Hello")
+
+        with patch("httpx.AsyncClient") as mock_client, caplog.at_level(logging.ERROR):
+            await adapter.send(channel_config, "Hello")
+
+        assert "No chat_id" in caplog.text
+        mock_client.assert_not_called()
 
     def test_escape_md(self):
         assert _escape_md("hello_world") == "hello\\_world"

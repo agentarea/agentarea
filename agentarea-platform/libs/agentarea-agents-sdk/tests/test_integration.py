@@ -7,15 +7,16 @@ class TestAgentIntegration:
     """Integration tests for complete agent workflows."""
 
     @pytest.mark.asyncio
-    async def test_math_problem_solving_workflow(self):
+    async def test_math_problem_solving_workflow(self, test_model, skip_if_no_llm):
         """Test complete math problem solving workflow."""
+        skip_if_no_llm()
         try:
             from agentarea_agents_sdk.agents.agent import create_agent
 
             agent = create_agent(
                 name="Math Assistant",
                 instruction="You are a helpful math assistant that solves problems step by step.",
-                model="ollama_chat/qwen2.5",
+                model=test_model,
                 max_tokens=500,
                 max_iterations=10,
             )
@@ -42,15 +43,16 @@ class TestAgentIntegration:
             pytest.skip(f"Integration test failed - LLM not available: {e}")
 
     @pytest.mark.asyncio
-    async def test_reasoning_workflow(self):
+    async def test_reasoning_workflow(self, test_model, skip_if_no_llm):
         """Test reasoning workflow with multiple steps."""
+        skip_if_no_llm()
         try:
             from agentarea_agents_sdk.agents.agent import create_agent
 
             agent = create_agent(
                 name="Logic Assistant",
                 instruction="You are a logical reasoning assistant.",
-                model="ollama_chat/qwen2.5",
+                model=test_model,
                 max_tokens=500,
                 max_iterations=10,
             )
@@ -67,15 +69,16 @@ class TestAgentIntegration:
             pytest.skip(f"Integration test failed - LLM not available: {e}")
 
     @pytest.mark.asyncio
-    async def test_custom_goal_and_criteria_workflow(self):
+    async def test_custom_goal_and_criteria_workflow(self, test_model, skip_if_no_llm):
         """Test workflow with custom goal and success criteria."""
+        skip_if_no_llm()
         try:
             from agentarea_agents_sdk.agents.agent import create_agent
 
             agent = create_agent(
                 name="Goal-Oriented Agent",
                 instruction="You are a systematic problem solver.",
-                model="ollama_chat/qwen2.5",
+                model=test_model,
                 max_tokens=500,
                 max_iterations=10,
             )
@@ -97,16 +100,17 @@ class TestAgentIntegration:
             pytest.skip(f"Integration test failed - LLM not available: {e}")
 
     @pytest.mark.asyncio
-    async def test_agent_with_custom_configuration(self):
+    async def test_agent_with_custom_configuration(self, test_model, skip_if_no_llm):
         """Test agent with custom configuration parameters."""
+        skip_if_no_llm()
         try:
             from agentarea_agents_sdk.agents.agent import Agent
 
             agent = Agent(
                 name="Custom Agent",
                 instruction="You are a precise assistant.",
-                model_provider="ollama_chat",
-                model_name="qwen2.5",
+                model_provider=test_model.partition("/")[0],
+                model_name=test_model.partition("/")[2],
                 temperature=0.1,
                 max_tokens=100,
                 max_iterations=2,
@@ -122,15 +126,16 @@ class TestAgentIntegration:
             pytest.skip(f"Integration test failed - LLM not available: {e}")
 
     @pytest.mark.asyncio
-    async def test_streaming_vs_non_streaming_consistency(self):
+    async def test_streaming_vs_non_streaming_consistency(self, test_model, skip_if_no_llm):
         """Test that streaming and non-streaming produce similar results."""
+        skip_if_no_llm()
         try:
             from agentarea_agents_sdk.agents.agent import create_agent
 
             agent = create_agent(
                 name="Consistency Test Agent",
                 instruction="You are a helpful assistant. Be concise.",
-                model="ollama_chat/qwen2.5",
+                model=test_model,
                 max_tokens=500,
                 max_iterations=1,  # Limit to one iteration for consistency
             )
