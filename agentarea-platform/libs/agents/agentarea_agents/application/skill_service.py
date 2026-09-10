@@ -480,17 +480,29 @@ class SkillService:
             projections.append(_project_catalog_skill(item))
         return projections
 
-    async def list(self) -> list[Skill]:
-        """List tenant skills plus catalog skill items projected as read-only.
+    async def list(self, include_catalog: bool = False) -> list[Skill]:
+        """List the workspace's own skills.
 
-        A catalog item already forked into the workspace is shadowed by the
-        tenant copy; un-forked catalog items appear as read-only projections.
+        Catalog (built-in) skills live in the global registry and are reached
+        through search or by id -- they are NOT part of the working set, so they
+        are excluded by default, mirroring ``AgentService.list``. Pass
+        ``include_catalog=True`` to also project un-forked catalog items as
+        read-only (ADR-003); a catalog item already forked into the workspace is
+        shadowed by the tenant copy.
+
+        Materializing the catalog is expensive enough to take the process down:
+        it is one unbounded read of every ``registry_items`` row of type
+        ``skills``, spec JSONB included, and turning that into objects is
+        synchronous CPU work that stalls the event loop for the whole API.
+        Prefer ``list_paginated``, which filters and pages in SQL.
 
         Returns:
             List of Skill entities.
         """
         repo = self._get_repository()
         tenant_skills = await repo.list_all()
+        if not include_catalog:
+            return list(tenant_skills)
         projections = await self._catalog_projections(tenant_skills)
         return [*tenant_skills, *projections]
 

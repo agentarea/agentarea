@@ -1,6 +1,6 @@
 """Workspace export smoke.
 
-Endpoint returns YAML (text/yaml). We parse with pyyaml.
+Endpoint returns a YAML document as text. We parse with pyyaml.
 """
 
 from __future__ import annotations
@@ -20,6 +20,21 @@ def _parse_export(resp: httpx.Response) -> dict:
 @pytest.mark.integration
 def test_workspace_export_empty_ok(alice_client: httpx.Client) -> None:
     _parse_export(alice_client.get("/v1/workspace/export"))
+
+
+@pytest.mark.integration
+def test_workspace_export_is_served_as_text(alice_client: httpx.Client) -> None:
+    """The media type decides how generated clients decode the body.
+
+    Anything under ``application/*`` that is not JSON is read as a binary blob,
+    so serving the export as ``application/x-yaml`` handed the webapp a Blob
+    where the generated type promised a string, and the download silently
+    became "{}". The filename comes from the disposition, not the media type.
+    """
+    resp = alice_client.get("/v1/workspace/export")
+    assert resp.status_code == 200, resp.text[:200]
+    assert resp.headers["content-type"].split(";")[0].strip() == "text/plain"
+    assert resp.headers["content-disposition"].endswith("workspace_config.yaml")
 
 
 @pytest.mark.integration

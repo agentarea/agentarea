@@ -81,9 +81,19 @@ export default function WorkspaceConfigClient() {
         return;
       }
 
-      const yaml =
-        typeof data === "string" ? data : JSON.stringify(data, null, 2);
-      const blob = new Blob([yaml], { type: "text/yaml" });
+      if (typeof data !== "string") {
+        // The export is YAML text. Anything else means the client read the
+        // response as something other than text, and JSON-stringifying it here
+        // would download a file containing "{}" under a success toast.
+        console.error("Workspace export returned a non-string body", data);
+        toast({
+          title: t("export.error"),
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const blob = new Blob([data], { type: "text/yaml" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;

@@ -238,7 +238,7 @@ async def test_list_shadows_forked_and_projects_unforked():
     repo = FakeSkillRepo([forked_copy])
     svc = _service(repo, FakeCatalogRepo([item_unforked, item_forked]))
 
-    result = await svc.list()
+    result = await svc.list(include_catalog=True)
     ids = [str(s.id) for s in result]
 
     # The user's forked copy is present; the catalog item it came from is shadowed.
@@ -387,13 +387,31 @@ async def test_isolation_built_in_visible_custom_from_other_workspace_not():
     repo = FakeSkillRepo([])
     svc = _service(repo, FakeCatalogRepo([item_builtin]), workspace_id="w2")
 
-    result = await svc.list()
+    result = await svc.list(include_catalog=True)
     ids = [str(s.id) for s in result]
 
     # Built-in catalog skill is visible.
     assert item_builtin.id in ids
     # No foreign custom skill leaked in (only the catalog projection is present).
     assert len(result) == 1
+
+
+async def test_list_does_not_scan_the_catalog_by_default():
+    """``list()`` answers "the workspace's skills" without touching the catalog.
+
+    Regression guard for the same failure ``list_paginated`` already guards
+    against, one call site over: the catalog is global (300k+ rows, each
+    carrying its full spec), so loading it to then discard every projection
+    stalled the event loop long enough for liveness to kill the API pod.
+    """
+    tenant = Skill(id=uuid4(), name="Mine", slug="mine", source_type="content")
+    catalog = FakeCatalogRepo([_item(name=f"Builtin {n}") for n in range(5)])
+    svc = _service(FakeSkillRepo([tenant]), catalog)
+
+    result = await svc.list()
+
+    assert catalog.list_items_calls == 0
+    assert [s.id for s in result] == [tenant.id]
 
 
 async def test_list_paginated_never_scans_the_whole_catalog():
