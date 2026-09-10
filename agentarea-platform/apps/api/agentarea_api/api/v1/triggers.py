@@ -39,18 +39,12 @@ from agentarea_triggers.trigger_service import (
     TriggerService,
     TriggerValidationError,
 )
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-
-TRIGGERS_AVAILABLE = True
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/triggers", tags=["triggers"])
-
-# Public router for endpoints that don't require authentication
-# Used by internal services (e.g., Go event-service) for trigger execution
-public_router = APIRouter(prefix="/triggers", tags=["triggers"])
 
 
 # API Response Models
@@ -98,24 +92,6 @@ class TriggerResponse(BaseModel):
         cls, trigger: Any, has_channel_credentials: bool = False
     ) -> "TriggerResponse":
         """Create response from domain model."""
-        if not TRIGGERS_AVAILABLE:
-            # Return mock response when triggers not available
-            return cls(
-                id=UUID("00000000-0000-0000-0000-000000000000"),
-                name="Mock Trigger",
-                description="Triggers service not available",
-                agent_id=UUID("00000000-0000-0000-0000-000000000000"),
-                trigger_type="mock",
-                is_active=False,
-                task_parameters={},
-                conditions={},
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
-                created_by="system",
-                failure_threshold=5,
-                consecutive_failures=0,
-            )
-
         # Base fields
         response_data = {
             "id": trigger.id,
@@ -183,18 +159,6 @@ class TriggerExecutionResponse(BaseModel):
     @classmethod
     def from_domain_model(cls, execution: Any) -> "TriggerExecutionResponse":
         """Create response from domain model."""
-        if not TRIGGERS_AVAILABLE:
-            # Return mock response when triggers not available
-            return cls(
-                id=UUID("00000000-0000-0000-0000-000000000000"),
-                trigger_id=UUID("00000000-0000-0000-0000-000000000000"),
-                executed_at=datetime.utcnow(),
-                status="failed",
-                execution_time_ms=0,
-                error_message="Triggers service not available",
-                trigger_data={},
-            )
-
         return cls(
             id=execution.id,
             trigger_id=execution.trigger_id,
@@ -276,15 +240,6 @@ class TriggerExecuteRequest(BaseModel):
 
 
 # Utility Functions
-
-
-def _check_triggers_availability():
-    """Check if triggers service is available and raise appropriate error."""
-    if not TRIGGERS_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Triggers service is not available. Please check system configuration.",
-        )
 
 
 async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) -> bool:
@@ -379,8 +334,6 @@ async def create_trigger(
     Raises:
         HTTPException: If validation fails or creation errors occur.
     """
-    _check_triggers_availability()
-
     try:
         if not user_context.user_id:
             raise HTTPException(status_code=400, detail="User ID is required to create a trigger")
@@ -465,25 +418,18 @@ async def list_triggers(
     Returns:
         List of triggers matching the criteria
     """
-    _check_triggers_availability()
-
     try:
         # Convert string trigger type to domain enum if provided
         domain_trigger_type = None
         if trigger_type:
-            if not TRIGGERS_AVAILABLE:
-                domain_trigger_type = None
-            else:
-                from agentarea_triggers.domain.enums import TriggerType
+            from agentarea_triggers.domain.enums import TriggerType
 
-                if trigger_type.lower() == "cron":
-                    domain_trigger_type = TriggerType.CRON
-                elif trigger_type.lower() == "webhook":
-                    domain_trigger_type = TriggerType.WEBHOOK
-                else:
-                    raise HTTPException(
-                        status_code=400, detail=f"Invalid trigger type: {trigger_type}"
-                    )
+            if trigger_type.lower() == "cron":
+                domain_trigger_type = TriggerType.CRON
+            elif trigger_type.lower() == "webhook":
+                domain_trigger_type = TriggerType.WEBHOOK
+            else:
+                raise HTTPException(status_code=400, detail=f"Invalid trigger type: {trigger_type}")
 
         # List triggers
         triggers = await trigger_service.list_triggers(
@@ -530,15 +476,6 @@ async def triggers_health_check(
         Dictionary with detailed health status information
     """
     try:
-        if not TRIGGERS_AVAILABLE:
-            return {
-                "overall_status": "unavailable",
-                "service": "triggers",
-                "message": "Triggers service not available",
-                "timestamp": datetime.utcnow().isoformat(),
-                "components": {},
-            }
-
         # Run comprehensive health check
         health_status = await health_checker.check_all_components()
         health_status["service"] = "triggers"
@@ -577,8 +514,6 @@ async def get_trigger(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         trigger = await trigger_service.get_trigger(trigger_id)
 
@@ -624,8 +559,6 @@ async def update_trigger(
     Raises:
         HTTPException: If trigger not found or validation fails.
     """
-    _check_triggers_availability()
-
     try:
         trigger_update = payload.to_domain()
 
@@ -696,8 +629,6 @@ async def delete_trigger(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         # Best-effort: clear this trigger's provider-side webhook before it goes
         # away. Channel-agnostic — resolve the channel from the trigger, read its
@@ -751,8 +682,6 @@ async def enable_trigger(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         success = await trigger_service.enable_trigger(trigger_id)
 
@@ -797,8 +726,6 @@ async def disable_trigger(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         success = await trigger_service.disable_trigger(trigger_id)
 
@@ -856,8 +783,6 @@ async def get_execution_history(
     Raises:
         HTTPException: If trigger not found or invalid parameters
     """
-    _check_triggers_availability()
-
     try:
         # Check if trigger exists
         trigger = await trigger_service.get_trigger(trigger_id)
@@ -867,15 +792,12 @@ async def get_execution_history(
         # Validate status filter
         status_enum = None
         if status:
-            if not TRIGGERS_AVAILABLE:
-                status_enum = None
-            else:
-                from agentarea_triggers.domain.enums import ExecutionStatus
+            from agentarea_triggers.domain.enums import ExecutionStatus
 
-                try:
-                    status_enum = ExecutionStatus(status.upper())
-                except ValueError as e:
-                    raise HTTPException(status_code=400, detail=f"Invalid status: {status}") from e
+            try:
+                status_enum = ExecutionStatus(status.upper())
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid status: {status}") from e
 
         # Calculate offset
         offset = (page - 1) * page_size
@@ -935,8 +857,6 @@ async def get_trigger_status(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         # Get trigger
         trigger = await trigger_service.get_trigger(trigger_id)
@@ -988,8 +908,6 @@ async def get_execution_metrics(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         # Check if trigger exists
         trigger = await trigger_service.get_trigger(trigger_id)
@@ -1034,8 +952,6 @@ async def get_execution_timeline(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         # Check if trigger exists
         trigger = await trigger_service.get_trigger(trigger_id)
@@ -1084,8 +1000,6 @@ async def get_execution_correlations(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         # Check if trigger exists
         trigger = await trigger_service.get_trigger(trigger_id)
@@ -1114,42 +1028,26 @@ async def get_execution_correlations(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-def _verify_internal_token(http_request: Request) -> None:
-    """Gate an internal-only endpoint with a shared secret.
-
-    The Go event service must send ``X-Internal-Token`` matching
-    ``INTERNAL_API_TOKEN``. When the token is unset the check is skipped
-    (back-compat); set it to require authentication on this endpoint.
-    """
-    import hmac
-
-    from agentarea_common.config import get_settings
-
-    expected = get_settings().app.INTERNAL_API_TOKEN
-    if not expected:
-        return
-    provided = http_request.headers.get("x-internal-token", "")
-    if not hmac.compare_digest(provided, expected):
-        raise HTTPException(status_code=401, detail="Invalid or missing internal service token")
-
-
-@public_router.post("/{trigger_id}/execute", response_model=dict[str, Any])
+@router.post("/{trigger_id}/execute", response_model=dict[str, Any])
 async def execute_trigger(
     trigger_id: UUID,
     request: TriggerExecuteRequest,
-    http_request: Request,
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> dict[str, Any]:
     """Execute a trigger with the provided event data.
 
-    Called by the Go event service when a polling channel receives new messages.
     Builds trigger data from the events and channel origin, then creates and
     submits a task for agent execution.
+
+    Authorization is the caller's session plus the workspace-scoped trigger
+    lookup: a trigger in another workspace is simply not found. This used to sit
+    on the public router behind an ``X-Internal-Token`` check that skipped
+    itself whenever the secret was unset — which was every deployment, since
+    nothing ever sent that header.
 
     Args:
         trigger_id: The unique identifier of the trigger
         request: Events and channel origin data
-        http_request: Raw request, used to verify the internal service token
         trigger_service: Injected trigger service
 
     Returns:
@@ -1158,9 +1056,6 @@ async def execute_trigger(
     Raises:
         HTTPException: If trigger not found or execution fails
     """
-    _verify_internal_token(http_request)
-    _check_triggers_availability()
-
     try:
         trigger_data: dict[str, Any] = {
             "events": request.events,

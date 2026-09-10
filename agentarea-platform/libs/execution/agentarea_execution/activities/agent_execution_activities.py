@@ -317,7 +317,6 @@ def make_agent_activities(dependencies: ActivityDependencies):
     from .dependencies import (
         ActivityContext,
         ActivityServiceContainer,
-        create_system_context,
         create_user_context,
     )
 
@@ -557,7 +556,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         from datetime import UTC
         from uuid import UUID as _UUID
 
-        user_context = create_system_context(request.workspace_id, request.user_id)
+        user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             model_instance_service = await ctx.get_model_instance_service()
             model_instance = await model_instance_service.get(_UUID(request.model_id))
@@ -624,7 +623,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Create context - prefer workspace_id, fallback to user_context_data
             if request.workspace_id:
-                user_context = create_system_context(request.workspace_id)
+                user_context = create_user_context(request.user_context_data)
             elif request.user_context_data:
                 user_context = create_user_context(request.user_context_data)
             else:
@@ -876,7 +875,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         if not decision.allowed:
             return _deny_tool_result(request.tool_name, decision.reason)
 
-        user_context = create_system_context(request.workspace_id)
+        user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
 
@@ -1673,7 +1672,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
         from agentarea_tasks.infrastructure.repository import TaskRepository
 
-        user_context = create_system_context(request.workspace_id)
+        user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             session = container._database.async_session_factory()
             ctx._sessions.append(session)
@@ -1723,7 +1722,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
         from agentarea_tasks.infrastructure.repository import TaskRepository
 
-        user_context = create_system_context(request.workspace_id)
+        user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             session = container._database.async_session_factory()
             ctx._sessions.append(session)
@@ -1762,7 +1761,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             model_uuid = UUID(request.model_id)
 
             if request.workspace_id:
-                user_context = create_system_context(request.workspace_id)
+                user_context = create_user_context(request.user_context_data)
             elif request.user_context_data:
                 user_context = create_user_context(request.user_context_data)
             else:
@@ -1960,7 +1959,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         request: ResolveAgentToolsRequest,
     ) -> ResolveAgentToolsResult:
         """Resolve agent names to their IDs for workflow-level delegation."""
-        user_context = create_system_context(request.workspace_id)
+        user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             agent_service = await ctx.get_agent_service()
             agent_map: dict[str, str] = {}
@@ -1986,7 +1985,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         Allows agents to recover context that was compacted out of the
         working set, or to review what happened in earlier executions.
         """
-        user_context = create_system_context(request.workspace_id)
+        user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             task_event_service = await ctx.get_task_event_service()
 
@@ -2071,7 +2070,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         try:
             if not request.workspace_id:
                 raise ValueError("skill materialization requires a workspace_id")
-            user_context = create_system_context(request.workspace_id)
+            user_context = create_user_context(request.user_context_data)
             async with ActivityContext(container, user_context) as ctx:
                 skill_service = await ctx.get_skill_service()
                 skill = await skill_service.get(request.skill_id)

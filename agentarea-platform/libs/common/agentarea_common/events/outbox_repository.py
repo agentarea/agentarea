@@ -17,7 +17,7 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.context import Principal
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class OutboxRepository:
     """Persistence for outbox rows on a caller-owned session."""
 
-    def __init__(self, session: AsyncSession, user_context: UserContext) -> None:
+    def __init__(self, session: AsyncSession, user_context: Principal) -> None:
         self.session = session
         self.user_context = user_context
 

@@ -110,7 +110,18 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
     # Additional methods for task-specific operations
     async def create_from_data(self, task_data: TaskCreate) -> Task:
-        """Create a new task from TaskCreate data."""
+        """Create a new task from TaskCreate data.
+
+        Raises:
+            ValueError: If the task carries no owner. Silently attributing it to
+                whoever happened to make the call hides the caller's bug and
+                hands the run an authority it was never given.
+        """
+        if not task_data.user_id:
+            raise ValueError("TaskCreate.user_id is required; a task must name its owner")
+        if not task_data.workspace_id:
+            raise ValueError("TaskCreate.workspace_id is required; a task must name its tenant")
+
         # Handle metadata field - ensure it's JSON serializable
         metadata = task_data.metadata
         if metadata is not None and not isinstance(metadata, dict):
@@ -123,8 +134,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             description=task_data.description,
             parameters=task_data.parameters,
             status="pending",
-            created_by=task_data.user_id or self.user_context.user_id,
-            workspace_id=task_data.workspace_id or self.user_context.workspace_id,
+            created_by=task_data.user_id,
+            workspace_id=task_data.workspace_id,
             task_metadata=metadata,
         )
 

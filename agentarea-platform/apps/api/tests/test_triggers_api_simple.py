@@ -370,16 +370,5 @@ class TestTriggersAPISimple:
         # Should fail validation
         assert response.status_code == 422
 
-    @patch("agentarea_api.api.v1.triggers.TRIGGERS_AVAILABLE", False)
-    def test_triggers_not_available_sync(self, client):
-        """Test API behavior when triggers service is not available using sync client."""
-        response = client.get("/v1/triggers/health")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["overall_status"] == "unavailable"
-        assert "not available" in data["message"]
-
-
 if __name__ == "__main__":
     pytest.main([__file__])

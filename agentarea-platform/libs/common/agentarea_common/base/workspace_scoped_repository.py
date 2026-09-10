@@ -9,7 +9,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth.context import UserContext
+from ..auth.context import ServicePrincipal, UserContext
 
 
 class WorkspaceScopedRepository[T]:
@@ -26,7 +26,19 @@ class WorkspaceScopedRepository[T]:
             session: SQLAlchemy async session
             model_class: The model class this repository manages
             user_context: Current user and workspace context
+
+        Raises:
+            TypeError: If given a ServicePrincipal. It has no workspace, so it
+                cannot scope anything; callers that genuinely need to read
+                across tenants must use an explicit unscoped query instead.
         """
+        if isinstance(user_context, ServicePrincipal):
+            raise TypeError(
+                f"ServicePrincipal({user_context.service!r}) cannot scope "
+                f"{model_class.__name__}: it has no workspace. Use an explicit "
+                "unscoped query for cross-tenant reads, or resolve a real "
+                "UserContext first."
+            )
         self.session = session
         self.model_class = model_class
         self.user_context = user_context

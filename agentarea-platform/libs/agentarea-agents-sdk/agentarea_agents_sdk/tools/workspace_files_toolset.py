@@ -38,7 +38,12 @@ class WorkspaceFilesToolset(Toolset):
         super().__init__()
         self.storage: StorageClient = storage or InMemoryStorage()
         self.workspace_repository = workspace_repository
-        self.workspace_id = workspace_id or "_standalone"
+        if not workspace_id:
+            raise ValueError(
+                "workspace_id is required: storage is scoped by it, and a shared "
+                "placeholder mixes one tenant's files into another's"
+            )
+        self.workspace_id = workspace_id
         self.task_id = task_id or ""
         self.lease_owner = lease_owner or ""
         self.base_prefix = base_prefix.strip("/")

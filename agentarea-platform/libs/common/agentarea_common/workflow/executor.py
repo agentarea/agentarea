@@ -155,7 +155,7 @@ class TaskExecutorInterface(ABC):
         task_id: str,
         agent_id: UUID,
         description: str,
-        user_id: str | None = None,
+        user_id: str,
         task_parameters: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> str:

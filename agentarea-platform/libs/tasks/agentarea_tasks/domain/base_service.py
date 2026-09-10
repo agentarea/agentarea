@@ -177,6 +177,11 @@ class BaseTaskService(ABC):
         # Convert AgentTask to Task domain model for repository
         from .models import Task
 
+        if not task.workspace_id:
+            raise ValueError(
+                f"task {task.id} has no workspace; refusing to persist it under a blank tenant"
+            )
+
         task_domain = Task(
             id=task.id,
             agent_id=task.agent_id,
@@ -191,7 +196,7 @@ class BaseTaskService(ABC):
             completed_at=task.completed_at,
             execution_id=task.execution_id,
             user_id=task.user_id,
-            workspace_id=task.workspace_id or "",
+            workspace_id=task.workspace_id,
             metadata=task.metadata,
         )
 
@@ -328,12 +333,15 @@ class BaseTaskService(ABC):
         Returns:
             AgentTask model for service/API layer
         """
+        if not task.workspace_id:
+            raise ValueError(f"task {task.id} row carries no workspace; the row is corrupt")
+
         return AgentTask(
             id=task.id,
             title=task.description,  # Use description as title
             description=task.description,
             query=task.description,  # Use description as query
-            user_id=task.user_id or "",
+            user_id=task.user_id,
             agent_id=task.agent_id,
             status=task.status,
             task_parameters=task.parameters,  # Convert parameters -> task_parameters
@@ -344,7 +352,7 @@ class BaseTaskService(ABC):
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,
-            workspace_id=task.workspace_id or "",
+            workspace_id=task.workspace_id,
             metadata=task.metadata,
         )
 

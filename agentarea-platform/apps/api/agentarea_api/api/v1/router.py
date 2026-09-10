@@ -59,9 +59,6 @@ public_v1_router = APIRouter(prefix="/v1", tags=["public"])
 public_v1_router.include_router(mcp_oauth_connect.public_router)
 public_v1_router.include_router(connection_oauth.public_router)
 
-# Trigger execute endpoint (public — called by internal Go event-service)
-public_v1_router.include_router(triggers.public_router)
-
 # A2A Agent Card discovery is public by protocol; execution RPC remains protected below.
 public_v1_router.include_router(agents_well_known.router, prefix="/agents/{agent_id}")
 

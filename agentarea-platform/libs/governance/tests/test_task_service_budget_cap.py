@@ -272,6 +272,7 @@ class TestCreationEntryPointsInvokeBudgetCap:
                 agent_id=agent_id,
                 description="blocked task",
                 workspace_id=workspace_id,
+                user_id="user-123",
                 task_policy=_runtime_task_policy(),
             )
 
