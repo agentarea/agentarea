@@ -96,10 +96,10 @@ For feature requests, please provide:
 #### Enable Debug Logging
 ```bash
 # Set log level to debug
-export LOG_LEVEL=DEBUG
+export AGENTAREA_LOG_LEVEL=DEBUG
 
 # Or in docker-compose
-LOG_LEVEL=DEBUG docker-compose up
+AGENTAREA_LOG_LEVEL=DEBUG docker-compose up
 ```
 
 #### Check Service Health

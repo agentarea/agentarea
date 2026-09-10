@@ -26,7 +26,7 @@ os.environ.setdefault("TEMPORAL_SERVER_URL", "localhost:7233")
 os.environ.setdefault("TEMPORAL_NAMESPACE", "default")
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("DEBUG", "true")
-os.environ["REDIS_URL"] = "redis://localhost:6379"
+os.environ["AGENTAREA_REDIS_URL"] = "redis://localhost:6379"
 
 
 class E2ETemporalTest:
@@ -49,8 +49,8 @@ class E2ETemporalTest:
         await self._create_test_llm_infrastructure()
         await self._setup_activity_dependencies()
         self.client = await Client.connect(
-            self.settings.workflow.TEMPORAL_SERVER_URL,
-            namespace=self.settings.workflow.TEMPORAL_NAMESPACE,
+            self.settings.workflow.TEMPORAL_URL,
+            namespace=self.settings.workflow.NAMESPACE,
             data_converter=pydantic_data_converter,
         )
 

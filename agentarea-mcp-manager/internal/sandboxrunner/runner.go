@@ -494,15 +494,15 @@ func eventPayload(message redis.XMessage) (string, error) {
 
 func ConfigFromEnv() Config {
 	return Config{
-		RequestStream:  getenv("SANDBOX_EXECUTION_REQUEST_STREAM", sandboxcontrol.DefaultExecutionRequestStream),
-		EventStream:    getenv("SANDBOX_EXECUTION_EVENT_STREAM", sandboxcontrol.DefaultExecutionEventStream),
-		Group:          getenv("SANDBOX_RUNNER_CONSUMER_GROUP", "agentarea-sandbox-runners"),
-		Consumer:       getenv("SANDBOX_RUNNER_CONSUMER_NAME", defaultConsumerName()),
-		Block:          durationEnv("SANDBOX_RUNNER_BLOCK_TIMEOUT", 5*time.Second),
-		BatchSize:      int64(intEnv("SANDBOX_RUNNER_BATCH_SIZE", 1)),
-		PendingIdle:    durationEnv("SANDBOX_RUNNER_PENDING_IDLE", 2*time.Minute),
-		ReclaimEvery:   durationEnv("SANDBOX_RUNNER_RECLAIM_INTERVAL", 15*time.Second),
-		HeartbeatEvery: durationEnv("SANDBOX_RUNNER_PENDING_HEARTBEAT", 30*time.Second),
+		RequestStream:  getenv("AGENTAREA_SBX_REQUEST_STREAM", sandboxcontrol.DefaultExecutionRequestStream),
+		EventStream:    getenv("AGENTAREA_SBX_EVENT_STREAM", sandboxcontrol.DefaultExecutionEventStream),
+		Group:          getenv("AGENTAREA_SBX_CONSUMER_GROUP", "agentarea-sandbox-runners"),
+		Consumer:       getenv("AGENTAREA_SBX_CONSUMER_NAME", defaultConsumerName()),
+		Block:          durationEnv("AGENTAREA_SBX_BLOCK_TIMEOUT", 5*time.Second),
+		BatchSize:      int64(intEnv("AGENTAREA_SBX_BATCH_SIZE", 1)),
+		PendingIdle:    durationEnv("AGENTAREA_SBX_PENDING_IDLE", 2*time.Minute),
+		ReclaimEvery:   durationEnv("AGENTAREA_SBX_RECLAIM_INTERVAL", 15*time.Second),
+		HeartbeatEvery: durationEnv("AGENTAREA_SBX_PENDING_HEARTBEAT", 30*time.Second),
 	}
 }
 

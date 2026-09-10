@@ -231,17 +231,17 @@ func TestManifestRefRejectsTraversalAndSignedURI(t *testing.T) {
 }
 
 func TestLoadConfigFromEnvUsesPlatformStorageFallbacksAndExplicitQuotas(t *testing.T) {
-	t.Setenv("SANDBOX_WORKSPACE_S3_BUCKET", "")
-	t.Setenv("SANDBOX_WORKSPACE_S3_REGION", "")
-	t.Setenv("SANDBOX_WORKSPACE_S3_ENDPOINT", "")
-	t.Setenv("SANDBOX_WORKSPACE_MAX_FILES", "10000")
-	t.Setenv("SANDBOX_WORKSPACE_MAX_FILE_BYTES", "268435456")
-	t.Setenv("SANDBOX_WORKSPACE_MAX_BYTES", "2147483648")
-	t.Setenv("SANDBOX_WORKSPACE_SIGNED_URL_TTL", "1h")
-	t.Setenv("SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE", "true")
-	t.Setenv("ARTIFACTS_BUCKET_NAME", "artifacts-fallback")
-	t.Setenv("AWS_REGION", "eu-west-2")
-	t.Setenv("AWS_ENDPOINT_URL", "http://rustfs:9000/")
+	t.Setenv("AGENTAREA_SBX_S3_BUCKET", "")
+	t.Setenv("AGENTAREA_SBX_S3_REGION", "")
+	t.Setenv("AGENTAREA_SBX_S3_ENDPOINT", "")
+	t.Setenv("AGENTAREA_SBX_MAX_FILES", "10000")
+	t.Setenv("AGENTAREA_SBX_MAX_FILE_SIZE", "268435456")
+	t.Setenv("AGENTAREA_SBX_MAX_TOTAL_SIZE", "2147483648")
+	t.Setenv("AGENTAREA_SBX_S3_URL_TTL", "1h")
+	t.Setenv("AGENTAREA_SBX_S3_PATH_STYLE", "true")
+	t.Setenv("AGENTAREA_S3_ARTIFACTS_BUCKET", "artifacts-fallback")
+	t.Setenv("AGENTAREA_S3_REGION", "eu-west-2")
+	t.Setenv("AGENTAREA_S3_ENDPOINT", "http://rustfs:9000/")
 
 	cfg, err := LoadConfigFromEnv()
 	if err != nil {
@@ -260,12 +260,12 @@ func TestLoadConfigFromEnvUsesPlatformStorageFallbacksAndExplicitQuotas(t *testi
 
 func TestLoadConfigFromEnvPrefersWorkspaceOverrides(t *testing.T) {
 	setWorkspacePolicyEnv(t)
-	t.Setenv("ARTIFACTS_BUCKET_NAME", "platform-bucket")
-	t.Setenv("AWS_REGION", "platform-region")
-	t.Setenv("AWS_ENDPOINT_URL", "http://platform.invalid")
-	t.Setenv("SANDBOX_WORKSPACE_S3_BUCKET", "workspace-bucket")
-	t.Setenv("SANDBOX_WORKSPACE_S3_REGION", "workspace-region")
-	t.Setenv("SANDBOX_WORKSPACE_S3_ENDPOINT", "http://workspace.invalid/")
+	t.Setenv("AGENTAREA_S3_ARTIFACTS_BUCKET", "platform-bucket")
+	t.Setenv("AGENTAREA_S3_REGION", "platform-region")
+	t.Setenv("AGENTAREA_S3_ENDPOINT", "http://platform.invalid")
+	t.Setenv("AGENTAREA_SBX_S3_BUCKET", "workspace-bucket")
+	t.Setenv("AGENTAREA_SBX_S3_REGION", "workspace-region")
+	t.Setenv("AGENTAREA_SBX_S3_ENDPOINT", "http://workspace.invalid/")
 
 	cfg, err := LoadConfigFromEnv()
 	if err != nil {
@@ -277,7 +277,7 @@ func TestLoadConfigFromEnvPrefersWorkspaceOverrides(t *testing.T) {
 }
 
 func TestLoadConfigFromEnvRejectsMissingQuotaPolicy(t *testing.T) {
-	t.Setenv("SANDBOX_WORKSPACE_MAX_FILES", "")
+	t.Setenv("AGENTAREA_SBX_MAX_FILES", "")
 	if _, err := LoadConfigFromEnv(); err == nil {
 		t.Fatal("missing workspace quota policy unexpectedly accepted")
 	}
@@ -285,11 +285,11 @@ func TestLoadConfigFromEnvRejectsMissingQuotaPolicy(t *testing.T) {
 
 func setWorkspacePolicyEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv("SANDBOX_WORKSPACE_MAX_FILES", "10000")
-	t.Setenv("SANDBOX_WORKSPACE_MAX_FILE_BYTES", "268435456")
-	t.Setenv("SANDBOX_WORKSPACE_MAX_BYTES", "2147483648")
-	t.Setenv("SANDBOX_WORKSPACE_SIGNED_URL_TTL", "1h")
-	t.Setenv("SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE", "true")
+	t.Setenv("AGENTAREA_SBX_MAX_FILES", "10000")
+	t.Setenv("AGENTAREA_SBX_MAX_FILE_SIZE", "268435456")
+	t.Setenv("AGENTAREA_SBX_MAX_TOTAL_SIZE", "2147483648")
+	t.Setenv("AGENTAREA_SBX_S3_URL_TTL", "1h")
+	t.Setenv("AGENTAREA_SBX_S3_PATH_STYLE", "true")
 }
 
 func TestRepositoryReleaseLeaseExpiresMatchingToken(t *testing.T) {

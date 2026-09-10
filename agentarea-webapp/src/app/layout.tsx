@@ -55,7 +55,7 @@ const sharedMetadata: Omit<Metadata, "metadataBase"> = {
 function getMetadataFallbackBase() {
   return (
     process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.APP_URL ||
+    process.env.AGENTAREA_APP_URL ||
     "https://app.agentarea.ai/"
   );
 }
@@ -93,15 +93,15 @@ const inter = Inter({
 function getRuntimeConfig() {
   return {
     CLIENT_ORY_SDK_URL: process.env.ORY_BROWSER_URL || process.env.ORY_SDK_URL || "",
-    CLIENT_API_URL: process.env.API_BROWSER_URL || process.env.API_URL || "http://localhost:8000",
+    CLIENT_API_URL: process.env.NEXT_PUBLIC_API_URL || process.env.AGENTAREA_API_URL || "http://localhost:8000",
     // Where this deployment's billing PAGE lives, if it has one. Empty on the open
     // build, which has nothing to bill for and therefore no page and no link.
     //
-    // Not BILLING_URL: that name is already the address of the billing SERVICE the
-    // backend calls. Both were set on this deployment and the service address won, so
-    // the link in the sidebar would have pointed at an internal cluster URL that no
+    // Not AGENTAREA_BILLING_URL: that name is already the address of the billing
+    // SERVICE the backend calls. Both were set on this deployment and the service
+    // address won, so the sidebar link pointed at an internal cluster URL that no
     // browser can reach.
-    CLIENT_BILLING_URL: process.env.BILLING_PAGE_URL || "",
+    CLIENT_BILLING_URL: process.env.AGENTAREA_BILLING_PAGE_URL || "",
   };
 }
 

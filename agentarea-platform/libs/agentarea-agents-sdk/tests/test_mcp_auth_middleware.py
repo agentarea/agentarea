@@ -226,7 +226,7 @@ class TestUnauthenticatedChallenge:
             sent.append(message)
 
         settings = MagicMock()
-        settings.app.API_BASE_URL = "https://api.example.com"
+        settings.app.API_URL = "https://api.example.com"
         middleware = MCPAuthMiddleware(AsyncMock())
 
         with patch("agentarea_common.config.get_settings", return_value=settings):

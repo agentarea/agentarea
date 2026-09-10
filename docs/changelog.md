@@ -334,7 +334,7 @@ Stay up to date with the latest AgentArea releases, bug fixes, and new features.
     cd agentarea-platform/apps/api && alembic upgrade head
 
     # 3. Update MCP manager config
-    # Remove MCP_REGISTRY_URL; set MCP_MANAGER_URL instead
+    # Remove MCP_REGISTRY_URL; set AGENTAREA_MCP_MANAGER_URL instead
 
     # 4. Restart all services
     make down-dev && make up-dev

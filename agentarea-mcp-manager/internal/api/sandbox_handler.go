@@ -10,10 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const sandboxCleanupAuthSecretEnv = "SANDBOX_CLEANUP_AUTH_SECRET"
+const sandboxCleanupAuthSecretEnv = "AGENTAREA_SBX_CLEANUP_SECRET"
 
 // deleteSandboxTask retires the sandbox state for a finished task. In K8s it
-// marks the task pod idle and schedules deletion after SANDBOX_TASK_IDLE_TTL;
+// marks the task pod idle and schedules deletion after AGENTAREA_SBX_IDLE_TTL;
 // the GC loop performs the actual delete.
 func (h *Handler) deleteSandboxTask(c *gin.Context) {
 	if !sandboxCleanupAuthorized(c.GetHeader("Authorization"), os.Getenv(sandboxCleanupAuthSecretEnv)) {

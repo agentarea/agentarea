@@ -53,7 +53,7 @@ class SkillStorageService:
         """S3 bucket name. Skills share the artifacts bucket and live under
         the ``skills/`` prefix — keeps storage to one bucket per workspace.
         """
-        return self.settings.ARTIFACTS_BUCKET_NAME
+        return self.settings.ARTIFACTS_BUCKET
 
     def _get_s3_prefix(self, workspace_id: str, skill_id: str) -> str:
         """Get the S3 prefix for a skill package.

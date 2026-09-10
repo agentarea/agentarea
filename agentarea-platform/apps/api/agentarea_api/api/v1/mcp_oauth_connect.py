@@ -161,7 +161,7 @@ async def _pop_state(state: str) -> dict | None:
 def _callback_uri() -> str:
     """Build the absolute callback URI this deployment is reachable at."""
     settings = get_settings()
-    api_base = settings.app.API_BASE_URL.rstrip("/")
+    api_base = settings.app.API_URL.rstrip("/")
     return f"{api_base}/v1/mcp-oauth/callback"
 
 
@@ -213,7 +213,7 @@ def _safe_frontend_base(return_to: str) -> str:
     - absolute URL with same origin as FRONTEND_BASE_URL
     """
     settings = get_settings()
-    default_base = settings.app.FRONTEND_BASE_URL.rstrip("/")
+    default_base = settings.app.APP_URL.rstrip("/")
     if not return_to:
         return default_base
 

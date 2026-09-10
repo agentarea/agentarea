@@ -44,13 +44,13 @@ class _Settings:
     """Minimal stand-in for the app settings the endpoint reads."""
 
     class app:  # noqa: N801 - mirrors the settings attribute name
-        API_BASE_URL = API_BASE
+        API_URL = API_BASE
 
     class mcp:  # noqa: N801 - mirrors the settings attribute name
-        HYDRA_PUBLIC_URL = HYDRA
+        HYDRA_URL = HYDRA
         HYDRA_ADMIN_URL = HYDRA_ADMIN
         HYDRA_BROWSER_URL = HYDRA
-        MCP_OAUTH_SCOPES = "openid offline_access offline"
+        OAUTH_SCOPES = "openid offline_access offline"
 
 
 class _FakeResponse:
@@ -187,7 +187,7 @@ class TestProtectedResourceMetadata:
 
         scopes = (await self._metadata())["scopes_supported"]
 
-        assert set(scopes) == set(_Settings.mcp.MCP_OAUTH_SCOPES.split())
+        assert set(scopes) == set(_Settings.mcp.OAUTH_SCOPES.split())
 
 
 class TestProtectedResourceMetadataLocations:

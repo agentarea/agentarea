@@ -18,7 +18,7 @@ def setup_otel(service_name: str, settings: ObservabilitySettings | None = None)
     idempotent per service name so API/worker startup can call it freely.
     """
     settings = settings or ObservabilitySettings()
-    if not settings.OTEL_ENABLED:
+    if not settings.ENABLED:
         return False
 
     resolved_service_name = settings.OTEL_SERVICE_NAME or service_name

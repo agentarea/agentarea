@@ -66,20 +66,20 @@ func ConfigFromEnv() (*Config, error) {
 		return nil, ErrDisabled
 	}
 
-	token := os.Getenv("MCP_DATAPLANE_AUTH_TOKEN")
+	token := os.Getenv("AGENTAREA_MCP_DATAPLANE_TOKEN")
 	if token == "" {
-		return nil, errors.New("MCP_DATAPLANE_AUTH_TOKEN is required in data-plane mode")
+		return nil, errors.New("AGENTAREA_MCP_DATAPLANE_TOKEN is required in data-plane mode")
 	}
 	if len(token) < 32 {
-		return nil, fmt.Errorf("MCP_DATAPLANE_AUTH_TOKEN must be at least 32 characters, got %d", len(token))
+		return nil, fmt.Errorf("AGENTAREA_MCP_DATAPLANE_TOKEN must be at least 32 characters, got %d", len(token))
 	}
 
-	agentID := os.Getenv("MCP_DATAPLANE_ID")
+	agentID := os.Getenv("AGENTAREA_MCP_DATAPLANE_ID")
 	if agentID == "" {
-		return nil, errors.New("MCP_DATAPLANE_ID is required in data-plane mode: it is what marks this data plane's instances as its own")
+		return nil, errors.New("AGENTAREA_MCP_DATAPLANE_ID is required in data-plane mode: it is what marks this data plane's instances as its own")
 	}
 
-	listen := os.Getenv("MCP_DATAPLANE_LISTEN_ADDR")
+	listen := os.Getenv("AGENTAREA_MCP_DATAPLANE_ADDR")
 	if listen == "" {
 		listen = ":8090"
 	}
@@ -89,7 +89,7 @@ func ConfigFromEnv() (*Config, error) {
 
 // Enabled reports whether the process was asked to run as a data plane.
 func Enabled() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("MCP_MANAGER_MODE")), "dataplane")
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("AGENTAREA_MCP_MODE")), "dataplane")
 }
 
 // Server exposes a container backend over HTTP for a remote control plane.

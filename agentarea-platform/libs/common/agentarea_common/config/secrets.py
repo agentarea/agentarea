@@ -2,31 +2,36 @@
 
 from functools import lru_cache
 
+from pydantic_settings import SettingsConfigDict
+
 from .base import BaseAppSettings
 
 
 class SecretManagerSettings(BaseAppSettings):
     """Secret manager configuration.
 
-    Supported SECRET_MANAGER_TYPE values:
+    Supported AGENTAREA_SECRET_BACKEND values:
     - "database": Encrypted storage in PostgreSQL (default for open source)
     - "infisical": External secret management service
+
+    One backend is active at a time, so the connection fields are named for
+    their role rather than for the vendor that happens to provide it.
     """
 
-    SECRET_MANAGER_TYPE: str = "database"  # noqa: S105
-    SECRET_MANAGER_ENCRYPTION_KEY: str | None = None  # Required when SECRET_MANAGER_TYPE="database"
+    model_config = SettingsConfigDict(env_prefix="AGENTAREA_SECRET_")
 
-    # Infisical-specific settings (only used when SECRET_MANAGER_TYPE="infisical")
-    SECRET_MANAGER_ENDPOINT: str | None = None
-    SECRET_MANAGER_ACCESS_KEY: str | None = None
-    SECRET_MANAGER_SECRET_KEY: str | None = None
+    BACKEND: str = "database"
+    ENCRYPTION_KEY: str | None = None  # Required when AGENTAREA_SECRET_BACKEND="database"
+
+    # Only used when AGENTAREA_SECRET_BACKEND="infisical"
+    ENDPOINT: str | None = None
+    CLIENT_ID: str | None = None
+    CLIENT_SECRET: str | None = None
     # Which Infisical project and environment hold the secrets. Both were
     # hardcoded to "default" — a value Infisical does not issue — so no
     # deployment ever read or wrote what it meant to.
-    SECRET_MANAGER_PROJECT_ID: str = ""
-    # Not a credential — an Infisical environment slug. The SECRET_* prefix is
-    # what trips the hardcoded-password check.
-    SECRET_MANAGER_ENVIRONMENT: str = "prod"  # noqa: S105
+    PROJECT_ID: str = ""
+    ENV: str = "prod"
 
 
 @lru_cache

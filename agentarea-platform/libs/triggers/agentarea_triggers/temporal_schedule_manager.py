@@ -59,7 +59,7 @@ class TemporalScheduleManager:
         from agentarea_common.config import get_settings
 
         settings = get_settings()
-        server_url = settings.workflow.TEMPORAL_SERVER_URL
+        server_url = settings.workflow.TEMPORAL_URL
         if not server_url:
             raise DependencyUnavailableError(
                 "TEMPORAL_SERVER_URL not configured",

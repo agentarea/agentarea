@@ -60,7 +60,7 @@ Resolution order:
   2. https://{{ ingress.hosts.backend.host }} when ingress is enabled and host is set
   3. Internal ClusterIP service URL (agentarea.backend.url)
 Used for OAuth protected-resource metadata and any env var that must advertise
-the externally reachable API URL (API_BASE_URL).
+the externally reachable API URL (AGENTAREA_API_URL).
 */}}
 {{- define "agentarea.backend.apiUrl" -}}
 {{- if .Values.global.api.publicUrl -}}

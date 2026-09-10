@@ -5,11 +5,12 @@ description: "Every environment variable each AgentArea service reads, and the H
 prerequisites:
   - /self-host/requirements
 related:
+  - /self-host/env-migration
   - /self-host/kubernetes
   - /self-host/docker-compose
   - /self-host/secrets-backends
   - /self-host/networking
-last_updated: 2026-07-29
+last_updated: 2026-09-24
 ---
 
 The environment variables each service reads, grouped by service, with the Helm
@@ -35,6 +36,29 @@ the generated files drift from `config.yaml`.
 Every group below maps to a generated ConfigMap named
 `<release>-env-<group>`.
 
+### Naming
+
+Every variable AgentArea reads is `AGENTAREA_<DOMAIN>_<KEY>`, at most 34
+characters, with at most three segments after the domain. The domain comes from
+a closed list: `DB` `S3` `AUTH` `AUTHZ` `SECRET` `MCP` `SBX` `WF` `TASK` `TRIG`
+`CHAN` `EVT` `CORS` `LOG` `REDIS` `KAFKA` `TOOL` `K8S`. A handful of app-level
+names carry no domain — `AGENTAREA_ENV`, `AGENTAREA_API_URL`,
+`AGENTAREA_APP_URL`, `AGENTAREA_EDITION`.
+
+Durations carry their unit in the value, not the name: `30s`, `500ms`, `5m`,
+`2h`, `7d`. A bare number is rejected rather than assumed to be seconds. Two
+exceptions are named `..._SECONDS` and take plain integers, listed below.
+
+An unprefixed name belongs to somebody else and keeps the name its owner
+expects: the postgres image (`POSTGRES_USER`), the AWS SDK
+(`AWS_ACCESS_KEY_ID`), OpenTelemetry (`OTEL_*`), the Ory SDK (`ORY_SDK_URL`),
+the Next.js build (`NEXT_PUBLIC_*`), and the platform that starts the process
+(`PORT`, `HOST`). `scripts/check_env_naming.py` enforces the split and runs in
+CI; a name owned by a third party goes in that script's whitelist.
+
+Upgrading from a release before this scheme: [Environment variable
+migration](/self-host/env-migration) lists every old name and its replacement.
+
 ## Parameters
 
 ### Database (group `database`)
@@ -46,10 +70,10 @@ Consumed by the backend, worker, and event service.
 | `POSTGRES_HOST` | `global.database.host`, or the bundled service when empty | derived |
 | `POSTGRES_PORT` | `global.database.port` | `5432` |
 | `POSTGRES_DB` | `global.database.name` | `agentarea` |
-| `POSTGRES_SSLMODE` | `global.database.sslMode` | `disable` |
+| `AGENTAREA_DB_SSLMODE` | `global.database.sslMode` | `disable` |
 | `POSTGRES_USER` | Secret `global.secrets.postgresql`, key `username` | generated |
 | `POSTGRES_PASSWORD` | Secret `global.secrets.postgresql`, key `password` | generated |
-| `DATABASE_URL` | composed from the five above | `postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=<sslMode>` |
+| `AGENTAREA_DB_URL` | composed from the five above | `postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=<sslMode>` |
 
 `global.database.maxConnections` and `global.database.connectionTimeout` exist in
 `values.yaml` but are not rendered into any environment variable by
@@ -59,12 +83,12 @@ Consumed by the backend, worker, and event service.
 
 | Variable | Helm value | Default |
 |---|---|---|
-| `REDIS_HOST` | `global.redis.host`, or the bundled Valkey service when empty | derived |
-| `REDIS_PORT` | `global.redis.port` | `6379` |
-| `REDIS_PASSWORD` | Secret `global.secrets.redis`, key `redis-password` | generated |
-| `REDIS_URL` | see precedence below | derived |
+| `AGENTAREA_REDIS_HOST` | `global.redis.host`, or the bundled Valkey service when empty | derived |
+| `AGENTAREA_REDIS_PORT` | `global.redis.port` | `6379` |
+| `AGENTAREA_REDIS_PASSWORD` | Secret `global.secrets.redis`, key `redis-password` | generated |
+| `AGENTAREA_REDIS_URL` | see precedence below | derived |
 
-`REDIS_URL` is emitted by `templates/_redis-url.tpl`, not by the `redis` group,
+`AGENTAREA_REDIS_URL` is emitted by `templates/_redis-url.tpl`, not by the `redis` group,
 in this order:
 
 1. `global.redis.existingSecret` set — read from that Secret's
@@ -72,7 +96,7 @@ in this order:
    managed Redis URLs carry credentials.
 2. `global.redis.url` set — used literally.
 3. Neither — derived as
-   `redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)` against the bundled
+   `redis://:$(AGENTAREA_REDIS_PASSWORD)@$(AGENTAREA_REDIS_HOST):$(AGENTAREA_REDIS_PORT)` against the bundled
    Valkey subchart.
 
 `global.redis.database`, `ssl`, `maxConnections`, and `connectionTimeout` are
@@ -84,39 +108,39 @@ Rendered only when `rustfs.enabled` is true.
 
 | Variable | Helm value | Default |
 |---|---|---|
-| `AWS_REGION` | `global.storage.region` | `us-east-1` |
-| `S3_BUCKET_NAME` | `global.storage.bucket` | `agentarea-documents` |
-| `ARTIFACTS_BUCKET_NAME` | `global.storage.bucket` | `agentarea-documents` |
-| `AWS_ENDPOINT_URL` | the RustFS service host, port 9000 | derived |
+| `AGENTAREA_S3_REGION` | `global.storage.region` | `us-east-1` |
+| `AGENTAREA_S3_BUCKET` | `global.storage.bucket` | `agentarea-documents` |
+| `AGENTAREA_S3_ARTIFACTS_BUCKET` | `global.storage.bucket` | `agentarea-documents` |
+| `AGENTAREA_S3_ENDPOINT` | the RustFS service host, port 9000 | derived |
 | `AWS_ACCESS_KEY_ID` | Secret `global.secrets.rustfs`, key `root-user` | generated |
 | `AWS_SECRET_ACCESS_KEY` | Secret `global.secrets.rustfs`, key `root-password` | generated |
 
 `global.storage.publicEndpoint` is rendered in the `backend` group as
-`PUBLIC_S3_ENDPOINT`, not here.
+`AGENTAREA_S3_PUBLIC_ENDPOINT`, not here.
 
 ### Backend API (group `backend`)
 
 | Variable | Helm value | Default |
 |---|---|---|
 | `PORT` | fixed | `8000` |
-| `LOG_LEVEL` | fixed in `config.yaml` | `info` |
+| `AGENTAREA_LOG_LEVEL` | fixed in `config.yaml` | `info` |
 | `API_HOST` | `global.api.host` | `0.0.0.0` |
 | `API_PORT` | `global.api.port` | `8000` |
-| `API_BASE_URL` | `global.api.publicUrl`, else derived from `ingress.hosts.backend.host`, else the ClusterIP service URL | derived |
+| `AGENTAREA_API_URL` | `global.api.publicUrl`, else derived from `ingress.hosts.backend.host`, else the ClusterIP service URL | derived |
 | `API_AUTH_ENABLED` | `global.api.auth.enabled` | `false` |
 | `API_AUTH_HEADER_NAME` | `global.api.auth.headerName` | `""` |
 | `API_AUTH_HEADER_VALUE` | Secret `global.secrets.application`, key `api-auth-header-value` | generated |
-| `MCP_MANAGER_URL` | the MCP Manager service and `mcpManager.service.port` | derived |
-| `MCP_CLIENT_TIMEOUT` | fixed | `30` |
-| `PUBLIC_S3_ENDPOINT` | `global.storage.publicEndpoint` | `""` |
+| `AGENTAREA_MCP_MANAGER_URL` | the MCP Manager service and `mcpManager.service.port` | derived |
+| `AGENTAREA_MCP_TIMEOUT` | fixed | `30` |
+| `AGENTAREA_S3_PUBLIC_ENDPOINT` | `global.storage.publicEndpoint` | `""` |
 | `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
 | `METRICS_PORT` | `global.monitoring.prometheus.port` | `9090` |
 | `HEALTH_CHECK_ENABLED` | `global.monitoring.health.enabled` | `true` |
 | `HEALTH_CHECK_PORT` | `global.monitoring.health.port` | `8001` |
-| `KRATOS_ISSUER` | `kratos.jwt.issuer` | `https://agentarea.dev` |
-| `KRATOS_AUDIENCE` | `kratos.jwt.audience` | `agentarea-api` |
-| `KRATOS_JWKS_B64` | Secret `<release>-kratos-jwks` or `kratos.secretName`, key `jwks_b64` | generated |
-| `KRATOS_ADMIN_URL` | `kratos.urls.admin` | in-cluster `<release>-kratos-admin:4434` |
+| `AGENTAREA_AUTH_ISSUER` | `kratos.jwt.issuer` | `https://agentarea.dev` |
+| `AGENTAREA_AUTH_AUDIENCE` | `kratos.jwt.audience` | `agentarea-api` |
+| `AGENTAREA_AUTH_JWKS_B64` | Secret `<release>-kratos-jwks` or `kratos.secretName`, key `jwks_b64` | generated |
+| `AGENTAREA_AUTH_KRATOS_ADMIN_URL` | `kratos.urls.admin` | in-cluster `<release>-kratos-admin:4434` |
 | `FRONTEND_BASE_URL` | derived from the frontend ingress | `http://localhost:3000` |
 | `SMTP_CONNECTION_URI` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `kratos.smtp.*` | empty (invitations are link-only) |
 
@@ -125,7 +149,7 @@ Rendered only when `rustfs.enabled` is true.
 source. The API serves `/health` on its normal port unconditionally and exposes
 no `/metrics` endpoint. See [observability](/self-host/observability).
 
-`API_BASE_URL` is the URL the backend advertises for itself — provider icon URLs,
+`AGENTAREA_API_URL` is the URL the backend advertises for itself — provider icon URLs,
 OAuth protected-resource metadata, and the MCP `WWW-Authenticate` header. It must
 be reachable by the client, not by the pod.
 
@@ -135,12 +159,12 @@ be reachable by the client, not by the pod.
 |---|---|---|
 | `WORKFLOW__USE_WORKFLOW_EXECUTION` | fixed | `true` |
 | `WORKFLOW__WORKFLOW_ENGINE` | fixed | `temporal` |
-| `WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES` | fixed in `config.yaml` | `10` |
-| `WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS` | fixed in `config.yaml` | `5` |
-| `TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY` | fixed | `true` |
+| `AGENTAREA_WF_MAX_ACTIVITIES` | fixed in `config.yaml` | `10` |
+| `AGENTAREA_WF_MAX_WORKFLOWS` | fixed in `config.yaml` | `5` |
+| `AGENTAREA_TASK_DISCOVERY_ENABLED` | fixed | `true` |
 | `DEBUG` | fixed | `false` |
-| `ENVIRONMENT` | fixed | `production` |
-| `MCP_MANAGER_URL` | derived | — |
+| `AGENTAREA_ENV` | fixed | `production` |
+| `AGENTAREA_MCP_MANAGER_URL` | derived | — |
 
 `global.temporal.worker.maxConcurrentActivityExecutions`,
 `maxConcurrentWorkflowTaskExecutions`, and `maxConcurrentSessionExecutions` in
@@ -158,9 +182,9 @@ Consumed by the backend and the worker.
 
 | Variable | Helm value | Default |
 |---|---|---|
-| `WORKFLOW__TEMPORAL_SERVER_URL` | `global.temporal.host` and `global.temporal.port` | derived, port `7233` |
-| `WORKFLOW__TEMPORAL_NAMESPACE` | `global.temporal.namespace` | `default` |
-| `WORKFLOW__TEMPORAL_TASK_QUEUE` | `global.temporal.taskQueue` | `agent-tasks` |
+| `AGENTAREA_WF_TEMPORAL_URL` | `global.temporal.host` and `global.temporal.port` | derived, port `7233` |
+| `AGENTAREA_WF_NAMESPACE` | `global.temporal.namespace` | `default` |
+| `AGENTAREA_WF_QUEUE` | `global.temporal.taskQueue` | `agent-tasks` |
 
 `global.temporal.client.connectionTimeout`, `rpcTimeout`, and `longPollTimeout`
 are not rendered into environment variables.
@@ -181,33 +205,33 @@ are not rendered into environment variables.
 
 | Variable | Helm value | Default |
 |---|---|---|
-| `LOG_LEVEL` | fixed | `INFO` |
-| `CORE_API_URL` | the backend service, port 8000 | derived |
-| `SERVER_HOST` | fixed | `0.0.0.0` |
-| `SERVER_PORT` | fixed | `80` |
-| `BACKEND_TYPE` | fixed to `kubernetes` in `config.yaml` | `kubernetes` |
-| `KUBERNETES_ENABLED` | fixed | `true` |
-| `KUBERNETES_NAMESPACE` | the release namespace | derived |
-| `KUBERNETES_DOMAIN` | `mcpManager.domain` | `mcp.local` |
-| `KUBERNETES_GATEWAY_NAME` | `mcpManager.gateway.name` | `envoy-gateway` |
-| `KUBERNETES_GATEWAY_NAMESPACE` | `mcpManager.gateway.namespace` | `envoy-gateway-system` |
-| `KUBERNETES_RUNTIME_CLASS` | `mcpManager.runtimeClass` | `""` |
-| `KUBERNETES_POD_SERVICE_ACCOUNT_NAME` | the zero-RBAC runtime ServiceAccount | derived |
-| `KUBERNETES_SECURITY_RUN_AS_NON_ROOT` | fixed | `true` |
-| `KUBERNETES_SECURITY_READ_ONLY_ROOT_FS` | fixed | `true` |
-| `KUBERNETES_DEFAULT_CPU_REQUEST` | fixed | `100m` |
-| `KUBERNETES_DEFAULT_CPU_LIMIT` | fixed | `500m` |
-| `KUBERNETES_DEFAULT_MEMORY_REQUEST` | fixed | `128Mi` |
-| `KUBERNETES_DEFAULT_MEMORY_LIMIT` | fixed | `512Mi` |
-| `MCP_FEATURES_ENABLED` | `mcpManager.features.enabled`, comma-joined | `gateway_api,state_reconciler` |
-| `MCP_IDLE_TIMEOUT` | `mcpManager.serverless.idleTimeout` when `serverless.enabled`, else `0` | `10m` |
-| `MCP_IDLE_SWEEP_INTERVAL` | `mcpManager.serverless.sweepInterval` | `60s` |
-| `MCP_REQUEST_LEASE_TTL` | `mcpManager.serverless.requestLeaseTTL` | `90s` |
-| `MCP_GATEWAY_STARTUP_TIMEOUT` | `mcpManager.serverless.startupTimeout` | `5m` |
-| `MCP_GATEWAY_AUTH_SECRET` | optional; the gateway's shared secret | `""` |
+| `AGENTAREA_LOG_LEVEL` | fixed | `INFO` |
+| `AGENTAREA_API_URL` | the backend service, port 8000 | derived |
+| `HOST` | fixed | `0.0.0.0` |
+| `PORT` | fixed | `80` |
+| `AGENTAREA_MCP_BACKEND` | fixed to `kubernetes` in `config.yaml` | `kubernetes` |
+| `AGENTAREA_K8S_ENABLED` | fixed | `true` |
+| `AGENTAREA_K8S_NAMESPACE` | the release namespace | derived |
+| `AGENTAREA_K8S_DOMAIN` | `mcpManager.domain` | `mcp.local` |
+| `AGENTAREA_K8S_GATEWAY` | `mcpManager.gateway.name` | `envoy-gateway` |
+| `AGENTAREA_K8S_GATEWAY_NS` | `mcpManager.gateway.namespace` | `envoy-gateway-system` |
+| `AGENTAREA_K8S_RUNTIME_CLASS` | `mcpManager.runtimeClass` | `""` |
+| `AGENTAREA_K8S_SERVICE_ACCOUNT` | the zero-RBAC runtime ServiceAccount | derived |
+| `AGENTAREA_K8S_NON_ROOT` | fixed | `true` |
+| `AGENTAREA_K8S_READONLY_ROOT` | fixed | `true` |
+| `AGENTAREA_K8S_CPU_REQUEST` | fixed | `100m` |
+| `AGENTAREA_K8S_CPU_LIMIT` | fixed | `500m` |
+| `AGENTAREA_K8S_MEMORY_REQUEST` | fixed | `128Mi` |
+| `AGENTAREA_K8S_MEMORY_LIMIT` | fixed | `512Mi` |
+| `AGENTAREA_MCP_FEATURES` | `mcpManager.features.enabled`, comma-joined | `gateway_api,state_reconciler` |
+| `AGENTAREA_MCP_IDLE_TIMEOUT` | `mcpManager.serverless.idleTimeout` when `serverless.enabled`, else `0` | `10m` |
+| `AGENTAREA_MCP_SWEEP_INTERVAL` | `mcpManager.serverless.sweepInterval` | `60s` |
+| `AGENTAREA_MCP_LEASE_TTL` | `mcpManager.serverless.requestLeaseTTL` | `90s` |
+| `AGENTAREA_MCP_STARTUP_TIMEOUT` | `mcpManager.serverless.startupTimeout` | `5m` |
+| `AGENTAREA_MCP_GATEWAY_SECRET` | optional; the gateway's shared secret | `""` |
 
 All four gateway durations are **required** — the manager refuses to start when
-one is missing or unparseable, and only `MCP_IDLE_TIMEOUT` may be zero
+one is missing or unparseable, and only `AGENTAREA_MCP_IDLE_TIMEOUT` may be zero
 (`LoadPolicyFromEnv` in `internal/mcpgateway/gateway.go`). Failing to boot is the
 intended outcome: a gateway with an unset lease TTL would hold workloads open
 indefinitely.
@@ -220,7 +244,7 @@ and brings the workload up regardless of this setting.
 
 `mcpManager.instancePod` (labels, annotations, nodeSelector, tolerations,
 affinity, imagePullSecrets, priorityClassName) is passed to the manager as a
-single JSON environment variable, `KUBERNETES_INSTANCE_POD`. Platform security
+single JSON environment variable, `AGENTAREA_K8S_INSTANCE_POD`. Platform security
 invariants — the managed-by label, securityContext and seccomp, the withheld
 ServiceAccount token, and the RuntimeClass clamp — are applied on top and cannot
 be weakened from these values.
@@ -231,10 +255,10 @@ be weakened from these values.
 |---|---|---|
 | `PORT` | fixed | `3000` |
 | `NODE_ENV` | fixed | `production` |
-| `API_URL` | the backend service URL | derived |
+| `AGENTAREA_API_URL` | the backend service URL | derived |
 | `ORY_SDK_URL` | `kratos.urls.public`, else the internal service | derived |
 | `ORY_BROWSER_URL` | `kratos.urls.publicBrowser`, else `kratos.urls.public` | derived |
-| `ORY_ADMIN_URL` | `kratos.urls.admin`, else the internal service | derived |
+| `AGENTAREA_AUTH_KRATOS_ADMIN_URL` | `kratos.urls.admin`, else the internal service | derived |
 | `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
 | `HEALTH_CHECK_ENABLED` | `global.monitoring.health.enabled` | `true` |
 
@@ -247,7 +271,7 @@ domain.
 
 | Variable | Helm value | Default |
 |---|---|---|
-| `SECRET_MANAGER_ENCRYPTION_KEY` | Secret `global.secrets.application`, key `encryption-key` | generated |
+| `AGENTAREA_SECRET_ENCRYPTION_KEY` | Secret `global.secrets.application`, key `encryption-key` | generated |
 
 ### Secret manager (not in `config.yaml`)
 
@@ -256,11 +280,11 @@ Read by `SecretManagerSettings` in the platform. On Kubernetes, set these throug
 
 | Variable | Type | Default | Description |
 |---|---|---|---|
-| `SECRET_MANAGER_TYPE` | string | `database` | `database` or `infisical`. Any other value raises at startup. |
-| `SECRET_MANAGER_ENCRYPTION_KEY` | string | unset | Fernet key. Required when type is `database`. |
-| `SECRET_MANAGER_ENDPOINT` | string | unset | Infisical host. Defaults to `https://app.infisical.com` when unset. |
-| `SECRET_MANAGER_ACCESS_KEY` | string | unset | Infisical client ID. Required when type is `infisical`. |
-| `SECRET_MANAGER_SECRET_KEY` | string | unset | Infisical client secret. Required when type is `infisical`. |
+| `AGENTAREA_SECRET_BACKEND` | string | `database` | `database` or `infisical`. Any other value raises at startup. |
+| `AGENTAREA_SECRET_ENCRYPTION_KEY` | string | unset | Fernet key. Required when type is `database`. |
+| `AGENTAREA_SECRET_ENDPOINT` | string | unset | Infisical host. Defaults to `https://app.infisical.com` when unset. |
+| `AGENTAREA_SECRET_CLIENT_ID` | string | unset | Infisical client ID. Required when type is `infisical`. |
+| `AGENTAREA_SECRET_CLIENT_SECRET` | string | unset | Infisical client secret. Required when type is `infisical`. |
 
 ### Event service (group `eventService` values, chart keys only)
 
@@ -286,8 +310,8 @@ uses webhooks.
 
 The runner consumes sandbox execution requests from Redis Streams. In Docker
 Compose there is no separate runner: the manager runs it in-process
-(`SANDBOX_EMBEDDED_RUNNER=true`) and delegates execution to the
-`sandbox-executor` container over `SANDBOX_EXECUTOR_URL`.
+(`AGENTAREA_SBX_EMBEDDED_RUNNER=true`) and delegates execution to the
+`sandbox-executor` container over `AGENTAREA_SBX_EXECUTOR_URL`.
 
 ### Docker Compose variables
 
@@ -302,16 +326,16 @@ equivalent are listed; the rest map onto the groups above.
 | `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` / `RUSTFS_REGION` | yes | `minioadmin` / `minioadmin` / `us-east-1` |
 | `DOCUMENTS_BUCKET` | yes | `ai-agents-bucket` |
 | `ARTIFACTS_BUCKET` | no | `artifacts` |
-| `SECRET_MANAGER_ENCRYPTION_KEY` | yes | a shipped development key |
-| `SANDBOX_ACTIVATION_AUTH_SECRET` | yes, no default | development placeholder |
-| `SANDBOX_CLEANUP_AUTH_SECRET` | yes, no default | development placeholder |
-| `KRATOS_JWKS_B64` / `KRATOS_ISSUER` / `KRATOS_AUDIENCE` | yes | a published test key |
-| `KRATOS_ADMIN_URL` | yes, to show member names | `http://kratos:4434` |
+| `AGENTAREA_SECRET_ENCRYPTION_KEY` | yes | a shipped development key |
+| `AGENTAREA_SBX_ACTIVATION_SECRET` | yes, no default | development placeholder |
+| `AGENTAREA_SBX_CLEANUP_SECRET` | yes, no default | development placeholder |
+| `AGENTAREA_AUTH_JWKS_B64` / `AGENTAREA_AUTH_ISSUER` / `AGENTAREA_AUTH_AUDIENCE` | yes | a published test key |
+| `AGENTAREA_AUTH_KRATOS_ADMIN_URL` | yes, to show member names | `http://kratos:4434` |
 | `SMTP_*` | for email delivery | targets the bundled Mailpit |
 | `FRONTEND_BASE_URL` | for links in invitation email | `http://localhost:3000` |
 | `OIDC_GOOGLE_*` / `OIDC_GITHUB_*` | for social login | empty |
 | `VERSION` | no | `latest` |
-| `WORKERS` / `RELOAD` / `PORT` / `LOG_LEVEL` | no | `1` / `false` / `8000` / `info` |
+| `AGENTAREA_API_WORKERS` / `RELOAD` / `PORT` / `AGENTAREA_LOG_LEVEL` | no | `1` / `false` / `8000` / `info` |
 
 The two sandbox secrets are declared `${VAR:?message}`, so Compose aborts rather
 than starting with them empty.
@@ -320,11 +344,11 @@ than starting with them empty.
 
 | Symptom | Cause | Action |
 |---|---|---|
-| Startup raises `SECRET_MANAGER_ENCRYPTION_KEY environment variable must be set` | `SECRET_MANAGER_TYPE=database` with no key | Generate a Fernet key |
-| Startup raises `Invalid SECRET_MANAGER_TYPE` | Value is neither `database` nor `infisical` | Correct the value |
-| Startup raises `Infisical credentials not configured` | Type is `infisical` without both keys | Set `SECRET_MANAGER_ACCESS_KEY` and `SECRET_MANAGER_SECRET_KEY` |
+| Startup raises `AGENTAREA_SECRET_ENCRYPTION_KEY environment variable must be set` | `AGENTAREA_SECRET_BACKEND=database` with no key | Generate a Fernet key |
+| Startup raises `Invalid AGENTAREA_SECRET_BACKEND` | Value is neither `database` nor `infisical` | Correct the value |
+| Startup raises `Infisical credentials not configured` | Type is `infisical` without both keys | Set `AGENTAREA_SECRET_CLIENT_ID` and `AGENTAREA_SECRET_CLIENT_SECRET` |
 | `docker compose` aborts before starting anything | A `${VAR:?}` variable is empty | Set the sandbox secrets |
-| Presigned upload URLs point at an unreachable host | `PUBLIC_S3_ENDPOINT` empty with a cluster-only object store | Set `global.storage.publicEndpoint` |
+| Presigned upload URLs point at an unreachable host | `AGENTAREA_S3_PUBLIC_ENDPOINT` empty with a cluster-only object store | Set `global.storage.publicEndpoint` |
 | CI fails on a Helm change with a configs diff | `templates/configs/` is stale relative to `config.yaml` | Run `make helm-gen` and commit |
 
 ## Example
@@ -335,14 +359,14 @@ point:
 ```yaml
 worker:
   extraEnv:
-    - name: WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES
+    - name: AGENTAREA_WF_MAX_ACTIVITIES
       value: "40"
 
 backend:
   extraEnv:
-    - name: SECRET_MANAGER_TYPE
+    - name: AGENTAREA_SECRET_BACKEND
       value: infisical
-    - name: SECRET_MANAGER_ENDPOINT
+    - name: AGENTAREA_SECRET_ENDPOINT
       value: https://infisical.example.com
 ```
 

@@ -128,7 +128,7 @@ func (m *Manager) Initialize(ctx context.Context) error {
 	m.logger.Info("Container discovery completed")
 
 	// A boot-time reconcile of "instances that should be running" used to live
-	// here, behind SKIP_INSTANCE_SYNC. internal/mcpgateway owns that now:
+	// here, behind AGENTAREA_MCP_SKIP_SYNC. internal/mcpgateway owns that now:
 	// EnsureReady creates a workload whose container is gone on the next request
 	// and holds it until it answers, so instances are dormant until called
 	// rather than started because the manager restarted. The old path also
@@ -805,7 +805,7 @@ func (m *Manager) enforceResourceCeiling(container *models.Container) error {
 			// safe reading of an unusable maximum is "nothing above the default",
 			// not "anything at all" -- a typo in one variable must not become a
 			// tenant's licence to take the machine.
-			return fmt.Errorf("MAX_MEMORY_LIMIT %q is unusable, refusing the requested %s: %w",
+			return fmt.Errorf("AGENTAREA_MCP_MAX_MEMORY %q is unusable, refusing the requested %s: %w",
 				m.config.Container.MaxMemoryLimit, container.MemoryLimit, err)
 		}
 		if requested > maximum {
@@ -821,7 +821,7 @@ func (m *Manager) enforceResourceCeiling(container *models.Container) error {
 		}
 		maximum, err := parseCPULimit(m.config.Container.MaxCPULimit)
 		if err != nil {
-			return fmt.Errorf("MAX_CPU_LIMIT %q is unusable, refusing the requested %s",
+			return fmt.Errorf("AGENTAREA_MCP_MAX_CPU %q is unusable, refusing the requested %s",
 				m.config.Container.MaxCPULimit, container.CPULimit)
 		}
 		if requested > maximum {
@@ -895,7 +895,7 @@ func parseMemoryLimit(value string) (int64, error) {
 // host, knowing what lands in the log.
 func (m *Manager) startFailureDiagnostic(ctx context.Context, container *models.Container) string {
 	if !m.config.Container.LogWorkloadOutput {
-		return "workload output withheld; set LOG_WORKLOAD_OUTPUT=true on this host to include it"
+		return "workload output withheld; set AGENTAREA_LOG_WORKLOAD=true on this host to include it"
 	}
 
 	output, err := exec.CommandContext(ctx, m.config.Container.Runtime, "logs", "--tail", "20", container.ID).CombinedOutput()

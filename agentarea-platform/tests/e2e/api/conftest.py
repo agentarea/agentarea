@@ -24,9 +24,9 @@ from dataclasses import dataclass
 import httpx
 import pytest
 
-KRATOS_ADMIN_URL = os.environ.get("KRATOS_ADMIN_URL", "http://localhost:4434")
-KRATOS_PUBLIC_URL = os.environ.get("KRATOS_PUBLIC_URL", "http://localhost:4433")
-API_URL = os.environ.get("API_URL", "http://localhost:8000")
+KRATOS_ADMIN_URL = os.environ.get("AGENTAREA_AUTH_KRATOS_ADMIN_URL", "http://localhost:4434")
+KRATOS_PUBLIC_URL = os.environ.get("AGENTAREA_AUTH_KRATOS_URL", "http://localhost:4433")
+API_URL = os.environ.get("AGENTAREA_API_URL", "http://localhost:8000")
 
 TEST_PASSWORD = "Str0ng-Test-PW-xyz!"
 

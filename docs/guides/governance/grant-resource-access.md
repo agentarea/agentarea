@@ -24,14 +24,14 @@ rules, not graph grants. See [set a budget](/guides/governance/set-a-budget) and
 ## Prerequisites
 
 <Info>
-- A graph backend enabled: `ACCESS_CONTROL_BACKEND=openfga`. The setting
+- A graph backend enabled: `AGENTAREA_AUTHZ_BACKEND=openfga`. The setting
   defaults to `disabled`, and with it disabled every write here returns HTTP
   503 and the permission service allows everything. **Which stack you started
   decides whether it is on:**
 
   | You ran | Compose file | Graph |
   |---|---|---|
-  | `make up-dev` | `docker-compose.dev.yaml` | on — sets `ACCESS_CONTROL_BACKEND=openfga` and runs OpenFGA |
+  | `make up-dev` | `docker-compose.dev.yaml` | on — sets `AGENTAREA_AUTHZ_BACKEND=openfga` and runs OpenFGA |
   | `make up` | `docker-compose.yaml` | **off** — the file names neither the setting nor OpenFGA, so it falls through to `disabled` |
   | Helm | `charts/agentarea` | on when `openfga.enabled=true`, which is the chart default |
 
@@ -56,7 +56,7 @@ Examples below assume `API=http://localhost:8000` and a bearer token in `$TOKEN`
     ```
 
     `enabled: false` means no graph backend is configured — stop here and set
-    `ACCESS_CONTROL_BACKEND` before continuing.
+    `AGENTAREA_AUTHZ_BACKEND` before continuing.
   </Step>
 
   <Step title="Choose the relation">
@@ -191,7 +191,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
     [model a custom relation](/guides/governance/model-a-custom-relation) .
   </Accordion>
   <Accordion title="`503 Graph authorization is disabled` or `Graph authorization write failed`">
-    The first means `ACCESS_CONTROL_BACKEND` is `disabled` . The second means
+    The first means `AGENTAREA_AUTHZ_BACKEND` is `disabled` . The second means
     OpenFGA was reachable but rejected or dropped the write; the API
     deliberately does not fall back to allowing the operation, so check the
     OpenFGA container before retrying.

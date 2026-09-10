@@ -224,15 +224,15 @@ def pytest_configure(config):
     _patch_temporal_test_server_startup()
 
     # Set required environment variables for WorkflowSettings
-    os.environ.setdefault("WORKFLOW__TEMPORAL_SERVER_URL", "localhost:7233")
-    os.environ.setdefault("WORKFLOW__TEMPORAL_NAMESPACE", "default")
-    os.environ.setdefault("WORKFLOW__TEMPORAL_TASK_QUEUE", "agent-tasks")
+    os.environ.setdefault("AGENTAREA_WF_TEMPORAL_URL", "localhost:7233")
+    os.environ.setdefault("AGENTAREA_WF_NAMESPACE", "default")
+    os.environ.setdefault("AGENTAREA_WF_QUEUE", "agent-tasks")
 
     # Set required Kratos settings for auth
-    os.environ.setdefault("KRATOS_ISSUER", "http://localhost:4433")
-    os.environ.setdefault("KRATOS_AUDIENCE", "agentarea")
+    os.environ.setdefault("AGENTAREA_AUTH_ISSUER", "http://localhost:4433")
+    os.environ.setdefault("AGENTAREA_AUTH_AUDIENCE", "agentarea")
     os.environ.setdefault(
-        "KRATOS_JWKS_B64", base64.b64encode(json.dumps({"keys": []}).encode()).decode()
+        "AGENTAREA_AUTH_JWKS_B64", base64.b64encode(json.dumps({"keys": []}).encode()).decode()
     )
 
     config.addinivalue_line("markers", "asyncio: mark test as async")

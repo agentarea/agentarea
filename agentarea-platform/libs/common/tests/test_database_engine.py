@@ -44,7 +44,7 @@ def test_all_pools_recycle_connections():
     from agentarea_common.config.database import get_database
 
     database = get_database()
-    expected = database.settings.pool_recycle
+    expected = database.settings.POOL_RECYCLE
     for name in ("engine", "read_engine", "sync_engine"):
         engine = getattr(database, name)
         assert engine.pool._recycle == expected, f"{name} pool is missing pool_recycle"
@@ -79,7 +79,7 @@ def test_read_engine_reuses_write_pool_without_replica():
     """
     from agentarea_common.config.database import Database, DatabaseSettings
 
-    db = Database(DatabaseSettings(POSTGRES_READ_HOST=None))
+    db = Database(DatabaseSettings(READ_HOST=None))
     assert db.read_engine.pool is db.engine.pool
     assert db.read_engine.get_execution_options().get("isolation_level") == "AUTOCOMMIT"
 
@@ -88,5 +88,5 @@ def test_read_engine_is_dedicated_pool_with_replica():
     """A configured replica gets its own pool to the replica host."""
     from agentarea_common.config.database import Database, DatabaseSettings
 
-    db = Database(DatabaseSettings(POSTGRES_READ_HOST="replica.invalid"))
+    db = Database(DatabaseSettings(READ_HOST="replica.invalid"))
     assert db.read_engine.pool is not db.engine.pool

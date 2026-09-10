@@ -45,32 +45,32 @@ spec:
             {{- include "agentarea.storage.envs" . | nindent 12 }}
             {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
-            - name: SANDBOX_ACTIVATION_AUTH_SECRET
+            - name: AGENTAREA_SBX_ACTIVATION_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.application }}
                   key: sandbox-activation-secret
-            - name: SANDBOX_CONTROL_AUTH_SECRET
+            - name: AGENTAREA_SBX_CONTROL_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.application }}
                   key: sandbox-control-secret
-            - name: SANDBOX_CLEANUP_AUTH_SECRET
+            - name: AGENTAREA_SBX_CLEANUP_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "agentarea.sandboxCleanupSecretName" . }}
                   key: {{ include "agentarea.sandboxCleanupSecretKey" . }}
-            - name: SANDBOX_INSPECTION_AUTH_SECRET
+            - name: AGENTAREA_SBX_INSPECT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "agentarea.sandboxInspectionSecretName" . }}
                   key: {{ include "agentarea.sandboxInspectionSecretKey" . }}
-            - name: SANDBOX_FILE_AUTH_SECRET
+            - name: AGENTAREA_SBX_FILE_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "agentarea.sandboxFileSecretName" . }}
                   key: {{ include "agentarea.sandboxFileSecretKey" . }}
-            - name: MCP_GATEWAY_AUTH_SECRET
+            - name: AGENTAREA_MCP_GATEWAY_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "agentarea.mcpGatewaySecretName" . }}
@@ -82,7 +82,7 @@ spec:
             {{- if and $ip (or $ip.labels $ip.annotations $ip.nodeSelector $ip.tolerations $ip.affinity $ip.imagePullSecrets $ip.priorityClassName) }}
             # Operator customization for spawned MCP instance pods (one JSON blob;
             # parsed by the manager into the instance pod spec).
-            - name: KUBERNETES_INSTANCE_POD
+            - name: AGENTAREA_K8S_INSTANCE_POD
               value: {{ $ip | toJson | quote }}
             {{- end }}
             {{- if or .Values.mcpManager.envVars .Values.global.envVars }}

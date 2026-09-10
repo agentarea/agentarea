@@ -96,12 +96,12 @@ Never store sensitive data in configuration files:
 ```bash
 # Required security environment variables
 export JWT_SECRET_KEY="your-long-random-secret-key"
-export DATABASE_URL="postgresql://user:pass@host:5432/db"
-export REDIS_URL="redis://localhost:6379"
+export AGENTAREA_DB_URL="postgresql://user:pass@host:5432/db"
+export AGENTAREA_REDIS_URL="redis://localhost:6379"
 export MCP_MANAGER_API_KEY="your-mcp-manager-key"
 
 # Optional security settings
-export CORS_ALLOWED_ORIGINS="https://yourdomain.com"
+export AGENTAREA_CORS_ORIGINS="https://yourdomain.com"
 export API_RATE_LIMIT="100/hour"
 export SESSION_TIMEOUT_MINUTES=30
 ```

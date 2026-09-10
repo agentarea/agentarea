@@ -34,19 +34,19 @@ spec:
             {{- include "agentarea.mcpManager.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.storage.envs" . | nindent 12 }}
             {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
-            - name: SANDBOX_ACTIVATION_AUTH_SECRET
+            - name: AGENTAREA_SBX_ACTIVATION_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.application }}
                   key: sandbox-activation-secret
             {{- include "agentarea.sandboxRuntime.envs" . | nindent 12 }}
-            - name: SANDBOX_EXECUTION_REQUEST_STREAM
+            - name: AGENTAREA_SBX_REQUEST_STREAM
               value: {{ default "agentarea.sandbox.execution.requests" .Values.mcpSandboxRunner.requestStream | quote }}
-            - name: SANDBOX_EXECUTION_EVENT_STREAM
+            - name: AGENTAREA_SBX_EVENT_STREAM
               value: {{ default "agentarea.sandbox.execution.events" .Values.mcpSandboxRunner.eventStream | quote }}
-            - name: SANDBOX_RUNNER_CONSUMER_GROUP
+            - name: AGENTAREA_SBX_CONSUMER_GROUP
               value: {{ .Values.mcpSandboxRunner.consumerGroup | quote }}
-            - name: SANDBOX_RUNNER_BATCH_SIZE
+            - name: AGENTAREA_SBX_BATCH_SIZE
               value: {{ .Values.mcpSandboxRunner.batchSize | quote }}
             {{- if .Values.mcpSandboxRunner.extraEnv }}
             {{- toYaml .Values.mcpSandboxRunner.extraEnv | nindent 12 }}

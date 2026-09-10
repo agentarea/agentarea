@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const sandboxInspectionAuthSecretEnv = "SANDBOX_INSPECTION_AUTH_SECRET"
+const sandboxInspectionAuthSecretEnv = "AGENTAREA_SBX_INSPECT_SECRET"
 
 func (h *Handler) listSandboxes(c *gin.Context) {
 	if !sandboxCleanupAuthorized(c.GetHeader("Authorization"), os.Getenv(sandboxInspectionAuthSecretEnv)) {

@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	SecretEnv        = "SANDBOX_CONTROL_AUTH_SECRET"
+	SecretEnv        = "AGENTAREA_SBX_CONTROL_SECRET"
 	ScopeCreate      = "execution.create"
 	ScopeRead        = "execution.read"
 	ScopeCancel      = "execution.cancel"

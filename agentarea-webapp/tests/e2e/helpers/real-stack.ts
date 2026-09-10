@@ -2,10 +2,10 @@ import type { BrowserContext, APIRequestContext } from "@playwright/test";
 import { expect } from "@playwright/test";
 
 export const apiBaseURL =
-  process.env.PLAYWRIGHT_API_BASE_URL ?? process.env.API_URL ?? "http://localhost:8000";
+  process.env.PLAYWRIGHT_API_BASE_URL ?? process.env.AGENTAREA_API_URL ?? "http://localhost:8000";
 export const kratosAdminURL =
   process.env.PLAYWRIGHT_KRATOS_ADMIN_URL ??
-  process.env.ORY_ADMIN_URL ??
+  process.env.AGENTAREA_AUTH_KRATOS_ADMIN_URL ??
   "http://localhost:4434";
 export const kratosPublicURL =
   process.env.PLAYWRIGHT_KRATOS_PUBLIC_URL ??

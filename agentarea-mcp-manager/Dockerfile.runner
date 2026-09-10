@@ -44,7 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Venv-first: /opt/runtime/venv owns `python` and `pip` on PATH, so agent
 # `pip install` works without --break-system-packages (no PEP 668 marker).
 ENV PATH=/opt/runtime/venv/bin:$PATH
-ENV SANDBOX_COMMAND_UID=10001 SANDBOX_COMMAND_GID=10001
+ENV AGENTAREA_SBX_UID=10001 AGENTAREA_SBX_GID=10001
 COPY runtime/requirements.txt /opt/runtime/requirements.txt
 RUN python -m venv /opt/runtime/venv \
     && pip install --no-cache-dir -r /opt/runtime/requirements.txt
@@ -92,8 +92,9 @@ RUN mkdir -p /etc/agentarea \
            ;; \
          *) echo "MANAGED_ENVIRONMENT must be mutable or immutable" >&2; exit 1 ;; \
        esac \
-    && RUNTIME_VERSION=${APP_VERSION} MANAGED_ENVIRONMENT=${MANAGED_ENVIRONMENT} \
-       EXEC_SUPERVISOR_PATH=${EXEC_SUPERVISOR_PATH} \
+    && AGENTAREA_SBX_RUNTIME_VERSION=${APP_VERSION} \
+       AGENTAREA_SBX_MANAGED_ENV=${MANAGED_ENVIRONMENT} \
+       AGENTAREA_SBX_SUPERVISOR_PATH=${EXEC_SUPERVISOR_PATH} \
        python /opt/runtime/generate_manifest.py \
        > /etc/agentarea/runtime.json \
     && cat /etc/agentarea/runtime.json \

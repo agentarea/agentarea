@@ -43,7 +43,7 @@ hex_to_b64url() {
 
 # Generates a fresh ES256 keypair. The PRIVATE JWKS is written to $1 — Kratos
 # signs tokens with it. The PUBLIC JWKS is printed base64-encoded on stdout for
-# KRATOS_JWKS_B64; the backend only ever verifies, so it must not receive `d`.
+# AGENTAREA_AUTH_JWKS_B64; the backend only ever verifies, so it must not receive `d`.
 generate_jwks() {
   jwks_private_path="$1"
   jwks_kid="${2:-agentarea-jwt-key-1}"
@@ -80,25 +80,25 @@ generate_jwks() {
 # callers drive this list, so a key added for one path cannot go missing on the
 # other — which is exactly how the sandbox secrets came to block a fresh install
 # while the checkout path had them.
-MANAGED_SECRET_KEYS='KRATOS_JWKS_B64
+MANAGED_SECRET_KEYS='AGENTAREA_AUTH_JWKS_B64
 KRATOS_SECRETS_COOKIE
 KRATOS_SECRETS_CIPHER
 HYDRA_SECRETS_SYSTEM
 HYDRA_SECRETS_COOKIE
 HYDRA_PAIRWISE_SALT
-SANDBOX_ACTIVATION_AUTH_SECRET
-SANDBOX_CLEANUP_AUTH_SECRET
-SANDBOX_FILE_AUTH_SECRET
-SANDBOX_CONTROL_AUTH_SECRET
-MCP_GATEWAY_AUTH_SECRET'
+AGENTAREA_SBX_ACTIVATION_SECRET
+AGENTAREA_SBX_CLEANUP_SECRET
+AGENTAREA_SBX_FILE_SECRET
+AGENTAREA_SBX_CONTROL_SECRET
+AGENTAREA_MCP_GATEWAY_SECRET'
 
 # $1 key, $2 path receiving the Kratos private JWKS.
 secret_value_for() {
   case "$1" in
-    KRATOS_JWKS_B64) generate_jwks "$2" ;;
+    AGENTAREA_AUTH_JWKS_B64) generate_jwks "$2" ;;
     # HMAC keys, not Ory cipher secrets, so no 32-character constraint. The
     # glob also covers sandbox secrets added later.
-    SANDBOX_*_AUTH_SECRET | MCP_GATEWAY_AUTH_SECRET) random_token 32 ;;
+    AGENTAREA_SBX_*_SECRET | AGENTAREA_MCP_GATEWAY_SECRET) random_token 32 ;;
     *) random_secret_32 ;;
   esac
 }
@@ -111,7 +111,7 @@ env_has_value() {
 }
 
 # Managed keys that $1 does not supply, one per line; empty means nothing to do.
-# KRATOS_JWKS_B64 counts as missing when the private half at $2 is gone: the
+# AGENTAREA_AUTH_JWKS_B64 counts as missing when the private half at $2 is gone: the
 # variable carries only the public half, so without that file Kratos cannot
 # sign however configured the variable looks. $2 is gitignored, so a fresh
 # checkout drops it while .env keeps the stale public half.
@@ -119,7 +119,7 @@ pending_secret_keys() {
   for _key in $MANAGED_SECRET_KEYS; do
     if ! env_has_value "$1" "$_key"; then
       printf '%s\n' "$_key"
-    elif [ "$_key" = KRATOS_JWKS_B64 ] && [ ! -f "$2" ]; then
+    elif [ "$_key" = AGENTAREA_AUTH_JWKS_B64 ] && [ ! -f "$2" ]; then
       printf '%s\n' "$_key"
     fi
   done
@@ -144,7 +144,7 @@ write_secret_keys() {
   {
     printf '\n# --- generated credentials, unique to this machine; do not commit ---\n'
     for _key in $_keys; do
-      if [ "$_key" = KRATOS_JWKS_B64 ]; then
+      if [ "$_key" = AGENTAREA_AUTH_JWKS_B64 ]; then
         printf '# Public half only. Kratos signs with the private half in\n'
         printf '# %s.\n' "$_jwks"
       fi

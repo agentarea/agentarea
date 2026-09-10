@@ -45,10 +45,10 @@ This guide provides detailed instructions for deploying AgentArea using Docker a
         image: agentarea/api:latest
         restart: unless-stopped
         environment:
-          - DATABASE_URL=${DATABASE_URL}
-          - REDIS_URL=${REDIS_URL}
+          - AGENTAREA_DB_URL=${AGENTAREA_DB_URL}
+          - AGENTAREA_REDIS_URL=${AGENTAREA_REDIS_URL}
           - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-          - ENVIRONMENT=production
+          - AGENTAREA_ENV=production
         networks:
           - agentarea-network
         depends_on:
@@ -64,7 +64,7 @@ This guide provides detailed instructions for deploying AgentArea using Docker a
         image: agentarea/frontend:latest
         restart: unless-stopped
         environment:
-          - NEXT_PUBLIC_API_URL=${API_URL}
+          - NEXT_PUBLIC_API_URL=${AGENTAREA_API_URL}
           - NEXT_PUBLIC_ENVIRONMENT=production
         networks:
           - agentarea-network
@@ -75,9 +75,9 @@ This guide provides detailed instructions for deploying AgentArea using Docker a
         image: agentarea/mcp-manager:latest
         restart: unless-stopped
         environment:
-          - SERVER_PORT=8001
-          - DATABASE_URL=${DATABASE_URL}
-          - LOG_LEVEL=info
+          - PORT=8001
+          - AGENTAREA_DB_URL=${AGENTAREA_DB_URL}
+          - AGENTAREA_LOG_LEVEL=info
         networks:
           - agentarea-network
         volumes:
@@ -154,23 +154,23 @@ This guide provides detailed instructions for deploying AgentArea using Docker a
     # Domain and SSL
     DOMAIN=yourdomain.com
     ACME_EMAIL=admin@yourdomain.com
-    API_URL=https://api.yourdomain.com
+    AGENTAREA_API_URL=https://api.yourdomain.com
     
     # Database Configuration
     POSTGRES_DB=agentarea
     POSTGRES_USER=agentarea
     POSTGRES_PASSWORD=your-secure-password
-    DATABASE_URL=postgresql://agentarea:your-secure-password@postgres:5432/agentarea
+    AGENTAREA_DB_URL=postgresql://agentarea:your-secure-password@postgres:5432/agentarea
     
     # Redis Configuration
-    REDIS_URL=redis://redis:6379
+    AGENTAREA_REDIS_URL=redis://redis:6379
     
     # Security
     JWT_SECRET_KEY=your-256-bit-secret-key
     
     # Application Settings
-    ENVIRONMENT=production
-    LOG_LEVEL=info
+    AGENTAREA_ENV=production
+    AGENTAREA_LOG_LEVEL=info
     ```
   </Tab>
 </Tabs>
@@ -208,9 +208,9 @@ This guide provides detailed instructions for deploying AgentArea using Docker a
     <Warning>
       `.env.example` ships with every secret field left empty on purpose. Generate
       fresh values for this deployment — never reuse a key that appears in a public
-      repository. `SECRET_MANAGER_ENCRYPTION_KEY`, `KRATOS_SECRETS_COOKIE`,
+      repository. `AGENTAREA_SECRET_ENCRYPTION_KEY`, `KRATOS_SECRETS_COOKIE`,
       `KRATOS_SECRETS_CIPHER`, `HYDRA_SECRETS_SYSTEM`, `HYDRA_SECRETS_COOKIE` and
-      `HYDRA_PAIRWISE_SALT` must all be set, and `KRATOS_JWKS_B64` must hold the
+      `HYDRA_PAIRWISE_SALT` must all be set, and `AGENTAREA_AUTH_JWKS_B64` must hold the
       public half of a keypair you generated yourself. The services refuse to start
       if any of them is missing.
     </Warning>
@@ -520,13 +520,13 @@ This guide provides detailed instructions for deploying AgentArea using Docker a
           ],
           "environment": [
             {
-              "name": "ENVIRONMENT",
+              "name": "AGENTAREA_ENV",
               "value": "production"
             }
           ],
           "secrets": [
             {
-              "name": "DATABASE_URL",
+              "name": "AGENTAREA_DB_URL",
               "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT:secret:agentarea/database-url"
             }
           ],
@@ -637,7 +637,7 @@ spec:
         ports:
         - containerPort: 8000
         env:
-        - name: DATABASE_URL
+        - name: AGENTAREA_DB_URL
           valueFrom:
             secretKeyRef:
               name: agentarea-secrets

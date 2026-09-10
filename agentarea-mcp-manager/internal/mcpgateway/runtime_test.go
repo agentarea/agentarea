@@ -108,8 +108,8 @@ func dockerInstance() *models.MCPServerInstance {
 
 func testImagePolicy(t *testing.T) ImagePolicy {
 	t.Helper()
-	t.Setenv("MCP_ALLOWED_IMAGE_REPOSITORIES", "ghcr.io/agentarea/allowed-mcp")
-	t.Setenv("MCP_ALLOWED_COMMAND_PACKAGES", "allowed-mcp-package")
+	t.Setenv("AGENTAREA_MCP_ALLOWED_IMAGES", "ghcr.io/agentarea/allowed-mcp")
+	t.Setenv("AGENTAREA_MCP_ALLOWED_PACKAGES", "allowed-mcp-package")
 	policy, err := LoadImagePolicyFromEnv()
 	if err != nil {
 		t.Fatal(err)

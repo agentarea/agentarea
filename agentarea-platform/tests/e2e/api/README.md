@@ -29,7 +29,7 @@ uv run pytest -m integration tests/e2e/api/ -n 4
 Override endpoints:
 
 ```
-KRATOS_ADMIN_URL=http://... KRATOS_PUBLIC_URL=http://... API_URL=http://... \
+AGENTAREA_AUTH_KRATOS_ADMIN_URL=http://... AGENTAREA_AUTH_KRATOS_URL=http://... AGENTAREA_API_URL=http://... \
   uv run pytest -m integration tests/e2e/api/
 ```
 

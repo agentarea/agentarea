@@ -296,7 +296,7 @@ async def check_mcp_server_instance_configuration(
 
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                f"{settings.mcp.MCP_MANAGER_URL}/containers/validate",
+                f"{settings.mcp.MANAGER_URL}/containers/validate",
                 json=validation_request,
                 headers={"Content-Type": "application/json"},
             )
@@ -640,7 +640,7 @@ async def get_containers_health(
 
     async def read_one(client: "httpx.AsyncClient", instance) -> dict:
         row = {"instance_id": str(instance.id), "name": getattr(instance, "name", None)}
-        url = f"{settings.mcp.MCP_MANAGER_URL}/instances/{instance.id}/health"
+        url = f"{settings.mcp.MANAGER_URL}/instances/{instance.id}/health"
         try:
             response = await client.get(url)
         except httpx.RequestError as e:

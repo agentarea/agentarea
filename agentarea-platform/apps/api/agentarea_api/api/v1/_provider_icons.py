@@ -1,7 +1,7 @@
 """Resolve a provider's stored icon reference into a browser-usable URL.
 
 Thin wrapper over the shared resolver in ``_icons`` — see it for why the host is
-taken from ``API_BASE_URL`` rather than the incoming request.
+taken from ``AGENTAREA_API_URL`` rather than the incoming request.
 """
 
 from agentarea_api.api.v1._icons import build_icon_url

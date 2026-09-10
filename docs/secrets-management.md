@@ -36,10 +36,10 @@ AgentArea requires various types of secrets for secure operation:
     
     ```bash
     # .env.local
-    DATABASE_URL=postgresql://user:pass@localhost:5432/agentarea
+    AGENTAREA_DB_URL=postgresql://user:pass@localhost:5432/agentarea
     JWT_SECRET_KEY=your-local-secret-key
     OPENAI_API_KEY=sk-your-openai-key
-    REDIS_URL=redis://localhost:6379
+    AGENTAREA_REDIS_URL=redis://localhost:6379
     
     # Load in application
     export $(cat .env.local | xargs)
@@ -67,7 +67,7 @@ AgentArea requires various types of secrets for secure operation:
     pass insert agentarea/openai-key
     
     # Retrieve in scripts
-    export DATABASE_URL=$(pass show agentarea/database-url)
+    export AGENTAREA_DB_URL=$(pass show agentarea/database-url)
     export JWT_SECRET_KEY=$(pass show agentarea/jwt-secret)
     ```
   </Tab>
@@ -118,7 +118,7 @@ AgentArea requires various types of secrets for secure operation:
         )['data']['data']
         
         return {
-            'DATABASE_URL': db_secrets['url'],
+            'AGENTAREA_DB_URL': db_secrets['url'],
             'JWT_SECRET_KEY': db_secrets['jwt_secret']
         }
     ```
@@ -154,7 +154,7 @@ AgentArea requires various types of secrets for secure operation:
             secret = json.loads(response['SecretString'])
             
             return {
-                'DATABASE_URL': f"postgresql://{secret['username']}:{secret['password']}@{secret['host']}:{secret['port']}/{secret['dbname']}"
+                'AGENTAREA_DB_URL': f"postgresql://{secret['username']}:{secret['password']}@{secret['host']}:{secret['port']}/{secret['dbname']}"
             }
         except Exception as e:
             print(f"Error retrieving secret: {e}")
@@ -210,7 +210,7 @@ AgentArea requires various types of secrets for secure operation:
         
         secrets = {}
         secret_configs = [
-            ("database-url", "DATABASE_URL"),
+            ("database-url", "AGENTAREA_DB_URL"),
             ("jwt-secret", "JWT_SECRET_KEY"),
             ("openai-key", "OPENAI_API_KEY")
         ]
@@ -301,7 +301,7 @@ AgentArea requires various types of secrets for secure operation:
         raise ValueError(f"Secret {env_var} not found")
     
     # Usage
-    DATABASE_URL = get_secret("DATABASE_URL")
+    AGENTAREA_DB_URL = get_secret("AGENTAREA_DB_URL")
     JWT_SECRET_KEY = get_secret("JWT_SECRET_KEY")
     ```
   </Tab>
@@ -344,7 +344,7 @@ AgentArea requires various types of secrets for secure operation:
           - name: api
             image: agentarea/api:latest
             env:
-            - name: DATABASE_URL
+            - name: AGENTAREA_DB_URL
               valueFrom:
                 secretKeyRef:
                   name: agentarea-secrets

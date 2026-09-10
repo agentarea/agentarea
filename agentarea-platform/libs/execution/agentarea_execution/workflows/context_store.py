@@ -37,7 +37,7 @@ class ContextStore:
             from agentarea_common.config.aws import get_aws_settings
 
             self._settings = get_aws_settings()
-        return self._settings.S3_BUCKET_NAME
+        return self._settings.BUCKET
 
     @property
     def prefix(self) -> str:

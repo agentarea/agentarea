@@ -230,7 +230,7 @@ async def test_delete_container_instance_retires_runtime_before_desired_state():
     svc = _make_service({str(instance.id): instance})
     client = _RetireClient([204])
     mcp_settings = MagicMock()
-    mcp_settings.MCP_CLIENT_TIMEOUT = 30
+    mcp_settings.TIMEOUT = 30
     mcp_settings.manager_retire_url.return_value = f"http://manager/mcp/{instance.id}"
     mcp_settings.manager_gateway_headers.return_value = {"X-Auth": "secret"}
 
@@ -252,7 +252,7 @@ async def test_delete_preserves_desired_state_when_runtime_retirement_fails():
     svc = _make_service({str(instance.id): instance})
     client = _RetireClient([503, 503, 503])
     mcp_settings = MagicMock()
-    mcp_settings.MCP_CLIENT_TIMEOUT = 30
+    mcp_settings.TIMEOUT = 30
     mcp_settings.manager_retire_url.return_value = f"http://manager/mcp/{instance.id}"
     mcp_settings.manager_gateway_headers.return_value = {"X-Auth": "secret"}
 

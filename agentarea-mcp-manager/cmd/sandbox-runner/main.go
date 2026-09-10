@@ -53,7 +53,7 @@ func main() {
 
 	var builtinRuntime sandboxruntime.ManagedRuntime
 	var backend *backends.KubernetesBackend
-	configuredProvider := strings.ToLower(strings.TrimSpace(os.Getenv("SANDBOX_PROVIDER")))
+	configuredProvider := strings.ToLower(strings.TrimSpace(os.Getenv("AGENTAREA_SBX_PROVIDER")))
 	if configuredProvider == "" || configuredProvider == "kubernetes" || configuredProvider == "agentarea" {
 		backend, err = backends.NewKubernetesBackend(cfg, logger, controlPolicy.TaskLeaseTTL)
 		if err != nil {
@@ -91,7 +91,7 @@ func main() {
 		Executor: runtime,
 		Capabilities: sandboxplacement.Capabilities{
 			Name:   providerName,
-			Region: os.Getenv("SANDBOX_REGION"),
+			Region: os.Getenv("AGENTAREA_SBX_REGION"),
 		},
 	})
 	if err != nil {
