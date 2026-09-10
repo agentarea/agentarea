@@ -1,97 +1,100 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   CreditCard,
   Gauge,
   List,
-  MessagesSquare,
-  Settings,
+  Network,
+  Play,
+  SlidersHorizontal,
   Users,
-  // Wallet,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 
 const TABS = [
   { key: "", icon: Gauge, labelKey: "overview" },
-  { key: "new-task", icon: MessagesSquare, labelKey: "createTask" },
-  { key: "tasks", icon: List, labelKey: "currentTasks" },
+  { key: "new-task", icon: Play, labelKey: "createTask" },
+  { key: "tasks", icon: List, labelKey: "currentTasks", counted: true },
   { key: "payments", icon: CreditCard, labelKey: "payments" },
-  // { key: "wallet", icon: Wallet, labelKey: "wallet" },
   { key: "delegation", icon: Users, labelKey: "delegation" },
-  { key: "settings", icon: Settings, labelKey: "settings" },
-];
+  { key: "settings", icon: SlidersHorizontal, labelKey: "settings" },
+] as const;
 
-export default function AgentHeaderTabs({ agentId }: { agentId: string }) {
+/**
+ * Agent detail navigation. It deliberately reuses the solid segmented control
+ * from Explore: these entries switch the page's primary content, rather than
+ * filtering the content already on the page.
+ */
+export default function AgentHeaderTabs({
+  agentId,
+  runningCount,
+}: {
+  agentId: string;
+  /** Number of in-progress tasks, shown next to the Tasks tab. */
+  runningCount?: number;
+}) {
   const t = useTranslations("AgentsPage");
   const pathname = usePathname();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const linkRefs = useRef<(HTMLAnchorElement | null)[]>([]);
-  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
-
-  useLayoutEffect(() => {
-    const activeIndex = TABS.findIndex((tab) => {
-      const tabPath = tab.key
+  const router = useRouter();
+  const activeTab =
+    TABS.find((tab) => {
+      const href = tab.key
         ? `/agents/${agentId}/${tab.key}`
         : `/agents/${agentId}`;
-      return pathname === tabPath;
-    });
-    if (activeIndex !== -1) {
-      const activeLink = linkRefs.current[activeIndex];
-      const container = containerRef.current;
-      if (activeLink && container) {
-        const containerRect = container.getBoundingClientRect();
-        const linkRect = activeLink.getBoundingClientRect();
-        setIndicatorStyle({
-          left: linkRect.left - containerRect.left,
-          width: linkRect.width,
-        });
-      }
-    }
-  }, [pathname, agentId]);
+      return tab.key
+        ? pathname === href || pathname.startsWith(`${href}/`)
+        : pathname === href;
+    })?.key ?? "";
 
   return (
-    <div
-      ref={containerRef}
-      className="inline-flex items-center gap-3 py-0 relative"
-    >
-      {TABS.map((tab, index) => {
-        const href = tab.key
-          ? `/agents/${agentId}/${tab.key}`
-          : `/agents/${agentId}`;
-        const isActive = pathname === href;
-        const Icon = tab.icon;
+    <div className="flex min-w-0 flex-1 items-center gap-1.5">
+      <nav aria-label="Agent sections" className="min-w-0 flex-1">
+        <CountSegmentedControl
+          items={TABS.map((tab) => {
+            const Icon = tab.icon;
+            const count =
+              "counted" in tab && tab.counted && runningCount
+                ? runningCount
+                : undefined;
 
-        return (
-          <Link
-            key={tab.key}
-            href={href}
-            ref={(el) => {
-              linkRefs.current[index] = el;
-            }}
-            aria-current={isActive ? "page" : undefined}
-            className={cn(
-              "flex items-center gap-1 px-1 py-2.5 text-xs",
-              isActive
-                ? "text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            {t(tab.labelKey)}
-          </Link>
-        );
-      })}
-      <div
-        className="absolute -bottom-[1.2px] h-[1.5px] bg-foreground transition-all duration-300 ease-out rounded-full"
-        style={{
-          left: indicatorStyle.left,
-          width: indicatorStyle.width,
-        }}
-      />
+            return {
+              value: tab.key,
+              label: (
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
+                  <Icon className="h-4 w-4" strokeWidth={1.8} />
+                  {t(tab.labelKey)}
+                </span>
+              ),
+              count,
+            };
+          })}
+          value={activeTab}
+          onChange={(next) => {
+            const href = next
+              ? `/agents/${agentId}/${next}`
+              : `/agents/${agentId}`;
+            router.push(href);
+          }}
+          variant="solid"
+          className="max-w-full"
+          layoutId="agent-section-control"
+        />
+      </nav>
+
+      <div className="mx-1 hidden h-[18px] w-px shrink-0 bg-border md:block" />
+      <Link
+        href="/network"
+        className="hidden h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] text-foreground/80 transition-colors hover:bg-muted/60 md:inline-flex"
+      >
+        <Network
+          className="h-[15px] w-[15px] text-muted-foreground"
+          strokeWidth={1.8}
+        />
+        {t("activity")}
+      </Link>
     </div>
   );
 }

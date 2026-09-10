@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import { DetailSkeleton } from "@/components/Skeleton";
 import { AgentOverview } from "./components/AgentOverview";
+import AgentOverviewSkeleton from "./components/AgentOverviewSkeleton";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -9,8 +9,8 @@ interface Props {
 export default async function AgentDetailPage({ params }: Props) {
   const { id } = await params;
   return (
-    <div className="main-content">
-      <Suspense fallback={<DetailSkeleton />}>
+    <div className="h-full overflow-auto">
+      <Suspense fallback={<AgentOverviewSkeleton />}>
         <AgentOverview agentId={id} />
       </Suspense>
     </div>
