@@ -44,9 +44,20 @@ is_set() {
   [ -f "$env_file" ] && grep -qE "^$1=." "$env_file"
 }
 
+needs_write() {
+  if [ "$force" -eq 1 ]; then return 0; fi
+  if ! is_set "$1"; then return 0; fi
+  # KRATOS_JWKS_B64 holds only the public half; Kratos signs with the private
+  # half in $jwks_file. Losing that file (it is gitignored, so a clean checkout
+  # or a stray clean drops it) leaves a variable that looks configured and a
+  # Kratos that cannot sign, so regenerate the pair however set it looks.
+  if [ "$1" = KRATOS_JWKS_B64 ] && [ ! -f "$jwks_file" ]; then return 0; fi
+  return 1
+}
+
 pending=''
 for key in $managed_keys; do
-  if [ "$force" -eq 1 ] || ! is_set "$key"; then
+  if needs_write "$key"; then
     pending="$pending$key
 "
   fi
