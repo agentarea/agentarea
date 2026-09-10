@@ -94,23 +94,20 @@ Relationship-based access control (ReBAC) via Ory Keto. Model who can see and ac
 curl -fsSL https://raw.githubusercontent.com/agentarea/agentarea/main/scripts/install.sh | sh
 ```
 
-The bootstrap downloads only the runtime bundle into `./agentarea`: Docker Compose, auth/Temporal config, and a small local launcher. It does not clone the repository and does not install Docker, Node, Python, or Go.
-
-Then run:
-
-```bash
-./agentarea/agentarea doctor
-./agentarea/agentarea pull
-./agentarea/agentarea up
-```
+The bootstrap downloads only the runtime bundle into `./agentarea`: Docker Compose config plus the auth and Temporal configuration. It generates the credentials the stack requires, then offers to start it. It does not clone the repository and does not install Docker, Node, Python, or Go.
 
 Open the web UI at **http://localhost:3000**.
 
-Edit configuration anytime in `./agentarea/.env` or run:
+Everything after that is plain Docker Compose, from `./agentarea`:
 
 ```bash
-./agentarea/agentarea config --edit
+docker compose up -d      # start
+docker compose logs -f    # follow logs
+docker compose ps         # status
+docker compose down       # stop
 ```
+
+Configuration lives in `./agentarea/.env`. Edit it, then `docker compose up -d` to apply. Re-running the installer in the same directory is safe: it refreshes the bundle and adds any credential a newer release has started requiring, without touching values you have set.
 
 To inspect the installer before running:
 

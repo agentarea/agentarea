@@ -48,6 +48,20 @@ services:
         condition: service_completed_successfully
       # mcp-manager:
       #   condition: service_healthy
+    # Probed with Python rather than curl, which the API image does not ship.
+    # app_catalog waits on this, so without it compose refuses to start.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     networks:
       - default
       - mcp-network
@@ -75,6 +89,32 @@ services:
         condition: service_completed_successfully
     command: ["agentarea-api", "migrate"]
     working_dir: /app/apps/api
+
+  # Populates the built-in MCP catalog once the API answers. Idempotent, so it
+  # re-runs harmlessly on every `up` and picks up catalog additions; run it on
+  # demand with `docker compose run --rm app_catalog`. Registry data lives in
+  # the database, not on disk, which is why a load step exists at all.
+  app_catalog:
+    image: agentarea/agentarea-api:${VERSION:-latest}
+    pull_policy: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+    depends_on:
+      app:
+        condition: service_healthy
+    command:
+      [
+        "agentarea-api",
+        "reconcile",
+        "--source",
+        "${CATALOG_MCP_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/mcp-servers.json}",
+      ]
+    working_dir: /app/apps/api
+    restart: "no"
 
   # Create the main app database and auxiliary databases — idempotent.
   postgres_init:
@@ -150,11 +190,21 @@ services:
       # mount must target the parent dir — mounting the legacy .../data path
       # makes the image refuse to start. Matches docker-compose.dev.yaml.
       - ./data/postgres:/var/lib/postgresql
+    # Reap orphans with an init process instead of the postmaster. Without it
+    # PID 1 is postgres itself, so a healthcheck killed on timeout leaves its
+    # pg_isready reparented onto the postmaster, which reads any untracked
+    # child exit as a backend crash and restarts the whole cluster. Recovery
+    # over the bind mount then outlasts the next probe and the loop feeds
+    # itself: the database spends its life rejecting connections.
+    init: true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 5s
-      timeout: 5s
+      interval: 10s
+      # Long enough to cover an fsync-bound start on a bind mount; a probe that
+      # is killed for being slow is the input to the loop described above.
+      timeout: 10s
       retries: 5
+      start_period: 60s
     networks:
       - default
       - temporal-network
@@ -185,17 +235,64 @@ services:
       - default
     environment:
       LOG_LEVEL: INFO
+      # The rest of the stack addresses the manager as
+      # http://agentarea-mcp-manager:80, and the published port maps to 80.
+      # The binary otherwise listens on 8000, which leaves both dead.
+      SERVER_PORT: "80"
+      # Spawned MCP workloads join the segregated MCP network rather than the
+      # project default, which also carries the database and Redis.
+      MCP_NETWORK: agentarea_mcp-network
       REDIS_URL: redis://valkey:6379
       CORE_API_URL: http://app:8000
+      # Demand gateway: MCP workloads start on the first call and are reclaimed
+      # after MCP_IDLE_TIMEOUT (0 keeps them running once started). All four are
+      # required — the gateway refuses to configure itself without them.
+      MCP_REQUEST_LEASE_TTL: "90s"
+      MCP_GATEWAY_STARTUP_TIMEOUT: "5m"
+      MCP_IDLE_TIMEOUT: "10m"
+      MCP_IDLE_SWEEP_INTERVAL: "60s"
+      # Admission lists for MCP instances, mirroring the chart defaults in
+      # charts/agentarea/values.yaml (mcpManager.admission). Both are required
+      # and an absent list is refused: "not decided yet" must not read as
+      # "allow everything". Declare one empty to disable that instance type.
+      MCP_ALLOWED_IMAGE_REPOSITORIES: "ghcr.io/github/github-mcp-server,mcp/fetch"
+      MCP_ALLOWED_COMMAND_PACKAGES: "npx -y @modelcontextprotocol/server-everything,npx -y @modelcontextprotocol/server-sequential-thinking,uvx mcp-server-fetch,uvx mcp-server-time"
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
       SANDBOX_EMBEDDED_RUNNER: "true"
       SANDBOX_EXECUTOR_URL: http://sandbox-executor:8080
+      # Explicit acknowledgement: the compose executor shares this host's
+      # kernel and is not an isolation boundary for hostile multi-tenant code.
+      # Kubernetes replaces it with per-task warm-pool pods under a sandboxed
+      # runtime class; the manager refuses the shared path without this flag.
+      SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT: "true"
       SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:?SANDBOX_ACTIVATION_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
       SANDBOX_CLEANUP_AUTH_SECRET: ${SANDBOX_CLEANUP_AUTH_SECRET:?SANDBOX_CLEANUP_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
+      SANDBOX_FILE_AUTH_SECRET: ${SANDBOX_FILE_AUTH_SECRET:?SANDBOX_FILE_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
+      SANDBOX_CONTROL_AUTH_SECRET: ${SANDBOX_CONTROL_AUTH_SECRET:?SANDBOX_CONTROL_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
+      MCP_GATEWAY_AUTH_SECRET: ${MCP_GATEWAY_AUTH_SECRET:?MCP_GATEWAY_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
+      # Lifecycle and admission policy. The manager refuses to start when any
+      # value is absent or malformed rather than inventing retention behavior,
+      # so these belong here in the deployment config — the binary holds no
+      # defaults. Helm emits the same set from .Values.sandboxRuntime.
+      SANDBOX_TASK_LEASE_TTL: "2h"
+      SANDBOX_TASK_IDLE_TTL: "15m"
+      SANDBOX_PROVIDER_PROVISIONING_TIMEOUT: "30s"
+      SANDBOX_PROVIDER_SESSION_TTL: "24h"
+      SANDBOX_EXECUTION_RECORD_TTL: "24h"
+      SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS: "1800"
+      SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS: "120"
+      SANDBOX_EXECUTION_QUEUE_TIMEOUT: "5m"
+      SANDBOX_EXECUTION_COMPLETION_GRACE: "2m"
+      SANDBOX_ALLOW_INTERNET: ${SANDBOX_ALLOW_INTERNET:-true}
       # The trusted control plane resolves immutable workspace refs in S3 and
       # gives the executor signed URLs. These credentials are not passed to the
       # executor or to task processes.
+      SANDBOX_WORKSPACE_PROVIDER: s3
+      SANDBOX_WORKSPACE_MAX_FILES: "10000"
+      SANDBOX_WORKSPACE_MAX_FILE_BYTES: "268435456"
+      SANDBOX_WORKSPACE_MAX_BYTES: "2147483648"
+      SANDBOX_WORKSPACE_SIGNED_URL_TTL: "1h"
       SANDBOX_WORKSPACE_S3_BUCKET: ${ARTIFACTS_BUCKET:-artifacts}
       SANDBOX_WORKSPACE_S3_ENDPOINT: http://rustfs:9000
       SANDBOX_WORKSPACE_S3_REGION: ${RUSTFS_REGION:-us-east-1}
@@ -227,6 +324,17 @@ services:
       - default
     environment:
       ACTIVATION_PORT: "8080"
+      HOME: /home/sandbox
+      # Activation policy. Same contract as the warm-pool pods in Helm
+      # (charts/agentarea/templates/warm-pool/daemonset.yaml): the service
+      # exits at boot when any of these is missing, so the deployment states
+      # them and the binary keeps no defaults. 0 disables the idle watchdog —
+      # a compose executor is not reclaimed the way a warm pod is.
+      MAX_EXECUTION_TIMEOUT_SECONDS: "1800"
+      IDLE_TIMEOUT_SECONDS: "0"
+      SANDBOX_WORKSPACE_MAX_FILES: "10000"
+      SANDBOX_WORKSPACE_MAX_FILE_BYTES: "268435456"
+      SANDBOX_WORKSPACE_MAX_BYTES: "2147483648"
       SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:?SANDBOX_ACTIVATION_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
 
   # Temporal Infrastructure Services
