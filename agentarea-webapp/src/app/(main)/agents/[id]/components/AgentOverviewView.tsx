@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { formatRelTime } from "@/app/(main)/dashboard/components/relTime";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
-import { GroupHeader } from "@/components/ui/group-header";
+import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { ProviderIcon } from "@/components/ui/provider-icon";
 import { StatusIndicator } from "@/components/ui/status-indicator";
@@ -161,14 +161,14 @@ export async function AgentOverviewView({
   const settingsHref = `/agents/${agentRef}/settings`;
 
   return (
-    <div>
+    <div className="md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden">
       {/* ===== hero ===== */}
-      <header className="relative overflow-hidden border-b border-border">
+      <header className="relative overflow-hidden border-b border-border md:shrink-0">
         <span
           aria-hidden
           className="bg-hatch-soft pointer-events-none absolute inset-y-0 right-0 w-[340px] opacity-[0.55] [-webkit-mask-image:linear-gradient(90deg,transparent,#000_88%)] [mask-image:linear-gradient(90deg,transparent,#000_88%)]"
         />
-        <div className="relative mx-auto w-full max-w-[1180px] px-[26px] pb-[14px] pt-[13px]">
+        <div className="relative w-full px-4 pb-[14px] pt-[13px]">
           <div className="flex items-start gap-3">
             <EntityAvatar
               size={34}
@@ -238,7 +238,7 @@ export async function AgentOverviewView({
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-[1180px] px-[26px] pb-11 pt-[18px]">
+      <div className="w-full px-4 pb-11 pt-[18px] md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
         {/* ===== stat strip ===== */}
         <StatStrip>
           <Stat
@@ -306,40 +306,42 @@ export async function AgentOverviewView({
               title={t("tasks")}
               link={{ label: t("allTasks"), href: `/agents/${agentRef}/tasks` }}
             />
-            <GroupHeader
-              sticky={false}
+            <CollapsibleGroup
               label={t("running")}
               count={model.runningTasks.length}
               color="hsl(var(--primary))"
-              className="h-[30px] px-[15px]"
-            />
-            {model.runningTasks.length === 0 ? (
-              <EmptyRow text={t("nothingRunning")} />
-            ) : (
-              model.runningTasks.map((task) => (
-                <TaskRow key={task.id} task={task} t={t} />
-              ))
-            )}
-            <GroupHeader
               sticky={false}
+              headerClassName="h-[30px] px-[15px]"
+            >
+              {model.runningTasks.length === 0 ? (
+                <EmptyRow text={t("nothingRunning")} />
+              ) : (
+                model.runningTasks.map((task) => (
+                  <TaskRow key={task.id} task={task} t={t} />
+                ))
+              )}
+            </CollapsibleGroup>
+            <CollapsibleGroup
               label={t("recent")}
               count={model.recentTasks.length}
               color="hsl(var(--muted-foreground) / 0.6)"
-              className="h-[30px] px-[15px]"
-            />
-            {model.recentTasks.length === 0 ? (
-              <EmptyRow
-                text={t("noTasksYet")}
-                action={{
-                  label: t("startOne"),
-                  href: `/agents/${agentRef}/new-task`,
-                }}
-              />
-            ) : (
-              model.recentTasks.map((task) => (
-                <TaskRow key={task.id} task={task} t={t} />
-              ))
-            )}
+              sticky={false}
+              headerClassName="h-[30px] px-[15px]"
+            >
+              {model.recentTasks.length === 0 ? (
+                <EmptyRow
+                  text={t("noTasksYet")}
+                  action={{
+                    label: t("startOne"),
+                    href: `/agents/${agentRef}/new-task`,
+                  }}
+                />
+              ) : (
+                model.recentTasks.map((task) => (
+                  <TaskRow key={task.id} task={task} t={t} />
+                ))
+              )}
+            </CollapsibleGroup>
           </SectionCard>
 
           {/* right rail */}

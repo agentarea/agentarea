@@ -7,9 +7,12 @@ import { SectionCard, StatStrip } from "./OverviewCard";
  */
 export default function AgentOverviewSkeleton() {
   return (
-    <div aria-hidden="true">
-      <div className="border-b border-border">
-        <div className="mx-auto flex w-full max-w-[1180px] items-start gap-3 px-[26px] pb-[14px] pt-[13px]">
+    <div
+      aria-hidden="true"
+      className="md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden"
+    >
+      <div className="border-b border-border md:shrink-0">
+        <div className="flex w-full items-start gap-3 px-4 pb-[14px] pt-[13px]">
           <Skeleton className="mt-0.5 h-[34px] w-[34px] rounded-[5px]" />
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex items-center gap-2.5">
@@ -26,7 +29,7 @@ export default function AgentOverviewSkeleton() {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-[1180px] px-[26px] pb-11 pt-[18px]">
+      <div className="w-full px-4 pb-11 pt-[18px] md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
         <StatStrip>
           {Array.from({ length: 4 }).map((_, i) => (
             <div

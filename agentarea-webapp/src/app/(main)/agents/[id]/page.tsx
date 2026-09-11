@@ -9,7 +9,7 @@ interface Props {
 export default async function AgentDetailPage({ params }: Props) {
   const { id } = await params;
   return (
-    <div className="h-full overflow-auto">
+    <div className="h-full overflow-auto md:overflow-hidden">
       <Suspense fallback={<AgentOverviewSkeleton />}>
         <AgentOverview agentId={id} />
       </Suspense>

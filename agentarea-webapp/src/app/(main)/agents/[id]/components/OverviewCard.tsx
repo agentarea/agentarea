@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import { BoardCrossMark } from "@/components/board";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -88,10 +89,30 @@ export function EmptyRow({
 
 /* ------------------------------ stat strip ------------------------------ */
 
+const STAT_MARKER_COLOR = "hsl(var(--foreground) / 0.78)";
+
 export function StatStrip({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-4 grid grid-cols-2 overflow-hidden rounded-[3px] border border-border bg-background lg:grid-cols-4">
-      {children}
+    <div className="mb-4">
+      <div className="relative grid grid-cols-2 overflow-hidden rounded-[3px] border border-border bg-background lg:grid-cols-4">
+        {children}
+        {[25, 50, 75].map((left) => (
+          <BoardCrossMark
+            key={`top-${left}`}
+            className="top-0 -translate-x-1/2 -translate-y-1/2"
+            color={STAT_MARKER_COLOR}
+            style={{ left: `${left}%` }}
+          />
+        ))}
+        {[25, 50, 75].map((left) => (
+          <BoardCrossMark
+            key={`bottom-${left}`}
+            className="bottom-0 -translate-x-1/2 translate-y-1/2"
+            color={STAT_MARKER_COLOR}
+            style={{ left: `${left}%` }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
