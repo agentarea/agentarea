@@ -161,7 +161,7 @@ export async function AgentOverviewView({
   const settingsHref = `/agents/${agentRef}/settings`;
 
   return (
-    <div className="md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden">
+    <div className="font-inter md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden">
       {/* ===== hero ===== */}
       <header className="relative overflow-hidden border-b border-border md:shrink-0">
         <span
@@ -408,7 +408,7 @@ export async function AgentOverviewView({
                     {t("spendThisMonth")}
                   </span>
                   <span className="text-[11.5px] text-muted-foreground">
-                    <b className="font-mono font-semibold text-foreground tabular-nums">
+                    <b className="font-semibold text-foreground tabular-nums">
                       {fmtUsd(stats.costMtd)}
                     </b>
                     {stats.cap ? ` / ${fmtUsd(stats.cap)}` : ""}
@@ -460,7 +460,7 @@ export async function AgentOverviewView({
                 trailing={
                   model.pendingApprovals.length > 0 ? (
                     <span
-                      className="rounded-[2px] px-[7px] py-px font-mono text-[11px] font-bold tabular-nums"
+                      className="rounded-[2px] px-[7px] py-px text-[11px] font-bold tabular-nums"
                       style={{
                         color: "var(--status-warning)",
                         background:
@@ -572,7 +572,7 @@ function TaskRow({ task, t }: { task: TaskResponse; t: Translator }) {
         dividerClassName="border-b border-border/60"
         contentClassName="gap-3"
         end={
-          <span className="w-[46px] text-right font-mono text-[11.5px] text-muted-foreground tabular-nums">
+          <span className="w-[46px] text-right text-[11.5px] text-muted-foreground tabular-nums">
             {cost > 0 ? fmtUsd(cost) : "—"}
           </span>
         }
@@ -624,7 +624,7 @@ function GlanceRow({
           <span className="flex items-center gap-[7px] text-[12px] text-muted-foreground">
             {trailing}
             {count != null && (
-              <b className="font-mono font-semibold text-foreground/80 tabular-nums">
+              <b className="font-semibold text-foreground/80 tabular-nums">
                 {count}
               </b>
             )}
