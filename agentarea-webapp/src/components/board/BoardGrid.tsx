@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { BoardCrossMark, BoardRingMark } from "./BoardMarker";
 
 /**
  * Board layout — a full-bleed 2×2 dashed line-grid with technical
@@ -24,17 +25,7 @@ function PlusMark({ pos }: { pos: PlusPos }) {
     bl: "left-0 bottom-0 -translate-x-1/2 translate-y-1/2",
     br: "right-0 bottom-0 translate-x-1/2 translate-y-1/2",
   };
-  return (
-    <span
-      aria-hidden
-      className={cn("pointer-events-none absolute z-[6] hidden h-[11px] w-[11px] lg:block", place[pos])}
-      style={{
-        background:
-          "linear-gradient(var(--board-crop),var(--board-crop)) center / 1.4px 11px no-repeat, " +
-          "linear-gradient(var(--board-crop),var(--board-crop)) center / 11px 1.4px no-repeat",
-      }}
-    />
-  );
+  return <BoardCrossMark className={place[pos]} />;
 }
 
 /** A ring marker for the interior line intersection. */
@@ -45,16 +36,7 @@ function RingMark({ pos }: { pos: PlusPos }) {
     bl: "left-0 bottom-0 -translate-x-1/2 translate-y-1/2",
     br: "right-0 bottom-0 translate-x-1/2 translate-y-1/2",
   };
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "pointer-events-none absolute z-[6] hidden h-[9px] w-[9px] rounded-full border-[1.5px] bg-background lg:block",
-        place[pos]
-      )}
-      style={{ borderColor: "var(--board-crop)" }}
-    />
-  );
+  return <BoardRingMark className={place[pos]} />;
 }
 
 export function BoardCell({
@@ -108,7 +90,10 @@ export function BoardGrid({
 
   return (
     <div className={cn("relative w-full lg:h-full", className)}>
-      <div className="flex flex-col lg:absolute lg:inset-0 lg:grid" style={gridStyle}>
+      <div
+        className="flex flex-col lg:absolute lg:inset-0 lg:grid"
+        style={gridStyle}
+      >
         {/* top-left */}
         <BoardCell
           padded
@@ -133,7 +118,10 @@ export function BoardGrid({
         </BoardCell>
 
         {/* bottom-left */}
-        <BoardCell padded={false} className={cn("border-b lg:border-b-0 lg:border-r", dashed)}>
+        <BoardCell
+          padded={false}
+          className={cn("border-b lg:border-b-0 lg:border-r", dashed)}
+        >
           {bottomLeft}
         </BoardCell>
 
@@ -142,25 +130,13 @@ export function BoardGrid({
       </div>
 
       {/* board-level vertical-divider crop marks (desktop only) */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute top-0 z-[6] hidden h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 lg:block"
-        style={{
-          left: `${leftFraction * 100}%`,
-          background:
-            "linear-gradient(var(--board-crop),var(--board-crop)) center / 1.4px 11px no-repeat, " +
-            "linear-gradient(var(--board-crop),var(--board-crop)) center / 11px 1.4px no-repeat",
-        }}
+      <BoardCrossMark
+        className="top-0 -translate-x-1/2 -translate-y-1/2"
+        style={{ left: `${leftFraction * 100}%` }}
       />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute bottom-0 z-[6] hidden h-[11px] w-[11px] -translate-x-1/2 translate-y-1/2 lg:block"
-        style={{
-          left: `${leftFraction * 100}%`,
-          background:
-            "linear-gradient(var(--board-crop),var(--board-crop)) center / 1.4px 11px no-repeat, " +
-            "linear-gradient(var(--board-crop),var(--board-crop)) center / 11px 1.4px no-repeat",
-        }}
+      <BoardCrossMark
+        className="bottom-0 -translate-x-1/2 translate-y-1/2"
+        style={{ left: `${leftFraction * 100}%` }}
       />
     </div>
   );
