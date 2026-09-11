@@ -8,6 +8,7 @@ const crossBackground = (color: string) =>
 type BoardMarkerProps = {
   className?: string;
   color?: string;
+  visibleFrom?: "base" | "lg";
   style?: CSSProperties;
 };
 
@@ -15,13 +16,15 @@ type BoardMarkerProps = {
 export function BoardCrossMark({
   className,
   color = "var(--board-crop)",
+  visibleFrom = "lg",
   style,
 }: BoardMarkerProps) {
   return (
     <span
       aria-hidden
       className={cn(
-        "pointer-events-none absolute z-[6] hidden h-[11px] w-[11px] lg:block",
+        "pointer-events-none absolute z-[6] h-[11px] w-[11px]",
+        visibleFrom === "lg" ? "hidden lg:block" : "block",
         className
       )}
       style={{ ...style, background: crossBackground(color) }}
@@ -33,13 +36,15 @@ export function BoardCrossMark({
 export function BoardRingMark({
   className,
   color = "var(--board-crop)",
+  visibleFrom = "lg",
   style,
 }: BoardMarkerProps) {
   return (
     <span
       aria-hidden
       className={cn(
-        "pointer-events-none absolute z-[6] hidden h-[9px] w-[9px] rounded-full border-[1.5px] bg-background lg:block",
+        "pointer-events-none absolute z-[6] h-[9px] w-[9px] rounded-full border-[1.5px] bg-background",
+        visibleFrom === "lg" ? "hidden lg:block" : "block",
         className
       )}
       style={{ ...style, borderColor: color }}

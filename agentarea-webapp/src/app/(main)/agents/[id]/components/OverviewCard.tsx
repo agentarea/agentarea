@@ -112,6 +112,31 @@ export function StatStrip({ children }: { children: ReactNode }) {
             style={{ left: `${left}%` }}
           />
         ))}
+        <BoardCrossMark
+          className="top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 lg:hidden"
+          color={STAT_MARKER_COLOR}
+          visibleFrom="base"
+        />
+        <BoardCrossMark
+          className="bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 lg:hidden"
+          color={STAT_MARKER_COLOR}
+          visibleFrom="base"
+        />
+        <BoardCrossMark
+          className="top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 lg:hidden"
+          color={STAT_MARKER_COLOR}
+          visibleFrom="base"
+        />
+        <BoardCrossMark
+          className="top-1/2 right-0 translate-x-1/2 -translate-y-1/2 lg:hidden"
+          color={STAT_MARKER_COLOR}
+          visibleFrom="base"
+        />
+        <BoardCrossMark
+          className="top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 lg:hidden"
+          color={STAT_MARKER_COLOR}
+          visibleFrom="base"
+        />
       </div>
     </div>
   );
