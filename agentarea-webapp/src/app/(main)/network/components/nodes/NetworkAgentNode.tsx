@@ -1,14 +1,6 @@
 "use client";
 
-import { useLayoutEffect } from "react";
 import { useTranslations } from "next-intl";
-import {
-  Handle,
-  Position,
-  useUpdateNodeInternals,
-  type Node,
-  type NodeProps,
-} from "@xyflow/react";
 import {
   ChevronDown,
   ChevronUp,
@@ -44,14 +36,7 @@ const resourceKinds: Record<NetworkNodeData["type"], EntityKind> = {
   trigger: "trigger",
 };
 
-export default function NetworkAgentNode({
-  id,
-  data,
-}: NodeProps<Node<NetworkAgentData>>) {
-  const updateNodeInternals = useUpdateNodeInternals();
-  useLayoutEffect(() => {
-    updateNodeInternals(id);
-  }, [id, data.clustered, data.horizontal, updateNodeInternals]);
+export default function NetworkAgentNode({ data }: { data: NetworkAgentData }) {
   const t = useTranslations("NetworkPage.networkMap");
   const accessText = useTranslations("NetworkPage.accessDetails");
   const common = useTranslations("NetworkPage.orgChart");
@@ -75,17 +60,19 @@ export default function NetworkAgentNode({
   return (
     <div
       className={cn(
-        "h-full w-72 rounded-lg border border-border bg-background shadow-sm transition-[opacity,box-shadow,border-color] motion-reduce:transition-none hover:border-primary/50 hover:shadow-md",
+        "relative h-full w-72 rounded-lg border border-border bg-background shadow-sm transition-[opacity,box-shadow,border-color] motion-reduce:transition-none hover:border-primary/50 hover:shadow-md",
         data._dimmed && "opacity-30",
         data._highlighted && "border-primary ring-2 ring-primary/20"
       )}
     >
-      <Handle
-        type="target"
-        id={data.clustered ? "flow-target" : undefined}
-        position={data.horizontal === false ? Position.Top : Position.Left}
-        isConnectable={false}
-        className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"
+      <span
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute h-1.5 w-1.5 rounded-full border border-background bg-zinc-400 dark:bg-zinc-500",
+          data.horizontal === false
+            ? "left-1/2 top-0 -translate-x-1/2 -translate-y-1/2"
+            : "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        )}
       />
       <div className="h-[102px] px-4 pt-4">
         <div className="flex items-start gap-3">
@@ -118,7 +105,7 @@ export default function NetworkAgentNode({
               data.onInspect();
             }}
             onKeyDown={(event) => event.stopPropagation()}
-            className="nodrag nopan ml-auto inline-flex items-center gap-1 rounded px-1 py-0.5 text-primary hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary"
+            className="ml-auto inline-flex items-center gap-1 rounded px-1 py-0.5 text-primary hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary"
             aria-label={accessText("inspectAgent", { name: data.label })}
             title={accessText("policyTitle")}
           >
@@ -161,7 +148,7 @@ export default function NetworkAgentNode({
                     key={node.id}
                     type="button"
                     className={cn(
-                      "nodrag nopan flex h-7 w-full items-center gap-2 rounded px-2 text-left text-[11px] text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
+                      "flex h-7 w-full items-center gap-2 rounded px-2 text-left text-[11px] text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
                       data.selectedResourceId === node.id &&
                         "bg-primary/10 text-primary"
                     )}
@@ -221,7 +208,7 @@ export default function NetworkAgentNode({
               {data.resources.length > NETWORK_RESOURCE_LIMIT && (
                 <button
                   type="button"
-                  className="nodrag nopan flex h-8 w-full items-center justify-between px-4 text-[11px] text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                  className="flex h-8 w-full items-center justify-between px-4 text-[11px] text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                   aria-expanded={data.expanded}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -249,28 +236,24 @@ export default function NetworkAgentNode({
       )}
       {data.clustered && (
         <>
-          <Handle
-            id="delegation-target"
-            type="target"
-            position={Position.Top}
-            isConnectable={false}
-            className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-background bg-zinc-400 dark:bg-zinc-500"
           />
-          <Handle
-            id="delegation-source"
-            type="source"
-            position={Position.Bottom}
-            isConnectable={false}
-            className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute bottom-0 left-1/2 h-1.5 w-1.5 -translate-x-1/2 translate-y-1/2 rounded-full border border-background bg-zinc-400 dark:bg-zinc-500"
           />
         </>
       )}
-      <Handle
-        type="source"
-        id={data.clustered ? "flow-source" : undefined}
-        position={data.horizontal === false ? Position.Bottom : Position.Right}
-        isConnectable={false}
-        className="!h-1.5 !w-1.5 !border-background !bg-zinc-400 dark:!bg-zinc-500"
+      <span
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute h-1.5 w-1.5 rounded-full border border-background bg-zinc-400 dark:bg-zinc-500",
+          data.horizontal === false
+            ? "bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2"
+            : "right-0 top-1/2 -translate-y-1/2 translate-x-1/2"
+        )}
       />
     </div>
   );

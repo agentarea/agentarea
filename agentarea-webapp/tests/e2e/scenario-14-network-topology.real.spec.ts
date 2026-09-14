@@ -63,7 +63,10 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
     expect(policy).toBeTruthy();
 
     await gotoCommitted(page, "/network");
-    const agentNode = page.locator(`.react-flow__node[data-id="${agent.id}"]`);
+    await expect(
+      page.locator('[data-network-renderer="cytoscape"] canvas').first()
+    ).toBeVisible();
+    const agentNode = page.locator(`[data-network-node="${agent.id}"]`);
     const overview = page.getByRole("button", {
       name: "Grouped",
       exact: true,
@@ -75,10 +78,34 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
     await expect(overview).toHaveAttribute("aria-pressed", "true", {
       timeout: 15_000,
     });
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
+    await expect(agentNode).toHaveAttribute("data-node-type", "networkAgent");
     await expect(
       agentNode.getByText(agent.name, { exact: true })
     ).toBeVisible();
+
+    const viewport = page
+      .locator("[data-network-renderer] > .origin-top-left")
+      .last();
+    const readZoom = () =>
+      viewport.evaluate(
+        (element) =>
+          new DOMMatrixReadOnly(getComputedStyle(element).transform).a
+      );
+    const beforeWheel = await readZoom();
+    await agentNode.hover();
+    await page.mouse.wheel(0, -240);
+    await expect.poll(readZoom).toBeGreaterThan(beforeWheel);
+    const zoomed = await readZoom();
+    const search = page.getByRole("textbox", {
+      name: "Find an agent or resource…",
+      exact: true,
+    });
+    await search.fill(agent.name);
+    await expect.poll(readZoom).toBe(zoomed);
+    await search.fill("");
+    await page
+      .getByRole("button", { name: "Fit map to screen", exact: true })
+      .click();
 
     await agentNode
       .getByRole("button", {
@@ -147,8 +174,8 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
     });
     await expect(clearFocus).toHaveText(`Path: ${agent.name}`);
     await expect(overview).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator(".react-flow__node-region")).not.toHaveCount(0);
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
+    await expect(page.locator('[data-node-type="region"]')).not.toHaveCount(0);
+    await expect(agentNode).toHaveAttribute("data-node-type", "networkAgent");
     await inspector
       .getByRole("button", { name: "Close details", exact: true })
       .click();
@@ -159,17 +186,17 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
 
     await overview.click();
     await expect(overview).toHaveAttribute("aria-pressed", "true");
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
+    await expect(agentNode).toHaveAttribute("data-node-type", "networkAgent");
     await allConnections.click();
     await expect(allConnections).toHaveAttribute("aria-pressed", "true");
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
+    await expect(agentNode).toHaveAttribute("data-node-type", "networkAgent");
 
     // Existing deep links and alternate lenses remain usable with real scoped data.
     await gotoCommitted(page, "/network?view=dataflow");
     await expect(overview).toHaveAttribute("aria-pressed", "true", {
       timeout: 15_000,
     });
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
+    await expect(agentNode).toHaveAttribute("data-node-type", "networkAgent");
     await page
       .getByRole("button", { name: "Organization", exact: true })
       .click();
@@ -177,7 +204,7 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
     await expect(
       page.getByRole("button", { name: "Full network", exact: true })
     ).toBeVisible();
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
+    await expect(agentNode).toHaveAttribute("data-node-type", "networkAgent");
     await agentNode
       .getByRole("button", {
         name: `Inspect permissions for ${agent.name}`,
@@ -198,7 +225,7 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
       .getByRole("button", { name: "Access Graph", exact: true })
       .click();
     await expect(page).toHaveURL(/\/network\?view=access$/);
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/);
+    await expect(agentNode).toHaveAttribute("data-node-type", "networkAgent");
     await expect(
       page.getByRole("combobox", { name: "Resource network scope" })
     ).toBeVisible();
@@ -232,7 +259,7 @@ test.describe("Scenario 14 MP - inspect the network topology", () => {
       agentNode.getByText(agent.name, { exact: true })
     ).toBeVisible();
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(agentNode).toHaveClass(/react-flow__node-networkAgent/, {
+    await expect(agentNode).toHaveAttribute("data-node-type", "networkAgent", {
       timeout: 15_000,
     });
     await expect(
