@@ -28,15 +28,6 @@ import { cn } from "@/lib/utils";
 import { useBillingUrl } from "@/lib/use-billing-url";
 
 
-/**
- * Where this deployment's billing page lives, if it has one.
- *
- * An open install has nothing to bill for, so there is no billing page here and no link
- * to one. A deployment that sells sets NEXT_PUBLIC_BILLING_URL and serves that page
- * itself; this repository holds the URL and nothing else about it -- no balance, no
- * prices, no provider, no plans.
- */
-const BILLING_URL = process.env.NEXT_PUBLIC_BILLING_URL?.trim();
 
 
 export function SettingsSidebarContent() {
