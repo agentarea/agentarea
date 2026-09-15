@@ -14,6 +14,52 @@ from agentarea_common.infrastructure.platform_credentials import MANAGED_BY_PLAT
 from agentarea_execution.activities.agent_execution_activities import (
     _resolve_provider_api_key,
 )
+from agentarea_execution.models import LLMCallRequest, ResolvedModelInfo
+
+
+def _resolved(**overrides):
+    base = {
+        "model_id": "m-1",
+        "provider_type": "openai",
+        "model_name": "gpt-4o-mini",
+        "context_window": 128000,
+    }
+    return ResolvedModelInfo(**{**base, **overrides})
+
+
+def test_managed_by_survives_the_dict_round_trip():
+    """``managed_by`` must reach the governance gate under exactly this name.
+
+    The workflow caches the resolved model as a plain dict on LLMCallRequest, the
+    temporal bridge turns the whole request into action_params via model_dump(),
+    and the enterprise entitlement guard reads
+    ``action_params["resolved_model"]["managed_by"]`` to decide whether an
+    unverifiable call is about to spend OUR provider credit or the customer's.
+
+    Nothing in this repository imports that guard, so renaming or dropping the
+    field breaks it silently and in the expensive direction: the guard would read
+    None, conclude BYOK, and fall back to allowing when billing is unreachable —
+    on calls we are paying for. This pins the wire name.
+    """
+    cached = _resolved(managed_by=MANAGED_BY_PLATFORM).model_dump()
+    assert cached["managed_by"] == "platform"
+
+    request = LLMCallRequest(messages=[], model_id="m-1", resolved_model=cached)
+    action_params = request.model_dump()
+    assert action_params["resolved_model"]["managed_by"] == "platform"
+
+
+def test_a_tenant_model_says_so_rather_than_omitting_the_field():
+    """Absent and "not platform" are different answers, and the guard treats them so.
+
+    A missing key means "this request cannot tell you", which the guard resolves
+    against the deployment's own configuration. An explicit None means "the
+    customer's own key", which it can trust. Round-tripping must preserve that
+    distinction rather than collapsing both to a missing key.
+    """
+    cached = _resolved().model_dump()
+    assert "managed_by" in cached, "the field must be present even when it is None"
+    assert cached["managed_by"] is None
 
 
 class _TenantSecretManager:
