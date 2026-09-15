@@ -51,9 +51,7 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
         for a row in another workspace, and that is what a platform-managed row is
         from the tenant's side: theirs to use, not theirs to change.
         """
-        return await self._scoped_write(
-            super().update, id, creator_scoped=creator_scoped, **kwargs
-        )
+        return await self._scoped_write(super().update, id, creator_scoped=creator_scoped, **kwargs)
 
     async def delete(self, id, creator_scoped: bool = False) -> bool:
         """Delete one of this workspace's own configurations.

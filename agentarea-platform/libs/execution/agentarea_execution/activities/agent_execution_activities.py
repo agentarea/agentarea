@@ -757,9 +757,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     if api_key_secret_name:
                         api_key = await _resolve_provider_api_key(
                             reference=api_key_secret_name,
-                            managed_by=getattr(
-                                model_instance.provider_config, "managed_by", None
-                            ),
+                            managed_by=getattr(model_instance.provider_config, "managed_by", None),
                             user_context=user_context,
                             dependencies=dependencies,
                         )
@@ -1884,9 +1882,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     if api_key_secret_name:
                         api_key = await _resolve_provider_api_key(
                             reference=api_key_secret_name,
-                            managed_by=getattr(
-                                model_instance.provider_config, "managed_by", None
-                            ),
+                            managed_by=getattr(model_instance.provider_config, "managed_by", None),
                             user_context=user_context,
                             dependencies=dependencies,
                         )

@@ -26,9 +26,7 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
         return or_(
             self._strict_workspace_filter(),
             ModelInstance.provider_config_id.in_(
-                select(ProviderConfig.id).where(
-                    ProviderConfig.managed_by == MANAGED_BY_PLATFORM
-                )
+                select(ProviderConfig.id).where(ProviderConfig.managed_by == MANAGED_BY_PLATFORM)
             ),
         )
 
@@ -38,9 +36,7 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
 
     async def update(self, id, creator_scoped: bool = False, **kwargs):
         """Update one of this workspace's own instances; None for the platform's."""
-        return await self._scoped_write(
-            super().update, id, creator_scoped=creator_scoped, **kwargs
-        )
+        return await self._scoped_write(super().update, id, creator_scoped=creator_scoped, **kwargs)
 
     async def delete(self, id, creator_scoped: bool = False) -> bool:
         """Delete one of this workspace's own instances; False for the platform's."""
