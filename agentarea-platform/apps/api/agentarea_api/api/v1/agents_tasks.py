@@ -1819,6 +1819,11 @@ async def _resolve_model_info(
         "provider_type": provider_spec.provider_type,
         "model_name": model_spec.model_name,
         "api_key_secret": provider_config.api_key,
+        # Whose credentials the rest of the run will spend. Switching model switches
+        # this too, and omitting it here would have defaulted every switched-to model
+        # to "the customer's own key" — including a platform one, whose calls we pay
+        # for and whose entitlement check would then quietly go back to failing open.
+        "managed_by": provider_config.managed_by,
         "endpoint_url": provider_config.endpoint_url,
         "context_window": model_spec.context_window,
         "max_output_tokens": model_spec.max_output_tokens,
