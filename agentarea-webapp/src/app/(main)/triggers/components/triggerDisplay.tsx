@@ -110,11 +110,73 @@ const TRIGGER_ICON_BY_KEY: Record<string, LucideIcon> = {
   event: Zap,
 };
 
+/**
+ * Solid accent colour per trigger kind — feeds the tinted tile and the type
+ * pill (mirrors the Skills page, where each source gets its own colour dot).
+ * Cron is the brand blue; webhooks default to violet, with brand colours for
+ * the providers we recognise.
+ */
+const TRIGGER_COLOR_BY_KEY: Record<string, string> = {
+  cron: "#2252b3",
+  schedule: "#2252b3",
+  telegram: "#229ed9",
+  slack: "#611f69",
+  discord: "#5865f2",
+  email: "#d99a00",
+  gmail: "#ea4335",
+  github: "#6e7681",
+  webhook: "#8a5cf6",
+  generic: "#8a5cf6",
+  event: "#d99a00",
+};
+
 export function getTriggerIconComponent(
   entry?: TriggerCatalogEntry | null,
   trigger?: TriggerLike
 ): LucideIcon {
   return TRIGGER_ICON_BY_KEY[getTriggerSourceKey(entry, trigger)] ?? Webhook;
+}
+
+export function getTriggerColor(
+  entry?: TriggerCatalogEntry | null,
+  trigger?: TriggerLike
+): string {
+  return TRIGGER_COLOR_BY_KEY[getTriggerSourceKey(entry, trigger)] ?? "#8a5cf6";
+}
+
+/**
+ * Trigger glyph tile — the direct analogue of the Skills page `SkillTile`:
+ * a softly kind-tinted square (13% colour over the surface) with a matching
+ * 26% border and the trigger glyph in full colour.
+ */
+export function TriggerTile({
+  color,
+  icon: Icon,
+  variant = "row",
+}: {
+  color: string;
+  icon: LucideIcon;
+  variant?: "row" | "card";
+}) {
+  const isCard = variant === "card";
+  const box = isCard ? 30 : 22;
+  const radius = isCard ? 8 : 6;
+  const glyph = isCard ? 17 : 13;
+  return (
+    <span
+      className="relative flex shrink-0 items-center justify-center border"
+      style={{
+        width: box,
+        height: box,
+        borderRadius: radius,
+        color,
+        background: `color-mix(in srgb, ${color} 13%, var(--tile-base))`,
+        borderColor: `color-mix(in srgb, ${color} 26%, var(--tile-base))`,
+      }}
+    >
+      <Icon style={{ width: glyph, height: glyph }} strokeWidth={1.9} />
+    </span>
+  );
 }
 
 export function renderTriggerIcon(

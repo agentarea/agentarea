@@ -8,15 +8,15 @@ import TriggersList from "./TriggersList";
 interface TriggersContentProps {
   viewMode: "grid" | "table";
   searchQuery: string;
-  typeFilter: string;
   groupBy: "channel" | "none";
+  orderBy: "name" | "created";
 }
 
 export default async function TriggersContent({
   viewMode,
   searchQuery,
-  typeFilter,
   groupBy,
+  orderBy,
 }: TriggersContentProps) {
   const t = await getTranslations("TriggersPage");
 
@@ -42,21 +42,10 @@ export default async function TriggersContent({
   const agentMap = new Map(agents.map((a) => [a.id, a.name]));
 
   // Enrich triggers with agent names
-  let enrichedTriggers = triggers.map((trigger) => ({
+  const enrichedTriggers = triggers.map((trigger) => ({
     ...trigger,
     agent_name: agentMap.get(trigger.agent_id) || "Unknown Agent",
   }));
-
-  // Filter by trigger type (All / Cron / Webhook)
-  if (typeFilter === "cron") {
-    enrichedTriggers = enrichedTriggers.filter(
-      (trigger) => trigger.trigger_type === "cron"
-    );
-  } else if (typeFilter === "webhook") {
-    enrichedTriggers = enrichedTriggers.filter(
-      (trigger) => trigger.trigger_type === "webhook"
-    );
-  }
 
   // Filter triggers based on search query
   const filteredTriggers = searchQuery.trim()
@@ -68,9 +57,18 @@ export default async function TriggersContent({
       )
     : enrichedTriggers;
 
+  const sortedTriggers = [...filteredTriggers].sort((a, b) => {
+    if (orderBy === "created") {
+      const left = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const right = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return right - left;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
   return (
     <TriggersList
-      triggers={filteredTriggers}
+      triggers={sortedTriggers}
       catalog={catalog}
       viewMode={viewMode}
       searchQuery={searchQuery}
