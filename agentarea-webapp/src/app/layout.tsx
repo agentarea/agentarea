@@ -91,6 +91,9 @@ function getRuntimeConfig() {
   return {
     CLIENT_ORY_SDK_URL: process.env.ORY_BROWSER_URL || process.env.ORY_SDK_URL || "",
     CLIENT_API_URL: process.env.API_BROWSER_URL || process.env.API_URL || "http://localhost:8000",
+    // Where this deployment's billing page lives, if it has one. Empty on the open
+    // build, which has nothing to bill for and therefore no page and no link.
+    CLIENT_BILLING_URL: process.env.BILLING_URL || "",
   };
 }
 
