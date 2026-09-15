@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useBillingUrl } from "@/lib/use-billing-url";
 import Link from "next/link";
 import { CreditCard, LogOut, Settings } from "lucide-react";
 import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
@@ -22,18 +23,11 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { APP_VERSION } from "@/lib/app-version";
 
-/**
- * Where this deployment's billing page lives, if it has one.
- *
- * An open install has nothing to bill for, so there is no billing page here and no link
- * to one. A deployment that sells sets NEXT_PUBLIC_BILLING_URL and serves that page
- * itself; this repository holds the URL and nothing else about it -- no balance, no
- * prices, no provider, no plans.
- */
-const BILLING_URL = process.env.NEXT_PUBLIC_BILLING_URL?.trim();
 
 export function NavUser() {
   const t = useTranslations("NavUser");
+  // Empty on any deployment that does not sell, which is the open default.
+  const billingUrl = useBillingUrl();
   const { isMobile } = useSidebar();
   const { user: authUser, isLoaded, signOut } = useAuth();
   const user = authUser
@@ -117,10 +111,10 @@ export function NavUser() {
                   {t("settings")}
                 </Link>
               </DropdownMenuItem>
-              {BILLING_URL ? (
+              {billingUrl ? (
                 <DropdownMenuItem asChild className="cursor-pointer">
                   <Link
-                    href={BILLING_URL}
+                    href={billingUrl}
                     className="flex w-full items-center"
                   >
                     <CreditCard className="mr-2 size-4" />
