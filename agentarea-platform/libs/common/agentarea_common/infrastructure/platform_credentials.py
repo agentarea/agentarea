@@ -18,7 +18,7 @@ So it is not in the database. It comes from the process environment, which means
     which is the correct default for a build that sells nothing.
 
 The name stored on the provider configuration is a *reference*, not the key:
-``api_key = "openai"`` resolves to ``PLATFORM_CREDENTIAL_OPENAI``.
+``api_key = "openai"`` resolves to ``PLATFORM_CREDENTIAL_OPENAI``.  # pragma: allowlist secret
 """
 
 from __future__ import annotations

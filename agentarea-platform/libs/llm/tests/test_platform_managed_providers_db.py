@@ -8,7 +8,7 @@ door do: the mocked version of this would pass no matter which way the filter we
 
 Needs a PostgreSQL migrated to head; skips without one:
 
-    LLM_TEST_DATABASE_URL=postgresql+asyncpg://test:test@localhost:55471/agentarea_test
+    LLM_TEST_DATABASE_URL=postgresql+asyncpg://test:test@localhost:55471/agentarea_test  # pragma: allowlist secret
 """
 
 import os
@@ -148,7 +148,7 @@ async def test_tenant_cannot_update_or_delete_the_platform_config(session):
     repo = ProviderConfigRepository(session, _ctx(TENANT_A))
     config = (await repo.list_configs())[0]
 
-    assert await repo.update(config.id, name="hijacked", api_key="tenant-key") is None
+    assert await repo.update(config.id, name="hijacked", api_key="tenant-key") is None  # pragma: allowlist secret
     assert await repo.delete(config.id) is False
 
     await session.commit()
@@ -157,7 +157,9 @@ async def test_tenant_cannot_update_or_delete_the_platform_config(session):
     )
     row = fresh.scalar_one()
     assert row.name == "AgentArea (included)", "the platform configuration was modified"
-    assert row.api_key == "platformtest", "the credential reference was repointed"
+    assert row.api_key == "platformtest", (  # pragma: allowlist secret
+        "the credential reference was repointed"
+    )
 
 
 async def test_tenant_can_still_update_its_own_config(session):
