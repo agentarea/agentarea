@@ -370,6 +370,17 @@
       "title": "Couldn't load billing",
       "description": "Something went wrong while loading your billing information. Please try again."
     },
+    "balance": {
+      "title": "Balance",
+      "subtitle": "Prepaid credit your agents spend from",
+      "creditLimit": "Plus an approved credit limit of {amount}",
+      "topUp": "Top up",
+      "pending": "Redirecting…",
+      "otherAmount": "Other",
+      "failed": "Could not start the payment",
+      "paymentTerms": "Payment and refunds",
+      "offer": "Terms of service"
+    },
     "currentPlan": {
       "title": "Current Plan",
       "subtitle": "Your active subscription",

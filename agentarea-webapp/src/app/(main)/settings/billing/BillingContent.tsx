@@ -13,6 +13,7 @@ export default async function BillingContent() {
   return (
     <BillingClient
       subscription={data?.subscription ?? null}
+      balance={data?.balance ?? null}
       usage={data?.usage ?? []}
       available={available}
       error={error}

@@ -2,6 +2,7 @@
 
 import {
   getBillingOverview,
+  startBillingTopup,
   listAgents,
   listMCPServerInstances,
   listOpenAPIConnections,
@@ -35,9 +36,31 @@ export interface BillingUsageItem {
   limit: number | null;
 }
 
+/** A prepaid balance, present only where the deployment sells from one. */
+export interface BillingBalance {
+  /** Minor units (kopecks for RUB). Money in a float is money that stops adding up. */
+  amount: number;
+  currency: string;
+  /** Approved overdraft headroom, as a positive number. 0 for ordinary prepaid. */
+  credit_limit: number;
+  /** One-click top-up amounts, in minor units. */
+  topup_presets?: number[];
+  /** Where this deployment publishes what it sells and on what terms. */
+  legal?: { terms_url?: string; payment_url?: string } | null;
+}
+
 export interface BillingOverview {
   subscription: BillingSubscription | null;
   usage: BillingUsageItem[];
+  /**
+   * Absent on the open build and on any deployment that does not sell.
+   *
+   * The API decides whether this exists; the page only renders what arrives. That is the
+   * same arrangement subscription and usage already have, and it is why showing a balance
+   * here adds no commercial behaviour to this repository -- an installation with no
+   * billing extension simply never receives the key.
+   */
+  balance?: BillingBalance | null;
 }
 
 export interface BillingOverviewResult {
@@ -138,4 +161,43 @@ export async function fetchCloudSetupEstimate(): Promise<CloudSetupEstimate> {
     infra_estimate_mtd_usd: null,
     platform_fee_usd: 0,
   };
+}
+
+export interface TopupResult {
+  /** Where to send the customer to pay. Null when the attempt could not be started. */
+  confirmation_url: string | null;
+  error: string | null;
+}
+
+/**
+ * Begin a top-up.
+ *
+ * Amount is in minor units and validated server-side; the bounds are the seller's, not
+ * this page's, so they are not duplicated here. A 400 carries a reason the customer can
+ * act on and is passed through rather than flattened -- a customer who cannot pay and is
+ * not told why has no next step.
+ */
+export async function startTopup(
+  amount: number,
+  email?: string
+): Promise<TopupResult> {
+  const { data, error, status } = await startBillingTopup({ amount, email });
+
+  if (status === 404) {
+    return { confirmation_url: null, error: "Billing is not available here" };
+  }
+  if (error || !data) {
+    const detail = (error as { detail?: { message?: string } } | null)?.detail;
+    return {
+      confirmation_url: null,
+      error: detail?.message ?? "Could not start the payment",
+    };
+  }
+
+  const url = (data as { confirmation_url?: string }).confirmation_url ?? null;
+  if (!url) {
+    // A 200 with nowhere to pay is a broken provider integration, not a user error.
+    return { confirmation_url: null, error: "Could not start the payment" };
+  }
+  return { confirmation_url: url, error: null };
 }
