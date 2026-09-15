@@ -343,11 +343,18 @@ async def _resolve_provider_api_key(
             # Worth a line in the log: the operator configured a platform model
             # and then did not supply its credential, and the only other symptom
             # is an auth error attributed to the provider.
+            #
+            # The environment variable NAME is the whole of what gets logged, and
+            # it is the whole of what is actionable. The reference itself is not
+            # repeated: it is not a secret either — this module exists to keep
+            # names and values apart — but it adds nothing the name does not
+            # already contain, and the cheapest way to never log a credential is
+            # to give no code the habit of logging things next to one.
+            expected_env_var = platform_credential_env_var(reference)
             logger.warning(
-                "Platform credential %r is not set (expected env %s); "
-                "calling the provider without a key",
-                reference,
-                platform_credential_env_var(reference),
+                "No platform credential in the environment; set %s. "
+                "The provider will be called without a key until it is.",
+                expected_env_var,
             )
         return key
 
