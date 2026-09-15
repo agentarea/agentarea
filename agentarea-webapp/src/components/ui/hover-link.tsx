@@ -1,17 +1,31 @@
+import type { ReactNode } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface HoverLinkProps {
-  text?: string;
+  text: string;
   className?: string;
+  leadingIcon?: ReactNode;
 }
 
-export function HoverLink({ text, className }: HoverLinkProps) {
+export function HoverLink({ text, className, leadingIcon }: HoverLinkProps) {
   return (
-    <div className={cn("small-link text-muted-foreground/70 group-hover:text-primary gap-1 flex items-center text-[9px] opacity-70", className)}>
-      <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-500 uppercase">{text}</span>
-      <ArrowUpRight className="h-[17px] w-[17px] group-hover:scale-110 transition-transform duration-500" strokeWidth={1.5} />
-    </div>
+    <span
+      className={cn(
+        "small-link flex items-center gap-1 text-[9px] text-muted-foreground/70 opacity-70 group-hover:text-primary group-focus-visible:text-primary",
+        className
+      )}
+    >
+      {leadingIcon}
+      <span className="uppercase opacity-0 transition-opacity duration-500 motion-reduce:transition-none group-hover:opacity-100 group-focus-visible:opacity-100">
+        {text}
+      </span>
+      {!leadingIcon && (
+        <ArrowUpRight
+          className="h-[17px] w-[17px] transition-transform duration-500 motion-reduce:transition-none group-hover:scale-110 group-focus-visible:scale-110"
+          strokeWidth={1.5}
+        />
+      )}
+    </span>
   );
 }
-

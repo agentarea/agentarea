@@ -8,8 +8,11 @@ import { cn } from "@/lib/utils";
 /**
  * Overview building blocks for the agent detail page: a bordered section
  * card with a compact icon+title head, and the four-up stat strip whose cells
- * are separated by dashed board lines. Colors come from the theme tokens only.
+ * are separated by dashed board lines.
  */
+
+const OVERVIEW_SURFACE_CLASS =
+  "overflow-hidden rounded-md border border-border/80 bg-card shadow-sm";
 
 export function SectionCard({
   children,
@@ -19,14 +22,7 @@ export function SectionCard({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "overflow-hidden rounded-[3px] border border-border bg-background",
-        className
-      )}
-    >
-      {children}
-    </div>
+    <div className={cn(OVERVIEW_SURFACE_CLASS, className)}>{children}</div>
   );
 }
 
@@ -40,8 +36,8 @@ export function SectionCardHead({
   link?: { label: string; href: string };
 }) {
   return (
-    <div className="flex items-center gap-[9px] border-b border-border/60 px-[15px] py-[11px]">
-      <span className="grid h-[23px] w-[23px] shrink-0 place-items-center rounded bg-muted text-foreground/80 [&>svg]:h-3.5 [&>svg]:w-3.5">
+    <div className="flex items-center gap-[9px] border-b border-border/60 bg-muted/20 px-[15px] py-[11px]">
+      <span className="grid h-[23px] w-[23px] shrink-0 place-items-center rounded bg-muted/80 text-foreground/75 ring-1 ring-inset ring-border/50 [&>svg]:h-3.5 [&>svg]:w-3.5">
         {icon}
       </span>
       <span className="flex-1 text-[13px] font-semibold">{title}</span>
@@ -94,7 +90,12 @@ const STAT_MARKER_COLOR = "hsl(var(--foreground) / 0.78)";
 export function StatStrip({ children }: { children: ReactNode }) {
   return (
     <div className="mb-4">
-      <div className="relative grid grid-cols-2 overflow-hidden rounded-[3px] border border-border bg-background lg:grid-cols-4">
+      <div
+        className={cn(
+          OVERVIEW_SURFACE_CLASS,
+          "relative grid grid-cols-2 lg:grid-cols-4"
+        )}
+      >
         {children}
         {[25, 50, 75].map((left) => (
           <BoardCrossMark
@@ -155,8 +156,8 @@ export function Stat({
   label: string;
   value: ReactNode;
   unit?: ReactNode;
-  /** Progress fill: percent (0–100) and a CSS color. Omit to leave the slot empty. */
-  bar?: { pct: number; color: string } | null;
+  /** Progress fill percentage (0–100). Omit to leave the slot empty. */
+  bar?: { pct: number } | null;
   sub: ReactNode;
   subTone?: "muted" | "up";
 }) {
@@ -188,10 +189,9 @@ export function Stat({
         {bar && (
           <div className="h-full w-full rounded-[2px] bg-muted">
             <span
-              className="block h-full rounded-[2px]"
+              className="block h-full rounded-[2px] bg-foreground"
               style={{
                 width: `${Math.max(0, Math.min(100, bar.pct))}%`,
-                background: bar.color,
               }}
             />
           </div>
@@ -201,7 +201,7 @@ export function Stat({
         className={cn(
           "mt-2 truncate text-[11px]",
           subTone === "up"
-            ? "text-[color:var(--status-success)]"
+            ? "font-medium text-foreground/70"
             : "text-muted-foreground/70"
         )}
       >

@@ -100,13 +100,14 @@ function agoText(iso: string | null | undefined, t: Translator): string {
   return t("agoFmt", { time: rel });
 }
 
-// Effect → semantic color token, used for the guardrail summary dots.
-const EFFECT_COLOR: Record<PolicyEffect, string> = {
+// Keep semantic color on the tiny marker only. The label stays neutral so the
+// guardrail summary does not turn into a second, competing palette.
+const EFFECT_MARKER_COLOR: Record<PolicyEffect, string> = {
   deny: "var(--status-danger)",
   approval: "var(--status-warning)",
   cap: "hsl(var(--primary))",
-  allow: "var(--status-success)",
-  safety: "var(--violet)",
+  allow: "hsl(var(--muted-foreground) / 0.72)",
+  safety: "hsl(var(--muted-foreground) / 0.72)",
 };
 const EFFECT_ORDER: PolicyEffect[] = [
   "deny",
@@ -139,15 +140,6 @@ export async function AgentOverviewView({
     stats.cap && stats.cap > 0
       ? Math.min(100, (stats.costMtd / stats.cap) * 100)
       : null;
-  const capColor =
-    capPct == null
-      ? "var(--violet)"
-      : capPct >= 100
-        ? "var(--status-danger)"
-        : capPct >= 85
-          ? "var(--status-warning)"
-          : "var(--violet)";
-
   const HeroIcon = getAgentIconComponent(model.iconKey);
   const triggerText =
     model.triggers.titles.length > 0 && model.triggers.titles.length <= 3
@@ -163,10 +155,10 @@ export async function AgentOverviewView({
   return (
     <div className="font-inter md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden">
       {/* ===== hero ===== */}
-      <header className="relative overflow-hidden border-b border-border md:shrink-0">
+      <header className="relative overflow-hidden border-b border-border bg-gradient-to-b from-muted/30 to-background md:shrink-0">
         <span
           aria-hidden
-          className="bg-hatch-soft pointer-events-none absolute inset-y-0 right-0 w-[340px] opacity-[0.55] [-webkit-mask-image:linear-gradient(90deg,transparent,#000_88%)] [mask-image:linear-gradient(90deg,transparent,#000_88%)]"
+          className="bg-hatch-soft pointer-events-none absolute inset-y-0 right-0 w-[300px] opacity-[0.35] [-webkit-mask-image:linear-gradient(90deg,transparent,#000_88%)] [mask-image:linear-gradient(90deg,transparent,#000_88%)]"
         />
         <div className="relative w-full px-4 pb-[14px] pt-[13px]">
           <div className="flex items-start gap-3">
@@ -200,7 +192,7 @@ export async function AgentOverviewView({
                 />
               )}
 
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[12px] text-muted-foreground">
+              <div className="mt-1.5 flex flex-wrap items-center gap-y-1.5 text-[12px] text-muted-foreground">
                 {model.model.label && (
                   <HeroMeta
                     icon={
@@ -238,7 +230,7 @@ export async function AgentOverviewView({
         </div>
       </header>
 
-      <div className="w-full px-4 pb-11 pt-[18px] md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
+      <div className="w-full bg-muted/20 px-4 pb-11 pt-[18px] md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
         {/* ===== stat strip ===== */}
         <StatStrip>
           <Stat
@@ -246,11 +238,7 @@ export async function AgentOverviewView({
             label={t("reliability")}
             value={totalRuns > 0 ? reliability.toFixed(0) : "—"}
             unit={totalRuns > 0 ? t("successUnit") : undefined}
-            bar={
-              totalRuns > 0
-                ? { pct: reliability, color: "var(--status-success)" }
-                : null
-            }
+            bar={totalRuns > 0 ? { pct: reliability } : null}
             sub={
               totalRuns > 0
                 ? t("ofTasks", {
@@ -267,7 +255,6 @@ export async function AgentOverviewView({
             unit={t("perDay")}
             bar={{
               pct: (stats.throughput7d / Math.max(stats.maxDaily, 1)) * 100,
-              color: "hsl(var(--primary))",
             }}
             sub={
               stats.throughput7d > 0 || stats.throughputPrev > 0
@@ -282,7 +269,7 @@ export async function AgentOverviewView({
             icon={<Wallet />}
             label={t("spendMonth")}
             value={fmtUsd(stats.costMtd)}
-            bar={capPct != null ? { pct: capPct, color: capColor } : null}
+            bar={capPct != null ? { pct: capPct } : null}
             sub={
               stats.cap ? t("ofCap", { cap: fmtUsd(stats.cap) }) : t("noCap")
             }
@@ -417,8 +404,8 @@ export async function AgentOverviewView({
                 {capPct != null ? (
                   <div className="h-1.5 overflow-hidden rounded-[2px] bg-muted">
                     <span
-                      className="block h-full rounded-[2px]"
-                      style={{ width: `${capPct}%`, background: capColor }}
+                      className="block h-full rounded-[2px] bg-foreground"
+                      style={{ width: `${capPct}%` }}
                     />
                   </div>
                 ) : (
@@ -489,10 +476,15 @@ export async function AgentOverviewView({
                         (e) => (
                           <span
                             key={e}
-                            className="font-semibold"
-                            style={{ color: EFFECT_COLOR[e] }}
+                            className="font-medium text-foreground/70"
                           >
-                            ●{" "}
+                            <span
+                              aria-hidden
+                              className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle"
+                              style={{
+                                backgroundColor: EFFECT_MARKER_COLOR[e],
+                              }}
+                            />
                             {t(EFFECT_KEY[e], {
                               count: model.effectCounts[e] ?? 0,
                             })}
@@ -523,7 +515,7 @@ function HeroMeta({
   children: ReactNode;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:text-muted-foreground/70">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap before:mx-3 before:h-1 before:w-1 before:shrink-0 before:rounded-full before:bg-muted-foreground/40 before:content-[''] first:before:hidden [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:text-muted-foreground/70">
       {icon}
       <span>{children}</span>
     </span>

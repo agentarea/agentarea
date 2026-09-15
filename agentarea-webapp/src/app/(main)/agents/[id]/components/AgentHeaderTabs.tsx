@@ -1,13 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   CreditCard,
   Gauge,
   List,
-  Network,
   Play,
   SlidersHorizontal,
   Users,
@@ -50,51 +48,37 @@ export default function AgentHeaderTabs({
     })?.key ?? "";
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1.5">
-      <nav aria-label="Agent sections" className="min-w-0 flex-1">
-        <CountSegmentedControl
-          items={TABS.map((tab) => {
-            const Icon = tab.icon;
-            const count =
-              "counted" in tab && tab.counted && runningCount
-                ? runningCount
-                : undefined;
+    <nav aria-label="Agent sections" className="min-w-0 flex-1">
+      <CountSegmentedControl
+        items={TABS.map((tab) => {
+          const Icon = tab.icon;
+          const count =
+            "counted" in tab && tab.counted && runningCount
+              ? runningCount
+              : undefined;
 
-            return {
-              value: tab.key,
-              label: (
-                <span className="flex items-center gap-1.5 whitespace-nowrap">
-                  <Icon className="h-4 w-4" strokeWidth={1.8} />
-                  {t(tab.labelKey)}
-                </span>
-              ),
-              count,
-            };
-          })}
-          value={activeTab}
-          onChange={(next) => {
-            const href = next
-              ? `/agents/${agentId}/${next}`
-              : `/agents/${agentId}`;
-            router.push(href);
-          }}
-          variant="solid"
-          className="max-w-full"
-          layoutId="agent-section-control"
-        />
-      </nav>
-
-      <div className="mx-1 hidden h-[18px] w-px shrink-0 bg-border md:block" />
-      <Link
-        href="/network"
-        className="hidden h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] text-foreground/80 transition-colors hover:bg-muted/60 md:inline-flex"
-      >
-        <Network
-          className="h-[15px] w-[15px] text-muted-foreground"
-          strokeWidth={1.8}
-        />
-        {t("activity")}
-      </Link>
-    </div>
+          return {
+            value: tab.key,
+            label: (
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
+                <Icon className="h-4 w-4" strokeWidth={1.8} />
+                {t(tab.labelKey)}
+              </span>
+            ),
+            count,
+          };
+        })}
+        value={activeTab}
+        onChange={(next) => {
+          const href = next
+            ? `/agents/${agentId}/${next}`
+            : `/agents/${agentId}`;
+          router.push(href);
+        }}
+        variant="solid"
+        className="max-w-full"
+        layoutId="agent-section-control"
+      />
+    </nav>
   );
 }
