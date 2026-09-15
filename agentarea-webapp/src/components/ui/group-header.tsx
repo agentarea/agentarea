@@ -71,7 +71,12 @@ export function GroupHeader({
   );
 
   return onToggle ? (
-    <button type="button" onClick={onToggle} className={cls}>
+    <button
+      type="button"
+      aria-expanded={!collapsed}
+      onClick={onToggle}
+      className={cls}
+    >
       {inner}
     </button>
   ) : (

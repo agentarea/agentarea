@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { BoardCell } from "@/components/board";
+import { BoardCell, BoardCrossMark, BoardRingMark } from "@/components/board";
 import { cn } from "@/lib/utils";
 
 /**
@@ -14,13 +14,6 @@ import { cn } from "@/lib/utils";
 
 /** Left column fraction → 1.55fr : 1fr split, matching the design. */
 const LEFT_FRACTION = 1.55 / 2.55;
-
-/** A small crop-mark cross drawn with two thin bars (matches the design). */
-const cropMark: CSSProperties = {
-  background:
-    "linear-gradient(var(--board-crop),var(--board-crop)) center / 1.4px 11px no-repeat, " +
-    "linear-gradient(var(--board-crop),var(--board-crop)) center / 11px 1.4px no-repeat",
-};
 
 export function BudgetsBoard({
   spend,
@@ -45,11 +38,7 @@ export function BudgetsBoard({
           padded
           className={cn("border-b", dashed, "lg:border-r")}
           markers={
-            <span
-              aria-hidden
-              className="pointer-events-none absolute right-0 bottom-0 z-[6] hidden h-[9px] w-[9px] translate-x-1/2 translate-y-1/2 rounded-full border-[1.5px] bg-background lg:block"
-              style={{ borderColor: "var(--board-crop)" }}
-            />
+            <BoardRingMark className="right-0 bottom-0 translate-x-1/2 translate-y-1/2" />
           }
         >
           {spend}
@@ -67,10 +56,9 @@ export function BudgetsBoard({
       </div>
 
       {/* vertical-divider crop marks (desktop only) */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute top-0 z-[6] hidden h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 lg:block"
-        style={{ left: `${LEFT_FRACTION * 100}%`, ...cropMark }}
+      <BoardCrossMark
+        className="top-0 -translate-x-1/2 -translate-y-1/2"
+        style={{ left: `${LEFT_FRACTION * 100}%` }}
       />
     </div>
   );

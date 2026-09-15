@@ -28,7 +28,7 @@ export function ProviderIcon({
         <AvatarImage
           src={iconUrl}
           alt={`${name} icon`}
-          className="object-contain p-0.5"
+          className="object-contain p-0.5 dark:invert"
         />
       )}
       <AvatarFallback className="text-xs font-medium">
