@@ -304,7 +304,7 @@ export async function AgentOverviewView({
                 <EmptyRow text={t("nothingRunning")} />
               ) : (
                 model.runningTasks.map((task) => (
-                  <TaskRow key={task.id} task={task} t={t} />
+                  <TaskRow key={task.id} task={task} t={t} hideRunningStatus />
                 ))
               )}
             </CollapsibleGroup>
@@ -543,9 +543,19 @@ function summarize(
   return rest > 0 ? `${shown} ${t("more", { count: rest })}` : shown;
 }
 
-function TaskRow({ task, t }: { task: TaskResponse; t: Translator }) {
+function TaskRow({
+  task,
+  t,
+  hideRunningStatus = false,
+}: {
+  task: TaskResponse;
+  t: Translator;
+  hideRunningStatus?: boolean;
+}) {
   const status = String(task.status ?? "unknown");
   const presentation = getTaskStatusPresentation(status);
+  const visuallyHideStatus =
+    hideRunningStatus && presentation.labelKey === "running";
   const resultCost =
     task.result && typeof task.result === "object"
       ? task.result.total_cost
@@ -575,14 +585,18 @@ function TaskRow({ task, t }: { task: TaskResponse; t: Translator }) {
             {sub}
           </div>
         </div>
-        <StatusIndicator
-          size="sm"
-          tone={presentation.tone}
-          pulse={presentation.pulse}
-          className="shrink-0 whitespace-nowrap text-[12px] font-medium"
-        >
-          {presentation.label}
-        </StatusIndicator>
+        {visuallyHideStatus ? (
+          <span className="sr-only">{presentation.label}</span>
+        ) : (
+          <StatusIndicator
+            size="sm"
+            tone={presentation.tone}
+            pulse={presentation.pulse}
+            className="shrink-0 whitespace-nowrap text-[12px] font-medium"
+          >
+            {presentation.label}
+          </StatusIndicator>
+        )}
       </InteractiveListRow>
     </Link>
   );
