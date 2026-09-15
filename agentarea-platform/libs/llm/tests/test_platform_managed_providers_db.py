@@ -44,6 +44,14 @@ pytestmark = pytest.mark.skipif(
     reason="LLM_TEST_DATABASE_URL not set; skipping schema-backed platform provider tests",
 )
 
+# Credential REFERENCES, not credentials — the whole point of managed_by is that these
+# name where a key lives rather than being one. Named rather than inlined so the
+# allowlist pragma sits on a line by itself: ruff reflowed an earlier inline assert
+# across two lines and left the pragma on the closing paren, where detect-secrets
+# stopped seeing it.
+PLATFORM_CREDENTIAL_REF = "platformtest"  # pragma: allowlist secret
+TENANT_CREDENTIAL_REF = "tenant-key"  # pragma: allowlist secret
+
 TENANT_A = "platform-test-tenant-a"
 TENANT_B = "platform-test-tenant-b"
 PROVIDER_KEY = "platform-test-openai"
@@ -92,7 +100,7 @@ def _declared() -> PlatformProvider:
     return PlatformProvider(
         provider_key=PROVIDER_KEY,
         name="AgentArea (included)",
-        credential="platformtest",
+        credential=PLATFORM_CREDENTIAL_REF,
         endpoint_url="https://llm.example.invalid/v1",
         models=[
             PlatformModel(
@@ -148,18 +156,14 @@ async def test_tenant_cannot_update_or_delete_the_platform_config(session):
     repo = ProviderConfigRepository(session, _ctx(TENANT_A))
     config = (await repo.list_configs())[0]
 
-    assert (
-        await repo.update(config.id, name="hijacked", api_key="tenant-key") is None
-    )  # pragma: allowlist secret
+    assert await repo.update(config.id, name="hijacked", api_key=TENANT_CREDENTIAL_REF) is None
     assert await repo.delete(config.id) is False
 
     await session.commit()
     fresh = await session.execute(select(ProviderConfig).where(ProviderConfig.id == config.id))
     row = fresh.scalar_one()
     assert row.name == "AgentArea (included)", "the platform configuration was modified"
-    assert row.api_key == "platformtest", (  # pragma: allowlist secret
-        "the credential reference was repointed"
-    )
+    assert row.api_key == PLATFORM_CREDENTIAL_REF, "the credential reference was repointed"
 
 
 async def test_tenant_can_still_update_its_own_config(session):
@@ -221,7 +225,7 @@ async def test_the_worker_can_resolve_a_platform_model_from_a_tenant_workspace(s
     )
     # The two fields that decide whose credential is read and whose money is spent.
     assert instance.provider_config.managed_by == MANAGED_BY_PLATFORM
-    assert instance.provider_config.api_key == "platformtest"
+    assert instance.provider_config.api_key == PLATFORM_CREDENTIAL_REF
 
 
 async def test_seeding_twice_changes_nothing_and_keeps_ids_stable(session):
