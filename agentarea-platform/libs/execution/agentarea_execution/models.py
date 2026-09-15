@@ -22,6 +22,15 @@ class ResolvedModelInfo(BaseModel):
     provider_type: str
     model_name: str
     api_key_secret: str | None = None  # secret manager key name, not the actual key
+    # Whose credentials this call spends. None = the tenant's own key; "platform" =
+    # the deployment operator's, in which case api_key_secret names a platform
+    # credential reference rather than a workspace secret.
+    #
+    # It rides with the resolved model rather than being looked up again later
+    # because two very different decisions depend on it — which credential store to
+    # read, and whether an unmetered run is spending someone else's money — and
+    # resolving it twice is how those two come to disagree.
+    managed_by: str | None = None
     endpoint_url: str | None = None
     context_window: int = Field(gt=0)
     max_output_tokens: int | None = Field(
@@ -61,6 +70,11 @@ class ChangeModelPayload(BaseModel):
     provider_type: str
     model_name: str
     api_key_secret: str | None = None
+    # Carried for the same reason as on ResolvedModelInfo: switching model mid-run
+    # can switch whose credentials the rest of the run spends, and a payload that
+    # omitted this would silently leave the new model resolving against the old
+    # model's credential store.
+    managed_by: str | None = None
     endpoint_url: str | None = None
     context_window: int = Field(gt=0)
     max_output_tokens: int | None = Field(default=None, gt=0)

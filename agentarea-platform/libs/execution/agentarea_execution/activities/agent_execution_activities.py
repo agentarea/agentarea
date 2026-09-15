@@ -37,6 +37,13 @@ from agentarea_common.auth.tool_authorization import (
     authorize_tool_invocation,
 )
 from agentarea_common.events.contract import LLM_FAILED, canonical_type
+from agentarea_common.infrastructure.platform_credentials import (
+    MANAGED_BY_PLATFORM,
+    platform_credential,
+)
+from agentarea_common.infrastructure.platform_credentials import (
+    env_var_name as platform_credential_env_var,
+)
 from agentarea_common.money import ZERO, to_money
 from prometheus_client import Counter
 
@@ -303,6 +310,57 @@ def _enqueue_last_dispatch(instance_id: str, payload: dict) -> None:
         _last_dispatch_queue.put_nowait((instance_id, payload))
     except asyncio.QueueFull:
         _mcp_last_dispatch_dropped_total.inc()
+
+
+async def _resolve_provider_api_key(
+    *,
+    reference: str | None,
+    managed_by: str | None,
+    user_context: Any,
+    dependencies: ActivityDependencies,
+) -> str | None:
+    """Read the credential this call runs on, from whichever store owns it.
+
+    ``reference`` means different things depending on ``managed_by``, which is the
+    whole reason this is one function and not a branch repeated at each call site:
+
+      * tenant configuration (managed_by unset) — the name of a secret in the
+        caller's workspace, read through the workspace-scoped secret manager;
+      * platform configuration — the name of a credential the deployment supplies
+        through its environment, which no workspace-scoped read can reach.
+
+    Getting this branch wrong in either direction is silent. A platform reference
+    sent to the tenant store resolves to None and the provider answers 401; a
+    tenant reference sent to the environment resolves to None just the same. Both
+    look like "the user's key is broken", which is the one thing neither is.
+    """
+    if not reference:
+        return None
+
+    if managed_by == MANAGED_BY_PLATFORM:
+        key = platform_credential(reference)
+        if key is None:
+            # Worth a line in the log: the operator configured a platform model
+            # and then did not supply its credential, and the only other symptom
+            # is an auth error attributed to the provider.
+            logger.warning(
+                "Platform credential %r is not set (expected env %s); "
+                "calling the provider without a key",
+                reference,
+                platform_credential_env_var(reference),
+            )
+        return key
+
+    from agentarea_common.config import get_database
+
+    secret_session = get_database().async_session_factory()
+    try:
+        secret_manager = dependencies.secret_manager_factory.create(
+            session=secret_session, user_context=user_context
+        )
+        return await secret_manager.get_secret(reference)
+    finally:
+        await secret_session.close()
 
 
 def make_agent_activities(dependencies: ActivityDependencies):
@@ -582,6 +640,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 model_instance.model_spec, "output_cost_per_token", None
             )
             api_key_secret = getattr(model_instance.provider_config, "api_key", None)
+            managed_by = getattr(model_instance.provider_config, "managed_by", None)
             display_name = getattr(model_instance.model_spec, "display_name", None)
             provider_display_name = getattr(
                 model_instance.provider_config.provider_spec, "display_name", None
@@ -592,6 +651,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             provider_type=provider_type,
             model_name=model_name,
             api_key_secret=api_key_secret,
+            managed_by=managed_by,
             endpoint_url=endpoint_url,
             context_window=context_window,
             max_output_tokens=max_output_tokens,
@@ -649,16 +709,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
                     try:
-                        from agentarea_common.config import get_database
-
-                        secret_session = get_database().async_session_factory()
-                        try:
-                            secret_manager = dependencies.secret_manager_factory.create(
-                                session=secret_session, user_context=user_context
-                            )
-                            api_key = await secret_manager.get_secret(api_key_secret_name)
-                        finally:
-                            await secret_session.close()
+                        api_key = await _resolve_provider_api_key(
+                            reference=api_key_secret_name,
+                            managed_by=cached.get("managed_by"),
+                            user_context=user_context,
+                            dependencies=dependencies,
+                        )
                     except Exception as decrypt_err:
                         logger.warning(
                             f"Failed to decrypt cached API key for model {request.model_id}, "
@@ -699,16 +755,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     )
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                     if api_key_secret_name:
-                        from agentarea_common.config import get_database
-
-                        secret_session = get_database().async_session_factory()
-                        try:
-                            secret_manager = dependencies.secret_manager_factory.create(
-                                session=secret_session, user_context=user_context
-                            )
-                            api_key = await secret_manager.get_secret(api_key_secret_name)
-                        finally:
-                            await secret_session.close()
+                        api_key = await _resolve_provider_api_key(
+                            reference=api_key_secret_name,
+                            managed_by=getattr(
+                                model_instance.provider_config, "managed_by", None
+                            ),
+                            user_context=user_context,
+                            dependencies=dependencies,
+                        )
                     else:
                         logger.warning(f"No API key found for model instance {model_instance.id}")
 
@@ -1787,16 +1841,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
                     try:
-                        from agentarea_common.config import get_database
-
-                        secret_session = get_database().async_session_factory()
-                        try:
-                            secret_manager = dependencies.secret_manager_factory.create(
-                                session=secret_session, user_context=user_context
-                            )
-                            api_key = await secret_manager.get_secret(api_key_secret_name)
-                        finally:
-                            await secret_session.close()
+                        api_key = await _resolve_provider_api_key(
+                            reference=api_key_secret_name,
+                            managed_by=cached.get("managed_by"),
+                            user_context=user_context,
+                            dependencies=dependencies,
+                        )
                     except Exception as decrypt_err:
                         logger.warning(
                             f"Failed to decrypt cached API key for model {request.model_id} "
@@ -1832,16 +1882,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                     if api_key_secret_name:
-                        from agentarea_common.config import get_database
-
-                        secret_session = get_database().async_session_factory()
-                        try:
-                            secret_manager = dependencies.secret_manager_factory.create(
-                                session=secret_session, user_context=user_context
-                            )
-                            api_key = await secret_manager.get_secret(api_key_secret_name)
-                        finally:
-                            await secret_session.close()
+                        api_key = await _resolve_provider_api_key(
+                            reference=api_key_secret_name,
+                            managed_by=getattr(
+                                model_instance.provider_config, "managed_by", None
+                            ),
+                            user_context=user_context,
+                            dependencies=dependencies,
+                        )
 
             if input_cost_per_token is None or output_cost_per_token is None:
                 raise ValueError(

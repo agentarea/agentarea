@@ -95,6 +95,25 @@ class AppSettings(BaseAppSettings):
             )
         return self
 
+    # Models this deployment offers on its own credentials, so a workspace can run
+    # without anyone pasting in an API key.
+    #
+    # JSON, because it is a list of objects and a flat env var cannot express one
+    # without inventing a delimiter syntax that has to be documented and parsed:
+    #
+    #   PLATFORM_PROVIDERS='[{"provider_key":"openai","name":"AgentArea",
+    #     "credential":"openai","models":[{"model_name":"gpt-4o-mini",
+    #     "display_name":"GPT-4o mini","context_window":128000,
+    #     "input_cost_per_token":1.5e-7,"output_cost_per_token":6e-7}]}]'
+    #
+    # "credential" names an environment variable, not a key: "openai" resolves to
+    # PLATFORM_CREDENTIAL_OPENAI at call time. The keys themselves never appear in
+    # this setting, so it can be a plain ConfigMap while they stay in a Secret.
+    #
+    # Empty by default: a build that supplies no keys offers no keyless models,
+    # which is the correct default for the open distribution.
+    PLATFORM_PROVIDERS: list[dict] | None = None
+
     # Kratos public API URL (used to validate browser session cookies in OAuth AS)
     KRATOS_PUBLIC_URL: str = "http://kratos:4433"
 
