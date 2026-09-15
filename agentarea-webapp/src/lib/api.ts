@@ -2186,38 +2186,7 @@ export const listAuditLogs = async (params?: {
   return { data, error };
 };
 
-export const getBillingOverview = async () => {
-  const result = await requestJson("GET", "/v1/billing/overview", {});
-  return {
-    data: result.data,
-    error: result.error,
-    status: result.response?.status,
-  };
-};
 
-/**
- * Start a top-up and get back where to pay.
- *
- * Nothing here moves money: the provider's notification does that. An abandoned checkout
- * therefore leaves nothing behind but an unused payment.
- *
- * The caller does not name an account -- the server resolves the payer from the session.
- * A client-supplied account id would let anyone top up somebody else's balance, and a
- * top-up credited to the wrong account is not recoverable by retrying.
- *
- * 404 on a build with no billing extension installed, which is the open-source default.
- */
-export const startBillingTopup = async (body: {
-  amount: number;
-  email?: string;
-}) => {
-  const result = await requestJson("POST", "/v1/billing/topup", { body });
-  return {
-    data: result.data,
-    error: result.error,
-    status: result.response?.status,
-  };
-};
 
 // Convenience helpers built on top of the generated API
 interface TaskEventRecord {

@@ -26,6 +26,17 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
+/**
+ * Where this deployment's billing page lives, if it has one.
+ *
+ * An open install has nothing to bill for, so there is no billing page here and no link
+ * to one. A deployment that sells sets NEXT_PUBLIC_BILLING_URL and serves that page
+ * itself; this repository holds the URL and nothing else about it -- no balance, no
+ * prices, no provider, no plans.
+ */
+const BILLING_URL = process.env.NEXT_PUBLIC_BILLING_URL?.trim();
+
+
 export function SettingsSidebarContent() {
   const pathname = usePathname();
   const t = useTranslations("SettingsSidebar");
@@ -36,7 +47,9 @@ export function SettingsSidebarContent() {
       label: t("account"),
       items: [
         { title: t("profile"), href: "/settings", icon: User },
-        { title: t("billing"), href: "/settings/billing", icon: CreditCard },
+        ...(BILLING_URL
+          ? [{ title: t("billing"), href: BILLING_URL, icon: CreditCard }]
+          : []),
       ],
     },
     {
