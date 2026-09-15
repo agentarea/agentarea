@@ -148,13 +148,13 @@ async def test_tenant_cannot_update_or_delete_the_platform_config(session):
     repo = ProviderConfigRepository(session, _ctx(TENANT_A))
     config = (await repo.list_configs())[0]
 
-    assert await repo.update(config.id, name="hijacked", api_key="tenant-key") is None  # pragma: allowlist secret
+    assert (
+        await repo.update(config.id, name="hijacked", api_key="tenant-key") is None
+    )  # pragma: allowlist secret
     assert await repo.delete(config.id) is False
 
     await session.commit()
-    fresh = await session.execute(
-        select(ProviderConfig).where(ProviderConfig.id == config.id)
-    )
+    fresh = await session.execute(select(ProviderConfig).where(ProviderConfig.id == config.id))
     row = fresh.scalar_one()
     assert row.name == "AgentArea (included)", "the platform configuration was modified"
     assert row.api_key == "platformtest", (  # pragma: allowlist secret
@@ -193,6 +193,35 @@ async def test_platform_model_instances_are_visible_and_unwritable(session):
     instance_id = instances[0].id
     assert await repo.delete(instance_id) is False
     assert await repo.update(instance_id, name="hijacked") is None
+
+
+async def test_the_worker_can_resolve_a_platform_model_from_a_tenant_workspace(session):
+    """The path an actual run takes, which no other test here exercises.
+
+    Listing the model is what makes it selectable; THIS is what makes it runnable.
+    The worker resolves the instance by id under the tenant's own context — not the
+    platform's — and reads the provider and model off the loaded relationships to
+    decide which credential store to read and what to send. A widened list with a
+    strict get_by_id would look completely healthy right up until someone pressed
+    run, and then fail as "model not found" on a model plainly visible in the picker.
+    """
+    await _provider_spec(session)
+    await PlatformProviderSeeder(session).seed([_declared()])
+
+    repo = ModelInstanceRepository(session, _ctx(TENANT_A))
+    instance = await repo.get_with_relations(platform_instance_id(PROVIDER_KEY, "test-model-mini"))
+
+    assert instance is not None, "the worker could not resolve the platform model"
+    # Everything _resolve_model_info reads, in the order it needs it.
+    assert instance.provider_config.provider_spec.provider_type == "openai"
+    assert instance.model_spec.model_name == "test-model-mini"
+    assert instance.provider_config.endpoint_url == "https://llm.example.invalid/v1"
+    assert instance.model_spec.input_cost_per_token == 1.5e-7, (
+        "without pricing the run is refused before it starts"
+    )
+    # The two fields that decide whose credential is read and whose money is spent.
+    assert instance.provider_config.managed_by == MANAGED_BY_PLATFORM
+    assert instance.provider_config.api_key == "platformtest"
 
 
 async def test_seeding_twice_changes_nothing_and_keeps_ids_stable(session):
@@ -343,6 +372,4 @@ async def test_seeded_instance_carries_the_derived_id(session):
     await PlatformProviderSeeder(session).seed([_declared()])
 
     instances = await ModelInstanceRepository(session, _ctx(TENANT_A)).list_instances()
-    assert [i.id for i in instances] == [
-        platform_instance_id(PROVIDER_KEY, "test-model-mini")
-    ]
+    assert [i.id for i in instances] == [platform_instance_id(PROVIDER_KEY, "test-model-mini")]
