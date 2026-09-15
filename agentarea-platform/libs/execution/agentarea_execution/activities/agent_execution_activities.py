@@ -38,11 +38,11 @@ from agentarea_common.auth.tool_authorization import (
 )
 from agentarea_common.events.contract import LLM_FAILED, canonical_type
 from agentarea_common.infrastructure.platform_credentials import (
-    MANAGED_BY_PLATFORM,
-    platform_credential,
+    ENV_PREFIX as PLATFORM_CREDENTIAL_ENV_PREFIX,
 )
 from agentarea_common.infrastructure.platform_credentials import (
-    env_var_name as platform_credential_env_var,
+    MANAGED_BY_PLATFORM,
+    platform_credential,
 )
 from agentarea_common.money import ZERO, to_money
 from prometheus_client import Counter
@@ -344,17 +344,21 @@ async def _resolve_provider_api_key(
             # and then did not supply its credential, and the only other symptom
             # is an auth error attributed to the provider.
             #
-            # The environment variable NAME is the whole of what gets logged, and
-            # it is the whole of what is actionable. The reference itself is not
-            # repeated: it is not a secret either — this module exists to keep
-            # names and values apart — but it adds nothing the name does not
-            # already contain, and the cheapest way to never log a credential is
-            # to give no code the habit of logging things next to one.
-            expected_env_var = platform_credential_env_var(reference)
+            # Nothing derived from the credential reference is logged — only the
+            # fixed prefix, and the rule for deriving the rest.
+            #
+            # The reference is a name, not a value, so logging it would leak
+            # nothing. But CodeQL reads any log line downstream of a credential
+            # parameter as clear-text logging of a secret, and it is right about
+            # the shape even where it is wrong about the value. Naming the prefix
+            # and the rule instead keeps the message actionable — the operator
+            # already has the reference in front of them, in PLATFORM_PROVIDERS —
+            # while leaving no path from a credential to a log at all.
             logger.warning(
-                "No platform credential in the environment; set %s. "
-                "The provider will be called without a key until it is.",
-                expected_env_var,
+                "No platform credential set: expected a %s* environment variable "
+                "for the credential named in PLATFORM_PROVIDERS. The provider "
+                "will be called without a key until it is set.",
+                PLATFORM_CREDENTIAL_ENV_PREFIX,
             )
         return key
 
