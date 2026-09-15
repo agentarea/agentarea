@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import {
   Bot,
@@ -19,13 +20,17 @@ import {
   Sparkles,
   TableProperties,
   Users,
+  Wallet,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getBillingStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
+import { startTopup } from "./actions";
 import type {
+  BillingBalance,
   BillingPlanKey,
   BillingSubscription,
   BillingUsageItem,
@@ -65,6 +70,7 @@ function humanizeKey(key: string): string {
 
 interface Props {
   subscription: BillingSubscription | null;
+  balance: BillingBalance | null;
   usage: BillingUsageItem[];
   available: boolean;
   error: string | null;
@@ -74,6 +80,7 @@ interface Props {
 
 export default function BillingClient({
   subscription,
+  balance,
   usage,
   available,
   error,
@@ -93,6 +100,10 @@ export default function BillingClient({
   return (
     <div className="mx-auto max-w-4xl">
       <div className="space-y-4">
+        {/* First, because it is the thing a paying customer came here to see. Absent on
+            builds with no billing extension, which never receive the key. */}
+        {balance ? <BalanceSection balance={balance} /> : null}
+
         <CurrentPlanSection
           subscription={subscription}
           available={available}
@@ -421,6 +432,165 @@ function CloudBenefitCard({
         {t(`cloudMigration.benefits.${itemKey}.description`)}
       </p>
     </div>
+  );
+}
+
+/** Minor units per major unit, asked of the runtime rather than hardcoded to 100. */
+function minorUnitsPerUnit(currency: string): number {
+  try {
+    const digits = new Intl.NumberFormat("ru-RU", {
+      style: "currency",
+      currency,
+    }).resolvedOptions().maximumFractionDigits;
+    return 10 ** (digits ?? 2);
+  } catch {
+    return 100;
+  }
+}
+
+function formatMoney(minorUnits: number, currency: string): string {
+  const amount = minorUnits / minorUnitsPerUnit(currency);
+  try {
+    return new Intl.NumberFormat("ru-RU", {
+      style: "currency",
+      currency,
+    }).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
+  }
+}
+
+/**
+ * Prepaid balance and top-up.
+ *
+ * Holds no prices and no payment provider of its own: the amounts to offer, the currency
+ * and the links to the seller's terms all arrive in the payload. This component renders
+ * them. That is what keeps a commercial offer out of this repository while the page that
+ * displays it stays in one place -- which is the whole reason the balance is not a second
+ * application with a second sidebar.
+ */
+function BalanceSection({ balance }: { balance: BillingBalance }) {
+  const t = useTranslations("BillingPage");
+  const presets = balance.topup_presets ?? [];
+  const [chosen, setChosen] = useState<number | null>(presets[0] ?? null);
+  const [custom, setCustom] = useState("");
+  const [failure, setFailure] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const unit = minorUnitsPerUnit(balance.currency);
+  // Rounded to a whole minor unit: the server rejects a fractional kopeck rather than
+  // silently truncating it, and a rejection the customer cannot see is worse than none.
+  const typed = custom.trim() ? Math.round(Number(custom) * unit) : null;
+  const amount = typed && Number.isFinite(typed) && typed > 0 ? typed : chosen;
+
+  const submit = () => {
+    if (!amount) return;
+    setFailure(null);
+    startTransition(async () => {
+      const result = await startTopup(amount);
+      if (result.confirmation_url) {
+        window.location.href = result.confirmation_url;
+        return;
+      }
+      setFailure(result.error ?? t("balance.failed"));
+    });
+  };
+
+  return (
+    <section id="balance" className="border-0 p-0">
+      <div className="px-4 pt-3">
+        <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+          {t("balance.title")}
+        </h2>
+        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          {t("balance.subtitle")}
+        </p>
+      </div>
+      <div className="p-4">
+        <Card>
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/5 text-primary dark:bg-primary/10 z-10">
+            <Wallet className="h-4 w-4" />
+          </div>
+          <div className="z-10 min-w-0 flex-1">
+            <p className="text-2xl font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">
+              {formatMoney(balance.amount, balance.currency)}
+            </p>
+            {balance.credit_limit > 0 ? (
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                {t("balance.creditLimit", {
+                  amount: formatMoney(balance.credit_limit, balance.currency),
+                })}
+              </p>
+            ) : null}
+
+            {presets.length > 0 ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {presets.map((preset) => (
+                  <Button
+                    key={preset}
+                    type="button"
+                    size="sm"
+                    variant={
+                      !typed && chosen === preset ? "default" : "outline"
+                    }
+                    onClick={() => {
+                      setChosen(preset);
+                      setCustom("");
+                    }}
+                  >
+                    {formatMoney(preset, balance.currency)}
+                  </Button>
+                ))}
+                <Input
+                  inputMode="decimal"
+                  className="h-8 w-28"
+                  placeholder={t("balance.otherAmount")}
+                  value={custom}
+                  onChange={(event) => setCustom(event.target.value)}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={submit}
+                  disabled={pending || !amount}
+                >
+                  {pending ? t("balance.pending") : t("balance.topUp")}
+                </Button>
+              </div>
+            ) : null}
+
+            {failure ? (
+              <p className="mt-3 text-xs text-destructive">{failure}</p>
+            ) : null}
+
+            {balance.legal?.terms_url || balance.legal?.payment_url ? (
+              <p className="mt-3 flex flex-wrap gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+                {balance.legal?.payment_url ? (
+                  <a
+                    className="hover:text-primary"
+                    href={balance.legal.payment_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t("balance.paymentTerms")}
+                  </a>
+                ) : null}
+                {balance.legal?.terms_url ? (
+                  <a
+                    className="hover:text-primary"
+                    href={balance.legal.terms_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t("balance.offer")}
+                  </a>
+                ) : null}
+              </p>
+            ) : null}
+          </div>
+        </Card>
+      </div>
+    </section>
   );
 }
 
