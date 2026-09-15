@@ -1,7 +1,7 @@
 ---
 title: Events
 type: concept
-summary: The one dotted event vocabulary AgentArea emits, the two delivery paths behind it, and why the three consumers must not switch on event names.
+description: "The one dotted event vocabulary AgentArea emits, the two delivery paths behind it, and why the three consumers must not switch on event names."
 prerequisites:
   - /concepts/execution/tasks
 related:
@@ -10,8 +10,6 @@ related:
   - /concepts/governance/audit
 last_updated: 2026-07-29
 ---
-
-# Events
 
 Everything an agent does while running is an event: a model call started, a
 token arrived, a tool was called, an approval is pending, the task ended. There
@@ -41,7 +39,7 @@ exact dotted strings — there is no second vocabulary and no alias-on-read
 bridge. `agentarea-webapp/src/lib/events/contract.ts` mirrors the same file in
 TypeScript.
 
-```
+```text
 llm.call.started      llm.call.chunk      llm.call.completed   llm.call.failed
 tool.call             tool.result
 input.request         input.response
@@ -219,7 +217,14 @@ table, not bare pub/sub.
 
 ## Related
 
-- [Tasks](/concepts/execution/tasks) — what the terminal types mean on the row.
-- [Durable execution](/concepts/execution/durable-execution) — where events are
-  produced.
-- [Artifacts](/concepts/execution/artifacts) — what `artifact.created` points at.
+<Columns cols={2}>
+  <Card title="Tasks" icon="diagram-project" href="/concepts/execution/tasks">
+    What the terminal types mean on the row
+  </Card>
+  <Card title="Durable execution" icon="diagram-project" href="/concepts/execution/durable-execution">
+    Where events are produced
+  </Card>
+  <Card title="Artifacts" icon="diagram-project" href="/concepts/execution/artifacts">
+    What `artifact.created` points at
+  </Card>
+</Columns>

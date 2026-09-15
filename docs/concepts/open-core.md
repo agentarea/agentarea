@@ -1,7 +1,7 @@
 ---
 title: Open core
 type: concept
-summary: AgentArea's core is Apache-2.0 and self-hostable; enterprise features arrive as a separately installed Python package that registers itself through entry points, not as a fork.
+description: "AgentArea's core is Apache-2.0 and self-hostable."
 prerequisites: []
 related:
   - /concepts/workspaces-projects-resources
@@ -10,8 +10,6 @@ related:
   - /concepts/governance/audit
 last_updated: 2026-07-29
 ---
-
-# Open core
 
 AgentArea is open core. The platform in this repository is Apache-2.0 licensed
 and runs standalone — you can self-host it, execute agents, govern tool calls,
@@ -198,7 +196,17 @@ implementation chosen for every selector point.
 
 ## Related
 
-- [Workspaces, projects, and resources](/concepts/workspaces-projects-resources) — the model both editions share
-- [Control plane and data plane](/concepts/control-and-data-plane) — the boundary that makes customer-hosted execution possible
-- [Policy engine](/concepts/governance/policy-engine) — the pipeline the entitlement gate joins
-- [Audit](/concepts/governance/audit) — what is recorded before anything is forwarded
+<Columns cols={2}>
+  <Card title="Workspaces, projects, and resources" icon="lightbulb" href="/concepts/workspaces-projects-resources">
+    The model both editions share
+  </Card>
+  <Card title="Control plane and data plane" icon="lightbulb" href="/concepts/control-and-data-plane">
+    The boundary that makes customer-hosted execution possible
+  </Card>
+  <Card title="Policy engine" icon="scale-balanced" href="/concepts/governance/policy-engine">
+    The pipeline the entitlement gate joins
+  </Card>
+  <Card title="Audit" icon="scale-balanced" href="/concepts/governance/audit">
+    What is recorded before anything is forwarded
+  </Card>
+</Columns>

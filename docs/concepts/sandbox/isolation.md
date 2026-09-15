@@ -1,7 +1,7 @@
 ---
 title: Isolation
 type: concept
-summary: How AgentArea confines untrusted workloads, which controls apply on which backend, and — importantly — which parts of the tier model are not yet wired, so a default deployment gets less isolation than the design describes.
+description: "How AgentArea confines untrusted workloads, which controls apply on which backend."
 prerequisites:
   - /concepts/sandbox/why-a-sandbox
 related:
@@ -11,8 +11,6 @@ related:
   - /security
 last_updated: 2026-07-29
 ---
-
-# Isolation
 
 Isolation is the boundary between a workload and everything else — the host
 kernel, the control plane, other tasks, and other tenants. AgentArea expresses it
@@ -249,8 +247,20 @@ syscall interposition.
 
 ## Related
 
-- [Why a sandbox](/concepts/sandbox/why-a-sandbox) — the threat this confines
-- [Sessions](/concepts/sandbox/sessions) — what lives inside the boundary
-- [Lifecycle](/concepts/sandbox/lifecycle) — how long a confined workload lives
-- [The file model](/concepts/sandbox/the-file-model) — scoping between tasks
-- [Security](/security) — platform-wide security posture
+<Columns cols={2}>
+  <Card title="Why a sandbox" icon="box" href="/concepts/sandbox/why-a-sandbox">
+    The threat this confines
+  </Card>
+  <Card title="Sessions" icon="box" href="/concepts/sandbox/sessions">
+    What lives inside the boundary
+  </Card>
+  <Card title="Lifecycle" icon="box" href="/concepts/sandbox/lifecycle">
+    How long a confined workload lives
+  </Card>
+  <Card title="The file model" icon="box" href="/concepts/sandbox/the-file-model">
+    Scoping between tasks
+  </Card>
+  <Card title="The AgentArea authorization model" icon="scale-balanced" href="/concepts/governance/the-agentarea-model">
+    The other half of the security posture: who may act on what
+  </Card>
+</Columns>

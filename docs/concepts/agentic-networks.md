@@ -1,7 +1,7 @@
 ---
 title: Agentic networks
 type: concept
-summary: AgentArea models a workspace as a private network of agents, with zone labels for what talks to the outside world — and enforces some of that model, not all of it.
+description: "AgentArea models a workspace as a private network of agents, with zone labels for what talks to the outside world."
 prerequisites:
   - /concepts/workspaces-projects-resources
 related:
@@ -11,8 +11,6 @@ related:
   - /concepts/open-core
 last_updated: 2026-07-29
 ---
-
-# Agentic networks
 
 An agent that can reach anything is an agent you cannot reason about. AgentArea
 borrows the mental model network engineers already have — the virtual private
@@ -167,7 +165,17 @@ rather than draggable, and it gets crowded at high entity counts.
 
 ## Related
 
-- [Workspaces, projects, and resources](/concepts/workspaces-projects-resources) — the scoping model this network sits on
-- [Control plane and data plane](/concepts/control-and-data-plane) — why the enforcement point and the label live in different places
-- [The AgentArea authorization model](/concepts/governance/the-agentarea-model) — the relations that are enforced
-- [Why a sandbox](/concepts/sandbox/why-a-sandbox) — where egress restriction actually happens
+<Columns cols={2}>
+  <Card title="Workspaces, projects, and resources" icon="lightbulb" href="/concepts/workspaces-projects-resources">
+    The scoping model this network sits on
+  </Card>
+  <Card title="Control plane and data plane" icon="lightbulb" href="/concepts/control-and-data-plane">
+    Why the enforcement point and the label live in different places
+  </Card>
+  <Card title="The AgentArea authorization model" icon="scale-balanced" href="/concepts/governance/the-agentarea-model">
+    The relations that are enforced
+  </Card>
+  <Card title="Why a sandbox" icon="box" href="/concepts/sandbox/why-a-sandbox">
+    Where egress restriction actually happens
+  </Card>
+</Columns>

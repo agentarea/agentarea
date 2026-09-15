@@ -1,7 +1,7 @@
 ---
 title: Approvals
 type: concept
-summary: How a tool call pauses for a human, who is allowed to resolve it, and which execution paths have no approval flow at all.
+description: "How a tool call pauses for a human, who is allowed to resolve it, and which execution paths have no approval flow at all."
 prerequisites:
   - /concepts/governance/policy-engine
   - /concepts/governance/tool-authorization
@@ -11,8 +11,6 @@ related:
   - /concepts/governance/audit
 last_updated: 2026-07-29
 ---
-
-# Approvals
 
 An approval turns a tool call into a question. The workflow stops before the call
 runs, records who may answer, waits, and resumes only when a designated approver
@@ -216,8 +214,14 @@ agent workflow has no approval flow, only a denial. See the limits below.
 
 ## Related
 
-- [Tool authorization](/concepts/governance/tool-authorization) — where the
-  `REQUIRE_APPROVAL` verdict comes from and which paths it reaches.
-- [The policy engine](/concepts/governance/policy-engine) — how approval rules
-  merge across scopes.
-- [Audit](/concepts/governance/audit) — what an approval leaves behind, and where.
+<Columns cols={2}>
+  <Card title="Tool authorization" icon="scale-balanced" href="/concepts/governance/tool-authorization">
+    Where the `REQUIRE_APPROVAL` verdict comes from and which paths it reaches
+  </Card>
+  <Card title="The policy engine" icon="scale-balanced" href="/concepts/governance/policy-engine">
+    How approval rules merge across scopes
+  </Card>
+  <Card title="Audit" icon="scale-balanced" href="/concepts/governance/audit">
+    What an approval leaves behind, and where
+  </Card>
+</Columns>

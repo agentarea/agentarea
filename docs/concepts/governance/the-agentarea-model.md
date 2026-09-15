@@ -1,7 +1,7 @@
 ---
 title: The AgentArea authorization model
 type: concept
-summary: The OpenFGA types, relations and tuples AgentArea deploys, how ownership and projects nest, and which parts of the API actually consult the graph.
+description: "The OpenFGA types, relations and tuples AgentArea deploys, how ownership and projects nest, and which parts of the API actually consult the graph."
 prerequisites:
   - /concepts/governance/authorization-basics
 related:
@@ -10,8 +10,6 @@ related:
   - /concepts/governance/audit
 last_updated: 2026-07-29
 ---
-
-# The AgentArea authorization model
 
 AgentArea models resource access as ReBAC in OpenFGA. Agents, skills, MCP servers
 and clients are not four permission systems — they are one generic `resource`
@@ -41,7 +39,7 @@ resource, and revoking it must not leave orphans behind.
 The model is `config/auth/openfga/model.fga`, schema 1.1, loaded into OpenFGA at
 startup. Seven types:
 
-```
+```text
 type User
 type Agent
 
@@ -126,7 +124,7 @@ Two writers keep the graph in step with the database.
 When a workspace is created, `seed_workspace` writes three tuples so the
 workspace is usable without manual setup:
 
-```
+```text
 Workspace:<ws>#members@User:<creator>
 Workspace:<ws>#admin@User:<creator>
 project:<ws>-root#workspace@Workspace:<ws>
@@ -139,7 +137,7 @@ manages that root project and everything under it.
 When a governed resource is created, `grant_resource_owner` attaches it to the
 root project and grants the creator all three bits:
 
-```
+```text
 resource:<id>#project@project:<ws>-root
 resource:<id>#reader@User:<creator>
 resource:<id>#writer@User:<creator>
@@ -283,10 +281,17 @@ each `role_assignment` attached to exactly one object.
 
 ## Related
 
-- [Authorization models](/concepts/governance/authorization-basics) — the
-  vocabulary this page assumes.
-- [The policy engine](/concepts/governance/policy-engine) — the other
-  authorization surface, and why it is separate.
-- [Tool authorization](/concepts/governance/tool-authorization) — what a tool
-  call clears, and what it does not.
-- [Audit](/concepts/governance/audit) — what a grant change leaves behind.
+<Columns cols={2}>
+  <Card title="Authorization models" icon="scale-balanced" href="/concepts/governance/authorization-basics">
+    The vocabulary this page assumes
+  </Card>
+  <Card title="The policy engine" icon="scale-balanced" href="/concepts/governance/policy-engine">
+    The other authorization surface, and why it is separate
+  </Card>
+  <Card title="Tool authorization" icon="scale-balanced" href="/concepts/governance/tool-authorization">
+    What a tool call clears, and what it does not
+  </Card>
+  <Card title="Audit" icon="scale-balanced" href="/concepts/governance/audit">
+    What a grant change leaves behind
+  </Card>
+</Columns>

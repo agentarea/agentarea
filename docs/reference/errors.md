@@ -1,7 +1,7 @@
 ---
 title: Errors
 type: reference
-summary: The problem+json envelope every API error uses, the machine-readable codes, the governance and authorization responses in detail, and the responses that succeed without doing anything.
+description: "The problem+json envelope every API error uses, the machine-readable codes, the governance and authorization responses in detail."
 prerequisites: []
 related:
   - /reference/policy-syntax
@@ -10,8 +10,6 @@ related:
   - /guides/governance/authorize-a-tool-call
 last_updated: 2026-07-29
 ---
-
-# Errors
 
 Every API error is an RFC 9457 problem-detail document with media type
 `application/problem+json`. A registered catch-all guarantees no response body is
@@ -153,10 +151,16 @@ A lower policy layer attempting to raise a ceiling:
 }
 ```
 
-## See also
+## Related
 
-- [Policy rule syntax](/reference/policy-syntax) — which rules validate and which
-  silently do nothing.
-- [Authorization model](/reference/authorization-model) — what a 403 from a
-  permission check means.
-- [Limits](/reference/limits) — the timeouts whose expiry produces a 5xx.
+<Columns cols={2}>
+  <Card title="Policy rule syntax" icon="book" href="/reference/policy-syntax">
+    Which rules validate and which silently do nothing
+  </Card>
+  <Card title="Authorization model" icon="book" href="/reference/authorization-model">
+    What a 403 from a permission check means
+  </Card>
+  <Card title="Limits" icon="book" href="/reference/limits">
+    The timeouts whose expiry produces a 5xx
+  </Card>
+</Columns>

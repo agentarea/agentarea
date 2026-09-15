@@ -1,19 +1,41 @@
 {
-  "$schema": "https://mintlify.com/schema.json",
+  "$schema": "https://mintlify.com/docs.json",
   "name": "AgentArea",
   "theme": "maple",
   "colors": {
-    "primary": "#3b82f6"
+    "primary": "#1e4bd0",
+    "light": "#60a5fa",
+    "dark": "#3574e8"
   },
-  "versions": [
-    "v1"
-  ],
+  "favicon": "/images/favicon.svg",
+  "logo": {
+    "light": "/images/logo-light.svg",
+    "dark": "/images/logo-dark.svg",
+    "href": "/"
+  },
+  "appearance": {
+    "default": "system"
+  },
+  "styling": {
+    "eyebrows": "breadcrumbs"
+  },
+  "metadata": {
+    "timestamp": true
+  },
   "feedback": {
     "thumbsRating": true,
     "suggestEdit": true
   },
   "search": {
     "prompt": "Search AgentArea documentation..."
+  },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "claude",
+      "chatgpt"
+    ]
   },
   "navigation": {
     "groups": [
@@ -22,6 +44,7 @@
         "icon": "rocket",
         "pages": [
           "index",
+          "quickstart",
           "how-it-works"
         ]
       },
@@ -67,6 +90,7 @@
             "group": "Integrations",
             "pages": [
               "concepts/integration/mcp",
+              "concepts/integration/triggers",
               "concepts/integration/bundles",
               "concepts/integration/registry-and-catalog"
             ]
@@ -88,6 +112,14 @@
         "icon": "compass",
         "pages": [
           {
+            "group": "Agents",
+            "pages": [
+              "guides/agents/create-and-configure",
+              "guides/agents/choose-a-model",
+              "guides/agents/attach-skills"
+            ]
+          },
+          {
             "group": "Tasks",
             "pages": [
               "guides/tasks/start-a-task",
@@ -96,6 +128,13 @@
               "guides/tasks/retrieve-artifacts",
               "guides/tasks/debug-a-failed-task",
               "guides/tasks/cancel-and-retry"
+            ]
+          },
+          {
+            "group": "Triggers",
+            "pages": [
+              "guides/triggers/schedule-an-agent",
+              "guides/triggers/trigger-from-a-webhook"
             ]
           },
           {
@@ -139,6 +178,7 @@
           "self-host/docker-compose",
           "self-host/kubernetes",
           "self-host/mcp-data-plane",
+          "self-host/serverless-mcp",
           "self-host/networking",
           "self-host/secrets-backends",
           "self-host/database-and-migrations",
@@ -159,8 +199,15 @@
         ]
       },
       {
-        "group": "API Endpoints",
-        "icon": "server",
+        "group": "API reference",
+        "icon": "code",
+        "pages": [
+          "api-reference/introduction"
+        ]
+      },
+      {
+        "group": "API endpoints",
+        "icon": "code",
         "openapi": "api-reference/openapi.json"
       },
       {
@@ -174,36 +221,28 @@
       }
     ]
   },
-  "footerSocials": {
-    "github": "https://github.com/agentarea/agentarea",
-    "discord": "https://discord.gg/5tduPwheYQ",
-    "twitter": "https://twitter.com/agentarea_hq"
+  "navbar": {
+    "links": [
+      {
+        "label": "Support",
+        "href": "https://github.com/agentarea/agentarea/discussions"
+      },
+      {
+        "type": "github",
+        "href": "https://github.com/agentarea/agentarea"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Get started",
+      "href": "/quickstart"
+    }
   },
-  "anchors": [
-    {
-      "name": "API Reference",
-      "icon": "code",
-      "url": "/api-reference"
-    },
-    {
-      "name": "GitHub",
-      "icon": "github",
-      "url": "https://github.com/agentarea/agentarea"
-    },
-    {
-      "name": "Discord",
-      "icon": "discord",
-      "url": "https://discord.gg/5tduPwheYQ"
+  "footer": {
+    "socials": {
+      "github": "https://github.com/agentarea/agentarea",
+      "discord": "https://discord.gg/5tduPwheYQ",
+      "x": "https://twitter.com/agentarea_hq"
     }
-  ],
-  "topbarLinks": [
-    {
-      "name": "Support",
-      "url": "https://github.com/agentarea/agentarea/discussions"
-    }
-  ],
-  "topbarCtaButton": {
-    "name": "Get Started",
-    "url": "https://github.com/agentarea/agentarea"
   }
 }

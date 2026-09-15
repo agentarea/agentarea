@@ -1,7 +1,7 @@
 ---
 title: Artifacts
 type: concept
-summary: How files an agent produces become durable — content-addressed objects, an immutable manifest per generation, and a compare-and-swap pointer — and how you get them back.
+description: "How files an agent produces become durable — content-addressed objects, an immutable manifest per generation."
 prerequisites:
   - /concepts/execution/tasks
 related:
@@ -10,8 +10,6 @@ related:
   - /concepts/sandbox/the-file-model
 last_updated: 2026-07-29
 ---
-
-# Artifacts
 
 An artifact is a file the task produced that outlives the sandbox that produced
 it. Artifacts live in S3-compatible object storage, addressed by the SHA-256 of
@@ -123,7 +121,7 @@ repository:
 
 ### How artifacts get retrieved
 
-```
+```http
 GET /v1/agents/{agent_id}/tasks/{task_id}/artifacts
 GET /v1/agents/{agent_id}/tasks/{task_id}/artifacts/files/{artifact_path}
 ```
@@ -199,6 +197,11 @@ binding makes the object store itself the verifier.
 
 ## Related
 
-- [Tasks](/concepts/execution/tasks) — the completion gate that validates these.
-- [Events](/concepts/execution/events) — `artifact.created` and
-  `artifact.updated` parts.
+<Columns cols={2}>
+  <Card title="Tasks" icon="diagram-project" href="/concepts/execution/tasks">
+    The completion gate that validates these
+  </Card>
+  <Card title="Events" icon="diagram-project" href="/concepts/execution/events">
+    `artifact.created` and `artifact.updated` parts
+  </Card>
+</Columns>

@@ -1,7 +1,7 @@
 ---
 title: Pass secrets to an MCP server
 type: guide
-summary: Declare which inputs are credentials with env_schema, supply their values on the instance, and confirm they were moved into the secret manager and masked.
+description: "Declare which inputs are credentials with env_schema, supply their values on the instance, and confirm they were moved into the secret manager and masked."
 prerequisites:
   - /guides/mcp/add-a-hosted-server
 related:
@@ -10,8 +10,6 @@ related:
   - /concepts/integration/mcp
 last_updated: 2026-07-29
 ---
-
-# Pass secrets to an MCP server
 
 Do this when an MCP server needs an API key, token, or password — as an
 environment variable for a managed workload, or as an HTTP header for a remote
@@ -24,9 +22,11 @@ are moved into the secret manager on write and masked on every read.
 
 ## Prerequisites
 
+<Info>
 - An API key for the workspace.
 - The names the server expects, and whether each is a credential or plain
   configuration.
+</Info>
 
 ## How sensitivity is decided
 
@@ -42,86 +42,88 @@ explicitly if you want some values to stay readable.
 
 ## Steps
 
-### 1. Declare the schema on the spec
+<Steps titleSize="h3">
+  <Step title="Declare the schema on the spec">
+    ```bash
+    curl -s -X POST "$AGENTAREA_URL/v1/mcp-servers/" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "GitHub",
+        "description": "GitHub tools.",
+        "remote_url": "https://api.githubcopilot.com/mcp/",
+        "env_schema": [
+          {"name": "Authorization", "description": "Bearer <PAT>", "isSecret": true},
+          {"name": "X-Org", "description": "Organisation slug", "isSecret": false}
+        ]
+      }'
+    ```
+  </Step>
 
-```bash
-curl -s -X POST "$AGENTAREA_URL/v1/mcp-servers/" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "GitHub",
-    "description": "GitHub tools.",
-    "remote_url": "https://api.githubcopilot.com/mcp/",
-    "env_schema": [
-      {"name": "Authorization", "description": "Bearer <PAT>", "isSecret": true},
-      {"name": "X-Org", "description": "Organisation slug", "isSecret": false}
-    ]
-  }'
-```
+  <Step title="Supply the values on the instance">
+    For a remote server, credentials go in `headers`:
 
-### 2. Supply the values on the instance
+    ```bash
+    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{
+        \"name\": \"GitHub\",
+        \"server_spec_id\": \"$SPEC_ID\",
+        \"json_spec\": {
+          \"type\": \"url\",
+          \"endpoint_url\": \"https://api.githubcopilot.com/mcp/\",
+          \"headers\": {\"Authorization\": \"Bearer ghp_...\", \"X-Org\": \"acme\"}
+        }
+      }"
+    ```
 
-For a remote server, credentials go in `headers`:
+    For a managed workload they go in `environment`:
 
-```bash
-curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"name\": \"GitHub\",
-    \"server_spec_id\": \"$SPEC_ID\",
-    \"json_spec\": {
-      \"type\": \"url\",
-      \"endpoint_url\": \"https://api.githubcopilot.com/mcp/\",
-      \"headers\": {\"Authorization\": \"Bearer ghp_...\", \"X-Org\": \"acme\"}
-    }
-  }"
-```
+    ```bash
+    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{
+        \"name\": \"Postgres\",
+        \"server_spec_id\": \"$SPEC_ID\",
+        \"json_spec\": {
+          \"type\": \"docker\",
+          \"image\": \"mcp/postgres:latest\",
+          \"environment\": {\"DATABASE_URL\": \"postgres://user:pw@host/db\"}
+        }
+      }"
+    ```
 
-For a managed workload they go in `environment`:
+    On write, each value whose name is marked secret is removed from `json_spec`,
+    stored in the secret manager under a key derived from the instance id and the
+    variable name, and its name appended to `json_spec.env_vars`. That list is the
+    record of which names are secret-backed.
+  </Step>
 
-```bash
-curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"name\": \"Postgres\",
-    \"server_spec_id\": \"$SPEC_ID\",
-    \"json_spec\": {
-      \"type\": \"docker\",
-      \"image\": \"mcp/postgres:latest\",
-      \"environment\": {\"DATABASE_URL\": \"postgres://user:pw@host/db\"}
-    }
-  }"
-```
+  <Step title="Rotate a credential">
+    Send the new value the same way with `PATCH`:
 
-On write, each value whose name is marked secret is removed from `json_spec`,
-stored in the secret manager under a key derived from the instance id and the
-variable name, and its name appended to `json_spec.env_vars`. That list is the
-record of which names are secret-backed.
+    ```bash
+    curl -s -X PATCH "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"json_spec": {"type": "url", "endpoint_url": "https://api.githubcopilot.com/mcp/", "headers": {"Authorization": "Bearer ghp_NEW"}}}'
+    ```
 
-### 3. Rotate a credential
+    Then re-verify, because the stored tool list was discovered with the old
+    credential:
 
-Send the new value the same way with `PATCH`:
+    ```bash
+    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID/verify" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '.verification.status'
+    ```
 
-```bash
-curl -s -X PATCH "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"json_spec": {"type": "url", "endpoint_url": "https://api.githubcopilot.com/mcp/", "headers": {"Authorization": "Bearer ghp_NEW"}}}'
-```
-
-Then re-verify, because the stored tool list was discovered with the old
-credential:
-
-```bash
-curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID/verify" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '.verification.status'
-```
-
-Do not send back the masked placeholder. A `PATCH` carrying `******` as a value
-is a no-op for that field by design, so an edit-then-save round trip in a UI
-cannot overwrite a real secret with asterisks.
+    Do not send back the masked placeholder. A `PATCH` carrying `******` as a value
+    is a no-op for that field by design, so an edit-then-save round trip in a UI
+    cannot overwrite a real secret with asterisks.
+  </Step>
+</Steps>
 
 ## Verify
 
@@ -168,33 +170,48 @@ from this list has no stored value.
 
 ## Troubleshooting
 
-**The credential is readable in `json_spec`.** Its name is not marked
-`isSecret: true` in the spec's `env_schema`, so it was treated as plain
-configuration. Update the spec, then re-send the value on the instance — fixing
-the schema alone does not move an already-stored plaintext value.
-
-**Every value came back masked when you only wanted one secret.** The instance
-was created without an explicit spec, so a schema was derived with everything
-marked secret. Create the spec with an explicit `env_schema` and point a new
-instance at it.
-
-**Verification fails with 401 right after a rotation.** The new value was
-supplied under a name the server does not expect, or the placeholder was sent
-instead of a real value. Confirm the name appears in
-`GET /v1/mcp-server-instances/{instance_id}/environment`, then re-verify.
-
-**A managed container starts and immediately dies.** A required environment
-variable is missing. Because secret values are stripped from `json_spec`, an
-inspection of the instance cannot tell you whether a value exists — use the
-`/environment` endpoint, which lists the names that do.
-
-**Tools still work after you revoked the credential upstream.** The tool list is
-a snapshot from the last successful verification and nothing re-verifies a
-healthy instance on a schedule. Revoking at the provider does not update
-AgentArea's view until the next verification or a live call fails.
+<AccordionGroup>
+  <Accordion title="The credential is readable in `json_spec`">
+    Its name is not marked `isSecret: true` in the spec's `env_schema` , so it
+    was treated as plain configuration. Update the spec, then re-send the value
+    on the instance — fixing the schema alone does not move an already-stored
+    plaintext value.
+  </Accordion>
+  <Accordion title="Every value came back masked when you only wanted one secret">
+    The instance was created without an explicit spec, so a schema was derived
+    with everything marked secret. Create the spec with an explicit `env_schema`
+    and point a new instance at it.
+  </Accordion>
+  <Accordion title="Verification fails with 401 right after a rotation">
+    The new value was supplied under a name the server does not expect, or the
+    placeholder was sent instead of a real value. Confirm the name appears in
+    `GET /v1/mcp-server-instances/{instance_id}/environment` , then re-verify.
+  </Accordion>
+  <Accordion title="A managed container starts and immediately dies">
+    A required environment variable is missing. Because secret values are
+    stripped from `json_spec` , an inspection of the instance cannot tell you
+    whether a value exists — use the `/environment` endpoint, which lists the
+    names that do.
+  </Accordion>
+  <Accordion title="Tools still work after you revoked the credential upstream">
+    The tool list is a snapshot from the last successful verification and
+    nothing re-verifies a healthy instance on a schedule. Revoking at the
+    provider does not update AgentArea's view until the next verification or a
+    live call fails.
+  </Accordion>
+</AccordionGroup>
 
 ## Related
 
-- [Add a hosted MCP server](/guides/mcp/add-a-hosted-server)
-- [Authenticate an MCP server with OAuth](/guides/mcp/authenticate-with-oauth)
-- [MCP](/concepts/integration/mcp)
+<Columns cols={2}>
+  <Card title="Add a hosted MCP server" icon="plug" href="/guides/mcp/add-a-hosted-server">
+    Run an MCP server as a managed workload
+  </Card>
+  <Card title="Authenticate an MCP server with OAuth" icon="plug" href="/guides/mcp/authenticate-with-oauth">
+    Connect a remote MCP instance to a provider that requires OAuth
+  </Card>
+  <Card title="MCP" icon="plug" href="/concepts/integration/mcp">
+    What the Model Context Protocol gives an agent, and how AgentArea hosts MCP
+    servers
+  </Card>
+</Columns>

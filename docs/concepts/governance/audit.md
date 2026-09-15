@@ -1,7 +1,7 @@
 ---
 title: Audit
 type: concept
-summary: The two separate trails AgentArea keeps — the append-only audit log for control-plane changes and the task event stream for what a run did — and what neither of them records.
+description: "The two separate trails AgentArea keeps — the append-only audit log for control-plane changes and the task event stream for what a run did — and what."
 prerequisites: []
 related:
   - /concepts/governance/policy-engine
@@ -9,8 +9,6 @@ related:
   - /concepts/governance/approvals
 last_updated: 2026-07-29
 ---
-
-# Audit
 
 AgentArea keeps two trails, and they answer different questions. The **audit log**
 records control-plane changes: who created an agent, who edited a policy rule, who
@@ -146,9 +144,14 @@ are joined by workspace and timestamp, not by a shared identifier.
 
 ## Related
 
-- [The policy engine](/concepts/governance/policy-engine) — the policy mutations
-  that do produce audit events.
-- [Approvals](/concepts/governance/approvals) — where approval outcomes are
-  recorded.
-- [The AgentArea model](/concepts/governance/the-agentarea-model) — the grant
-  changes that are not.
+<Columns cols={2}>
+  <Card title="The policy engine" icon="scale-balanced" href="/concepts/governance/policy-engine">
+    The policy mutations that do produce audit events
+  </Card>
+  <Card title="Approvals" icon="scale-balanced" href="/concepts/governance/approvals">
+    Where approval outcomes are recorded
+  </Card>
+  <Card title="The AgentArea model" icon="scale-balanced" href="/concepts/governance/the-agentarea-model">
+    The grant changes that are not
+  </Card>
+</Columns>

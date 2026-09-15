@@ -1,7 +1,7 @@
 ---
 title: Agent-to-agent communication
 type: concept
-summary: One agent invoking another is delegation; A2A is the transport binding used when the target is outside your platform, and this page separates the two.
+description: "One agent invoking another is delegation; A2A is the transport binding used when the target is outside your platform, and this page separates the two."
 prerequisites:
   - /concepts/agents/what-is-an-agent
   - /concepts/execution/tasks
@@ -12,8 +12,6 @@ related:
   - /concepts/agents/skills
 last_updated: 2026-07-29
 ---
-
-# Agent-to-agent communication
 
 When one agent hands work to another, the concept is delegation. A2A — the
 Agent2Agent protocol — is one *transport binding* for delegation, used when the
@@ -95,7 +93,7 @@ same artifacts as a task started from the UI.
 
 The endpoint is a single JSON-RPC 2.0 route per agent:
 
-```
+```http
 POST /v1/agents/{agent_id}/a2a/rpc
 ```
 
@@ -282,10 +280,17 @@ mapping in one case and the task row in the other.
 
 ## Related
 
-- [Tasks](/concepts/execution/tasks) — the unit an A2A message becomes, and the
-  states it reports back.
-- [Events](/concepts/execution/events) — the stream A2A streaming maps from.
-- [What is an agent](/concepts/agents/what-is-an-agent) — where the `a2a_url`
-  setting lives on a tool config.
-- [Tool authorization](/concepts/governance/tool-authorization) — the gate a
-  `delegate_to_<agent>` call clears.
+<Columns cols={2}>
+  <Card title="Tasks" icon="diagram-project" href="/concepts/execution/tasks">
+    The unit an A2A message becomes, and the states it reports back
+  </Card>
+  <Card title="Events" icon="diagram-project" href="/concepts/execution/events">
+    The stream A2A streaming maps from
+  </Card>
+  <Card title="What is an agent" icon="robot" href="/concepts/agents/what-is-an-agent">
+    Where the `a2a_url` setting lives on a tool config
+  </Card>
+  <Card title="Tool authorization" icon="scale-balanced" href="/concepts/governance/tool-authorization">
+    The gate a `delegate_to_<agent>` call clears
+  </Card>
+</Columns>

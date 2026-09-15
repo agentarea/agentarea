@@ -1,7 +1,7 @@
 ---
 title: Stream task events
 type: guide
-summary: Consume a task's live event feed over SSE, or page its durable history, without losing events that fired before you attached.
+description: "Consume a task's live event feed over SSE, or page its durable history, without losing events that fired before you attached."
 prerequisites:
   - /concepts/execution/events
 related:
@@ -11,8 +11,6 @@ related:
 last_updated: 2026-07-29
 ---
 
-# Stream task events
-
 Do this when you want to render or follow a run as it happens. Do not build a
 polling loop against `GET /v1/agents/{agent_id}/tasks/{task_id}` for this — the
 stream already replays everything from the beginning, so attaching late loses
@@ -20,10 +18,12 @@ nothing.
 
 ## Prerequisites
 
+<Info>
 - A task id and its agent id. See [Start a task](/guides/tasks/start-a-task).
 - An API key.
 - A client that can hold an open HTTP response. `curl -N` works; `curl` without
   `-N` buffers and looks hung.
+</Info>
 
 ## Choose an endpoint
 
@@ -35,85 +35,87 @@ nothing.
 
 ## Steps
 
-### Stream live
+<Steps titleSize="h3">
+  <Step title="Stream live">
+    ```bash
+    curl -N "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events/stream" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Accept: text/event-stream"
+    ```
 
-```bash
-curl -N "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events/stream" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Accept: text/event-stream"
-```
+    Each frame is a standard SSE event. The SSE event name and the payload's
+    `event_type` are the same dotted string, so a consumer can key on either:
 
-Each frame is a standard SSE event. The SSE event name and the payload's
-`event_type` are the same dotted string, so a consumer can key on either:
+    ```text
+    event: connected
+    data: {"task_id": "3f2a...", "agent_id": "9b1d...", "execution_id": "task-3f2a...", "message": "Connected to task event stream", "timestamp": "2026-07-29T10:15:04.881233+00:00"}
 
-```
-event: connected
-data: {"task_id": "3f2a...", "agent_id": "9b1d...", "execution_id": "task-3f2a...", "message": "Connected to task event stream", "timestamp": "2026-07-29T10:15:04.881233+00:00"}
+    event: llm.call.started
+    data: {"event_type": "llm.call.started", "event_id": "0f7c...", "timestamp": "...", "data": {"task_id": "3f2a...", "execution_id": "task-3f2a...", "iteration": 1}}
 
-event: llm.call.started
-data: {"event_type": "llm.call.started", "event_id": "0f7c...", "timestamp": "...", "data": {"task_id": "3f2a...", "execution_id": "task-3f2a...", "iteration": 1}}
+    event: tool.call
+    data: {"event_type": "tool.call", "event_id": "1a2b...", "timestamp": "...", "data": {"tool_call_id": "call_abc", "tool_name": "bash", ...}}
 
-event: tool.call
-data: {"event_type": "tool.call", "event_id": "1a2b...", "timestamp": "...", "data": {"tool_call_id": "call_abc", "tool_name": "bash", ...}}
+    event: task.completed
+    data: {"event_type": "task.completed", "event_id": "9e8d...", "timestamp": "...", "data": {"success": true, "message": "...", "validation_state": "passed"}}
+    ```
 
-event: task.completed
-data: {"event_type": "task.completed", "event_id": "9e8d...", "timestamp": "...", "data": {"success": true, "message": "...", "validation_state": "passed"}}
-```
+    The feed replays the task's full durable history first, then tails live events,
+    de-duplicating by `event_id` across the hand-off. It closes after
+    `task.completed`, `task.failed`, or `task.cancelled`.
+  </Step>
 
-The feed replays the task's full durable history first, then tails live events,
-de-duplicating by `event_id` across the hand-off. It closes after
-`task.completed`, `task.failed`, or `task.cancelled`.
+  <Step title="Drop token-level chunks">
+    `llm.call.chunk` events are high volume — one per token. They are included by
+    default. Turn them off when you only need structural progress:
 
-### Drop token-level chunks
+    ```bash
+    curl -N "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events/stream?include_chunks=false" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN"
+    ```
+  </Step>
 
-`llm.call.chunk` events are high volume — one per token. They are included by
-default. Turn them off when you only need structural progress:
+  <Step title="Read history instead">
+    ```bash
+    curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events?page=1&page_size=50" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '{total, has_next, first: .events[0]}'
+    ```
 
-```bash
-curl -N "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events/stream?include_chunks=false" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN"
-```
+    ```json
+    {
+      "total": 42,
+      "has_next": false,
+      "first": {
+        "id": "0f7c...",
+        "task_id": "3f2a...",
+        "agent_id": "9b1d...",
+        "execution_id": "task-3f2a...",
+        "timestamp": "2026-07-29T10:15:04.912004+00:00",
+        "event_type": "task.started",
+        "message": "",
+        "metadata": {}
+      }
+    }
+    ```
 
-### Read history instead
+    Filter with `?event_type=tool.call`. Chunks never appear here — they are
+    stream-only and are not persisted.
+  </Step>
 
-```bash
-curl -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events?page=1&page_size=50" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq '{total, has_next, first: .events[0]}'
-```
+  <Step title="Write the consumer correctly">
+    Two rules keep a consumer from breaking when the vocabulary grows:
 
-```json
-{
-  "total": 42,
-  "has_next": false,
-  "first": {
-    "id": "0f7c...",
-    "task_id": "3f2a...",
-    "agent_id": "9b1d...",
-    "execution_id": "task-3f2a...",
-    "timestamp": "2026-07-29T10:15:04.912004+00:00",
-    "event_type": "task.started",
-    "message": "",
-    "metadata": {}
-  }
-}
-```
+    1. **Do not switch on every event name.** Pass unknown types through. New event
+       types are added without a version bump.
+    2. **Only three types are terminal**: `task.completed`, `task.failed`,
+       `task.cancelled`. Stop on those and nothing else.
 
-Filter with `?event_type=tool.call`. Chunks never appear here — they are
-stream-only and are not persisted.
-
-### Write the consumer correctly
-
-Two rules keep a consumer from breaking when the vocabulary grows:
-
-1. **Do not switch on every event name.** Pass unknown types through. New event
-   types are added without a version bump.
-2. **Only three types are terminal**: `task.completed`, `task.failed`,
-   `task.cancelled`. Stop on those and nothing else.
-
-To collapse a model call or a tool call into one UI element rather than four
-lines, group by part id: `tool_call_id` for tool events,
-`{execution_id}:{iteration}` for LLM events. A later event with the same part id
-replaces the earlier one.
+    To collapse a model call or a tool call into one UI element rather than four
+    lines, group by part id: `tool_call_id` for tool events,
+    `{execution_id}:{iteration}` for LLM events. A later event with the same part id
+    replaces the earlier one.
+  </Step>
+</Steps>
 
 ## Verify
 
@@ -125,7 +127,7 @@ curl -N -s "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/$TASK_ID/events/stream?incl
   -H "Authorization: Bearer $AGENTAREA_TOKEN" | grep -m1 -E '^event: task\.(completed|failed|cancelled)'
 ```
 
-```
+```text
 event: task.completed
 ```
 
@@ -135,33 +137,47 @@ below.
 
 ## Troubleshooting
 
-**The connection opens and nothing appears.** Without `-N`, curl buffers the
-response. Add `-N`. If frames still do not arrive, confirm the task actually
-dispatched: a task with `execution_id: null` never started a workflow and will
-never emit events.
-
-**The stream closes after about 30 minutes with no terminal event.** The feed
-has a 30-minute wall-clock limit so a stuck task does not tail forever. This is
-the feed giving up, not the task ending. Re-attach, or check
-`GET .../tasks/{task_id}` for the current status.
-
-**A completed task streams its history and then hangs briefly before closing.**
-Expected. The reader replays from the database, then attaches to the live tail
-and waits for a terminal event it may have already replayed. It closes on the
-replayed terminal event.
-
-**Events are missing from history but were seen live.** The event was published
-to the live stream but its database write failed; that failure is recorded and
-does not retry. The live tail is also best-effort in the other direction — a
-failed publish leaves the event in history only. History is the durable copy;
-prefer `GET .../events` when completeness matters.
-
-**A `blocked` task never emits `task.blocked`.** There is no such event type. A
-blocked task emits `task.failed` on the feed while its row reads `blocked`. Read
-`failure_reason` from the task to tell them apart.
+<AccordionGroup>
+  <Accordion title="The connection opens and nothing appears">
+    Without `-N` , curl buffers the response. Add `-N` . If frames still do not
+    arrive, confirm the task actually dispatched: a task with
+    `execution_id: null` never started a workflow and will never emit events.
+  </Accordion>
+  <Accordion title="The stream closes after about 30 minutes with no terminal event">
+    The feed has a 30-minute wall-clock limit so a stuck task does not tail
+    forever. This is the feed giving up, not the task ending. Re-attach, or
+    check `GET .../tasks/{task_id}` for the current status.
+  </Accordion>
+  <Accordion title="A completed task streams its history and then hangs briefly before closing">
+    Expected. The reader replays from the database, then attaches to the live
+    tail and waits for a terminal event it may have already replayed. It closes
+    on the replayed terminal event.
+  </Accordion>
+  <Accordion title="Events are missing from history but were seen live">
+    The event was published to the live stream but its database write failed;
+    that failure is recorded and does not retry. The live tail is also
+    best-effort in the other direction — a failed publish leaves the event in
+    history only. History is the durable copy; prefer `GET .../events` when
+    completeness matters.
+  </Accordion>
+  <Accordion title="A `blocked` task never emits `task.blocked`">
+    There is no such event type. A blocked task emits `task.failed` on the feed
+    while its row reads `blocked` . Read `failure_reason` from the task to tell
+    them apart.
+  </Accordion>
+</AccordionGroup>
 
 ## Related
 
-- [Events](/concepts/execution/events)
-- [Debug a failed task](/guides/tasks/debug-a-failed-task)
-- [Start a task](/guides/tasks/start-a-task)
+<Columns cols={2}>
+  <Card title="Events" icon="diagram-project" href="/concepts/execution/events">
+    The one dotted event vocabulary AgentArea emits, the two delivery paths
+    behind it
+  </Card>
+  <Card title="Debug a failed task" icon="list-check" href="/guides/tasks/debug-a-failed-task">
+    Read the failure code, narrow it with the task rollup
+  </Card>
+  <Card title="Start a task" icon="list-check" href="/guides/tasks/start-a-task">
+    Launch an agent run over REST, the CLI, or A2A
+  </Card>
+</Columns>

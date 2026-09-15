@@ -1,7 +1,7 @@
 ---
 title: Review the audit trail
 type: guide
-summary: Query the audit log for control-plane changes, page through results, read field-level diffs, and know which trail to use when the audit log has no answer.
+description: "Query the audit log for control-plane changes, page through results, read field-level diffs, and know which trail to use when the audit log has no answer."
 prerequisites: []
 related:
   - /concepts/governance/audit
@@ -9,8 +9,6 @@ related:
   - /guides/governance/require-human-approval
 last_updated: 2026-07-29
 ---
-
-# Review the audit trail
 
 Do this to answer "who changed this, when, and from where" about configuration:
 agents, skills, MCP servers, triggers, tasks and policy rules. The audit log
@@ -23,92 +21,96 @@ audit log — the two are separate stores. If your question is about a run, skip
 
 ## Prerequisites
 
+<Info>
 - An authenticated session in the workspace you want to inspect. Reads are
   workspace-scoped, and any authenticated member can read their workspace's full
   audit log.
 - Read [audit](/concepts/governance/audit) for what each trail covers.
 
 Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
+</Info>
 
 ## Steps
 
-### 1. Read the most recent events
+<Steps titleSize="h3">
+  <Step title="Read the most recent events">
+    ```bash
+    curl -s -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/" \
+      | python3 -c '
+    import json,sys
+    d = json.load(sys.stdin)
+    for e in d["events"]:
+        print(f"{e[\"created_at\"]}  {e[\"action\"]:28} {e[\"resource_type\"]}/{e[\"resource_id\"]}  by {e[\"actor_id\"]}")
+    print("next_cursor:", d["next_cursor"])'
+    ```
 
-```bash
-curl -s -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/" \
-  | python3 -c '
-import json,sys
-d = json.load(sys.stdin)
-for e in d["events"]:
-    print(f"{e[\"created_at\"]}  {e[\"action\"]:28} {e[\"resource_type\"]}/{e[\"resource_id\"]}  by {e[\"actor_id\"]}")
-print("next_cursor:", d["next_cursor"])'
-```
+    Events come back newest first. The default page is 50 and the maximum is 100.
+  </Step>
 
-Events come back newest first. The default page is 50 and the maximum is 100.
+  <Step title="Narrow with filters">
+    All filters combine, and all are optional.
 
-### 2. Narrow with filters
+    | Query parameter | Example | Use when |
+    |---|---|---|
+    | `action` | `agent.delete` | you know exactly what happened |
+    | `actor_id` | a user id | you are investigating one person's activity |
+    | `resource_type` | `agent`, `skill`, `mcp_server`, `mcp_instance`, `trigger`, `task`, `governance_policy` | you want everything that happened to one kind of object |
+    | `resource_id` | a UUID | you want the history of one specific object |
+    | `since` / `until` | ISO 8601 | you are bounding an incident window |
+    | `limit` | 1 to 100 | you are paging |
 
-All filters combine, and all are optional.
+    ```bash
+    curl -s -G -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/" \
+      --data-urlencode "resource_type=agent" \
+      --data-urlencode "resource_id=$AGENT_ID" \
+      --data-urlencode "since=2026-07-01T00:00:00Z" \
+      | python3 -m json.tool
+    ```
 
-| Query parameter | Example | Use when |
-|---|---|---|
-| `action` | `agent.delete` | you know exactly what happened |
-| `actor_id` | a user id | you are investigating one person's activity |
-| `resource_type` | `agent`, `skill`, `mcp_server`, `mcp_instance`, `trigger`, `task`, `governance_policy` | you want everything that happened to one kind of object |
-| `resource_id` | a UUID | you want the history of one specific object |
-| `since` / `until` | ISO 8601 | you are bounding an incident window |
-| `limit` | 1 to 100 | you are paging |
+    The action names are hierarchical and follow `<resource>.<verb>`. The set written
+    today is agent, skill, mcp_server, mcp_instance and trigger create/update/delete,
+    `task.create`, and `governance_policy.create`, `.update`, `.set_enabled` and
+    `.delete`.
+  </Step>
 
-```bash
-curl -s -G -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/" \
-  --data-urlencode "resource_type=agent" \
-  --data-urlencode "resource_id=$AGENT_ID" \
-  --data-urlencode "since=2026-07-01T00:00:00Z" \
-  | python3 -m json.tool
-```
+  <Step title="Page through a long window">
+    Pass the previous response's `next_cursor` as `cursor`:
 
-The action names are hierarchical and follow `<resource>.<verb>`. The set written
-today is agent, skill, mcp_server, mcp_instance and trigger create/update/delete,
-`task.create`, and `governance_policy.create`, `.update`, `.set_enabled` and
-`.delete`.
+    ```bash
+    CURSOR=$(curl -s -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/?limit=100" \
+             | python3 -c 'import json,sys; print(json.load(sys.stdin)["next_cursor"] or "")')
 
-### 3. Page through a long window
+    curl -s -H "Authorization: Bearer $TOKEN" \
+      "$API/v1/audit-logs/?limit=100&cursor=$CURSOR" | python3 -m json.tool
+    ```
 
-Pass the previous response's `next_cursor` as `cursor`:
+    The cursor is the id of the last event on the previous page; the next page
+    returns events strictly older than it.
+  </Step>
 
-```bash
-CURSOR=$(curl -s -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/?limit=100" \
-         | python3 -c 'import json,sys; print(json.load(sys.stdin)["next_cursor"] or "")')
+  <Step title="Read what actually changed">
+    Update and delete events carry a `changes` array of `{field, before, after}`:
 
-curl -s -H "Authorization: Bearer $TOKEN" \
-  "$API/v1/audit-logs/?limit=100&cursor=$CURSOR" | python3 -m json.tool
-```
+    ```bash
+    curl -s -G -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/" \
+      --data-urlencode "action=agent.update" \
+      | python3 -c '
+    import json,sys
+    for e in json.load(sys.stdin)["events"]:
+        print(e["created_at"], e["resource_id"], "from", e["source_ip"], "req", e["request_id"])
+        for c in e["changes"] or []:
+            print(f"   {c[\"field\"]}: {c[\"before\"]!r} -> {c[\"after\"]!r}")'
+    ```
 
-The cursor is the id of the last event on the previous page; the next page
-returns events strictly older than it.
+    `created_at` and `updated_at` are excluded from diffs. Create events have no
+    diff, because there is no before-state.
 
-### 4. Read what actually changed
-
-Update and delete events carry a `changes` array of `{field, before, after}`:
-
-```bash
-curl -s -G -H "Authorization: Bearer $TOKEN" "$API/v1/audit-logs/" \
-  --data-urlencode "action=agent.update" \
-  | python3 -c '
-import json,sys
-for e in json.load(sys.stdin)["events"]:
-    print(e["created_at"], e["resource_id"], "from", e["source_ip"], "req", e["request_id"])
-    for c in e["changes"] or []:
-        print(f"   {c[\"field\"]}: {c[\"before\"]!r} -> {c[\"after\"]!r}")'
-```
-
-`created_at` and `updated_at` are excluded from diffs. Create events have no
-diff, because there is no before-state.
-
-`source_ip` comes from `X-Forwarded-For` when present and the direct client
-otherwise, so it is only as trustworthy as your proxy configuration.
-`request_id` is the inbound `X-Request-ID` header, or a generated UUID when the
-caller did not send one — send your own to correlate with upstream logs.
+    `source_ip` comes from `X-Forwarded-For` when present and the direct client
+    otherwise, so it is only as trustworthy as your proxy configuration.
+    `request_id` is the inbound `X-Request-ID` header, or a generated UUID when the
+    caller did not send one — send your own to correlate with upstream logs.
+  </Step>
+</Steps>
 
 ## Verify
 
@@ -158,40 +160,53 @@ is recorded in the graph itself — read it with
 
 ## Troubleshooting
 
-**An action you expected is missing.** Check it is one of the covered actions
-above. Beyond coverage, two mechanics drop events silently: the decorator skips
-auditing when the service has no repository factory, and it catches and logs
-failures from the audit write so the mutation still succeeds. A warning in the
-API log reading `Failed to record audit event for <action>` is the signal.
-
-**`actor_type` says `user` for an API-key call.** The column exists to
-distinguish `user`, `service`, `system` and `api_key`, but no call site sets it,
-so everything is recorded as `user` with the resolved user id. You cannot tell
-interactive from programmatic activity from this field. Use `user_agent` and
-`source_ip` as a weaker proxy.
-
-**`limit=500` returned 100 rows.** The parameter is validated to 1-100 and the
-repository clamps it again. Page with `cursor`.
-
-**Events stop at a certain date.** There is no retention or archival job in core,
-so this is not expiry — check whether the workspace filter is what you expect.
-Reads are scoped to the caller's current workspace, and switching workspaces
-changes the result set entirely.
-
-**You need the log somewhere else.** Core has no export endpoint. Enterprise
-deployments can register an `audit_sink` extension that receives every recorded
-event for SIEM or object-storage delivery; a forwarding failure is logged and
-does not fail the write.
-
-**You are relying on immutability.** The repository only inserts and reads, and
-the table is documented as append-only, but nothing in the application enforces
-that. Grant only INSERT and SELECT on `audit_events` at the database level if the
-guarantee matters.
+<AccordionGroup>
+  <Accordion title="An action you expected is missing">
+    Check it is one of the covered actions above. Beyond coverage, two mechanics
+    drop events silently: the decorator skips auditing when the service has no
+    repository factory, and it catches and logs failures from the audit write so
+    the mutation still succeeds. A warning in the API log reading
+    `Failed to record audit event for <action>` is the signal.
+  </Accordion>
+  <Accordion title="`actor_type` says `user` for an API-key call">
+    The column exists to distinguish `user` , `service` , `system` and `api_key`
+    , but no call site sets it, so everything is recorded as `user` with the
+    resolved user id. You cannot tell interactive from programmatic activity
+    from this field. Use `user_agent` and `source_ip` as a weaker proxy.
+  </Accordion>
+  <Accordion title="`limit=500` returned 100 rows">
+    The parameter is validated to 1-100 and the repository clamps it again. Page
+    with `cursor` .
+  </Accordion>
+  <Accordion title="Events stop at a certain date">
+    There is no retention or archival job in core, so this is not expiry — check
+    whether the workspace filter is what you expect. Reads are scoped to the
+    caller's current workspace, and switching workspaces changes the result set
+    entirely.
+  </Accordion>
+  <Accordion title="You need the log somewhere else">
+    Core has no export endpoint. Enterprise deployments can register an
+    `audit_sink` extension that receives every recorded event for SIEM or
+    object-storage delivery; a forwarding failure is logged and does not fail
+    the write.
+  </Accordion>
+  <Accordion title="You are relying on immutability">
+    The repository only inserts and reads, and the table is documented as
+    append-only, but nothing in the application enforces that. Grant only INSERT
+    and SELECT on `audit_events` at the database level if the guarantee matters.
+  </Accordion>
+</AccordionGroup>
 
 ## Related
 
-- [Audit](/concepts/governance/audit) — the two trails and why they are separate.
-- [Grant access to a resource](/guides/governance/grant-resource-access) — grant
-  changes, which this log does not record.
-- [Require human approval](/guides/governance/require-human-approval) — approval
-  outcomes, which live in the event stream.
+<Columns cols={2}>
+  <Card title="Audit" icon="scale-balanced" href="/concepts/governance/audit">
+    The two trails and why they are separate
+  </Card>
+  <Card title="Grant access to a resource" icon="scale-balanced" href="/guides/governance/grant-resource-access">
+    Grant changes, which this log does not record
+  </Card>
+  <Card title="Require human approval" icon="scale-balanced" href="/guides/governance/require-human-approval">
+    Approval outcomes, which live in the event stream
+  </Card>
+</Columns>

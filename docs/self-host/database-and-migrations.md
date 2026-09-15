@@ -1,7 +1,7 @@
 ---
 title: Run database migrations
 type: guide
-summary: Apply, inspect, and recover Alembic migrations for the AgentArea schema, on Kubernetes and on Docker Compose.
+description: "Apply, inspect, and recover Alembic migrations for the AgentArea schema, on Kubernetes and on Docker Compose."
 prerequisites:
   - /self-host/requirements
 related:
@@ -11,8 +11,6 @@ related:
   - /self-host/backup-and-recovery
 last_updated: 2026-07-29
 ---
-
-# Run database migrations
 
 AgentArea's schema is managed by Alembic and applied by the
 `agentarea-api migrate` command. Both deployment targets run it automatically
@@ -28,120 +26,124 @@ reason.
 
 ## Prerequisites
 
+<Info>
 - A reachable PostgreSQL instance with the `agentarea` database created
 - For local work: Python 3.12 or later and `uv`, from a clone of the repository
 - The same `DATABASE_URL` or `POSTGRES_*` values the platform uses
+</Info>
 
 ## Steps
 
-### 1. Understand what runs automatically
+<Steps titleSize="h3">
+  <Step title="Understand what runs automatically">
+    | Target | Runs as | Command |
+    |---|---|---|
+    | Kubernetes | the `<release>-db-migration` Job, gated on `jobs.dbMigration.enabled` | `agentarea-api migrate` |
+    | Docker Compose | the `app_migrations` service | `agentarea-api migrate` |
 
-| Target | Runs as | Command |
-|---|---|---|
-| Kubernetes | the `<release>-db-migration` Job, gated on `jobs.dbMigration.enabled` | `agentarea-api migrate` |
-| Docker Compose | the `app_migrations` service | `agentarea-api migrate` |
+    Both are ordered ahead of the API. Compose declares
+    `app_migrations: condition: service_completed_successfully` as a dependency of
+    `app`, so a failed migration keeps the API from starting rather than letting it
+    serve against a stale schema. On Kubernetes the Job has
+    `ttlSecondsAfterFinished: 300` and disappears five minutes after it succeeds.
 
-Both are ordered ahead of the API. Compose declares
-`app_migrations: condition: service_completed_successfully` as a dependency of
-`app`, so a failed migration keeps the API from starting rather than letting it
-serve against a stale schema. On Kubernetes the Job has
-`ttlSecondsAfterFinished: 300` and disappears five minutes after it succeeds.
+    `agentarea-api migrate` does more than `alembic upgrade head`:
 
-`agentarea-api migrate` does more than `alembic upgrade head`:
+    1. It opens a connection and runs `SELECT 1`, printing `Database connection successful`.
+    2. It reads the current Alembic revision.
+    3. If there is no revision **and** the `provider_specs` table exists, it treats the schema as already current and runs `alembic stamp head` instead of replaying migrations. This is the path for a database created by an older bootstrap.
+    4. If there is no revision and no `provider_specs` table, it runs `alembic upgrade head` from empty.
+    5. If there is a revision, it runs `alembic upgrade head` normally.
 
-1. It opens a connection and runs `SELECT 1`, printing `Database connection successful`.
-2. It reads the current Alembic revision.
-3. If there is no revision **and** the `provider_specs` table exists, it treats the schema as already current and runs `alembic stamp head` instead of replaying migrations. This is the path for a database created by an older bootstrap.
-4. If there is no revision and no `provider_specs` table, it runs `alembic upgrade head` from empty.
-5. If there is a revision, it runs `alembic upgrade head` normally.
+    On any exception it prints `Migration failed:` and exits 1.
+  </Step>
 
-On any exception it prints `Migration failed:` and exits 1.
+  <Step title="Apply migrations by hand">
+    When you need to run them outside the normal startup path — after restoring a
+    backup, or against an external database the Job cannot reach.
 
-### 2. Apply migrations by hand
+    On Kubernetes, run a one-off pod from the API image:
 
-When you need to run them outside the normal startup path — after restoring a
-backup, or against an external database the Job cannot reach.
+    ```bash
+    kubectl run agentarea-migrate --rm -it \
+      --namespace agentarea \
+      --image=agentarea/agentarea-api:latest \
+      --restart=Never \
+      --overrides='{"spec":{"containers":[{"name":"agentarea-migrate","image":"agentarea/agentarea-api:latest","workingDir":"/app/apps/api","command":["agentarea-api","migrate"],"envFrom":[{"configMapRef":{"name":"agentarea-env-databasejobs"}}],"env":[{"name":"POSTGRES_USER","valueFrom":{"secretKeyRef":{"name":"agentarea-postgresql-secret","key":"username"}}},{"name":"POSTGRES_PASSWORD","valueFrom":{"secretKeyRef":{"name":"agentarea-postgresql-secret","key":"password"}}}]}]}}'
+    ```
 
-On Kubernetes, run a one-off pod from the API image:
+    Or re-run the chart's own Job by reinstalling with only that Job enabled.
 
-```bash
-kubectl run agentarea-migrate --rm -it \
-  --namespace agentarea \
-  --image=agentarea/agentarea-api:latest \
-  --restart=Never \
-  --overrides='{"spec":{"containers":[{"name":"agentarea-migrate","image":"agentarea/agentarea-api:latest","workingDir":"/app/apps/api","command":["agentarea-api","migrate"],"envFrom":[{"configMapRef":{"name":"agentarea-env-databasejobs"}}],"env":[{"name":"POSTGRES_USER","valueFrom":{"secretKeyRef":{"name":"agentarea-postgresql-secret","key":"username"}}},{"name":"POSTGRES_PASSWORD","valueFrom":{"secretKeyRef":{"name":"agentarea-postgresql-secret","key":"password"}}}]}]}}'
-```
+    Under Compose:
 
-Or re-run the chart's own Job by reinstalling with only that Job enabled.
+    ```bash
+    docker compose -f docker-compose.yaml run --rm app_migrations
+    ```
 
-Under Compose:
+    From a clone, against a database you can reach directly:
 
-```bash
-docker compose -f docker-compose.yaml run --rm app_migrations
-```
+    ```bash
+    cd agentarea-platform/apps/api
+    uv run alembic upgrade head
+    ```
+  </Step>
 
-From a clone, against a database you can reach directly:
+  <Step title="Inspect migration state">
+    From `agentarea-platform/apps/api`:
 
-```bash
-cd agentarea-platform/apps/api
-uv run alembic upgrade head
-```
+    ```bash
+    uv run alembic current      # the revision the database is on
+    uv run alembic heads        # the revision the code expects
+    uv run alembic history      # the full chain
+    uv run alembic branches     # non-empty means a merge is needed
+    ```
 
-### 3. Inspect migration state
+    The platform also exposes this as a command:
 
-From `agentarea-platform/apps/api`:
+    ```bash
+    agentarea-api check-migrations
+    ```
 
-```bash
-uv run alembic current      # the revision the database is on
-uv run alembic heads        # the revision the code expects
-uv run alembic history      # the full chain
-uv run alembic branches     # non-empty means a merge is needed
-```
+    Inside a running container:
 
-The platform also exposes this as a command:
+    ```bash
+    docker compose -f docker-compose.yaml exec -w /app/apps/api app alembic current
+    ```
+  </Step>
 
-```bash
-agentarea-api check-migrations
-```
+  <Step title="Create a migration">
+    Only when changing the schema in code.
 
-Inside a running container:
+    ```bash
+    cd agentarea-platform/apps/api
+    uv run alembic revision --autogenerate -m "add widget table"
+    ```
 
-```bash
-docker compose -f docker-compose.yaml exec -w /app/apps/api app alembic current
-```
+    `alembic.ini` sets
+    `file_template = %%(year)d%%(month).2d%%(day).2d_%%(hour).2d%%(minute).2d_%%(slug)s`,
+    so new files are named by ISO-style timestamp — `20260729_1432_add_widget_table.py`.
+    Do not rename them into any other scheme.
 
-### 4. Create a migration
+    Always read the generated file before committing. Autogenerate does not detect
+    every change, and it will happily drop a column it does not recognise.
+  </Step>
 
-Only when changing the schema in code.
+  <Step title="Know which databases exist">
+    One PostgreSQL instance holds several logical databases. Alembic owns only the
+    first.
 
-```bash
-cd agentarea-platform/apps/api
-uv run alembic revision --autogenerate -m "add widget table"
-```
+    | Database | Owned by | Migrated by |
+    |---|---|---|
+    | `agentarea` | the platform | `agentarea-api migrate` (Alembic) |
+    | `temporal` | Temporal | `temporalio/auto-setup` on start |
+    | `kratos` | Ory Kratos | the `kratos-migrate` container / Job |
+    | `openfga` | OpenFGA | the `openfga-migrate` container / Job |
+    | `keto` | Ory Keto | the `keto-migrate` container / Job |
 
-`alembic.ini` sets
-`file_template = %%(year)d%%(month).2d%%(day).2d_%%(hour).2d%%(minute).2d_%%(slug)s`,
-so new files are named by ISO-style timestamp — `20260729_1432_add_widget_table.py`.
-Do not rename them into any other scheme.
-
-Always read the generated file before committing. Autogenerate does not detect
-every change, and it will happily drop a column it does not recognise.
-
-### 5. Know which databases exist
-
-One PostgreSQL instance holds several logical databases. Alembic owns only the
-first.
-
-| Database | Owned by | Migrated by |
-|---|---|---|
-| `agentarea` | the platform | `agentarea-api migrate` (Alembic) |
-| `temporal` | Temporal | `temporalio/auto-setup` on start |
-| `kratos` | Ory Kratos | the `kratos-migrate` container / Job |
-| `openfga` | OpenFGA | the `openfga-migrate` container / Job |
-| `keto` | Ory Keto | the `keto-migrate` container / Job |
-
-Under Compose these are created by `postgres_init`, which is idempotent. On
-Kubernetes each has its own `create-*-db-job`.
+    Under Compose these are created by `postgres_init`, which is idempotent. On
+    Kubernetes each has its own `create-*-db-job`.
+  </Step>
+</Steps>
 
 ## Verify
 
@@ -178,56 +180,72 @@ docker compose -f docker-compose.yaml exec db \
 
 ## Troubleshooting
 
-**The migration Job sits in `Init:0/1` and logs `Waiting for database...`.** Its
-`wait-for-db` init container polls `nc -z <host> <port>` and never times out.
-The host is `global.database.host`, or the bundled PostgreSQL service when that
-is empty. Verify the host resolves from inside the namespace and the port is
-reachable.
+<AccordionGroup>
+  <Accordion title="The migration Job sits in `Init:0/1` and logs `Waiting for database...`">
+    Its `wait-for-db` init container polls `nc -z <host> <port>` and never times
+    out. The host is `global.database.host` , or the bundled PostgreSQL service
+    when that is empty. Verify the host resolves from inside the namespace and
+    the port is reachable.
+  </Accordion>
+  <Accordion title="`Migration failed:` with a `relation already exists` error">
+    Alembic is replaying a migration against a schema that already has the
+    object. This happens when a database has tables but no `alembic_version`
+    row, and the auto-stamp path did not trigger because `provider_specs`
+    was absent — a "dirty" database, in the command's own words. Confirm the
+    schema really is current, then stamp it:
 
-**`Migration failed:` with a `relation already exists` error.** Alembic is
-replaying a migration against a schema that already has the object. This happens
-when a database has tables but no `alembic_version` row, and the auto-stamp path
-did not trigger because `provider_specs` was absent — a "dirty" database, in the
-command's own words. Confirm the schema really is current, then stamp it:
+    ```bash
+    cd agentarea-platform/apps/api
+    uv run alembic stamp head
+    ```
 
-```bash
-cd agentarea-platform/apps/api
-uv run alembic stamp head
-```
+    Stamping tells Alembic the database is current without checking. If the
+    schema is not in fact current, you have hidden the gap rather than
+    closed it; take a backup first.
+  </Accordion>
+  <Accordion title="`Can't locate revision identified by '<hash>'`">
+    The database records a revision that does not exist in the image's
+    migration directory — usually a downgrade to an older image after a
+    newer one migrated, or a branch whose migration was never merged. Roll
+    forward to the image that contains the revision. Do not delete the
+    `alembic_version` row to make the error go away; it strands the schema
+    at an unknown point.
+  </Accordion>
+  <Accordion title="`alembic branches` returns rows">
+    Two migrations claim the same parent, typically from two branches merged
+    without rebasing. Generate a merge revision:
 
-Stamping tells Alembic the database is current without checking. If the schema
-is not in fact current, you have hidden the gap rather than closed it; take a
-backup first.
-
-**`Can't locate revision identified by '<hash>'`.** The database records a
-revision that does not exist in the image's migration directory — usually a
-downgrade to an older image after a newer one migrated, or a branch whose
-migration was never merged. Roll forward to the image that contains the
-revision. Do not delete the `alembic_version` row to make the error go away; it
-strands the schema at an unknown point.
-
-**`alembic branches` returns rows.** Two migrations claim the same parent,
-typically from two branches merged without rebasing. Generate a merge revision:
-
-```bash
-cd agentarea-platform/apps/api
-uv run alembic merge -m "merge heads" <rev1> <rev2>
-```
-
-**Migrations work locally but fail in the container with
-`FAILED: No 'script_location' key found`.** The command ran from the repository
-root. `alembic.ini` uses a relative `script_location`, so the working directory
-must be `agentarea-platform/apps/api` (`/app/apps/api` in the image).
-
-**A `helm upgrade` leaves the API running an older schema.** The migration Job
-is a normal resource, not a Helm hook — the chart notes this is deliberate, to
-avoid a dependency deadlock with the database. It therefore does not block the
-Deployment rollout. Check the Job completed before assuming the upgrade is done.
-See [upgrades](/self-host/upgrades).
+    ```bash
+    cd agentarea-platform/apps/api
+    uv run alembic merge -m "merge heads" <rev1> <rev2>
+    ```
+  </Accordion>
+  <Accordion title="Migrations work locally but fail in the container with `FAILED: No 'script_location' key found`">
+    The command ran from the repository root. `alembic.ini` uses a relative
+    `script_location` , so the working directory must be
+    `agentarea- platform/apps/api` (`/app/apps/api` in the image).
+  </Accordion>
+  <Accordion title="A `helm upgrade` leaves the API running an older schema">
+    The migration Job is a normal resource, not a Helm hook — the chart notes
+    this is deliberate, to avoid a dependency deadlock with the database. It
+    therefore does not block the Deployment rollout. Check the Job completed
+    before assuming the upgrade is done. See [upgrades](/self- host/upgrades) .
+  </Accordion>
+</AccordionGroup>
 
 ## Related
 
-- [Deploy on Kubernetes with Helm](/self-host/kubernetes)
-- [Deploy with Docker Compose](/self-host/docker-compose)
-- [Upgrade a deployment](/self-host/upgrades)
-- [Back up and restore](/self-host/backup-and-recovery)
+<Columns cols={2}>
+  <Card title="Deploy on Kubernetes with Helm" icon="server" href="/self-host/kubernetes">
+    Install the agentarea Helm chart, decide which bundled dependencies to keep
+  </Card>
+  <Card title="Deploy with Docker Compose" icon="server" href="/self-host/docker-compose">
+    Run the full AgentArea platform on one host with docker- compose.yaml
+  </Card>
+  <Card title="Upgrade a deployment" icon="server" href="/self-host/upgrades">
+    Move an AgentArea deployment to a new version safely
+  </Card>
+  <Card title="Back up and restore" icon="server" href="/self-host/backup-and-recovery">
+    Identify everything AgentArea stores, back each store up
+  </Card>
+</Columns>

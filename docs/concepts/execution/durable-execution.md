@@ -1,7 +1,7 @@
 ---
 title: Durable execution
 type: concept
-summary: What Temporal actually provides to an AgentArea task — replay, retries, signals, queries, durable timers — and the constraints you take on in exchange.
+description: "What Temporal actually provides to an AgentArea task — replay, retries, signals, queries, durable timers — and the constraints you take on in exchange."
 prerequisites:
   - /concepts/execution/tasks
 related:
@@ -10,8 +10,6 @@ related:
   - /concepts/governance/policy-engine
 last_updated: 2026-07-29
 ---
-
-# Durable execution
 
 An agent run is a loop that calls a model, calls tools, and decides whether it
 is done. AgentArea runs that loop as a Temporal workflow, which means the loop's
@@ -172,6 +170,11 @@ end up with is a worse Temporal.
 
 ## Related
 
-- [Tasks](/concepts/execution/tasks) — the states this machinery moves a task
-  through.
-- [Events](/concepts/execution/events) — how workflow progress reaches a client.
+<Columns cols={2}>
+  <Card title="Tasks" icon="diagram-project" href="/concepts/execution/tasks">
+    The states this machinery moves a task through
+  </Card>
+  <Card title="Events" icon="diagram-project" href="/concepts/execution/events">
+    How workflow progress reaches a client
+  </Card>
+</Columns>

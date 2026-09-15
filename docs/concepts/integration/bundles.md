@@ -1,7 +1,7 @@
 ---
 title: Bundles
 type: concept
-summary: A bundle is one portable document describing a working setup — MCP servers, skills, agents, channels, automations, and policies — that is previewed before it is installed.
+description: "A bundle is one portable document describing a working setup — MCP servers, skills, agents, channels, automations."
 prerequisites:
   - /concepts/integration/mcp
 related:
@@ -10,8 +10,6 @@ related:
   - /concepts/governance/policy-engine
 last_updated: 2026-07-29
 ---
-
-# Bundles
 
 A bundle is a single document that describes everything a working setup needs:
 the MCP servers, the skills, the agents wired to both, the channels that reach
@@ -179,6 +177,11 @@ preview, moves those failures to a point where nothing has been created yet.
 
 ## Related
 
-- [Registry and catalog](/concepts/integration/registry-and-catalog) — how a
-  bundle reaches a workspace as a catalog item.
-- [MCP](/concepts/integration/mcp) — what the `mcps` section provisions.
+<Columns cols={2}>
+  <Card title="Registry and catalog" icon="plug" href="/concepts/integration/registry-and-catalog">
+    How a bundle reaches a workspace as a catalog item
+  </Card>
+  <Card title="MCP" icon="plug" href="/concepts/integration/mcp">
+    What the `mcps` section provisions
+  </Card>
+</Columns>

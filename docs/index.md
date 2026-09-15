@@ -1,17 +1,15 @@
 ---
 title: What is AgentArea
 type: concept
-summary: AgentArea is an open-core platform for running AI agents you can govern — with workspace isolation, relationship-based authorization, sandboxed execution, and durable workflows.
+description: "AgentArea is an open-core platform for running AI agents you can govern — with workspace isolation, relationship-based authorization, sandboxed execution."
 prerequisites: []
 related:
   - /how-it-works
-  - /getting-started
+  - /quickstart
   - /concepts/agentic-networks
   - /concepts/open-core
-last_updated: 2026-07-29
+last_updated: 2026-09-07
 ---
-
-# What is AgentArea
 
 AgentArea runs AI agents under controls you configure: which tools an agent may
 call, whose data it may read, what it may spend, and what a human has to approve
@@ -39,29 +37,37 @@ and more like infrastructure.
 
 ## What it gives you
 
-**Isolation by construction.** Every entity belongs to a workspace, and
-repositories cannot be built without a user context. Scoping is structurally hard
-to omit rather than a rule developers must remember.
-
-**Relationship-based authorization.** Permissions come from relationships in a
-graph — this user manages this project, this project contains this agent —
-evaluated by OpenFGA or Ory Keto. Checks fail closed.
-
-**Sandboxed execution.** Commands and skills run in isolated sandboxes managed by
-a dedicated Go service, not in the workflow process. Logs and artifacts go to
-object storage and are referenced by handle.
-
-**Durable workflows.** Agent execution is a Temporal workflow. A worker restart
-does not lose a task, and a run can wait on a human approval for as long as it
-takes without holding a connection open.
-
-**Governed tool access.** Tool calls pass an interceptor pipeline — budget gates,
-security filters, observers — before they run, and the same policy that decides
-what an agent may call decides what it is even shown.
-
-**MCP as the tool interface.** External tools connect over the Model Context
-Protocol, hosted by AgentArea or connected remotely, with secrets resolved
-server-side.
+<Columns cols={2}>
+  <Card title="Isolation by construction" icon="layer-group" href="/concepts/workspaces-projects-resources">
+    Every entity belongs to a workspace, and repositories cannot be built
+    without a user context. Scoping is structurally hard to omit rather than a
+    rule developers must remember.
+  </Card>
+  <Card title="Relationship-based authorization" icon="scale-balanced" href="/concepts/governance/authorization-basics">
+    Permissions come from relationships in a graph — this user manages this
+    project, this project contains this agent — evaluated by OpenFGA or Ory
+    Keto. Checks fail closed.
+  </Card>
+  <Card title="Sandboxed execution" icon="box" href="/concepts/sandbox/why-a-sandbox">
+    Commands and skills run in isolated sandboxes managed by a dedicated Go
+    service, not in the workflow process. Logs and artifacts go to object
+    storage and are referenced by handle.
+  </Card>
+  <Card title="Durable workflows" icon="diagram-project" href="/concepts/execution/durable-execution">
+    Agent execution is a Temporal workflow. A worker restart does not lose a
+    task, and a run can wait on a human approval for as long as it takes
+    without holding a connection open.
+  </Card>
+  <Card title="Governed tool access" icon="shield-halved" href="/concepts/governance/tool-authorization">
+    Tool calls pass an interceptor pipeline — budget gates, security filters,
+    observers — before they run, and the same policy that decides what an agent
+    may call decides what it is even shown.
+  </Card>
+  <Card title="MCP as the tool interface" icon="plug" href="/concepts/integration/mcp">
+    External tools connect over the Model Context Protocol, hosted by AgentArea
+    or connected remotely, with secrets resolved server-side.
+  </Card>
+</Columns>
 
 ## How the pieces fit
 
@@ -130,41 +136,72 @@ it is not, use a framework.
 
 Worth knowing before you invest time.
 
-- **Not a model-agnostic agent framework you embed.** AgentArea is a platform you
-  deploy. If you want a library to import into an existing service, this is more
-  than you need.
-- **Not a hosted product you can sign up for today.** The documented path is
-  self-hosting.
-- **Not finished.** Parts of the network model are descriptive rather than
-  enforced, and the concept pages say which. Where documentation and code
-  disagree, the code is right and the page is a bug.
+<Warning>
+**Not a model-agnostic agent framework you embed.** AgentArea is a platform you
+deploy. If you want a library to import into an existing service, this is more
+than you need.
+
+**Not a hosted product you can sign up for today.** The documented path is
+self-hosting.
+
+**Not finished.** Parts of the network model are descriptive rather than
+enforced, and the concept pages say which. Where documentation and code
+disagree, the code is right and the page is a bug.
+</Warning>
 
 ## Where to go next
 
 Start here, in order:
 
-1. [Getting started](/getting-started) — `make up-dev` to a running dashboard.
-2. [How it works](/how-it-works) — the request path, and what each service does.
-   Read this before the rest of the documentation; it makes the rest legible.
-3. [Building agents](/building-agents) — create an agent, give it a model, run a
-   task.
+<Steps>
+  <Step title="Run AgentArea locally" icon="rocket">
+    The development stack, from clone to a dashboard.
+    [Quickstart →](/quickstart)
+  </Step>
+  <Step title="Read how it works" icon="sitemap">
+    The request path, and what each service does. Read this before the rest of
+    the documentation; it makes the rest legible.
+    [How it works →](/how-it-works)
+  </Step>
+  <Step title="Create and configure an agent" icon="robot">
+    Give an agent a model and run a task.
+    [Create and configure →](/guides/agents/create-and-configure)
+  </Step>
+</Steps>
 
 Then, depending on what you are evaluating:
 
-- [Agentic networks](/concepts/agentic-networks) — the network model, and which
-  parts of it are enforced
-- [Workspaces, projects, and resources](/concepts/workspaces-projects-resources) —
-  the scoping model everything else assumes
-- [Control plane and data plane](/concepts/control-and-data-plane) — where your
-  data goes, and how to keep it in your network
-- [Open core](/concepts/open-core) — what is core, what is commercial, and how
-  the boundary is implemented
-- [Deployment](/deployment) — running it somewhere other than your laptop
+<Columns cols={2}>
+  <Card title="Agentic networks" icon="lightbulb" href="/concepts/agentic-networks">
+    The network model, and which parts of it are enforced.
+  </Card>
+  <Card title="Workspaces, projects, and resources" icon="layer-group" href="/concepts/workspaces-projects-resources">
+    The scoping model everything else assumes.
+  </Card>
+  <Card title="Control plane and data plane" icon="sitemap" href="/concepts/control-and-data-plane">
+    Where your data goes, and how to keep it in your network.
+  </Card>
+  <Card title="Open core" icon="scale-balanced" href="/concepts/open-core">
+    What is core, what is commercial, and how the boundary is implemented.
+  </Card>
+  <Card title="Self-host requirements" icon="server" href="/self-host/requirements">
+    Running it somewhere other than your laptop.
+  </Card>
+  <Card title="API reference" icon="code" href="/api-reference/introduction">
+    Every endpoint, generated from the OpenAPI spec.
+  </Card>
+</Columns>
 
 ## License and community
 
 Apache License 2.0. Commercial features exist as a separately installed package;
 see [Open core](/concepts/open-core) for exactly where the line falls.
 
-- [GitHub](https://github.com/agentarea/agentarea)
-- [Discord](https://discord.gg/5tduPwheYQ)
+<Columns cols={2}>
+  <Card title="GitHub" icon="github" href="https://github.com/agentarea/agentarea">
+    Source, issues, and discussions.
+  </Card>
+  <Card title="Discord" icon="discord" href="https://discord.gg/5tduPwheYQ">
+    Ask questions and follow development.
+  </Card>
+</Columns>

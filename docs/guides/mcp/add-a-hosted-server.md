@@ -1,7 +1,7 @@
 ---
 title: Add a hosted MCP server
 type: guide
-summary: Run an MCP server as a managed workload — a container image or a published npm/PyPI package — and confirm it came up by checking its verification.
+description: "Run an MCP server as a managed workload — a container image or a published npm/PyPI package — and confirm it came up by checking its verification."
 prerequisites:
   - /concepts/integration/mcp
 related:
@@ -10,8 +10,6 @@ related:
   - /guides/mcp/build-a-compound-mcp
 last_updated: 2026-07-29
 ---
-
-# Add a hosted MCP server
 
 Do this when the MCP server is code that AgentArea should run — a published
 container image, or an npm or PyPI package launched with `npx` or `uvx`. Use
@@ -23,10 +21,12 @@ never reaches the server directly.
 
 ## Prerequisites
 
+<Info>
 - An API key for the workspace.
 - The image reference, or the package name and its launch command.
 - The MCP manager reachable from the API. Managed instances cannot be
   provisioned without it.
+</Info>
 
 ## Choose a creation path
 
@@ -40,116 +40,118 @@ declaring the inputs it needs. The instance is *one configured copy* of it.
 
 ## Steps
 
-### Option A — container image, one call
+<Steps titleSize="h3">
+  <Step title="Option A — container image, one call">
+    ```bash
+    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/with-spec" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "server": {
+          "name": "Filesystem",
+          "description": "Read-only filesystem access for the agent.",
+          "docker_image_url": "mcp/filesystem:latest",
+          "version": "1.0.0",
+          "tags": ["files"],
+          "env_schema": [
+            {"name": "ALLOWED_DIRECTORIES", "description": "Comma-separated roots", "isSecret": false}
+          ]
+        },
+        "instance": {
+          "name": "Filesystem (shared)",
+          "json_spec": {
+            "type": "docker",
+            "image": "mcp/filesystem:latest",
+            "environment": {"ALLOWED_DIRECTORIES": "/data"}
+          }
+        }
+      }'
+    ```
 
-```bash
-curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/with-spec" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "server": {
-      "name": "Filesystem",
-      "description": "Read-only filesystem access for the agent.",
-      "docker_image_url": "mcp/filesystem:latest",
-      "version": "1.0.0",
-      "tags": ["files"],
-      "env_schema": [
-        {"name": "ALLOWED_DIRECTORIES", "description": "Comma-separated roots", "isSecret": false}
-      ]
-    },
-    "instance": {
-      "name": "Filesystem (shared)",
-      "json_spec": {
-        "type": "docker",
-        "image": "mcp/filesystem:latest",
-        "environment": {"ALLOWED_DIRECTORIES": "/data"}
-      }
-    }
-  }'
-```
+    The response is the instance, including its `verification` block. A managed
+    instance returns **202**, not 201: verification runs in the background, so the
+    `verification.status` in this response is the starting state, not the outcome.
+    Remote (`url`) instances verify synchronously and return 201.
+  </Step>
 
-The response is the instance, including its `verification` block. A managed
-instance returns **202**, not 201: verification runs in the background, so the
-`verification.status` in this response is the starting state, not the outcome.
-Remote (`url`) instances verify synchronously and return 201.
+  <Step title="Option B — published package">
+    Use `type: "command"`. The package is wrapped in the `agentarea/mcp-bridge`
+    container, which listens on port 8080; you do not set a port.
 
-### Option B — published package
+    ```bash
+    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/with-spec" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "server": {
+          "name": "Sequential Thinking",
+          "description": "Structured reasoning tools.",
+          "cmd": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"],
+          "version": "1.0.0",
+          "tags": ["reasoning"]
+        },
+        "instance": {
+          "name": "Sequential Thinking",
+          "json_spec": {
+            "type": "command",
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+          }
+        }
+      }'
+    ```
 
-Use `type: "command"`. The package is wrapped in the `agentarea/mcp-bridge`
-container, which listens on port 8080; you do not set a port.
+    Only five keys in `json_spec` are treated as transport: `type`, `endpoint_url`,
+    `image`, `command`, `args`. Everything else — `environment`, `headers`, `port` —
+    is instance configuration.
+  </Step>
 
-```bash
-curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/with-spec" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "server": {
-      "name": "Sequential Thinking",
-      "description": "Structured reasoning tools.",
-      "cmd": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"],
-      "version": "1.0.0",
-      "tags": ["reasoning"]
-    },
-    "instance": {
-      "name": "Sequential Thinking",
-      "json_spec": {
-        "type": "command",
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
-      }
-    }
-  }'
-```
+  <Step title="Option C — separate spec and instances">
+    Create the spec once:
 
-Only five keys in `json_spec` are treated as transport: `type`, `endpoint_url`,
-`image`, `command`, `args`. Everything else — `environment`, `headers`, `port` —
-is instance configuration.
+    ```bash
+    SPEC_ID=$(curl -s -X POST "$AGENTAREA_URL/v1/mcp-servers/" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "Filesystem",
+        "description": "Read-only filesystem access.",
+        "docker_image_url": "mcp/filesystem:latest",
+        "env_schema": [{"name": "ALLOWED_DIRECTORIES", "isSecret": false}]
+      }' | jq -r '.id')
+    ```
 
-### Option C — separate spec and instances
+    Then create each instance against it:
 
-Create the spec once:
+    ```bash
+    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{
+        \"name\": \"Filesystem (reports)\",
+        \"server_spec_id\": \"$SPEC_ID\",
+        \"json_spec\": {\"type\": \"docker\", \"image\": \"mcp/filesystem:latest\", \"environment\": {\"ALLOWED_DIRECTORIES\": \"/reports\"}}
+      }"
+    ```
+  </Step>
 
-```bash
-SPEC_ID=$(curl -s -X POST "$AGENTAREA_URL/v1/mcp-servers/" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Filesystem",
-    "description": "Read-only filesystem access.",
-    "docker_image_url": "mcp/filesystem:latest",
-    "env_schema": [{"name": "ALLOWED_DIRECTORIES", "isSecret": false}]
-  }' | jq -r '.id')
-```
+  <Step title="Trigger verification">
+    Verification provisions the workload and polls `tools/list` until it answers.
+    Run it explicitly after creating an instance:
 
-Then create each instance against it:
+    ```bash
+    curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID/verify" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq
+    ```
 
-```bash
-curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"name\": \"Filesystem (reports)\",
-    \"server_spec_id\": \"$SPEC_ID\",
-    \"json_spec\": {\"type\": \"docker\", \"image\": \"mcp/filesystem:latest\", \"environment\": {\"ALLOWED_DIRECTORIES\": \"/reports\"}}
-  }"
-```
+    The call returns 200 whether or not verification succeeded — the HTTP status
+    describes the call, not the outcome. Read `verification.status`.
 
-### Trigger verification
-
-Verification provisions the workload and polls `tools/list` until it answers.
-Run it explicitly after creating an instance:
-
-```bash
-curl -s -X POST "$AGENTAREA_URL/v1/mcp-server-instances/$INSTANCE_ID/verify" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" | jq
-```
-
-The call returns 200 whether or not verification succeeded — the HTTP status
-describes the call, not the outcome. Read `verification.status`.
-
-A cold `npx` or `uvx` install can take minutes. Verification does not fail on a
-clock while the container is alive; it fails early only when the runtime reports
-the container dead, and is capped at 600 seconds.
+    A cold `npx` or `uvx` install can take minutes. Verification does not fail on a
+    clock while the container is alive; it fails early only when the runtime reports
+    the container dead, and is capped at 600 seconds.
+  </Step>
+</Steps>
 
 ## Verify
 
@@ -174,36 +176,54 @@ There is no status column — this field is the liveness signal.
 
 ## Troubleshooting
 
-**`verification.status` is `failed` with `code: container_failed`.** The
-workload started and died. The message carries the runtime's report — usually a
-missing environment variable the image requires at boot, or an image that does
-not exist for the node's architecture. Fix the spec and re-verify.
-
-**`failed` with `code: list_tools_timeout`.** The container is alive after 600
-seconds but never answered `tools/list`. Common causes: the image is not an MCP
-server, or it speaks stdio and was configured as `type: "docker"` rather than
-being launched through the bridge as `type: "command"`.
-
-**`failed` with `code: mcp_error`.** The endpoint answered but the MCP handshake
-failed. This is a protocol-level error and is not retried. Check the server's
-own logs.
-
-**Stuck at `in_progress`.** A verification interrupted by a worker restart stays
-`in_progress` until it is 12 minutes old, then the monitor marks it
-`verification_interrupted`. Re-running `POST .../verify` forces a fresh run
-without waiting.
-
-**`never_attempted` and nothing happens.** The background sweep picks up managed
-instances at `never_attempted` every 30 seconds, five at a time — unless the
-instance is marked `lazy_provisioning`, which is excluded from the sweep by
-design and starts on first use instead.
-
-**The instance verifies but an agent cannot call it.** Discovery is separate
-from authorization. A tool call also has to clear the task's policy, so check
-[Authorize a tool call](/guides/governance/authorize-a-tool-call).
+<AccordionGroup>
+  <Accordion title="`verification.status` is `failed` with `code: container_failed`">
+    The workload started and died. The message carries the runtime's report —
+    usually a missing environment variable the image requires at boot, or an
+    image that does not exist for the node's architecture. Fix the spec and
+    re-verify.
+  </Accordion>
+  <Accordion title="`failed` with `code: list_tools_timeout`">
+    The container is alive after 600 seconds but never answered `tools/list` .
+    Common causes: the image is not an MCP server, or it speaks stdio and was
+    configured as `type: "docker"` rather than being launched through the bridge
+    as `type: "command"` .
+  </Accordion>
+  <Accordion title="`failed` with `code: mcp_error`">
+    The endpoint answered but the MCP handshake failed. This is a protocol-
+    level error and is not retried. Check the server's own logs.
+  </Accordion>
+  <Accordion title="Stuck at `in_progress`">
+    A verification interrupted by a worker restart stays `in_progress` until it
+    is 12 minutes old, then the monitor marks it `verification_interrupted` .
+    Re-running `POST .../verify` forces a fresh run without waiting.
+  </Accordion>
+  <Accordion title="`never_attempted` and nothing happens">
+    The background sweep picks up managed instances at `never_attempted` every
+    30 seconds, five at a time — unless the instance is marked
+    `lazy_provisioning` , which is excluded from the sweep by design and starts
+    on first use instead.
+  </Accordion>
+  <Accordion title="The instance verifies but an agent cannot call it">
+    Discovery is separate from authorization. A tool call also has to clear the
+    task's policy, so check
+    [Authorize a tool call](/guides/governance/authorize-a-tool-call) .
+  </Accordion>
+</AccordionGroup>
 
 ## Related
 
-- [Connect a remote MCP server](/guides/mcp/connect-a-remote-server)
-- [Pass secrets to an MCP server](/guides/mcp/pass-secrets)
-- [MCP](/concepts/integration/mcp)
+<Columns cols={2}>
+  <Card title="Connect a remote MCP server" icon="plug" href="/guides/mcp/connect-a-remote-server">
+    Point AgentArea at an MCP server somebody else operates, test the endpoint
+    before saving it
+  </Card>
+  <Card title="Pass secrets to an MCP server" icon="plug" href="/guides/mcp/pass-secrets">
+    Declare which inputs are credentials with env_schema, supply their values on
+    the instance
+  </Card>
+  <Card title="MCP" icon="plug" href="/concepts/integration/mcp">
+    What the Model Context Protocol gives an agent, and how AgentArea hosts MCP
+    servers
+  </Card>
+</Columns>

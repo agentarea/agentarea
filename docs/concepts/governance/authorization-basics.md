@@ -1,7 +1,7 @@
 ---
 title: Authorization models
 type: concept
-summary: How ACL, RBAC, ABAC and ReBAC differ, what question each answers well, and why most real systems combine two of them.
+description: "How ACL, RBAC, ABAC and ReBAC differ, what question each answers well, and why most real systems combine two of them."
 prerequisites: []
 related:
   - /concepts/governance/the-agentarea-model
@@ -9,8 +9,6 @@ related:
   - /concepts/governance/tool-authorization
 last_updated: 2026-07-29
 ---
-
-# Authorization models
 
 Authorization answers one question: may this subject perform this action on this
 object? The four common models — ACL, RBAC, ABAC and ReBAC — all answer it. They
@@ -171,9 +169,14 @@ is an extra datastore with its own consistency and availability characteristics.
 
 ## Related
 
-- [The AgentArea model](/concepts/governance/the-agentarea-model) — the types,
-  relations and tuples actually deployed.
-- [The policy engine](/concepts/governance/policy-engine) — where runtime
-  ceilings are decided, and why they are not in the graph.
-- [Tool authorization](/concepts/governance/tool-authorization) — the layers a
-  single tool call clears.
+<Columns cols={2}>
+  <Card title="The AgentArea model" icon="scale-balanced" href="/concepts/governance/the-agentarea-model">
+    The types, relations and tuples actually deployed
+  </Card>
+  <Card title="The policy engine" icon="scale-balanced" href="/concepts/governance/policy-engine">
+    Where runtime ceilings are decided, and why they are not in the graph
+  </Card>
+  <Card title="Tool authorization" icon="scale-balanced" href="/concepts/governance/tool-authorization">
+    The layers a single tool call clears
+  </Card>
+</Columns>
