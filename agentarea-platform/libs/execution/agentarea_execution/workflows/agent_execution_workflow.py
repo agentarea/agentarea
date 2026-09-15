@@ -2043,6 +2043,18 @@ class AgentExecutionWorkflow:
                     # it — the same 1000 tokens cost very different amounts depending
                     # on the model, so no consumer can interpret `usage` without it.
                     "model_id": self.state.agent_config.get("model_id"),
+                    # The provider's own name for the model, alongside the instance id
+                    # above. The id identifies a row; this identifies what was actually
+                    # bought, and it survives the row being deleted or recreated —
+                    # which a metered fact has to, because it is priced and invoiced
+                    # long after the run.
+                    "model_name": (self.state.resolved_model or {}).get("model_name"),
+                    # Whose credentials paid the provider. Without it there is no way
+                    # to tell a run on the operator's key — real money out of our
+                    # account, and the only kind that must be recovered from the
+                    # customer — from a run on the customer's own, which costs us
+                    # nothing and must not be charged for twice.
+                    "managed_by": (self.state.resolved_model or {}).get("managed_by"),
                     "cost": usage_info["cost"],
                     "total_cost": serialize_money(self._budget.cost),
                     "usage": usage_info,

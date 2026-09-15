@@ -14,7 +14,7 @@ from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.model_discovery_service import DiscoveredModel, ModelDiscoveryService
 from agentarea_llm.application.provider_service import ProviderService  # type: ignore
-from agentarea_llm.domain.models import ProviderConfig  # type: ignore
+from agentarea_llm.domain.models import MANAGED_BY_PLATFORM, ProviderConfig  # type: ignore
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,6 +28,19 @@ router = APIRouter(prefix="/provider-configs", tags=["provider-configs"])
 __all__ = ["ProviderConfigCreate", "ProviderConfigUpdate", "router"]
 
 
+def _requires_api_key(provider_config: ProviderConfig) -> bool:
+    """Whether the client should ask for a key for this configuration.
+
+    Defaults to True when the spec is not loaded: an unnecessary key field is a
+    small annoyance, a missing one for a provider that needs it is a configuration
+    that silently never works.
+    """
+    spec = getattr(provider_config, "provider_spec", None)
+    if spec is None:
+        return True
+    return bool(getattr(spec, "requires_api_key", True))
+
+
 class ProviderConfigResponse(BaseModel):
     id: str
     provider_spec_id: str
@@ -39,6 +52,18 @@ class ProviderConfigResponse(BaseModel):
     is_public: bool
     created_at: UtcDatetime
     updated_at: UtcDatetime
+    # "platform" when the deployment supplies this configuration's credentials.
+    # Read-only: there is no request field that sets it, because a tenant able to
+    # declare their own configuration platform-managed could make it unwritable by
+    # anyone and visible to every other workspace.
+    #
+    # The client needs it to stop offering an API-key field and a Delete button for
+    # a configuration whose key is not the user's and whose deletion will be
+    # refused.
+    managed_by: str | None = None
+    # Whether this provider type authenticates at all, copied from the spec so the
+    # client can decide about the key field from the configuration alone.
+    requires_api_key: bool = True
 
     # Related data
     provider_spec_name: str | None = None
@@ -69,6 +94,8 @@ class ProviderConfigResponse(BaseModel):
             is_public=provider_config.is_public,
             created_at=provider_config.created_at,
             updated_at=provider_config.updated_at,
+            managed_by=getattr(provider_config, "managed_by", None),
+            requires_api_key=_requires_api_key(provider_config),
             provider_spec_name=provider_config.provider_spec.name
             if hasattr(provider_config, "provider_spec") and provider_config.provider_spec
             else None,
@@ -506,6 +533,20 @@ async def discover_models(
     config = await provider_service.get_provider_config(config_id)
     if not config:
         raise HTTPException(status_code=404, detail="Provider configuration not found")
+
+    # Discovery spends the configuration's credential on a provider call and writes
+    # what comes back into model specs. On a platform-managed configuration that is
+    # the operator's credential and the operator's catalogue, reached by a tenant
+    # who happens to be able to see the row — which they can, deliberately, so they
+    # can use its models. Refused here rather than left to fail further down: the
+    # key would not resolve in this process anyway (it is not in any workspace's
+    # secret store), so the call would go out unauthenticated and the 400 below
+    # would blame the provider.
+    if getattr(config, "managed_by", None) == MANAGED_BY_PLATFORM:
+        raise HTTPException(
+            status_code=403,
+            detail="Model discovery is not available for platform-supplied providers.",
+        )
 
     api_key = None
     if config.api_key:

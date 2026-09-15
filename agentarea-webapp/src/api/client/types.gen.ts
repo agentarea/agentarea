@@ -4914,6 +4914,10 @@ export type ProviderConfigResponse = {
    */
   is_public: boolean;
   /**
+   * Managed By
+   */
+  managed_by?: string | null;
+  /**
    * Model Instance Ids
    */
   model_instance_ids?: Array<string>;
@@ -4933,6 +4937,10 @@ export type ProviderConfigResponse = {
    * Provider Spec Name
    */
   provider_spec_name?: string | null;
+  /**
+   * Requires Api Key
+   */
+  requires_api_key?: boolean;
   /**
    * Updated At
    */

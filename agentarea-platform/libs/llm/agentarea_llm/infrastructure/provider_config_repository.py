@@ -2,16 +2,82 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
-from agentarea_llm.domain.models import ProviderConfig
+from agentarea_llm.domain.models import MANAGED_BY_PLATFORM, ProviderConfig
 
 
 class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, ProviderConfig, user_context)
+
+    def _get_workspace_filter(self):
+        """Read the active workspace's configurations, plus the platform's.
+
+        A platform-managed configuration is credentials the deployment operator
+        supplies to everyone, so it has to be readable from every workspace. It
+        physically lives in whichever workspace the seeder ran under, which no
+        tenant can name — a strict workspace filter therefore hides it from all of
+        them, which is the same as it not existing.
+
+        This overrides the base filter rather than widening it. ADR-003's objection
+        is to the *generic* filter growing an OR-branch for built-in content, which
+        would silently change the scope of every workspace-scoped table at once;
+        here one repository states one exception for one column, and every other
+        table keeps the strict rule.
+
+        Writes deliberately do NOT widen with it: ``update`` and ``delete`` below
+        re-assert the strict filter. The base class routes reads and writes through
+        this one method, so widening it alone would have let any tenant edit or
+        delete the platform's configuration — and repoint its key — simply by
+        addressing it by ID.
+        """
+        return or_(
+            self._strict_workspace_filter(),
+            ProviderConfig.managed_by == MANAGED_BY_PLATFORM,
+        )
+
+    def _strict_workspace_filter(self):
+        """The unwidened filter: this workspace's own rows and nothing else."""
+        return super()._get_workspace_filter()
+
+    async def update(self, id, creator_scoped: bool = False, **kwargs):
+        """Update one of this workspace's own configurations.
+
+        A platform-managed row is invisible to this call even though it is visible
+        to reads. Returning None (rather than raising) is what the base class does
+        for a row in another workspace, and that is what a platform-managed row is
+        from the tenant's side: theirs to use, not theirs to change.
+        """
+        return await self._scoped_write(super().update, id, creator_scoped=creator_scoped, **kwargs)
+
+    async def delete(self, id, creator_scoped: bool = False) -> bool:
+        """Delete one of this workspace's own configurations.
+
+        Returns False for a platform-managed row, matching the base class's answer
+        for anything outside the caller's workspace.
+        """
+        result = await self._scoped_write(super().delete, id, creator_scoped=creator_scoped)
+        return bool(result)
+
+    async def _scoped_write(self, op, id, **kwargs):
+        """Run ``op`` only if ``id`` is not a platform-managed row.
+
+        Checked with its own query against the strict filter rather than by reading
+        the row through the widened one: the point is to answer "is this the
+        caller's to write", and the widened read cannot distinguish that.
+        """
+        owned = await self.session.execute(
+            select(ProviderConfig.id).where(
+                ProviderConfig.id == id,
+                self._strict_workspace_filter(),
+            )
+        )
+        if owned.scalar_one_or_none() is None:
+            return None
+        return await op(id, **kwargs)
 
     async def create_config(self, config: ProviderConfig) -> ProviderConfig:
         """Create a provider config from a domain object.

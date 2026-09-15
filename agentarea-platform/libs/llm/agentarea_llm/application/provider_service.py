@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from agentarea_secrets.models import EncryptedSecret
 
 from agentarea_llm.domain.models import (
+    MANAGED_BY_PLATFORM,
     ModelInstance,
     ModelSpec,
     ProviderConfig,
@@ -23,6 +24,31 @@ from agentarea_llm.infrastructure.provider_config_repository import (
 )
 from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRepository
 from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
+
+
+class PlatformManagedConfigError(PermissionError):
+    """Raised when a tenant tries to write to the deployment's own configuration."""
+
+
+def _reject_platform_managed(config: ProviderConfig, verb: str) -> None:
+    """Stop a write to a configuration whose credentials are the operator's.
+
+    Platform-managed configurations are readable from every workspace so their
+    models can be used without anyone supplying a key. That visibility is what
+    makes this check necessary: a tenant holding the ID of a row they can see
+    would otherwise be able to address it for update or delete like any other, and
+    repointing its ``api_key`` would hand them the operator's credential.
+
+    Raised, not returned as None, so the API answers "this one is not yours to
+    change" instead of the "no such configuration" that every other
+    out-of-workspace row produces — which would be a lie about a row the same user
+    can plainly see listed.
+    """
+    if getattr(config, "managed_by", None) == MANAGED_BY_PLATFORM:
+        raise PlatformManagedConfigError(
+            f"Provider configuration '{config.name}' is supplied by the platform "
+            f"and cannot be {verb}."
+        )
 
 
 class ProviderService:
@@ -220,6 +246,7 @@ class ProviderService:
         config = await self.provider_config_repo.get_by_id(config_id)
         if not config:
             return None
+        _reject_platform_managed(config, "modified")
 
         patch = payload.model_dump(exclude_unset=True)
 
@@ -279,6 +306,8 @@ class ProviderService:
         from agentarea_secrets.models import SecretReference
 
         config = await self.provider_config_repo.get_by_id(config_id)
+        if config is not None:
+            _reject_platform_managed(config, "deleted")
         own_secret = self._own_secret_name_if_held(config) if config is not None else None
 
         # Both the reverse-index row and provider_configs.api_key_secret_id hold

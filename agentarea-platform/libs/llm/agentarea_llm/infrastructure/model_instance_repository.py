@@ -2,16 +2,58 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from agentarea_llm.domain.models import ModelInstance, ProviderConfig
+from agentarea_llm.domain.models import MANAGED_BY_PLATFORM, ModelInstance, ProviderConfig
 
 
 class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, ModelInstance, user_context)
+
+    def _get_workspace_filter(self):
+        """Read this workspace's model instances, plus the platform's.
+
+        An instance is the platform's exactly when its provider configuration is —
+        the configuration is where the credentials live, so it is the only place
+        that fact belongs. Re-stating it on the instance would be a second copy of
+        one answer, free to drift from the first.
+
+        Mirrors ProviderConfigRepository: reads widen, writes do not.
+        """
+        return or_(
+            self._strict_workspace_filter(),
+            ModelInstance.provider_config_id.in_(
+                select(ProviderConfig.id).where(ProviderConfig.managed_by == MANAGED_BY_PLATFORM)
+            ),
+        )
+
+    def _strict_workspace_filter(self):
+        """The unwidened filter: this workspace's own rows and nothing else."""
+        return super()._get_workspace_filter()
+
+    async def update(self, id, creator_scoped: bool = False, **kwargs):
+        """Update one of this workspace's own instances; None for the platform's."""
+        return await self._scoped_write(super().update, id, creator_scoped=creator_scoped, **kwargs)
+
+    async def delete(self, id, creator_scoped: bool = False) -> bool:
+        """Delete one of this workspace's own instances; False for the platform's."""
+        result = await self._scoped_write(super().delete, id, creator_scoped=creator_scoped)
+        return bool(result)
+
+    async def _scoped_write(self, op, id, **kwargs):
+        """Run ``op`` only if ``id`` is a row this workspace owns outright."""
+        owned = await self.session.execute(
+            select(ModelInstance.id).where(
+                ModelInstance.id == id,
+                self._strict_workspace_filter(),
+            )
+        )
+        if owned.scalar_one_or_none() is None:
+            return None
+        return await op(id, **kwargs)
 
     async def create_instance(self, instance: ModelInstance) -> ModelInstance:
         """Create a model instance from a domain object.
