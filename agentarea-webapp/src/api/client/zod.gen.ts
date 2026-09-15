@@ -1992,11 +1992,13 @@ export const zProviderConfigResponse = z.object({
   id: z.string(),
   is_active: z.boolean(),
   is_public: z.boolean(),
+  managed_by: z.string().nullish(),
   model_instance_ids: z.array(z.string()).optional().default([]),
   name: z.string(),
   provider_spec_id: z.string(),
   provider_spec_key: z.string().nullish(),
   provider_spec_name: z.string().nullish(),
+  requires_api_key: z.boolean().optional().default(true),
   updated_at: z.string(),
   workspace_id: z.string(),
 });

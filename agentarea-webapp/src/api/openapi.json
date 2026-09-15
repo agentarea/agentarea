@@ -8407,6 +8407,17 @@
             "title": "Is Public",
             "type": "boolean"
           },
+          "managed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed By"
+          },
           "model_instance_ids": {
             "default": [],
             "items": {
@@ -8444,6 +8455,11 @@
               }
             ],
             "title": "Provider Spec Name"
+          },
+          "requires_api_key": {
+            "default": true,
+            "title": "Requires Api Key",
+            "type": "boolean"
           },
           "updated_at": {
             "title": "Updated At",
