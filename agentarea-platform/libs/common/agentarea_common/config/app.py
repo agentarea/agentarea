@@ -3,7 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 
 from .base import BaseAppSettings
 
@@ -113,6 +113,27 @@ class AppSettings(BaseAppSettings):
     # Empty by default: a build that supplies no keys offers no keyless models,
     # which is the correct default for the open distribution.
     PLATFORM_PROVIDERS: list[dict] | None = None
+
+    @field_validator("PLATFORM_PROVIDERS", mode="before")
+    @classmethod
+    def _empty_string_is_no_providers(cls, v: object) -> object:
+        """Treat a blank value as "none declared" rather than a parse error.
+
+        pydantic-settings JSON-decodes complex types, and "" is not JSON — so an
+        env var set to the empty string raises a ValidationError during settings
+        construction, which happens before anything can log about it and takes the
+        process down at boot.
+
+        "" is the natural way to spell "not set" wherever this is configured from:
+        a Helm value left empty renders as "", a shell export of an unset variable
+        is "", a ConfigMap key with no value is "". Making the disabled state
+        impossible to express by accident matters more here than strictness,
+        because the accident is an outage for every tenant — including all the ones
+        bringing their own keys, who are not using this feature at all.
+        """
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     # Kratos public API URL (used to validate browser session cookies in OAuth AS)
     KRATOS_PUBLIC_URL: str = "http://kratos:4433"
