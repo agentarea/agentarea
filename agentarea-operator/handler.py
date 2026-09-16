@@ -296,20 +296,35 @@ def sync_provider_config(
             model_count = len(discovered)
         elif explicit_models:
             for em in explicit_models:
-                model_name = em["modelName"]
-                # Find the model spec
-                ms_row = conn.execute(
-                    text(
-                        "SELECT id FROM model_specs "
-                        "WHERE provider_spec_id = :spec_id AND model_name = :mn"
-                    ),
-                    {"spec_id": provider_spec_id, "mn": model_name},
-                ).fetchone()
-                if ms_row:
-                    _upsert_model_instance(
-                        conn, provider_key, config_id, str(ms_row[0]), model_name, workspace_id
-                    )
-                    model_count += 1
+                # Creates the model spec when the catalog has none, rather than
+                # activating only what is already there.
+                #
+                # It used to look the spec up and silently do nothing when it was
+                # missing, which is the normal case for anything we decide to sell:
+                # a model released last month is not in a catalog built from
+                # someone else's list. The custom resource went Synced with zero
+                # models and the model never appeared, with nothing saying why.
+                #
+                # Pricing comes from the resource for the same reason. The runtime
+                # refuses to run a model whose cost per token is unset, so a spec
+                # created without it is a model that lists and then fails at the
+                # moment somebody presses run.
+                _upsert_model_spec_and_instance(
+                    conn,
+                    provider_key,
+                    provider_spec_id,
+                    config_id,
+                    {
+                        "model_name": em["modelName"],
+                        "display_name": em.get("displayName", em["modelName"]),
+                        "description": em.get("description", ""),
+                        "context_window": em.get("contextWindow", 4096),
+                        "input_cost_per_token": em.get("inputCostPerToken"),
+                        "output_cost_per_token": em.get("outputCostPerToken"),
+                    },
+                    workspace_id,
+                )
+                model_count += 1
 
     return config_id, model_count
 
@@ -336,15 +351,31 @@ def _upsert_model_spec_and_instance(
 
     if ms_row:
         model_spec_id = str(ms_row[0])
+        # Only our own rows are updated.
+        #
+        # uq_model_specs_provider_model is (provider_spec_id, model_name) without
+        # workspace_id, so this lookup can return a spec a tenant created first for
+        # the same model. Overwriting it would silently reprice their own usage and
+        # rename it in their own list. The instance below simply points at it.
+        #
+        # COALESCE so a resource that omits a price leaves the existing one rather
+        # than clearing it — unsetting a cost per token makes the model unrunnable,
+        # which is a poor thing to do by leaving a field out.
         conn.execute(
             text(
                 "UPDATE model_specs SET display_name = :dn, "
-                "context_window = :cw, updated_at = now() WHERE id = :id"
+                "context_window = :cw, "
+                "input_cost_per_token = COALESCE(:icpt, input_cost_per_token), "
+                "output_cost_per_token = COALESCE(:ocpt, output_cost_per_token), "
+                "updated_at = now() WHERE id = :id AND workspace_id = :ws"
             ),
             {
                 "id": model_spec_id,
                 "dn": model.get("display_name", model_name),
                 "cw": model.get("context_window", 4096),
+                "icpt": model.get("input_cost_per_token"),
+                "ocpt": model.get("output_cost_per_token"),
+                "ws": workspace_id,
             },
         )
     else:
@@ -353,9 +384,10 @@ def _upsert_model_spec_and_instance(
             text(
                 "INSERT INTO model_specs "
                 "(id, provider_spec_id, model_name, display_name, description, "
-                "context_window, is_active, workspace_id, created_by, "
+                "context_window, input_cost_per_token, output_cost_per_token, "
+                "is_active, workspace_id, created_by, "
                 "created_at, updated_at) "
-                "VALUES (:id, :spec_id, :mn, :dn, :desc, :cw, true, "
+                "VALUES (:id, :spec_id, :mn, :dn, :desc, :cw, :icpt, :ocpt, true, "
                 ":ws, :created_by, now(), now())"
             ),
             {
@@ -365,6 +397,8 @@ def _upsert_model_spec_and_instance(
                 "dn": model.get("display_name", model_name),
                 "desc": model.get("description", ""),
                 "cw": model.get("context_window", 4096),
+                "icpt": model.get("input_cost_per_token"),
+                "ocpt": model.get("output_cost_per_token"),
                 "ws": workspace_id,
                 "created_by": PLATFORM_PRINCIPAL_ID,
             },
