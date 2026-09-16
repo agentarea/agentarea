@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import {
   listWorkspaceInvitations,
   listWorkspaceMembers,
@@ -5,6 +6,7 @@ import {
   type WorkspaceMember,
 } from "@/lib/api";
 import { getAuthContext } from "@/lib/getAuthContext";
+import { getWorkspaceContext } from "@/lib/workspace-context";
 import MembersClient from "./MembersClient";
 
 function ensureCurrentUserMember(
@@ -40,7 +42,12 @@ function ensureCurrentUserMember(
 // The data-fetching half of the members page, isolated so the page can wrap it
 // in <Suspense> and show MembersSkeleton while it loads.
 export default async function MembersData() {
-  const { workspaceId, userId, email, name, username } = await getAuthContext();
+  const [{ workspaceId, userId, email, name, username }, { active }, t] =
+    await Promise.all([
+      getAuthContext(),
+      getWorkspaceContext(),
+      getTranslations("MembersPage"),
+    ]);
 
   let members: WorkspaceMember[] = [];
   let invitations: WorkspaceInvitation[] = [];
@@ -66,10 +73,9 @@ export default async function MembersData() {
     <MembersClient
       members={members}
       invitations={invitations}
-      currentUserId={userId}
-      currentUserEmail={email}
-      currentUserName={name}
-      currentUsername={username}
+      currentUser={{ id: userId, email, name, username }}
+      ownerUserId={active?.owner_user_id ?? null}
+      workspaceName={active?.name ?? t("thisWorkspace")}
     />
   );
 }
