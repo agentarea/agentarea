@@ -36,14 +36,8 @@ from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationRequest,
     authorize_tool_invocation,
 )
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.events.contract import LLM_FAILED, canonical_type
-from agentarea_common.infrastructure.platform_credentials import (
-    ENV_PREFIX as PLATFORM_CREDENTIAL_ENV_PREFIX,
-)
-from agentarea_common.infrastructure.platform_credentials import (
-    MANAGED_BY_PLATFORM,
-    platform_credential,
-)
 from agentarea_common.money import ZERO, to_money
 from prometheus_client import Counter
 
@@ -319,55 +313,41 @@ async def _resolve_provider_api_key(
     user_context: Any,
     dependencies: ActivityDependencies,
 ) -> str | None:
-    """Read the credential this call runs on, from whichever store owns it.
+    """Read the credential this call runs on, from the workspace that owns it.
 
-    ``reference`` means different things depending on ``managed_by``, which is the
-    whole reason this is one function and not a branch repeated at each call site:
+    ``reference`` is a secret name in both cases. What differs is whose secrets are
+    searched, which is the whole reason this is one function and not a branch
+    repeated at each call site:
 
-      * tenant configuration (managed_by unset) — the name of a secret in the
-        caller's workspace, read through the workspace-scoped secret manager;
-      * platform configuration — the name of a credential the deployment supplies
-        through its environment, which no workspace-scoped read can reach.
+      * tenant configuration (managed_by unset) — the caller's own workspace;
+      * platform configuration — the platform workspace, which only the operator
+        writes and which no tenant-scoped read can reach. The scoping that keeps
+        tenants out of each other's secrets is what keeps them out of this one.
 
-    Getting this branch wrong in either direction is silent. A platform reference
-    sent to the tenant store resolves to None and the provider answers 401; a
-    tenant reference sent to the environment resolves to None just the same. Both
-    look like "the user's key is broken", which is the one thing neither is.
+    Getting this branch wrong in either direction is silent: the name resolves to
+    None in the wrong workspace and the provider answers 401, which reads as "the
+    user's key is broken" — the one thing neither case is.
     """
     if not reference:
         return None
 
-    if managed_by == MANAGED_BY_PLATFORM:
-        key = platform_credential(reference)
-        if key is None:
-            # Worth a line in the log: the operator configured a platform model
-            # and then did not supply its credential, and the only other symptom
-            # is an auth error attributed to the provider.
-            #
-            # Nothing derived from the credential reference is logged — only the
-            # fixed prefix, and the rule for deriving the rest.
-            #
-            # The reference is a name, not a value, so logging it would leak
-            # nothing. But CodeQL reads any log line downstream of a credential
-            # parameter as clear-text logging of a secret, and it is right about
-            # the shape even where it is wrong about the value. Naming the prefix
-            # and the rule instead keeps the message actionable — the operator
-            # already has the reference in front of them, in PLATFORM_PROVIDERS —
-            # while leaving no path from a credential to a log at all.
-            logger.warning(
-                "No platform credential set: expected a %s* environment variable "
-                "for the credential named in PLATFORM_PROVIDERS. The provider "
-                "will be called without a key until it is set.",
-                PLATFORM_CREDENTIAL_ENV_PREFIX,
-            )
-        return key
-
     from agentarea_common.config import get_database
+
+    if managed_by == MANAGED_BY_PLATFORM:
+        from agentarea_common.auth.context import UserContext
+        from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
+
+        secret_context: Any = UserContext(
+            user_id=PLATFORM_PRINCIPAL_ID,
+            workspace_id=PLATFORM_WORKSPACE_ID,
+        )
+    else:
+        secret_context = user_context
 
     secret_session = get_database().async_session_factory()
     try:
         secret_manager = dependencies.secret_manager_factory.create(
-            session=secret_session, user_context=user_context
+            session=secret_session, user_context=secret_context
         )
         return await secret_manager.get_secret(reference)
     finally:
