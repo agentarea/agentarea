@@ -1,20 +1,30 @@
-"""Which credential store a call reads, and why getting it wrong is invisible.
+"""Whose secrets a call reads, and why getting it wrong is invisible.
 
-A platform reference sent to the tenant's secret manager resolves to None. A tenant
-secret name looked up in the environment resolves to None. Both produce a request
-with no key and a 401 from the provider, attributed to the user's credentials —
-which is the one explanation that is never right. Nothing else in the system
-notices, so it is checked here.
+Both kinds of provider configuration store a secret *name*; what differs is the
+workspace the name is looked up in. A platform reference resolved against the
+caller's workspace finds nothing, and so does a tenant reference resolved against
+the platform's. Both produce a request with no key and a 401 from the provider,
+attributed to the user's credentials — which is the one explanation that is never
+right. Nothing else in the system notices, so it is checked here.
 """
 
 from types import SimpleNamespace
 
 import pytest
-from agentarea_common.infrastructure.platform_credentials import MANAGED_BY_PLATFORM
+from agentarea_common.constants import (
+    MANAGED_BY_PLATFORM,
+    PLATFORM_WORKSPACE_ID,
+)
 from agentarea_execution.activities.agent_execution_activities import (
     _resolve_provider_api_key,
 )
 from agentarea_execution.models import LLMCallRequest, ResolvedModelInfo
+
+TENANT_WORKSPACE = "ws"
+
+# Deliberately the same name in both workspaces. A tenant can choose what to call
+# their own secrets, so the names are not a namespace — the workspace is.
+SHARED_REFERENCE = "openai"
 
 
 def _resolved(**overrides):
@@ -62,30 +72,51 @@ def test_a_tenant_model_says_so_rather_than_omitting_the_field():
     assert cached["managed_by"] is None
 
 
-class _TenantSecretManager:
-    """Stands in for the workspace-scoped store, and records that it was consulted."""
+class _WorkspaceScopedStore:
+    """Stands in for DatabaseSecretManager: sees one workspace's secrets only."""
 
-    def __init__(self, values):
-        self.values = values
-        self.asked_for: list[str] = []
+    def __init__(self, values, asked):
+        self._values = values
+        self._asked = asked
 
     async def get_secret(self, name):
-        self.asked_for.append(name)
-        return self.values.get(name)
+        self._asked.append(name)
+        return self._values.get(name)
+
+
+class _RecordingFactory:
+    """Hands out a store per workspace and remembers which context asked."""
+
+    def __init__(self, by_workspace):
+        self._by_workspace = by_workspace
+        self.contexts = []
+        self.asked_by_workspace = {ws: [] for ws in by_workspace}
+
+    def create(self, *, session, user_context):
+        self.contexts.append(user_context)
+        workspace = user_context.workspace_id
+        return _WorkspaceScopedStore(
+            self._by_workspace.get(workspace, {}),
+            self.asked_by_workspace.setdefault(workspace, []),
+        )
 
 
 class _Dependencies:
-    def __init__(self, manager):
-        self._manager = manager
-        self.secret_manager_factory = SimpleNamespace(create=lambda **_: manager)
+    def __init__(self, factory):
+        self.secret_manager_factory = factory
 
 
 @pytest.fixture
-def tenant_store(monkeypatch):
-    manager = _TenantSecretManager({"provider_config_abc": "tenant-key"})
+def factory(monkeypatch):
+    built = _RecordingFactory(
+        {
+            TENANT_WORKSPACE: {SHARED_REFERENCE: "tenant-key"},
+            PLATFORM_WORKSPACE_ID: {SHARED_REFERENCE: "platform-key"},
+        }
+    )
 
-    # The tenant path opens a database session to build its secret manager. The
-    # store itself is what this test is about, so the session is stubbed out.
+    # Building a secret manager opens a database session. The routing is what this
+    # test is about, so the session is stubbed out.
     class _Session:
         async def close(self):
             return None
@@ -94,72 +125,67 @@ def tenant_store(monkeypatch):
         "agentarea_common.config.get_database",
         lambda: SimpleNamespace(async_session_factory=lambda: _Session()),
     )
-    return manager
+    return built
 
 
-async def test_tenant_config_reads_the_workspace_secret_store(tenant_store, monkeypatch):
-    monkeypatch.setenv("PLATFORM_CREDENTIAL_PROVIDER_CONFIG_ABC", "platform-key")
-
+async def test_tenant_config_reads_the_callers_workspace(factory):
     key = await _resolve_provider_api_key(
-        reference="provider_config_abc",
+        reference=SHARED_REFERENCE,
         managed_by=None,
-        user_context=SimpleNamespace(workspace_id="ws", user_id="u"),
-        dependencies=_Dependencies(tenant_store),
+        user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
+        dependencies=_Dependencies(factory),
     )
 
     assert key == "tenant-key"
-    assert tenant_store.asked_for == ["provider_config_abc"]
+    assert [c.workspace_id for c in factory.contexts] == [TENANT_WORKSPACE]
 
 
-async def test_platform_config_reads_the_environment_not_the_workspace(
-    tenant_store, monkeypatch
-):
-    """The important one: the tenant store must not even be consulted.
+async def test_platform_config_reads_the_platform_workspace_not_the_callers(factory):
+    """The important one: the caller's workspace must not even be consulted.
 
-    If it were, a tenant could create a secret named after the platform's
-    credential reference and have their own value served in its place.
+    Both workspaces hold a secret under this exact name. If the caller's context
+    were used, a tenant could name a secret after the platform's reference and
+    have their own value served in place of the operator's — on a configuration
+    they are deliberately allowed to see but not to write.
     """
-    monkeypatch.setenv("PLATFORM_CREDENTIAL_OPENAI", "platform-key")
-
     key = await _resolve_provider_api_key(
-        reference="openai",
+        reference=SHARED_REFERENCE,
         managed_by=MANAGED_BY_PLATFORM,
-        user_context=SimpleNamespace(workspace_id="ws", user_id="u"),
-        dependencies=_Dependencies(tenant_store),
+        user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
+        dependencies=_Dependencies(factory),
     )
 
     assert key == "platform-key"
-    assert tenant_store.asked_for == [], "the tenant secret store was consulted"
+    assert [c.workspace_id for c in factory.contexts] == [PLATFORM_WORKSPACE_ID]
+    assert factory.asked_by_workspace[TENANT_WORKSPACE] == [], (
+        "the caller's secret store was consulted for a platform credential"
+    )
 
 
-async def test_platform_credential_absent_yields_no_key_rather_than_an_error(
-    tenant_store, monkeypatch
-):
-    """An operator who declared a model and forgot its key gets a warning, not a crash.
+async def test_a_platform_credential_the_operator_never_set_is_not_an_error(factory):
+    """A configuration whose secret is missing sends no key rather than crashing.
 
     Returning None sends the request without an Authorization header, which is
     also the correct behaviour for an endpoint that authenticates with nothing.
     """
-    monkeypatch.delenv("PLATFORM_CREDENTIAL_OPENAI", raising=False)
-
     key = await _resolve_provider_api_key(
-        reference="openai",
+        reference="never-created",
         managed_by=MANAGED_BY_PLATFORM,
-        user_context=SimpleNamespace(workspace_id="ws", user_id="u"),
-        dependencies=_Dependencies(tenant_store),
+        user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
+        dependencies=_Dependencies(factory),
     )
 
     assert key is None
 
 
-async def test_no_reference_touches_no_store(tenant_store):
+async def test_no_reference_touches_no_store(factory):
     """A keyless provider must not produce a lookup for the empty name."""
     key = await _resolve_provider_api_key(
         reference=None,
         managed_by=None,
-        user_context=SimpleNamespace(workspace_id="ws", user_id="u"),
-        dependencies=_Dependencies(tenant_store),
+        user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
+        dependencies=_Dependencies(factory),
     )
 
     assert key is None
-    assert tenant_store.asked_for == []
+    assert factory.contexts == []
