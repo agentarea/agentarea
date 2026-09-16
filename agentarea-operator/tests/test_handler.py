@@ -119,3 +119,100 @@ def test_a_missing_encryption_key_refuses_rather_than_storing_the_key_in_the_cle
 
     with pytest.raises(kopf.PermanentError, match="SECRET_MANAGER_ENCRYPTION_KEY"):
         handler.store_api_key(Mock(), "platform", "provider_config_x", API_KEY)
+
+
+class _RecordingConn:
+    """Records the statements and parameters a sync would issue.
+
+    Every SELECT returns nothing, which is the state that matters here: a model the
+    catalog has never heard of, which is the normal case for anything new enough to
+    be worth selling.
+    """
+
+    def __init__(self):
+        self.calls = []
+
+    def execute(self, statement, params=None):
+        self.calls.append((str(statement), params or {}))
+
+        class _Result:
+            @staticmethod
+            def fetchone():
+                return None
+
+        return _Result()
+
+    def params_for(self, fragment):
+        for sql, params in self.calls:
+            if fragment in sql:
+                return params
+        raise AssertionError(f"no statement containing {fragment!r} was issued")
+
+
+def test_an_unknown_model_is_created_with_its_price():
+    """The runtime refuses a model whose cost per token is unset.
+
+    So a spec created without one is a model that appears in the picker and then
+    fails the moment somebody presses run. This path used to only *activate* specs
+    the catalog already had, which meant a model released after the catalog was
+    built produced a Synced resource, zero models, and no explanation.
+    """
+    conn = _RecordingConn()
+
+    handler._upsert_model_spec_and_instance(
+        conn,
+        "moonshot",
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        {
+            "model_name": "kimi-k2.5",
+            "display_name": "Kimi K2.5",
+            "context_window": 262144,
+            "input_cost_per_token": 6e-7,
+            "output_cost_per_token": 3e-6,
+        },
+        handler.PLATFORM_WORKSPACE_ID,
+    )
+
+    inserted = conn.params_for("INSERT INTO model_specs")
+    assert inserted["mn"] == "kimi-k2.5"
+    assert inserted["icpt"] == 6e-7, "the model would be unrunnable without this"
+    assert inserted["ocpt"] == 3e-6
+    assert inserted["cw"] == 262144
+
+
+def test_the_instance_gets_the_derived_id_so_billing_can_name_it():
+    conn = _RecordingConn()
+
+    handler._upsert_model_spec_and_instance(
+        conn,
+        "moonshot",
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        {"model_name": "kimi-k2.5", "input_cost_per_token": 6e-7, "output_cost_per_token": 3e-6},
+        handler.PLATFORM_WORKSPACE_ID,
+    )
+
+    instance = conn.params_for("INSERT INTO model_instances")
+    assert instance["id"] == handler.platform_instance_id("moonshot", "kimi-k2.5")
+
+
+def test_a_spec_another_workspace_owns_is_not_repriced():
+    """uq_model_specs_provider_model has no workspace_id, so the lookup can find a
+    tenant's own spec for the same model. Repricing it would silently change what
+    their usage of their own key costs them."""
+    conn = _RecordingConn()
+
+    handler._upsert_model_spec_and_instance(
+        conn,
+        "moonshot",
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        {"model_name": "kimi-k2.5", "input_cost_per_token": 6e-7},
+        handler.PLATFORM_WORKSPACE_ID,
+    )
+
+    # The guard is in the statement itself rather than a branch above it.
+    update = next((s for s, _ in conn.calls if "UPDATE model_specs" in s), None)
+    if update is not None:
+        assert "workspace_id = :ws" in update, "an update could reach another workspace's spec"
