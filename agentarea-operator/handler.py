@@ -6,9 +6,19 @@ Watches LLMProviderConfig resources and:
 3. Optionally discovers models via /v1/models
 4. Creates ModelInstance entries for each activated model
 
+This is the only writer of ``provider_configs.managed_by = 'platform'``. The
+application refuses those writes from every path a tenant can reach — the API has
+no request field that sets the column, and the repositories re-assert the strict
+workspace filter on update and delete — because a tenant able to declare their own
+configuration platform-managed could make it visible to every other workspace and
+deletable by nobody. Which models a deployment offers, on whose key, is an access
+decision, and it is made here: declared as a custom resource wherever the
+deployment is described, and reconciled into rows.
+
 Env vars:
-    DATABASE_URL       – PostgreSQL async connection string
-    WATCH_NAMESPACE    – Namespace to watch (default: all)
+    DATABASE_URL                     – PostgreSQL connection string
+    SECRET_MANAGER_ENCRYPTION_KEY    – Fernet key, same one the platform uses
+    WATCH_NAMESPACE                  – Namespace to watch (default: all)
 """
 
 import logging
@@ -18,6 +28,7 @@ from datetime import datetime, timezone
 
 import httpx
 import kopf
+from cryptography.fernet import Fernet
 from kubernetes import client as k8s_client
 from sqlalchemy import create_engine, text
 
@@ -26,12 +37,89 @@ logger = logging.getLogger("agentarea-operator")
 # Keep in sync with agentarea_common.constants
 PLATFORM_WORKSPACE_ID = "platform"
 PLATFORM_PRINCIPAL_ID = "platform"
+MANAGED_BY_PLATFORM = "platform"
+
+# Keep in sync with agentarea_common.platform_ids, which carries the full
+# explanation and the test that pins these values.
+#
+# In short: a platform model's instance id is what an agent stores when it selects
+# the model and what billing's rate cards are keyed on — and those rows live in the
+# payments service, a different database this process cannot see. Deriving the id
+# from (provider_key, model_name) is what lets a rate card name it without anyone
+# copying a generated uuid between environments by hand.
+PLATFORM_ID_NAMESPACE = uuid.UUID("8f3d4b2a-6c1e-5a7f-9d0b-2e4a6c8f1d3b")
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql+psycopg2://user:password@localhost:5432/agentarea",
 )
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+
+# The same key the platform encrypts workspace secrets with, because this writes
+# into the same table it reads from.
+#
+# Holding it makes this process able to decrypt any row in encrypted_secrets, which
+# is more than it needs and more than it should keep. The narrow fix is a database
+# role restricted to the tables below — tracked separately; until then this is the
+# most privileged thing in the cluster after the API itself, and its RBAC and image
+# provenance should be treated that way.
+ENCRYPTION_KEY = os.environ.get("SECRET_MANAGER_ENCRYPTION_KEY", "")
+
+
+def platform_config_id(provider_key: str) -> str:
+    return str(uuid.uuid5(PLATFORM_ID_NAMESPACE, f"provider_config:{provider_key}"))
+
+
+def platform_instance_id(provider_key: str, model_name: str) -> str:
+    return str(uuid.uuid5(PLATFORM_ID_NAMESPACE, f"model_instance:{provider_key}:{model_name}"))
+
+
+def secret_name_for(config_id: str) -> str:
+    """The name a configuration's key is stored under.
+
+    ``provider_config_<uuid>`` is a reserved prefix: ``validate_user_secret_name``
+    refuses it, and ``parse_managed_name`` reads it back into the owner, which is
+    what stops the secrets API offering the row for editing or deletion. Naming it
+    anything else would produce a secret a user could claim and overwrite.
+    """
+    return f"provider_config_{config_id}"
+
+
+def store_api_key(conn, workspace_id: str, secret_name: str, api_key: str) -> None:
+    """Encrypt the key into the workspace's secret store, creating or rotating it.
+
+    Deliberately not stored on ``provider_configs.api_key``, which holds the *name*
+    of a secret and is passed to the secret manager as one. Writing the key there
+    would put a live credential in plain text in a column every workspace can read
+    — the configuration is visible to all of them by design — and the lookup would
+    then fail anyway, because no secret exists under a name that is itself a key.
+    """
+    if not ENCRYPTION_KEY:
+        raise kopf.PermanentError(
+            "SECRET_MANAGER_ENCRYPTION_KEY is not set; refusing to write a provider "
+            "configuration whose credential cannot be stored. Set it to the same "
+            "Fernet key the platform API uses."
+        )
+    encrypted = Fernet(ENCRYPTION_KEY.encode("utf-8")).encrypt(api_key.encode("utf-8")).decode()
+    conn.execute(
+        text(
+            "INSERT INTO encrypted_secrets "
+            "(id, workspace_id, secret_name, encrypted_value, owner_type, owner_id, "
+            "created_by, created_at, updated_at) "
+            "VALUES (:id, :ws, :name, :val, 'provider_config', :owner, :by, now(), now()) "
+            "ON CONFLICT (workspace_id, secret_name) DO UPDATE SET "
+            "encrypted_value = EXCLUDED.encrypted_value, external_ref = NULL, "
+            "updated_by = EXCLUDED.created_by, updated_at = now()"
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "ws": workspace_id,
+            "name": secret_name,
+            "val": encrypted,
+            "owner": secret_name.removeprefix("provider_config_"),
+            "by": PLATFORM_PRINCIPAL_ID,
+        },
+    )
 
 
 def read_secret(namespace: str, secret_name: str, secret_key: str) -> str:
@@ -134,48 +222,62 @@ def sync_provider_config(
             )
         provider_spec_id = str(row[0])
 
-        # 2. Upsert ProviderConfig (match by name + workspace)
+        # 2. Upsert ProviderConfig, keyed on its derived id.
+        #
+        # Not on (name, workspace) as this once was: the name is a display string
+        # the custom resource can change, and matching on it meant renaming a CR
+        # created a second configuration rather than updating the first — two rows
+        # holding the operator's key, both visible to every workspace, only one of
+        # them metered.
+        is_platform = workspace_id == PLATFORM_WORKSPACE_ID
+        config_id = platform_config_id(provider_key) if is_platform else str(uuid.uuid4())
+        managed_by = MANAGED_BY_PLATFORM if is_platform else None
+
         existing = conn.execute(
-            text(
-                "SELECT id FROM provider_configs "
-                "WHERE name = :name AND workspace_id = :ws"
-            ),
-            {"name": name, "ws": workspace_id},
+            text("SELECT id FROM provider_configs WHERE id = :id"),
+            {"id": config_id},
         ).fetchone()
 
+        # The configuration stores the NAME of a secret; the key itself goes to the
+        # secret store under that name, in the same transaction.
+        secret_name = secret_name_for(config_id)
+        store_api_key(conn, workspace_id, secret_name, api_key)
+
         if existing:
-            config_id = str(existing[0])
             conn.execute(
                 text(
                     "UPDATE provider_configs SET "
-                    "api_key = :key, endpoint_url = :url, "
+                    "name = :name, api_key = :key, endpoint_url = :url, "
+                    "managed_by = :managed_by, "
                     "is_active = true, is_public = :pub, updated_at = now() "
                     "WHERE id = :id"
                 ),
                 {
                     "id": config_id,
-                    "key": api_key,
+                    "name": name,
+                    "key": secret_name,
                     "url": endpoint_url,
+                    "managed_by": managed_by,
                     "pub": is_public,
                 },
             )
         else:
-            config_id = str(uuid.uuid4())
             conn.execute(
                 text(
                     "INSERT INTO provider_configs "
-                    "(id, provider_spec_id, name, api_key, endpoint_url, "
+                    "(id, provider_spec_id, name, api_key, endpoint_url, managed_by, "
                     "is_active, is_public, source, workspace_id, created_by, "
                     "created_at, updated_at) "
-                    "VALUES (:id, :spec_id, :name, :key, :url, "
+                    "VALUES (:id, :spec_id, :name, :key, :url, :managed_by, "
                     "true, :pub, 'official', :ws, :created_by, now(), now())"
                 ),
                 {
                     "id": config_id,
                     "spec_id": provider_spec_id,
                     "name": name,
-                    "key": api_key,
+                    "key": secret_name,
                     "url": endpoint_url,
+                    "managed_by": managed_by,
                     "pub": is_public,
                     "ws": workspace_id,
                     "created_by": PLATFORM_PRINCIPAL_ID,
@@ -189,7 +291,7 @@ def sync_provider_config(
             discovered = discover_models(provider_key, api_key, endpoint_url)
             for m in discovered:
                 _upsert_model_spec_and_instance(
-                    conn, provider_spec_id, config_id, m, workspace_id
+                    conn, provider_key, provider_spec_id, config_id, m, workspace_id
                 )
             model_count = len(discovered)
         elif explicit_models:
@@ -205,7 +307,7 @@ def sync_provider_config(
                 ).fetchone()
                 if ms_row:
                     _upsert_model_instance(
-                        conn, config_id, str(ms_row[0]), model_name, workspace_id
+                        conn, provider_key, config_id, str(ms_row[0]), model_name, workspace_id
                     )
                     model_count += 1
 
@@ -213,7 +315,12 @@ def sync_provider_config(
 
 
 def _upsert_model_spec_and_instance(
-    conn, provider_spec_id: str, config_id: str, model: dict, workspace_id: str
+    conn,
+    provider_key: str,
+    provider_spec_id: str,
+    config_id: str,
+    model: dict,
+    workspace_id: str,
 ):
     """Create or update a ModelSpec and its ModelInstance."""
     model_name = model["model_name"]
@@ -263,19 +370,38 @@ def _upsert_model_spec_and_instance(
             },
         )
 
-    _upsert_model_instance(conn, config_id, model_spec_id, model_name, workspace_id)
+    _upsert_model_instance(
+        conn, provider_key, config_id, model_spec_id, model_name, workspace_id
+    )
 
 
 def _upsert_model_instance(
-    conn, config_id: str, model_spec_id: str, model_name: str, workspace_id: str
+    conn,
+    provider_key: str,
+    config_id: str,
+    model_spec_id: str,
+    model_name: str,
+    workspace_id: str,
 ):
-    """Create a ModelInstance if it doesn't already exist."""
+    """Create a ModelInstance if it doesn't already exist.
+
+    The id is derived rather than generated for platform rows. It is what an agent
+    stores when it selects this model and what billing's rate cards name, so a
+    re-created row has to come back with the same id: a fresh one would silently
+    unlink every agent using the model and match no rate card, which does not fail
+    — it runs on our provider credit and charges nobody.
+    """
+    instance_id = (
+        platform_instance_id(provider_key, model_name)
+        if workspace_id == PLATFORM_WORKSPACE_ID
+        else str(uuid.uuid4())
+    )
     existing = conn.execute(
         text(
             "SELECT id FROM model_instances "
-            "WHERE provider_config_id = :cid AND model_spec_id = :msid"
+            "WHERE id = :id OR (provider_config_id = :cid AND model_spec_id = :msid)"
         ),
-        {"cid": config_id, "msid": model_spec_id},
+        {"id": instance_id, "cid": config_id, "msid": model_spec_id},
     ).fetchone()
 
     if not existing:
@@ -289,7 +415,7 @@ def _upsert_model_instance(
                 ":ws, :created_by, now(), now())"
             ),
             {
-                "id": str(uuid.uuid4()),
+                "id": instance_id,
                 "cid": config_id,
                 "msid": model_spec_id,
                 "name": model_name,
@@ -351,26 +477,23 @@ def on_provider_config_change(spec, meta, status, namespace, patch, **_):
     )
 
 
-@kopf.on.delete("agentarea.io", "v1alpha1", "llmproviderconfigs")
-def on_provider_config_delete(spec, meta, namespace, **_):
-    """Handle deletion — deactivate (don't delete) the ProviderConfig."""
-    cr_name = meta["name"]
-    name = spec["name"]
-    workspace_id = spec.get("workspaceId", PLATFORM_WORKSPACE_ID)
-
-    logger.info("Deactivating LLMProviderConfig %s/%s", namespace, cr_name)
-
-    try:
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "UPDATE provider_configs SET is_active = false, "
-                    "updated_at = now() WHERE name = :name AND workspace_id = :ws"
-                ),
-                {"name": name, "ws": workspace_id},
-            )
-    except Exception as e:
-        logger.error("Failed to deactivate %s: %s", cr_name, e)
+# There is deliberately no delete handler.
+#
+# There was one, and it deactivated the configuration when the custom resource went
+# away. That makes the disappearance of a file from git indistinguishable from a
+# decision to stop selling a model: an Argo CD prune during a bad sync, a rename, a
+# refactor of the directory — and the model goes dark for every paying workspace at
+# once. This cluster has had that class of outage before, from a certificate
+# reference that took TLS down for a week.
+#
+# Withdrawing a model is a decision and should be made deliberately, not inferred
+# from an absence. The rows also outlive the resource on purpose: rate cards and
+# usage records in the payments database reference the model instance id, and a
+# disputed invoice six months from now is answered by rows that are still there.
+#
+# Its absence has a second effect worth knowing: kopf only installs finalizers for
+# resources it has delete handlers for, so `kubectl delete` on one of these returns
+# immediately instead of blocking until this process acknowledges it.
 
 
 @kopf.on.timer("agentarea.io", "v1alpha1", "llmproviderconfigs", interval=3600)
