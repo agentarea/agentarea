@@ -76,7 +76,11 @@ export default function MembersClient({
   const [invitationsOrder, setInvitationsOrder] =
     useState<InvitationsOrder>("expires");
   const [inviteOpen, setInviteOpen] = useState(false);
-  const openInvite = useCallback(() => setInviteOpen(true), []);
+  const [inviteSession, setInviteSession] = useState(0);
+  const openInvite = useCallback(() => {
+    setInviteSession((session) => session + 1);
+    setInviteOpen(true);
+  }, []);
 
   const q = query.trim().toLowerCase();
   const accessLabels = useMemo(
@@ -164,6 +168,7 @@ export default function MembersClient({
       )}
 
       <InviteDialog
+        key={inviteSession}
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         onCreated={() => setTab("invitations")}

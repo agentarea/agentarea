@@ -77,16 +77,6 @@ export function InviteDialog({
     invitation: WorkspaceInvitationCreated;
   } | null>(null);
 
-  const handleOpenChange = (next: boolean) => {
-    if (next) {
-      setEmail("");
-      setExpiresInDays("7");
-      setError(null);
-      setCreated(null);
-    }
-    onOpenChange(next);
-  };
-
   const handleCreate = () => {
     setError(null);
     startTransition(async () => {
@@ -110,7 +100,7 @@ export function InviteDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="min-w-0 max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[496px] sm:rounded-[10px]">
         <DialogHeader className="space-y-1.5 px-6 pb-4 pt-5">
           <DialogTitle>
@@ -125,7 +115,7 @@ export function InviteDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <BlueprintSheet className="min-w-0 pb-0">
+        <BlueprintSheet className="min-w-0" style={{ paddingBottom: 0 }}>
           <BlueprintDivider />
           <div className="relative z-[1] min-w-0 space-y-5 px-4 py-5">
             {created ? (
@@ -169,12 +159,16 @@ export function InviteDialog({
                     value={expiresInDays}
                     onValueChange={setExpiresInDays}
                   >
-                    <SelectTrigger id="invite-expiry">
+                    <SelectTrigger id="invite-expiry" className="text-[13px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {EXPIRY_OPTIONS.map((days) => (
-                        <SelectItem key={days} value={days}>
+                        <SelectItem
+                          key={days}
+                          value={days}
+                          className="text-[13px]"
+                        >
                           {t(`expiry${days}`)}
                         </SelectItem>
                       ))}
