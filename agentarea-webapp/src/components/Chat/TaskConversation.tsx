@@ -82,7 +82,6 @@ export function TaskConversation({
   const status = currentStatus || task.status || "";
   const isActive =
     QUEUEABLE_STATUSES.includes(status) || status === "waiting_for_input";
-  const isRunning = streamStatus === "running";
   const lastAssistantText = [...parts]
     .reverse()
     .find((part) => part.kind === "llm")?.data?.content;
