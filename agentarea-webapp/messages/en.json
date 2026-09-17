@@ -154,7 +154,7 @@
     "noInvitations": "No pending invitations.",
     "inviteDialogTitle": "Invite people",
     "inviteDialogDescription": "Create an invitation link to share. Optionally tie it to an email address.",
-    "emailLabel": "Email (optional)",
+    "emailLabel": "Email",
     "emailPlaceholder": "teammate@example.com",
     "emailHint": "Leave empty to create a link anyone can use.",
     "expiryLabel": "Expires in",

@@ -155,7 +155,7 @@
     "noInvitations": "Нет ожидающих приглашений.",
     "inviteDialogTitle": "Пригласить",
     "inviteDialogDescription": "Создайте ссылку-приглашение. При желании привяжите её к email.",
-    "emailLabel": "Email (необязательно)",
+    "emailLabel": "Email",
     "emailPlaceholder": "teammate@example.com",
     "emailHint": "Оставьте пустым, чтобы создать ссылку для любого.",
     "expiryLabel": "Истекает через",

@@ -12,6 +12,11 @@ import {
   UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
+import FormLabel from "@/components/FormLabel/FormLabel";
+import {
+  BlueprintDivider,
+  BlueprintSheet,
+} from "@/components/ui/blueprint-sheet";
 import { Button } from "@/components/ui/button";
 import { CopyableText } from "@/components/ui/copyable-text";
 import {
@@ -23,7 +28,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -107,8 +111,8 @@ export function InviteDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-[468px]">
-        <DialogHeader>
+      <DialogContent className="min-w-0 max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[496px] sm:rounded-[10px]">
+        <DialogHeader className="space-y-1.5 px-6 pb-4 pt-5">
           <DialogTitle>
             {created ? t("inviteLinkCreatedTitle") : t("inviteDialogTitle")}
           </DialogTitle>
@@ -121,82 +125,85 @@ export function InviteDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {created ? (
-          <div className="space-y-5">
-            <div className="space-y-1.5">
-              <Label className="label">
-                <Link2 className="label-icon" />
-                {t("invitationLinkLabel")}
-              </Label>
-              <CopyableText text={created.link} labelClassName="text-xs" />
-              <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
-                <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
-                <span>{t("shownOnce")}</span>
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="label">
-                <Clock className="label-icon" />
-                {t("expiresLabel")}
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                {formatDate(created.invitation.expires_at, locale)}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-5">
-            <div className="space-y-1.5">
-              <Label htmlFor="invite-email" className="label">
-                <Mail className="label-icon" />
-                {t("emailLabel")}
-              </Label>
-              <Input
-                id="invite-email"
-                type="email"
-                autoComplete="off"
-                placeholder={t("emailPlaceholder")}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <p className="note">{t("emailHint")}</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="label">
-                <Clock className="label-icon" />
-                {t("expiryLabel")}
-              </Label>
-              <Select value={expiresInDays} onValueChange={setExpiresInDays}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {EXPIRY_OPTIONS.map((days) => (
-                    <SelectItem key={days} value={days}>
-                      {t(`expiry${days}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {error && (
-              <p className="form-error" role="alert">
-                {error}
-              </p>
+        <BlueprintSheet className="min-w-0 pb-0">
+          <BlueprintDivider />
+          <div className="relative z-[1] min-w-0 space-y-5 px-4 py-5">
+            {created ? (
+              <>
+                <div className="space-y-2">
+                  <FormLabel icon={Link2}>{t("invitationLinkLabel")}</FormLabel>
+                  <CopyableText text={created.link} />
+                  <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                    <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
+                    <span>{t("shownOnce")}</span>
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <FormLabel icon={Clock}>{t("expiresLabel")}</FormLabel>
+                  <p className="text-sm text-muted-foreground">
+                    {formatDate(created.invitation.expires_at, locale)}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <FormLabel htmlFor="invite-email" icon={Mail} optional>
+                    {t("emailLabel")}
+                  </FormLabel>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    autoComplete="off"
+                    placeholder={t("emailPlaceholder")}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                  <p className="note">{t("emailHint")}</p>
+                </div>
+                <div className="space-y-2">
+                  <FormLabel htmlFor="invite-expiry" icon={Clock}>
+                    {t("expiryLabel")}
+                  </FormLabel>
+                  <Select
+                    value={expiresInDays}
+                    onValueChange={setExpiresInDays}
+                  >
+                    <SelectTrigger id="invite-expiry">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EXPIRY_OPTIONS.map((days) => (
+                        <SelectItem key={days} value={days}>
+                          {t(`expiry${days}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {error && (
+                  <p className="form-error" role="alert">
+                    {error}
+                  </p>
+                )}
+              </>
             )}
           </div>
-        )}
+          <BlueprintDivider />
+        </BlueprintSheet>
 
-        <DialogFooter className="sm:items-center sm:justify-between">
+        <DialogFooter className="px-6 py-4 sm:items-center sm:justify-between">
           {created ? (
             <>
               <span />
-              <Button onClick={() => onOpenChange(false)}>{t("done")}</Button>
+              <Button size="sm" onClick={() => onOpenChange(false)}>
+                {t("done")}
+              </Button>
             </>
           ) : (
             <>
               <p className="note text-left">{t("joinsAsMember")}</p>
-              <Button onClick={handleCreate} disabled={isPending}>
+              <Button size="sm" onClick={handleCreate} disabled={isPending}>
                 {isPending && <Loader2 className="animate-spin" />}
                 {t("createInvite")}
               </Button>
