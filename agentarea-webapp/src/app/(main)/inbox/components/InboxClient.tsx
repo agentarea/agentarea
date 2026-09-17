@@ -25,7 +25,6 @@ import {
   type FilterValue,
 } from "@/app/(main)/inbox/components/inboxShared";
 import { resolveEscalationAction } from "@/lib/server-actions";
-import { cn } from "@/lib/utils";
 
 interface InboxClientProps {
   items: InboxTask[];
@@ -40,9 +39,6 @@ export function InboxClient({ items, error }: InboxClientProps) {
   );
   const [isCompactLayout, setIsCompactLayout] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [desktopPanelTask, setDesktopPanelTask] = useState<InboxTask | null>(
-    null
-  );
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [resolved, setResolved] = useState<
     Record<string, "completed" | "failed">
@@ -82,29 +78,15 @@ export function InboxClient({ items, error }: InboxClientProps) {
   }, [items, filter, effectiveStatus]);
 
   const selected = visible.find((task) => String(task.id) === selectedId) ?? null;
-  const desktopPanelOpen = !isCompactLayout && Boolean(selected);
+  // Keep the reading surface in sync with an optimistic resolve so the action
+  // footer never offers controls for a task that has already been handled.
+  const selectedWithEffectiveStatus = selected
+    ? { ...selected, status: effectiveStatus(selected) }
+    : null;
   const pendingTasks = items.filter(
     (task) => isPending(effectiveStatus(task)) && task.escalation_id
   );
   const anyChecked = checked.size > 0;
-
-  useEffect(() => {
-    if (isCompactLayout) {
-      setDesktopPanelTask(null);
-      return;
-    }
-
-    if (selected) {
-      setDesktopPanelTask(selected);
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setDesktopPanelTask(null);
-    }, 220);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [isCompactLayout, selected]);
 
   function changeFilter(next: FilterValue) {
     setFilter(next);
@@ -211,14 +193,6 @@ export function InboxClient({ items, error }: InboxClientProps) {
   return (
     <ContentBlock
       header={{ breadcrumb: [{ label: "Inbox" }], controls: approveAll }}
-      subheader={
-        <InboxToolbar
-          counts={counts}
-          filter={filter}
-          visibleCount={visible.length}
-          onChange={changeFilter}
-        />
-      }
       className="flex min-h-0 flex-1 flex-col overflow-hidden p-0"
     >
       {error ? (
@@ -235,7 +209,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
           >
             <SheetContent
               side="right"
-              className="flex w-full flex-col p-0 sm:max-w-[432px] lg:hidden [&>button]:hidden"
+              className="flex h-full w-full max-w-none flex-col p-0 sm:max-w-none lg:hidden [&>button]:hidden"
             >
               <SheetHeader className="sr-only">
                 <SheetTitle>Inbox task details</SheetTitle>
@@ -244,19 +218,17 @@ export function InboxClient({ items, error }: InboxClientProps) {
                 </SheetDescription>
               </SheetHeader>
               <InboxClientPanel
-                task={selected}
+                task={selectedWithEffectiveStatus}
                 onResolve={resolveOne}
                 onClose={() => setSelectedId(null)}
               />
             </SheetContent>
           </Sheet>
 
-          <div
-            className={cn(
-              "flex min-w-0 flex-1 flex-col overflow-hidden",
-              desktopPanelTask && "border-r border-zinc-200 dark:border-zinc-700"
-            )}
-          >
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:w-[34%] lg:min-w-[320px] lg:max-w-[440px] lg:flex-none lg:border-r lg:border-border">
+            <div className="flex h-[46px] shrink-0 items-center border-b border-border bg-background px-3 sm:px-4">
+              <InboxToolbar counts={counts} filter={filter} onChange={changeFilter} />
+            </div>
             {anyChecked && (
               <InboxSelectionBar
                 checkedCount={checked.size}
@@ -292,26 +264,12 @@ export function InboxClient({ items, error }: InboxClientProps) {
             </div>
           </div>
 
-          <aside
-            className="relative hidden shrink-0 overflow-hidden transition-[width] duration-200 ease-out lg:block"
-            style={{ width: desktopPanelOpen ? 432 : 0 }}
-          >
-            {desktopPanelTask && (
-              <div
-                className={cn(
-                  "absolute inset-y-0 right-0 flex w-[432px] min-w-0 flex-col overflow-y-auto border-l border-border bg-background transition-all duration-200 ease-out",
-                  desktopPanelOpen
-                    ? "translate-x-0 opacity-100"
-                    : "pointer-events-none translate-x-6 opacity-0"
-                )}
-              >
-                <InboxClientPanel
-                  task={desktopPanelTask}
-                  onResolve={resolveOne}
-                  onClose={() => setSelectedId(null)}
-                />
-              </div>
-            )}
+          <aside className="hidden min-h-0 min-w-0 flex-1 overflow-hidden bg-background lg:flex">
+            <InboxClientPanel
+              task={selectedWithEffectiveStatus}
+              onResolve={resolveOne}
+              onClose={() => setSelectedId(null)}
+            />
           </aside>
         </div>
       )}

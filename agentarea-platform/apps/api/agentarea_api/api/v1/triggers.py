@@ -25,12 +25,16 @@ from uuid import UUID
 
 from agentarea_api.api.deps.services import (
     BaseSecretManagerDep,
+    SecretCatalogServiceDep,
     get_trigger_health_check,
     get_trigger_service,
 )
+from agentarea_api.api.v1._icons import CHANNEL_ICON_NAMESPACE, build_icon_url
 from agentarea_common.auth.dependencies import UserContext, get_user_context
 from agentarea_common.config.app import get_app_settings
+from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.types import UtcDatetime
+from agentarea_secrets.catalog_service import SecretCatalogService, SecretNotFoundError
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
 from agentarea_triggers.schemas.dto import TriggerCreate, TriggerUpdate
@@ -270,8 +274,16 @@ async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) 
 async def get_catalog(
     user_context: UserContext = Depends(get_user_context),
 ) -> list[dict[str, Any]]:
-    """Get the trigger catalog — available trigger types with metadata and events."""
-    return get_trigger_catalog()
+    """Get the trigger catalog — available trigger types with metadata and events.
+
+    ``icon`` is stored as data (an asset id or a full URL); it is resolved here
+    into ``icon_url`` so the frontend renders whatever it is handed and never
+    carries a table of which channels exist.
+    """
+    return [
+        {**entry, "icon_url": build_icon_url(CHANNEL_ICON_NAMESPACE, entry.get("icon"))}
+        for entry in get_trigger_catalog()
+    ]
 
 
 @router.get("/channels/events")
@@ -305,9 +317,65 @@ def _channel_secret_name(trigger: Any, trigger_id: Any) -> str | None:
     return f"channel_cred:{name}:{trigger_id}" if name else None
 
 
+async def _resolve_channel_credentials(
+    credentials: dict[str, Any] | None,
+    secret_catalog: SecretCatalogService,
+    secret_manager: BaseSecretManager,
+) -> dict[str, Any] | None:
+    """Resolve workspace secret selections before persisting any trigger changes."""
+    if not credentials:
+        return credentials
+
+    resolved = {}
+    for field, credential in credentials.items():
+        if not isinstance(credential, dict):
+            # Existing clients provide credential values directly.
+            resolved[field] = credential
+            continue
+
+        if set(credential) != {"secret_id"} or not isinstance(credential["secret_id"], str):
+            raise HTTPException(
+                status_code=422, detail="Invalid channel credential secret reference."
+            )
+        try:
+            secret_id = UUID(credential["secret_id"])
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail="Invalid channel credential secret reference."
+            ) from exc
+
+        try:
+            secret = await secret_catalog.get(secret_id)
+        except SecretNotFoundError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="Selected channel credential secret is not available in this workspace.",
+            ) from exc
+        if secret.owner_type is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Selected channel credential must be a user-owned workspace secret.",
+            )
+        try:
+            value = await secret_manager.get_secret(secret.secret_name)
+        except Exception:
+            # Provider exceptions may include sensitive material; never forward or log them.
+            raise HTTPException(
+                status_code=422, detail="Selected channel credential secret could not be read."
+            ) from None
+        if not value:
+            raise HTTPException(
+                status_code=422, detail="Selected channel credential secret has no value."
+            )
+        resolved[field] = value
+
+    return resolved
+
+
 @router.post("/", response_model=TriggerResponse, status_code=201)
 async def create_trigger(
     secret_manager: BaseSecretManagerDep,
+    secret_catalog: SecretCatalogServiceDep,
     payload: TriggerCreate = Body(...),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
@@ -326,6 +394,7 @@ async def create_trigger(
         user_context: Authentication context.
         trigger_service: Injected trigger service.
         secret_manager: Injected secret manager for credential storage.
+        secret_catalog: Workspace-scoped catalog for selected credential references.
         webhook_service: Injected service that registers the channel webhook.
 
     Returns:
@@ -338,6 +407,10 @@ async def create_trigger(
         if not user_context.user_id:
             raise HTTPException(status_code=400, detail="User ID is required to create a trigger")
 
+        credentials = await _resolve_channel_credentials(
+            payload.channel_credentials, secret_catalog, secret_manager
+        )
+
         # Convert DTO -> domain create. Done up-front so we can fold polling
         # channel credentials into ``data_extractor_config`` before persisting.
         trigger_data = payload.to_domain(
@@ -347,10 +420,18 @@ async def create_trigger(
 
         # For polling extractors, merge credentials into extractor config
         # so the Go polling service can read them (e.g. bot_token for Telegram).
-        if trigger_data.data_extractor and payload.channel_credentials:
+        # Extractors that read the secret store themselves are excluded: that
+        # column is plain JSON, and a mailbox password does not belong in it.
+        from agentarea_triggers.extractors import resolves_own_credentials
+
+        if (
+            trigger_data.data_extractor
+            and credentials
+            and not resolves_own_credentials(trigger_data.data_extractor)
+        ):
             trigger_data.data_extractor_config = {
                 **(trigger_data.data_extractor_config or {}),
-                **payload.channel_credentials,
+                **credentials,
             }
 
         # Create trigger
@@ -358,13 +439,13 @@ async def create_trigger(
 
         # Also store credentials encrypted in secret store for Python outbound delivery
         has_creds = False
-        if payload.channel_credentials and secret_manager:
+        if credentials and secret_manager:
             # Channel type for secret key: use webhook_type or derive from data_extractor.
             # Extractor names like "telegram_polling" map to channel type via suffix stripping.
             extractor = payload.data_extractor or ""
             channel_type = payload.webhook_type or extractor.removesuffix("_polling") or "generic"
             secret_name = f"channel_cred:{channel_type}:{trigger.id}"
-            await secret_manager.set_secret(secret_name, json.dumps(payload.channel_credentials))
+            await secret_manager.set_secret(secret_name, json.dumps(credentials))
             has_creds = True
             logger.info(f"Stored channel credentials for trigger {trigger.id}")
 
@@ -372,13 +453,15 @@ async def create_trigger(
             await webhook_service.register(
                 channel_type=getattr(trigger, "webhook_type", None),
                 webhook_id=getattr(trigger, "webhook_id", None),
-                credentials=payload.channel_credentials,
+                credentials=credentials,
             )
 
         logger.info(f"Created trigger {trigger.id} for agent {trigger.agent_id}")
 
         return TriggerResponse.from_domain_model(trigger, has_channel_credentials=has_creds)
 
+    except HTTPException:
+        raise
     except TriggerValidationError as e:
         logger.warning(f"Trigger validation failed: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -534,6 +617,7 @@ async def get_trigger(
 async def update_trigger(
     trigger_id: UUID,
     secret_manager: BaseSecretManagerDep,
+    secret_catalog: SecretCatalogServiceDep,
     payload: TriggerUpdate = Body(...),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
@@ -542,8 +626,8 @@ async def update_trigger(
     """Update an existing trigger.
 
     Updates the specified trigger with the provided data. Only non-null fields
-    in the request will be updated. If channel_credentials are provided,
-    they replace the existing credentials in the secret store.
+    in the request will be updated. Secret selections preserve unselected
+    credential fields; legacy raw credentials replace the stored bundle.
 
     Args:
         trigger_id: The unique identifier of the trigger.
@@ -551,6 +635,7 @@ async def update_trigger(
         user_context: Authentication context.
         trigger_service: Injected trigger service.
         secret_manager: Injected secret manager for credential storage.
+        secret_catalog: Workspace-scoped catalog for selected credential references.
         webhook_service: Injected service that registers the channel webhook.
 
     Returns:
@@ -560,6 +645,31 @@ async def update_trigger(
         HTTPException: If trigger not found or validation fails.
     """
     try:
+        credentials = await _resolve_channel_credentials(
+            payload.channel_credentials, secret_catalog, secret_manager
+        )
+        if credentials and any(
+            isinstance(value, dict) for value in (payload.channel_credentials or {}).values()
+        ):
+            current_trigger = await trigger_service.get_trigger(trigger_id)
+            if current_trigger is None:
+                raise HTTPException(status_code=404, detail=f"Trigger {trigger_id} not found")
+            secret_name = _channel_secret_name(current_trigger, trigger_id)
+            if secret_name is None:
+                extractor = getattr(current_trigger, "data_extractor", None) or ""
+                channel_type = extractor.removesuffix("_polling") or "generic"
+                secret_name = f"channel_cred:{channel_type}:{trigger_id}"
+            try:
+                stored = await secret_manager.get_secret(secret_name)
+                existing_credentials = json.loads(stored) if stored is not None else {}
+                if not isinstance(existing_credentials, dict):
+                    raise ValueError("Stored channel credentials must be an object")
+            except Exception:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Existing channel credentials could not be read. No changes were saved.",
+                ) from None
+            credentials = {**existing_credentials, **credentials}
         trigger_update = payload.to_domain()
 
         # Update trigger
@@ -567,7 +677,7 @@ async def update_trigger(
 
         # Update channel credentials if provided
         has_creds = False
-        if payload.channel_credentials and secret_manager:
+        if credentials and secret_manager:
             # Determine channel type from the updated trigger
             channel_type = "generic"
             updated_trigger_any = cast(Any, updated_trigger)
@@ -580,12 +690,12 @@ async def update_trigger(
             ):
                 channel_type = str(updated_trigger_any.data_extractor).removesuffix("_polling")
             secret_name = f"channel_cred:{channel_type}:{trigger_id}"
-            await secret_manager.set_secret(secret_name, json.dumps(payload.channel_credentials))
+            await secret_manager.set_secret(secret_name, json.dumps(credentials))
             has_creds = True
             await webhook_service.register(
                 channel_type=getattr(updated_trigger, "webhook_type", None),
                 webhook_id=getattr(updated_trigger, "webhook_id", None),
-                credentials=payload.channel_credentials,
+                credentials=credentials,
             )
             logger.info(f"Updated channel credentials for trigger {trigger_id}")
         elif secret_manager:
@@ -596,6 +706,8 @@ async def update_trigger(
 
         return TriggerResponse.from_domain_model(updated_trigger, has_channel_credentials=has_creds)
 
+    except HTTPException:
+        raise
     except TriggerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except TriggerValidationError as e:

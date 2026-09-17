@@ -129,6 +129,7 @@ async function MyConnectionsSectionServer({
           title="No matching connections"
           description={`No connections match your search query: "${searchQuery}"`}
           iconsType="mcp"
+          action={{ label: "Clear search", href: "/connections" }}
         />
       </div>
     );

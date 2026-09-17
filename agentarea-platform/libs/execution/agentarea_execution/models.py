@@ -3,6 +3,7 @@
 Integrates with existing AgentArea domain models and uses proper UUID types.
 """
 
+from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Any, Literal
 from uuid import UUID
@@ -242,6 +243,8 @@ class AgentConfigRequest(BaseModel):
     override_model: str | None = None
     # Set so the resolved config hash can be recorded against the run.
     task_id: UUID | None = None
+    # Resource selections apply to this run without changing the saved agent.
+    task_parameters: dict[str, Any] = Field(default_factory=dict)
 
 
 class SkillInfo(BaseModel):
@@ -386,6 +389,8 @@ class ToolDiscoveryRequest(BaseModel):
 
     agent_id: UUID
     user_context_data: dict[str, Any]
+    # None preserves legacy discovery; [] is an explicitly empty run config.
+    tools: list[dict[str, Any]] | None = None
 
 
 class ToolDefinition(BaseModel):
@@ -632,15 +637,36 @@ class ExecuteTriggerRequest(BaseModel):
     execution_data: dict[str, Any] = Field(default_factory=dict)
 
 
+class TriggerOutcome(StrEnum):
+    """Outcome of a trigger execution activity.
+
+    SUCCESS means the trigger produced a task. A trigger that fired but created
+    nothing is FAILED, not SUCCESS — see ExecuteTriggerResult.error.
+    """
+
+    SUCCESS = "success"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+class TriggerSkipReason(StrEnum):
+    """Why a trigger fired but was intentionally not executed."""
+
+    TRIGGER_INACTIVE = "trigger_inactive"
+    CONDITIONS_NOT_MET = "conditions_not_met"
+    NO_NEW_DATA = "no_new_data"
+
+
 class ExecuteTriggerResult(BaseModel):
     """Trigger execution result."""
 
     trigger_id: UUID
-    status: str
+    status: TriggerOutcome
     task_id: UUID | None = None
     execution_id: UUID | None = None
     execution_time_ms: int = 0
-    reason: str | None = None
+    reason: TriggerSkipReason | None = None
+    error: str | None = None
     trigger_data: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -707,12 +733,19 @@ class CreateTaskFromTriggerRequest(BaseModel):
     execution_data: dict[str, Any] = Field(default_factory=dict)
 
 
+class TaskCreationOutcome(StrEnum):
+    """Outcome of creating a task from a trigger."""
+
+    CREATED = "created"
+    FAILED = "failed"
+
+
 class CreateTaskFromTriggerResult(BaseModel):
     """Create task from trigger result."""
 
     task_id: UUID | None = None
     trigger_id: UUID
-    status: str
+    status: TaskCreationOutcome
     task_parameters: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
 

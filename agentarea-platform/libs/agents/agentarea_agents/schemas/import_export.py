@@ -252,27 +252,3 @@ class WorkspaceConfigYAML(BaseModel):
     def ensure_list(cls, v: Any) -> list:
         """Ensure fields are lists even if None."""
         return v if v is not None else []
-
-
-class ImportOptions(BaseModel):
-    """Options for import operation."""
-
-    skip_missing_dependencies: bool = Field(
-        default=False,
-        description="Skip resources with missing dependencies instead of failing",
-    )
-    override_existing: bool = Field(
-        default=False, description="Override existing resources with same name"
-    )
-
-
-class ImportResult(BaseModel):
-    """Result of an import operation."""
-
-    success: bool
-    created_skills: int = 0
-    created_agents: int = 0
-    created_mcp_instances: int = 0
-    created_provider_configs: int = 0
-    errors: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)

@@ -26,7 +26,9 @@ def _install_service(monkeypatch, **methods):
         "archive": AsyncMock(return_value=".trash/20260826T101500.000000Z/notes.md"),
         "copy": AsyncMock(),
         "delete": AsyncMock(),
-        "exists": AsyncMock(return_value=True),
+        "move": AsyncMock(),
+        "exists": AsyncMock(return_value=False),
+        "list": AsyncMock(return_value=[]),
     }
     service = SimpleNamespace(**{**defaults, **methods})
     monkeypatch.setattr(files, "ArtifactService", lambda **kwargs: service)
@@ -81,7 +83,7 @@ async def test_upload_refuses_to_write_into_reserved_prefixes(monkeypatch) -> No
 
 @pytest.mark.asyncio
 async def test_delete_archives_instead_of_destroying(monkeypatch) -> None:
-    service = _install_service(monkeypatch)
+    service = _install_service(monkeypatch, exists=AsyncMock(return_value=True))
 
     await files.delete_workspace_file("wiki/index.md", WS)
 
@@ -140,6 +142,121 @@ async def test_archived_files_are_hidden_from_the_listing(monkeypatch) -> None:
     result = await files.list_workspace_files(WS, project_service)
 
     assert [f.path for f in result.files] == ["wiki/index.md"]
+
+
+def _obj(path: str, size: int = 3):
+    return SimpleNamespace(path=path, size=size, content_type=None, last_modified=None)
+
+
+def _exists_only(*paths: str) -> AsyncMock:
+    known = set(paths)
+    return AsyncMock(side_effect=lambda _ws, path: path in known)
+
+
+def _list_by_prefix(mapping: dict[str, list]) -> AsyncMock:
+    return AsyncMock(side_effect=lambda _ws, prefix="", max_items=1000: mapping.get(prefix, []))
+
+
+@pytest.mark.asyncio
+async def test_move_relocates_a_single_file(monkeypatch) -> None:
+    service = _install_service(monkeypatch, exists=_exists_only("wiki/index.md"))
+
+    result = await files.move_workspace_file(
+        files.MoveWorkspaceFileRequest(source="wiki/index.md", destination="docs/index.md"), WS
+    )
+
+    service.move.assert_awaited_once()
+    assert service.move.await_args.args[1:] == ("wiki/index.md", "docs/index.md")
+    assert (result.source, result.destination, result.moved) == (
+        "wiki/index.md",
+        "docs/index.md",
+        1,
+    )
+
+
+@pytest.mark.asyncio
+async def test_move_relocates_a_folder_keeping_every_suffix(monkeypatch) -> None:
+    service = _install_service(
+        monkeypatch,
+        exists=_exists_only(),
+        list=_list_by_prefix(
+            {"wiki/": [_obj("wiki/"), _obj("wiki/index.md"), _obj("wiki/api/auth.md")]}
+        ),
+    )
+
+    result = await files.move_workspace_file(
+        files.MoveWorkspaceFileRequest(source="wiki", destination="docs/wiki"), WS
+    )
+
+    moved = [call.args[1:] for call in service.move.await_args_list]
+    assert moved == [
+        ("wiki/", "docs/wiki/"),
+        ("wiki/index.md", "docs/wiki/index.md"),
+        ("wiki/api/auth.md", "docs/wiki/api/auth.md"),
+    ]
+    assert result.moved == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("source", "destination"),
+    [
+        ("tasks/t-1/workspace/out.txt", "wiki/out.txt"),
+        ("wiki/index.md", "tasks/t-1/workspace/index.md"),
+        ("staging/x/f.txt", "wiki/f.txt"),
+        ("wiki/index.md", ".trash/old/index.md"),
+        ("wiki/index.md", "../escape.md"),
+    ],
+)
+async def test_move_refuses_reserved_and_escaping_paths(monkeypatch, source, destination) -> None:
+    service = _install_service(monkeypatch, exists=_exists_only(source))
+
+    with pytest.raises(HTTPException) as exc:
+        await files.move_workspace_file(
+            files.MoveWorkspaceFileRequest(source=source, destination=destination), WS
+        )
+
+    assert exc.value.status_code == 422
+    service.move.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_move_refuses_a_destination_inside_the_source(monkeypatch) -> None:
+    service = _install_service(monkeypatch, exists=_exists_only())
+
+    with pytest.raises(HTTPException) as exc:
+        await files.move_workspace_file(
+            files.MoveWorkspaceFileRequest(source="wiki", destination="wiki/nested"), WS
+        )
+
+    assert exc.value.status_code == 422
+    service.move.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_move_refuses_an_occupied_destination(monkeypatch) -> None:
+    service = _install_service(monkeypatch, exists=_exists_only("wiki/index.md", "docs/index.md"))
+
+    with pytest.raises(HTTPException) as exc:
+        await files.move_workspace_file(
+            files.MoveWorkspaceFileRequest(source="wiki/index.md", destination="docs/index.md"), WS
+        )
+
+    assert exc.value.status_code == 409
+    service.move.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_move_reports_a_missing_source(monkeypatch) -> None:
+    service = _install_service(monkeypatch, exists=_exists_only())
+
+    with pytest.raises(HTTPException) as exc:
+        await files.move_workspace_file(
+            files.MoveWorkspaceFileRequest(source="wiki/gone.md", destination="docs/gone.md"), WS
+        )
+
+    assert exc.value.status_code == 404
+    service.move.assert_not_awaited()
 
 
 @pytest.mark.asyncio

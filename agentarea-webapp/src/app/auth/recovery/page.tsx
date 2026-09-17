@@ -1,13 +1,12 @@
 // Copyright © 2024 Ory Corp
 
 import type { Metadata } from "next";
-import { getRecoveryFlow, OryPageParams } from "@ory/nextjs/app";
-import config from "@/ory.config";
-import { rewriteFlowForBrowser } from "@/lib/auth/browser-config";
-import { RecoveryForm } from "./recovery-form";
-
 import { AuthLayout } from "@/components/auth/auth-layout";
+import { rewriteFlowForBrowser } from "@/lib/auth/browser-config";
 import { getAuthPageConfig } from "@/lib/auth/page-config";
+import { getRecoveryFlow, OryPageParams } from "@/lib/ory";
+import config from "@/ory.config";
+import { RecoveryForm } from "./recovery-form";
 
 export const metadata: Metadata = {
   title: "Password Recovery",
@@ -21,7 +20,7 @@ export default async function RecoveryPage(props: OryPageParams) {
   }
 
   const browserFlow = rewriteFlowForBrowser(flow);
-  const recoveryConfig = getAuthPageConfig();
+  const recoveryConfig = await getAuthPageConfig();
 
   return (
     <AuthLayout>

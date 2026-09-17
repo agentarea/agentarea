@@ -149,11 +149,18 @@ class CatalogItemUpdate(BaseModel):
     tags: list[str] | None = None
 
 
+class SkippedItem(BaseModel):
+    external_id: str
+    reason: str
+
+
 class SyncResponse(BaseModel):
     new_specs: int
     updates_flagged: int
     unchanged: int
     total: int
+    skipped: int = 0
+    skipped_items: list[SkippedItem] = Field(default_factory=list)
 
 
 class UpdateAllResponse(BaseModel):

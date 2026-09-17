@@ -227,6 +227,7 @@ class TriggerUpdate(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=1000)
+    agent_id: UUID | None = None
     is_active: bool | None = None
     task_parameters: dict[str, Any] | None = None
     conditions: dict[str, Any] | None = None

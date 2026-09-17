@@ -23,6 +23,7 @@ export default async function AgentsContent({
   viewMode = "grid",
 }: AgentsContentProps) {
   const t = await getTranslations("AgentsPage");
+  const tCommon = await getTranslations("Common");
 
   const [
     { data: agents = [] },
@@ -102,6 +103,7 @@ export default async function AgentsContent({
           title={t("noAgentsTitle")}
           description={t("noAgentsDescription")}
           iconsType="agent"
+          action={{ label: t("createAgent"), href: "/agents/create" }}
         />
         <CatalogSuggestions type="agents" />
       </div>
@@ -114,6 +116,7 @@ export default async function AgentsContent({
         title={t("noMatchingAgents")}
         description={`${t("noMatchingAgentsDescription")}: "${searchQuery}"`}
         iconsType="agent"
+        action={{ label: tCommon("clearSearch"), href: "/agents" }}
       />
     );
   }

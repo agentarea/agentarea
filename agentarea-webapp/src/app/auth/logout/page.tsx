@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getLogoutFlow } from "@ory/nextjs/app";
+import { getLogoutFlow } from "@/lib/ory";
 
 export default async function LogoutPage() {
   const flow = await getLogoutFlow();

@@ -30,7 +30,8 @@ FROM golang:1.25-alpine AS dev
 RUN apk add --no-cache git ca-certificates docker-cli dumb-init \
     && rm -rf /var/cache/apk/*
 
-RUN go install github.com/air-verse/air@latest
+# Pinned: air >= v1.67.2 requires Go 1.26, which this base image does not ship.
+RUN go install github.com/air-verse/air@v1.67.1
 
 WORKDIR /app
 
@@ -61,8 +62,13 @@ COPY --from=builder /app/bin/sandbox-runner /app/sandbox-runner
 # Templates are mounted at runtime
 RUN mkdir -p /app/templates
 
+# Probe the HTTP endpoint, the way Dockerfile.runner does. The binary parses no
+# flags, so `--health` did not run a check: it booted a second server inside the
+# running container, which then failed to bind and reported every healthy
+# manager as unhealthy. SERVER_PORT is honoured because the port is configurable
+# and compose moves it to 80 to match the published mapping.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD /app/mcp-manager --health || exit 1
+    CMD wget -qO- "http://localhost:${SERVER_PORT:-8000}/health" >/dev/null || exit 1
 
 # 8000: mcp-manager API, 80: internal proxy
 EXPOSE 8000 80

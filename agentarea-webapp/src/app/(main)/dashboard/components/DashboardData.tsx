@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { BoardGrid } from "@/components/board";
-import EmptyState from "@/components/EmptyState";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { getDashboard } from "@/lib/api-dashboard";
 import { ActivityStrip } from "./ActivityStrip";
 import { AgentRows } from "./AgentRows";
@@ -21,7 +21,7 @@ export async function DashboardData() {
     const t = await getTranslations("DashboardPage");
     return (
       <div className="p-6">
-        <EmptyState
+        <RetryEmptyState
           title={t("couldntLoadTitle")}
           description={error}
           iconsType="tasks"

@@ -28,6 +28,31 @@ export function isProtectedRoute(pathname: string): boolean {
   );
 }
 
+const LOGIN_PATH = "/auth/login";
+
+/**
+ * Where to send an unauthenticated request for `pathname`.
+ *
+ * The requested page travels along as `return_to` so a link opened from
+ * outside the app — an emailed workspace invitation, which by definition
+ * lands on someone with no session — comes back to its target after sign-in
+ * instead of dropping its one-time token at the dashboard.
+ *
+ * The target stays relative: Kratos fills in the scheme and host from
+ * `default_browser_return_url` before matching `allowed_return_urls`, so this
+ * works on any public host without the middleware having to know it.
+ */
+export function loginRedirectPath(pathname: string, search: string): string {
+  // "//host" and "/\host" are protocol-relative — a browser reads them as
+  // another origin, so they must never become a return target.
+  const escapesOrigin = /^\/[/\\]/.test(pathname);
+  if (pathname === "/" || escapesOrigin || !isProtectedRoute(pathname)) {
+    return LOGIN_PATH;
+  }
+  const params = new URLSearchParams({ return_to: `${pathname}${search}` });
+  return `${LOGIN_PATH}?${params}`;
+}
+
 /**
  * Returns true only when the forwarded cookies resolve to a live Kratos
  * session that can be tokenized as an agentarea JWT.

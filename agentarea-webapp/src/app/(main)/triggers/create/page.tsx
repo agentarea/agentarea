@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
 import { listAgents } from "@/lib/api";
+import CreateTriggerHeaderControls from "./CreateTriggerHeaderControls";
 import { CreateTriggerForm } from "./CreateTriggerForm";
 
 export const metadata = {
@@ -20,8 +21,9 @@ export default async function CreateTriggerPage() {
           { label: t("title"), href: "/triggers" },
           { label: tCreate("title") },
         ],
-        description: tCreate("description"),
-        backLink: { label: tCreate("back"), href: "/triggers" },
+        controls: (
+          <CreateTriggerHeaderControls label={tCreate("createButton")} />
+        ),
       }}
     >
       <CreateTriggerForm agents={agents ?? []} />

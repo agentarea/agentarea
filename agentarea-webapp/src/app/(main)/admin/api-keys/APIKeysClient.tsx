@@ -21,6 +21,7 @@ import {
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useToast } from "@/hooks/use-toast";
 import { getApiKeyStatusPresentation } from "@/lib/status";
+import CreateAPIKeyDialog from "./components/CreateAPIKeyDialog";
 import { revokeAPIKeyAction } from "./actions";
 
 type APIKeyStatusType = "active" | "revoked" | "expired";
@@ -117,6 +118,7 @@ export default function APIKeysClient({
   const dateLocale = locale === "ru" ? ru : undefined;
 
   const [revokeOpen, setRevokeOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<APIKey | null>(null);
   const [revoking, setRevoking] = useState(false);
 
@@ -269,11 +271,25 @@ export default function APIKeysClient({
 
   if (keys.length === 0) {
     return (
-      <EmptyState
-        title={t("noKeys")}
-        description={t("noKeysDescription")}
-        iconsType="apiKey"
-      />
+      <>
+        <EmptyState
+          title={t("noKeys")}
+          description={t("noKeysDescription")}
+          iconsType="apiKey"
+          action={{ label: t("createKey"), onClick: () => setCreateOpen(true) }}
+        />
+        <CreateAPIKeyDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          onSuccess={(token?: string) =>
+            token
+              ? router.push(
+                  `/admin/api-keys?new_token=${encodeURIComponent(token)}`
+                )
+              : router.refresh()
+          }
+        />
+      </>
     );
   }
 

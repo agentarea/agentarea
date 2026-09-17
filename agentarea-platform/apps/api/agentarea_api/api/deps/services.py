@@ -9,9 +9,9 @@ from datetime import datetime
 from typing import Annotated, Final
 
 from agentarea_agents.application.agent_service import AgentService
-from agentarea_agents.application.import_export_service import WorkspaceImportExportService
 from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
+from agentarea_agents.application.workspace_export_service import WorkspaceExportService
 from agentarea_agents.domain.interfaces import ExecutionServiceInterface
 from agentarea_common.audit.service import AuditService
 from agentarea_common.auth import UserContextDep
@@ -281,7 +281,7 @@ async def get_skill_service(
     )
 
 
-async def get_workspace_import_export_service(
+async def get_workspace_export_service(
     repository_factory: RepositoryFactoryDep,
     event_broker: EventBrokerDep,
     mcp_instance_service: Annotated[
@@ -289,14 +289,14 @@ async def get_workspace_import_export_service(
     ],
     provider_service: Annotated["ProviderService", Depends(get_provider_service)],
     skill_service: Annotated["SkillService", Depends(get_skill_service)],
-) -> WorkspaceImportExportService:
-    """Get a WorkspaceImportExportService instance for the current request."""
+) -> WorkspaceExportService:
+    """Get a WorkspaceExportService instance for the current request."""
     from agentarea_common.auth.authorization import AuthorizationService
     from agentarea_common.di.container import resolve
 
     authz = resolve(AuthorizationService)
     agent_service = AgentService(repository_factory, event_broker, authorization_service=authz)
-    return WorkspaceImportExportService(
+    return WorkspaceExportService(
         agent_service=agent_service,
         repository_factory=repository_factory,
         mcp_instance_service=mcp_instance_service,
@@ -366,9 +366,7 @@ async def get_read_task_service(
 # Common service type hints for easier use
 AgentServiceDep = Annotated[AgentService, Depends(get_agent_service)]
 SkillServiceDep = Annotated[SkillService, Depends(get_skill_service)]
-WorkspaceImportExportServiceDep = Annotated[
-    WorkspaceImportExportService, Depends(get_workspace_import_export_service)
-]
+WorkspaceExportServiceDep = Annotated[WorkspaceExportService, Depends(get_workspace_export_service)]
 ProviderServiceDep = Annotated[ProviderService, Depends(get_provider_service)]
 ModelInstanceServiceDep = Annotated[ModelInstanceService, Depends(get_model_instance_service)]
 TaskServiceDep = Annotated[TaskService, Depends(get_task_service)]

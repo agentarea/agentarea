@@ -120,3 +120,50 @@ def test_stripe_missing_header_fails():
         "stripe", {"signing_secret": "whsec_test"}, {}, {}, BODY
     )
     assert result is False
+
+
+# --- A configured secret must never be silently ignored --------------------
+# A type with no dedicated verifier used to resolve to "not enabled", so a
+# deployment could set a signing secret, see no error, and stay unprotected.
+
+
+def _generic_sig(secret: str, body: bytes) -> str:
+    return hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+def test_email_secret_is_actually_enforced():
+    secret = "inbound-parse-secret"  # noqa: S105 — fixture credential
+    headers = {"X-Webhook-Signature": _generic_sig(secret, BODY)}
+
+    result = verify_webhook_signature("email", {"signing_secret": secret}, {}, headers, BODY)
+
+    assert result is True
+
+
+def test_email_bad_signature_is_rejected():
+    result = verify_webhook_signature(
+        "email", {"signing_secret": "inbound-parse-secret"}, {}, {"X-Webhook-Signature": "nope"}, BODY
+    )
+
+    assert result is False
+
+
+def test_email_signature_header_and_prefix_are_configurable():
+    """Providers sign with different header names; that is configuration."""
+    secret = "inbound-parse-secret"  # noqa: S105 — fixture credential
+    rules = {
+        "signing_secret": secret,
+        "signature_header": "x-provider-signature",
+        "signature_prefix": "sha256=",
+    }
+    headers = {"X-Provider-Signature": "sha256=" + _generic_sig(secret, BODY)}
+
+    assert verify_webhook_signature("email", rules, {}, headers, BODY) is True
+
+
+def test_email_without_a_secret_still_skips_verification():
+    assert verify_webhook_signature("email", {}, {}, {}, BODY) is None
+
+
+def test_email_signing_secret_resolves():
+    assert resolve_signing_secret("email", {"signing_secret": "x"}, {}) == "x"

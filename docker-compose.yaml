@@ -37,6 +37,19 @@ services:
       - KRATOS_JWKS_B64=${KRATOS_JWKS_B64}
       - KRATOS_ISSUER=${KRATOS_ISSUER:-http://localhost:4433}
       - KRATOS_AUDIENCE=${KRATOS_AUDIENCE:-agentarea-api}
+      - KRATOS_ADMIN_URL=${KRATOS_ADMIN_URL:-http://kratos:4434}
+      # Transactional mail (workspace invitations). Same server Kratos' courier
+      # uses, so one SMTP setup covers both senders.
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_PROTOCOL=${SMTP_PROTOCOL:-smtp}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-AgentArea}
+      - SMTP_SKIP_SSL_VERIFY=${SMTP_SKIP_SSL_VERIFY:-true}
+      - SMTP_DISABLE_STARTTLS=${SMTP_DISABLE_STARTTLS:-true}
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:3000}
     depends_on:
       db:
         condition: service_healthy

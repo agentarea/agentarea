@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -46,8 +46,68 @@ type NavItem = {
 type NavSection = {
   label?: string;
   labelKey?: string;
+  collapsible?: boolean;
   items: NavItem[];
 };
+
+const SECTIONS_STORAGE_KEY = "navOpenSections";
+
+const matchesPath = (pathname: string, url: string) =>
+  pathname === url || pathname.startsWith(`${url}/`);
+
+const getSectionId = (section: NavSection, index: number) =>
+  section.labelKey ?? section.label ?? `section-${index}`;
+
+const sectionHasActivePath = (section: NavSection, pathname: string) =>
+  section.items.some(
+    (item) =>
+      matchesPath(pathname, item.url) ||
+      item.items?.some((sub) => matchesPath(pathname, sub.url))
+  );
+
+function NavSectionGroup({
+  section,
+  isIconSidebar,
+  open,
+  onOpenChange,
+  children,
+}: {
+  section: NavSection;
+  isIconSidebar: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  const t = useTranslations("Sidebar");
+  const label = section.labelKey ? t(section.labelKey) : section.label;
+  const collapsible = section.collapsible ?? Boolean(label);
+
+  if (!collapsible || isIconSidebar) {
+    return (
+      <SidebarGroup>
+        {label && !isIconSidebar && <SidebarGroupLabel>{label}</SidebarGroupLabel>}
+        {children}
+      </SidebarGroup>
+    );
+  }
+
+  return (
+    <Collapsible open={open} onOpenChange={onOpenChange} asChild>
+      <SidebarGroup className={cn(!open && "py-0")}>
+        <SidebarGroupLabel asChild>
+          <CollapsibleTrigger className="group/section-trigger gap-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground [&>svg]:size-3.5">
+            <span>{label}</span>
+            <ChevronRight
+              aria-hidden="true"
+              className="text-muted-foreground/70 transition-transform duration-200 group-data-[state=open]/section-trigger:rotate-90 motion-reduce:transition-none"
+            />
+          </CollapsibleTrigger>
+        </SidebarGroupLabel>
+        <CollapsibleContent className="pt-1">{children}</CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
+  );
+}
 
 export function NavMain({
   sections,
@@ -56,6 +116,17 @@ export function NavMain({
 }) {
   const items = sections.flatMap((s) => s.items);
   const pathname = usePathname();
+  const activeSectionIds = useMemo(
+    () =>
+      sections
+        .map((section, index) => getSectionId(section, index))
+        .filter((_, index) => sectionHasActivePath(sections[index], pathname)),
+    [sections, pathname]
+  );
+  const [openSections, setOpenSections] = useState<Set<string>>(
+    () => new Set(activeSectionIds)
+  );
+  const sectionsRestored = useRef(false);
   const [openCollapsibles, setOpenCollapsibles] = useState<Set<string>>(
     new Set()
   );
@@ -91,6 +162,35 @@ export function NavMain({
       }
     };
   }, []);
+  // Секция с активной страницей всегда раскрыта, остальные — как их оставил пользователь
+  useEffect(() => {
+    const saved = localStorage.getItem(SECTIONS_STORAGE_KEY);
+    sectionsRestored.current = true;
+    if (!saved) return;
+    try {
+      const parsed: string[] = JSON.parse(saved);
+      setOpenSections((prev) => new Set([...parsed, ...prev]));
+    } catch (e) {
+      console.warn("Failed to parse saved open sections:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    setOpenSections((prev) =>
+      activeSectionIds.every((id) => prev.has(id))
+        ? prev
+        : new Set([...prev, ...activeSectionIds])
+    );
+  }, [activeSectionIds]);
+
+  useEffect(() => {
+    if (!sectionsRestored.current) return;
+    localStorage.setItem(
+      SECTIONS_STORAGE_KEY,
+      JSON.stringify(Array.from(openSections))
+    );
+  }, [openSections]);
+
   // Восстанавливаем только открытые коллапсы из localStorage при инициализации
   useEffect(() => {
     const savedOpenCollapsibles = localStorage.getItem("navOpenCollapsibles");
@@ -139,8 +239,7 @@ export function NavMain({
   }, [openCollapsibles]);
 
   // Активность ссылки для точного совпадения и вложенных путей
-  const isItemActive = (url: string) =>
-    pathname === url || pathname.startsWith(`${url}/`);
+  const isItemActive = (url: string) => matchesPath(pathname, url);
 
   // Проверяем, открыт ли коллапс
   const isCollapsibleOpen = (id: string) => openCollapsibles.has(id);
@@ -149,9 +248,26 @@ export function NavMain({
 
   return (
     <>
-    {sections.map((section, sectionIndex) => (
-    <SidebarGroup key={section.labelKey || section.label || sectionIndex}>
-      {section.label && <SidebarGroupLabel>{section.labelKey ? t(section.labelKey) : section.label}</SidebarGroupLabel>}
+    {sections.map((section, sectionIndex) => {
+    const sectionId = getSectionId(section, sectionIndex);
+    return (
+    <NavSectionGroup
+      key={sectionId}
+      section={section}
+      isIconSidebar={state === "collapsed" && !isMobile}
+      open={openSections.has(sectionId)}
+      onOpenChange={(next) =>
+        setOpenSections((prev) => {
+          const updated = new Set(prev);
+          if (next) {
+            updated.add(sectionId);
+          } else {
+            updated.delete(sectionId);
+          }
+          return updated;
+        })
+      }
+    >
       <SidebarMenu>
         {section.items.map((item) => {
           if (item.items) {
@@ -315,8 +431,9 @@ export function NavMain({
           );
         })}
       </SidebarMenu>
-    </SidebarGroup>
-    ))}
+    </NavSectionGroup>
+    );
+    })}
     </>
   );
 }

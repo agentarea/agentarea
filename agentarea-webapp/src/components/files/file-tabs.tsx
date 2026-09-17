@@ -1,99 +1,83 @@
 "use client";
 
-import { X } from "lucide-react";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { useTranslations } from "next-intl";
+import { FileText, Folder, X } from "lucide-react";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { cn } from "@/lib/utils";
-import {
-  FileViewerContent,
-  type FetchUrlFn,
-  type FetchHistoryFn,
-} from "./file-viewer";
-import type { BrowsedFile } from "./file-tree";
+import { FOLDER_TAB } from "./tab-state";
 
-export function FileTabs({
-  openFiles,
-  activePath,
-  onActivate,
+/** The strip above the browser's content: the folder, then each open file.
+ *
+ * Must be rendered inside a Radix `Tabs` whose value is the folder sentinel or
+ * an open file's path. The folder tab has no close button — it is where the
+ * browser returns when the last file closes. */
+export function FileTabStrip({
+  folderLabel,
+  open,
+  active,
   onClose,
-  fetchUrl,
-  fetchHistory,
 }: {
-  openFiles: BrowsedFile[];
-  activePath: string | null;
-  onActivate: (path: string) => void;
+  folderLabel: string;
+  open: string[];
+  /** The focused file, or null while the folder tab is showing. */
+  active: string | null;
   onClose: (path: string) => void;
-  fetchUrl: FetchUrlFn;
-  fetchHistory?: FetchHistoryFn;
 }) {
-  if (openFiles.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Select a file to preview it.
-      </div>
-    );
-  }
-
+  const t = useTranslations("FilesPage");
   return (
-    <Tabs
-      value={activePath ?? undefined}
-      onValueChange={onActivate}
-      className="flex h-full flex-col"
+    <TabsPrimitive.List
+      aria-label={t("openFiles")}
+      className="flex h-9 min-w-0 flex-1 items-stretch overflow-x-auto"
     >
-      <TabsPrimitive.List
-        className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b bg-muted/30"
+      <TabsPrimitive.Trigger
+        value={FOLDER_TAB}
+        className={cn(
+          "flex shrink-0 items-center gap-1.5 border-r px-3 text-sm outline-none",
+          active === null
+            ? "bg-background text-foreground"
+            : "text-muted-foreground hover:bg-background/60"
+        )}
       >
-        {openFiles.map((file) => {
-          const isActive = file.path === activePath;
-          const fileName = file.path.split("/").pop() || file.path;
-          return (
-            <div
-              key={file.path}
+        <Folder className="h-3.5 w-3.5 shrink-0 text-primary/80" />
+        <span className="max-w-[180px] truncate">{folderLabel}</span>
+      </TabsPrimitive.Trigger>
+      {open.map((path) => {
+        const name = path.split("/").pop() || path;
+        const isActive = path === active;
+        return (
+          <div
+            key={path}
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 border-r pl-3 pr-1.5 text-sm",
+              isActive ? "bg-background" : "hover:bg-background/60"
+            )}
+          >
+            <TabsPrimitive.Trigger
+              value={path}
               className={cn(
-                "group flex items-center gap-1.5 border-r pl-3 pr-1.5 text-sm",
-                isActive ? "bg-background" : "bg-transparent hover:bg-background/60"
+                "flex items-center gap-1.5 outline-none",
+                isActive ? "text-foreground" : "text-muted-foreground"
               )}
             >
-              <TabsPrimitive.Trigger
-                value={file.path}
-                className={cn(
-                  "flex items-center gap-1.5 outline-none",
-                  isActive ? "text-foreground" : "text-muted-foreground"
-                )}
-              >
-                <span className="truncate max-w-[180px]" title={file.path}>
-                  {fileName}
-                </span>
-              </TabsPrimitive.Trigger>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClose(file.path);
-                }}
-                className="rounded p-0.5 text-muted-foreground opacity-60 hover:bg-muted hover:opacity-100"
-                aria-label={`Close ${fileName}`}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          );
-        })}
-      </TabsPrimitive.List>
-
-      {openFiles.map((file) => (
-        <TabsContent
-          key={file.path}
-          value={file.path}
-          className="mt-0 flex-1 overflow-hidden focus-visible:ring-0"
-        >
-          <FileViewerContent
-            file={file}
-            fetchUrl={fetchUrl}
-            fetchHistory={fetchHistory}
-          />
-        </TabsContent>
-      ))}
-    </Tabs>
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span className="max-w-[180px] truncate" title={path}>
+                {name}
+              </span>
+            </TabsPrimitive.Trigger>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onClose(path);
+              }}
+              className="rounded p-0.5 text-muted-foreground opacity-60 hover:bg-muted hover:opacity-100"
+              aria-label={t("closeTab", { name })}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        );
+      })}
+    </TabsPrimitive.List>
   );
 }

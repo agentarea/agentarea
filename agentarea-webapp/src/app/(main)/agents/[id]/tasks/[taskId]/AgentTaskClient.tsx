@@ -4,10 +4,9 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Bot, Check, Clock, Pause, Play, Square } from "lucide-react";
 import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import AgentChat from "@/components/Chat/AgentChat";
+import { TaskStatus } from "@/components/TaskStatus";
 import { Button } from "@/components/ui/button";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
-import { StatusIndicator } from "@/components/ui/status-indicator";
-import { getTaskStatusPresentation } from "@/lib/status";
 import {
   cancelTask,
   changeTaskModel,
@@ -187,21 +186,12 @@ export default function AgentTaskClient({ agent, taskId, task }: Props) {
     }
   };
 
-  const getStatusBadge = () => {
-    const status = taskStatus?.status || task?.status;
-    const presentation = getTaskStatusPresentation(status || "unknown");
-
-    return (
-      <StatusIndicator
-        size="sm"
-        tone={presentation.tone}
-        pulse={presentation.pulse}
-        className="whitespace-nowrap"
-      >
-        {presentation.label}
-      </StatusIndicator>
-    );
-  };
+  const getStatusBadge = () => (
+    <TaskStatus
+      status={taskStatus?.status || task?.status || "unknown"}
+      className="whitespace-nowrap"
+    />
+  );
 
   const currentStatus = taskStatus?.status || task?.status || "";
   const isActiveTask = ["running", "paused", "blocked"].includes(currentStatus);

@@ -8,7 +8,6 @@ import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getTriggerStatusPresentation } from "@/lib/status";
 import {
   findTriggerCatalogEntry,
-  getTriggerIconComponent,
   renderTriggerIcon,
   type EnrichedTrigger,
   type TriggerCatalogEntry,
@@ -23,7 +22,6 @@ export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
   const t = useTranslations("TriggersPage");
 
   const entry = findTriggerCatalogEntry(trigger, catalog);
-  const Icon = getTriggerIconComponent(entry, trigger);
   const isActive = trigger.is_active;
   const status = getTriggerStatusPresentation(isActive ? "active" : "inactive");
 
@@ -32,7 +30,7 @@ export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
       href={`/triggers/${trigger.id}`}
       title={trigger.name}
       type="view"
-      icon={Icon}
+      icon={entry?.icon_url ?? undefined}
       subtitle={
         <div className="flex items-center gap-1.5">
           <Badge

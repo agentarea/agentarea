@@ -1,4 +1,4 @@
-import EmptyState from "@/components/EmptyState";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { listAgents, listPolicies } from "@/lib/api";
 import type { Policy } from "@/types/policies";
 import PoliciesEditableView from "./PoliciesEditableView";
@@ -42,7 +42,7 @@ export async function PoliciesData() {
   if (policiesError && policies.length === 0) {
     return (
       <div className="space-y-4">
-        <EmptyState
+        <RetryEmptyState
           title="Couldn't load policies"
           description={policiesError}
           iconsType="audit"

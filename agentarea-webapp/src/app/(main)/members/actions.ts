@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import {
   createWorkspaceInvitation,
   removeWorkspaceMember,
@@ -7,6 +9,7 @@ import {
 } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { getAuthContext } from "@/lib/getAuthContext";
+import { WORKSPACE_SLUG_COOKIE } from "@/lib/workspaces";
 
 export async function createInvitationAction(input: {
   email?: string;
@@ -38,12 +41,22 @@ export async function revokeInvitationAction(invitationId: string) {
 }
 
 export async function removeMemberAction(userId: string) {
-  const { workspaceId } = await getAuthContext();
+  const { workspaceId, userId: callerId } = await getAuthContext();
   if (!workspaceId) return { error: "No workspace context" };
 
   const result = await removeWorkspaceMember(workspaceId, userId);
   if (result.error) {
     return { error: apiErrorMessage(result, "Failed to remove member") };
   }
+
+  // Leaving invalidates the active-workspace cookie: it is sent with every
+  // later request, and the backend now refuses it, which would lock the user
+  // out of the whole app rather than just this page.
+  if (callerId && userId === callerId) {
+    const cookieStore = await cookies();
+    cookieStore.delete(WORKSPACE_SLUG_COOKIE);
+    revalidatePath("/", "layout");
+  }
+
   return { ok: true };
 }

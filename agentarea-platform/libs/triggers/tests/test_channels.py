@@ -352,6 +352,56 @@ class TestEmailAdapter:
             with pytest.raises(FatalError, match="authentication"):
                 await adapter.send({"trigger_id": "t1", "reply_to": "u@x.io"}, "<p>hi</p>")
 
+    # --- threading: the reply belongs in the conversation it answers ----------
+
+    async def _sent_message(self, creds, channel_config):
+        sm = AsyncMock()
+        sm.get_secret = AsyncMock(return_value=creds)
+        adapter = EmailAdapter(secret_manager=sm)
+        with patch("agentarea_triggers.channels.email.aiosmtplib.send", new=AsyncMock()) as send:
+            await adapter.send(channel_config, "<p>hi</p>")
+        return send.await_args.args[0], sm
+
+    @pytest.mark.asyncio
+    async def test_reply_references_the_whole_chain(self, creds):
+        """Mail clients thread on References; sending only the parent breaks it."""
+        message, _ = await self._sent_message(
+            creds,
+            {
+                "trigger_id": "t1",
+                "reply_to": "u@x.io",
+                "message_id": "<second@x>",
+                "references": ["<root@x>", "<second@x>"],
+            },
+        )
+
+        assert message["In-Reply-To"] == "<second@x>"
+        assert message["References"] == "<root@x> <second@x>"
+
+    @pytest.mark.asyncio
+    async def test_a_first_reply_still_threads_on_the_message_id(self, creds):
+        message, _ = await self._sent_message(
+            creds,
+            {"trigger_id": "t1", "reply_to": "u@x.io", "message_id": "<root@x>"},
+        )
+
+        assert message["References"] == "<root@x>"
+
+    @pytest.mark.asyncio
+    async def test_credentials_follow_the_channel_that_received_the_mail(self, creds):
+        """A polled mailbox keeps one credential blob for both IMAP and SMTP."""
+        _, sm = await self._sent_message(
+            creds,
+            {
+                "trigger_id": "t1",
+                "reply_to": "u@x.io",
+                "type": "email",
+                "credential_type": "imap",
+            },
+        )
+
+        sm.get_secret.assert_awaited_once_with("channel_cred:imap:t1")
+
 
 class TestAdapterRegistry:
     """Test channel adapter registry."""

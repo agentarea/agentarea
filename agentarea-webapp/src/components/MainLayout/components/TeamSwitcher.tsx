@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Building2, Check, ChevronsUpDown, Plus, User } from "lucide-react";
+import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +33,8 @@ import {
   createWorkspaceAction,
   switchWorkspaceAction,
 } from "@/lib/workspace-actions";
-import { isPersonalWorkspace, type Workspace } from "@/lib/workspaces";
+import type { Workspace } from "@/lib/workspaces";
+import { cn } from "@/lib/utils";
 
 function WorkspaceIcon({
   workspace,
@@ -41,8 +43,15 @@ function WorkspaceIcon({
   workspace: Workspace;
   className?: string;
 }) {
-  const Icon = isPersonalWorkspace(workspace) ? User : Building2;
-  return <Icon className={className} />;
+  return (
+    <Image
+      src="/Icon.svg"
+      alt={workspace.name}
+      width={32}
+      height={32}
+      className={cn("rounded-md", className)}
+    />
+  );
 }
 
 export function TeamSwitcher({
@@ -104,11 +113,8 @@ export function TeamSwitcher({
                 size="lg"
                 className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-all duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
               >
-                <div className="flex aspect-square size-8 items-center justify-center rounded-md border border-border/60 bg-transparent">
-                  <WorkspaceIcon
-                    workspace={active}
-                    className="size-4 text-zinc-900 dark:text-zinc-100"
-                  />
+                <div className="flex aspect-square size-8 items-center justify-center bg-transparent">
+                  <WorkspaceIcon workspace={active} className="size-8" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
@@ -140,8 +146,8 @@ export function TeamSwitcher({
                   disabled={isPending}
                   className="gap-2 p-2 cursor-pointer"
                 >
-                  <div className="flex size-6 items-center justify-center rounded-md border">
-                    <WorkspaceIcon workspace={workspace} className="size-3.5" />
+                  <div className="flex size-6 items-center justify-center">
+                    <WorkspaceIcon workspace={workspace} className="size-6" />
                   </div>
                   <span className="flex-1 truncate">{workspace.name}</span>
                   {workspace.slug === activeSlug && (

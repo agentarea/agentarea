@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type {
   CreateWalletRequest,
+  CreateWorkspaceDirectoryRequest,
   FundWalletRequest,
   McpServerCreate,
   McpServerInstanceCreate,
@@ -16,6 +17,7 @@ import type {
   UpdateWalletRequest,
 } from "@/api/client/types.gen";
 import {
+  zCreateWorkspaceDirectoryRequest,
   zProviderConfigCreate,
   zProviderConfigUpdate,
 } from "@/api/client/zod.gen";
@@ -32,6 +34,7 @@ import {
   checkMCPServerInstanceConfiguration,
   continueAgentTask,
   createAgentWallet,
+  createWorkspaceDirectory,
   createClient,
   createMCPAuthConfig,
   createMCPServer,
@@ -57,7 +60,6 @@ import {
   downloadProjectFile,
   downloadWorkspaceFile,
   enableTrigger,
-  exportWorkspace,
   flattenSkill,
   fundAgentWallet,
   getAgent,
@@ -78,7 +80,6 @@ import {
   getSkillFiles,
   getTask,
   getTaskPolicySnapshot,
-  importWorkspace,
   installAgent,
   installSkill,
   listAgents,
@@ -506,18 +507,6 @@ export async function getNetworkTopologyAction() {
   return await getNetworkTopology();
 }
 
-export async function exportWorkspaceAction() {
-  return await exportWorkspace();
-}
-
-export async function importWorkspaceAction(body: {
-  config: string;
-  skip_missing_dependencies?: boolean;
-  override_existing?: boolean;
-}) {
-  return await importWorkspace(body);
-}
-
 export async function listTriggersAction(params?: {
   agent_id?: string;
   trigger_type?: string;
@@ -850,6 +839,12 @@ export async function listWorkspaceFilesAction() {
   return await listWorkspaceFiles();
 }
 
+export async function createWorkspaceDirectoryAction(body: CreateWorkspaceDirectoryRequest) {
+  const parsed = zCreateWorkspaceDirectoryRequest.safeParse(body);
+  if (!parsed.success) return { data: null, error: parsed.error.flatten() };
+  return await createWorkspaceDirectory(parsed.data);
+}
+
 export async function uploadWorkspaceFileAction(formData: FormData) {
   const authToken = await getAuthToken();
   const uploadUrl = `${env.API_URL}/v1/files`;
@@ -893,6 +888,29 @@ export async function deleteWorkspaceFileAction(filePath: string) {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({
       detail: "Delete failed",
+    }));
+    return { data: null, error: errorData };
+  }
+
+  return { data: await response.json(), error: null };
+}
+
+export async function moveWorkspaceFileAction(source: string, destination: string) {
+  const authToken = await getAuthToken();
+
+  const response = await fetch(`${env.API_URL}/v1/files/move`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...(await workspaceSlugHeaders()),
+    },
+    body: JSON.stringify({ source, destination }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({
+      detail: "Move failed",
     }));
     return { data: null, error: errorData };
   }

@@ -867,18 +867,6 @@ export type Blockers = {
 };
 
 /**
- * Body_import_workspace_config_file_v1_workspace_import_file_post
- */
-export type BodyImportWorkspaceConfigFileV1WorkspaceImportFilePost = {
-    /**
-     * File
-     *
-     * YAML configuration file
-     */
-    file: Blob | File;
-};
-
-/**
  * Body_upload_file_v1_files_post
  */
 export type BodyUploadFileV1FilesPost = {
@@ -1836,6 +1824,16 @@ export type CreateWorkspaceBody = {
 };
 
 /**
+ * CreateWorkspaceDirectoryRequest
+ */
+export type CreateWorkspaceDirectoryRequest = {
+    /**
+     * Path
+     */
+    path: string;
+};
+
+/**
  * DailySpendPoint
  */
 export type DailySpendPoint = {
@@ -2549,68 +2547,6 @@ export type ImportPreview = {
 };
 
 /**
- * ImportRequest
- *
- * Request body for importing workspace configuration.
- */
-export type ImportRequest = {
-    /**
-     * Override Existing
-     *
-     * Override existing resources with same name
-     */
-    override_existing?: boolean;
-    /**
-     * Skip Missing Dependencies
-     *
-     * Skip resources with missing dependencies
-     */
-    skip_missing_dependencies?: boolean;
-    /**
-     * Yaml Content
-     *
-     * YAML configuration content
-     */
-    yaml_content: string;
-};
-
-/**
- * ImportResult
- *
- * Result of an import operation.
- */
-export type ImportResult = {
-    /**
-     * Created Agents
-     */
-    created_agents?: number;
-    /**
-     * Created Mcp Instances
-     */
-    created_mcp_instances?: number;
-    /**
-     * Created Provider Configs
-     */
-    created_provider_configs?: number;
-    /**
-     * Created Skills
-     */
-    created_skills?: number;
-    /**
-     * Errors
-     */
-    errors?: Array<string>;
-    /**
-     * Success
-     */
-    success: boolean;
-    /**
-     * Warnings
-     */
-    warnings?: Array<string>;
-};
-
-/**
  * InboxResponse
  */
 export type InboxResponse = {
@@ -2736,6 +2672,7 @@ export type InvitationCreatedResponse = {
      * Email
      */
     email: string | null;
+    email_delivery: InvitationEmailDelivery;
     /**
      * Expires At
      */
@@ -2749,6 +2686,10 @@ export type InvitationCreatedResponse = {
      */
     invited_by: string;
     /**
+     * Invited By Display Name
+     */
+    invited_by_display_name: string | null;
+    /**
      * Status
      */
     status: string;
@@ -2761,6 +2702,11 @@ export type InvitationCreatedResponse = {
      */
     workspace_id: string;
 };
+
+/**
+ * InvitationEmailDelivery
+ */
+export type InvitationEmailDelivery = 'sent' | 'not_requested' | 'not_configured' | 'failed';
 
 /**
  * InvitationResponse
@@ -2794,6 +2740,10 @@ export type InvitationResponse = {
      * Invited By
      */
     invited_by: string;
+    /**
+     * Invited By Display Name
+     */
+    invited_by_display_name: string | null;
     /**
      * Status
      */
@@ -3519,11 +3469,11 @@ export type MemberResponse = {
     /**
      * Display Name
      */
-    display_name?: string | null;
+    display_name: string | null;
     /**
      * Email
      */
-    email?: string | null;
+    email: string | null;
     /**
      * Id
      */
@@ -3533,9 +3483,13 @@ export type MemberResponse = {
      */
     invitation_id: string | null;
     /**
+     * Is Owner
+     */
+    is_owner: boolean;
+    /**
      * Joined At
      */
-    joined_at: string;
+    joined_at: string | null;
     /**
      * User Id
      */
@@ -3826,6 +3780,38 @@ export type ModelSpecUpdate = {
      * Output Cost Per Token
      */
     output_cost_per_token?: number | null;
+};
+
+/**
+ * MoveWorkspaceFileRequest
+ */
+export type MoveWorkspaceFileRequest = {
+    /**
+     * Destination
+     */
+    destination: string;
+    /**
+     * Source
+     */
+    source: string;
+};
+
+/**
+ * MovedFileResponse
+ */
+export type MovedFileResponse = {
+    /**
+     * Destination
+     */
+    destination: string;
+    /**
+     * Moved
+     */
+    moved: number;
+    /**
+     * Source
+     */
+    source: string;
 };
 
 /**
@@ -4620,6 +4606,32 @@ export type PreviewIssue = {
 };
 
 /**
+ * PrincipalResponse
+ */
+export type PrincipalResponse = {
+    /**
+     * Display Name
+     */
+    display_name?: string | null;
+    /**
+     * Email
+     */
+    email?: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    type: PrincipalType;
+};
+
+/**
+ * PrincipalType
+ *
+ * What kind of thing an id refers to.
+ */
+export type PrincipalType = 'user' | 'agent' | 'platform';
+
+/**
  * ProjectAgentRef
  */
 export type ProjectAgentRef = {
@@ -4896,6 +4908,10 @@ export type ProviderConfigResponse = {
      */
     is_public: boolean;
     /**
+     * Managed By
+     */
+    managed_by?: string | null;
+    /**
      * Model Instance Ids
      */
     model_instance_ids?: Array<string>;
@@ -4915,6 +4931,10 @@ export type ProviderConfigResponse = {
      * Provider Spec Name
      */
     provider_spec_name?: string | null;
+    /**
+     * Requires Api Key
+     */
+    requires_api_key?: boolean;
     /**
      * Updated At
      */
@@ -6023,6 +6043,20 @@ export type SkillUpdateRequest = {
 };
 
 /**
+ * SkippedItem
+ */
+export type SkippedItem = {
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Reason
+     */
+    reason: string;
+};
+
+/**
  * SkippedModelResponse
  */
 export type SkippedModelResponse = {
@@ -6331,6 +6365,10 @@ export type TaskResponse = {
      */
     created_at: string;
     /**
+     * Created By
+     */
+    created_by?: string | null;
+    /**
      * Description
      */
     description: string;
@@ -6480,6 +6518,10 @@ export type TaskWithAgent = {
      * Created At
      */
     created_at: string;
+    /**
+     * Created By
+     */
+    created_by?: string | null;
     /**
      * Description
      */
@@ -6966,6 +7008,10 @@ export type TriggerStatusResponse = {
  */
 export type TriggerUpdate = {
     /**
+     * Agent Id
+     */
+    agent_id?: string | null;
+    /**
      * Allowed Methods
      */
     allowed_methods?: Array<string> | null;
@@ -6997,6 +7043,10 @@ export type TriggerUpdate = {
      * Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (alias).
      */
     enabled?: boolean | null;
+    /**
+     * Event Types
+     */
+    event_types?: Array<string> | null;
     /**
      * Failure Threshold
      */
@@ -7268,6 +7318,16 @@ export type WalletResponse = {
     x402_config?: {
         [key: string]: unknown;
     } | null;
+};
+
+/**
+ * WorkspaceDirectoryResponse
+ */
+export type WorkspaceDirectoryResponse = {
+    /**
+     * Path
+     */
+    path: string;
 };
 
 /**
@@ -7550,6 +7610,14 @@ export type AgentareaApiApiV1RegistriesSyncResponse = {
      * New Specs
      */
     new_specs: number;
+    /**
+     * Skipped
+     */
+    skipped?: number;
+    /**
+     * Skipped Items
+     */
+    skipped_items?: Array<SkippedItem>;
     /**
      * Total
      */
@@ -9982,6 +10050,31 @@ export type UploadFileV1FilesPostResponses = {
     200: unknown;
 };
 
+export type CreateWorkspaceDirectoryV1FilesDirectoriesPostData = {
+    body: CreateWorkspaceDirectoryRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/files/directories';
+};
+
+export type CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateWorkspaceDirectoryV1FilesDirectoriesPostError = CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors[keyof CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors];
+
+export type CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: WorkspaceDirectoryResponse;
+};
+
+export type CreateWorkspaceDirectoryV1FilesDirectoriesPostResponse = CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses[keyof CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses];
+
 export type StreamWorkspaceFileV1FilesDownloadFilePathGetData = {
     body?: never;
     path: {
@@ -10039,6 +10132,31 @@ export type WorkspaceFileHistoryV1FilesHistoryGetResponses = {
 };
 
 export type WorkspaceFileHistoryV1FilesHistoryGetResponse = WorkspaceFileHistoryV1FilesHistoryGetResponses[keyof WorkspaceFileHistoryV1FilesHistoryGetResponses];
+
+export type MoveWorkspaceFileV1FilesMovePostData = {
+    body: MoveWorkspaceFileRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/files/move';
+};
+
+export type MoveWorkspaceFileV1FilesMovePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MoveWorkspaceFileV1FilesMovePostError = MoveWorkspaceFileV1FilesMovePostErrors[keyof MoveWorkspaceFileV1FilesMovePostErrors];
+
+export type MoveWorkspaceFileV1FilesMovePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: MovedFileResponse;
+};
+
+export type MoveWorkspaceFileV1FilesMovePostResponse = MoveWorkspaceFileV1FilesMovePostResponses[keyof MoveWorkspaceFileV1FilesMovePostResponses];
 
 export type RestoreWorkspaceFileV1FilesRestoreFilePathPostData = {
     body?: never;
@@ -12190,6 +12308,40 @@ export type UpdatePolicyRuleV1PoliciesRuleIdPatchResponses = {
 };
 
 export type UpdatePolicyRuleV1PoliciesRuleIdPatchResponse = UpdatePolicyRuleV1PoliciesRuleIdPatchResponses[keyof UpdatePolicyRuleV1PoliciesRuleIdPatchResponses];
+
+export type ResolvePrincipalsV1PrincipalsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Ids
+         *
+         * Principal ids to resolve
+         */
+        ids?: Array<string>;
+    };
+    url: '/v1/principals';
+};
+
+export type ResolvePrincipalsV1PrincipalsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ResolvePrincipalsV1PrincipalsGetError = ResolvePrincipalsV1PrincipalsGetErrors[keyof ResolvePrincipalsV1PrincipalsGetErrors];
+
+export type ResolvePrincipalsV1PrincipalsGetResponses = {
+    /**
+     * Response Resolve Principals V1 Principals Get
+     *
+     * Successful Response
+     */
+    200: Array<PrincipalResponse>;
+};
+
+export type ResolvePrincipalsV1PrincipalsGetResponse = ResolvePrincipalsV1PrincipalsGetResponses[keyof ResolvePrincipalsV1PrincipalsGetResponses];
 
 export type ListProjectsV1ProjectsGetData = {
     body?: never;
@@ -15137,69 +15289,6 @@ export type ExportWorkspaceConfigV1WorkspaceExportGetResponses = {
 };
 
 export type ExportWorkspaceConfigV1WorkspaceExportGetResponse = ExportWorkspaceConfigV1WorkspaceExportGetResponses[keyof ExportWorkspaceConfigV1WorkspaceExportGetResponses];
-
-export type ImportWorkspaceConfigV1WorkspaceImportPostData = {
-    body: ImportRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/workspace/import';
-};
-
-export type ImportWorkspaceConfigV1WorkspaceImportPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ImportWorkspaceConfigV1WorkspaceImportPostError = ImportWorkspaceConfigV1WorkspaceImportPostErrors[keyof ImportWorkspaceConfigV1WorkspaceImportPostErrors];
-
-export type ImportWorkspaceConfigV1WorkspaceImportPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ImportResult;
-};
-
-export type ImportWorkspaceConfigV1WorkspaceImportPostResponse = ImportWorkspaceConfigV1WorkspaceImportPostResponses[keyof ImportWorkspaceConfigV1WorkspaceImportPostResponses];
-
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostData = {
-    body: BodyImportWorkspaceConfigFileV1WorkspaceImportFilePost;
-    path?: never;
-    query?: {
-        /**
-         * Skip Missing Dependencies
-         *
-         * Skip resources with missing dependencies
-         */
-        skip_missing_dependencies?: boolean;
-        /**
-         * Override Existing
-         *
-         * Override existing resources with same name
-         */
-        override_existing?: boolean;
-    };
-    url: '/v1/workspace/import/file';
-};
-
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostError = ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors[keyof ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors];
-
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ImportResult;
-};
-
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponse = ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses[keyof ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses];
 
 export type GetWorkspaceSettingsV1WorkspaceSettingsGetData = {
     body?: never;

@@ -17,7 +17,7 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
     {
         "id": "cron",
         "name": "Cron",
-        "icon": "\u23f0",
+        "icon": "cron",
         "description": "Run your agent on a schedule",
         "kind": "schedule",
         "backend_type": "cron",
@@ -25,7 +25,7 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
     {
         "id": "telegram",
         "name": "Telegram",
-        "icon": "\u2708\ufe0f",
+        "icon": "telegram",
         "description": "Connect a Telegram bot to your agent",
         "kind": "messaging",
         "backend_type": "webhook",
@@ -38,7 +38,7 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
     {
         "id": "slack",
         "name": "Slack",
-        "icon": "\U0001f4ac",
+        "icon": "slack",
         "description": "Receive Slack messages and events",
         "kind": "messaging",
         "backend_type": "webhook",
@@ -55,7 +55,7 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
     {
         "id": "discord",
         "name": "Discord",
-        "icon": "\U0001f3ae",
+        "icon": "discord",
         "description": "Receive Discord messages and interactions",
         "kind": "messaging",
         "backend_type": "webhook",
@@ -72,9 +72,53 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
     {
         "id": "email",
         "name": "Email",
-        "icon": "\U0001f4e7",
-        "description": "Trigger agent via email",
+        "icon": "gmail",
+        "description": "Give the agent an address — mail to it starts a task",
         "kind": "messaging",
+        "backend_type": "webhook",
+        "webhook_type": "email",
+        "default_methods": ["POST"],
+        "credential_fields": [
+            {"key": "smtp_host", "label": "SMTP Host", "placeholder": "smtp.example.com"},
+            {"key": "smtp_port", "label": "SMTP Port", "placeholder": "587"},
+            {"key": "username", "label": "SMTP Username", "placeholder": "apikey"},
+            {"key": "password", "label": "SMTP Password", "placeholder": "Password or API key"},
+            {
+                "key": "from_address",
+                "label": "Reply From",
+                "placeholder": "agent@your-domain.example",
+            },
+            {
+                "key": "signing_secret",
+                "label": "Signing Secret",
+                "placeholder": "Secret your inbound-parse provider signs with",
+            },
+        ],
+    },
+    {
+        "id": "mailbox",
+        "name": "Mailbox (IMAP)",
+        "icon": "gmail",
+        "description": "Poll a mailbox you already own, read-only",
+        "kind": "messaging",
+        "backend_type": "polling",
+        "default_methods": [],
+        "credential_fields": [
+            {"key": "username", "label": "Mailbox Username", "placeholder": "me@example.com"},
+            {"key": "password", "label": "Mailbox Password", "placeholder": "App password"},
+            {"key": "smtp_host", "label": "SMTP Host", "placeholder": "smtp.example.com"},
+            {"key": "smtp_port", "label": "SMTP Port", "placeholder": "587"},
+            {"key": "from_address", "label": "Reply From", "placeholder": "me@example.com"},
+        ],
+    },
+    {
+        "id": "gmail",
+        "name": "Gmail push",
+        "icon": "gmail",
+        # Google's Pub/Sub push says only that the mailbox changed; the message
+        # is not in it. Named so nobody picks this expecting to read mail.
+        "description": "Pub/Sub change notification — carries no message body",
+        "kind": "event",
         "backend_type": "webhook",
         "webhook_type": "gmail",
         "default_methods": ["POST"],
@@ -82,7 +126,7 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
     {
         "id": "teams",
         "name": "Microsoft Teams",
-        "icon": "\U0001f465",
+        "icon": "webhook",
         "description": "Receive Microsoft Teams messages and events",
         "kind": "messaging",
         "backend_type": "webhook",
@@ -92,7 +136,7 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
     {
         "id": "github",
         "name": "GitHub",
-        "icon": "\U0001f419",
+        "icon": "github",
         "description": "React to GitHub events — pushes, PRs, issues, releases",
         "kind": "event",
         "backend_type": "webhook",
@@ -109,7 +153,7 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
     {
         "id": "stripe",
         "name": "Stripe",
-        "icon": "\U0001f4b3",
+        "icon": "webhook",
         "description": "React to Stripe events — payments, invoices, subscriptions",
         "kind": "event",
         "backend_type": "webhook",
@@ -126,7 +170,7 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
     {
         "id": "linear",
         "name": "Linear",
-        "icon": "\U0001f4d0",
+        "icon": "webhook",
         "description": "React to Linear events — issues, comments, projects",
         "kind": "event",
         "backend_type": "webhook",
@@ -143,7 +187,7 @@ TRIGGER_CATALOG: list[dict[str, Any]] = [
     {
         "id": "webhook",
         "name": "Webhook",
-        "icon": "\U0001f517",
+        "icon": "webhook",
         "description": "Generic HTTP webhook for any integration",
         "kind": "event",
         "backend_type": "webhook",
@@ -294,6 +338,11 @@ CHANNEL_EVENTS: dict[str, list[str]] = {
     "gmail": [
         "message_received",
         "label_changed",
+    ],
+    # Mail delivered by an inbound-parse provider, which carries the message
+    # itself — unlike "gmail", whose push only says that something changed.
+    "email": [
+        "message_received",
     ],
     "teams": [
         "message",

@@ -374,40 +374,6 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             }
         )
 
-    def _domain_to_orm(self, task) -> TaskORM:
-        """Convert domain model to ORM model.
-
-        Handles both Task and AgentTask domain models.
-        """
-        # Handle different domain model types
-        if hasattr(task, "task_parameters"):
-            # AgentTask model
-            parameters = task.task_parameters
-            error = task.error_message
-        else:
-            # Task model
-            parameters = task.parameters
-            error = task.error
-
-        return TaskORM(
-            id=task.id,
-            agent_id=task.agent_id,
-            description=task.description,
-            parameters=parameters,
-            status=task.status,
-            result=task.result,
-            error=error,
-            created_at=task.created_at,
-            updated_at=task.updated_at,
-            started_at=task.started_at,
-            completed_at=task.completed_at,
-            scheduled_at=task.scheduled_at,
-            execution_id=task.execution_id,
-            user_id=task.user_id,
-            workspace_id=task.workspace_id,
-            task_metadata=task.metadata,
-        )
-
 
 class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
     """Repository for task event persistence."""

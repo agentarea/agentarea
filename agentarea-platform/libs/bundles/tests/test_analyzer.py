@@ -130,7 +130,7 @@ schema_version: "0.1.0"
 name: p
 agents: [{key: lead, name: Lead, model: gpt-4o}]
 policies:
-  - {key: cap, subject: workspace, target: spend, effect: cap}
+  - {key: cap, subject: workspace, target: spend, effect: cap, params: {amount_usd: 50}}
   - {key: deny, subject: lead, target: "tool:send_email", effect: deny}
 """
     )
@@ -161,6 +161,31 @@ async def test_policy_invalid_target_blocks():
     preview = await BundleAnalyzer().analyze(pkg)
     assert preview.installable is False
     assert any("target 'bogus:thing' is invalid" in i.message for i in preview.block_issues)
+
+
+async def test_policy_unenforceable_params_block():
+    # The target parses, so the old target-only check passed it — but the
+    # compiler reads `period` as month|run and skips anything else, so this
+    # installs a cap that never fires.
+    pkg = parse_bundle(
+        'schema_version: "0.1.0"\nname: p\npolicies:\n'
+        "  - {key: x, subject: workspace, target: spend, effect: cap, "
+        "params: {amount_usd: 10, period: day}}\n"
+    )
+    preview = await BundleAnalyzer().analyze(pkg)
+    assert preview.installable is False
+    assert any("period" in i.message for i in preview.block_issues)
+
+
+async def test_policy_wildcard_deny_blocks():
+    # deny/allow compile to a named tool; a wildcard one is dropped by the
+    # compiler, so a bundle promising "denies everything" enforces nothing.
+    pkg = parse_bundle(
+        'schema_version: "0.1.0"\nname: p\n'
+        'policies: [{key: x, subject: workspace, target: "tool:*", effect: deny}]\n'
+    )
+    preview = await BundleAnalyzer().analyze(pkg)
+    assert preview.installable is False
 
 
 async def test_duplicate_policy_key_blocks():

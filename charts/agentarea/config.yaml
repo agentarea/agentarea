@@ -94,6 +94,11 @@ groups:
       HEALTH_CHECK_PORT: '{{ .Values.global.monitoring.health.port }}'
       KRATOS_ISSUER: '{{ .Values.kratos.jwt.issuer }}'
       KRATOS_AUDIENCE: '{{ .Values.kratos.jwt.audience }}'
+      KRATOS_ADMIN_URL: '{{ include "agentarea.kratosAdminUrl" . }}'
+      FRONTEND_BASE_URL: '{{ include "agentarea.frontendUrl" . }}'
+      SMTP_CONNECTION_URI: '{{ .Values.kratos.smtp.connection_uri }}'
+      SMTP_FROM_EMAIL: '{{ .Values.kratos.smtp.from_address }}'
+      SMTP_FROM_NAME: '{{ .Values.kratos.smtp.from_name }}'
     secrets:
       - name: API_AUTH_HEADER_NAME
         value: "{{ .Values.global.api.auth.headerName }}"

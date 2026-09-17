@@ -142,6 +142,9 @@ import type {
   CreateWalletV1AgentsAgentIdWalletPostData,
   CreateWalletV1AgentsAgentIdWalletPostErrors,
   CreateWalletV1AgentsAgentIdWalletPostResponses,
+  CreateWorkspaceDirectoryV1FilesDirectoriesPostData,
+  CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors,
+  CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses,
   CreateWorkspaceV1WorkspacesPostData,
   CreateWorkspaceV1WorkspacesPostErrors,
   CreateWorkspaceV1WorkspacesPostResponses,
@@ -456,12 +459,6 @@ import type {
   HydraOauth2ProxyOauth2PathPutData,
   HydraOauth2ProxyOauth2PathPutErrors,
   HydraOauth2ProxyOauth2PathPutResponses,
-  ImportWorkspaceConfigFileV1WorkspaceImportFilePostData,
-  ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors,
-  ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses,
-  ImportWorkspaceConfigV1WorkspaceImportPostData,
-  ImportWorkspaceConfigV1WorkspaceImportPostErrors,
-  ImportWorkspaceConfigV1WorkspaceImportPostResponses,
   InstallAgentV1AgentsAgentIdInstallPostData,
   InstallAgentV1AgentsAgentIdInstallPostErrors,
   InstallAgentV1AgentsAgentIdInstallPostResponses,
@@ -578,6 +575,9 @@ import type {
   ListWorkspaceFilesV1FilesGetResponses,
   ListWorkspacesV1WorkspacesGetData,
   ListWorkspacesV1WorkspacesGetResponses,
+  MoveWorkspaceFileV1FilesMovePostData,
+  MoveWorkspaceFileV1FilesMovePostErrors,
+  MoveWorkspaceFileV1FilesMovePostResponses,
   OauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGetData,
   OauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGetResponses,
   OauthAuthorizeV1McpOauthAuthorizeGetData,
@@ -648,6 +648,9 @@ import type {
   ResolveAccessV1AccessControlResolvePostData,
   ResolveAccessV1AccessControlResolvePostErrors,
   ResolveAccessV1AccessControlResolvePostResponses,
+  ResolvePrincipalsV1PrincipalsGetData,
+  ResolvePrincipalsV1PrincipalsGetErrors,
+  ResolvePrincipalsV1PrincipalsGetResponses,
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostData,
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors,
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostResponses,
@@ -3500,6 +3503,43 @@ export const uploadFileV1FilesPost = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Create Workspace Directory
+ *
+ * Persist an empty workspace folder as a trailing-slash object marker.
+ */
+export const createWorkspaceDirectoryV1FilesDirectoriesPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    CreateWorkspaceDirectoryV1FilesDirectoriesPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses,
+  CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses,
+    CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/files/directories",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
  * Stream Workspace File
  *
  * Stream a workspace file through the AgentArea API.
@@ -3560,6 +3600,46 @@ export const workspaceFileHistoryV1FilesHistoryGet = <
     ],
     url: "/v1/files/history",
     ...options,
+  });
+
+/**
+ * Move Workspace File
+ *
+ * Relocate a workspace file or folder to another path.
+ *
+ * A folder is a key prefix rather than an object, so moving one walks every
+ * key beneath it — including the trailing-slash marker that keeps an empty
+ * folder visible in the listing. Reserved prefixes are refused at both ends:
+ * ``tasks/`` belongs to a task's committed manifest, and ``.trash/`` is the
+ * restore endpoint's alone.
+ */
+export const moveWorkspaceFileV1FilesMovePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<MoveWorkspaceFileV1FilesMovePostData, ThrowOnError>
+): RequestResult<
+  MoveWorkspaceFileV1FilesMovePostResponses,
+  MoveWorkspaceFileV1FilesMovePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    MoveWorkspaceFileV1FilesMovePostResponses,
+    MoveWorkspaceFileV1FilesMovePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/files/move",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
@@ -6032,6 +6112,36 @@ export const updatePolicyRuleV1PoliciesRuleIdPatch = <
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * Resolve Principals
+ *
+ * Resolve the given ids. Unresolvable ids are absent from the response.
+ */
+export const resolvePrincipalsV1PrincipalsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ResolvePrincipalsV1PrincipalsGetData, ThrowOnError>
+): RequestResult<
+  ResolvePrincipalsV1PrincipalsGetResponses,
+  ResolvePrincipalsV1PrincipalsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ResolvePrincipalsV1PrincipalsGetResponses,
+    ResolvePrincipalsV1PrincipalsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/principals",
+    ...options,
   });
 
 /**
@@ -8574,6 +8684,7 @@ export const listTriggersV1TriggersGet = <ThrowOnError extends boolean = false>(
  * user_context: Authentication context.
  * trigger_service: Injected trigger service.
  * secret_manager: Injected secret manager for credential storage.
+ * secret_catalog: Workspace-scoped catalog for selected credential references.
  * webhook_service: Injected service that registers the channel webhook.
  *
  * Returns:
@@ -8615,6 +8726,10 @@ export const createTriggerV1TriggersPost = <
  * Get Catalog
  *
  * Get the trigger catalog — available trigger types with metadata and events.
+ *
+ * ``icon`` is stored as data (an asset id or a full URL); it is resolved here
+ * into ``icon_url`` so the frontend renders whatever it is handed and never
+ * carries a table of which channels exist.
  */
 export const getCatalogV1TriggersCatalogGet = <
   ThrowOnError extends boolean = false,
@@ -8805,8 +8920,8 @@ export const getTriggerV1TriggersTriggerIdGet = <
  * Update an existing trigger.
  *
  * Updates the specified trigger with the provided data. Only non-null fields
- * in the request will be updated. If channel_credentials are provided,
- * they replace the existing credentials in the secret store.
+ * in the request will be updated. Secret selections preserve unselected
+ * credential fields; legacy raw credentials replace the stored bundle.
  *
  * Args:
  * trigger_id: The unique identifier of the trigger.
@@ -8814,6 +8929,7 @@ export const getTriggerV1TriggersTriggerIdGet = <
  * user_context: Authentication context.
  * trigger_service: Injected trigger service.
  * secret_manager: Injected secret manager for credential storage.
+ * secret_catalog: Workspace-scoped catalog for selected credential references.
  * webhook_service: Injected service that registers the channel webhook.
  *
  * Returns:
@@ -9291,8 +9407,14 @@ export const getDashboardV1WorkspaceDashboardGet = <
  * - Only resources in the current workspace are exported
  * - References to specs are included (server_spec_id, provider_spec_id)
  *
+ * There is no matching import endpoint. Recreating a workspace goes through
+ * the platform toolsets (``agentarea/agents``, ``agentarea/mcp_servers``,
+ * ``agentarea/providers``, ``agentarea/skills``, ...) or bundle install,
+ * both of which handle secrets as first-class inputs instead of smuggling
+ * placeholders through a YAML file.
+ *
  * **Returns:**
- * YAML file content that can be saved and later imported
+ * YAML file content describing the workspace
  */
 export const exportWorkspaceConfigV1WorkspaceExportGet = <
   ThrowOnError extends boolean = false,
@@ -9317,117 +9439,6 @@ export const exportWorkspaceConfigV1WorkspaceExportGet = <
     ],
     url: "/v1/workspace/export",
     ...options,
-  });
-
-/**
- * Import Workspace Config
- *
- * Import workspace configuration from YAML.
- *
- * This endpoint creates agents, MCP instances, and provider configs
- * in the current workspace based on the provided YAML configuration.
- *
- * **Important Notes:**
- * - All resources are created in the current workspace
- * - Secrets (API keys, passwords) must be provided as they cannot be exported
- * - References to MCP servers and provider specs must exist in the system
- * - Import is atomic - if any resource fails, all changes are rolled back
- *
- * **Example YAML:**
- * ```yaml
- * agents:
- * - name: "My Assistant"
- * description: "Helpful assistant"
- * instruction: "You are a helpful AI assistant"
- * tools:
- * - type: code
- * name: agentarea/math
- * - type: mcp
- * name: my-filesystem
- * settings:
- * allowed_tools: [read_file, write_file]
- * planning: false
- *
- * mcp_instances:
- * - name: "My Filesystem"
- * description: "Local file access"
- * server_spec_id: "a1b2c3d4-..."
- * env_vars:
- * FILESYSTEM_ROOT: "/workspace"
- *
- * provider_configs:
- * - name: "My OpenAI"
- * provider_spec_id: "932f3839-..."
- * api_key_placeholder: "sk-..."
- * ```
- */
-export const importWorkspaceConfigV1WorkspaceImportPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<ImportWorkspaceConfigV1WorkspaceImportPostData, ThrowOnError>
-): RequestResult<
-  ImportWorkspaceConfigV1WorkspaceImportPostResponses,
-  ImportWorkspaceConfigV1WorkspaceImportPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ImportWorkspaceConfigV1WorkspaceImportPostResponses,
-    ImportWorkspaceConfigV1WorkspaceImportPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspace/import",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Import Workspace Config File
- *
- * Import workspace configuration from uploaded YAML file.
- *
- * Same as /import but accepts a file upload instead of raw YAML content.
- */
-export const importWorkspaceConfigFileV1WorkspaceImportFilePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ImportWorkspaceConfigFileV1WorkspaceImportFilePostData,
-    ThrowOnError
-  >
-): RequestResult<
-  ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses,
-  ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses,
-    ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors,
-    ThrowOnError
-  >({
-    ...formDataBodySerializer,
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspace/import/file",
-    ...options,
-    headers: {
-      "Content-Type": null,
-      ...options.headers,
-    },
   });
 
 /**
@@ -9713,6 +9724,9 @@ export const listMembersV1WorkspacesWorkspaceIdMembersGet = <
  * Remove Member
  *
  * Remove a member from the workspace.
+ *
+ * The owner keeps their access until ownership moves, and the last member
+ * cannot leave — either would strand the workspace and everything in it.
  */
 export const removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete = <
   ThrowOnError extends boolean = false,

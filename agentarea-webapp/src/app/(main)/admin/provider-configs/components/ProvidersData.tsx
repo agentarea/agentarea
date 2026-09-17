@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
 import { listProviderConfigsWithModelInstances } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api-errors";
 import ProviderConfigsView from "./ProviderConfigsView";
 import ProviderSpecView from "./ProviderSpecView";
 import { ProviderConfig, ProviderSpec } from "./types";
@@ -20,20 +21,14 @@ export default async function ProvidersData({
   const { specs: specsResponse, configs: configsResponse } =
     await listProviderConfigsWithModelInstances();
 
-  type ApiError = { detail?: Array<{ msg: string }> };
-
   // Handle API errors
   if (specsResponse.error || configsResponse.error) {
-    const specsError = specsResponse.error as ApiError;
-    const configsError = configsResponse.error as ApiError;
+    const failed = configsResponse.error ? configsResponse : specsResponse;
 
     return (
       <div className="py-10 text-center">
         <p className="text-red-500">
-          {t("error.loadingData")}:{" "}
-          {specsError?.detail?.[0]?.msg ||
-            configsError?.detail?.[0]?.msg ||
-            "Unknown error occurred"}
+          {apiErrorMessage(failed, t("error.loadingData"))}
         </p>
       </div>
     );
@@ -101,6 +96,7 @@ export default async function ProvidersData({
         title="No providers found"
         description="No provider configurations or specifications are available"
         iconsType="llm"
+        action={{ label: "Add provider", href: "/admin/provider-configs/create" }}
       />
     );
   }
@@ -111,6 +107,7 @@ export default async function ProvidersData({
         title="No matching providers"
         description={`No providers match your search query: "${searchQuery}"`}
         iconsType="llm"
+        action={{ label: "Clear search", href: "/admin/provider-configs" }}
       />
     );
   }

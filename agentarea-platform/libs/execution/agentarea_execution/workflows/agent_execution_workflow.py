@@ -731,6 +731,7 @@ class AgentExecutionWorkflow:
             user_context_data=self.state.user_context_data,
             execution_context=self._workflow_metadata,
             task_id=UUID(self.state.task_id),
+            task_parameters=self.state.goal.context if self.state.goal else {},
         )
         agent_config_result: AgentConfigResult = await workflow.execute_activity(
             Activities.BUILD_AGENT_CONFIG,
@@ -744,6 +745,9 @@ class AgentExecutionWorkflow:
             self.state.agent_config = agent_config_result.model_dump()
         except AttributeError:
             self.state.agent_config = dict(agent_config_result)
+
+        if self.state.agent_config.get("execution_context") is not None:
+            self._workflow_metadata = dict(self.state.agent_config["execution_context"])
 
         self._events.add_event(
             EventTypes.RUNTIME_DISCOVERED,
@@ -804,7 +808,9 @@ class AgentExecutionWorkflow:
         self.state.context_strategy = strategy.value
 
         tools_request = ToolDiscoveryRequest(
-            agent_id=UUID(self.state.agent_id), user_context_data=self.state.user_context_data
+            agent_id=UUID(self.state.agent_id),
+            user_context_data=self.state.user_context_data,
+            tools=self.state.agent_config.get("tools"),
         )
 
         if allows_tool_progressive_disclosure(strategy):

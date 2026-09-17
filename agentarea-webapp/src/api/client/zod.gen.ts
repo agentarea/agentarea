@@ -284,15 +284,6 @@ export const zAuditLogListResponse = z.object({
 });
 
 /**
- * Body_import_workspace_config_file_v1_workspace_import_file_post
- */
-export const zBodyImportWorkspaceConfigFileV1WorkspaceImportFilePost = z.object(
-  {
-    file: z.string(),
-  }
-);
-
-/**
  * Body_upload_file_v1_files_post
  */
 export const zBodyUploadFileV1FilesPost = z.object({
@@ -667,6 +658,13 @@ export const zCreateWorkspaceBody = z.object({
 });
 
 /**
+ * CreateWorkspaceDirectoryRequest
+ */
+export const zCreateWorkspaceDirectoryRequest = z.object({
+  path: z.string().min(1),
+});
+
+/**
  * DailySpendPoint
  */
 export const zDailySpendPoint = z.object({
@@ -926,32 +924,6 @@ export const zHitlBlocker = z.object({
 });
 
 /**
- * ImportRequest
- *
- * Request body for importing workspace configuration.
- */
-export const zImportRequest = z.object({
-  override_existing: z.boolean().optional().default(false),
-  skip_missing_dependencies: z.boolean().optional().default(false),
-  yaml_content: z.string(),
-});
-
-/**
- * ImportResult
- *
- * Result of an import operation.
- */
-export const zImportResult = z.object({
-  created_agents: z.number().int().optional().default(0),
-  created_mcp_instances: z.number().int().optional().default(0),
-  created_provider_configs: z.number().int().optional().default(0),
-  created_skills: z.number().int().optional().default(0),
-  errors: z.array(z.string()).optional(),
-  success: z.boolean(),
-  warnings: z.array(z.string()).optional(),
-});
-
-/**
  * InputSecretValue
  *
  * Secret value submitted through the protected input endpoint.
@@ -988,6 +960,16 @@ export const zInstallResult = z.object({
 });
 
 /**
+ * InvitationEmailDelivery
+ */
+export const zInvitationEmailDelivery = z.enum([
+  "sent",
+  "not_requested",
+  "not_configured",
+  "failed",
+]);
+
+/**
  * InvitationCreatedResponse
  *
  * Same as InvitationResponse plus the plaintext token, returned ONCE.
@@ -997,9 +979,11 @@ export const zInvitationCreatedResponse = z.object({
   accepted_by_user_id: z.string().nullable(),
   created_at: z.string(),
   email: z.string().nullable(),
+  email_delivery: zInvitationEmailDelivery,
   expires_at: z.string(),
   id: z.string().uuid(),
   invited_by: z.string(),
+  invited_by_display_name: z.string().nullable(),
   status: z.string(),
   token: z.string(),
   workspace_id: z.string(),
@@ -1016,6 +1000,7 @@ export const zInvitationResponse = z.object({
   expires_at: z.string(),
   id: z.string().uuid(),
   invited_by: z.string(),
+  invited_by_display_name: z.string().nullable(),
   status: z.string(),
   workspace_id: z.string(),
 });
@@ -1318,11 +1303,12 @@ export const zMcpToolConfigOutput = z.object({
  * MemberResponse
  */
 export const zMemberResponse = z.object({
-  display_name: z.string().nullish(),
-  email: z.string().nullish(),
+  display_name: z.string().nullable(),
+  email: z.string().nullable(),
   id: z.string().uuid(),
   invitation_id: z.string().uuid().nullable(),
-  joined_at: z.string(),
+  is_owner: z.boolean(),
+  joined_at: z.string().nullable(),
   user_id: z.string(),
   workspace_id: z.string(),
 });
@@ -1436,6 +1422,23 @@ export const zModelSpecUpdate = z.object({
   is_active: z.boolean().nullish(),
   max_output_tokens: z.number().int().gt(0).nullish(),
   output_cost_per_token: z.number().gte(0).nullish(),
+});
+
+/**
+ * MoveWorkspaceFileRequest
+ */
+export const zMoveWorkspaceFileRequest = z.object({
+  destination: z.string().min(1),
+  source: z.string().min(1),
+});
+
+/**
+ * MovedFileResponse
+ */
+export const zMovedFileResponse = z.object({
+  destination: z.string(),
+  moved: z.number().int(),
+  source: z.string(),
 });
 
 /**
@@ -1873,6 +1876,23 @@ export const zPreviewIssue = z.object({
   entity_key: z.string().nullish(),
   message: z.string(),
   severity: zIssueSeverity,
+});
+
+/**
+ * PrincipalType
+ *
+ * What kind of thing an id refers to.
+ */
+export const zPrincipalType = z.enum(["user", "agent", "platform"]);
+
+/**
+ * PrincipalResponse
+ */
+export const zPrincipalResponse = z.object({
+  display_name: z.string().nullish(),
+  email: z.string().nullish(),
+  id: z.string(),
+  type: zPrincipalType,
 });
 
 /**
@@ -2522,6 +2542,14 @@ export const zSkillUpdateRequest = z.object({
 });
 
 /**
+ * SkippedItem
+ */
+export const zSkippedItem = z.object({
+  external_id: z.string(),
+  reason: z.string(),
+});
+
+/**
  * SkippedModelResponse
  */
 export const zSkippedModelResponse = z.object({
@@ -2675,6 +2703,7 @@ export const zTaskInputSubmission = z.object({
 export const zTaskResponse = z.object({
   agent_id: z.string().uuid(),
   created_at: z.string(),
+  created_by: z.string().nullish(),
   description: z.string(),
   error: z.string().nullish(),
   execution_id: z.string().nullish(),
@@ -2728,6 +2757,7 @@ export const zTaskWithAgent = z.object({
   agent_id: z.string().uuid(),
   agent_name: z.string().nullish(),
   created_at: z.string(),
+  created_by: z.string().nullish(),
   description: z.string(),
   error: z.string().nullish(),
   escalation_id: z.string().nullish(),
@@ -2988,12 +3018,14 @@ export const zTriggerStatusResponse = z.object({
  * Patch payload for a trigger. All fields optional — unset = unchanged.
  */
 export const zTriggerUpdate = z.object({
+  agent_id: z.string().uuid().nullish(),
   allowed_methods: z.array(z.string()).nullish(),
   channel_credentials: z.record(z.unknown()).nullish(),
   conditions: z.record(z.unknown()).nullish(),
   cron_expression: z.string().nullish(),
   description: z.string().max(1000).nullish(),
   enabled: z.boolean().nullish(),
+  event_types: z.array(z.string()).nullish(),
   failure_threshold: z.number().int().gte(1).lte(100).nullish(),
   name: z.string().min(1).max(255).nullish(),
   task_parameters: z.record(z.unknown()).nullish(),
@@ -3131,6 +3163,13 @@ export const zWalletResponse = z.object({
 });
 
 /**
+ * WorkspaceDirectoryResponse
+ */
+export const zWorkspaceDirectoryResponse = z.object({
+  path: z.string(),
+});
+
+/**
  * WorkspaceFileDownloadResponse
  */
 export const zWorkspaceFileDownloadResponse = z.object({
@@ -3152,7 +3191,7 @@ export const zWorkspaceFileInfo = z.object({
  * WorkspaceFileListResponse
  */
 export const zWorkspaceFileListResponse = z.object({
-  directories: z.array(z.string()).optional().default([]),
+  directories: z.array(z.string()).optional(),
   files: z.array(zWorkspaceFileInfo),
 });
 
@@ -3293,6 +3332,8 @@ export const zProviderSpecWithModelsResponse = z.object({
  */
 export const zAgentareaApiApiV1RegistriesSyncResponse = z.object({
   new_specs: z.number().int(),
+  skipped: z.number().int().optional().default(0),
+  skipped_items: z.array(zSkippedItem).optional(),
   total: z.number().int(),
   unchanged: z.number().int(),
   updates_flagged: z.number().int(),
@@ -4004,6 +4045,15 @@ export const zListWorkspaceFilesV1FilesGetResponse = zWorkspaceFileListResponse;
 
 export const zUploadFileV1FilesPostBody = zBodyUploadFileV1FilesPost;
 
+export const zCreateWorkspaceDirectoryV1FilesDirectoriesPostBody =
+  zCreateWorkspaceDirectoryRequest;
+
+/**
+ * Successful Response
+ */
+export const zCreateWorkspaceDirectoryV1FilesDirectoriesPostResponse =
+  zWorkspaceDirectoryResponse;
+
 export const zStreamWorkspaceFileV1FilesDownloadFilePathGetPath = z.object({
   file_path: z.string(),
 });
@@ -4017,6 +4067,13 @@ export const zWorkspaceFileHistoryV1FilesHistoryGetQuery = z.object({
  */
 export const zWorkspaceFileHistoryV1FilesHistoryGetResponse =
   zArtifactHistoryResponse;
+
+export const zMoveWorkspaceFileV1FilesMovePostBody = zMoveWorkspaceFileRequest;
+
+/**
+ * Successful Response
+ */
+export const zMoveWorkspaceFileV1FilesMovePostResponse = zMovedFileResponse;
 
 export const zRestoreWorkspaceFileV1FilesRestoreFilePathPostPath = z.object({
   file_path: z.string(),
@@ -4677,6 +4734,18 @@ export const zUpdatePolicyRuleV1PoliciesRuleIdPatchPath = z.object({
  */
 export const zUpdatePolicyRuleV1PoliciesRuleIdPatchResponse =
   zPolicyRuleResponse;
+
+export const zResolvePrincipalsV1PrincipalsGetQuery = z.object({
+  ids: z.array(z.string()).optional(),
+});
+
+/**
+ * Response Resolve Principals V1 Principals Get
+ *
+ * Successful Response
+ */
+export const zResolvePrincipalsV1PrincipalsGetResponse =
+  z.array(zPrincipalResponse);
 
 export const zListProjectsV1ProjectsGetQuery = z.object({
   limit: z.number().int().optional().default(100),
@@ -5695,29 +5764,6 @@ export const zGetDashboardV1WorkspaceDashboardGetResponse = zDashboardResponse;
  * Successful Response
  */
 export const zExportWorkspaceConfigV1WorkspaceExportGetResponse = z.string();
-
-export const zImportWorkspaceConfigV1WorkspaceImportPostBody = zImportRequest;
-
-/**
- * Successful Response
- */
-export const zImportWorkspaceConfigV1WorkspaceImportPostResponse =
-  zImportResult;
-
-export const zImportWorkspaceConfigFileV1WorkspaceImportFilePostBody =
-  zBodyImportWorkspaceConfigFileV1WorkspaceImportFilePost;
-
-export const zImportWorkspaceConfigFileV1WorkspaceImportFilePostQuery =
-  z.object({
-    skip_missing_dependencies: z.boolean().optional().default(false),
-    override_existing: z.boolean().optional().default(false),
-  });
-
-/**
- * Successful Response
- */
-export const zImportWorkspaceConfigFileV1WorkspaceImportFilePostResponse =
-  zImportResult;
 
 /**
  * Successful Response
