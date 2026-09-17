@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
 import { Check } from "lucide-react";
+import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { AuthLayout } from "@/components/auth/auth-layout";
 import { grantedAccessTokenAudience } from "./oauth-audience";
 
 const KNOWN_SCOPES = ["openid", "profile", "email", "offline_access"] as const;
@@ -28,7 +28,9 @@ export default function ConsentPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [consentRequest, setConsentRequest] = useState<ConsentRequest | null>(null);
+  const [consentRequest, setConsentRequest] = useState<ConsentRequest | null>(
+    null
+  );
   const searchParams = useSearchParams();
   const consentChallenge = searchParams.get("consent_challenge");
 

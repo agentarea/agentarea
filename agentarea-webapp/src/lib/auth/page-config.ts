@@ -1,8 +1,8 @@
 import { OryClientConfiguration } from "@ory/elements-react";
 import { getOryBrowserConfig } from "@/lib/auth/browser-config";
 
-export const getAuthPageConfig = (): OryClientConfiguration => {
-  const browserConfig = getOryBrowserConfig();
+export const getAuthPageConfig = async (): Promise<OryClientConfiguration> => {
+  const browserConfig = await getOryBrowserConfig();
   return {
     ...browserConfig,
     project: {

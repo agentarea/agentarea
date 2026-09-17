@@ -51,6 +51,12 @@ export function formatApiError(value: unknown) {
     if (Array.isArray(record.detail)) {
       return record.detail.map(itemMessage).join(", ");
     }
+    // FastAPI endpoints may raise HTTPException with a structured detail, e.g.
+    // workspace import's `{message, errors, warnings}`. Recurse so the nested
+    // `errors` array is read instead of JSON-dumping the whole envelope.
+    if (record.detail && typeof record.detail === "object") {
+      return formatApiError(record.detail);
+    }
 
     if (typeof record.message === "string") return record.message;
 

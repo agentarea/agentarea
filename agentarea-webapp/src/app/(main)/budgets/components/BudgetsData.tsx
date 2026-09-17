@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { SpendCard } from "@/app/(main)/dashboard/components/SpendCard";
-import EmptyState from "@/components/EmptyState";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { getDashboard, getWorkspaceSettings } from "@/lib/api-dashboard";
 import { BudgetCapPanel } from "./BudgetCapPanel";
 import { BudgetsBoard } from "./BudgetsBoard";
@@ -41,7 +41,7 @@ export async function BudgetsData() {
     const t = await getTranslations("BudgetsPage");
     return (
       <div className="p-6">
-        <EmptyState
+        <RetryEmptyState
           title={t("couldntLoadTitle")}
           description={error}
           iconsType="payments"

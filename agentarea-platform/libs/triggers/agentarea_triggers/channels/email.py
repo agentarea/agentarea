@@ -115,11 +115,16 @@ class EmailAdapter:
         msg["From"] = from_addr
         msg["To"] = reply_to
 
-        # Add In-Reply-To for email threading
+        # Thread the reply. Clients thread on References, so the whole chain
+        # goes back out; the parent alone would start a sibling thread.
         original_message_id = channel_config.get("message_id")
         if original_message_id:
             msg["In-Reply-To"] = original_message_id
-            msg["References"] = original_message_id
+        references = channel_config.get("references") or (
+            [original_message_id] if original_message_id else []
+        )
+        if references:
+            msg["References"] = " ".join(references)
 
         # Plain text fallback + HTML
         plain_text = _html_to_plain(message)
@@ -174,7 +179,11 @@ class EmailAdapter:
                 "email channel: no trigger_id in channel_config — cannot resolve credentials"
             )
 
-        secret_name = f"channel_cred:{channel_config.get('type', 'email')}:{trigger_id}"
+        # A polled mailbox keeps one credential blob covering both IMAP and
+        # SMTP, so the origin says which one to read instead of assuming the
+        # secret is named after the outbound channel.
+        cred_type = channel_config.get("credential_type") or channel_config.get("type", "email")
+        secret_name = f"channel_cred:{cred_type}:{trigger_id}"
         raw = await self._secret_manager.get_secret(secret_name)
         if not raw:
             raise FatalError(

@@ -91,11 +91,13 @@ function MemberRowActions({
   member,
   currentUser,
   access,
+  ownerUserId,
   workspaceName,
 }: {
   member: DisplayMember;
   currentUser: CurrentUser;
   access: MemberAccess;
+  ownerUserId: string | null;
   workspaceName: string;
 }) {
   const t = useTranslations("MembersPage");
@@ -106,8 +108,13 @@ function MemberRowActions({
   const label = isAnonymousMember(member, currentUser)
     ? shortId(member.user_id)
     : getMemberLabel(member, currentUser);
-  // The owner can only be removed by leaving themselves.
-  if (!isSelf && access === "owner") return null;
+  const canLeave = isSelf && access !== "owner";
+  const canRemove =
+    !isSelf &&
+    ownerUserId !== null &&
+    ownerUserId === currentUser.id &&
+    access !== "owner";
+  if (!canLeave && !canRemove) return null;
 
   const remove = async () => {
     const res = await removeMemberAction(member.user_id);
@@ -119,12 +126,13 @@ function MemberRowActions({
     }
     if (isSelf) {
       toast.success(t("youLeft"));
+      router.push("/");
     } else {
       toast.success(t("memberRemoved"), {
         description: t("memberRemovedText", { member: label }),
       });
+      startTransition(() => router.refresh());
     }
-    startTransition(() => router.refresh());
   };
 
   return (
@@ -217,6 +225,7 @@ export function MembersTable({
             member={member}
             currentUser={currentUser}
             access={getMemberAccess(member, ownerUserId)}
+            ownerUserId={ownerUserId}
             workspaceName={workspaceName}
           />
         ) : null,

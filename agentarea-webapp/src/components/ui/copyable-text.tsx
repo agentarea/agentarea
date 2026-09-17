@@ -9,6 +9,8 @@ interface CopyableTextProps {
   displayValue?: string;
   className?: string;
   labelClassName?: string;
+  onCopied?: () => void;
+  onCopyError?: () => void;
 }
 
 export function CopyableText({
@@ -16,6 +18,8 @@ export function CopyableText({
   displayValue,
   className,
   labelClassName,
+  onCopied,
+  onCopyError,
 }: CopyableTextProps) {
   const [copied, setCopied] = useState(false);
 
@@ -23,9 +27,11 @@ export function CopyableText({
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      onCopied?.();
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error("Failed to copy text: ", err);
+      onCopyError?.();
     }
   };
 

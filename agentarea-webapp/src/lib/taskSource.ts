@@ -15,6 +15,20 @@ export interface TaskSource {
   kind: TaskSourceKind;
   label: string;
   detail?: string;
+  /**
+   * The channel id as the backend spells it (`webhook_type`). Open set — new
+   * channels arrive by configuration, so resolve the name and icon through the
+   * trigger catalog rather than matching on this here.
+   */
+  channel?: string;
+  /**
+   * A principal id the caller should resolve into a name via GET /v1/principals
+   * — the delegating agent, for a task another agent started. Deliberately an
+   * id and not a name: parameters record how a task was created, and a name
+   * written there would be frozen at creation while the same screen renders
+   * every other agent's live name.
+   */
+  principalId?: string;
 }
 
 type Params = Record<string, unknown> | null | undefined;
@@ -45,36 +59,40 @@ export function getTaskSource(parameters: Params): TaskSource {
       getString(channelOrigin, "username") ||
       getString(channelOrigin, "from") ||
       getString(channelOrigin, "chat_id");
-    return { kind: "telegram", label: "Telegram", detail };
+    return { kind: "telegram", label: "Telegram", detail, channel: "telegram" };
   }
   if (channelOrigin && channelType === "email") {
     const detail =
       getString(channelOrigin, "from") || getString(channelOrigin, "address");
-    return { kind: "email", label: "Email", detail };
+    return { kind: "email", label: "Email", detail, channel: "email" };
   }
   if (channelOrigin && channelType === "slack") {
     const detail =
       getString(channelOrigin, "channel_name") ||
       getString(channelOrigin, "channel_id");
-    return { kind: "slack", label: "Slack", detail };
+    return { kind: "slack", label: "Slack", detail, channel: "slack" };
   }
   if (channelOrigin && channelType === "discord") {
     const detail =
       getString(channelOrigin, "channel_name") ||
       getString(channelOrigin, "channel_id");
-    return { kind: "discord", label: "Discord", detail };
+    return { kind: "discord", label: "Discord", detail, channel: "discord" };
   }
   if (channelType) {
-    return { kind: "channel", label: channelType };
+    return { kind: "channel", label: channelType, channel: channelType };
   }
 
   const src = getString(parameters, "source");
   if (src === "agent_delegation") {
-    const detail =
-      getString(parameters, "delegating_agent") ||
-      getString(parameters, "parent_agent") ||
-      getString(parameters, "parent_agent_name");
-    return { kind: "delegation", label: "Delegated", detail };
+    // `parent_agent_id` is the only key the delegation activity actually writes.
+    // This used to look for delegating_agent / parent_agent / parent_agent_name
+    // — three display strings nobody has ever written — so the badge could never
+    // name the agent that delegated.
+    return {
+      kind: "delegation",
+      label: "Delegated",
+      principalId: getString(parameters, "parent_agent_id"),
+    };
   }
   if (src === "a2a") {
     return { kind: "a2a", label: "A2A" };
@@ -83,10 +101,23 @@ export function getTaskSource(parameters: Params): TaskSource {
   const triggerType = getString(parameters, "trigger_type");
   const triggerName = getString(parameters, "trigger_name");
   if (triggerType === "cron") {
-    return { kind: "schedule", label: "Scheduled", detail: triggerName };
+    return {
+      kind: "schedule",
+      label: "Scheduled",
+      detail: triggerName,
+      channel: "cron",
+    };
   }
   if (triggerType === "webhook") {
-    return { kind: "webhook", label: "Webhook", detail: triggerName };
+    // The channel goes out raw: which channels exist is the catalog's business
+    // (GET /v1/triggers/catalog), not this module's. channel_origin above only
+    // covers the channels we route replies back to.
+    return {
+      kind: "webhook",
+      label: "Webhook",
+      detail: triggerName,
+      channel: getString(parameters, "webhook_type"),
+    };
   }
   if (triggerName || triggerType) {
     return {

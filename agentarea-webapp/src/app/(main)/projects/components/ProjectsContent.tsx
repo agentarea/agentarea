@@ -39,6 +39,7 @@ export default async function ProjectsContent({
         title="No projects yet"
         description="Create a project to organize your agents, skills, and tools"
         iconsType="agent"
+        action={{ label: "Create project", href: "/projects/create" }}
       />
     );
   }
@@ -106,6 +107,7 @@ export default async function ProjectsContent({
             title="No matching projects"
             description={`No projects found matching: "${searchQuery}"`}
             iconsType="agent"
+            action={{ label: "Clear search", href: "/projects" }}
           />
         }
         cardContent={(project: ProjectResponse) => (

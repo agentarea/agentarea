@@ -7,13 +7,12 @@ import {
   FileText,
   GalleryVerticalEnd,
   Gauge,
-  Home,
-  Inbox,
   KeyRound,
   Network,
   Plug,
   ShieldCheck,
   Sparkles,
+  Terminal,
   Users,
   Wallet,
   Zap,
@@ -39,18 +38,13 @@ export const navData = {
     {
       label: "Work",
       labelKey: "work",
+      collapsible: false,
       items: [
         {
-          title: "Home",
-          titleKey: "home",
-          url: "/workplace",
-          icon: Home,
-        },
-        {
-          title: "Inbox",
-          titleKey: "inbox",
-          url: "/inbox",
-          icon: Inbox,
+          title: "Dashboard",
+          titleKey: "dashboard",
+          url: "/dashboard",
+          icon: Gauge,
         },
         {
           title: "Tasks",
@@ -63,6 +57,12 @@ export const navData = {
           titleKey: "projects",
           url: "/projects",
           icon: GalleryVerticalEnd,
+        },
+        {
+          title: "Automation",
+          titleKey: "automation",
+          url: "/triggers",
+          icon: Zap,
         },
       ],
     },
@@ -110,7 +110,7 @@ export const navData = {
           title: "Clients",
           titleKey: "clients",
           url: "/clients",
-          icon: Plug,
+          icon: Terminal,
         },
         {
           title: "Models",
@@ -118,24 +118,12 @@ export const navData = {
           url: "/admin/provider-configs",
           icon: Brain,
         },
-        {
-          title: "Automation",
-          titleKey: "automation",
-          url: "/triggers",
-          icon: Zap,
-        },
       ],
     },
     {
       label: "Govern",
       labelKey: "govern",
       items: [
-        {
-          title: "Dashboard",
-          titleKey: "dashboard",
-          url: "/dashboard",
-          icon: Gauge,
-        },
         {
           title: "Sandboxes",
           titleKey: "sandboxes",

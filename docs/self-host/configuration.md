@@ -119,6 +119,9 @@ Rendered only when `rustfs.enabled` is true.
 | `KRATOS_ISSUER` | `kratos.jwt.issuer` | `https://agentarea.dev` |
 | `KRATOS_AUDIENCE` | `kratos.jwt.audience` | `agentarea-api` |
 | `KRATOS_JWKS_B64` | Secret `<release>-kratos-jwks` or `kratos.secretName`, key `jwks_b64` | generated |
+| `KRATOS_ADMIN_URL` | `kratos.urls.admin` | in-cluster `<release>-kratos-admin:4434` |
+| `FRONTEND_BASE_URL` | derived from the frontend ingress | `http://localhost:3000` |
+| `SMTP_CONNECTION_URI` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME` | `kratos.smtp.*` | empty (invitations are link-only) |
 
 `METRICS_ENABLED`, `METRICS_PORT`, `HEALTH_CHECK_ENABLED`, and
 `HEALTH_CHECK_PORT` are rendered by the chart but have no reader in the Python
@@ -296,7 +299,9 @@ equivalent are listed; the rest map onto the groups above.
 | `SANDBOX_ACTIVATION_AUTH_SECRET` | yes, no default | development placeholder |
 | `SANDBOX_CLEANUP_AUTH_SECRET` | yes, no default | development placeholder |
 | `KRATOS_JWKS_B64` / `KRATOS_ISSUER` / `KRATOS_AUDIENCE` | yes | a published test key |
+| `KRATOS_ADMIN_URL` | yes, to show member names | `http://kratos:4434` |
 | `SMTP_*` | for email delivery | targets the bundled Mailpit |
+| `FRONTEND_BASE_URL` | for links in invitation email | `http://localhost:3000` |
 | `OIDC_GOOGLE_*` / `OIDC_GITHUB_*` | for social login | empty |
 | `VERSION` | no | `latest` |
 | `WORKERS` / `RELOAD` / `PORT` / `LOG_LEVEL` | no | `1` / `false` / `8000` / `info` |

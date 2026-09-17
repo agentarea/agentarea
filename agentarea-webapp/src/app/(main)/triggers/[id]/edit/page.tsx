@@ -1,27 +1,11 @@
-import { getTrigger, listAgents } from "@/lib/api";
-import { requireApiData } from "@/lib/server-resource";
-import { CreateTriggerForm } from "../../create/CreateTriggerForm";
+import { redirect } from "next/navigation";
 
 interface Props {
   params: Promise<{ id: string }>;
 }
 
+/** The automation page is the form now, so this URL has nothing of its own. */
 export default async function EditTriggerPage({ params }: Props) {
   const { id } = await params;
-
-  const [triggerResponse, agentsResponse] = await Promise.all([
-    getTrigger(id),
-    listAgents(),
-  ]);
-
-  const trigger = requireApiData(triggerResponse, "trigger");
-
-  return (
-    <div className="p-6">
-      <CreateTriggerForm
-        agents={agentsResponse.data ?? []}
-        initialData={trigger}
-      />
-    </div>
-  );
+  redirect(`/triggers/${id}`);
 }

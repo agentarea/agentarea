@@ -39,7 +39,7 @@ selfservice:
       ui_url: http://localhost:3000/auth/error
 
     settings:
-      ui_url: http://localhost:3000/auth/settings
+      ui_url: http://localhost:3000/settings
       privileged_session_max_age: 15m
       required_aal: highest_available
 

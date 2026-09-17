@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
+from agentarea_common.artifacts.workspace import WorkspaceValidationError, normalize_workspace_path
 from agentarea_common.audit import audited
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.money import Money, serialize_money, to_money
@@ -47,6 +48,38 @@ logger = logging.getLogger(__name__)
 # after the activity has already persisted "completed" to the DB.
 _TERMINAL_WORKFLOW_STATUSES = frozenset({"completed", "failed", "cancelled", "canceled"})
 _GOVERNANCE_SNAPSHOT_METADATA_KEY = "governance_snapshot"
+
+
+def _task_resource_selection_key(parameters: dict[str, Any] | None) -> tuple | None:
+    """Compare capability identities before reusing a run with frozen inputs."""
+    parameters = parameters or {}
+    groups: list[frozenset[str]] = []
+    for kind in ("mcps", "skills", "files"):
+        value = parameters.get(kind)
+        if kind == "mcps" and value is None:
+            value = parameters.get("mcp")
+            if value is None:
+                value = parameters.get("mcp_servers")
+        if value is None:
+            value = []
+        if not isinstance(value, list):
+            return None
+        identities: set[str] = set()
+        for item in value:
+            try:
+                if kind == "files":
+                    identities.add(normalize_workspace_path(item))
+                else:
+                    ref = item
+                    if isinstance(item, dict):
+                        ref = item.get("id") or item.get("instance_id") or item.get("skill_id")
+                    if not isinstance(ref, str):
+                        return None
+                    identities.add(str(UUID(ref)))
+            except (ValueError, TypeError, WorkspaceValidationError):
+                return None
+        groups.append(frozenset(identities))
+    return tuple(groups)
 
 
 class TaskService(BaseTaskService):
@@ -514,8 +547,13 @@ class TaskService(BaseTaskService):
         candidates = await task_repository.find_active_by_agent_and_chat(task.agent_id, chat_id)
 
         message_text = task.query or task.description
+        incoming_resources = _task_resource_selection_key(task.task_parameters)
+        if incoming_resources is None:
+            return None
 
         for candidate in candidates:
+            if _task_resource_selection_key(candidate.parameters) != incoming_resources:
+                continue
             try:
                 ok = await executor.send_workflow_command(
                     candidate.execution_id,

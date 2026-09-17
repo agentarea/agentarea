@@ -2,7 +2,7 @@ from importlib import import_module
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from agentarea_common.infrastructure.platform_credentials import MANAGED_BY_PLATFORM
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship

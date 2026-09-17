@@ -365,6 +365,12 @@ async def _reconcile(
                 stats = await service.sync_registry(registry_id)
                 await session.commit()
                 click.echo(f"Synced: {stats}")
+                if stats.get("skipped"):
+                    click.echo(
+                        f"  WARNING: skipped {stats['skipped']} item(s) "
+                        "that failed validation (see logs for reasons)",
+                        err=True,
+                    )
                 succeeded.append(registry_name)
         except Exception as e:
             logger.exception("Reconcile failed for registry %s", registry_name)

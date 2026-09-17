@@ -13,7 +13,9 @@ from agentarea_triggers.domain.enums import (
 )
 from agentarea_triggers.domain.models import (
     CronTrigger,
+    TriggerCreate,
     TriggerExecution,
+    TriggerUpdate,
     WebhookTrigger,
 )
 from agentarea_triggers.infrastructure.orm import TriggerExecutionORM, TriggerORM
@@ -227,6 +229,47 @@ class TestTriggerRepository:
         assert result.trigger_type == TriggerType.CRON
         assert result.cron_expression == sample_trigger_orm.cron_expression
         assert result.timezone == sample_trigger_orm.timezone
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("event_types", [["message"], []])
+    async def test_update_webhook_preserves_event_filter(
+        self, repository, mock_session, sample_trigger_orm, event_types
+    ):
+        sample_trigger_orm.trigger_type = TriggerType.WEBHOOK.value
+        sample_trigger_orm.webhook_id = "webhook_123"
+        sample_trigger_orm.event_types = event_types
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = sample_trigger_orm
+        mock_session.execute.return_value = mock_result
+
+        result = await repository.update_by_id(
+            sample_trigger_orm.id, TriggerUpdate(event_types=event_types)
+        )
+
+        update_statement = mock_session.execute.call_args_list[0].args[0]
+        assert update_statement.compile().params["event_types"] == event_types
+        assert result.event_types == event_types
+
+    @pytest.mark.asyncio
+    async def test_create_from_model_persists_event_filter(
+        self, repository, mock_session, sample_trigger_orm
+    ):
+        sample_trigger_orm.trigger_type = TriggerType.WEBHOOK.value
+        sample_trigger_orm.webhook_id = "webhook_123"
+        sample_trigger_orm.event_types = ["message"]
+        repository._orm_to_domain = MagicMock(return_value=sample_trigger_orm)
+        trigger_data = TriggerCreate(
+            name="Filtered webhook",
+            agent_id=uuid4(),
+            trigger_type=TriggerType.WEBHOOK,
+            webhook_id="webhook_123",
+            created_by="test_user",
+            event_types=["message"],
+        )
+
+        await repository.create_from_model(trigger_data)
+
+        assert mock_session.add.call_args.args[0].event_types == ["message"]
 
 
 class TestTriggerExecutionRepository:

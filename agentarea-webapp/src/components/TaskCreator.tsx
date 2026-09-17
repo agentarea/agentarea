@@ -1,260 +1,82 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { CheckCircle, Loader2, Send } from "lucide-react";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { createTask, getAgents } from "./actions";
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
-interface Agent {
-  id: string;
-  name: string;
-  description?: string;
-  model_id?: string | null;
+interface TaskCreatorProps {
+  /** tasks.created_by — the principal that started the task. */
+  userId?: string | null;
+  /** Resolved display name, or null when the identity directory does not know the id. */
+  name?: string | null;
 }
 
-export default function TaskCreator() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
-  const [taskDescription, setTaskDescription] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [loadingAgents, setLoadingAgents] = useState(true);
-  const [result, setResult] = useState<{
-    success: boolean;
-    message: string;
-    taskId?: string;
-  } | null>(null);
+/**
+ * The person a task belongs to, rendered as avatar + name.
+ *
+ * Shown by `TaskSourceBadge` in place of a "Manual" chip: a task nobody
+ * automated came from a person, and naming them says strictly more than the
+ * word "Manual" ever did.
+ *
+ * Clicking filters the list down to that person's tasks — the only navigation
+ * a task list can offer that is actually about them; there is no per-user page.
+ *
+ * An id the directory could not resolve is labelled as unknown and keeps the id
+ * in a tooltip. It is deliberately not a link and never renders the raw id as
+ * if it were a name: a uuid here is indistinguishable from a person actually
+ * called that, which is the same trap `agent_name` avoids.
+ */
+export function TaskCreator({ userId, name }: TaskCreatorProps) {
+  const t = useTranslations("TasksPage");
 
-  // Load agents on mount
-  useEffect(() => {
-    loadAgents();
-  }, []);
+  if (!userId) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
 
-  const loadAgents = async () => {
-    try {
-      setLoadingAgents(true);
-      const { data: agentsData, error } = await getAgents();
-
-      if (error) {
-        console.error("Failed to load agents:", error);
-        setResult({ success: false, message: "Failed to load agents" });
-      } else {
-        const transformedAgents = (agentsData || []).map((agent) => ({
-          ...agent,
-          description: agent.description ?? undefined,
-          model_id: agent.model_id ?? undefined,
-        }));
-        setAgents(transformedAgents);
-        if (transformedAgents.length > 0) {
-          setSelectedAgentId(transformedAgents[0].id);
-        }
-      }
-    } catch (err) {
-      console.error("Error loading agents:", err);
-      setResult({ success: false, message: "Error loading agents" });
-    } finally {
-      setLoadingAgents(false);
-    }
-  };
-
-  const handleCreateTask = async () => {
-    if (!selectedAgentId || !taskDescription.trim()) {
-      setResult({
-        success: false,
-        message: "Please select an agent and enter a task description",
-      });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setResult(null);
-
-      const taskData = {
-        description: taskDescription,
-        parameters: {
-          created_via: "task_creator_ui",
-          timestamp: new Date().toISOString(),
-        },
-        enable_agent_communication: true,
-        requires_human_approval: null,
-      };
-
-      const { error } = await createTask(selectedAgentId, taskData);
-
-      if (error) {
-        setResult({
-          success: false,
-          message: `Failed to create task: ${error.detail?.[0]?.msg || "Unknown error"}`,
-        });
-      } else {
-        setResult({
-          success: true,
-          message: `Task created successfully!`,
-        });
-        setTaskDescription(""); // Clear the form
-      }
-    } catch (err) {
-      console.error("Error creating task:", err);
-      setResult({
-        success: false,
-        message: `Error creating task: ${err instanceof Error ? err.message : "Unknown error"}`,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleViewTask = () => {
-    if (result?.taskId) {
-      window.open(`/tasks/${result.taskId}`, "_blank");
-    }
-  };
-
-  const handleViewAllTasks = () => {
-    window.open("/tasks", "_blank");
-  };
-
-  if (loadingAgents) {
+  if (!name) {
     return (
-      <Card className="w-full max-w-2xl">
-        <CardContent className="pt-6">
-          <LoadingSpinner />
-        </CardContent>
-      </Card>
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex min-w-0 items-center gap-2">
+              <EntityAvatar size={20} text="?" variant="soft" />
+              <span className="truncate text-xs italic text-muted-foreground">
+                {t("unknownCreator")}
+              </span>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <span className="font-mono text-xs">{userId}</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 
+  // Only the local part of an email carries a name — the domain would turn
+  // alice@example.com into "AE".
+  const initials = nameInitials(
+    name.includes("@") ? name.slice(0, name.indexOf("@")) : name
+  );
+
   return (
-    <Card className="w-full max-w-2xl">
-      <CardHeader>
-        <CardTitle>Create Test Task</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Send a task to an agent and test the task creation functionality
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Agent Selection */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Select Agent</label>
-          <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Choose an agent" />
-            </SelectTrigger>
-            <SelectContent>
-              {agents.map((agent) => (
-                <SelectItem key={agent.id} value={agent.id}>
-                  {agent.name} {agent.description && `- ${agent.description}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Task Description */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Task Description</label>
-          <Textarea
-            placeholder="Enter your task description here... (e.g., 'What is the current time?', 'Analyze this data', etc.)"
-            value={taskDescription}
-            onChange={(e) => setTaskDescription(e.target.value)}
-            rows={4}
-          />
-        </div>
-
-        {/* Create Task Button */}
-        <Button
-          onClick={handleCreateTask}
-          disabled={loading || !selectedAgentId || !taskDescription.trim()}
-          className="w-full"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 animate-spin" />
-              Creating Task...
-            </>
-          ) : (
-            <>
-              <Send className="mr-2" />
-              Create Task
-            </>
-          )}
-        </Button>
-
-        {/* Result Display */}
-        {result && (
-          <div
-            className={`rounded-lg p-4 ${result.success ? "border border-green-200 bg-green-50" : "border border-red-200 bg-red-50"}`}
-          >
-            <div className="flex items-start gap-2">
-              {result.success ? (
-                <CheckCircle className="mt-0.5 h-5 w-5 text-green-600" />
-              ) : (
-                <div className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs text-white">
-                  !
-                </div>
-              )}
-              <div className="flex-1">
-                <p
-                  className={`text-sm ${result.success ? "text-green-800" : "text-red-800"}`}
-                >
-                  {result.message}
-                </p>
-                {result.success && result.taskId && (
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleViewTask}
-                    >
-                      View Task Details
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleViewAllTasks}
-                    >
-                      View All Tasks
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Quick Test Examples */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Quick Test Examples</label>
-          <div className="grid grid-cols-1 gap-2">
-            {[
-              "What is the current time and date?",
-              "Tell me a joke",
-              "Explain what you can do",
-              "Help me with a simple calculation: 15 * 23",
-            ].map((example, index) => (
-              <Button
-                key={index}
-                variant="outline"
-                size="sm"
-                onClick={() => setTaskDescription(example)}
-                className="h-auto justify-start px-3 py-2 text-left"
-              >
-                {example}
-              </Button>
-            ))}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <Link
+      href={`/tasks?creator=${encodeURIComponent(userId)}`}
+      // The row is itself clickable; without this the row's navigation wins.
+      onClick={(event) => event.stopPropagation()}
+      title={t("showTasksBy", { name })}
+      className="group/creator inline-flex min-w-0 items-center gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      <EntityAvatar size={20} text={initials} variant="soft" />
+      <span className="truncate text-xs text-muted-foreground transition-colors group-hover/creator:text-primary group-hover/creator:underline group-hover/creator:underline-offset-2">
+        {name}
+      </span>
+    </Link>
   );
 }

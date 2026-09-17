@@ -1,24 +1,14 @@
 import { createElement } from "react";
-import {
-  Clock,
-  CreditCard,
-  Github,
-  Hash,
-  ListTodo,
-  Mail,
-  MessageSquare,
-  Send,
-  Users,
-  Webhook,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
 import type { TriggerResponse } from "@/api/client/types.gen";
+import { cn } from "@/lib/utils";
 
 export interface TriggerCatalogEntry {
   id?: string;
   name?: string;
+  /** Asset id kept for reference; render `icon_url`, not this. */
   icon?: string;
+  /** Resolved by the API — the only thing the UI needs to draw a channel. */
+  icon_url?: string | null;
   description?: string;
   kind?: string;
   webhook_type?: string;
@@ -93,61 +83,30 @@ export function getTriggerSourceKey(
   ).toLowerCase();
 }
 
-const TRIGGER_ICON_BY_KEY: Record<string, LucideIcon> = {
-  cron: Clock,
-  schedule: Clock,
-  telegram: Send,
-  slack: Hash,
-  discord: MessageSquare,
-  email: Mail,
-  gmail: Mail,
-  github: Github,
-  stripe: CreditCard,
-  linear: ListTodo,
-  teams: Users,
-  webhook: Webhook,
-  generic: Webhook,
-  event: Zap,
-};
-
-export function getTriggerIconComponent(
-  entry?: TriggerCatalogEntry | null,
-  trigger?: TriggerLike
-): LucideIcon {
-  return TRIGGER_ICON_BY_KEY[getTriggerSourceKey(entry, trigger)] ?? Webhook;
-}
-
+/**
+ * The catalog owns both the artwork and the name of a channel — which channels
+ * exist grows by configuration, so nothing here may switch on the type. The API
+ * hands us a resolved `icon_url`; we draw it and ask no questions.
+ */
 export function renderTriggerIcon(
   entry?: TriggerCatalogEntry | null,
-  trigger?: TriggerLike,
+  _trigger?: TriggerLike,
   className = "h-5 w-5"
 ) {
-  return createElement(getTriggerIconComponent(entry, trigger), { className });
+  if (!entry?.icon_url) return null;
+  return createElement("img", {
+    src: entry.icon_url,
+    alt: "",
+    "aria-hidden": true,
+    className: cn("shrink-0", className),
+  });
 }
-
-const WEBHOOK_TYPE_LABELS: Record<string, string> = {
-  github: "GitHub",
-  gmail: "Gmail",
-  teams: "Microsoft Teams",
-};
 
 export function getTriggerDisplayName(
   trigger: TriggerLike,
   entry?: TriggerCatalogEntry | null
 ) {
-  const webhookType = effectiveWebhookType(trigger);
-  const entryMatchesType =
-    !webhookType ||
-    entry?.webhook_type === webhookType ||
-    entry?.id === webhookType;
-  if (entry?.name && entryMatchesType) return entry.name;
-  if (webhookType && webhookType !== "generic") {
-    return (
-      WEBHOOK_TYPE_LABELS[webhookType] ??
-      webhookType.charAt(0).toUpperCase() + webhookType.slice(1)
-    );
-  }
-  return entry?.name ?? (trigger.trigger_type === "cron" ? "Cron" : "Webhook");
+  return entry?.name ?? trigger.trigger_type ?? "";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -202,19 +161,24 @@ export function describeCronExpression(expr?: string | null): string {
 
   // Hourly — M * * * *  or  M */N * * *
   if (hour === "*" && dom === "*" && dow === "*" && /^\d+$/.test(min)) {
-    return min === "0" ? "Every hour" : `Every hour at :${min.padStart(2, "0")}`;
+    return min === "0"
+      ? "Every hour"
+      : `Every hour at :${min.padStart(2, "0")}`;
   }
   if (hour.startsWith("*/") && dom === "*" && dow === "*") {
     return `Every ${hour.slice(2)} hours`;
   }
 
   const timeValid = /^\d+$/.test(min) && /^\d+$/.test(hour);
-  const time = timeValid ? formatClock(parseInt(hour, 10), parseInt(min, 10)) : null;
+  const time = timeValid
+    ? formatClock(parseInt(hour, 10), parseInt(min, 10))
+    : null;
 
   if (timeValid && dom === "*") {
     // Weekday / weekend ranges
     if (dow === "1-5") return `Weekdays at ${time}`;
-    if (dow === "0,6" || dow === "6,0" || dow === "0,6,") return `Weekends at ${time}`;
+    if (dow === "0,6" || dow === "6,0" || dow === "0,6,")
+      return `Weekends at ${time}`;
     // A single day of the week
     if (/^[0-6]$/.test(dow)) {
       return `Every ${CRON_DAY_NAMES[parseInt(dow, 10)]} at ${time}`;
@@ -288,7 +252,8 @@ export function formatCompactDistance(value: Date | string | number): string {
   else if (seconds < 3600) label = `${Math.round(seconds / 60)}m`;
   else if (seconds < 86400) label = `${Math.round(seconds / 3600)}h`;
   else if (seconds < 86400 * 30) label = `${Math.round(seconds / 86400)}d`;
-  else if (seconds < 86400 * 365) label = `${Math.round(seconds / (86400 * 30))}mo`;
+  else if (seconds < 86400 * 365)
+    label = `${Math.round(seconds / (86400 * 30))}mo`;
   else label = `${Math.round(seconds / (86400 * 365))}y`;
 
   return diff >= 0 ? `in ${label}` : `${label} ago`;

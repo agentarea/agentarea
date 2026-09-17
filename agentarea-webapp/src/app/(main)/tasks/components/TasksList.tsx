@@ -7,14 +7,23 @@ import Table from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { TaskItem } from "@/components/TaskItem";
 import { TaskSourceBadge } from "@/components/TaskSourceBadge";
-import { StatusIndicator } from "@/components/ui/status-indicator";
+import type { TriggerCatalogEntry } from "@/app/(main)/triggers/components/triggerDisplay";
+import { TaskStatus } from "@/components/TaskStatus";
 import { TaskWithAgent } from "@/lib/api";
 import { CARD_GRID_WIDE } from "@/lib/collectionGrids";
-import { getTaskStatusPresentation } from "@/lib/status";
 
 interface TasksListProps {
   initialTasks: TaskWithAgent[];
   viewMode?: string;
+  /** Names and draws the channel each task came from. */
+  catalog?: TriggerCatalogEntry[];
+  /**
+   * Principal id -> display name, resolved by the caller via GET /v1/principals:
+   * each task's creator, plus any principal its source names. An id missing from
+   * the map is one nothing could resolve, and is rendered as unknown rather than
+   * as the id.
+   */
+  principalNames?: Record<string, string>;
 }
 
 function formatUsdCost(value: number) {
@@ -23,10 +32,11 @@ function formatUsdCost(value: number) {
 
 export default function TasksList({
   initialTasks,
-  viewMode = "grid",
+  viewMode = "table",
+  catalog = [],
+  principalNames = {},
 }: TasksListProps) {
   const t = useTranslations("TasksPage");
-  const tStatus = useTranslations("TasksPage.status");
   const router = useRouter();
 
   // Define table columns for tasks
@@ -36,28 +46,19 @@ export default function TasksList({
       header: t("statusLabel"),
       headerClassName: "w-[140px]",
       cellClassName: "whitespace-nowrap",
-      render: (value: string, row: TaskWithAgent) => {
-        const presentation = getTaskStatusPresentation(value);
-        const label = presentation.labelKey
-          ? tStatus(presentation.labelKey)
-          : presentation.label;
-
-        return (
-          <div className="flex flex-col gap-1">
-            <StatusIndicator
-              size="default"
-              tone={presentation.tone}
-              pulse={presentation.pulse}
-              className="font-medium"
-            >
-              {label}
-            </StatusIndicator>
-            {row.scheduled_at && (
-              <TableDateDisplay dateString={row.scheduled_at} />
-            )}
-          </div>
-        );
-      },
+      render: (value: string, row: TaskWithAgent) => (
+        <div className="flex flex-col gap-1">
+          <TaskStatus
+            status={value}
+            size="default"
+            caption="auto"
+            className="font-medium"
+          />
+          {row.scheduled_at && (
+            <TableDateDisplay dateString={row.scheduled_at} />
+          )}
+        </div>
+      ),
     },
     {
       accessor: "description",
@@ -87,10 +88,19 @@ export default function TasksList({
     {
       accessor: "parameters",
       header: t("source"),
-      headerClassName: "w-[160px]",
-      cellClassName: "w-[160px] max-w-[160px]",
-      render: (value: TaskWithAgent["parameters"]) => (
-        <TaskSourceBadge parameters={value} />
+      headerClassName: "w-[180px]",
+      cellClassName: "w-[180px] max-w-[180px]",
+      // One column, not two: where a task came from and who it belongs to are
+      // the same question asked of different task kinds. A task nobody
+      // automated renders as its person; an automated one keeps its badge and
+      // carries the owner in the tooltip.
+      render: (value: TaskWithAgent["parameters"], row: TaskWithAgent) => (
+        <TaskSourceBadge
+          parameters={value}
+          createdBy={row.created_by}
+          principalNames={principalNames}
+          catalog={catalog}
+        />
       ),
     },
     {
@@ -125,7 +135,7 @@ export default function TasksList({
     return (
       <div>
         <Table
-          className="min-w-[1040px] table-fixed"
+          className="min-w-[1060px] table-fixed"
           data={initialTasks}
           columns={taskColumns}
           onRowClick={(task) => {

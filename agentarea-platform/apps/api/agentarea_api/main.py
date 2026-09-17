@@ -144,45 +144,6 @@ async def initialize_services():
         raise e
 
 
-async def seed_platform_providers() -> None:
-    """Install the models this deployment supplies credentials for.
-
-    A no-op unless PLATFORM_PROVIDERS is set, which is the open build's normal
-    state: a deployment that supplies no keys offers no keyless models.
-
-    Fail-soft, and deliberately so. The failure it guards against is the one this
-    code creates — a malformed provider list, a provider spec the catalog has not
-    loaded yet — and refusing to boot over it would take the whole API down for
-    every tenant, including the ones bringing their own keys and unaffected by any
-    of this. A platform model that failed to seed is absent, which is visible in
-    the model list and fixed by a restart once the configuration is right.
-    """
-    from agentarea_common.config import get_settings
-
-    raw = get_settings().app.PLATFORM_PROVIDERS
-    if not raw:
-        return
-
-    try:
-        from agentarea_common.config import get_database
-        from agentarea_llm.application.platform_provider_seeder import (
-            PlatformProviderSeeder,
-            parse_platform_providers,
-        )
-
-        providers = parse_platform_providers(raw)
-        async with get_database().async_session_factory() as session:
-            summary = await PlatformProviderSeeder(session).seed(providers)
-        logger.info(
-            "Platform providers seeded: %d provider(s), %d new model(s), %d skipped",
-            summary["providers"],
-            summary["models"],
-            summary["skipped"],
-        )
-    except Exception:
-        logger.exception("Failed to seed platform providers; continuing without them")
-
-
 async def cleanup_all_connections():
     """Comprehensive cleanup of all connections."""
     logger.info("Starting comprehensive connection cleanup...")
@@ -225,7 +186,6 @@ async def app_lifespan(app: FastAPI):
     # Startup
     get_container()
     await initialize_services()
-    await seed_platform_providers()
 
     from agentarea_api.api.events.events_router import start_events_router
 

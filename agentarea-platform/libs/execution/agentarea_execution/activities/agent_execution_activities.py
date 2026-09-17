@@ -12,10 +12,13 @@ This module provides Temporal activities for agent execution:
 
 # Standard library imports
 import asyncio
+import hashlib
 import json
 import logging
 from collections.abc import Awaitable, Callable
+from copy import deepcopy
 from datetime import datetime
+from pathlib import PurePosixPath
 from typing import Any
 from uuid import UUID
 
@@ -36,19 +39,14 @@ from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationRequest,
     authorize_tool_invocation,
 )
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.events.contract import LLM_FAILED, canonical_type
-from agentarea_common.infrastructure.platform_credentials import (
-    ENV_PREFIX as PLATFORM_CREDENTIAL_ENV_PREFIX,
-)
-from agentarea_common.infrastructure.platform_credentials import (
-    MANAGED_BY_PLATFORM,
-    platform_credential,
-)
 from agentarea_common.money import ZERO, to_money
 from prometheus_client import Counter
 
 # Third-party imports
 from temporalio import activity
+from temporalio.exceptions import ApplicationError
 
 from ..exceptions import AgentNotFoundError, ModelInstanceNotFoundError, NoModelBoundError
 from ..interfaces import ActivityDependencies
@@ -141,6 +139,179 @@ def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _task_resource_ids(parameters: dict[str, Any], kind: str) -> list[UUID]:
+    value = parameters.get(kind)
+    if kind == "mcps" and value is None:
+        value = parameters.get("mcp")
+        if value is None:
+            value = parameters.get("mcp_servers")
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ApplicationError(f"Task {kind} must be a list", non_retryable=True)
+    ids: list[UUID] = []
+    for item in value:
+        ref = item
+        if isinstance(item, dict):
+            ref = item.get("id") or item.get("instance_id") or item.get("skill_id")
+        try:
+            resource_id = UUID(ref) if isinstance(ref, str) else None
+        except ValueError:
+            resource_id = None
+        if resource_id is None:
+            raise ApplicationError(f"Invalid task {kind} reference", non_retryable=True)
+        if resource_id not in ids:
+            ids.append(resource_id)
+    return ids
+
+
+async def _resolve_task_resources(
+    agent: Any, parameters: dict[str, Any], ctx: Any
+) -> tuple[list[dict[str, Any]], list[Any]]:
+    """Resolve additive run resources with the task's workspace-scoped services."""
+    tools = deepcopy(_as_tool_config_list(agent.tools))
+    skills = list(getattr(agent, "skills", None) or [])
+    mcp_ids = _task_resource_ids(parameters, "mcps")
+    if mcp_ids:
+        mcp_service = await ctx.get_mcp_server_instance_service()
+        for instance_id in mcp_ids:
+            instance = await mcp_service.get(instance_id)
+            if instance is None:
+                raise ApplicationError("Selected task MCP is unavailable", non_retryable=True)
+            # Match both storage conventions. An inherited restriction must never
+            # be replaced by a second, unrestricted entry for the same server.
+            inherited = False
+            for tool in tools:
+                if tool.get("type") != "mcp":
+                    continue
+                reference = str(tool.get("name") or "")
+                if reference == instance.name:
+                    inherited = True
+                    break
+                try:
+                    inherited = UUID(reference) == instance.id
+                except ValueError:
+                    pass
+                if inherited:
+                    break
+            if not inherited:
+                tools.append({"type": "mcp", "name": str(instance.id)})
+
+    skill_ids = _task_resource_ids(parameters, "skills")
+    if skill_ids:
+        skill_service = await ctx.get_skill_service()
+        for skill_id in skill_ids:
+            if any(str(skill.id) == str(skill_id) for skill in skills):
+                continue
+            skill = await skill_service.get_with_catalog(skill_id)
+            if skill is None:
+                raise ApplicationError("Selected task skill is unavailable", non_retryable=True)
+            if any(existing.name == skill.name for existing in skills):
+                raise ApplicationError(
+                    "Selected task skills must have distinct names", non_retryable=True
+                )
+            skills.append(skill)
+    return tools, skills
+
+
+async def _prepare_task_files(
+    request: AgentConfigRequest, user_context: UserContext
+) -> list[dict[str, Any]]:
+    """Snapshot explicitly selected workspace files into this run's inputs."""
+    from agentarea_common.artifacts import (
+        ArtifactActor,
+        ArtifactService,
+        DbArtifactEventRecorder,
+        WorkspaceRepository,
+        WorkspaceValidationError,
+    )
+    from agentarea_common.artifacts.workspace import normalize_workspace_path
+
+    paths = request.task_parameters.get("files")
+    if paths is None or paths == []:
+        return []
+    if not isinstance(paths, list) or len(paths) > 100 or request.task_id is None:
+        raise ApplicationError("Invalid task file selection", non_retryable=True)
+
+    sources: list[tuple[str, str | None, str]] = []
+    for path in paths:
+        try:
+            clean = normalize_workspace_path(path)
+            parts = PurePosixPath(clean).parts
+            if not parts:
+                raise ValueError("not a file path")
+            source_task_id = None
+            relative_path = clean
+            if parts[0] == "tasks":
+                if len(parts) < 4 or parts[2] != "workspace":
+                    raise ValueError("not a public task workspace path")
+                source_task_id = str(UUID(parts[1]))
+                relative_path = normalize_workspace_path("/".join(parts[3:]))
+            elif parts[0] in {"staging", ".trash"} or "://" in clean:
+                raise ValueError("not a visible workspace file")
+        except (ValueError, TypeError, WorkspaceValidationError) as exc:
+            raise ApplicationError("Invalid task file path", non_retryable=True) from exc
+        source = (clean, source_task_id, relative_path)
+        if source not in sources:
+            sources.append(source)
+
+    workspace_id = user_context.workspace_id
+    task_id = str(request.task_id)
+    repository = WorkspaceRepository(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
+    artifacts = ArtifactService()
+    descriptors: list[dict[str, Any]] = []
+    for source, source_task_id, source_path in sources:
+        # A stable name makes activity retries reuse the first committed snapshot
+        # even if the source has since changed or disappeared.
+        basename = PurePosixPath(source_path).name
+        prefix = hashlib.sha256(source.encode()).hexdigest()[:16]
+        filename = f"selected-{prefix}-{basename}"
+        target = f"inputs/attachments/{filename}"
+        try:
+            data, content_type = await repository.get(workspace_id, task_id, target)
+        except FileNotFoundError:
+            try:
+                if source_task_id is not None:
+                    data, content_type = await repository.get(
+                        workspace_id, source_task_id, source_path
+                    )
+                else:
+                    head = await artifacts.head(workspace_id, source_path)
+                    if head is None or not head.get("sha256"):
+                        raise FileNotFoundError(source_path)
+                    data, content_type = await artifacts.get(workspace_id, source_path)
+                    if (
+                        len(data) != head["size"]
+                        or hashlib.sha256(data).hexdigest() != head["sha256"]
+                    ):
+                        raise WorkspaceValidationError("selected file changed during snapshot")
+                await repository.put_files(
+                    workspace_id,
+                    task_id,
+                    {target: data},
+                    content_types={target: content_type or "application/octet-stream"},
+                    provenance={"source": "task_selection", "source_path": source},
+                    owner=f"task-inputs-{task_id}",
+                )
+            except (FileNotFoundError, WorkspaceValidationError) as exc:
+                raise ApplicationError(
+                    "Selected task file is unavailable", non_retryable=True
+                ) from exc
+        descriptors.append(
+            {
+                "relative_path": target,
+                "filename": filename,
+                "size": len(data),
+                "content_type": content_type or "application/octet-stream",
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+        )
+    return descriptors
 
 
 def _sandbox_file_auth_secret(dependencies: ActivityDependencies) -> str:
@@ -319,55 +490,41 @@ async def _resolve_provider_api_key(
     user_context: Any,
     dependencies: ActivityDependencies,
 ) -> str | None:
-    """Read the credential this call runs on, from whichever store owns it.
+    """Read the credential this call runs on, from the workspace that owns it.
 
-    ``reference`` means different things depending on ``managed_by``, which is the
-    whole reason this is one function and not a branch repeated at each call site:
+    ``reference`` is a secret name in both cases. What differs is whose secrets are
+    searched, which is the whole reason this is one function and not a branch
+    repeated at each call site:
 
-      * tenant configuration (managed_by unset) — the name of a secret in the
-        caller's workspace, read through the workspace-scoped secret manager;
-      * platform configuration — the name of a credential the deployment supplies
-        through its environment, which no workspace-scoped read can reach.
+      * tenant configuration (managed_by unset) — the caller's own workspace;
+      * platform configuration — the platform workspace, which only the operator
+        writes and which no tenant-scoped read can reach. The scoping that keeps
+        tenants out of each other's secrets is what keeps them out of this one.
 
-    Getting this branch wrong in either direction is silent. A platform reference
-    sent to the tenant store resolves to None and the provider answers 401; a
-    tenant reference sent to the environment resolves to None just the same. Both
-    look like "the user's key is broken", which is the one thing neither is.
+    Getting this branch wrong in either direction is silent: the name resolves to
+    None in the wrong workspace and the provider answers 401, which reads as "the
+    user's key is broken" — the one thing neither case is.
     """
     if not reference:
         return None
 
-    if managed_by == MANAGED_BY_PLATFORM:
-        key = platform_credential(reference)
-        if key is None:
-            # Worth a line in the log: the operator configured a platform model
-            # and then did not supply its credential, and the only other symptom
-            # is an auth error attributed to the provider.
-            #
-            # Nothing derived from the credential reference is logged — only the
-            # fixed prefix, and the rule for deriving the rest.
-            #
-            # The reference is a name, not a value, so logging it would leak
-            # nothing. But CodeQL reads any log line downstream of a credential
-            # parameter as clear-text logging of a secret, and it is right about
-            # the shape even where it is wrong about the value. Naming the prefix
-            # and the rule instead keeps the message actionable — the operator
-            # already has the reference in front of them, in PLATFORM_PROVIDERS —
-            # while leaving no path from a credential to a log at all.
-            logger.warning(
-                "No platform credential set: expected a %s* environment variable "
-                "for the credential named in PLATFORM_PROVIDERS. The provider "
-                "will be called without a key until it is set.",
-                PLATFORM_CREDENTIAL_ENV_PREFIX,
-            )
-        return key
-
     from agentarea_common.config import get_database
+
+    if managed_by == MANAGED_BY_PLATFORM:
+        from agentarea_common.auth.context import UserContext
+        from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
+
+        secret_context: Any = UserContext(
+            user_id=PLATFORM_PRINCIPAL_ID,
+            workspace_id=PLATFORM_WORKSPACE_ID,
+        )
+    else:
+        secret_context = user_context
 
     secret_session = get_database().async_session_factory()
     try:
         secret_manager = dependencies.secret_manager_factory.create(
-            session=secret_session, user_context=user_context
+            session=secret_session, user_context=secret_context
         )
         return await secret_manager.get_secret(reference)
     finally:
@@ -430,12 +587,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
             if not agent:
                 raise AgentNotFoundError(f"Agent {request.agent_id} not found")
 
+            tools, skills = await _resolve_task_resources(agent, request.task_parameters, ctx)
             runtime = await discover_runtime_manifest_activity()
 
             # Build skill information
             skills_info = []
-            if hasattr(agent, "skills") and agent.skills:
-                for skill in agent.skills:
+            if skills:
+                for skill in skills:
                     # Get file list for multi-file skills
                     files = []
                     if skill.s3_path:
@@ -484,15 +642,24 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 {
                     "instruction": agent.instruction,
                     "model_id": model_id_str,
-                    "tools": agent.tools,
+                    "tools": tools,
                     "events_config": agent.events_config,
                     "planning": agent.planning,
                     "agent_type": getattr(agent, "agent_type", None),
                 },
-                skill_ids=[str(s.id) for s in getattr(agent, "skills", None) or []],
+                skill_ids=[str(s.id) for s in skills],
             )
             if request.task_id is not None:
                 await _record_task_config_hash(ctx, request.task_id, config_hash)
+
+            execution_context = deepcopy(request.execution_context)
+            attachments = await _prepare_task_files(request, user_context)
+            if attachments:
+                execution_context = execution_context or {}
+                execution_context["workspace_attachments"] = [
+                    *(execution_context.get("workspace_attachments") or []),
+                    *attachments,
+                ]
 
             # Build configuration using Pydantic model
             return AgentConfigResult(
@@ -502,21 +669,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 instruction=(agent.instruction or "")
                 + render_runtime_prompt(
                     runtime,
-                    has_org_context=any(
-                        t.get("name") == "agentarea/context"
-                        for t in _as_tool_config_list(agent.tools)
-                    ),
+                    has_org_context=any(t.get("name") == "agentarea/context" for t in tools),
                 ),
                 agent_type=getattr(agent, "agent_type", "stateless") or "stateless",
                 model_id=model_id_str,
                 config_hash=config_hash,
                 context_window=context_window,
                 default_context_strategy=default_context_strategy,
-                tools=_as_tool_config_list(agent.tools),
+                tools=tools,
                 events_config=agent.events_config or {},
                 planning=agent.planning if agent.planning is not None else False,
                 a2ui_enabled=agent.a2ui_enabled if agent.a2ui_enabled is not None else False,
-                execution_context=request.execution_context,
+                execution_context=execution_context,
                 step_type=request.step_type,
                 skills=skills_info,
                 runtime=runtime,
@@ -550,7 +714,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
             base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
             split = await tool_manager.discover_available_tools_split(
                 agent_id=request.agent_id,
-                tools_config=_as_tool_config_list(agent.tools),
+                tools_config=request.tools
+                if request.tools is not None
+                else _as_tool_config_list(agent.tools),
                 mcp_server_instance_service=mcp_server_instance_service,
                 agent_service=agent_service,
                 base_url=base_url,
@@ -591,7 +757,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
             base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
             providers = await tool_manager.discover_tool_providers(
                 agent_id=request.agent_id,
-                tools_config=_as_tool_config_list(agent.tools),
+                tools_config=request.tools
+                if request.tools is not None
+                else _as_tool_config_list(agent.tools),
                 mcp_server_instance_service=mcp_server_instance_service,
                 agent_service=agent_service,
                 base_url=base_url,
@@ -2128,7 +2296,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             user_context = create_user_context(request.user_context_data)
             async with ActivityContext(container, user_context) as ctx:
                 skill_service = await ctx.get_skill_service()
-                skill = await skill_service.get(request.skill_id)
+                skill = await skill_service.get_with_catalog(request.skill_id)
                 if not skill:
                     return MaterializeSkillFilesResult(
                         success=False, error=f"Skill {request.skill_id} not found"

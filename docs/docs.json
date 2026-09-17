@@ -118,6 +118,12 @@
             ]
           },
           {
+            "group": "Channels",
+            "pages": [
+              "guides/channels/receive-email"
+            ]
+          },
+          {
             "group": "Governance",
             "pages": [
               "guides/governance/authorize-a-tool-call",

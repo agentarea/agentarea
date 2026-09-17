@@ -47,6 +47,7 @@ interface InviteDialogProps {
 }
 
 const EXPIRY_OPTIONS = ["7", "14", "30"] as const;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Header "Invite people" button — opens {@link InviteDialog}. */
 export function InviteButton({ onClick }: { onClick: () => void }) {
@@ -76,12 +77,28 @@ export function InviteDialog({
     link: string;
     invitation: WorkspaceInvitationCreated;
   } | null>(null);
+  const [hasCopied, setHasCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const [closeWarning, setCloseWarning] = useState(false);
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next && created && !hasCopied) {
+      setCloseWarning(true);
+      return;
+    }
+    onOpenChange(next);
+  };
 
   const handleCreate = () => {
+    const recipient = email.trim();
+    if (recipient && !EMAIL_PATTERN.test(recipient)) {
+      setError(t("emailInvalid"));
+      return;
+    }
     setError(null);
     startTransition(async () => {
       const res = await createInvitationAction({
-        email: email || undefined,
+        email: recipient || undefined,
         expiresInDays: Number(expiresInDays),
       });
       if (res.error || !res.data) {
@@ -100,7 +117,7 @@ export function InviteDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="min-w-0 max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[496px] sm:rounded-[10px]">
         <DialogHeader className="space-y-1.5 px-6 pb-4 pt-5">
           <DialogTitle>
@@ -121,12 +138,44 @@ export function InviteDialog({
             {created ? (
               <>
                 <div className="space-y-2">
+                  {created.invitation.email_delivery === "sent" &&
+                    created.invitation.email && (
+                      <p className="text-xs text-muted-foreground">
+                        {t("emailSent", { email: created.invitation.email })}
+                      </p>
+                    )}
+                  {(created.invitation.email_delivery === "not_configured" ||
+                    created.invitation.email_delivery === "failed") && (
+                    <p className="text-xs text-destructive" role="alert">
+                      {created.invitation.email_delivery === "not_configured"
+                        ? t("emailNotConfigured")
+                        : t("emailFailed")}
+                    </p>
+                  )}
                   <FormLabel icon={Link2}>{t("invitationLinkLabel")}</FormLabel>
-                  <CopyableText text={created.link} />
+                  <CopyableText
+                    text={created.link}
+                    onCopied={() => {
+                      setHasCopied(true);
+                      setCopyFailed(false);
+                      setCloseWarning(false);
+                    }}
+                    onCopyError={() => setCopyFailed(true)}
+                  />
+                  {copyFailed && (
+                    <p className="text-xs text-destructive" role="alert">
+                      {t("copyFailed")}
+                    </p>
+                  )}
                   <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
                     <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
                     <span>{t("shownOnce")}</span>
                   </p>
+                  {closeWarning && (
+                    <p className="text-xs text-destructive" role="alert">
+                      {t("closeWarning")}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <FormLabel icon={Clock}>{t("expiresLabel")}</FormLabel>

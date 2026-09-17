@@ -74,6 +74,11 @@ export default function ProviderSpecView({
               : `No specs match your search query: "${searchQuery}"`
           }
           iconsType="llm"
+          // Specs come from the registry, so there is nothing to create here --
+          // the only useful move on an empty result is dropping the filter.
+          action={
+            hasNoData ? undefined : { label: "Clear search", href: "/admin/provider-configs" }
+          }
         />
       </div>
     );

@@ -6,7 +6,11 @@ import { Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { FileBrowser, type BrowsedFile } from "@/components/files/file-browser";
+import {
+  FileBrowser,
+  useFileBrowserState,
+  type BrowsedFile,
+} from "@/components/files/file-browser";
 import type { ArtifactEvent } from "@/components/files/file-viewer";
 import {
   listProjectFilesAction,
@@ -24,6 +28,9 @@ export default function ProjectFilesPage() {
   const [files, setFiles] = useState<BrowsedFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [browserState, setBrowserState] = useFileBrowserState(
+    `project:${projectId}`
+  );
 
   const fetchFiles = useCallback(async () => {
     const { data } = await listProjectFilesAction(projectId);
@@ -113,37 +120,38 @@ export default function ProjectFilesPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col">
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <h2 className="text-sm font-medium">Files ({files.length})</h2>
-        <Button
-          size="xs"
-          variant="outline"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading ? (
-            <Loader2 className="mr-1.5 animate-spin" />
-          ) : (
-            <Upload className="mr-1.5" />
-          )}
-          Upload File
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          onChange={handleUpload}
-        />
-      </div>
-
+    <>
       <FileBrowser
         files={files}
+        state={browserState}
+        onChange={setBrowserState}
         fetchUrl={fetchUrl}
         fetchHistory={fetchHistory}
         emptyMessage="No files uploaded yet."
-        className="flex-1"
+        className="h-[calc(100vh-8rem)]"
+        title={<h2 className="text-sm font-medium">Files ({files.length})</h2>}
+        actions={
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <Loader2 className="mr-1.5 animate-spin" />
+            ) : (
+              <Upload className="mr-1.5" />
+            )}
+            Upload File
+          </Button>
+        }
       />
-    </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleUpload}
+      />
+    </>
   );
 }

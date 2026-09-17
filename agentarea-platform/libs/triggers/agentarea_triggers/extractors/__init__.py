@@ -50,6 +50,17 @@ def get_extractor(name: str) -> type | None:
     return _EXTRACTORS.get(name)
 
 
+def resolves_own_credentials(name: str) -> bool:
+    """True when this extractor reads its credentials from the secret store.
+
+    Those extractors must never have credentials folded into
+    ``data_extractor_config``: that column is plain JSON in Postgres, and a
+    mailbox password does not belong there.
+    """
+    extractor = _EXTRACTORS.get(name)
+    return bool(getattr(extractor, "resolves_own_credentials", False))
+
+
 def list_extractors() -> list[str]:
     """List all registered extractor names."""
     return list(_EXTRACTORS.keys())

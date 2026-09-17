@@ -435,6 +435,16 @@ class LLMModel:
         # Handle tool calls
         tool_calls = None
         if hasattr(message, "tool_calls") and message.tool_calls:
+            # Narrowed on `type`: openai's union gained
+            # ChatCompletionMessageCustomToolCall, which carries no `function`.
+            # We never advertise custom tools, so one arriving means the provider
+            # invented it — say so rather than dropping it from the transcript,
+            # where it would look like the model simply never called anything.
+            for tool_call in message.tool_calls:
+                if tool_call.type != "function":
+                    logger.warning(
+                        "Ignoring unsupported tool call type %r from the model", tool_call.type
+                    )
             tool_calls = [
                 {
                     "id": tool_call.id,
@@ -445,6 +455,7 @@ class LLMModel:
                     },
                 }
                 for tool_call in message.tool_calls
+                if tool_call.type == "function"
             ]
         elif hasattr(message, "function_call") and getattr(message, "function_call"):
             # Fallback for providers that use function_call instead of tool_calls

@@ -1,8 +1,12 @@
-import { createOryMiddleware } from "@ory/nextjs/middleware";
-import oryConfig from "@/ory.config";
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/env";
-import { isProtectedRoute, hasLiveSession } from "@/lib/auth-session";
+import {
+  hasLiveSession,
+  isProtectedRoute,
+  loginRedirectPath,
+} from "@/lib/auth-session";
+import { createOryMiddleware } from "@/lib/ory/middleware";
+import oryConfig from "@/ory.config";
 
 // This function can be marked `async` if using `await` inside
 // The middleware automatically reads ORY_SDK_URL from environment variables
@@ -13,10 +17,8 @@ export const proxy = async (request: Request) => {
   if (
     currentHost &&
     publicOryUrl &&
-    (
-      request.url.startsWith(`http://${currentHost}/self-service`) ||
-      request.url.startsWith(`https://${currentHost}/self-service`)
-    )
+    (request.url.startsWith(`http://${currentHost}/self-service`) ||
+      request.url.startsWith(`https://${currentHost}/self-service`))
   ) {
     const originalUrl = new URL(request.url);
     const redirectUrl = new URL(publicOryUrl);
@@ -36,7 +38,10 @@ export const proxy = async (request: Request) => {
       orySdkUrl: env.ORY_SDK_URL,
     });
     if (!alive) {
-      const loginUrl = new URL("/auth/login", nextReq.url);
+      const loginUrl = new URL(
+        loginRedirectPath(pathname, nextReq.nextUrl.search),
+        nextReq.url
+      );
       const res = NextResponse.redirect(loginUrl);
       // best-effort clear; fresh login overwrites it regardless. The cookie Domain is
       // configured in the Kratos chart and not known to the webapp, so a Domain-scoped
@@ -50,7 +55,6 @@ export const proxy = async (request: Request) => {
 
   return response;
 };
-
 
 export const config = {
   matcher: [

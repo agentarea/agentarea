@@ -297,8 +297,21 @@ class RegistryService:
 
     # ── Sync ──
 
+    # Cap on how many skip reasons ride along in the returned stats dict. A
+    # catalog can fail validation on hundreds of items (e.g. a whole class of
+    # priceless reserved-capacity SKUs); the full count is still reported via
+    # `skipped`, this just bounds the payload. The WARNING log carries every
+    # skip regardless of the cap.
+    MAX_SKIPPED_DETAILS = 50
+
     async def sync_registry(self, registry_id: UUID) -> dict[str, Any]:
-        """Sync: fetch source, upsert catalog, auto-create entities for new items."""
+        """Sync: fetch source, upsert catalog, auto-create entities for new items.
+
+        A single item failing validation (e.g. an LLM model published with no
+        price) must not cost the rest of the batch: such items are skipped and
+        reported back in `skipped`/`skipped_items`, not silently dropped and
+        not allowed to abort the sync.
+        """
         registry = await self.registry_repo.get_by_id(registry_id)
         if not registry:
             raise RegistryNotFoundError(f"Registry {registry_id} not found")
@@ -312,69 +325,92 @@ class RegistryService:
             new_specs = 0
             updates_flagged = 0
             unchanged = 0
+            skipped = 0
+            skipped_items: list[dict[str, str]] = []
 
             for item_data in parsed_items:
-                existing = await self.item_repo.get_by_external_id(
-                    registry_id=registry_id,
-                    external_id=item_data["external_id"],
-                )
-
-                if existing:
-                    for field in ("name", "description", "spec", "tags"):
-                        if field in item_data:
-                            setattr(existing, field, item_data[field])
-                    # Browse facets are derived from the fields just overwritten,
-                    # so they have to be recomputed or the catalog keeps sorting
-                    # and faceting this item by what it used to be.
-                    apply_facets(existing, registry.registry_type)
-
-                    new_version = item_data.get("version") or "latest"
-                    existing.version = new_version
-
-                    if existing.installed_version and existing.installed_version != new_version:
-                        existing.update_available = True
-                        updates_flagged += 1
-                    else:
-                        unchanged += 1
-
-                    await self.item_repo.session.commit()
-                    await self.item_repo.session.refresh(existing)
-
-                    # Backfill json_spec on linked entity if missing
-                    if existing.installed_entity_id:
-                        raw_spec = (existing.spec or {}).get("raw_spec")
-                        if raw_spec:
-                            await self._backfill_entity(
-                                registry.registry_type, existing, registry_url=registry.source_url
-                            )
-                else:
-                    facets = derive_facets(
-                        registry.registry_type,
-                        item_data["name"],
-                        item_data.get("spec", {}),
-                        item_data.get("tags", []),
-                    )
-                    item = await self.item_repo.create(
+                external_id = item_data["external_id"]
+                try:
+                    existing = await self.item_repo.get_by_external_id(
                         registry_id=registry_id,
-                        external_id=item_data["external_id"],
-                        name=item_data["name"],
-                        description=item_data.get("description"),
-                        version=item_data.get("version"),
-                        spec=item_data.get("spec", {}),
-                        tags=item_data.get("tags", []),
-                        category=facets.category,
-                        sort_key=facets.sort_key,
-                        featured=facets.featured,
+                        external_id=external_id,
                     )
-                    entity_id = await self._create_entity(
-                        registry.registry_type, item, registry_url=registry.source_url
+
+                    if existing:
+                        for field in ("name", "description", "spec", "tags"):
+                            if field in item_data:
+                                setattr(existing, field, item_data[field])
+                        # Browse facets are derived from the fields just overwritten,
+                        # so they have to be recomputed or the catalog keeps sorting
+                        # and faceting this item by what it used to be.
+                        apply_facets(existing, registry.registry_type)
+
+                        new_version = item_data.get("version") or "latest"
+                        existing.version = new_version
+
+                        if existing.installed_version and existing.installed_version != new_version:
+                            existing.update_available = True
+                            updates_flagged += 1
+                        else:
+                            unchanged += 1
+
+                        await self.item_repo.session.commit()
+                        await self.item_repo.session.refresh(existing)
+
+                        # Backfill json_spec on linked entity if missing
+                        if existing.installed_entity_id:
+                            raw_spec = (existing.spec or {}).get("raw_spec")
+                            if raw_spec:
+                                await self._backfill_entity(
+                                    registry.registry_type,
+                                    existing,
+                                    registry_url=registry.source_url,
+                                )
+                    else:
+                        facets = derive_facets(
+                            registry.registry_type,
+                            item_data["name"],
+                            item_data.get("spec", {}),
+                            item_data.get("tags", []),
+                        )
+                        item = await self.item_repo.create(
+                            registry_id=registry_id,
+                            external_id=external_id,
+                            name=item_data["name"],
+                            description=item_data.get("description"),
+                            version=item_data.get("version"),
+                            spec=item_data.get("spec", {}),
+                            tags=item_data.get("tags", []),
+                            category=facets.category,
+                            sort_key=facets.sort_key,
+                            featured=facets.featured,
+                        )
+                        try:
+                            entity_id = await self._create_entity(
+                                registry.registry_type, item, registry_url=registry.source_url
+                            )
+                        except Exception:
+                            # Don't leave a catalog row with no backing entity
+                            # behind -- a rejected item must not appear browsable.
+                            await self.item_repo.delete(item.id)
+                            raise
+                        await self.item_repo.update(
+                            item.id,
+                            installed_entity_id=entity_id,
+                            installed_version=item.version or "latest",
+                        )
+                        new_specs += 1
+                except Exception as e:
+                    logger.warning(
+                        "Skipping catalog item %r in registry %s: %s",
+                        external_id,
+                        registry_id,
+                        e,
+                        exc_info=True,
                     )
-                    await self.item_repo.update(
-                        item.id,
-                        installed_entity_id=entity_id,
-                        installed_version=item.version or "latest",
-                    )
-                    new_specs += 1
+                    skipped += 1
+                    if len(skipped_items) < self.MAX_SKIPPED_DETAILS:
+                        skipped_items.append({"external_id": external_id, "reason": str(e)})
 
             total = new_specs + updates_flagged + unchanged
             await self.registry_repo.update(
@@ -389,6 +425,8 @@ class RegistryService:
                 "updates_flagged": updates_flagged,
                 "unchanged": unchanged,
                 "total": len(parsed_items),
+                "skipped": skipped,
+                "skipped_items": skipped_items,
             }
 
         except Exception as e:

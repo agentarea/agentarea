@@ -239,6 +239,11 @@ export function MyMCPsSection({
               : `No connections match your search query: "${searchQuery}"`
           }
           iconsType="mcp"
+          action={
+            hasNoData
+              ? { label: "Add connection", href: "/connections/add" }
+              : { label: "Clear search", href: "/connections" }
+          }
         />
         {hasNoData && <CatalogSuggestions type="mcp_servers" />}
       </div>

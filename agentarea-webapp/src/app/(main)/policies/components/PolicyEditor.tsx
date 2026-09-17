@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Link as LinkIcon, Plus, UsersRound, X } from "lucide-react";
 import { AgentIdentity } from "@/components/AgentIdentity";
+import { AgentSelect } from "@/components/AgentSelect";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -1610,22 +1611,13 @@ export default function PolicyEditor({
               <div className="flex items-end gap-2">
                 <div className="min-w-0 flex-1 space-y-1.5">
                   <Label htmlFor="policy-agent">Agent</Label>
-                  <Select value={agentToAddId} onValueChange={setAgentToAddId}>
-                    <SelectTrigger id="policy-agent">
-                      <SelectValue placeholder="Select an agent" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {addableAgents.map((agent) => (
-                        <SelectItem
-                          key={agent.id}
-                          value={agent.id}
-                          textValue={agent.name}
-                        >
-                          <AgentIdentity agent={agent} size="xs" />
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <AgentSelect
+                    id="policy-agent"
+                    agents={addableAgents}
+                    value={agentToAddId}
+                    onChange={setAgentToAddId}
+                    placeholder="Select an agent"
+                  />
                 </div>
                 <Button
                   type="button"

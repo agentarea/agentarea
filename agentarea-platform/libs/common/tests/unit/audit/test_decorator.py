@@ -84,13 +84,80 @@ async def test_audited_update_computes_changes_and_uses_resource_id_param(monkey
 
 
 @pytest.mark.asyncio
-async def test_audited_skips_when_repository_factory_missing():
+async def test_audited_raises_when_repository_factory_missing():
+    """A service wired without ``repository_factory`` must not silently lose its
+    audit trail — the misconfiguration surfaces on the first call."""
+
     class Service:
         @audited("agent.create", resource_type="agent")
         async def create_agent(self):
             return {"id": "agent-3"}
 
-    assert await Service().create_agent() == {"id": "agent-3"}
+    with pytest.raises(TypeError, match="repository_factory"):
+        await Service().create_agent()
+
+
+@pytest.mark.asyncio
+async def test_audited_redacts_sensitive_field_values(monkeypatch):
+    _FakeAuditService.calls = []
+    monkeypatch.setattr("agentarea_common.audit.decorator.AuditService", _FakeAuditService)
+
+    class Repo:
+        async def get(self, resource_id):
+            return _Resource(
+                resource_id,
+                {"id": resource_id, "name": "before", "api_key": "sk-old", "password": None},
+            )
+
+    class Service:
+        def __init__(self):
+            self.repository_factory = MagicMock(session=MagicMock(), user_context=MagicMock())
+            self.repository = Repo()
+
+        @audited("config.update", resource_type="provider_config", resource_id_param="config_id")
+        async def update_config(self, config_id: str):
+            return _Resource(
+                config_id,
+                {"id": config_id, "name": "after", "api_key": "sk-new", "password": "hunter2"},
+            )
+
+    await Service().update_config("config-1")
+
+    changes = {c["field"]: c for c in _FakeAuditService.calls[0]["changes"]}
+
+    # The fact that the key rotated is auditable; its value is not.
+    assert changes["api_key"] == {"field": "api_key", "before": "***", "after": "***"}
+    # Unset -> set must stay distinguishable from a rotation.
+    assert changes["password"] == {"field": "password", "before": None, "after": "***"}
+    # Non-sensitive fields keep their values.
+    assert changes["name"] == {"field": "name", "before": "before", "after": "after"}
+
+
+@pytest.mark.asyncio
+async def test_audited_keeps_secret_reference_ids_readable(monkeypatch):
+    """``api_key_secret_id`` points at a secret, it is not one — redacting it
+    would destroy the provenance the audit trail exists to show."""
+    _FakeAuditService.calls = []
+    monkeypatch.setattr("agentarea_common.audit.decorator.AuditService", _FakeAuditService)
+
+    class Repo:
+        async def get(self, resource_id):
+            return _Resource(resource_id, {"id": resource_id, "api_key_secret_id": "secret-a"})
+
+    class Service:
+        def __init__(self):
+            self.repository_factory = MagicMock(session=MagicMock(), user_context=MagicMock())
+            self.repository = Repo()
+
+        @audited("config.update", resource_type="provider_config", resource_id_param="config_id")
+        async def update_config(self, config_id: str):
+            return _Resource(config_id, {"id": config_id, "api_key_secret_id": "secret-b"})
+
+    await Service().update_config("config-2")
+
+    assert _FakeAuditService.calls[0]["changes"] == [
+        {"field": "api_key_secret_id", "before": "secret-a", "after": "secret-b"}
+    ]
 
 
 @pytest.mark.asyncio
@@ -120,3 +187,5 @@ async def test_audited_logs_warning_when_audit_record_fails(monkeypatch):
 
     assert result.id == "agent-4"
     mock_warning.assert_called_once()
+    # A swallowed traceback makes an audit-write failure undiagnosable.
+    assert mock_warning.call_args.kwargs["exc_info"] is True

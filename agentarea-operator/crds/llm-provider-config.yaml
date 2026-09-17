@@ -75,6 +75,25 @@ spec:
                       displayName:
                         type: string
                         description: "Override display name"
+                      description:
+                        type: string
+                      contextWindow:
+                        type: integer
+                        description: "Maximum context in tokens"
+                      # The PROVIDER's price to us, per token, and the reason these
+                      # are here rather than left to the catalog: the runtime refuses
+                      # to run a model whose cost per token is unset, and anything we
+                      # decide to sell is typically newer than the catalog that would
+                      # otherwise carry it.
+                      #
+                      # Not what the customer pays — that is a markup applied over
+                      # this in the billing service, and it is declared there.
+                      inputCostPerToken:
+                        type: number
+                        description: "Provider cost per input token, e.g. 6e-7"
+                      outputCostPerToken:
+                        type: number
+                        description: "Provider cost per output token"
             status:
               type: object
               properties:

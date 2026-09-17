@@ -4,14 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowUpRight, FileText, Network } from "lucide-react";
-import type {
-  AgentResponse,
-  McpServerInstanceResponse,
-  McpServerResponse,
-  ProjectResponse,
-  SkillResponse,
-} from "@/api/client";
-import { getMCPConnectionIconSrc } from "@/app/(main)/connections/utils";
+import type { AgentResponse, ProjectResponse } from "@/api/client";
+import { useAttachableResources } from "@/hooks/use-attachable-resources";
+import { resolveMcpRef } from "@/lib/mcp/resolveMcpRef";
 import {
   AttachmentSection,
   hydrateAttachments,
@@ -27,9 +22,6 @@ import {
   addSkillToProjectAction,
   getProjectAction,
   listAgentsAction,
-  listMCPServerInstancesAction,
-  listMCPServersAction,
-  listSkillsAction,
   removeAgentFromProjectAction,
   removeMcpInstanceFromProjectAction,
   removeSkillFromProjectAction,
@@ -46,11 +38,12 @@ export default function ProjectOverviewPage() {
   const [project, setProject] = useState<ProjectResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [allAgents, setAllAgents] = useState<AgentResponse[]>([]);
-  const [allSkills, setAllSkills] = useState<SkillResponse[]>([]);
-  const [allMcpInstances, setAllMcpInstances] = useState<
-    McpServerInstanceResponse[]
-  >([]);
-  const [mcpServers, setMcpServers] = useState<McpServerResponse[]>([]);
+  const resources = useAttachableResources();
+  const {
+    skills: allSkills,
+    mcpInstances: allMcpInstances,
+    mcpServers,
+  } = resources;
 
   const fetchProject = useCallback(async () => {
     const { data } = await getProjectAction(projectId);
@@ -61,25 +54,12 @@ export default function ProjectOverviewPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [projectRes, agentsRes, skillsRes, mcpRes, serversRes] =
-          await Promise.all([
-            getProjectAction(projectId),
-            listAgentsAction(),
-            listSkillsAction(),
-            listMCPServerInstancesAction(),
-            listMCPServersAction({ page_size: 100 }),
-          ]);
+        const [projectRes, agentsRes] = await Promise.all([
+          getProjectAction(projectId),
+          listAgentsAction(),
+        ]);
         if (projectRes.data) setProject(projectRes.data);
         setAllAgents(agentsRes.data || []);
-        setAllSkills((skillsRes.data as SkillResponse[]) || []);
-        setAllMcpInstances(mcpRes.data || []);
-        const serversData = serversRes.data as
-          | { items?: McpServerResponse[] }
-          | McpServerResponse[]
-          | undefined;
-        setMcpServers(
-          Array.isArray(serversData) ? serversData : serversData?.items || []
-        );
       } finally {
         setLoading(false);
       }
@@ -94,10 +74,8 @@ export default function ProjectOverviewPage() {
   if (!project) return null;
 
   const instanceIconSrc = (instance: AttachmentItem) => {
-    const full = allMcpInstances.find((i) => String(i.id) === instance.id);
-    if (!full) return undefined;
-    const spec = mcpServers.find((s) => s.id === full.server_spec_id);
-    return getMCPConnectionIconSrc(full, spec);
+    const resolved = resolveMcpRef(instance.id, allMcpInstances, mcpServers);
+    return resolved.status === "unresolved" ? undefined : resolved.iconSrc;
   };
 
   const composition = [

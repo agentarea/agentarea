@@ -17,10 +17,10 @@ export default function MembersFixturePage() {
             ownerUserId={ME}
             workspaceName="AgentArea"
             members={[
-              { id: "m1", workspace_id: "w", user_id: ME, email: "jamakase54@gmail.com", display_name: "Artem Astapenko", joined_at: iso(-40), invitation_id: null },
+              { id: "m1", workspace_id: "w", user_id: ME, email: "jamakase54@gmail.com", display_name: "Artem Astapenko", joined_at: iso(-40), invitation_id: null, is_owner: true },
             ]}
             invitations={[
-              { id: "i1", workspace_id: "w", email: "test@test.ru", created_at: iso(-1), expires_at: iso(6), accepted_at: null, accepted_by_user_id: null, invited_by: ME, status: "pending" },
+              { id: "i1", workspace_id: "w", email: "test@test.ru", created_at: iso(-1), expires_at: iso(6), accepted_at: null, accepted_by_user_id: null, invited_by: ME, invited_by_display_name: "Artem Astapenko", status: "pending" },
             ]}
           />
         </div>

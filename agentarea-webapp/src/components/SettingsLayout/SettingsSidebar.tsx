@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   ArrowLeft,
   CreditCard,
-  Download,
+  SlidersHorizontal,
   Github,
   Key,
   ScrollText,
@@ -51,7 +51,7 @@ export function SettingsSidebarContent() {
       label: t("workspace"),
       items: [
         { title: t("apiKeys"), href: "/admin/api-keys", icon: Key },
-        { title: t("importExport"), href: "/admin/workspace", icon: Download },
+        { title: t("workspaceSettings"), href: "/admin/workspace", icon: SlidersHorizontal },
         { title: t("auditLog"), href: "/settings/audit", icon: ScrollText },
       ],
     },

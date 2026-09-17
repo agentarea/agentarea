@@ -622,6 +622,10 @@ export default function CatalogGallery({
                   "This item may have been removed or isn't available."
                 }
                 iconsType="404"
+                action={{
+                  label: "Back to catalog",
+                  onClick: () => void setItemId(null),
+                }}
               />
             )}
           </DeepItemStatus>

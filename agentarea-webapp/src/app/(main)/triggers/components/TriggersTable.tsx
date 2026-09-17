@@ -36,9 +36,12 @@ export default function TriggersTable({
   const router = useRouter();
 
   const columns: Column<EnrichedTrigger>[] = [
+    // Leads the row: the icon belongs to the event source, which is what this
+    // column spells out ("On GitHub event"), not to the trigger's own name.
     {
-      header: t("name"),
-      accessor: "name",
+      header: t("when"),
+      accessor: "when",
+      headerClassName: "w-[200px]",
       render: (_value, trigger) => {
         if (!trigger) return null;
         const entry = findTriggerCatalogEntry(trigger, catalog);
@@ -55,12 +58,23 @@ export default function TriggersTable({
             >
               {renderTriggerIcon(entry, trigger, "h-3.5 w-3.5")}
             </span>
-            <span className="truncate text-[13px] font-medium text-foreground group-hover:text-primary">
-              {trigger.name}
+            <span className="truncate text-[13px] text-muted-foreground">
+              {describeTriggerSchedule(trigger)}
             </span>
           </span>
         );
       },
+    },
+    {
+      header: t("name"),
+      accessor: "name",
+      headerClassName: "w-[320px]",
+      render: (_value, trigger) =>
+        trigger ? (
+          <span className="block truncate text-[13px] font-medium text-foreground group-hover:text-primary">
+            {trigger.name}
+          </span>
+        ) : null,
     },
     ...(hideChannelColumn
       ? []
@@ -68,11 +82,11 @@ export default function TriggersTable({
           {
             header: t("channel"),
             accessor: "channel",
-            headerClassName: "hidden sm:table-cell",
+            headerClassName: "hidden w-[150px] sm:table-cell",
             cellClassName: "hidden sm:table-cell",
             render: (_value, trigger) =>
               trigger ? (
-                <span className="text-[13px] text-muted-foreground">
+                <span className="block truncate text-[13px] text-muted-foreground">
                   {getTriggerDisplayName(
                     trigger,
                     findTriggerCatalogEntry(trigger, catalog)
@@ -82,21 +96,9 @@ export default function TriggersTable({
           } satisfies Column<EnrichedTrigger>,
         ]),
     {
-      header: t("when"),
-      accessor: "when",
-      headerClassName: "hidden md:table-cell",
-      cellClassName: "hidden md:table-cell",
-      render: (_value, trigger) =>
-        trigger ? (
-          <span className="text-[13px] text-muted-foreground">
-            {describeTriggerSchedule(trigger)}
-          </span>
-        ) : null,
-    },
-    {
       header: t("agent"),
       accessor: "agent_name",
-      headerClassName: "hidden md:table-cell",
+      headerClassName: "hidden w-[170px] md:table-cell",
       cellClassName: "hidden md:table-cell",
       render: (_value, trigger) =>
         trigger ? (
@@ -119,7 +121,7 @@ export default function TriggersTable({
     {
       header: t("lastRun"),
       accessor: "last_run",
-      headerClassName: "hidden lg:table-cell",
+      headerClassName: "hidden w-[130px] lg:table-cell",
       cellClassName: "hidden lg:table-cell",
       render: (_value, trigger) => {
         if (!trigger?.last_execution_at) {
@@ -141,7 +143,7 @@ export default function TriggersTable({
     {
       header: t("created"),
       accessor: "created",
-      headerClassName: "hidden xl:table-cell",
+      headerClassName: "hidden w-[120px] xl:table-cell",
       cellClassName: "hidden xl:table-cell",
       render: (_value, trigger) =>
         trigger?.created_at ? (
@@ -155,6 +157,7 @@ export default function TriggersTable({
     {
       header: t("status"),
       accessor: "status",
+      headerClassName: "w-[120px]",
       render: (_value, trigger) => {
         if (!trigger) return null;
         const health = getTriggerHealth(trigger);
@@ -169,7 +172,11 @@ export default function TriggersTable({
   ];
 
   return (
+    // Fixed layout, not auto: the grouped view renders one table per channel,
+    // and content-derived widths would make each group's columns land in a
+    // different place.
     <Table
+      className="table-fixed"
       data={triggers}
       columns={columns}
       onRowClick={(trigger) => router.push(`/triggers/${trigger.id}`)}

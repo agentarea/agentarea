@@ -123,6 +123,7 @@ export default function MembersClient({
     <ContentBlock
       header={{
         breadcrumb: [{ label: t("title") }],
+        description: t("descriptionForWorkspace", { workspace: workspaceName }),
         controls: <InviteButton onClick={openInvite} />,
       }}
       subheader={

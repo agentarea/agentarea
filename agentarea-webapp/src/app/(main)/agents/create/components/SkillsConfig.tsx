@@ -1,16 +1,15 @@
-import React, { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import React, { useMemo, useState } from "react";
 import { Sparkles, Trash2 } from "lucide-react";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import { Accordion } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import Note from "@/components/ui/note";
-import { listSkillsAction as listSkills } from "@/lib/server-actions";
 import type { AgentSkill } from "../types";
 import AccordionControl from "@/components/AccordionControl";
 import ConfigSheet from "@/components/ConfigSheet";
-import { SelectableList } from "@/components/SelectableList";
+import { SkillPicker } from "@/components/ResourcePicker/SkillPicker";
+import { useAttachableResources } from "@/hooks/use-attachable-resources";
 
 type SkillsConfigProps = {
   selectedSkills: AgentSkill[];
@@ -23,22 +22,7 @@ const SkillsConfig = ({
 }: SkillsConfigProps) => {
   const [accordionValue, setAccordionValue] = useState<string>("skills");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [availableSkills, setAvailableSkills] = useState<AgentSkill[]>([]);
-  const [loadingSkills, setLoadingSkills] = useState(true);
-
-  // Fetch available skills
-  useEffect(() => {
-    const fetchSkills = async () => {
-      setLoadingSkills(true);
-      try {
-        const { data } = await listSkills();
-        setAvailableSkills((data as AgentSkill[]) || []);
-      } finally {
-        setLoadingSkills(false);
-      }
-    };
-    fetchSkills();
-  }, []);
+  const resources = useAttachableResources();
 
   const handleAddSkill = (skill: AgentSkill) => {
     if (selectedSkills.some((s) => s.id === skill.id)) return;
@@ -88,42 +72,12 @@ const SkillsConfig = ({
               <Sparkles className="h-4 w-4 text-muted-foreground" />
               Available Skills
             </div>
-            {loadingSkills ? (
-              <Note>
-                <p>Loading skills...</p>
-              </Note>
-            ) : availableSkills.length > 0 ? (
-              <SelectableList
-                disableExpand={false}
-                items={availableSkills.map((skill) => ({ ...skill, id: skill.id }))}
-                prefix="skill"
-                extractTitle={(skill) => (
-                  <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
-                    <Sparkles className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
-                      {skill.name}
-                    </h3>
-                  </div>
-                )}
-                onAdd={(skill) => handleAddSkill(skill)}
-                onRemove={(skill) => handleRemoveSkill(skill.id)}
-                selectedIds={selectedSkills.map((s) => s.id)}
-                renderContent={(skill) => (
-                  <div className="space-y-2 p-2">
-                    <p className="text-xs text-muted-foreground">
-                      {skill.description || "Agent skill"}
-                    </p>
-                  </div>
-                )}
-              />
-            ) : (
-              <Note>
-                <p>No skills available.</p>
-                <Link href="/skills" className="text-primary hover:underline text-xs">
-                  Create a skill
-                </Link>
-              </Note>
-            )}
+            <SkillPicker
+              resources={resources}
+              selectedIds={selectedSkills.map((s) => s.id)}
+              onAdd={(skill) => handleAddSkill(skill as AgentSkill)}
+              onRemove={(skill) => handleRemoveSkill(skill.id)}
+            />
           </div>
         </ConfigSheet>
       }
