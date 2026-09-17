@@ -1,7 +1,7 @@
 ---
 title: Workspaces, projects, and resources
 type: concept
-summary: Every entity in AgentArea belongs to a workspace, optionally to a project, and is authorized as a resource — three tiers with three different jobs.
+description: "Every entity in AgentArea belongs to a workspace, optionally to a project, and is authorized as a resource — three tiers with three different jobs."
 prerequisites: []
 related:
   - /concepts/agentic-networks
@@ -10,8 +10,6 @@ related:
   - /concepts/open-core
 last_updated: 2026-07-29
 ---
-
-# Workspaces, projects, and resources
 
 AgentArea scopes everything three ways. A **workspace** is the isolation
 boundary — the wall data does not cross. A **project** is a grouping inside that
@@ -169,7 +167,17 @@ requests rather than granted ones.
 
 ## Related
 
-- [Agentic networks](/concepts/agentic-networks) — what the workspace boundary means for agents
-- [Authorization basics](/concepts/governance/authorization-basics) — ACL, RBAC, ABAC, and ReBAC compared
-- [The AgentArea authorization model](/concepts/governance/the-agentarea-model) — the deployed types and relations in full
-- [Open core](/concepts/open-core) — which parts of this model differ between editions
+<Columns cols={2}>
+  <Card title="Agentic networks" icon="lightbulb" href="/concepts/agentic-networks">
+    What the workspace boundary means for agents
+  </Card>
+  <Card title="Authorization basics" icon="scale-balanced" href="/concepts/governance/authorization-basics">
+    ACL, RBAC, ABAC, and ReBAC compared
+  </Card>
+  <Card title="The AgentArea authorization model" icon="scale-balanced" href="/concepts/governance/the-agentarea-model">
+    The deployed types and relations in full
+  </Card>
+  <Card title="Open core" icon="lightbulb" href="/concepts/open-core">
+    Which parts of this model differ between editions
+  </Card>
+</Columns>

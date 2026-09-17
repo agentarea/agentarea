@@ -104,7 +104,7 @@ mcpManager:
 The manager refuses a plain-`http` data plane unless you also say the hop is
 private, so this arrangement cannot happen by accident:
 
-```
+```text
 MCP_DATAPLANE_ALLOW_INSECURE=true
 ```
 
@@ -117,7 +117,7 @@ sits in — see [Verifying it](#verifying-it).
 The manager proves the host is reachable and the token accepted at startup, so a
 wrong value fails the rollout instead of surfacing later as a broken tool call.
 
-Pair it with [serverless mode](/serverless-mcp) if you want instances reclaimed
+Pair it with [serverless mode](/self-host/serverless-mcp) if you want instances reclaimed
 when idle. A call to a reclaimed instance starts it and waits — first for the
 container, then for the server inside to accept a connection — so the caller
 pays a cold start rather than getting an error.
@@ -129,7 +129,7 @@ is no port published per instance: the token that gates management gates traffic
 and the data plane strips it before forwarding, so an MCP server never sees your
 credential.
 
-```
+```text
 https://<data-plane-host>/dataplane/v1/instances/<instance-id>/proxy/mcp
 ```
 

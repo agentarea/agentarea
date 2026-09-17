@@ -1,7 +1,7 @@
 ---
 title: Control plane and data plane
 type: concept
-summary: AgentArea separates the system that decides what should happen from the system that touches your data, so execution can move into your own infrastructure without moving the platform.
+description: "AgentArea separates the system that decides what should happen from the system that touches your data."
 prerequisites:
   - /concepts/workspaces-projects-resources
 related:
@@ -11,8 +11,6 @@ related:
   - /concepts/open-core
 last_updated: 2026-07-29
 ---
-
-# Control plane and data plane
 
 AgentArea splits into two halves with different jobs and different threat
 exposure. The **control plane** decides: it owns workspaces, projects, task
@@ -201,7 +199,17 @@ back to the synchronous model.
 
 ## Related
 
-- [Agentic networks](/concepts/agentic-networks) — why some labels cannot be enforced across this boundary
-- [Why a sandbox](/concepts/sandbox/why-a-sandbox) — the threat model on the data-plane side
-- [Durable execution](/concepts/execution/durable-execution) — how the workflow waits without holding a connection
-- [Open core](/concepts/open-core) — which deployment shapes are commercial
+<Columns cols={2}>
+  <Card title="Agentic networks" icon="lightbulb" href="/concepts/agentic-networks">
+    Why some labels cannot be enforced across this boundary
+  </Card>
+  <Card title="Why a sandbox" icon="box" href="/concepts/sandbox/why-a-sandbox">
+    The threat model on the data-plane side
+  </Card>
+  <Card title="Durable execution" icon="diagram-project" href="/concepts/execution/durable-execution">
+    How the workflow waits without holding a connection
+  </Card>
+  <Card title="Open core" icon="lightbulb" href="/concepts/open-core">
+    Which deployment shapes are commercial
+  </Card>
+</Columns>

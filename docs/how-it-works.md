@@ -1,7 +1,7 @@
 ---
 title: How it works
 type: concept
-summary: Follow one task from an API call to a finished result, and learn what each of the four AgentArea services is responsible for.
+description: "Follow one task from an API call to a finished result, and learn what each of the four AgentArea services is responsible for."
 prerequisites:
   - /
 related:
@@ -11,8 +11,6 @@ related:
   - /concepts/governance/policy-engine
 last_updated: 2026-07-29
 ---
-
-# How it works
 
 AgentArea runs as four processes: an API, a Temporal worker, a Go manager for
 sandboxes and MCP servers, and a web dashboard. Most confusion about the platform
@@ -57,70 +55,97 @@ boundary is drawn where it is.
 
 Starting a task: `POST /v1/agents/{agent_id}/tasks/`.
 
-### 1. The API authenticates and scopes
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant A as API
+    participant T as Temporal
+    participant W as Worker
+    participant M as MCP manager
+    C->>A: POST /v1/agents/{id}/tasks/
+    A->>A: Resolve UserContext, then effective policy
+    A->>T: Start AgentExecutionWorkflow
+    A-->>C: 200 with task id
+    T->>W: Dispatch workflow
+    loop Reason-act
+        W->>W: Model call, through the interceptor pipeline
+        W->>M: Tool call — MCP instance or sandbox
+        M-->>W: Handle to logs and artifacts
+    end
+    W-->>A: Events, relayed over SSE and persisted
+    W->>T: Terminal state
+```
 
-The token is resolved into a `UserContext` carrying `user_id`, `workspace_id`,
-and `accessible_workspaces`. Every repository is constructed from this context,
-so reads are constrained to workspaces the caller can access before any handler
-logic runs.
+<Steps titleSize="h3">
+  <Step title="The API authenticates and scopes">
+    The token is resolved into a `UserContext` carrying `user_id`,
+    `workspace_id`, and `accessible_workspaces`. Every repository is constructed
+    from this context, so reads are constrained to workspaces the caller can
+    access before any handler logic runs.
+  </Step>
 
-### 2. The API resolves an effective policy
+  <Step title="The API resolves an effective policy">
+    Before the task starts, the governance layer resolves the policy that will
+    apply to it — budgets, which tools are permitted, what requires approval.
+    The result is attached to the task and handed to the workflow.
 
-Before the task starts, the governance layer resolves the policy that will apply
-to it — budgets, which tools are permitted, what requires approval. The result is
-attached to the task and handed to the workflow.
+    This is a snapshot taken at creation. The running workflow carries the
+    effective policy in its state and is the canonical source for it, which
+    means editing a policy does not retroactively change a task already in
+    flight.
+  </Step>
 
-This is a snapshot taken at creation. The running workflow carries the effective
-policy in its state and is the canonical source for it, which means editing a
-policy does not retroactively change a task already in flight.
+  <Step title="The API hands off to Temporal">
+    `TaskService` persists the task, then `TemporalTaskManager` starts an
+    `AgentExecutionWorkflow`. The API returns immediately with a task id. It
+    does not wait for the agent.
 
-### 3. The API hands off to Temporal
+    <Note>
+    For local development, `WORKFLOW__EXECUTION_ENGINE=direct` swaps in
+    `DirectTaskManager`, which runs the same logic in-process with no Temporal.
+    Same interface, no durability. Production uses Temporal.
+    </Note>
+  </Step>
 
-`TaskService` persists the task, then `TemporalTaskManager` starts an
-`AgentExecutionWorkflow`. The API returns immediately with a task id. It does not
-wait for the agent.
+  <Step title="The worker runs the agent loop">
+    A worker picks up the workflow and runs the reason-act loop: build context,
+    call the model, get back either a final answer or tool calls, execute them,
+    feed results back, repeat.
 
-For local development, `WORKFLOW__EXECUTION_ENGINE=direct` swaps in
-`DirectTaskManager`, which runs the same logic in-process with no Temporal. Same
-interface, no durability. Production uses Temporal.
+    Each model call and each tool call passes the governance interceptor
+    pipeline first. Budget gates run earliest because they are the cheapest
+    check, then security filters, then observers. A gate can deny the call or
+    escalate it for human approval.
 
-### 4. The worker runs the agent loop
+    Progress is published as events, which the API relays to clients over
+    server-sent events (`text/event-stream`), and persisted to the database. The
+    dashboard's live view is that stream.
+  </Step>
 
-A worker picks up the workflow and runs the reason-act loop: build context, call
-the model, get back either a final answer or tool calls, execute them, feed
-results back, repeat.
+  <Step title="Tool calls reach the data plane">
+    A tool call is one of two things.
 
-Each model call and each tool call passes the governance interceptor pipeline
-first. Budget gates run earliest because they are the cheapest check, then
-security filters, then observers. A gate can deny the call or escalate it for
-human approval.
+    **An MCP tool call** goes to an MCP server instance — hosted by AgentArea in
+    a container the Go manager started, or a remote server. Secrets are resolved
+    server-side; the agent never sees them.
 
-Progress is published as events, which the API relays to clients over
-server-sent events (`text/event-stream`), and persisted to the database. The
-dashboard's live view is that stream.
+    **A shell or skill execution** goes to the sandbox. The client posts to
+    `POST /sandbox/executions` on the Go manager, which persists a pending record
+    and publishes a request event. A runner claims it from a Valkey Streams
+    consumer group, executes it, writes logs and artifacts to object storage, and
+    reports lifecycle events back. The workflow reads completion from the
+    execution record.
 
-### 5. Tool calls reach the data plane
+    Output does not come back inline. Artifacts and logs are referenced by
+    handle, so large payloads never enter workflow history.
+  </Step>
 
-A tool call is one of two things.
-
-**An MCP tool call** goes to an MCP server instance — hosted by AgentArea in a
-container the Go manager started, or a remote server. Secrets are resolved
-server-side; the agent never sees them.
-
-**A shell or skill execution** goes to the sandbox. The client posts to
-`POST /sandbox/executions` on the Go manager, which persists a pending record and
-publishes a request event. A runner claims it from a Valkey Streams consumer
-group, executes it, writes logs and artifacts to object storage, and reports
-lifecycle events back. The workflow reads completion from the execution record.
-
-Output does not come back inline. Artifacts and logs are referenced by handle, so
-large payloads never enter workflow history.
-
-### 6. The task reaches a terminal state
-
-The workflow completes, fails, or is cancelled. Final state is persisted, a
-terminal event is published, and artifacts remain in object storage addressed by
-their content hash.
+  <Step title="The task reaches a terminal state">
+    The workflow completes, fails, or is cancelled. Final state is persisted, a
+    terminal event is published, and artifacts remain in object storage
+    addressed by their content hash.
+  </Step>
+</Steps>
 
 ## What Temporal is doing
 
@@ -227,7 +252,17 @@ not the production contract.
 
 ## Related
 
-- [Control plane and data plane](/concepts/control-and-data-plane) — the boundary this path crosses
-- [Durable execution](/concepts/execution/durable-execution) — Temporal in depth
-- [Workspaces, projects, and resources](/concepts/workspaces-projects-resources) — the scoping applied in step 1
-- [Policy engine](/concepts/governance/policy-engine) — how the effective policy in step 2 is resolved
+<Columns cols={2}>
+  <Card title="Control plane and data plane" icon="lightbulb" href="/concepts/control-and-data-plane">
+    The boundary this path crosses
+  </Card>
+  <Card title="Durable execution" icon="diagram-project" href="/concepts/execution/durable-execution">
+    Temporal in depth
+  </Card>
+  <Card title="Workspaces, projects, and resources" icon="lightbulb" href="/concepts/workspaces-projects-resources">
+    The scoping applied in step 1
+  </Card>
+  <Card title="Policy engine" icon="scale-balanced" href="/concepts/governance/policy-engine">
+    How the effective policy in step 2 is resolved
+  </Card>
+</Columns>

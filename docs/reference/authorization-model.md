@@ -1,7 +1,7 @@
 ---
 title: Authorization model
 type: reference
-summary: The deployed OpenFGA types, relations and permission bits, the verb mappings applied on top of them, and the settings that select a graph backend.
+description: "The deployed OpenFGA types, relations and permission bits, the verb mappings applied on top of them, and the settings that select a graph backend."
 prerequisites:
   - /concepts/governance/the-agentarea-model
 related:
@@ -12,15 +12,13 @@ related:
 last_updated: 2026-07-29
 ---
 
-# Authorization model
-
 The relationship graph that authorizes access to resources. Authority for this
 page is `config/auth/openfga/model.fga`; the deployable payload
 `config/auth/openfga/authorization-model.json` is generated from it.
 
 ## Synopsis
 
-```
+```text
 model
   schema 1.1
 
@@ -288,7 +286,7 @@ store create, all converge on the earliest store with that name.
 
 Grant a write-only role bundle on a project, and confirm the bits do not roll up:
 
-```
+```text
 role:writeonly#can_write@User:*
 role:writeonly#can_write@Agent:*
 
@@ -298,17 +296,25 @@ role_assignment:ra2#role@role:writeonly
 resource:res2#role_assignment@role_assignment:ra2
 ```
 
-```
+```text
 Check(User:ub, can_write,  resource:res2) -> true
 Check(User:ub, can_read,   resource:res2) -> false
 Check(User:ub, can_manage, resource:res2) -> false
 ```
 
-## See also
+## Related
 
-- [Policy rule syntax](/reference/policy-syntax) — the other authorization
-  surface, which governs tool invocation.
-- [Limits](/reference/limits) — timeouts and pagination on the graph client.
-- [Errors](/reference/errors) — the 403 and 503 responses these checks produce.
-- [The AgentArea model](/concepts/governance/the-agentarea-model) — the reasoning
-  behind the type set.
+<Columns cols={2}>
+  <Card title="Policy rule syntax" icon="book" href="/reference/policy-syntax">
+    The other authorization surface, which governs tool invocation
+  </Card>
+  <Card title="Limits" icon="book" href="/reference/limits">
+    Timeouts and pagination on the graph client
+  </Card>
+  <Card title="Errors" icon="book" href="/reference/errors">
+    The 403 and 503 responses these checks produce
+  </Card>
+  <Card title="The AgentArea model" icon="scale-balanced" href="/concepts/governance/the-agentarea-model">
+    The reasoning behind the type set
+  </Card>
+</Columns>

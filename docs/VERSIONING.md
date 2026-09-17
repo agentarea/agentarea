@@ -1,4 +1,7 @@
-# Versioning and Releases
+---
+title: Versioning and releases
+description: "How AgentArea versions its components, and what a tagged release actually publishes."
+---
 
 AgentArea uses a **build-once / promote-on-tag** release model:
 
@@ -10,7 +13,7 @@ A local script, `scripts/release.sh`, validates pre-conditions and pushes the ta
 
 ## Version Architecture
 
-```
+```text
 VERSION file (0.0.8) — single source of truth for application version
     ├─> Git tags              (v0.0.8)
     ├─> Docker images         (0.0.8-abc1234, 0.0.8, 0.0, 0, latest)
@@ -143,7 +146,7 @@ The tag push triggers two workflows in parallel:
 
 ## TL;DR Release Checklist
 
-```
+```text
 1. Actions → "Prepare Release" → patch/minor/major → run
 2. Review + merge the release PR
 3. Wait for ci.yml green

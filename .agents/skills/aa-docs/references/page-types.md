@@ -10,7 +10,7 @@ the fields are machine-checkable, which is why they stay accurate.
 ---
 title: Run a command in a sandbox
 type: guide                    # tutorial | guide | concept | reference
-summary: Execute a shell command inside a task's sandbox and read its output.
+description: "Execute a shell command inside a task's sandbox and read its output."
 prerequisites:
   - /concepts/sandbox/sessions
 related:
@@ -23,8 +23,13 @@ last_updated: 2026-07-29
 Rules:
 
 - `type` is the genre. If you cannot pick one, the page is two pages.
-- `summary` is one sentence, states what the reader gets, and is written for
-  search results — not "This page describes...".
+- Do **not** open the body with an `# H1`. Mintlify renders `title` as the
+  page's H1, so a body H1 prints the title twice.
+- `description` is one sentence, states what the reader gets, and is written
+  for search results — not "This page describes...". Mintlify renders it as
+  the page subtitle and uses it for SEO and search, so keep it under ~155
+  characters. This field was called `summary` until 2026-09-10; `summary` is
+  a custom key Mintlify ignores, so it rendered nothing.
 - `prerequisites` links pages the reader must have read. Empty list is allowed
   and meaningful; a missing field is not.
 - `related` is for lateral moves, not prerequisites. Three to five entries.
@@ -40,8 +45,6 @@ that runs. The single hardest genre, because the temptation to explain is
 constant and must be resisted.
 
 ```markdown
-# <Verb> a <thing>
-
 <One paragraph: what you will have built by the end. Show the end state first.>
 
 ## Before you start
@@ -75,8 +78,6 @@ Constraints:
 Task-oriented. The reader knows what they want and is stuck on how.
 
 ```markdown
-# <Verb> <object>
-
 <One paragraph: when you would do this, and when you would not.>
 
 ## Prerequisites
@@ -115,8 +116,6 @@ Constraints:
 Understanding-oriented. The reader wants the mental model and the reasoning.
 
 ```markdown
-# <Noun phrase>
-
 <One paragraph: the idea in plain language, before any jargon.>
 
 ## The problem
@@ -154,8 +153,6 @@ Information-oriented. The reader knows what they are looking for and wants it
 fast.
 
 ```markdown
-# <Exact name of the thing>
-
 <One sentence. What it is.>
 
 ## Synopsis

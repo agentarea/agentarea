@@ -1,7 +1,7 @@
 ---
 title: Tool authorization
 type: concept
-summary: The layers a tool call clears before it runs — composition, disclosure, the workflow gate, the activity re-check and the interceptor pipeline — and the default-allow posture at the centre of them.
+description: "The layers a tool call clears before it runs."
 prerequisites:
   - /concepts/governance/policy-engine
 related:
@@ -12,8 +12,6 @@ related:
 last_updated: 2026-07-29
 ---
 
-# Tool authorization
-
 A tool call in AgentArea passes through several checks, and they are not the same
 check. Composition decides what the agent physically has. Policy decides what it
 may use. Disclosure decides what the model is even told about. Understanding
@@ -22,7 +20,7 @@ fixing an agent configuration.
 
 The relationship between them is a nesting:
 
-```
+```text
 Equipped  ⊇  Authorized  ⊇  Disclosed
 (composed)   (policy)       (offered to the model)
 ```
@@ -190,11 +188,18 @@ only the pattern-matching gates.
 
 ## Related
 
-- [The policy engine](/concepts/governance/policy-engine) — how the snapshot the
-  decision reads is built.
-- [Approvals](/concepts/governance/approvals) — what `REQUIRE_APPROVAL` triggers,
-  and on which paths.
-- [Budgets and quotas](/concepts/governance/budgets-and-quotas) — the budget gates
-  in the pipeline.
-- [The AgentArea model](/concepts/governance/the-agentarea-model) — the graph,
-  which governs the tool's *configuration* rather than its invocation.
+<Columns cols={2}>
+  <Card title="The policy engine" icon="scale-balanced" href="/concepts/governance/policy-engine">
+    How the snapshot the decision reads is built
+  </Card>
+  <Card title="Approvals" icon="scale-balanced" href="/concepts/governance/approvals">
+    What `REQUIRE_APPROVAL` triggers, and on which paths
+  </Card>
+  <Card title="Budgets and quotas" icon="scale-balanced" href="/concepts/governance/budgets-and-quotas">
+    The budget gates in the pipeline
+  </Card>
+  <Card title="The AgentArea model" icon="scale-balanced" href="/concepts/governance/the-agentarea-model">
+    The graph, which governs the tool's *configuration* rather than its
+    invocation
+  </Card>
+</Columns>

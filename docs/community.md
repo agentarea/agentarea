@@ -1,4 +1,7 @@
-# AgentArea Community
+---
+title: Community
+description: "Where to ask questions, report bugs, and contribute to AgentArea."
+---
 
 <Info>
 Welcome to the AgentArea community! We're building the future of AI agent platforms together, and we'd love for you to be part of our growing ecosystem.
@@ -10,11 +13,11 @@ Welcome to the AgentArea community! We're building the future of AI agent platfo
   <Card title="GitHub Repository" icon="code" href="https://github.com/agentarea/agentarea">
     Source code, issues, contributions, and project management
   </Card>
-  
+
   <Card title="GitHub Discussions" icon="github" href="https://github.com/agentarea/agentarea/discussions">
     Design discussions, feature proposals, Q&A, and community announcements
   </Card>
-  
+
   <Card title="GitHub Issues" icon="bug" href="https://github.com/agentarea/agentarea/issues">
     Report bugs, request features, and track development progress
   </Card>
@@ -33,14 +36,14 @@ Our Discord server is the heart of our real-time community:
     - **#showcase** - Share your AI agents and projects
     - **#random** - Off-topic conversations and community bonding
   </Tab>
-  
+
   <Tab title="Support Channels">
     - **#help-general** - General questions and troubleshooting
     - **#help-development** - Development and coding assistance
     - **#help-deployment** - Production deployment questions
     - **#bug-reports** - Quick bug reports and discussions
   </Tab>
-  
+
   <Tab title="Developer Channels">
     - **#contributors** - For active contributors to coordinate work
     - **#feature-requests** - Discuss and propose new features
@@ -76,7 +79,7 @@ For project management and tracking:
     - Maintain high code quality standards
     - **Recognition**: GitHub contributor status
   </Card>
-  
+
   <Card title="Community Advocates" icon="megaphone">
     - Help newcomers in Discord and forums
     - Create tutorials and educational content
@@ -96,14 +99,14 @@ We encourage community members to create educational content:
     - Document real-world use cases
     - **Support**: We'll help promote your content
   </AccordionItem>
-  
+
   <AccordionItem title="Video Content">
     - Create YouTube tutorials and demos
     - Record conference talks and presentations
     - Live stream development sessions
     - **Support**: Equipment recommendations and promotion
   </AccordionItem>
-  
+
   <AccordionItem title="Documentation">
     - Improve existing documentation
     - Translate documentation to other languages
@@ -122,7 +125,7 @@ We encourage community members to create educational content:
     - Direct line to core maintainers
     - Exclusive contributor swag
   </Tab>
-  
+
   <Tab title="Community Champions">
     **Long-term contributors who help shape the project**
     - Influence on project roadmap
@@ -143,14 +146,14 @@ We encourage community members to create educational content:
     - What kind of AI agents are you interested in building?
     - Your background and experience level
   </Step>
-  
+
   <Step title="Explore and Learn">
     - Read through our documentation
     - Try the getting started tutorial
     - Browse existing community projects
     - Ask questions in #help-general
   </Step>
-  
+
   <Step title="Start Contributing">
     - Look for "good first issue" labels on GitHub
     - Help answer questions in support channels
@@ -168,7 +171,7 @@ We encourage community members to create educational content:
     - Add tests and documentation
     - Review community pull requests
   </Card>
-  
+
   <Card title="Community Support" icon="headphones">
     - Help newcomers with technical questions
     - Share your expertise and best practices
@@ -188,27 +191,27 @@ We encourage community members to create educational content:
     - Community member spotlights
     - Q&A with maintainers
     - Feature demonstrations
-    
+
     *First Thursday of every month, 2PM UTC*
   </Tab>
-  
+
   <Tab title="Developer Office Hours">
     **Weekly technical support sessions**
     - Get help with development issues
     - Discuss architecture and design patterns
     - Code review sessions
     - Pair programming opportunities
-    
+
     *Every Wednesday, 4PM UTC*
   </Tab>
-  
+
   <Tab title="Community Showcase">
     **Bi-weekly project presentations**
     - Demo your AI agents and use cases
     - Get feedback from the community
     - Learn from other builders
     - Network with fellow developers
-    
+
     *Every other Friday, 3PM UTC*
   </Tab>
 </Tabs>
@@ -228,15 +231,15 @@ We're building a vibrant community of developers, researchers, and businesses in
   <Card title="Connect & Learn" icon="users">
     Meet other developers building AI agent solutions
   </Card>
-  
+
   <Card title="Share & Showcase" icon="star">
     Show off your projects and learn from others
   </Card>
-  
+
   <Card title="Contribute & Grow" icon="git-branch">
     Help improve AgentArea and grow your skills
   </Card>
-  
+
   <Card title="Build Together" icon="rocket">
     Collaborate on innovative AI agent projects
   </Card>
@@ -253,7 +256,7 @@ We're building a vibrant community of developers, researchers, and businesses in
     - Knowledge base integration and learning
     - **Community Examples**: [SupportBot](https://github.com/community/supportbot)
   </AccordionItem>
-  
+
   <AccordionItem title="Sales & Marketing Automation">
     - Lead qualification and nurturing agents
     - Personalized marketing campaign agents
@@ -271,7 +274,7 @@ We're building a vibrant community of developers, researchers, and businesses in
     - Bug detection and fix suggestions
     - **Community Examples**: [CodeReviewBot](https://github.com/community/code-review-bot)
   </AccordionItem>
-  
+
   <AccordionItem title="DevOps & Monitoring">
     - Infrastructure monitoring agents
     - Automated deployment and rollback
@@ -308,11 +311,11 @@ We're building a vibrant community of developers, researchers, and businesses in
   <Card title="Discord #help-general" icon="message-circle">
     Fast community support for general questions
   </Card>
-  
+
   <Card title="GitHub Issues" icon="bug">
     Detailed bug reports and feature requests
   </Card>
-  
+
   <Card title="Documentation" icon="book">
     Comprehensive guides and API reference
   </Card>
@@ -324,15 +327,15 @@ We're building a vibrant community of developers, researchers, and businesses in
   <Step title="Search First">
     Check documentation and GitHub issues/discussions before asking
   </Step>
-  
+
   <Step title="Provide Context">
     Include error messages, code snippets, and environment details
   </Step>
-  
+
   <Step title="Be Specific">
     Clearly describe what you're trying to achieve and what's not working
   </Step>
-  
+
   <Step title="Follow Up">
     Update the community when you resolve issues or find solutions
   </Step>

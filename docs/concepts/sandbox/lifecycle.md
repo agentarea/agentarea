@@ -1,18 +1,16 @@
 ---
 title: Sandbox lifecycle
 type: concept
-summary: How sandboxes and MCP instances are brought up from a warm pool, activated, and reclaimed when idle — and which of those reclaim paths do not currently fire.
+description: "How sandboxes and MCP instances are brought up from a warm pool, activated."
 prerequisites:
   - /concepts/sandbox/sessions
 related:
   - /concepts/sandbox/isolation
   - /concepts/sandbox/why-a-sandbox
   - /concepts/integration/mcp
-  - /serverless-mcp
+  - /self-host/serverless-mcp
 last_updated: 2026-07-29
 ---
-
-# Sandbox lifecycle
 
 Workloads on this platform are not meant to run continuously. A sandbox exists
 while its task does; an MCP server can be started on first use and stopped once
@@ -210,7 +208,17 @@ your own deployment.
 
 ## Related
 
-- [Sessions](/concepts/sandbox/sessions) — what a sandbox holds while it lives
-- [Isolation](/concepts/sandbox/isolation) — what confines it
-- [MCP](/concepts/integration/mcp) — what an MCP instance is
-- [Serverless MCP instances](/serverless-mcp) — enabling and verifying the mode
+<Columns cols={2}>
+  <Card title="Sessions" icon="box" href="/concepts/sandbox/sessions">
+    What a sandbox holds while it lives
+  </Card>
+  <Card title="Isolation" icon="box" href="/concepts/sandbox/isolation">
+    What confines it
+  </Card>
+  <Card title="MCP" icon="plug" href="/concepts/integration/mcp">
+    What an MCP instance is
+  </Card>
+  <Card title="Serverless MCP instances" icon="server" href="/self-host/serverless-mcp">
+    Enabling and verifying the mode
+  </Card>
+</Columns>

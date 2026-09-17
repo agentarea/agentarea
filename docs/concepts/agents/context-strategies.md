@@ -1,7 +1,7 @@
 ---
 title: Context strategies
 type: concept
-summary: Three settings — static, hybrid and dynamic — decide whether large tool outputs are offloaded to object storage, whether compacted history is preserved, and whether tools are disclosed lazily.
+description: "Three settings — static, hybrid and dynamic — decide whether large tool outputs are offloaded to object storage, whether compacted history is preserved."
 prerequisites:
   - /concepts/agents/what-is-an-agent
   - /concepts/execution/tasks
@@ -12,8 +12,6 @@ related:
   - /concepts/integration/mcp
 last_updated: 2026-07-29
 ---
-
-# Context strategies
 
 A long agent run fills its context window with material it will never read
 again: a 40,000-character command output, twelve tool schemas it never called,
@@ -84,7 +82,7 @@ the exact character and line counts, then the first 500 characters, then — if
 the content is longer than head plus tail — the last 200 characters, and it ends
 by telling the model how to get the rest:
 
-```
+```text
 [Output stored as <output_id> — 41,208 chars, 913 lines]
 Preview:
 <first 500 chars>
@@ -143,7 +141,7 @@ Only `dynamic` changes what tools the model is shown. Instead of discovering and
 injecting every tool definition, the workflow discovers tool *providers* — MCP
 servers, code toolsets, agents, built-ins — and injects a catalog block:
 
-```
+```text
 ## Available Tool Sources
 Use activate_tool_source("name") to enable tools before using them.
 
@@ -228,11 +226,19 @@ reproduce on a model whose spec leaves the default unset.
 
 ## Related
 
-- [Skills](/concepts/agents/skills) — activated skill content is exempt from
-  compaction, which interacts directly with the boundary search.
-- [What is an agent](/concepts/agents/what-is-an-agent) — where model selection
-  lives, and therefore where the strategy is chosen today.
-- [Durable execution](/concepts/execution/durable-execution) — continue-as-new,
-  which the resolved strategy and activated sources are carried across.
-- [Artifacts](/concepts/execution/artifacts) — the other thing a task writes to
-  object storage, on a different path and with different durability rules.
+<Columns cols={2}>
+  <Card title="Skills" icon="robot" href="/concepts/agents/skills">
+    Activated skill content is exempt from compaction
+  </Card>
+  <Card title="What is an agent" icon="robot" href="/concepts/agents/what-is-an-agent">
+    Where model selection lives, and therefore where the strategy is chosen
+    today
+  </Card>
+  <Card title="Durable execution" icon="diagram-project" href="/concepts/execution/durable-execution">
+    Continue-as-new, which the resolved strategy and activated sources are
+    carried across
+  </Card>
+  <Card title="Artifacts" icon="diagram-project" href="/concepts/execution/artifacts">
+    The other thing a task writes to object storage
+  </Card>
+</Columns>

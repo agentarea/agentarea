@@ -1,7 +1,7 @@
 ---
 title: The policy engine
 type: concept
-summary: How policy rules compile into one immutable effective-policy snapshot per task, and where the administration, decision and enforcement points live in the code.
+description: "How policy rules compile into one immutable effective-policy snapshot per task."
 prerequisites:
   - /concepts/governance/authorization-basics
 related:
@@ -11,8 +11,6 @@ related:
   - /concepts/governance/approvals
 last_updated: 2026-07-29
 ---
-
-# The policy engine
 
 The policy engine decides what a running task may do: which tools it may call,
 how much it may spend, how many tokens it may burn, what needs a human, and which
@@ -61,7 +59,9 @@ every mutation is recorded in the audit log as `governance_policy.create`,
 `.update`, `.set_enabled` or `.delete`. A malformed target selector is rejected
 at parse time rather than silently ignored.
 
-New workspaces are seeded from `config/default_policies.yaml`, which is data
+New workspaces are seeded from `config/default_policies.yaml` (packaged inside
+the governance library, at
+`agentarea-platform/libs/governance/agentarea_governance/config/`), which is data
 rather than a code constant: a 500.00 USD monthly spend cap, a 50.00 USD per-run
 cap, 20,000,000 total tokens, 100,000 tokens per call, and both content-safety
 filters on. Seeding is idempotent per dimension — a cap the user already set is
@@ -74,7 +74,7 @@ At task creation, `GovernancePolicyResolver` reads the enabled rules for each
 subject layer, compiles each layer into a typed `PolicyDocument`, and merges them
 in order:
 
-```
+```text
 workspace  →  agent  →  user  →  task
 ```
 
@@ -216,11 +216,17 @@ precisely because that limit is felt — see below.
 
 ## Related
 
-- [Tool authorization](/concepts/governance/tool-authorization) — the tool half of
-  the PDP, and its enforcement points.
-- [Budgets and quotas](/concepts/governance/budgets-and-quotas) — the spend and
-  token dimensions in detail.
-- [Approvals](/concepts/governance/approvals) — the one dimension that pauses a
-  workflow.
-- [The AgentArea model](/concepts/governance/the-agentarea-model) — the other
-  authorization surface.
+<Columns cols={2}>
+  <Card title="Tool authorization" icon="scale-balanced" href="/concepts/governance/tool-authorization">
+    The tool half of the PDP, and its enforcement points
+  </Card>
+  <Card title="Budgets and quotas" icon="scale-balanced" href="/concepts/governance/budgets-and-quotas">
+    The spend and token dimensions in detail
+  </Card>
+  <Card title="Approvals" icon="scale-balanced" href="/concepts/governance/approvals">
+    The one dimension that pauses a workflow
+  </Card>
+  <Card title="The AgentArea model" icon="scale-balanced" href="/concepts/governance/the-agentarea-model">
+    The other authorization surface
+  </Card>
+</Columns>

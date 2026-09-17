@@ -1,7 +1,7 @@
 ---
 title: Budgets and quotas
 type: concept
-summary: The three spend dimensions AgentArea bounds — inference cost, service cost and tokens — where each ceiling is enforced, and which configured limits nothing reads.
+description: "The three spend dimensions AgentArea bounds — inference cost, service cost and tokens — where each ceiling is enforced."
 prerequisites:
   - /concepts/governance/policy-engine
 related:
@@ -10,8 +10,6 @@ related:
   - /concepts/governance/audit
 last_updated: 2026-07-29
 ---
-
-# Budgets and quotas
 
 An agent loop can spend money without bound. Each iteration makes an LLM call,
 each call costs, and a loop that fails to converge repeats until something stops
@@ -171,8 +169,14 @@ than continuously.
 
 ## Related
 
-- [The policy engine](/concepts/governance/policy-engine) — how ceilings merge and
-  where the snapshot comes from.
-- [Tool authorization](/concepts/governance/tool-authorization) — the other gates
-  sharing the pre-tool phase.
-- [Audit](/concepts/governance/audit) — what is and is not recorded.
+<Columns cols={2}>
+  <Card title="The policy engine" icon="scale-balanced" href="/concepts/governance/policy-engine">
+    How ceilings merge and where the snapshot comes from
+  </Card>
+  <Card title="Tool authorization" icon="scale-balanced" href="/concepts/governance/tool-authorization">
+    The other gates sharing the pre-tool phase
+  </Card>
+  <Card title="Audit" icon="scale-balanced" href="/concepts/governance/audit">
+    What is and is not recorded
+  </Card>
+</Columns>

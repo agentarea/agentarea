@@ -1,16 +1,33 @@
 ---
-title: "Serverless MCP instances"
-description: "Start MCP servers on first use and reclaim them once idle, instead of running every connected server continuously."
+title: Serverless MCP instances
+type: guide
+description: "Reclaim idle MCP server workloads and let the next call start them again, instead of running every connected server continuously."
+prerequisites:
+  - /concepts/integration/mcp
+related:
+  - /self-host/configuration
+  - /self-host/mcp-data-plane
+  - /self-host/troubleshooting
+  - /concepts/sandbox/lifecycle
+last_updated: 2026-09-07
 ---
 
-By default, connecting an MCP server starts its container and leaves it running
-until someone deletes the connection. A workspace with thirty connections runs
-thirty containers, whether or not an agent has called any of them this month.
+Without idle reclaim, a connected MCP server's container runs until someone
+deletes the connection. A workspace with thirty connections runs thirty
+containers, whether or not an agent has called any of them this month.
 
-Serverless mode changes that: a container-backed instance is started on its
-first call and stopped again once it has gone idle. The connection, its
-credentials, and its discovered tools all stay exactly as they were — only the
-running workload comes and goes.
+Serverless mode reclaims a container-backed instance once it has gone idle, and
+the next call starts it again. The connection, its credentials, and its
+discovered tools all stay exactly as they were — only the running workload comes
+and goes.
+
+It is **on by default** (`mcpManager.serverless.enabled: true`).
+
+<Note>
+This setting controls **reclaim only**. On-demand start is not optional: every
+container-backed call goes through the manager's demand gateway, which brings a
+dormant workload up whether or not reclaim is enabled.
+</Note>
 
 ## What changes when you enable it
 
@@ -28,16 +45,21 @@ workload the first call is bringing up. Queueing them instead would hold a
 database connection each for the whole cold start, so a client retrying faster
 than a slow start could finish would fill the manager's connection pool — taking
 the connection the start itself still needs and stalling every instance, not
-just the one being started. A client that honours `Retry-After` sees a slower
+only the one being started. A client that honours `Retry-After` sees a slower
 first call; one that treats `503` as fatal needs its own retry.
 
-**Creating a connection no longer verifies it immediately.** Verification is
-what starts the container and lists its tools, so deferring the start defers the
-check. A bad image reference or a missing environment variable surfaces on first
-use instead of in the connection form.
+**A reclaimed instance shows no running workload.** The instance row, its
+credentials and its tool list are untouched, but nothing is running until the
+next call. An operator looking only at pods or containers sees fewer than the
+number of connections, and that is the intended state.
 
-If neither trade is acceptable for your users, leave it off. It is off by
-default.
+Creating a connection still verifies it: `url`-type connections verify
+synchronously and block until the check succeeds or fails, while
+container-backed ones verify in the background. Reclaim never invalidates that
+result — runtime state and verification are separate records.
+
+If the cold-start trade is not acceptable for your users, set
+`serverless.enabled: false`.
 
 ## Enabling it
 
@@ -51,11 +73,10 @@ mcpManager:
     sweepInterval: "60s"
 ```
 
-One switch drives every component that has to agree about it — the API and the
-worker (which create instances and dispatch tool calls) and the MCP manager
-(which reclaims them). Configuring them separately is not possible by design: an
-idle timeout without lazy start reclaims nothing, and lazy start without a
-timeout brings instances up on demand and then leaves them up forever.
+The switch is read by the MCP manager alone, and it collapses to a single
+duration: enabled renders `MCP_IDLE_TIMEOUT` as `idleTimeout`, disabled renders
+it as `0`, and `0` means "never reclaim". Neither the API nor the worker
+configures any of this — they do not decide when a workload starts or stops.
 
 ## Bring-up from nothing
 
@@ -100,7 +121,7 @@ kubectl run gvisor-check --rm -it --restart=Never \
 
 **2. Point the control plane at it.**
 
-```
+```text
 BACKEND_TYPE=kubernetes
 KUBERNETES_KUBECONFIG=/path/to/execution-cluster.kubeconfig
 KUBERNETES_RUNTIME_CLASS=gvisor
@@ -158,10 +179,12 @@ Excluded from reclamation:
 
 ## How reclaiming works
 
-The MCP proxy records a timestamp when traffic passes through it — it is the
-only component that sees MCP calls, since the gateway routes to the container
-directly. Writes are throttled to one per instance per minute, so an active
-instance does not put the database on the hot path of every tool call.
+Every container-backed call passes through the manager's demand gateway, and the
+gateway is what records use. On the way in it marks the instance `ready` and
+opens a request lease; while the request runs it heartbeats that lease; on the
+way out it closes the lease and stamps `last_used_at`. A call in flight is
+therefore always visible as a live lease, not inferred from a timestamp that
+might be stale.
 
 The manager sweeps on `sweepInterval`. For each instance past its idle window it
 stops the workload and marks the instance unprovisioned; the database row, the
@@ -204,7 +227,7 @@ that is already present comes back in a few seconds.
 If a workload is never reclaimed, check that `idleTimeout` is non-zero. A zero
 timeout disables the reaper, and that is the one case it announces:
 
-```
+```text
 MCP idle reaper disabled by explicit zero timeout
 ```
 

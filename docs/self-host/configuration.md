@@ -1,7 +1,7 @@
 ---
 title: Configuration
 type: reference
-summary: Every environment variable each AgentArea service reads, and the Helm value that sets it.
+description: "Every environment variable each AgentArea service reads, and the Helm value that sets it."
 prerequisites:
   - /self-host/requirements
 related:
@@ -11,8 +11,6 @@ related:
   - /self-host/networking
 last_updated: 2026-07-29
 ---
-
-# Configuration
 
 The environment variables each service reads, grouped by service, with the Helm
 value that produces each one.
@@ -110,7 +108,6 @@ Rendered only when `rustfs.enabled` is true.
 | `API_AUTH_HEADER_VALUE` | Secret `global.secrets.application`, key `api-auth-header-value` | generated |
 | `MCP_MANAGER_URL` | the MCP Manager service and `mcpManager.service.port` | derived |
 | `MCP_CLIENT_TIMEOUT` | fixed | `30` |
-| `MCP_LAZY_PROVISIONING_ENABLED` | `mcpManager.serverless.enabled` | `false` |
 | `PUBLIC_S3_ENDPOINT` | `global.storage.publicEndpoint` | `""` |
 | `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
 | `METRICS_PORT` | `global.monitoring.prometheus.port` | `9090` |
@@ -144,16 +141,16 @@ be reachable by the client, not by the pod.
 | `DEBUG` | fixed | `false` |
 | `ENVIRONMENT` | fixed | `production` |
 | `MCP_MANAGER_URL` | derived | — |
-| `MCP_LAZY_PROVISIONING_ENABLED` | `mcpManager.serverless.enabled` | `false` |
 
 `global.temporal.worker.maxConcurrentActivityExecutions`,
 `maxConcurrentWorkflowTaskExecutions`, and `maxConcurrentSessionExecutions` in
 `values.yaml` do not feed these variables — `config.yaml` hardcodes 10 and 5. To
 change worker concurrency, use `worker.extraEnv`.
 
-The worker must agree with the API on `MCP_LAZY_PROVISIONING_ENABLED`. The worker
-dispatches agent tool calls, so it is a provisioning trigger in its own right;
-without it a reclaimed instance stays down for agents.
+Neither the API nor the worker configures on-demand MCP start any more. Every
+container-backed call goes through the manager's demand gateway, which starts a
+cold workload itself; there is nothing for the Python side to agree on. See the
+MCP Manager group below.
 
 ### Temporal client (group `temporal`)
 
@@ -203,13 +200,23 @@ are not rendered into environment variables.
 | `KUBERNETES_DEFAULT_MEMORY_REQUEST` | fixed | `128Mi` |
 | `KUBERNETES_DEFAULT_MEMORY_LIMIT` | fixed | `512Mi` |
 | `MCP_FEATURES_ENABLED` | `mcpManager.features.enabled`, comma-joined | `gateway_api,state_reconciler` |
-| `MCP_IDLE_TIMEOUT` | `mcpManager.serverless.idleTimeout` when `serverless.enabled`, else `0` | `0` |
+| `MCP_IDLE_TIMEOUT` | `mcpManager.serverless.idleTimeout` when `serverless.enabled`, else `0` | `10m` |
 | `MCP_IDLE_SWEEP_INTERVAL` | `mcpManager.serverless.sweepInterval` | `60s` |
+| `MCP_REQUEST_LEASE_TTL` | `mcpManager.serverless.requestLeaseTTL` | `90s` |
+| `MCP_GATEWAY_STARTUP_TIMEOUT` | `mcpManager.serverless.startupTimeout` | `5m` |
+| `MCP_GATEWAY_AUTH_SECRET` | optional; the gateway's shared secret | `""` |
 
-`MCP_IDLE_TIMEOUT` is derived from `serverless.enabled` rather than configured
-separately. Only instances created as lazy are eligible for reclaim, so a timeout
-without lazy start reclaims nothing, and lazy start without a timeout leaves
-instances up forever. One switch makes both half-configured states unreachable.
+All four gateway durations are **required** — the manager refuses to start when
+one is missing or unparseable, and only `MCP_IDLE_TIMEOUT` may be zero
+(`LoadPolicyFromEnv` in `internal/mcpgateway/gateway.go`). Failing to boot is the
+intended outcome: a gateway with an unset lease TTL would hold workloads open
+indefinitely.
+
+`serverless.enabled` collapses to a single duration: enabled renders
+`idleTimeout`, disabled renders `0`, and `0` means "never reclaim". The switch
+controls **idle reclaim only**. On-demand start is not conditional — every
+container-backed call passes through the gateway, which serializes cold starts
+and brings the workload up regardless of this setting.
 
 `mcpManager.instancePod` (labels, annotations, nodeSelector, tolerations,
 affinity, imagePullSecrets, priorityClassName) is passed to the manager as a
@@ -341,8 +348,21 @@ backend:
 
 ## Related
 
-- [Requirements](/self-host/requirements)
-- [Deploy on Kubernetes with Helm](/self-host/kubernetes)
-- [Deploy with Docker Compose](/self-host/docker-compose)
-- [Choose a secrets backend](/self-host/secrets-backends)
-- [Collect logs and metrics](/self-host/observability)
+<Columns cols={2}>
+  <Card title="Requirements" icon="server" href="/self-host/requirements">
+    Host, cluster, and dependency versions required to run AgentArea, per
+    deployment target
+  </Card>
+  <Card title="Deploy on Kubernetes with Helm" icon="server" href="/self-host/kubernetes">
+    Install the agentarea Helm chart, decide which bundled dependencies to keep
+  </Card>
+  <Card title="Deploy with Docker Compose" icon="server" href="/self-host/docker-compose">
+    Run the full AgentArea platform on one host with docker- compose.yaml
+  </Card>
+  <Card title="Choose a secrets backend" icon="server" href="/self-host/secrets-backends">
+    Configure where AgentArea stores workspace secrets
+  </Card>
+  <Card title="Collect logs and metrics" icon="server" href="/self-host/observability">
+    Read AgentArea's structured JSON logs, enable OpenTelemetry tracing
+  </Card>
+</Columns>
