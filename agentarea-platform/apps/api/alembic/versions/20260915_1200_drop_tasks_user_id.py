@@ -22,7 +22,7 @@ literally.
 Reversible, and losslessly so: the column carried no data to lose.
 
 Revision ID: 20260915_1200_drop_tasks_uid
-Revises: 20260908_1000_multi_catalog_conn
+Revises: 20260915_1000_platform_providers
 Create Date: 2026-09-15 12:00:00.000000
 """
 
@@ -32,7 +32,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260915_1200_drop_tasks_uid"
-down_revision: str | None = "20260908_1000_multi_catalog_conn"
+down_revision: str | None = "20260915_1000_platform_providers"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
