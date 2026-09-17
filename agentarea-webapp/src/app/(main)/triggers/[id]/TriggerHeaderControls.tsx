@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter } from "next/navigation";
-import { Power, PowerOff } from "lucide-react";
+import { Play, Power, PowerOff } from "lucide-react";
 import { toast } from "sonner";
 import { useFormSubmittingState } from "@/app/(main)/agents/shared/useFormSubmittingState";
 import DeleteButton from "@/components/DeleteButton/DeleteButton";
@@ -12,6 +12,7 @@ import {
   deleteTriggerAction,
   disableTriggerAction,
   enableTriggerAction,
+  runTriggerNowAction,
 } from "./actions";
 
 export default function TriggerHeaderControls({
@@ -26,12 +27,17 @@ export default function TriggerHeaderControls({
   const router = useRouter();
   const pathname = usePathname();
   const tCreate = useTranslations("TriggersPage.create");
+  const t = useTranslations("TriggersPage.detail");
   // The form only exists on the overview route; the executions and metrics tabs
   // share this header and have nothing to submit.
   const isOverview = pathname === `/triggers/${triggerId}`;
   const isSaving = useFormSubmittingState("create-trigger-form");
   const [isToggling, setIsToggling] = useState(false);
   const [active, setActive] = useState(isActive);
+  const [isRunning, setIsRunning] = useState(false);
+  // Why a run produced no task. Shown next to the button rather than in a toast:
+  // it is the answer to what was just asked, and it is worth re-reading.
+  const [skipped, setSkipped] = useState<string | null>(null);
   const handleDelete = async (id: string) => {
     const result = await deleteTriggerAction(id);
     return result.error
@@ -58,8 +64,44 @@ export default function TriggerHeaderControls({
     }
   };
 
+  const handleRunNow = async () => {
+    setIsRunning(true);
+    setSkipped(null);
+    try {
+      const result = await runTriggerNowAction(triggerId);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.taskId) {
+        // The point of the button is watching the run, so go to it.
+        router.push(`/tasks/${result.taskId}`);
+        return;
+      }
+      setSkipped(result.reason ?? t("runSkipped"));
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-2 py-1 sm:flex-nowrap">
+      {skipped && (
+        <span className="text-xs text-muted-foreground" role="status">
+          {skipped}
+        </span>
+      )}
+      <Button
+        size="xs"
+        variant="outline"
+        type="button"
+        onClick={handleRunNow}
+        disabled={isRunning}
+        isLoading={isRunning}
+      >
+        <Play />
+        {t("runNow")}
+      </Button>
       <Button
         size="xs"
         variant="outline"

@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import type { ExecutionHistoryResponse } from "@/api/client/types.gen";
-import { getTriggerExecutions } from "@/lib/api";
+import { getTriggerExecutions, resolvePrincipals } from "@/lib/api";
 import ExecutionsTable from "./ExecutionsTable";
 
 interface Props {
@@ -49,12 +49,28 @@ export default async function TriggerExecutionsPage({
     );
   }
 
+  // fired_by is an id; the name is resolved here rather than stored on the
+  // execution, so a person who is renamed is renamed everywhere at once.
+  const principals = await resolvePrincipals([
+    ...new Set(
+      executions
+        .map((execution) => execution.fired_by)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ]);
+  const principalNames = Object.fromEntries(
+    (principals.data ?? [])
+      .filter((principal) => principal.display_name)
+      .map((principal) => [principal.id, principal.display_name as string])
+  );
+
   return (
     <div className="p-6">
       <ExecutionsTable
         executions={executions}
         triggerId={id}
         currentPage={page}
+        principalNames={principalNames}
       />
     </div>
   );

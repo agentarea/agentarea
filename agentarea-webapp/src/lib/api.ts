@@ -1283,6 +1283,14 @@ export const disableTrigger = async (triggerId: string) => {
   return { data, error };
 };
 
+export const runTriggerNow = async (triggerId: string) => {
+  const { data, error } = await sdk.runTriggerNowV1TriggersTriggerIdRunPost({
+    client: serverClient,
+    path: { trigger_id: triggerId },
+  });
+  return { data, error };
+};
+
 export const getTriggerStatus = async (triggerId: string) => {
   const { data, error } =
     await sdk.getTriggerStatusV1TriggersTriggerIdStatusGet({

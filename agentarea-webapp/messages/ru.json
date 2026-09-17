@@ -1384,7 +1384,12 @@
       "successRate": "Успешность",
       "avgExecutionTime": "Среднее время выполнения",
       "noExecutions": "Выполнений пока нет",
-      "noExecutionsDescription": "Этот триггер ещё не выполнялся."
+      "noExecutionsDescription": "Этот триггер ещё не выполнялся.",
+      "runNow": "Запустить",
+      "runSkipped": "Условия триггера не пропустили этот запуск.",
+      "executionSource": "Источник",
+      "executionManual": "Вручную",
+      "executionAutomatic": "Автоматически"
     },
     "error": {
       "createFailed": "Не удалось создать триггер",

@@ -1383,7 +1383,12 @@
       "successRate": "Success Rate",
       "avgExecutionTime": "Avg Execution Time",
       "noExecutions": "No executions yet",
-      "noExecutionsDescription": "This trigger hasn't been executed yet."
+      "noExecutionsDescription": "This trigger hasn't been executed yet.",
+      "runNow": "Run now",
+      "runSkipped": "The trigger's conditions rejected this run.",
+      "executionSource": "Source",
+      "executionManual": "Manual",
+      "executionAutomatic": "Automatic"
     },
     "error": {
       "createFailed": "Failed to create trigger",

@@ -480,6 +480,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             "trigger_data": entity.trigger_data,
             "workflow_id": entity.workflow_id,
             "run_id": entity.run_id,
+            "fired_by": entity.fired_by,
         }
 
         # Remove None values and system fields that will be auto-populated
@@ -503,6 +504,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             "trigger_data": entity.trigger_data,
             "workflow_id": entity.workflow_id,
             "run_id": entity.run_id,
+            "fired_by": entity.fired_by,
         }
 
         # Remove None values
@@ -827,6 +829,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             trigger_data=execution_orm.trigger_data or {},
             workflow_id=execution_orm.workflow_id,
             run_id=execution_orm.run_id,
+            fired_by=execution_orm.fired_by,
         )
 
     def _domain_to_orm(self, execution: TriggerExecution) -> TriggerExecutionORM:
@@ -842,4 +845,5 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             trigger_data=execution.trigger_data,
             workflow_id=execution.workflow_id,
             run_id=execution.run_id,
+            fired_by=execution.fired_by,
         )

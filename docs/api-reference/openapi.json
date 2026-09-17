@@ -11624,6 +11624,18 @@
             "title": "Execution Time Ms",
             "type": "integer"
           },
+          "fired_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Principal who asked for this run, when a person did. Null means the trigger fired itself. Resolve the name through GET /v1/principals.",
+            "title": "Fired By"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -11892,6 +11904,62 @@
           "consecutive_failures"
         ],
         "title": "TriggerResponse",
+        "type": "object"
+      },
+      "TriggerRunResponse": {
+        "description": "Result of firing a trigger once by hand.",
+        "properties": {
+          "execution_id": {
+            "format": "uuid",
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the run was skipped, when it was.",
+            "title": "Reason"
+          },
+          "status": {
+            "description": "'started' when a task was created and is now running. 'skipped' when the trigger's own conditions rejected the run -- a real answer about the trigger, not an error.",
+            "enum": [
+              "started",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The task to watch. Absent when the run was skipped.",
+            "title": "Task Id"
+          },
+          "trigger_id": {
+            "format": "uuid",
+            "title": "Trigger Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "trigger_id",
+          "execution_id"
+        ],
+        "title": "TriggerRunResponse",
         "type": "object"
       },
       "TriggerStatusResponse": {
@@ -27003,6 +27071,57 @@
           }
         ],
         "summary": "Get Execution Metrics",
+        "tags": [
+          "v1",
+          "protected",
+          "triggers"
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}/run": {
+      "post": {
+        "description": "Fire a trigger once, now, because a person asked for it.\n\nDistinct from ``/execute``, which replays a real event: this carries no event\ndata and records the caller in ``fired_by``, so the run is visibly a manual\none and the task it creates belongs to the caller rather than to whoever\ncreated the trigger.\n\nThe run is otherwise faithful to a real one -- the trigger's conditions are\nstill evaluated, and a run they reject comes back ``skipped`` with the reason\nrather than being forced through. A trigger that is switched off still runs:\n``is_active`` governs the schedule, not a person asking for one run.\n\nReturns:\n    The execution, and the task id to watch when one was created.",
+        "operationId": "run_trigger_now_v1_triggers__trigger_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trigger_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trigger Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Trigger Now",
         "tags": [
           "v1",
           "protected",

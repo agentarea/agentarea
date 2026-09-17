@@ -985,6 +985,115 @@ class TestTriggerService:
         assert "inactive" in result.error_message.lower()
 
     @pytest.mark.asyncio
+    async def test_a_scheduled_run_names_nobody_as_having_asked_for_it(
+        self,
+        trigger_service,
+        mock_trigger_repository,
+        mock_trigger_execution_repository,
+        mock_task_service,
+        sample_cron_trigger,
+    ):
+        """The trigger's own mechanism fired: fired_by stays empty."""
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        mock_task_service.route_or_submit_task.return_value = MagicMock(
+            id=uuid4(), status="submitted"
+        )
+        mock_trigger_execution_repository.create.return_value = MagicMock(
+            id=uuid4(), trigger_id=sample_cron_trigger.id, status=ExecutionStatus.SUCCESS
+        )
+
+        await trigger_service.execute_trigger(sample_cron_trigger.id, {"source": "test"})
+
+        assert mock_trigger_execution_repository.create.call_args.kwargs["fired_by"] is None
+        task = mock_task_service.route_or_submit_task.call_args.args[0]
+        assert "fired_by" not in task.task_parameters
+
+    @pytest.mark.asyncio
+    async def test_a_manual_run_records_who_asked_for_it(
+        self,
+        trigger_service,
+        mock_trigger_repository,
+        mock_trigger_execution_repository,
+        mock_task_service,
+        sample_cron_trigger,
+    ):
+        """Pressing "run now" is the one thing that fills fired_by."""
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        mock_task_service.route_or_submit_task.return_value = MagicMock(
+            id=uuid4(), status="submitted"
+        )
+        mock_trigger_execution_repository.create.return_value = MagicMock(
+            id=uuid4(), trigger_id=sample_cron_trigger.id, status=ExecutionStatus.SUCCESS
+        )
+
+        await trigger_service.execute_trigger(
+            sample_cron_trigger.id, {"source": "test"}, fired_by="user-42"
+        )
+
+        assert mock_trigger_execution_repository.create.call_args.kwargs["fired_by"] == "user-42"
+
+    @pytest.mark.asyncio
+    async def test_a_manual_run_belongs_to_the_person_who_pressed_it(
+        self,
+        trigger_service,
+        mock_trigger_repository,
+        mock_trigger_execution_repository,
+        mock_task_service,
+        sample_cron_trigger,
+    ):
+        """Not to whoever happened to create the trigger months ago."""
+        sample_cron_trigger.created_by = "someone-else"
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        mock_task_service.route_or_submit_task.return_value = MagicMock(
+            id=uuid4(), status="submitted"
+        )
+        mock_trigger_execution_repository.create.return_value = MagicMock(
+            id=uuid4(), trigger_id=sample_cron_trigger.id, status=ExecutionStatus.SUCCESS
+        )
+
+        await trigger_service.execute_trigger(
+            sample_cron_trigger.id, {"source": "test"}, fired_by="user-42"
+        )
+
+        task = mock_task_service.route_or_submit_task.call_args.args[0]
+        assert task.user_id == "user-42"
+        # The task listing reads this to say the run was manual rather than
+        # claiming the schedule fired.
+        assert task.task_parameters["fired_by"] == "user-42"
+        assert task.task_parameters["trigger_name"] == sample_cron_trigger.name
+
+    @pytest.mark.asyncio
+    async def test_a_manual_run_fires_a_disabled_trigger(
+        self,
+        trigger_service,
+        mock_trigger_repository,
+        mock_trigger_execution_repository,
+        mock_task_service,
+        sample_cron_trigger,
+    ):
+        """is_active governs the schedule, not a person asking for one run.
+
+        Testing a trigger you have just switched off -- or not switched on yet --
+        is the main reason the button exists.
+        """
+        disabled = CronTrigger(**sample_cron_trigger.model_dump())
+        disabled.is_active = False
+        mock_trigger_repository.get_trigger.return_value = disabled
+        mock_task_service.route_or_submit_task.return_value = MagicMock(
+            id=uuid4(), status="submitted"
+        )
+        mock_trigger_execution_repository.create.return_value = MagicMock(
+            id=uuid4(), trigger_id=disabled.id, status=ExecutionStatus.SUCCESS
+        )
+
+        result = await trigger_service.execute_trigger(
+            disabled.id, {"source": "test"}, fired_by="user-42"
+        )
+
+        assert result.status == ExecutionStatus.SUCCESS
+        mock_task_service.route_or_submit_task.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_execute_trigger_task_creation_error(
         self,
         trigger_service,

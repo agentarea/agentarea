@@ -6820,6 +6820,12 @@ export type TriggerExecutionResponse = {
      */
     execution_time_ms: number;
     /**
+     * Fired By
+     *
+     * Principal who asked for this run, when a person did. Null means the trigger fired itself. Resolve the name through GET /v1/principals.
+     */
+    fired_by?: string | null;
+    /**
      * Id
      */
     id: string;
@@ -6965,6 +6971,40 @@ export type TriggerResponse = {
      * Webhook Type
      */
     webhook_type?: string | null;
+};
+
+/**
+ * TriggerRunResponse
+ *
+ * Result of firing a trigger once by hand.
+ */
+export type TriggerRunResponse = {
+    /**
+     * Execution Id
+     */
+    execution_id: string;
+    /**
+     * Reason
+     *
+     * Why the run was skipped, when it was.
+     */
+    reason?: string | null;
+    /**
+     * Status
+     *
+     * 'started' when a task was created and is now running. 'skipped' when the trigger's own conditions rejected the run -- a real answer about the trigger, not an error.
+     */
+    status: 'started' | 'skipped';
+    /**
+     * Task Id
+     *
+     * The task to watch. Absent when the run was skipped.
+     */
+    task_id?: string | null;
+    /**
+     * Trigger Id
+     */
+    trigger_id: string;
 };
 
 /**
@@ -15184,6 +15224,36 @@ export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses = {
 };
 
 export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponse = GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses[keyof GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses];
+
+export type RunTriggerNowV1TriggersTriggerIdRunPostData = {
+    body?: never;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: never;
+    url: '/v1/triggers/{trigger_id}/run';
+};
+
+export type RunTriggerNowV1TriggersTriggerIdRunPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RunTriggerNowV1TriggersTriggerIdRunPostError = RunTriggerNowV1TriggersTriggerIdRunPostErrors[keyof RunTriggerNowV1TriggersTriggerIdRunPostErrors];
+
+export type RunTriggerNowV1TriggersTriggerIdRunPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: TriggerRunResponse;
+};
+
+export type RunTriggerNowV1TriggersTriggerIdRunPostResponse = RunTriggerNowV1TriggersTriggerIdRunPostResponses[keyof RunTriggerNowV1TriggersTriggerIdRunPostResponses];
 
 export type GetTriggerStatusV1TriggersTriggerIdStatusGetData = {
     body?: never;

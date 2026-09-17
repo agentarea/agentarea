@@ -9,6 +9,7 @@ export type TaskSourceKind =
   | "webhook"
   | "trigger"
   | "a2a"
+  | "manual_run"
   | "manual";
 
 export interface TaskSource {
@@ -50,6 +51,22 @@ function getObject(obj: unknown, key: string): Record<string, unknown> | undefin
 }
 
 export function getTaskSource(parameters: Params): TaskSource {
+  // Someone pressed "run now" on a trigger. The backend writes fired_by on that
+  // path and nowhere else, so it settles what caused this run before anything
+  // else gets a say — including channel_origin, which a manual run of a channel
+  // trigger still carries because the reply routes back to that chat. Where the
+  // answer goes is not what started it. The trigger is still named: which one
+  // was run is the next question.
+  const firedBy = getString(parameters, "fired_by");
+  if (firedBy) {
+    return {
+      kind: "manual_run",
+      label: "Manual run",
+      detail: getString(parameters, "trigger_name"),
+      principalId: firedBy,
+    };
+  }
+
   const channelOrigin = getObject(parameters, "channel_origin");
   const channelType = channelOrigin && getString(channelOrigin, "type");
 
@@ -100,6 +117,7 @@ export function getTaskSource(parameters: Params): TaskSource {
 
   const triggerType = getString(parameters, "trigger_type");
   const triggerName = getString(parameters, "trigger_name");
+
   if (triggerType === "cron") {
     return {
       kind: "schedule",

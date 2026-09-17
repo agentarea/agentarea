@@ -675,6 +675,9 @@ import type {
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
+  RunTriggerNowV1TriggersTriggerIdRunPostData,
+  RunTriggerNowV1TriggersTriggerIdRunPostErrors,
+  RunTriggerNowV1TriggersTriggerIdRunPostResponses,
   ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostData,
   ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostErrors,
   ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponses,
@@ -9262,6 +9265,49 @@ export const getExecutionMetricsV1TriggersTriggerIdMetricsGet = <
       },
     ],
     url: "/v1/triggers/{trigger_id}/metrics",
+    ...options,
+  });
+
+/**
+ * Run Trigger Now
+ *
+ * Fire a trigger once, now, because a person asked for it.
+ *
+ * Distinct from ``/execute``, which replays a real event: this carries no event
+ * data and records the caller in ``fired_by``, so the run is visibly a manual
+ * one and the task it creates belongs to the caller rather than to whoever
+ * created the trigger.
+ *
+ * The run is otherwise faithful to a real one -- the trigger's conditions are
+ * still evaluated, and a run they reject comes back ``skipped`` with the reason
+ * rather than being forced through. A trigger that is switched off still runs:
+ * ``is_active`` governs the schedule, not a person asking for one run.
+ *
+ * Returns:
+ * The execution, and the task id to watch when one was created.
+ */
+export const runTriggerNowV1TriggersTriggerIdRunPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<RunTriggerNowV1TriggersTriggerIdRunPostData, ThrowOnError>
+): RequestResult<
+  RunTriggerNowV1TriggersTriggerIdRunPostResponses,
+  RunTriggerNowV1TriggersTriggerIdRunPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RunTriggerNowV1TriggersTriggerIdRunPostResponses,
+    RunTriggerNowV1TriggersTriggerIdRunPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}/run",
     ...options,
   });
 
