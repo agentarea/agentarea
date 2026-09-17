@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import ContentBlock from "@/components/ContentBlock";
 import {
   listWorkspaceInvitations,
   listWorkspaceMembers,
@@ -7,17 +8,29 @@ import {
 } from "@/lib/api";
 import { formatApiError } from "@/lib/api-errors";
 import { getAuthContext } from "@/lib/getAuthContext";
+import { resolveIdentityProfiles } from "@/lib/identities";
+import { getWorkspaceContext } from "@/lib/workspace-context";
 import MembersClient from "./MembersClient";
 import MembersLoadError from "./MembersLoadError";
 
 // The data-fetching half of the members page, isolated so the page can wrap it
 // in <Suspense> and show MembersSkeleton while it loads.
 export default async function MembersData() {
-  const t = await getTranslations("MembersPage");
-  const { workspaceId, userId } = await getAuthContext();
+  const [{ workspaceId, userId, email, name, username }, { active }, t] =
+    await Promise.all([
+      getAuthContext(),
+      getWorkspaceContext(),
+      getTranslations("MembersPage"),
+    ]);
+
+  const loadError = (message: string) => (
+    <ContentBlock header={{ breadcrumb: [{ label: t("title") }] }}>
+      <MembersLoadError message={message} />
+    </ContentBlock>
+  );
 
   if (!workspaceId) {
-    return <MembersLoadError message={t("noWorkspaceContext")} />;
+    return loadError(t("noWorkspaceContext"));
   }
 
   const [membersRes, invitationsRes] = await Promise.all([
@@ -29,17 +42,40 @@ export default async function MembersData() {
   // membership graph is down hides an outage behind a plausible screen.
   const failure = membersRes.error ?? invitationsRes.error;
   if (failure) {
-    return <MembersLoadError message={formatApiError(failure)} />;
+    return loadError(formatApiError(failure));
   }
 
-  const members: WorkspaceMember[] = membersRes.data ?? [];
+  let members: WorkspaceMember[] = membersRes.data ?? [];
   const invitations: WorkspaceInvitation[] = invitationsRes.data ?? [];
+
+  // The API knows profile details for the caller only; look the rest up in
+  // the identity provider so members show as people, not ids.
+  const profiles = await resolveIdentityProfiles(members.map((m) => m.user_id));
+  members = members.map((m) => {
+    const profile = profiles.get(m.user_id);
+    if (!profile) return m;
+    return {
+      ...m,
+      email: m.email ?? profile.email,
+      display_name: m.display_name ?? profile.name ?? profile.email,
+    };
+  });
+
+  // A personal workspace is owned by the user whose id it carries, so the
+  // owner is known even when the API predates `owner_user_id` in its
+  // workspace response and leaves the field out.
+  const ownerUserId =
+    members.find((member) => member.is_owner)?.user_id ??
+    active?.owner_user_id ??
+    (active && userId && active.id === userId ? userId : null);
 
   return (
     <MembersClient
       members={members}
       invitations={invitations}
-      currentUserId={userId}
+      currentUser={{ id: userId, email, name, username }}
+      ownerUserId={ownerUserId}
+      workspaceName={active?.name ?? t("thisWorkspace")}
     />
   );
 }

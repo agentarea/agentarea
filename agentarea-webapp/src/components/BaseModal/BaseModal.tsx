@@ -17,9 +17,18 @@ import {
 interface BaseModalProps {
   title: string | React.ReactNode;
   description: string | React.ReactNode;
-  children: React.ReactNode;
-  onConfirm: () => void;
+  /** Trigger element. Omit when the dialog is driven by `open`/`onOpenChange`. */
+  children?: React.ReactNode;
+  onConfirm: () => void | Promise<void>;
   type: "delete" | "confirm";
+  /** Overrides the default "Delete"/"Confirm" label on the confirm button. */
+  confirmLabel?: React.ReactNode;
+  /**
+   * Controlled mode — open the dialog from somewhere that can't host a
+   * trigger (a dropdown-menu item, a keyboard shortcut…). Both must be passed.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export default function BaseModal({
@@ -28,15 +37,25 @@ export default function BaseModal({
   children,
   onConfirm,
   type,
+  confirmLabel,
+  open,
+  onOpenChange,
 }: BaseModalProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const tCommon = useTranslations("Common");
+
+  const controlled = open !== undefined && onOpenChange !== undefined;
+  const isOpen = controlled ? open : internalOpen;
+  const setIsOpen = controlled ? onOpenChange : setInternalOpen;
 
   const handleConfirm = async () => {
     setIsLoading(true);
-    await onConfirm();
-    setIsLoading(false);
+    try {
+      await onConfirm();
+    } finally {
+      setIsLoading(false);
+    }
     setIsOpen(false);
   };
 
@@ -56,7 +75,7 @@ export default function BaseModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+      {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent className="max-w-[400px] overflow-hidden">
         <div className="relative w-max">
           <div
@@ -165,7 +184,8 @@ export default function BaseModal({
             disabled={isLoading}
             variant={type === "delete" ? "destructive" : "default"}
           >
-            {type === "delete" ? tCommon("delete") : tCommon("confirm")}
+            {confirmLabel ??
+              (type === "delete" ? tCommon("delete") : tCommon("confirm"))}
             {isLoading && <Loader2 className="animate-spin" />}
           </Button>
         </DialogFooter>

@@ -27,7 +27,6 @@ export default async function RegistrationPage(props: OryPageParams) {
       <Registration
         flow={browserFlow}
         config={registrationConfig}
-       
       />
     </AuthLayout>
   );

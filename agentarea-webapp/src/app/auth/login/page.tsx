@@ -25,7 +25,6 @@ export default async function LoginPage(props: OryPageParams) {
       <Login
         flow={browserFlow}
         config={loginConfig}
-       
       />
     </AuthLayout>
   );

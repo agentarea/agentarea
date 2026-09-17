@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { CalendarRange, ChevronDown } from "lucide-react";
+import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
-import { cn } from "@/lib/utils";
+import { ToolbarButton } from "@/components/ui/toolbar";
 
 type Preset = { id: string; labelKey: string; days: number | "mtd" };
 
@@ -53,16 +53,12 @@ export function PeriodSelect() {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        className={cn(
-          "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal transition-colors",
-          "text-foreground/80 hover:bg-muted/60",
-          "data-[state=open]:bg-muted data-[state=open]:text-foreground"
-        )}
-      >
-        <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="tabular-nums">{label}</span>
-        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/70" />
+      <PopoverTrigger asChild>
+        <ToolbarButton active={open}>
+          <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="tabular-nums">{label}</span>
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/70" />
+        </ToolbarButton>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[288px] p-1.5">
         <MenuSectionLabel>{t("period")}</MenuSectionLabel>

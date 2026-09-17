@@ -94,7 +94,7 @@ export function TasksFilters({
                 <SelectValue placeholder={t("filterByStatus")} />
               </div>
             </SelectTrigger>
-            <SelectContent className="rounded-xl border-gray-200 shadow-lg dark:border-gray-700">
+            <SelectContent className="rounded-xl border-gray-200 dark:border-gray-700">
               <SelectItem value="all" className="rounded-lg">
                 <div className="flex items-center gap-2">
                   <div className="h-2 w-2 rounded-full bg-gray-400" />

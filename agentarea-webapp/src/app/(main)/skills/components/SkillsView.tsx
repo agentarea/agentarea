@@ -17,13 +17,17 @@ import {
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
+import { GroupHeader } from "@/components/ui/group-header";
+import {
+  MenuRow,
+  MenuSectionLabel,
+  MenuSeparator,
+} from "@/components/ui/menu-row";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { GroupHeader } from "@/components/ui/group-header";
-import { MenuRow, MenuSectionLabel, MenuSeparator } from "@/components/ui/menu-row";
 import {
   Select,
   SelectContent,
@@ -31,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ToolbarButton, ToolbarDivider } from "@/components/ui/toolbar";
 import { listSkillsAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 import type { PaginatedSkills, Skill } from "@/types/skill";
@@ -114,9 +119,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   // local-only UI state
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [filtersOpen, setFiltersOpen] = useState(
-    Boolean(initial.scope)
-  );
+  const [filtersOpen, setFiltersOpen] = useState(Boolean(initial.scope));
 
   useEffect(() => {
     let active = true;
@@ -314,37 +317,28 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
               ))}
             </div>
 
-            <div className="mx-1 h-[18px] w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />
+            <ToolbarDivider />
           </>
         ) : (
           <div className="min-w-0 flex-1" />
         )}
 
         {/* Filter toggle */}
-        <button
-          type="button"
+        <ToolbarButton
           onClick={() => setFiltersOpen((v) => !v)}
-          className={cn(
-            "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal transition-colors",
-            filtersOpen
-              ? "bg-muted text-foreground"
-              : "text-foreground/80 hover:bg-muted/60"
-          )}
+          active={filtersOpen}
         >
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="skills-btn-label">{t("filters.filter")}</span>
-        </button>
+        </ToolbarButton>
 
         {/* Display menu */}
         <Popover>
           <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-normal text-foreground/80 transition-colors hover:bg-muted/60"
-            >
+            <ToolbarButton>
               <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="skills-btn-label">{t("display.display")}</span>
-            </button>
+            </ToolbarButton>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-52 p-1.5">
             <MenuSectionLabel>{t("display.grouping")}</MenuSectionLabel>

@@ -34,4 +34,3 @@ Use case: stylized-concept. Asset type: polished GitHub README explanatory hero 
 ### Final edit prompt
 
 Edit this AgentArea README illustration. Preserve its entire visual style, palette, title, main network layout, agent nodes, policy gates, runtime foundation, and legible labels. Correct ONLY these details: Any LLM must have its own distinct connection directly from the nearest agent network, branching BEFORE the Human approval gate and completely bypassing that gate. Human approval connects ONLY to MCP tools. Make the two routes visibly separate and unambiguous. Rename the gate label to "Approval if required" to clarify approval is policy-driven. Remove all small decorative slogans in the corners or margins; keep only the main title, subtitle and actual architecture labels. No new elements or slogans.
-

@@ -63,12 +63,10 @@ export function rewriteJsonResponse<T extends object>(
             value
               .map((item) => {
                 if (typeof item === "object" && item !== null) {
-                   
                   return rewriteJsonResponse(item, proxyUrl);
                 } else if (typeof item === "string" && proxyUrl) {
                   return item.replaceAll(orySdkUrl(), proxyUrl);
                 }
-                 
                 return item;
               })
               .filter((item) => item !== undefined),

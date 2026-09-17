@@ -27,7 +27,6 @@ export default async function VerificationPage(props: OryPageParams) {
       <Verification
         flow={browserFlow}
         config={verificationConfig}
-       
       />
     </AuthLayout>
   );
