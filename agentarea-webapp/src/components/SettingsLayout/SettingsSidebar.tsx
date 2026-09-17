@@ -27,62 +27,101 @@ import {
 import { cn } from "@/lib/utils";
 import { useBillingUrl } from "@/lib/use-billing-url";
 
+/** One nav entry. `icon` is any lucide-style component. */
+export type SettingsNavItem = {
+  title: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
 
+export type SettingsNavSection = {
+  label: string;
+  items: SettingsNavItem[];
+};
 
+export type SettingsSidebarViewProps = {
+  /** Heading of the sidebar — "Settings". */
+  title: string;
+  /** Sub-label and tooltip of the back button — "Back to app". */
+  backToApp: string;
+  /** Where the back button goes. An absolute URL when it leaves this deployment. */
+  backHref: string;
+  sections: SettingsNavSection[];
+  /** Current path, used to mark the active entry. */
+  currentPath: string;
+  /** Rendered at the bottom, under the social links. The account menu, normally. */
+  footer?: React.ReactNode;
+  /**
+   * Link component. Defaults to a plain anchor so this renders in an app with no
+   * router — the billing UI is a separate deployment and cannot client-side navigate
+   * into the platform anyway.
+   */
+  linkComponent?: React.ComponentType<{
+    href: string;
+    className?: string;
+    children: React.ReactNode;
+  }>;
+};
 
-export function SettingsSidebarContent() {
-  const pathname = usePathname();
-  const t = useTranslations("SettingsSidebar");
+/**
+ * The settings sidebar, with nothing of the platform in it.
+ *
+ * Presentational on purpose: it takes its entries, its labels and the current path
+ * rather than reaching for next-intl, the router and the session the way it used to.
+ * That is what lets a second deployment — the billing UI, a different Next app in a
+ * different repository — render this same sidebar instead of growing its own copy,
+ * which is how the two ended up looking like unrelated products.
+ *
+ * Keep it free of imports from `@/app`, next-intl and anything session-shaped. The
+ * billing UI consumes this file directly from a pinned checkout of this repository,
+ * so a dependency added here has to exist over there too.
+ */
+export function SettingsSidebarView({
+  title,
+  backToApp,
+  backHref,
+  sections,
+  currentPath,
+  footer,
+  linkComponent,
+}: SettingsSidebarViewProps) {
   const { open } = useSidebar();
-  // Empty on any deployment that does not sell, which is the open default.
-  const billingUrl = useBillingUrl();
-
-  const settingsNav = [
-    {
-      label: t("account"),
-      items: [
-        { title: t("profile"), href: "/settings", icon: User },
-        ...(billingUrl
-          ? [{ title: t("billing"), href: billingUrl, icon: CreditCard }]
-          : []),
-      ],
-    },
-    {
-      label: t("workspace"),
-      items: [
-        { title: t("apiKeys"), href: "/admin/api-keys", icon: Key },
-        { title: t("workspaceSettings"), href: "/admin/workspace", icon: SlidersHorizontal },
-        { title: t("auditLog"), href: "/settings/audit", icon: ScrollText },
-      ],
-    },
-  ];
+  const LinkComponent =
+    linkComponent ??
+    (({ href, className, children }) => (
+      <a href={href} className={className}>
+        {children}
+      </a>
+    ));
 
   const isActive = (href: string) =>
-    href === "/settings" ? pathname === "/settings" : pathname.startsWith(href);
+    href === "/settings"
+      ? currentPath === "/settings"
+      : currentPath.startsWith(href);
 
   return (
     <>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild size="lg" tooltip={t("backToApp")}>
-              <Link href="/workplace" className="flex items-center gap-2">
+            <SidebarMenuButton asChild size="lg" tooltip={backToApp}>
+              <LinkComponent href={backHref} className="flex items-center gap-2">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
                   <ArrowLeft className="size-4" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">{t("title")}</span>
+                  <span className="truncate font-semibold">{title}</span>
                   <span className="truncate text-[10px] text-muted-foreground">
-                    {t("backToApp")}
+                    {backToApp}
                   </span>
                 </div>
-              </Link>
+              </LinkComponent>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        {settingsNav.map((section) => (
+        {sections.map((section) => (
           <SidebarGroup key={section.label}>
             <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
             <SidebarMenu>
@@ -93,10 +132,10 @@ export function SettingsSidebarContent() {
                     isActive={isActive(item.href)}
                     tooltip={item.title}
                   >
-                    <Link href={item.href}>
+                    <LinkComponent href={item.href}>
                       <item.icon />
                       <span>{item.title}</span>
-                    </Link>
+                    </LinkComponent>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -145,8 +184,59 @@ export function SettingsSidebarContent() {
             </svg>
           </a>
         </div>
-        <NavUser />
+        {footer}
       </SidebarFooter>
     </>
+  );
+}
+
+/**
+ * The platform's settings sidebar: the view above, wired to this app's translations,
+ * router and session.
+ *
+ * Everything platform-specific lives here so the view stays renderable by a deployment
+ * that has none of it. Callers are unchanged — ConditionalLayout still renders
+ * <SettingsSidebarContent /> with no props.
+ */
+export function SettingsSidebarContent() {
+  const pathname = usePathname();
+  const t = useTranslations("SettingsSidebar");
+  // Empty on any deployment that does not sell, which is the open default.
+  const billingUrl = useBillingUrl();
+
+  const sections: SettingsNavSection[] = [
+    {
+      label: t("account"),
+      items: [
+        { title: t("profile"), href: "/settings", icon: User },
+        ...(billingUrl
+          ? [{ title: t("billing"), href: billingUrl, icon: CreditCard }]
+          : []),
+      ],
+    },
+    {
+      label: t("workspace"),
+      items: [
+        { title: t("apiKeys"), href: "/admin/api-keys", icon: Key },
+        {
+          title: t("workspaceSettings"),
+          href: "/admin/workspace",
+          icon: SlidersHorizontal,
+        },
+        { title: t("auditLog"), href: "/settings/audit", icon: ScrollText },
+      ],
+    },
+  ];
+
+  return (
+    <SettingsSidebarView
+      title={t("title")}
+      backToApp={t("backToApp")}
+      backHref="/workplace"
+      sections={sections}
+      currentPath={pathname}
+      footer={<NavUser />}
+      linkComponent={Link}
+    />
   );
 }
