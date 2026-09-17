@@ -326,6 +326,7 @@ SIGNING_SECRET_KEYS: dict[str, str] = {
     "linear": "signing_secret",
     "stripe": "signing_secret",
     "generic": "signing_secret",
+    "email": "signing_secret",
 }
 
 
@@ -392,7 +393,13 @@ def verify_webhook_signature(
         )
         return False
 
-    if wt == "generic":
+    resolved = None if wt == "generic" else get_verifier(wt)
+    if resolved is None:
+        # No channel-specific scheme for this type. A secret was configured, so
+        # verification is enabled and must actually run — skipping it here would
+        # leave a deployment that believes it signed its webhooks unprotected.
+        # Header name, digest and prefix are configurable because providers that
+        # share plain HMAC still disagree on all three.
         rules = validation_rules or {}
         verifier: SignatureVerifier = GenericHMACVerifier(
             header_name=rules.get("signature_header", "x-webhook-signature"),
@@ -400,9 +407,6 @@ def verify_webhook_signature(
             prefix=rules.get("signature_prefix", ""),
         )
     else:
-        resolved = get_verifier(wt)
-        if resolved is None:
-            return None
         verifier = resolved
 
     headers_lower = {k.lower(): v for k, v in headers.items()}

@@ -9,9 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { StatusIndicator } from "@/components/ui/status-indicator";
-import { TaskWithAgent } from "@/lib/api";
-import { getTaskStatusPresentation } from "@/lib/status";
+import { TaskStatus } from "@/components/TaskStatus";
 
 interface TaskDetailsCardProps {
   task: {
@@ -35,12 +33,6 @@ export default function TaskDetailsCard({
   executionTime,
 }: TaskDetailsCardProps) {
   const t = useTranslations("TaskDetailsCard");
-  const tStatus = useTranslations("TasksPage.status");
-  const status = currentStatus as TaskWithAgent["status"];
-  const presentation = getTaskStatusPresentation(status);
-  const label = presentation.labelKey
-    ? tStatus(presentation.labelKey)
-    : presentation.label;
 
   return (
     <Card className="shadow-sm">
@@ -68,13 +60,7 @@ export default function TaskDetailsCard({
             </div>
           </div>
           <div className="flex items-center gap-1.5 ml-2">
-            <StatusIndicator
-              size="sm"
-              tone={presentation.tone}
-              pulse={presentation.pulse}
-            >
-              {label}
-            </StatusIndicator>
+            <TaskStatus status={currentStatus} />
           </div>
         </div>
 

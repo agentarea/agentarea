@@ -35,6 +35,7 @@ from . import (
     network,
     openapi_connections,
     policies,
+    principals,
     projects,
     provider_configs,
     provider_specs,
@@ -105,6 +106,9 @@ protected_v1_router.include_router(workspace_config.router)
 # Workspace invitations + memberships - PROTECTED
 protected_v1_router.include_router(workspace_invitations.router)
 protected_v1_router.include_router(workspaces.router)
+
+# Principal (id -> who it is) resolution - PROTECTED
+protected_v1_router.include_router(principals.router)
 
 # Skills management - PROTECTED
 protected_v1_router.include_router(skills.router)

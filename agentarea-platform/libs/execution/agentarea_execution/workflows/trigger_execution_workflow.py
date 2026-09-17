@@ -31,6 +31,8 @@ from ..models import (  # noqa: E402
     ExecuteTriggerRequest,
     ExecuteTriggerResult,
     RecordTriggerExecutionRequest,
+    TriggerOutcome,
+    TriggerSkipReason,
 )
 
 
@@ -126,8 +128,8 @@ class TriggerExecutionWorkflow:
                 )
                 return {
                     "trigger_id": str(trigger_id),
-                    "status": "skipped",
-                    "reason": "conditions_not_met",
+                    "status": TriggerOutcome.SKIPPED.value,
+                    "reason": TriggerSkipReason.CONDITIONS_NOT_MET.value,
                     "execution_time_ms": execution_time_ms,
                     "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
                 }

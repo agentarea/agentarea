@@ -1,21 +1,41 @@
-import config from "@/ory.config";
+import { getLocale } from "next-intl/server";
+import type { OryClientConfiguration } from "@ory/elements-react";
 import { env } from "@/env";
+import config from "@/ory.config";
 
 /**
- * Returns Ory config with sdk.url set to the browser-accessible Kratos URL.
+ * Locales Ory Elements is translated into, i.e. the ones kept in
+ * packages/elements-react/src/locales.
+ */
+const ORY_LOCALES = ["en", "ru"] as const;
+
+/**
+ * Returns Ory config with sdk.url set to the browser-accessible Kratos URL and
+ * the UI locale matched to the one next-intl resolved for this request.
  *
  * In self-hosted setups, ORY_SDK_URL is the in-cluster URL (not reachable by browsers).
- * BROWSER_ORY_SDK_URL is the public URL browsers can reach (e.g. via Tailscale).
+ * ORY_BROWSER_URL is the public URL browsers can reach (e.g. via Tailscale).
  * Setting sdk.url ensures @ory/elements-react renders links with the correct URL
  * during both SSR and client-side hydration.
  */
-export function getOryBrowserConfig() {
+export async function getOryBrowserConfig(): Promise<OryClientConfiguration> {
   const browserUrl = process.env.ORY_BROWSER_URL || env.ORY_SDK_URL;
+  const appLocale = await getLocale();
+  const locale = (ORY_LOCALES as readonly string[]).includes(appLocale)
+    ? appLocale
+    : "en";
+
   return {
     ...config,
     sdk: {
       ...config.sdk,
       url: browserUrl,
+    },
+    intl: { locale },
+    project: {
+      ...config.project,
+      default_locale: locale,
+      enabled_locales: [...ORY_LOCALES],
     },
   };
 }

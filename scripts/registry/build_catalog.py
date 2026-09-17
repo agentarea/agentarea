@@ -15,6 +15,7 @@ Run:
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -43,7 +44,10 @@ def _agent(
         "description": description,
         "version": "1.0.0",
         "instruction": instruction.strip(),
-        "model_id": DEFAULT_MODEL,
+        # The catalog is global and model instances are per-workspace, so
+        # RegistryService._parse_agents carries `preferred_models` (slugs) and
+        # ignores `model_id` — emitting the latter reconciles to no preference.
+        "preferred_models": [DEFAULT_MODEL],
         "tools": tools or [],
         "planning": planning,
         "tags": tags or [],
@@ -171,6 +175,21 @@ def _url_mcp(key: str, name: str, endpoint_url: str) -> dict[str, Any]:
     }
 
 
+def _stdio_mcp(key: str, name: str, command: str, args: list[str]) -> dict[str, Any]:
+    """A stdio MCP run in the mcp-bridge container.
+
+    ``command`` must be one of the runtimes the analyzer allows (npx, uvx, …) and
+    the package must actually be published — an unresolvable package fails at
+    container start, long after the install reports success.
+    """
+    return {
+        "key": key,
+        "name": name,
+        "json_spec": {"type": "command", "command": command, "args": args},
+        "bindings": {},
+    }
+
+
 def _bundle(
     name: str,
     display_name: str,
@@ -182,6 +201,7 @@ def _bundle(
     skills: list[dict[str, Any]] | None = None,
     mcps: list[dict[str, Any]] | None = None,
     agents: list[dict[str, Any]] | None = None,
+    channels: list[dict[str, Any]] | None = None,
     automations: list[dict[str, Any]] | None = None,
     policies: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
@@ -204,6 +224,8 @@ def _bundle(
         bundle["mcps"] = mcps
     if agents:
         bundle["agents"] = agents
+    if channels:
+        bundle["channels"] = channels
     if automations:
         bundle["automations"] = automations
     if policies:
@@ -232,7 +254,73 @@ def _agent_def(key: str, name: str, instruction: str, **over: Any) -> dict[str, 
     return d
 
 
+_TELEGRAM_TOKEN_SETUP = {
+    "key": "telegram_bot_token",
+    "label": "Telegram bot token",
+    "type": "secret",
+    "required": True,
+    "help": "From @BotFather. Used so the agent can reply in your Telegram chat.",
+}
+
+
 BUNDLES: list[dict[str, Any]] = [
+    _bundle(
+        "ops-pulse",
+        "Ops Pulse",
+        "A governed operations assistant: chat with it on Telegram, run a daily "
+        "health check, and keep it locked to a safe, explicit set of tools.",
+        category="operations",
+        capabilities=["interactive", "scheduled", "governed"],
+        setup=[_MODEL_SETUP, _TELEGRAM_TOKEN_SETUP],
+        skills=[
+            _skill("incident_triage", "Incident Triage", "# Incident Triage\nClassify an incident by severity (S1-S4), summarize impact, and propose the next concrete action. Be terse and decisive."),
+            _skill("status_digest", "Status Digest", "# Status Digest\nProduce a short daily digest: what changed, what's at risk, and what needs a human. Lead with the one thing that matters most."),
+        ],
+        mcps=[
+            _stdio_mcp("web", "Web Fetch", "uvx", ["mcp-server-fetch"]),
+        ],
+        agents=[
+            _agent_def(
+                "watcher",
+                "Ops Pulse Watcher",
+                "You are an operations watcher. Triage incidents, fetch status pages when asked, and produce crisp digests. Never take destructive actions; if something looks risky, ask for human approval.",
+                mcps=["web"],
+                skills=["incident_triage", "status_digest"],
+            )
+        ],
+        channels=[
+            {
+                "key": "telegram_inbox",
+                "type": "telegram",
+                "name": "Telegram inbox",
+                "agent": "watcher",
+                "bindings": {"bot_token": "${setup.telegram_bot_token}"},
+                "prompt": "Handle the incoming Telegram message: {{ message_text }}",
+                "enabled": False,
+            }
+        ],
+        automations=[
+            {
+                "key": "daily_health_check",
+                "type": "cron",
+                "cron": "0 9 * * *",
+                "timezone": "UTC",
+                "agent": "watcher",
+                "prompt": "Run the daily health check: review overnight status, fetch any referenced status pages, and write a Status Digest.",
+                "enabled": False,
+            }
+        ],
+        policies=[
+            {"key": "scope_tools", "subject": "watcher", "target": "tool:fetch", "effect": "allow",
+             "message": "Ops Pulse may only use the Web Fetch tool."},
+            {"key": "spend_cap", "subject": "workspace", "target": "spend", "effect": "cap",
+             "params": {"amount_usd": 100, "period": "month"},
+             "message": "Capped at $100 / month."},
+            {"key": "approve_writes", "subject": "watcher", "target": "tool:fetch",
+             "effect": "approval",
+             "message": "Ask a human before fetching external URLs."},
+        ],
+    ),
     _bundle(
         "productivity-lite",
         "Productivity Lite",
@@ -339,9 +427,9 @@ BUNDLES: list[dict[str, Any]] = [
         policies=[
             {"key": "approve_outreach", "target": "tool:send_email", "effect": "approval",
              "message": "Approve outreach emails before they send."},
-            {"key": "cap_daily_contacts", "target": "actions", "effect": "cap",
-             "params": {"count": 200, "period": "day"},
-             "message": "Limit to 200 contacts per day."},
+            {"key": "cap_monthly_spend", "target": "spend", "effect": "cap",
+             "params": {"amount_usd": 25, "period": "month"},
+             "message": "Cap automated outreach spend at $25 / month."},
         ],
     ),
     _bundle(
@@ -432,23 +520,189 @@ BUNDLES: list[dict[str, Any]] = [
             }
         ],
     ),
+    _bundle(
+        "meeting-companion",
+        "Meeting Companion",
+        "Turn raw meeting notes into summaries, decisions, and owner-tagged actions, "
+        "then chase what is still open every Monday.",
+        category="productivity",
+        capabilities=["interactive", "scheduled"],
+        setup=[_MODEL_SETUP],
+        skills=[
+            _skill("meeting_summary", "Meeting Summary", "# Meeting Summary\nCondense a transcript into context, decisions, and open questions. Keep it skimmable; quote a line only when the exact wording matters."),
+            _skill("action_items", "Action Items", "# Action Items\nExtract every commitment as `owner - action - due`. Mark an item unowned rather than guessing an owner, and drop anything that is only a discussion point."),
+        ],
+        agents=[
+            _agent_def(
+                "notetaker",
+                "Meeting Companion",
+                "You turn meeting notes and transcripts into a summary, the decisions taken, and owner-tagged action items. Never invent an owner or a due date; say 'unassigned' when the notes do not say.",
+                skills=["meeting_summary", "action_items"],
+            )
+        ],
+        automations=[
+            {
+                "key": "weekly_followup",
+                "type": "cron",
+                "cron": "0 8 * * 1",
+                "timezone": "UTC",
+                "agent": "notetaker",
+                "prompt": "List every action item from last week's notes that is still open, with its owner and how long it has been outstanding. Flag anything older than seven days.",
+                "enabled": False,
+            }
+        ],
+    ),
+    _bundle(
+        "finance-ops",
+        "Finance Ops",
+        "An invoice and expense assistant that drafts the paperwork but can never move "
+        "money on its own.",
+        category="finance",
+        capabilities=["interactive", "governed"],
+        setup=[_MODEL_SETUP],
+        skills=[
+            _skill("invoice_triage", "Invoice Triage", "# Invoice Triage\nFor each invoice: vendor, amount, due date, and whether it matches an existing PO. Route mismatches to a human instead of approving them."),
+            _skill("expense_review", "Expense Review", "# Expense Review\nCheck an expense against policy: category, limit, receipt present, business purpose stated. Report a verdict plus the specific rule you applied."),
+        ],
+        agents=[
+            _agent_def(
+                "bookkeeper",
+                "Finance Assistant",
+                "You triage invoices and review expenses. Show the arithmetic behind every total, cite the policy rule you applied, and escalate anything ambiguous. You never authorize a payment.",
+                skills=["invoice_triage", "expense_review"],
+            )
+        ],
+        policies=[
+            {"key": "deny_payments", "subject": "bookkeeper", "target": "tool:make_payment",
+             "effect": "deny",
+             "message": "The assistant may never move money."},
+            {"key": "approve_invoices", "subject": "bookkeeper", "target": "tool:send_invoice",
+             "effect": "approval",
+             "message": "Approve an invoice before it is sent to a customer."},
+            {"key": "cap_monthly_spend", "target": "spend", "effect": "cap",
+             "params": {"amount_usd": 50, "period": "month"},
+             "message": "Cap automated spend at $50 / month."},
+        ],
+    ),
+    _bundle(
+        "recruiting-screen",
+        "Recruiting Screener",
+        "Screen candidates against a role brief with a consistent rubric, and draft the "
+        "outreach — with a human in the loop before anything is sent.",
+        category="hr",
+        capabilities=["interactive", "governed"],
+        setup=[_MODEL_SETUP],
+        skills=[
+            _skill("screening_rubric", "Screening Rubric", "# Screening Rubric\nScore a candidate against the role's must-haves and nice-to-haves. Quote the evidence from the CV for each score, and mark a requirement unverified when the CV is silent - never infer it."),
+            _skill("candidate_outreach", "Candidate Outreach", "# Candidate Outreach\nDraft a short, specific first message: why this person, what the role is, and one concrete next step. No superlatives, no filler."),
+        ],
+        agents=[
+            _agent_def(
+                "screener",
+                "Recruiting Screener",
+                "You screen candidates against a role brief and draft outreach. Judge only on evidence in the application, apply the same rubric to everyone, and never infer age, gender, nationality, or any other protected characteristic.",
+                skills=["screening_rubric", "candidate_outreach"],
+            )
+        ],
+        policies=[
+            {"key": "approve_outreach", "subject": "screener", "target": "tool:send_email",
+             "effect": "approval",
+             "message": "A human approves every message to a candidate."},
+            {"key": "cap_monthly_spend", "target": "spend", "effect": "cap",
+             "params": {"amount_usd": 25, "period": "month"},
+             "message": "Cap automated spend at $25 / month."},
+        ],
+    ),
+    _bundle(
+        "release-radar",
+        "Release Radar",
+        "Watches the dependencies you care about, posts a daily digest of what shipped "
+        "and what looks risky, and answers follow-up questions on Telegram.",
+        category="engineering",
+        capabilities=["interactive", "scheduled", "governed"],
+        setup=[_MODEL_SETUP, _TELEGRAM_TOKEN_SETUP],
+        skills=[
+            _skill("release_digest", "Release Digest", "# Release Digest\nSummarize what shipped since the last digest: version, headline change, and whether it is breaking. Lead with anything that needs action today."),
+            _skill("risk_callout", "Risk Callout", "# Risk Callout\nFor a release note, name the breaking changes, deprecations, and security fixes, and state the upgrade action for each. Say so explicitly when a release carries none."),
+        ],
+        mcps=[
+            _stdio_mcp("web", "Web Fetch", "uvx", ["mcp-server-fetch"]),
+        ],
+        agents=[
+            _agent_def(
+                "radar",
+                "Release Radar",
+                "You track releases of the projects the team depends on. Fetch the release notes, separate breaking changes from routine ones, and state the upgrade action. Quote the version numbers you actually read; if a page cannot be fetched, say so instead of guessing.",
+                mcps=["web"],
+                skills=["release_digest", "risk_callout"],
+            )
+        ],
+        channels=[
+            {
+                "key": "telegram_inbox",
+                "type": "telegram",
+                "name": "Telegram inbox",
+                "agent": "radar",
+                "bindings": {"bot_token": "${setup.telegram_bot_token}"},
+                "prompt": "Answer the release question from Telegram: {{ message_text }}",
+                "enabled": False,
+            }
+        ],
+        automations=[
+            {
+                "key": "daily_digest",
+                "type": "cron",
+                "cron": "0 7 * * 1-5",
+                "timezone": "UTC",
+                "agent": "radar",
+                "prompt": "Check the release notes of the tracked dependencies and write today's digest: what shipped, what is breaking, and what we should upgrade.",
+                "enabled": False,
+            }
+        ],
+        policies=[
+            {"key": "cap_monthly_spend", "target": "spend", "effect": "cap",
+             "params": {"amount_usd": 20, "period": "month"},
+             "message": "Cap automated spend at $20 / month."},
+        ],
+    ),
 ]
 
 
-def _validate_bundles(bundles: list[dict[str, Any]]) -> None:
-    """Fail loudly if any bundle does not validate against the canonical model."""
-    from agentarea_bundles.schemas.bundle import Bundle
+async def _validate_bundles(bundles: list[dict[str, Any]]) -> None:
+    """Fail loudly if a bundle would not install, or would install a dead rule.
 
+    Schema validation catches a malformed entry; running the same analyzer the
+    import wizard runs catches everything else — a dangling key reference, a
+    policy the governance compiler would silently skip. A BLOCK issue means the
+    catalog would ship a bundle nobody can install.
+    """
+    from agentarea_bundles.application.analyzer import BundleAnalyzer
+    from agentarea_bundles.schemas.bundle import Bundle
+    from agentarea_bundles.schemas.preview import IssueSeverity
+
+    problems: list[str] = []
     seen: set[str] = set()
-    for b in bundles:
-        if b["name"] in seen:
-            raise ValueError(f"duplicate bundle name: {b['name']}")
-        seen.add(b["name"])
-        Bundle.model_validate(b)  # raises on any schema violation
+    for raw in bundles:
+        name = raw["name"]
+        if name in seen:
+            raise ValueError(f"duplicate bundle name: {name}")
+        seen.add(name)
+
+        bundle = Bundle.model_validate(raw)  # raises on any schema violation
+
+        preview = await BundleAnalyzer().analyze(bundle)
+        problems += [
+            f"{name}: {issue.message}"
+            for issue in preview.issues
+            if issue.severity is IssueSeverity.BLOCK
+        ]
+
+    if problems:
+        raise SystemExit("catalog is invalid:\n  " + "\n  ".join(problems))
 
 
 def main() -> None:
-    _validate_bundles(BUNDLES)
+    asyncio.run(_validate_bundles(BUNDLES))
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "agents.json").write_text(json.dumps({"agents": AGENTS}, indent=2) + "\n")
     (OUT_DIR / "bundles.json").write_text(json.dumps({"bundles": BUNDLES}, indent=2) + "\n")

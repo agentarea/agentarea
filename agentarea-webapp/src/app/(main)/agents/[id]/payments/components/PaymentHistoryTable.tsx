@@ -103,6 +103,7 @@ export function PaymentHistoryTable({ agentId }: PaymentHistoryTableProps) {
         title={t("noPayments")}
         description={t("noPaymentsDescription")}
         iconsType="payments"
+        action={{ label: t("fundWallet"), href: `/agents/${agentId}/wallet` }}
       />
     );
   }
@@ -210,6 +211,7 @@ export function PaymentHistoryTable({ agentId }: PaymentHistoryTableProps) {
             title={t("noPayments")}
             description={t("noPaymentsDescription")}
             iconsType="payments"
+            action={{ label: t("fundWallet"), href: `/agents/${agentId}/wallet` }}
           />
         </div>
       ) : (

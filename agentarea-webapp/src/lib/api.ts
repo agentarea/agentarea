@@ -11,10 +11,10 @@ import type {
   TaskResponse as ApiTaskResponse,
   CatalogConnectionRequest,
   CreateInvitationBody,
+  CreateWorkspaceDirectoryRequest,
   CreateWalletRequest,
   FundWalletRequest,
   HttpValidationError,
-  ImportWorkspaceConfigV1WorkspaceImportPostData,
   InstallRequest,
   InvitationCreatedResponse,
   InvitationResponse,
@@ -41,6 +41,7 @@ import type {
   ProjectCreate,
   ProjectResponse,
   ProjectUpdate,
+  PrincipalResponse,
   ProviderConfigCreate,
   ProviderConfigResponse,
   ProviderConfigUpdate,
@@ -56,6 +57,7 @@ import type {
   SkillUpdateRequest,
   TaskCreate,
   TriggerCreate,
+  TriggerUpdate,
   UpdateWalletRequest,
   ValidateRequest,
 } from "@/api/client/types.gen";
@@ -645,12 +647,12 @@ export const listProviderSpecs = async (params?: { is_builtin?: boolean }) => {
 export const listProviderSpecsWithModels = async (params?: {
   is_builtin?: boolean;
 }) => {
-  const { data, error } =
+  const response =
     await sdk.listProviderSpecsWithModelsV1ProviderSpecsWithModelsGet({
       client: serverClient,
       query: params,
     });
-  return { data, error };
+  return withStatus(response);
 };
 
 export const getProviderSpec = async (providerSpecId: string) => {
@@ -675,11 +677,11 @@ export const listProviderConfigs = async (params?: {
   provider_spec_id?: string;
   is_active?: boolean;
 }) => {
-  const { data, error } = await sdk.listProviderConfigsV1ProviderConfigsGet({
+  const response = await sdk.listProviderConfigsV1ProviderConfigsGet({
     client: serverClient,
     query: params,
   });
-  return { data, error };
+  return withStatus(response);
 };
 
 export const createProviderConfig = async (config: ProviderConfigCreate) => {
@@ -1180,6 +1182,25 @@ export const revokeAPIKey = async (tokenId: string) => {
   return { data, error };
 };
 
+/**
+ * Resolve principal ids (a row's `created_by`) into who they are.
+ *
+ * Deliberately a separate call rather than a field on each resource: names
+ * change far more slowly than the rows referencing them, and a task list must
+ * not fail because the identity provider is slow. Ids the backend cannot
+ * resolve are simply absent from the response.
+ */
+export const resolvePrincipals = async (ids: string[]) => {
+  if (ids.length === 0) {
+    return { data: [] as Principal[], error: undefined };
+  }
+  const { data, error } = await sdk.resolvePrincipalsV1PrincipalsGet({
+    client: serverClient,
+    query: { ids },
+  });
+  return { data, error };
+};
+
 export const listTriggerCatalog = async () => {
   const { data, error } = await sdk.getCatalogV1TriggersCatalogGet({
     client: serverClient,
@@ -1227,16 +1248,7 @@ export const getTrigger = async (triggerId: string) => {
 
 export const updateTrigger = async (
   triggerId: string,
-  body: {
-    name?: string;
-    cron_expression?: string;
-    timezone?: string;
-    task_parameters?: Record<string, unknown>;
-    failure_threshold?: number;
-    description?: string;
-    is_active?: boolean;
-    conditions?: Record<string, unknown>;
-  }
+  body: TriggerUpdate
 ) => {
   const { data, error } = await sdk.updateTriggerV1TriggersTriggerIdPut({
     client: serverClient,
@@ -1320,30 +1332,6 @@ export const getTriggerCorrelations = async (triggerId: string) => {
       client: serverClient,
       path: { trigger_id: triggerId },
     });
-  return { data, error };
-};
-
-export const exportWorkspace = async () => {
-  const { data, error } = await sdk.exportWorkspaceConfigV1WorkspaceExportGet({
-    client: serverClient,
-  });
-  return { data, error };
-};
-
-export const importWorkspace = async (body: {
-  config: string;
-  skip_missing_dependencies?: boolean;
-  override_existing?: boolean;
-}) => {
-  const payload: ImportWorkspaceConfigV1WorkspaceImportPostData["body"] = {
-    yaml_content: body.config,
-    skip_missing_dependencies: body.skip_missing_dependencies,
-    override_existing: body.override_existing,
-  };
-  const { data, error } = await sdk.importWorkspaceConfigV1WorkspaceImportPost({
-    client: serverClient,
-    body: payload,
-  });
   return { data, error };
 };
 
@@ -1932,6 +1920,14 @@ export const listWorkspaceFiles = async () => {
   return { data, error };
 };
 
+export const createWorkspaceDirectory = async (body: CreateWorkspaceDirectoryRequest) => {
+  const { data, error } = await sdk.createWorkspaceDirectoryV1FilesDirectoriesPost({
+    client: serverClient,
+    body,
+  });
+  return { data, error };
+};
+
 export const downloadWorkspaceFile = async (filePath: string) => {
   const { data, error } = await sdk.downloadWorkspaceFileV1FilesFilePathGet({
     client: serverClient,
@@ -2324,6 +2320,7 @@ export type ModelInstance = ModelInstanceResponse;
 export type ChatAgent = AgentResponse;
 export type ChatResponse = { task_id: string; status: string };
 export type ConversationResponse = unknown;
+export type Principal = PrincipalResponse;
 export type TaskResponse = ApiTaskResponse;
 export type AgentCard = ApiAgentCard;
 export type TaskWithAgent = ApiTaskResponse & {

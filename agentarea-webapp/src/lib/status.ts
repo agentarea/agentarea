@@ -1,12 +1,23 @@
-export type StatusTone = "success" | "warning" | "danger" | "info" | "neutral";
+export type StatusTone =
+  | "success"
+  | "warning"
+  | "danger"
+  | "info"
+  | "neutral"
+  /** Brand accent. Reserved for "done", the way Linear colours a closed issue. */
+  | "brand";
 
 export type StatusIndicatorSize = "default" | "sm";
+
+/** Swaps the indicator's dot for a filled marker, Linear's "Done" check. */
+export type StatusIcon = "check";
 
 export type StatusPresentation = {
   label: string;
   labelKey?: string;
   tone: StatusTone;
   pulse?: boolean;
+  icon?: StatusIcon;
 };
 
 export function normalizeStatus(status: string): string {
@@ -168,9 +179,19 @@ export function getMcpCatalogStatusPresentation(
 export function getTaskStatusPresentation(status: string): StatusPresentation {
   switch (normalizeStatus(status)) {
     case "completed":
-      return { label: "Completed", labelKey: "completed", tone: "success" };
+      return {
+        label: "Completed",
+        labelKey: "completed",
+        tone: "brand",
+        icon: "check",
+      };
     case "success":
-      return { label: "Success", labelKey: "success", tone: "success" };
+      return {
+        label: "Success",
+        labelKey: "success",
+        tone: "brand",
+        icon: "check",
+      };
     case "running":
     case "in_progress":
       return {
@@ -320,20 +341,6 @@ export function getPaymentStatusPresentation(
     default:
       return fallbackStatusPresentation(status);
   }
-}
-
-export function getInboxStatusPresentation(status: string): StatusPresentation {
-  const normalized = normalizeStatus(status);
-
-  if (normalized === "waiting_for_approval" || normalized === "pending") {
-    return { label: "Needs approval", tone: "warning", pulse: true };
-  }
-
-  if (normalized === "completed" || normalized === "success") {
-    return { label: "Completed", tone: "success" };
-  }
-
-  return { label: "Failed", tone: "danger" };
 }
 
 export function getPolicyStatusPresentation(

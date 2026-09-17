@@ -7,7 +7,7 @@ function TriggerCardSkeleton() {
   return <LinkedCardSkeleton icon subtitle lines={1} />;
 }
 
-// Mirrors a TriggersTable row: icon · name · schedule · type · agent · next · status.
+// Mirrors a TriggersTable row: icon + when · name · channel · agent · last run · status.
 function TriggersTableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
     <div className="-mx-4 -mt-5 border-t border-zinc-100 dark:border-zinc-800" aria-hidden="true">

@@ -69,6 +69,11 @@ export default function ProviderConfigsView({
               : `No configs match your search query: "${searchQuery}"`
           }
           iconsType="llm"
+          action={
+            hasNoData
+              ? { label: "Add provider", href: "/admin/provider-configs/create" }
+              : { label: "Clear search", href: "/admin/provider-configs" }
+          }
         />
       </div>
     );

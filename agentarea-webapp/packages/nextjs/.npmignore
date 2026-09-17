@@ -1,8 +1,0 @@
-project.json
-tsup.config.ts
-jest.config.ts
-tsconfig*.json
-!dist/
-src/
-api-report/
-config/

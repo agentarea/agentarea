@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { Link as LinkIcon } from "lucide-react";
 import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
-import { getTrigger, listAgents, listTriggerCatalog } from "@/lib/api";
+import { CopyableText } from "@/components/ui/copyable-text";
+import { getTrigger, listAgents } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
-import TriggerDetail from "./TriggerDetail";
+import { CreateTriggerForm } from "../create/CreateTriggerForm";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -10,43 +12,48 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const trigger = requireApiData<TriggerResponse>(await getTrigger(id), "trigger");
+  const trigger = requireApiData<TriggerResponse>(
+    await getTrigger(id),
+    "trigger"
+  );
   return { title: trigger.name ?? "Trigger" };
 }
 
+/** A saved automation opens in the same form that created it.
+ *
+ * It used to open a read-only summary with a separate /edit page rendering the
+ * form, which meant two screens describing one thing and a click between
+ * looking and changing. The webhook URL rides above it because the form has no
+ * field for a value the server assigns.
+ */
 export default async function TriggerPage({ params }: Props) {
   const { id } = await params;
 
-  const [triggerResponse, agentsResponse, catalogResponse] = await Promise.all([
+  const [triggerResponse, agentsResponse] = await Promise.all([
     getTrigger(id),
     listAgents(),
-    listTriggerCatalog(),
   ]);
 
   const trigger = requireApiData<TriggerResponse>(triggerResponse, "trigger");
-
   const agents: AgentResponse[] = agentsResponse.data ?? [];
-  const agentName =
-    agents.find((a) => a.id === trigger.agent_id)?.name || "Unknown Agent";
-
-  const catalog: Array<Record<string, unknown>> = catalogResponse.data ?? [];
-
-  // Match catalog entry: check data_extractor first, then cron/webhook type
-  const triggerType = trigger.trigger_type;
-  const webhookType = trigger.webhook_type;
-  const dataExtractor = trigger.data_extractor;
-  const catalogEntry =
-    catalog.find((c) => {
-      if (dataExtractor) return c.data_extractor === dataExtractor;
-      if (triggerType === "cron") return c.id === "cron";
-      return c.webhook_type === webhookType;
-    }) ?? null;
+  const webhookUrl = (trigger as { webhook_url?: string }).webhook_url;
 
   return (
-    <TriggerDetail
-      trigger={trigger}
-      agentName={agentName}
-      catalogEntry={catalogEntry}
-    />
+    <div className="px-4 py-5">
+      <div className="mx-auto w-full max-w-5xl space-y-6">
+        {trigger.trigger_type !== "cron" && webhookUrl && (
+          <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-zinc-900/40">
+            <div className="flex items-center gap-2">
+              <LinkIcon className="h-4 w-4 text-muted-foreground" />
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Webhook URL
+              </span>
+            </div>
+            <CopyableText text={webhookUrl} />
+          </div>
+        )}
+        <CreateTriggerForm agents={agents} initialData={trigger} />
+      </div>
+    </div>
   );
 }

@@ -23,10 +23,10 @@ class WorkspaceConfigToolset(Toolset):
         """Export current workspace configuration as YAML (secrets are placeholders)."""
         async with platform_read_context() as (_session, user_ctx, repo_factory, broker, secret):
             from agentarea_agents.application.agent_service import AgentService
-            from agentarea_agents.application.import_export_service import (
-                WorkspaceImportExportService,
-            )
             from agentarea_agents.application.skill_service import SkillService
+            from agentarea_agents.application.workspace_export_service import (
+                WorkspaceExportService,
+            )
             from agentarea_common.auth.authorization import AuthorizationService
             from agentarea_common.di.container import resolve
             from agentarea_llm.application.provider_service import ProviderService
@@ -58,7 +58,7 @@ class WorkspaceConfigToolset(Toolset):
                 secret_manager=secret,
             )
             skill_service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
-            service = WorkspaceImportExportService(
+            service = WorkspaceExportService(
                 agent_service=agent_service,
                 repository_factory=repo_factory,
                 mcp_instance_service=mcp_instance_service,

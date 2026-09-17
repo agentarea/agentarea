@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Files, RefreshCw } from "lucide-react";
-import { FileBrowser, type BrowsedFile } from "@/components/files/file-browser";
+import {
+  FileBrowser,
+  useFileBrowserState,
+  type BrowsedFile,
+} from "@/components/files/file-browser";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiErrorMessage } from "@/lib/api-errors";
@@ -22,6 +26,10 @@ export default function TaskFilesPage() {
   const [files, setFiles] = useState<BrowsedFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // The task arrives a render later; the strip restores once its key is known.
+  const [browserState, setBrowserState] = useFileBrowserState(
+    `task:${task?.id ?? "pending"}`
+  );
 
   const loadFiles = useCallback(async () => {
     if (!task) return;
@@ -40,14 +48,9 @@ export default function TaskFilesPage() {
         );
         return;
       }
-      setFiles(
-        (result.data?.items ?? []).map((item) => ({
-          path: item.path,
-          size: 0,
-          content_type: null,
-          last_modified: null,
-        }))
-      );
+      // A sandbox listing carries names only: leaving size and date out keeps
+      // the listing honest instead of reporting every file as zero bytes.
+      setFiles((result.data?.items ?? []).map((item) => ({ path: item.path })));
     } finally {
       setLoading(false);
     }
@@ -94,29 +97,29 @@ export default function TaskFilesPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] flex-col">
-      <div className="flex items-center justify-between border-b px-4 py-2">
+    <FileBrowser
+      files={files}
+      state={browserState}
+      onChange={setBrowserState}
+      fetchUrl={fetchUrl}
+      error={error}
+      onRetry={() => void loadFiles()}
+      emptyMessage="No files exist in this live sandbox yet."
+      className="h-[calc(100vh-12rem)]"
+      title={
         <div>
           <h2 className="text-sm font-medium">Live sandbox files</h2>
           <p className="text-xs text-muted-foreground">
             Ephemeral files are visible only while the task sandbox exists.
           </p>
         </div>
+      }
+      actions={
         <Button size="xs" variant="outline" onClick={() => void loadFiles()}>
           <RefreshCw className="mr-1.5" />
           Refresh
         </Button>
-      </div>
-      {error ? (
-        <div className="p-6 text-sm text-muted-foreground">{error}</div>
-      ) : (
-        <FileBrowser
-          files={files}
-          fetchUrl={fetchUrl}
-          emptyMessage="No files exist in this live sandbox yet."
-          className="flex-1"
-        />
-      )}
-    </div>
+      }
+    />
   );
 }

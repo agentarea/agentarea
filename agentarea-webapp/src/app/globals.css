@@ -273,6 +273,12 @@
       rgba(161, 161, 170, 0.08) 58%,
       rgba(161, 161, 170, 0.14) 100%
     );
+    --row-tint-brand: linear-gradient(
+      90deg,
+      transparent,
+      rgba(34, 82, 179, 0.07) 58%,
+      rgba(34, 82, 179, 0.14) 100%
+    );
     /* softer hatch for table group headers */
     --hatch-soft: repeating-linear-gradient(
       135deg,
@@ -385,6 +391,12 @@
       transparent,
       rgba(161, 161, 170, 0.05) 58%,
       rgba(161, 161, 170, 0.1) 100%
+    );
+    --row-tint-brand: linear-gradient(
+      90deg,
+      transparent,
+      rgba(120, 150, 235, 0.06) 58%,
+      rgba(120, 150, 235, 0.12) 100%
     );
     /* softer hatch for table group headers */
     --hatch-soft: repeating-linear-gradient(

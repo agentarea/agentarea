@@ -26,6 +26,8 @@ def _task(agent_id):
         created_at=datetime.now(UTC),
         execution_id="exec-1",
         scheduled_at=None,
+        # The creator the response reports as `created_by`.
+        user_id="user-1",
     )
 
 

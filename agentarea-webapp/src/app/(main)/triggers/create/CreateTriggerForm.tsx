@@ -1,54 +1,42 @@
 "use client";
 
-import { useState, useEffect, useActionState, useMemo } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  Search,
-  Tag,
-  Bot,
-  Clock,
-  Globe,
-  List,
-  Key,
-  Code2,
-  AlertTriangle,
-  MessageSquare,
-  Zap,
-  Send,
-  Hash,
-  Mail,
-  Webhook,
-  Circle,
-  Info,
-  FileText,
-  Paperclip,
-  Server,
-  Sparkles,
-  X,
-  type LucideIcon,
-} from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
+import { ChevronRight, Paperclip } from "lucide-react";
+import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
+import { AgentSelect } from "@/components/AgentSelect";
+import ConfigSheet from "@/components/ConfigSheet";
+import { FileTree } from "@/components/files/file-tree";
+import FormLabel from "@/components/FormLabel/FormLabel";
+import { McpPicker } from "@/components/ResourcePicker/McpPicker";
+import { SkillPicker } from "@/components/ResourcePicker/SkillPicker";
+import { SecretSelect } from "@/components/SecretSelect";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import FormLabel from "@/components/FormLabel/FormLabel";
-import { cn } from "@/lib/utils";
-import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
+import { Textarea } from "@/components/ui/textarea";
+import { useAttachableResources } from "@/hooks/use-attachable-resources";
 import { useToast } from "@/hooks/use-toast";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { cn } from "@/lib/utils";
 import {
-  listMCPServerInstancesAction as listMCPServerInstances,
-  listSkillsAction as listSkills,
-} from "@/lib/server-actions";
+  composeTaskParameters,
+  normalizeTaskParameters,
+  type TaskParameterRef,
+} from "../components/taskParameters";
+import { renderTriggerIcon } from "../components/triggerDisplay";
 import {
   createTriggerAction,
   listTriggerCatalogAction,
@@ -57,31 +45,31 @@ import {
   type TriggerFormState,
 } from "./actions";
 import { CronScheduler } from "./CronScheduler";
-import {
-  composeTaskParameters,
-  normalizeTaskParameters,
-  splitLines,
-  type TaskParameterRef,
-} from "../components/taskParameters";
-
-type TriggerInitialData = TriggerResponse & {
-  config?: {
-    webhook_type?: string;
-    allowed_methods?: string[];
-    cron_expression?: string;
-    timezone?: string;
-  };
-};
+import { TriggerExecutionContext } from "./TriggerExecutionContext";
 
 interface CreateTriggerFormProps {
   agents: AgentResponse[];
-  initialData?: TriggerInitialData;
+  initialData?: TriggerResponse;
 }
 
-const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
-const KIND_ORDER: TriggerCatalogEntry["kind"][] = ["schedule", "messaging", "event"];
+const HTTP_METHODS = [
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+] as const;
+const KIND_ORDER: TriggerCatalogEntry["kind"][] = [
+  "schedule",
+  "messaging",
+  "event",
+];
 
 type SelectableResource = TaskParameterRef;
+const McpIcon = ENTITY_ICONS.mcp;
+const SkillIcon = ENTITY_ICONS.skill;
 
 const TIMEZONES = [
   "UTC",
@@ -92,6 +80,7 @@ const TIMEZONES = [
   "Europe/London",
   "Europe/Paris",
   "Europe/Berlin",
+  "Europe/Moscow",
   "Asia/Tokyo",
   "Asia/Shanghai",
   "Asia/Kolkata",
@@ -99,10 +88,22 @@ const TIMEZONES = [
   "Pacific/Auckland",
 ] as const;
 
-function resolveInitialId(catalog: TriggerCatalogEntry[], initialData?: TriggerInitialData): string {
+function resolveInitialId(
+  catalog: TriggerCatalogEntry[],
+  initialData?: TriggerResponse
+): string {
   if (!initialData) return "";
-  if (initialData.trigger_type === "cron") return "cron";
-  const wt = initialData.config?.webhook_type;
+  if (initialData.trigger_type === "cron") {
+    return (
+      catalog.find(
+        (entry) =>
+          entry.backend_type === "cron" &&
+          (entry.data_extractor ?? null) ===
+            (initialData.data_extractor ?? null)
+      )?.id ?? "cron"
+    );
+  }
+  const wt = initialData.webhook_type;
   if (!wt) return "webhook";
   return catalog.find((e) => e.webhook_type === wt)?.id ?? "webhook";
 }
@@ -125,10 +126,26 @@ export function CreateTriggerForm({
 
   const [catalog, setCatalog] = useState<TriggerCatalogEntry[]>([]);
   const [selectedId, setSelectedId] = useState("");
-  const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState("");
+  const [selectedAgentId, setSelectedAgentId] = useState(
+    initialData?.agent_id ?? ""
+  );
+  const [credentialSecrets, setCredentialSecrets] = useState<
+    Record<string, string>
+  >({});
+  const [catalogFailed, setCatalogFailed] = useState(false);
+  const [runSettingsOpen, setRunSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    if (
+      state.errors?.failure_threshold ||
+      state.errors?.allowed_methods ||
+      state.errors?.description
+    )
+      setRunSettingsOpen(true);
+  }, [state.errors]);
+  const [typeMissing, setTypeMissing] = useState(false);
   const [selectedMethods, setSelectedMethods] = useState<string[]>(
-    initialData?.config?.allowed_methods || ["POST"]
+    initialData?.allowed_methods ?? ["POST"]
   );
   const [selectedEvents, setSelectedEvents] = useState<string[]>(
     initialData?.event_types || []
@@ -138,84 +155,74 @@ export function CreateTriggerForm({
     [initialData?.task_parameters]
   );
   const [taskText, setTaskText] = useState(initialTaskParameters.text);
-  const [taskFilesText, setTaskFilesText] = useState(
-    initialTaskParameters.files.join("\n")
-  );
+  const [taskFiles, setTaskFiles] = useState(initialTaskParameters.files);
+  const [fileSearch, setFileSearch] = useState("");
   const [taskSkills, setTaskSkills] = useState<TaskParameterRef[]>(
     initialTaskParameters.skills
   );
   const [taskMcps, setTaskMcps] = useState<TaskParameterRef[]>(
     initialTaskParameters.mcps
   );
-  const [taskRestJson, setTaskRestJson] = useState(
-    Object.keys(initialTaskParameters.rest).length > 0
-      ? JSON.stringify(initialTaskParameters.rest, null, 2)
-      : ""
+  const resources = useAttachableResources({
+    withFiles: true,
+    withSecrets: true,
+  });
+  const {
+    mcpInstances: availableMcps,
+    files: availableFiles,
+    secrets: availableSecrets,
+    loading: resourcesLoading,
+    failed: resourceErrors,
+  } = resources;
+  const availableSkills = useMemo<SelectableResource[]>(
+    () =>
+      resources.skills.map((skill) => ({
+        id: skill.id,
+        name: skill.name,
+        description: skill.description,
+      })),
+    [resources.skills]
   );
-  const [availableSkills, setAvailableSkills] = useState<SelectableResource[]>([]);
-  const [availableMcps, setAvailableMcps] = useState<SelectableResource[]>([]);
 
   // Fetch catalog from backend
   useEffect(() => {
     listTriggerCatalogAction()
       .then((data) => {
         setCatalog(data);
+        setCatalogFailed(false);
         if (initialData) {
           setSelectedId(resolveInitialId(data, initialData));
-        } else {
-          const firstKind = KIND_ORDER.find((k) => data.some((e) => e.kind === k));
-          if (firstKind) setActiveTab(firstKind);
         }
       })
       .catch((e) => {
+        // Swallowing this left an empty type dropdown that looked like the
+        // product simply had no trigger types.
         console.error("Failed to load trigger catalog:", e);
+        setCatalogFailed(true);
       });
   }, [initialData]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchTaskResources() {
-      const [skillsResponse, mcpsResponse] = await Promise.all([
-        listSkills().catch(() => ({ data: [] })),
-        listMCPServerInstances().catch(() => ({ data: [] })),
-      ]);
-
-      if (cancelled) return;
-
-      const skillsData = Array.isArray(skillsResponse.data)
-        ? skillsResponse.data
-        : [];
-      const mcpsData = Array.isArray(mcpsResponse.data)
-        ? mcpsResponse.data
-        : [];
-
-      setAvailableSkills(
-        skillsData.map((skill) => ({
-          id: skill.id,
-          name: skill.name,
-          description: skill.description,
-        }))
-      );
-      setAvailableMcps(
-        mcpsData.map((mcp) => ({
-          id: mcp.id,
-          name: mcp.name,
-          description: mcp.description,
-        }))
-      );
-    }
-
-    fetchTaskResources();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const refreshResourcesControl = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="xs"
+      disabled={resourcesLoading}
+      onClick={resources.refresh}
+    >
+      {t("refreshResources")}
+    </Button>
+  );
 
   const selected = catalog.find((e) => e.id === selectedId);
-  const triggerType = selected?.backend_type ?? "";
-  const webhookType = selected?.webhook_type ?? "";
+  const triggerType = initialData?.trigger_type ?? selected?.backend_type ?? "";
+  const webhookType = initialData?.webhook_type ?? selected?.webhook_type ?? "";
+  const timezones = Array.from(
+    new Set([
+      ...TIMEZONES,
+      ...(initialData?.timezone ? [initialData.timezone] : []),
+    ])
+  );
 
   // Reset methods and events when selection changes
   useEffect(() => {
@@ -225,7 +232,9 @@ export function CreateTriggerForm({
     }
   }, [isEditing, selected]);
 
-  const availableEvents = selected?.events ?? [];
+  const availableEvents = Array.from(
+    new Set([...(selected?.events ?? []), ...(initialData?.event_types ?? [])])
+  );
   const credentialFields = selected?.credential_fields ?? [];
 
   const toggleEvent = (event: string) => {
@@ -242,71 +251,32 @@ export function CreateTriggerForm({
     );
   };
 
-  const addTaskResource = (
-    resourceId: string,
-    available: SelectableResource[],
-    selected: TaskParameterRef[],
-    onChange: (items: TaskParameterRef[]) => void
-  ) => {
-    const resource = available.find((item) => item.id === resourceId);
-    if (!resource || selected.some((item) => item.id === resource.id)) return;
-    onChange([...selected, resource]);
-  };
+  const taskParametersValue = useMemo(
+    () =>
+      JSON.stringify(
+        composeTaskParameters({
+          text: taskText,
+          files: taskFiles,
+          skills: taskSkills,
+          mcps: taskMcps,
+          rest: initialTaskParameters.rest,
+        })
+      ),
+    [taskText, taskFiles, taskSkills, taskMcps, initialTaskParameters.rest]
+  );
 
-  const removeTaskResource = (
-    resourceId: string,
-    selected: TaskParameterRef[],
-    onChange: (items: TaskParameterRef[]) => void
-  ) => {
-    onChange(selected.filter((item) => item.id !== resourceId));
-  };
-
-  const taskParametersValue = useMemo(() => {
-    let rest: Record<string, unknown> = {};
-    if (taskRestJson.trim()) {
-      try {
-        const parsed = JSON.parse(taskRestJson);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          rest = parsed;
-        } else {
-          return "__INVALID_TASK_PARAMETERS_JSON__";
-        }
-      } catch {
-        return "__INVALID_TASK_PARAMETERS_JSON__";
-      }
-    }
-
-    return JSON.stringify(
-      composeTaskParameters({
-        text: taskText,
-        files: splitLines(taskFilesText),
-        skills: taskSkills,
-        mcps: taskMcps,
-        rest,
+  // Mirror pending state onto the form element so the header controls can
+  // render the submit button's loading state (see useFormSubmittingState).
+  useEffect(() => {
+    const form = document.getElementById("create-trigger-form");
+    if (!form) return;
+    form.setAttribute("data-submitting", String(isPending));
+    form.dispatchEvent(
+      new CustomEvent("form-submitting", {
+        detail: { isSubmitting: isPending },
       })
     );
-  }, [taskText, taskFilesText, taskSkills, taskMcps, taskRestJson]);
-
-  const renderSelectedResource = (
-    resource: TaskParameterRef,
-    onRemove: (id: string) => void
-  ) => (
-    <div
-      key={resource.id}
-      className="inline-flex max-w-full items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-2 py-1 text-xs"
-    >
-      <span className="truncate">{resource.name || resource.id}</span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-4 w-4 shrink-0 text-muted-foreground hover:bg-transparent hover:text-destructive"
-        onClick={() => onRemove(resource.id)}
-      >
-        <X />
-      </Button>
-    </div>
-  );
+  }, [isPending]);
 
   useEffect(() => {
     if (state.success) {
@@ -314,7 +284,7 @@ export function CreateTriggerForm({
         title: isEditing ? tSuccess("updated") : tSuccess("created"),
         variant: "success",
       });
-      router.push("/triggers");
+      router.push(initialData ? `/triggers/${initialData.id}` : "/triggers");
       router.refresh();
     } else if (state.errors) {
       toast({
@@ -323,527 +293,572 @@ export function CreateTriggerForm({
         variant: "destructive",
       });
     }
-  }, [state, toast, router, isEditing, tSuccess, tError]);
+  }, [state, toast, router, isEditing, initialData, tSuccess, tError]);
 
-  // Filter catalog by search
-  const filteredEntries = search.trim()
-    ? catalog.filter(
-        (e) =>
-          e.name.toLowerCase().includes(search.toLowerCase()) ||
-          e.description.toLowerCase().includes(search.toLowerCase())
-      )
-    : null;
-
-  // Group by kind for default view
+  // Kind is only a grouping header inside the type dropdown.
   const kindLabels: Record<string, string> = {
     schedule: "Scheduling",
     messaging: "Messaging",
     event: "Events",
   };
-  const kindIcons: Record<string, LucideIcon> = {
-    schedule: Clock,
-    messaging: MessageSquare,
-    event: Zap,
-  };
-  const triggerIcons: Record<string, LucideIcon> = {
-    cron: Clock,
-    telegram: Send,
-    slack: Hash,
-    discord: MessageSquare,
-    email: Mail,
-    webhook: Webhook,
-  };
   const kinds = new Set(catalog.map((e) => e.kind));
   const orderedKinds = KIND_ORDER.filter((k) => kinds.has(k));
 
-  useEffect(() => {
-    if (!activeTab || isEditing) return;
-    const entries = catalog.filter((e) => e.kind === activeTab);
-    if (entries.length === 1) {
-      setSelectedId(entries[0].id);
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    if (!isEditing && !selected) {
+      event.preventDefault();
+      setTypeMissing(true);
     }
-  }, [activeTab, catalog, isEditing]);
-
-  const renderCard = (entry: TriggerCatalogEntry) => {
-    const Icon = triggerIcons[entry.icon] ?? triggerIcons[entry.id] ?? Circle;
-    const isSelected = selectedId === entry.id;
-    return (
-      <button
-        key={entry.id}
-        type="button"
-        onClick={() => setSelectedId(entry.id)}
-        className={cn(
-          "group flex items-center gap-2 rounded px-2.5 py-1.5 text-left text-[13px] transition-colors w-full",
-          isSelected
-            ? "bg-foreground/[0.04] text-foreground ring-1 ring-foreground/15 dark:bg-foreground/[0.06] dark:ring-foreground/20"
-            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-        )}
-      >
-        <Icon
-          className={cn(
-            "h-3.5 w-3.5 shrink-0 transition-colors",
-            isSelected ? "text-foreground" : "text-muted-foreground/70"
-          )}
-        />
-        <span className="truncate font-medium">{entry.name}</span>
-      </button>
-    );
   };
 
+  const fileControl = (
+    <ConfigSheet
+      title={t("taskFiles")}
+      description={t("taskFilesHint")}
+      triggerComponent={
+        <Button
+          id="task_files"
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="justify-start gap-1.5 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Paperclip />
+          {t("taskFilesPlaceholder")}
+        </Button>
+      }
+    >
+      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pb-6">
+        <Input
+          aria-label={t("searchFiles")}
+          placeholder={t("searchFiles")}
+          value={fileSearch}
+          onChange={(event) => setFileSearch(event.target.value)}
+        />
+        {resourcesLoading ? (
+          <p className="note">{t("loadingResources")}</p>
+        ) : resourceErrors.includes("files") ? (
+          <p role="alert" className="text-xs text-destructive">
+            {t("resourcesLoadFailed")}
+          </p>
+        ) : (
+          <>
+            <FileTree
+              files={availableFiles.filter(
+                (file) =>
+                  !taskFiles.includes(file.path) &&
+                  file.path.toLowerCase().includes(fileSearch.toLowerCase())
+              )}
+              selectedPath={null}
+              onSelect={(file) =>
+                setTaskFiles((previous) =>
+                  previous.includes(file.path)
+                    ? previous
+                    : [...previous, file.path]
+                )
+              }
+            />
+            {!availableFiles.some(
+              (file) =>
+                !taskFiles.includes(file.path) &&
+                file.path.toLowerCase().includes(fileSearch.toLowerCase())
+            ) && <p className="note">{t("noFiles")}</p>}
+          </>
+        )}
+        <Link
+          href="/files"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-primary hover:underline"
+        >
+          {t("manageFiles")}
+        </Link>
+        {refreshResourcesControl}
+      </div>
+    </ConfigSheet>
+  );
+  const mcpControl = (
+    <ConfigSheet
+      title={t("taskMcps")}
+      description={t("taskMcpsHint")}
+      triggerComponent={
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="justify-start gap-1.5 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <McpIcon />
+          {t("taskMcpsPlaceholder")}
+        </Button>
+      }
+    >
+      <div className="min-h-0 overflow-y-auto pb-6">
+        <McpPicker
+          resources={resources}
+          selectedIds={taskMcps.map((mcp) => mcp.id)}
+          onAdd={(mcp) =>
+            setTaskMcps((previous) =>
+              previous.some((item) => item.id === mcp.id)
+                ? previous
+                : [...previous, { id: mcp.id, name: mcp.name }]
+            )
+          }
+          onRemove={(mcp) =>
+            setTaskMcps((previous) =>
+              previous.filter((item) => item.id !== mcp.id)
+            )
+          }
+        />
+      </div>
+    </ConfigSheet>
+  );
+  const skillControl = (
+    <ConfigSheet
+      title={t("taskSkills")}
+      description={t("taskSkillsHint")}
+      triggerComponent={
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="justify-start gap-1.5 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <SkillIcon />
+          {t("taskSkillsPlaceholder")}
+        </Button>
+      }
+    >
+      <div className="min-h-0 overflow-y-auto pb-6">
+        <SkillPicker
+          resources={resources}
+          selectedIds={taskSkills.map((skill) => skill.id)}
+          onAdd={(skill) =>
+            setTaskSkills((previous) =>
+              previous.some((item) => item.id === skill.id)
+                ? previous
+                : [
+                    ...previous,
+                    {
+                      id: skill.id,
+                      name: skill.name,
+                      description: skill.description,
+                    },
+                  ]
+            )
+          }
+          onRemove={(skill) =>
+            setTaskSkills((previous) =>
+              previous.filter((item) => item.id !== skill.id)
+            )
+          }
+        />
+      </div>
+    </ConfigSheet>
+  );
+
   return (
-    <form id="create-trigger-form" action={formAction} className="overflow-auto h-full">
-      <div className="form-content lg:max-w-xl lg:mx-auto space-y-5 py-5">
-        {isEditing && (
-          <input type="hidden" name="id" value={initialData.id} />
-        )}
-        <input type="hidden" name="trigger_type" value={triggerType} />
-        {triggerType === "webhook" && (
-          <input type="hidden" name="webhook_type" value={webhookType} />
-        )}
-        {selected?.data_extractor && (
-          <input type="hidden" name="data_extractor" value={selected.data_extractor} />
-        )}
+    <form
+      id="create-trigger-form"
+      action={formAction}
+      onSubmit={handleSubmit}
+      onInvalidCapture={(event) => {
+        if ((event.target as HTMLElement).closest("details[data-run-settings]"))
+          setRunSettingsOpen(true);
+      }}
+      className="h-full overflow-auto"
+    >
+      {isEditing && <input type="hidden" name="id" value={initialData.id} />}
+      <input type="hidden" name="trigger_type" value={triggerType} />
+      {triggerType === "webhook" && (
+        <input type="hidden" name="webhook_type" value={webhookType} />
+      )}
+      {selected?.data_extractor && (
         <input
           type="hidden"
-          name="task_parameters"
-          value={taskParametersValue}
+          name="data_extractor"
+          value={selected.data_extractor}
         />
-
-        {/* Catalog Picker */}
-        {!isEditing ? (
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search triggers..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8"
+      )}
+      <input type="hidden" name="task_parameters" value={taskParametersValue} />
+      {triggerType === "webhook" && (
+        <input
+          type="hidden"
+          name="event_types"
+          value={JSON.stringify(selectedEvents)}
+        />
+      )}
+      <div className="mx-auto grid w-full max-w-6xl gap-6 pb-10 pt-2 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-8">
+        <div className="min-w-0 space-y-6" data-task-authoring>
+          <div className="grid content-start gap-2">
+            <Label htmlFor="name" className="sr-only">
+              {t("automationName")}
+            </Label>
+            <Input
+              id="name"
+              name="name"
+              placeholder={t("automationNamePlaceholder")}
+              variant="title"
+              defaultValue={initialData?.name || ""}
+              required
+            />
+            {state.errors?.name && (
+              <p className="text-sm text-destructive">{state.errors.name[0]}</p>
+            )}
+          </div>
+          <section aria-label={t("taskInstructions")} className="space-y-3">
+            <div className="grid content-start gap-2">
+              <FormLabel htmlFor="task_text">{t("taskInstructions")}</FormLabel>
+              <Textarea
+                id="task_text"
+                value={taskText}
+                onChange={(event) => setTaskText(event.target.value)}
+                placeholder={t("taskTextPlaceholder")}
+                variant="document"
+                rows={6}
               />
             </div>
-            <div className="max-h-72 overflow-y-auto">
-              {filteredEntries ? (
-                <div className="grid grid-cols-2 gap-1.5">
-                  {filteredEntries.map(renderCard)}
-                  {filteredEntries.length === 0 && (
-                    <p className="text-sm text-muted-foreground py-4 col-span-2 text-center">
-                      No triggers found for &ldquo;{search}&rdquo;
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList
-                    className="w-full grid"
-                    style={{
-                      gridTemplateColumns: `repeat(${orderedKinds.length}, minmax(0, 1fr))`,
-                    }}
-                  >
-                    {orderedKinds.map((kind) => {
-                      const KindIcon = kindIcons[kind] ?? Circle;
-                      return (
-                        <TabsTrigger key={kind} value={kind}>
-                          <KindIcon className="h-4 w-4 mr-1.5" />
-                          {kindLabels[kind] ?? kind}
-                        </TabsTrigger>
-                      );
-                    })}
-                  </TabsList>
-                  {orderedKinds.map((kind) => {
-                    const entries = catalog.filter((e) => e.kind === kind);
-                    return (
-                      <TabsContent key={kind} value={kind}>
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {entries.map(renderCard)}
-                        </div>
-                      </TabsContent>
-                    );
-                  })}
-                </Tabs>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <div>
-              <p className="text-sm font-medium">
-                {selected?.name ?? initialData.trigger_type}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {selected?.description}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {selected && triggerType === "webhook" && (
-          <div className="border-l border-border/60 pl-3 space-y-1">
-            <div className="flex items-center gap-1.5">
-              <Info className="h-3 w-3 text-muted-foreground shrink-0" />
-              <p className="text-[12px] font-medium">Webhook endpoint</p>
-            </div>
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              A unique URL is generated after you create this trigger. Copy it
-              from the trigger detail page and paste it into your {selected.name}{" "}
-              settings.
-              {selected.webhook_type === "telegram" &&
-                " Use /setwebhook with @BotFather or the Telegram Bot API."}
-              {selected.webhook_type === "slack" &&
-                " In Slack → Event Subscriptions, paste under Request URL."}
-              {selected.webhook_type === "discord" &&
-                " In Discord → General Information, paste under Interactions Endpoint URL."}
-              {selected.webhook_type === "gmail" &&
-                " Set up a Google Cloud Pub/Sub push subscription pointing to this URL."}
-              {selected.webhook_type === "generic" &&
-                " Send HTTP requests to this URL from any service or script."}
-            </p>
-          </div>
-        )}
-
-        {/* Name */}
-        <div className="grid gap-2">
-          <FormLabel htmlFor="name" icon={Tag} required>
-            {t("name")}
-          </FormLabel>
-          <Input
-            id="name"
-            name="name"
-            placeholder={t("namePlaceholder")}
-            defaultValue={initialData?.name || ""}
-            required
-          />
-          {state.errors?.name && (
-            <p className="text-sm text-destructive">{state.errors.name[0]}</p>
-          )}
-        </div>
-
-        {/* Agent */}
-        <div className="grid gap-2">
-          <FormLabel htmlFor="agent_id" icon={Bot} required>
-            {t("agent")}
-          </FormLabel>
-          <Select
-            name="agent_id"
-            defaultValue={initialData?.agent_id || ""}
-          >
-            <SelectTrigger id="agent_id">
-              <SelectValue placeholder={t("selectAgent")} />
-            </SelectTrigger>
-            <SelectContent>
-              {agents.map((agent) => (
-                <SelectItem key={agent.id} value={agent.id}>
-                  {agent.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {state.errors?.agent_id && (
-            <p className="text-sm text-destructive">
-              {state.errors.agent_id[0]}
-            </p>
-          )}
-        </div>
-
-        {/* Cron config */}
-        {triggerType === "cron" && (
-          <>
-            <div className="grid gap-2">
-              <CronScheduler
-                name="cron_expression"
-                defaultValue={initialData?.config?.cron_expression || selected?.default_cron || ""}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <FormLabel htmlFor="timezone" icon={Clock}>
-                {t("timezone")}
-              </FormLabel>
-              <Select
-                name="timezone"
-                defaultValue={initialData?.config?.timezone || "UTC"}
-              >
-                <SelectTrigger id="timezone">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIMEZONES.map((tz) => (
-                    <SelectItem key={tz} value={tz}>
-                      {tz}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </>
-        )}
-
-        {/* Webhook config */}
-        {triggerType === "webhook" && (
-          <>
-            <div className="grid gap-2">
-              <FormLabel icon={Globe}>
-                {t("allowedMethods")}
-              </FormLabel>
-              <div className="flex flex-wrap gap-3">
-                {HTTP_METHODS.map((method) => (
-                  <div key={method} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`method_${method}`}
-                      name={`method_${method}`}
-                      checked={selectedMethods.includes(method)}
-                      onCheckedChange={() => toggleMethod(method)}
-                    />
-                    <Label
-                      htmlFor={`method_${method}`}
-                      className="text-sm font-mono cursor-pointer"
-                    >
-                      {method}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {availableEvents.length > 0 && (
-              <div className="grid gap-2">
-                <FormLabel icon={List}>
-                  Event Types
-                </FormLabel>
-                <p className="text-xs text-muted-foreground">
-                  Select which events trigger execution. Leave empty to accept all.
-                </p>
-                <input
-                  type="hidden"
-                  name="event_types"
-                  value={JSON.stringify(selectedEvents)}
-                />
-                <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
-                  {availableEvents.map((event) => {
-                    const isSel = selectedEvents.includes(event);
-                    return (
-                      <button
-                        key={event}
-                        type="button"
-                        onClick={() => toggleEvent(event)}
-                        className={cn(
-                          "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
-                          isSel
-                            ? "bg-foreground text-background"
-                            : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-                        )}
-                      >
-                        {event}
-                      </button>
-                    );
-                  })}
-                </div>
-                {selectedEvents.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {selectedEvents.length} event
-                    {selectedEvents.length !== 1 ? "s" : ""} selected
-                  </p>
-                )}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Credentials */}
-        {credentialFields.length > 0 && (
-          <>
-            <p className="text-xs text-muted-foreground">
-              {selected?.data_extractor
-                ? "Required to connect to the service."
-                : "Add signing credentials to verify webhook authenticity. Stored securely."}
-            </p>
-            {credentialFields.map((field) => (
-              <div key={field.key} className="grid gap-2">
-                <FormLabel
-                  htmlFor={`cred_${field.key}`}
-                  icon={Key}
-                  required={!!selected?.data_extractor}
-                >
-                  {field.label}
-                </FormLabel>
-                <Input
-                  id={`cred_${field.key}`}
-                  name={`credential_${field.key}`}
-                  type="password"
-                  placeholder={field.placeholder}
-                  autoComplete="off"
-                  required={!!selected?.data_extractor}
-                />
-              </div>
-            ))}
-          </>
-        )}
-
-        {/* Task Parameters */}
-        <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4">
-          <FormLabel icon={Code2} optional>
-            {t("taskParameters")}
-          </FormLabel>
-
-          <div className="grid gap-2">
-            <FormLabel htmlFor="task_text" icon={FileText} optional>
-              Task text
-            </FormLabel>
-            <Textarea
-              id="task_text"
-              value={taskText}
-              onChange={(event) => setTaskText(event.target.value)}
-              placeholder="Text to pass into each task created by this trigger"
-              className="min-h-[96px]"
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <FormLabel htmlFor="task_files" icon={Paperclip} optional>
-              Additional files
-            </FormLabel>
-            <Textarea
-              id="task_files"
-              value={taskFilesText}
-              onChange={(event) => setTaskFilesText(event.target.value)}
-              placeholder="One file path or URL per line"
-              className="min-h-[72px] font-mono text-xs"
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <FormLabel icon={Sparkles} optional>
-              Additional skills
-            </FormLabel>
-            <Select
-              value=""
-              onValueChange={(value) =>
-                addTaskResource(value, availableSkills, taskSkills, setTaskSkills)
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Add a skill" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableSkills
-                  .filter((skill) => !taskSkills.some((item) => item.id === skill.id))
-                  .map((skill) => (
-                    <SelectItem key={skill.id} value={skill.id}>
-                      {skill.name || skill.id}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-            {taskSkills.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {taskSkills.map((skill) =>
-                  renderSelectedResource(skill, (id) =>
-                    removeTaskResource(id, taskSkills, setTaskSkills)
-                  )
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="grid gap-2">
-            <FormLabel icon={Server} optional>
-              Additional MCP
-            </FormLabel>
-            <Select
-              value=""
-              onValueChange={(value) =>
-                addTaskResource(value, availableMcps, taskMcps, setTaskMcps)
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Add an MCP server" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableMcps
-                  .filter((mcp) => !taskMcps.some((item) => item.id === mcp.id))
-                  .map((mcp) => (
-                    <SelectItem key={mcp.id} value={mcp.id}>
-                      {mcp.name || mcp.id}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-            {taskMcps.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {taskMcps.map((mcp) =>
-                  renderSelectedResource(mcp, (id) =>
-                    removeTaskResource(id, taskMcps, setTaskMcps)
-                  )
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="grid gap-2">
-            <FormLabel htmlFor="task_parameters_rest" icon={Code2} optional>
-              Other JSON parameters
-            </FormLabel>
-            <Textarea
-              id="task_parameters_rest"
-              value={taskRestJson}
-              onChange={(event) => setTaskRestJson(event.target.value)}
-              placeholder={t("taskParametersPlaceholder")}
-              className="min-h-[96px] font-mono text-xs"
-            />
             {state.errors?.task_parameters && (
               <p className="text-sm text-destructive">
                 {state.errors.task_parameters[0]}
               </p>
             )}
-          </div>
-        </div>
+          </section>
+          <section
+            aria-labelledby="trigger-configuration-heading"
+            className="space-y-5 border-t border-border/60 pt-6"
+          >
+            <h2
+              id="trigger-configuration-heading"
+              className="text-sm font-semibold"
+            >
+              {t("whenToRun")}
+            </h2>
+            {!isEditing ? (
+              <div className="grid content-start gap-2">
+                <FormLabel htmlFor="trigger_type_select" required>
+                  {t("triggerType")}
+                </FormLabel>
+                <Select
+                  value={selectedId}
+                  onValueChange={(value) => {
+                    setSelectedId(value);
+                    setTypeMissing(false);
+                  }}
+                >
+                  <SelectTrigger id="trigger_type_select">
+                    <SelectValue placeholder={t("selectType")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {orderedKinds.map((kind) => (
+                      <SelectGroup key={kind}>
+                        <SelectLabel>{kindLabels[kind] ?? kind}</SelectLabel>
+                        {catalog
+                          .filter((entry) => entry.kind === kind)
+                          .map((entry) => (
+                            <SelectItem key={entry.id} value={entry.id}>
+                              <span className="flex items-center gap-2">
+                                {/* The catalog owns the artwork — drawing it
+                                    from a map here is how channels the map
+                                    never heard of ended up as dots. */}
+                                <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
+                                  {renderTriggerIcon(
+                                    entry,
+                                    undefined,
+                                    "h-4 w-4"
+                                  )}
+                                </span>
+                                {entry.name}
+                              </span>
+                            </SelectItem>
+                          ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-        {/* Failure Threshold */}
-        <div className="grid gap-2">
-          <FormLabel htmlFor="failure_threshold" icon={AlertTriangle} optional>
-            {t("failureThreshold")}
-          </FormLabel>
-          <Input
-            id="failure_threshold"
-            name="failure_threshold"
-            type="number"
-            min={1}
-            placeholder={t("failureThresholdPlaceholder")}
-            defaultValue={initialData?.failure_threshold || ""}
+                {catalogFailed && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {t("catalogLoadFailed")}
+                  </p>
+                )}
+                {(typeMissing || state.errors?.trigger_type) && (
+                  <p className="text-sm text-destructive">
+                    {state.errors?.trigger_type?.[0] ?? t("selectType")}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="grid content-start gap-2">
+                <FormLabel>{t("triggerType")}</FormLabel>
+                <p className="text-sm font-medium">
+                  {selected?.name ?? initialData.trigger_type}
+                </p>
+              </div>
+            )}
+            {triggerType === "cron" && (
+              <>
+                <div className="grid gap-2">
+                  <FormLabel required>{t("schedule")}</FormLabel>
+                  <CronScheduler
+                    name="cron_expression"
+                    defaultValue={
+                      initialData?.cron_expression ??
+                      selected?.default_cron ??
+                      ""
+                    }
+                  />
+                  {state.errors?.cron_expression && (
+                    <p className="text-sm text-destructive">
+                      {state.errors.cron_expression[0]}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid gap-2 md:max-w-sm">
+                  <FormLabel htmlFor="timezone">{t("timezone")}</FormLabel>
+                  <Select
+                    name="timezone"
+                    defaultValue={initialData?.timezone ?? "UTC"}
+                  >
+                    <SelectTrigger id="timezone">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timezones.map((tz) => (
+                        <SelectItem key={tz} value={tz}>
+                          {tz}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+            {credentialFields.length > 0 && (
+              <>
+                {credentialFields.map((field) => (
+                  <div
+                    key={`${selectedId}:${field.key}`}
+                    className="grid gap-2 md:max-w-sm"
+                  >
+                    <FormLabel
+                      htmlFor={`cred_${field.key}`}
+                      required={
+                        !!selected?.data_extractor &&
+                        !initialData?.has_channel_credentials
+                      }
+                    >
+                      {field.label}
+                    </FormLabel>
+                    <SecretSelect
+                      id={`cred_${field.key}`}
+                      name={`credential_secret_${field.key}`}
+                      secrets={availableSecrets}
+                      value={credentialSecrets[field.key] ?? ""}
+                      onChange={(secretId) =>
+                        setCredentialSecrets((previous) => ({
+                          ...previous,
+                          [field.key]: secretId,
+                        }))
+                      }
+                      disabled={
+                        resourcesLoading || resourceErrors.includes("secrets")
+                      }
+                      required={
+                        !!selected?.data_extractor &&
+                        !initialData?.has_channel_credentials
+                      }
+                      placeholder={
+                        resourcesLoading
+                          ? t("loadingResources")
+                          : isEditing && initialData.has_channel_credentials
+                            ? t("keepExistingSecret")
+                            : t("selectSecret")
+                      }
+                      searchPlaceholder={t("selectSecret")}
+                      emptyMessage={t("noSecrets")}
+                      createLabel={t("newSecret")}
+                      onCreated={resources.refresh}
+                    />
+                    {state.errors?.[`credential_secret_${field.key}`] && (
+                      <p role="alert" className="text-sm text-destructive">
+                        {state.errors[`credential_secret_${field.key}`][0]}
+                      </p>
+                    )}
+                  </div>
+                ))}
+                {resourceErrors.includes("secrets") && (
+                  <p role="alert" className="text-xs text-destructive">
+                    {t("resourcesLoadFailed")}
+                  </p>
+                )}
+              </>
+            )}
+            {triggerType === "webhook" && availableEvents.length > 0 && (
+              <details className="group/events rounded-md border border-border/60">
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm [&::-webkit-details-marker]:hidden">
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 text-muted-foreground group-open/events:rotate-90"
+                  />
+                  <span>{t("eventTypes")}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {selectedEvents.length
+                      ? t("selectedEventsCount", {
+                          count: selectedEvents.length,
+                        })
+                      : t("allEvents")}
+                  </span>
+                </summary>
+                <div className="flex max-h-48 flex-wrap gap-1.5 overflow-y-auto px-3 pb-3">
+                  {availableEvents.map((event) => (
+                    <button
+                      key={event}
+                      type="button"
+                      aria-pressed={selectedEvents.includes(event)}
+                      onClick={() => toggleEvent(event)}
+                      className={cn(
+                        "rounded-md px-2 py-1 text-xs transition-colors",
+                        selectedEvents.includes(event)
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {event}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            )}
+          </section>
+          <details
+            data-run-settings
+            open={runSettingsOpen}
+            onToggle={(event) => setRunSettingsOpen(event.currentTarget.open)}
+            className="group/settings border-t border-border/60 pt-4"
+          >
+            <summary className="flex cursor-pointer list-none items-center gap-2 py-2 text-sm text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+              <ChevronRight
+                aria-hidden="true"
+                className="h-3.5 w-3.5 group-open/settings:rotate-90"
+              />
+              {t("runSettings")}
+            </summary>
+            <div className="space-y-5 py-4">
+              <div className="grid content-start gap-2">
+                <FormLabel htmlFor="failure_threshold">
+                  {t("failureThreshold")}
+                </FormLabel>
+                <Input
+                  id="failure_threshold"
+                  name="failure_threshold"
+                  type="number"
+                  min={1}
+                  max={100}
+                  placeholder={t("failureThresholdPlaceholder")}
+                  defaultValue={initialData?.failure_threshold || ""}
+                />
+              </div>
+              {triggerType === "webhook" && (
+                <div className="grid gap-2">
+                  <FormLabel>{t("allowedMethods")}</FormLabel>
+                  <div className="flex flex-wrap gap-3">
+                    {HTTP_METHODS.map((method) => (
+                      <div key={method} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`method_${method}`}
+                          name={`method_${method}`}
+                          checked={selectedMethods.includes(method)}
+                          onCheckedChange={() => toggleMethod(method)}
+                        />
+                        <Label
+                          htmlFor={`method_${method}`}
+                          className="text-sm font-mono cursor-pointer"
+                        >
+                          {method}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="grid gap-2">
+                <FormLabel htmlFor="description">
+                  {t("triggerDescription")}
+                </FormLabel>
+                <Textarea
+                  id="description"
+                  name="description"
+                  defaultValue={initialData?.description ?? ""}
+                  placeholder={t("triggerDescriptionPlaceholder")}
+                  maxLength={1000}
+                />
+                {state.errors?.description && (
+                  <p className="text-sm text-destructive">
+                    {state.errors.description[0]}
+                  </p>
+                )}
+              </div>
+            </div>
+          </details>
+          {state.errors?._form && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {state.errors._form.map((error, index) => (
+                <p key={index}>{error}</p>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 self-start border-t border-border/60 pt-4 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:border-t-0 lg:pt-0">
+          <TriggerExecutionContext
+            selectedAgentId={selectedAgentId}
+            agents={agents}
+            availableMcps={availableMcps}
+            availableSkills={availableSkills}
+            selectedMcps={taskMcps}
+            selectedSkills={taskSkills}
+            selectedFiles={taskFiles}
+            resourcesLoading={resourcesLoading}
+            resourceErrors={resourceErrors}
+            refreshKey={resources.revision}
+            orchestratorControl={
+              <div className="space-y-2">
+                <AgentSelect
+                  name="agent_id"
+                  id="agent_id"
+                  agents={agents}
+                  value={selectedAgentId}
+                  onChange={setSelectedAgentId}
+                  ariaLabel={t("execution.orchestrator")}
+                  placeholder={t("selectAgent")}
+                />
+                {state.errors?.agent_id && (
+                  <p className="text-sm text-destructive">
+                    {state.errors.agent_id[0]}
+                  </p>
+                )}
+              </div>
+            }
+            mcpControl={mcpControl}
+            skillControl={skillControl}
+            fileControl={fileControl}
+            onRemoveMcp={(id) =>
+              setTaskMcps((previous) =>
+                previous.filter((item) => item.id !== id)
+              )
+            }
+            onRemoveSkill={(id) =>
+              setTaskSkills((previous) =>
+                previous.filter((item) => item.id !== id)
+              )
+            }
+            onRemoveFile={(path) =>
+              setTaskFiles((previous) =>
+                previous.filter((file) => file !== path)
+              )
+            }
           />
-        </div>
-
-        {state.errors?._form && (
-          <div className="border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
-            {state.errors._form.map((err, i) => (
-              <p key={i}>{err}</p>
-            ))}
-          </div>
-        )}
-
-        {/* Submit */}
-        <div className="flex items-center justify-end gap-2 border-t border-border/50 pt-4">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push("/triggers")}
-            className="h-8 text-[13px] text-muted-foreground hover:text-foreground"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            size="sm"
-            disabled={isPending || !selected}
-            className="h-8 text-[13px]"
-          >
-            {isPending
-              ? "..."
-              : isEditing
-                ? t("createButton").replace("Create", "Update")
-                : t("createButton")}
-          </Button>
         </div>
       </div>
     </form>

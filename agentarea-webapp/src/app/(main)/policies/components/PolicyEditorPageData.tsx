@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import EmptyState from "@/components/EmptyState";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import {
   listAgents,
   listMCPServerInstances,
@@ -194,7 +194,7 @@ export async function PolicyEditorPageData({
     >
       <div className="main-content">
         {policiesError && policyId ? (
-          <EmptyState
+          <RetryEmptyState
             title="Couldn't load policy"
             description={policiesError}
             iconsType="audit"

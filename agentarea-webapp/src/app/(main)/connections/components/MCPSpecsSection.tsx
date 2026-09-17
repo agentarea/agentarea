@@ -177,6 +177,7 @@ export function MCPSpecsSection({
           title="No MCP specifications found"
           description="No MCP server specifications match your search"
           iconsType="mcp"
+          action={{ label: "Clear search", href: "/connections" }}
         />
       ) : viewMode === "table" ? (
         <>

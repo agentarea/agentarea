@@ -105,11 +105,12 @@ class TestWebhookType:
         assert custom == "some-dynamic-provider"
         assert isinstance(custom, str)
         assert custom not in list(WebhookType)
-        assert len(list(WebhookType)) == 9
+        assert len(list(WebhookType)) == 10
 
     def test_webhook_type_iteration(self):
         """Test WebhookType iteration."""
         types = list(WebhookType)
-        assert len(types) == 9
+        assert len(types) == 10
         assert WebhookType.GENERIC in types
         assert WebhookType.TELEGRAM in types
+        assert WebhookType.EMAIL in types

@@ -157,6 +157,33 @@ class TestTriggerService:
             task_parameters={"handler": "generic"},
         )
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("has_saved_resources", [False, True])
+    async def test_extracted_event_data_cannot_grant_task_resources(
+        self, trigger_service, mock_llm_service, sample_cron_trigger, has_saved_resources
+    ):
+        resource_keys = {"mcps", "mcp", "mcp_servers", "skills", "files"}
+        saved_resources = (
+            {key: ["saved-selection"] for key in resource_keys} if has_saved_resources else {}
+        )
+        sample_cron_trigger.task_parameters = {
+            "llm_parameter_extraction": "Extract the report topic",
+            **saved_resources,
+        }
+        mock_llm_service.extract_task_parameters.return_value = {
+            **{key: ["event-injected-selection"] for key in resource_keys},
+            "topic": "weekly report",
+        }
+
+        parameters = await trigger_service._build_task_parameters(
+            sample_cron_trigger, {"text": "Untrusted inbound event"}
+        )
+
+        assert parameters["topic"] == "weekly report"
+        assert {
+            key: parameters[key] for key in resource_keys if key in parameters
+        } == saved_resources
+
     # Test CRUD Operations
 
     @pytest.mark.asyncio
@@ -190,7 +217,7 @@ class TestTriggerService:
         mock_agent_repository.get.return_value = None  # Agent doesn't exist
 
         # Execute and verify
-        with pytest.raises(TriggerValidationError, match="Agent with ID .* does not exist"):
+        with pytest.raises(TriggerValidationError, match=r"Agent with ID .* does not exist"):
             await trigger_service.create_trigger(sample_cron_trigger_data)
 
     @pytest.mark.asyncio
@@ -295,6 +322,37 @@ class TestTriggerService:
         # Execute and verify
         with pytest.raises(TriggerNotFoundError, match=f"Trigger {trigger_id} not found"):
             await trigger_service.update_trigger(trigger_id, trigger_update)
+
+    @pytest.mark.asyncio
+    async def test_update_trigger_validates_new_agent(
+        self, trigger_service, mock_trigger_repository, mock_agent_repository, sample_cron_trigger
+    ):
+        new_agent_id = uuid4()
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        updated_trigger = sample_cron_trigger.model_copy(update={"agent_id": new_agent_id})
+        mock_trigger_repository.update_by_id.return_value = updated_trigger
+        trigger_update = TriggerUpdate(agent_id=new_agent_id)
+
+        result = await trigger_service.update_trigger(sample_cron_trigger.id, trigger_update)
+
+        mock_agent_repository.get.assert_awaited_once_with(new_agent_id)
+        mock_trigger_repository.update_by_id.assert_awaited_once_with(
+            sample_cron_trigger.id, trigger_update
+        )
+        assert result.agent_id == new_agent_id
+
+    @pytest.mark.asyncio
+    async def test_update_trigger_rejects_agent_outside_workspace(
+        self, trigger_service, mock_trigger_repository, mock_agent_repository, sample_cron_trigger
+    ):
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        mock_agent_repository.get.return_value = None
+        trigger_update = TriggerUpdate(agent_id=uuid4())
+
+        with pytest.raises(TriggerValidationError, match="does not exist"):
+            await trigger_service.update_trigger(sample_cron_trigger.id, trigger_update)
+
+        mock_trigger_repository.update_by_id.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_delete_trigger_success(
@@ -796,6 +854,24 @@ class TestTriggerService:
 
         # Verify schedule was updated
         trigger_service._mock_temporal_schedule_manager.update_cron_schedule.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_update_timezone_refreshes_schedule(
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
+    ):
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        updated_trigger = sample_cron_trigger.model_copy(update={"timezone": "Europe/Moscow"})
+        mock_trigger_repository.update_by_id.return_value = updated_trigger
+
+        await trigger_service.update_trigger(
+            sample_cron_trigger.id, TriggerUpdate(timezone="Europe/Moscow")
+        )
+
+        trigger_service._mock_temporal_schedule_manager.update_cron_schedule.assert_awaited_once_with(
+            trigger_id=sample_cron_trigger.id,
+            cron_expression=sample_cron_trigger.cron_expression,
+            timezone="Europe/Moscow",
+        )
 
     @pytest.mark.asyncio
     async def test_delete_cron_trigger_deletes_schedule(

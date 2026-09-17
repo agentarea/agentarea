@@ -25,6 +25,8 @@ interface TableProps<T> {
   columns: Column<T>[];
   onRowClick?: (item: T) => void;
   className?: string;
+  /** Extra attributes for each row, e.g. to make it a drag source or drop target. */
+  rowProps?: (item: T) => React.HTMLAttributes<HTMLElement>;
 }
 
 export default function Table<T>({
@@ -32,6 +34,7 @@ export default function Table<T>({
   columns,
   onRowClick,
   className,
+  rowProps,
 }: TableProps<T>) {
   return (
     <TableComponent className={className}>
@@ -69,17 +72,21 @@ export default function Table<T>({
       <TableBody>
         {data.map((item) => {
           const row = item as Record<string, unknown>;
+          const { className: extraClassName, ...extraRowProps } =
+            rowProps?.(item) ?? {};
           return (
             <TableRow
               key={row.id as React.Key}
               onClick={() => onRowClick?.(item)}
+              {...extraRowProps}
               className={cn(
                 "group border-b border-zinc-100 transition-colors duration-200 dark:border-zinc-800",
                 // Only a table that actually handles the click should look
                 // clickable; without this every row invites one that does nothing.
                 onRowClick &&
                   "cursor-pointer hover:bg-primary/5 dark:hover:bg-primary/10",
-                row.className as string | undefined
+                row.className as string | undefined,
+                extraClassName
               )}
             >
               {columns.map((column) => (

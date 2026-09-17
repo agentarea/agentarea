@@ -4,20 +4,29 @@ import hashlib
 import logging
 import secrets
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
 
+from .memberships import (
+    MembershipGraph,
+    grant_workspace_membership,
+    list_workspace_member_ids,
+    revoke_workspace_membership,
+)
 from .models import (
     INVITATION_STATUS_ACCEPTED,
     INVITATION_STATUS_PENDING,
     INVITATION_STATUS_REVOKED,
     Workspace,
     WorkspaceInvitation,
+    WorkspaceMembership,
 )
 from .repository import (
     WorkspaceInvitationRepository,
+    WorkspaceMembershipRepository,
     WorkspaceRepository,
 )
 from .slug import slugify
@@ -42,6 +51,22 @@ class InvitationRevoked(Exception):  # noqa: N818
 
 class InvitationAlreadyAccepted(Exception):  # noqa: N818
     pass
+
+
+class MembershipRemovalRejected(Exception):  # noqa: N818
+    """A membership removal was refused by a workspace rule."""
+
+
+class OwnerRemovalRejected(MembershipRemovalRejected):
+    """The workspace owner keeps their own access until ownership moves."""
+
+
+class LastMemberRemovalRejected(MembershipRemovalRejected):
+    """Removing the final member would orphan the workspace and its resources."""
+
+
+class MembershipRemovalForbidden(MembershipRemovalRejected):
+    """Only the owner removes other people; everyone else may only leave."""
 
 
 def _hash_token(token: str) -> str:
@@ -124,6 +149,119 @@ class WorkspaceInvitationService:
         await self.invitation_repo.update(invitation)
 
         return invitation
+
+
+@dataclass(frozen=True)
+class WorkspaceMemberView:
+    """One member as the product surfaces them.
+
+    ``joined_at`` is ``None`` for members granted before membership rows were
+    written; that is reported as unknown rather than guessed.
+    """
+
+    user_id: str
+    joined_at: datetime | None
+    invitation_id: UUID | None
+
+
+class WorkspaceMembershipService:
+    """Membership as a product operation: who is in, since when, and who may leave.
+
+    The relationship graph stays the source of truth for *who* is a member —
+    it is what authorization reads. The membership table adds the facts the
+    graph cannot hold, currently the join date and the invitation that led to
+    it, so a stale row can never resurrect access on its own.
+    """
+
+    def __init__(
+        self,
+        *,
+        membership_repo: WorkspaceMembershipRepository,
+        workspace_repo: WorkspaceRepository,
+        graph: MembershipGraph,
+    ) -> None:
+        self.membership_repo = membership_repo
+        self.workspace_repo = workspace_repo
+        self.graph = graph
+
+    async def record(
+        self,
+        *,
+        workspace_id: str,
+        user_id: str,
+        invitation_id: UUID | None,
+    ) -> None:
+        """Grant membership and persist when it happened. Idempotent."""
+        await grant_workspace_membership(self.graph, workspace_id=workspace_id, user_id=user_id)
+        if await self.membership_repo.get(workspace_id, user_id) is not None:
+            return
+        await self.membership_repo.add(
+            WorkspaceMembership(
+                workspace_id=workspace_id,
+                user_id=user_id,
+                invitation_id=invitation_id,
+            )
+        )
+
+    async def list_members(self, workspace_id: str) -> list[WorkspaceMemberView]:
+        member_ids = await list_workspace_member_ids(self.graph, workspace_id)
+        rows = {
+            row.user_id: row for row in await self.membership_repo.list_for_workspace(workspace_id)
+        }
+        members = [
+            WorkspaceMemberView(
+                user_id=member_id,
+                joined_at=getattr(rows.get(member_id), "created_at", None),
+                invitation_id=getattr(rows.get(member_id), "invitation_id", None),
+            )
+            for member_id in member_ids
+        ]
+        return sorted(members, key=_member_order)
+
+    async def remove(
+        self,
+        *,
+        workspace_id: str,
+        target_user_id: str,
+        actor_user_id: str,
+    ) -> None:
+        owner_user_id = await self.owner_user_id(workspace_id)
+
+        if target_user_id == owner_user_id:
+            raise OwnerRemovalRejected(
+                "The workspace owner cannot be removed; transfer ownership first."
+            )
+        if actor_user_id not in (owner_user_id, target_user_id):
+            raise MembershipRemovalForbidden("Only the workspace owner can remove other members.")
+
+        member_ids = await list_workspace_member_ids(self.graph, workspace_id)
+        if target_user_id in member_ids and len(member_ids) <= 1:
+            raise LastMemberRemovalRejected(
+                "The last member cannot leave; the workspace would be unreachable."
+            )
+
+        await revoke_workspace_membership(
+            self.graph, workspace_id=workspace_id, user_id=target_user_id
+        )
+        await self.membership_repo.delete(workspace_id, target_user_id)
+
+    async def owner_user_id(self, workspace_id: str) -> str:
+        """Who owns the workspace.
+
+        Without a workspace row the id itself carries the answer: a workspace
+        auto-provisioned for one user reuses that user's id.
+        """
+        workspace = await self.workspace_repo.get(workspace_id)
+        return workspace.owner_user_id if workspace is not None else workspace_id
+
+
+def _member_order(member: WorkspaceMemberView) -> tuple[bool, datetime, str]:
+    joined_at = member.joined_at
+    if joined_at is None:
+        return (True, datetime.min, member.user_id)
+    if joined_at.tzinfo is not None:
+        joined_at = joined_at.astimezone(UTC).replace(tzinfo=None)
+    return (False, joined_at, member.user_id)
 
 
 class WorkspaceService:

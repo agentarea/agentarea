@@ -243,9 +243,10 @@ class TriggerService:
                 updated_trigger, CronTrigger
             ):
                 try:
-                    # Check if cron expression or active status changed
+                    # Check if schedule settings or active status changed
                     cron_changed = (
                         trigger_update.cron_expression is not None
+                        or trigger_update.timezone is not None
                         or trigger_update.is_active is not None
                     )
 
@@ -929,6 +930,9 @@ class TriggerService:
         if trigger_update.name is not None and not trigger_update.name.strip():
             raise TriggerValidationError("Trigger name cannot be empty")
 
+        if trigger_update.agent_id is not None:
+            await self._validate_agent_exists(trigger_update.agent_id)
+
         # Type-specific validation
         if isinstance(existing_trigger, CronTrigger):
             if trigger_update.cron_expression is not None:
@@ -1234,6 +1238,12 @@ class TriggerService:
             }
         )
 
+        # Which channel the webhook came from. channel_origin carries this only
+        # for the channels that need outbound routing, so without it a GitHub or
+        # Stripe webhook reaches the task listing as an anonymous "webhook".
+        if isinstance(trigger, WebhookTrigger) and trigger.webhook_type:
+            params["webhook_type"] = str(trigger.webhook_type)
+
         # Add trigger data
         if trigger_data:
             params["trigger_data"] = trigger_data
@@ -1260,9 +1270,10 @@ class TriggerService:
                     trigger_context=trigger_context,
                 )
 
-                # Merge LLM-extracted parameters (don't override existing ones)
+                # Event-derived data cannot grant new capabilities or file access.
+                resource_keys = {"mcps", "mcp", "mcp_servers", "skills", "files"}
                 for key, value in llm_params.items():
-                    if key not in params:
+                    if key not in params and key not in resource_keys:
                         params[key] = value
 
                 logger.info(
@@ -1323,6 +1334,11 @@ class TriggerService:
                         "user_display_name": trigger_data.get("user_name", ""),
                         "presentation": "concise",
                     }
+
+            elif webhook_type == "email":
+                from .channels.email_message import build_email_channel_origin
+
+                return build_email_channel_origin(trigger_data, trigger_id=trigger_id)
 
             elif webhook_type == "discord":
                 channel_id = trigger_data.get("channel_id")

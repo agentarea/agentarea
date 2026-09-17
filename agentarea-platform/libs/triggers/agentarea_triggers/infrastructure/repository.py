@@ -187,6 +187,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             webhook_type=(_value(trigger_data.webhook_type)) if trigger_data.webhook_type else None,
             validation_rules=trigger_data.validation_rules,
             webhook_config=trigger_data.webhook_config,
+            event_types=trigger_data.event_types,
         )
 
         self.session.add(trigger_orm)
@@ -393,6 +394,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 else WebhookType.GENERIC,
                 validation_rules=trigger_orm.validation_rules or {},
                 webhook_config=trigger_orm.webhook_config,
+                event_types=trigger_orm.event_types or [],
             )
         else:
             # Fallback to base Trigger

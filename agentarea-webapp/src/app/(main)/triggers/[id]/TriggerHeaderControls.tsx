@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Pencil, Power, PowerOff } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { usePathname, useRouter } from "next/navigation";
+import { Power, PowerOff } from "lucide-react";
 import { toast } from "sonner";
+import { useFormSubmittingState } from "@/app/(main)/agents/shared/useFormSubmittingState";
 import DeleteButton from "@/components/DeleteButton/DeleteButton";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +24,12 @@ export default function TriggerHeaderControls({
   isActive: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const tCreate = useTranslations("TriggersPage.create");
+  // The form only exists on the overview route; the executions and metrics tabs
+  // share this header and have nothing to submit.
+  const isOverview = pathname === `/triggers/${triggerId}`;
+  const isSaving = useFormSubmittingState("create-trigger-form");
   const [isToggling, setIsToggling] = useState(false);
   const [active, setActive] = useState(isActive);
   const handleDelete = async (id: string) => {
@@ -72,15 +80,17 @@ export default function TriggerHeaderControls({
           </>
         )}
       </Button>
-      <Button
-        size="xs"
-        variant="outline"
-        type="button"
-        onClick={() => router.push(`/triggers/${triggerId}/edit`)}
-      >
-        <Pencil />
-        Edit
-      </Button>
+      {isOverview && (
+        <Button
+          size="xs"
+          type="submit"
+          form="create-trigger-form"
+          isLoading={isSaving}
+          disabled={isSaving}
+        >
+          {tCreate("updateButton")}
+        </Button>
+      )}
       <DeleteButton
         size="xs"
         itemId={triggerId}

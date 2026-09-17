@@ -29,6 +29,7 @@ ACTION_CREATED = "created"
 ACTION_MODIFIED = "modified"
 ACTION_DELETED = "deleted"
 ACTION_ARCHIVED = "archived"
+ACTION_MOVED = "moved"
 
 ACTOR_USER = "user"
 ACTOR_AGENT = "agent"

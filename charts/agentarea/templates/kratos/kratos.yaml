@@ -46,7 +46,7 @@ data:
 {{- if not (hasKey $flowError "ui_url") -}}{{- $_ = set $flowError "ui_url" (printf "%s/auth/error" $frontendUrl) -}}{{- end -}}
 {{- $_ = set $flows "error" $flowError -}}
 {{- $flowSettings := get $flows "settings" | default dict -}}
-{{- if not (hasKey $flowSettings "ui_url") -}}{{- $_ = set $flowSettings "ui_url" (printf "%s/auth/settings" $frontendUrl) -}}{{- end -}}
+{{- if not (hasKey $flowSettings "ui_url") -}}{{- $_ = set $flowSettings "ui_url" (printf "%s/settings" $frontendUrl) -}}{{- end -}}
 {{- $_ = set $flows "settings" $flowSettings -}}
 {{- $flowRecovery := get $flows "recovery" | default dict -}}
 {{- if not (hasKey $flowRecovery "ui_url") -}}{{- $_ = set $flowRecovery "ui_url" (printf "%s/auth/recovery" $frontendUrl) -}}{{- end -}}

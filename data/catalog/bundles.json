@@ -21,7 +21,7 @@
           "type": "string",
           "required": false,
           "default": "gpt-4o",
-          "help": "Pick a model from your workspace."
+          "help": "Provider model id used by the bundle's agents."
         },
         {
           "key": "telegram_bot_token",
@@ -51,10 +51,9 @@
           "name": "Web Fetch",
           "json_spec": {
             "type": "command",
-            "command": "npx",
+            "command": "uvx",
             "args": [
-              "-y",
-              "@modelcontextprotocol/server-fetch"
+              "mcp-server-fetch"
             ]
           },
           "bindings": {}
@@ -113,17 +112,16 @@
           "target": "spend",
           "effect": "cap",
           "params": {
-            "amount_usd": 10,
-            "period": "day"
+            "amount_usd": 100,
+            "period": "month"
           },
-          "message": "Capped at $10/day."
+          "message": "Capped at $100 / month."
         },
         {
           "key": "approve_writes",
           "subject": "watcher",
           "target": "tool:fetch",
           "effect": "approval",
-          "condition": null,
           "message": "Ask a human before fetching external URLs."
         }
       ]
@@ -431,14 +429,14 @@
           "message": "Approve outreach emails before they send."
         },
         {
-          "key": "cap_daily_contacts",
-          "target": "actions",
+          "key": "cap_monthly_spend",
+          "target": "spend",
           "effect": "cap",
           "params": {
-            "count": 200,
-            "period": "day"
+            "amount_usd": 25,
+            "period": "month"
           },
-          "message": "Limit to 200 contacts per day."
+          "message": "Cap automated outreach spend at $25 / month."
         }
       ]
     },
@@ -661,6 +659,323 @@
           "agent": "social",
           "prompt": "Draft next week's social calendar.",
           "enabled": false
+        }
+      ]
+    },
+    {
+      "schema_version": "0.1.0",
+      "name": "meeting-companion",
+      "display_name": "Meeting Companion",
+      "description": "Turn raw meeting notes into summaries, decisions, and owner-tagged actions, then chase what is still open every Monday.",
+      "metadata": {
+        "developer": "AgentArea",
+        "category": "productivity",
+        "capabilities": [
+          "interactive",
+          "scheduled"
+        ]
+      },
+      "setup": [
+        {
+          "key": "model",
+          "label": "Model",
+          "type": "string",
+          "required": false,
+          "default": "gpt-4o",
+          "help": "Provider model id used by the bundle's agents."
+        }
+      ],
+      "skills": [
+        {
+          "key": "meeting_summary",
+          "name": "Meeting Summary",
+          "source_type": "content",
+          "content": "# Meeting Summary\nCondense a transcript into context, decisions, and open questions. Keep it skimmable; quote a line only when the exact wording matters.\n"
+        },
+        {
+          "key": "action_items",
+          "name": "Action Items",
+          "source_type": "content",
+          "content": "# Action Items\nExtract every commitment as `owner - action - due`. Mark an item unowned rather than guessing an owner, and drop anything that is only a discussion point.\n"
+        }
+      ],
+      "agents": [
+        {
+          "key": "notetaker",
+          "name": "Meeting Companion",
+          "model": "${setup.model}",
+          "instruction": "You turn meeting notes and transcripts into a summary, the decisions taken, and owner-tagged action items. Never invent an owner or a due date; say 'unassigned' when the notes do not say.",
+          "skills": [
+            "meeting_summary",
+            "action_items"
+          ]
+        }
+      ],
+      "automations": [
+        {
+          "key": "weekly_followup",
+          "type": "cron",
+          "cron": "0 8 * * 1",
+          "timezone": "UTC",
+          "agent": "notetaker",
+          "prompt": "List every action item from last week's notes that is still open, with its owner and how long it has been outstanding. Flag anything older than seven days.",
+          "enabled": false
+        }
+      ]
+    },
+    {
+      "schema_version": "0.1.0",
+      "name": "finance-ops",
+      "display_name": "Finance Ops",
+      "description": "An invoice and expense assistant that drafts the paperwork but can never move money on its own.",
+      "metadata": {
+        "developer": "AgentArea",
+        "category": "finance",
+        "capabilities": [
+          "interactive",
+          "governed"
+        ]
+      },
+      "setup": [
+        {
+          "key": "model",
+          "label": "Model",
+          "type": "string",
+          "required": false,
+          "default": "gpt-4o",
+          "help": "Provider model id used by the bundle's agents."
+        }
+      ],
+      "skills": [
+        {
+          "key": "invoice_triage",
+          "name": "Invoice Triage",
+          "source_type": "content",
+          "content": "# Invoice Triage\nFor each invoice: vendor, amount, due date, and whether it matches an existing PO. Route mismatches to a human instead of approving them.\n"
+        },
+        {
+          "key": "expense_review",
+          "name": "Expense Review",
+          "source_type": "content",
+          "content": "# Expense Review\nCheck an expense against policy: category, limit, receipt present, business purpose stated. Report a verdict plus the specific rule you applied.\n"
+        }
+      ],
+      "agents": [
+        {
+          "key": "bookkeeper",
+          "name": "Finance Assistant",
+          "model": "${setup.model}",
+          "instruction": "You triage invoices and review expenses. Show the arithmetic behind every total, cite the policy rule you applied, and escalate anything ambiguous. You never authorize a payment.",
+          "skills": [
+            "invoice_triage",
+            "expense_review"
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "key": "deny_payments",
+          "subject": "bookkeeper",
+          "target": "tool:make_payment",
+          "effect": "deny",
+          "message": "The assistant may never move money."
+        },
+        {
+          "key": "approve_invoices",
+          "subject": "bookkeeper",
+          "target": "tool:send_invoice",
+          "effect": "approval",
+          "message": "Approve an invoice before it is sent to a customer."
+        },
+        {
+          "key": "cap_monthly_spend",
+          "target": "spend",
+          "effect": "cap",
+          "params": {
+            "amount_usd": 50,
+            "period": "month"
+          },
+          "message": "Cap automated spend at $50 / month."
+        }
+      ]
+    },
+    {
+      "schema_version": "0.1.0",
+      "name": "recruiting-screen",
+      "display_name": "Recruiting Screener",
+      "description": "Screen candidates against a role brief with a consistent rubric, and draft the outreach \u2014 with a human in the loop before anything is sent.",
+      "metadata": {
+        "developer": "AgentArea",
+        "category": "hr",
+        "capabilities": [
+          "interactive",
+          "governed"
+        ]
+      },
+      "setup": [
+        {
+          "key": "model",
+          "label": "Model",
+          "type": "string",
+          "required": false,
+          "default": "gpt-4o",
+          "help": "Provider model id used by the bundle's agents."
+        }
+      ],
+      "skills": [
+        {
+          "key": "screening_rubric",
+          "name": "Screening Rubric",
+          "source_type": "content",
+          "content": "# Screening Rubric\nScore a candidate against the role's must-haves and nice-to-haves. Quote the evidence from the CV for each score, and mark a requirement unverified when the CV is silent - never infer it.\n"
+        },
+        {
+          "key": "candidate_outreach",
+          "name": "Candidate Outreach",
+          "source_type": "content",
+          "content": "# Candidate Outreach\nDraft a short, specific first message: why this person, what the role is, and one concrete next step. No superlatives, no filler.\n"
+        }
+      ],
+      "agents": [
+        {
+          "key": "screener",
+          "name": "Recruiting Screener",
+          "model": "${setup.model}",
+          "instruction": "You screen candidates against a role brief and draft outreach. Judge only on evidence in the application, apply the same rubric to everyone, and never infer age, gender, nationality, or any other protected characteristic.",
+          "skills": [
+            "screening_rubric",
+            "candidate_outreach"
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "key": "approve_outreach",
+          "subject": "screener",
+          "target": "tool:send_email",
+          "effect": "approval",
+          "message": "A human approves every message to a candidate."
+        },
+        {
+          "key": "cap_monthly_spend",
+          "target": "spend",
+          "effect": "cap",
+          "params": {
+            "amount_usd": 25,
+            "period": "month"
+          },
+          "message": "Cap automated spend at $25 / month."
+        }
+      ]
+    },
+    {
+      "schema_version": "0.1.0",
+      "name": "release-radar",
+      "display_name": "Release Radar",
+      "description": "Watches the dependencies you care about, posts a daily digest of what shipped and what looks risky, and answers follow-up questions on Telegram.",
+      "metadata": {
+        "developer": "AgentArea",
+        "category": "engineering",
+        "capabilities": [
+          "interactive",
+          "scheduled",
+          "governed"
+        ]
+      },
+      "setup": [
+        {
+          "key": "model",
+          "label": "Model",
+          "type": "string",
+          "required": false,
+          "default": "gpt-4o",
+          "help": "Provider model id used by the bundle's agents."
+        },
+        {
+          "key": "telegram_bot_token",
+          "label": "Telegram bot token",
+          "type": "secret",
+          "required": true,
+          "help": "From @BotFather. Used so the agent can reply in your Telegram chat."
+        }
+      ],
+      "skills": [
+        {
+          "key": "release_digest",
+          "name": "Release Digest",
+          "source_type": "content",
+          "content": "# Release Digest\nSummarize what shipped since the last digest: version, headline change, and whether it is breaking. Lead with anything that needs action today.\n"
+        },
+        {
+          "key": "risk_callout",
+          "name": "Risk Callout",
+          "source_type": "content",
+          "content": "# Risk Callout\nFor a release note, name the breaking changes, deprecations, and security fixes, and state the upgrade action for each. Say so explicitly when a release carries none.\n"
+        }
+      ],
+      "mcps": [
+        {
+          "key": "web",
+          "name": "Web Fetch",
+          "json_spec": {
+            "type": "command",
+            "command": "uvx",
+            "args": [
+              "mcp-server-fetch"
+            ]
+          },
+          "bindings": {}
+        }
+      ],
+      "agents": [
+        {
+          "key": "radar",
+          "name": "Release Radar",
+          "model": "${setup.model}",
+          "instruction": "You track releases of the projects the team depends on. Fetch the release notes, separate breaking changes from routine ones, and state the upgrade action. Quote the version numbers you actually read; if a page cannot be fetched, say so instead of guessing.",
+          "mcps": [
+            "web"
+          ],
+          "skills": [
+            "release_digest",
+            "risk_callout"
+          ]
+        }
+      ],
+      "channels": [
+        {
+          "key": "telegram_inbox",
+          "type": "telegram",
+          "name": "Telegram inbox",
+          "agent": "radar",
+          "bindings": {
+            "bot_token": "${setup.telegram_bot_token}"
+          },
+          "prompt": "Answer the release question from Telegram: {{ message_text }}",
+          "enabled": false
+        }
+      ],
+      "automations": [
+        {
+          "key": "daily_digest",
+          "type": "cron",
+          "cron": "0 7 * * 1-5",
+          "timezone": "UTC",
+          "agent": "radar",
+          "prompt": "Check the release notes of the tracked dependencies and write today's digest: what shipped, what is breaking, and what we should upgrade.",
+          "enabled": false
+        }
+      ],
+      "policies": [
+        {
+          "key": "cap_monthly_spend",
+          "target": "spend",
+          "effect": "cap",
+          "params": {
+            "amount_usd": 20,
+            "period": "month"
+          },
+          "message": "Cap automated spend at $20 / month."
         }
       ]
     }

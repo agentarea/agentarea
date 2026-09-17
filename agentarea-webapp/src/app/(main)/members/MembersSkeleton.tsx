@@ -31,7 +31,9 @@ export default function MembersSkeleton() {
   return (
     <div className="space-y-8" aria-hidden="true">
       <SectionSkeleton rows={5} />
-      <SectionSkeleton rows={2} />
+      {/* Most workspaces have no pending invitations, and that section then
+          renders as a single line — matching it here avoids a layout jump. */}
+      <Skeleton className="h-4 w-48" />
     </div>
   );
 }

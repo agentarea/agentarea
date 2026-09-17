@@ -27,6 +27,7 @@ from agentarea_common.artifacts.audit import (
     ACTION_CREATED,
     ACTION_DELETED,
     ACTION_MODIFIED,
+    ACTION_MOVED,
     ArtifactActor,
     ArtifactEventRecorder,
 )
@@ -312,6 +313,28 @@ class ArtifactService:
             )
 
         await asyncio.to_thread(_call)
+
+    async def move(self, workspace_id: str, source: str, destination: str) -> None:
+        """Relocate one workspace object, copying before removing the original.
+
+        The provenance row lands on the *destination*: that is where the file
+        lives afterwards, so it is the path a history lookup will ask about.
+        Events written under the old path stay there — path-keyed history does
+        not follow a rename.
+        """
+        clean_source = source.lstrip("/")
+        clean_destination = destination.lstrip("/")
+        if not await self.exists(workspace_id, clean_source):
+            raise FileNotFoundError(clean_source)
+        await self.copy(workspace_id, clean_source, clean_destination)
+
+        key = self._key(workspace_id, clean_source)
+
+        def _call() -> None:
+            self._client.delete_object(Bucket=self._bucket, Key=key)
+
+        await asyncio.to_thread(_call)
+        await self._record(workspace_id, clean_destination, ACTION_MOVED)
 
     async def archive(self, workspace_id: str, path: str) -> str:
         """Move a file into the trash prefix and return its archived path.

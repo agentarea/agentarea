@@ -11,6 +11,7 @@ export default function TriggersEmptyState() {
       title={t("noTriggers")}
       description={t("noTriggersDescription")}
       iconsType="triggers"
+      action={{ label: t("createTrigger"), href: "/triggers/create" }}
     />
   );
 }

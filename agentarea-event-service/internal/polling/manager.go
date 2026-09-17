@@ -114,7 +114,11 @@ func (m *Manager) startPoller(ctx context.Context, t trigger.Trigger) {
 	// Resolve channel poller from registry
 	factory := channels.Get(t.DataExtractor)
 	if factory == nil {
-		slog.Error("no channel poller registered for extractor", "trigger_id", t.ID, "extractor", t.DataExtractor)
+		// Not every polling extractor lives here: the Python worker runs its own
+		// (imap, for one) off the same column. Nothing is wrong, this service
+		// simply does not serve that one.
+		slog.Debug("extractor not served by this service, skipping",
+			"trigger_id", t.ID, "extractor", t.DataExtractor)
 		return
 	}
 

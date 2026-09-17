@@ -323,6 +323,9 @@ class TaskResponse(BaseModel):
     total_cost: float | None = None  # LLM token cost in USD
     # Set only on one-shot deferred runs; null means the task ran on creation.
     scheduled_at: UtcDatetime | None = None
+    # Who started the task. Distinct from `parameters`-derived source: a
+    # trigger-fired task is still owned by whoever created the trigger.
+    created_by: str | None = None
 
     @classmethod
     def create_new(
@@ -360,6 +363,7 @@ class TaskResponse(BaseModel):
             created_at=task.created_at,
             execution_id=task.execution_id,
             scheduled_at=task.scheduled_at,
+            created_by=task.user_id,
         )
 
 
@@ -386,9 +390,17 @@ class TaskWithAgent(BaseModel):
     # approve/reject the pending escalation inline without re-fetching task events.
     escalation_id: str | None = None
     escalation_tool_name: str | None = None
+    # The principal that started the task. Only the id: resolving it to a name
+    # is GET /v1/principals' job, so a task never fails to load because the
+    # identity provider is slow.
+    created_by: str | None = None
 
     @classmethod
-    def from_task_response(cls, task: TaskResponse, agent_name: str | None) -> "TaskWithAgent":
+    def from_task_response(
+        cls,
+        task: TaskResponse,
+        agent_name: str | None,
+    ) -> "TaskWithAgent":
         """Create TaskWithAgent from TaskResponse and agent name."""
         return cls(
             id=task.id,
@@ -404,6 +416,7 @@ class TaskWithAgent(BaseModel):
             execution_id=task.execution_id,
             total_cost=task.total_cost,
             scheduled_at=task.scheduled_at,
+            created_by=task.created_by,
         )
 
 
@@ -453,6 +466,7 @@ async def get_all_tasks(
                     scheduled_at=task.scheduled_at,
                     execution_id=task.execution_id,
                     total_cost=total_cost,
+                    created_by=task.user_id,
                 )
             )
 
@@ -492,7 +506,6 @@ async def get_task_by_id(
         agent = await agent_service.get_with_catalog(task.agent_id)
         result_dict = task.result if isinstance(task.result, dict) else None
         total_cost = result_dict.get("total_cost") if result_dict else None
-
         return TaskWithAgent(
             id=task.id,
             agent_id=task.agent_id,
@@ -507,6 +520,7 @@ async def get_task_by_id(
             scheduled_at=task.scheduled_at,
             execution_id=task.execution_id,
             total_cost=total_cost,
+            created_by=task.user_id,
         )
     except HTTPException:
         raise

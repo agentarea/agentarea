@@ -62,6 +62,8 @@ def _reserved_task(task_id, payload):
         # the live Redis event feed.
         execution_id=None,
         scheduled_at=None,
+        # The creator the response reports as `created_by`.
+        user_id="user-1",
     )
 
 
@@ -499,6 +501,7 @@ async def test_sync_path_attaches_and_deletes_after_dispatch(monkeypatch):
             created_at=task.created_at,
             execution_id="exec-1",
             scheduled_at=None,
+            user_id=task.user_id,
         )
 
     async def dispatch_reserved_run(task):
@@ -533,6 +536,9 @@ def _install_files_fakes(monkeypatch, *, puts, presigns):
     class FakeArtifactService:
         def __init__(self, *args, **kwargs):
             pass
+
+        async def list(self, workspace_id, prefix="", max_items=1000):
+            return []
 
         async def put(self, workspace_id, path, content, content_type=None):
             puts.append(
