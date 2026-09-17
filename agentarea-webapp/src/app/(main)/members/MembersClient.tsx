@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock";
 import type { WorkspaceInvitation } from "@/lib/api";
 import { InvitationsTable } from "./components/InvitationsTable";
@@ -54,22 +54,22 @@ export default function MembersClient({
   workspaceName,
 }: MembersClientProps) {
   const t = useTranslations("MembersPage");
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  // The tab lives in client state so switching is instant; the URL is kept in
+  // sync for deep links without a server round-trip (which re-fetched members
+  // and identity profiles on every click).
   const tabParam = searchParams.get("tab");
-  const tab: MembersTab = isMembersTab(tabParam) ? tabParam : "members";
-  const setTab = useCallback(
-    (next: MembersTab) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (next === "members") params.delete("tab");
-      else params.set("tab", next);
-      const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    },
-    [pathname, router, searchParams]
+  const [tab, setTabState] = useState<MembersTab>(
+    isMembersTab(tabParam) ? tabParam : "members"
   );
+  const setTab = useCallback((next: MembersTab) => {
+    setTabState(next);
+    const url = new URL(window.location.href);
+    if (next === "members") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", next);
+    window.history.replaceState(window.history.state, "", url);
+  }, []);
 
   const [query, setQuery] = useState("");
   const [order, setOrder] = useState<MembersOrder>("access");

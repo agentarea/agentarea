@@ -1,30 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import {
-  Copy,
-  LogOut,
-  MoreHorizontal,
-  Search,
-  Trash2,
-  User,
-  Users,
-} from "lucide-react";
+import { LogOut, Search, Trash2, User, Users } from "lucide-react";
 import { toast } from "sonner";
 import BaseModal from "@/components/BaseModal";
 import EmptyState from "@/components/EmptyState";
 import Table, { type Column } from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
+import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
 import { removeMemberAction } from "../actions";
 import {
@@ -89,11 +75,7 @@ function MemberCell({
           >
             {anonymous ? shortId(member.user_id) : label}
           </span>
-          {isSelf && (
-            <Badge variant="secondary" size="sm" className="uppercase">
-              {t("you")}
-            </Badge>
-          )}
+          {isSelf && <BlueprintBadge>{t("you")}</BlueprintBadge>}
         </span>
         {(secondary || anonymous) && (
           <span className="truncate text-xs text-muted-foreground">
@@ -118,7 +100,6 @@ function MemberRowActions({
 }) {
   const t = useTranslations("MembersPage");
   const router = useRouter();
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [, startTransition] = useTransition();
 
   const isSelf = member.user_id === currentUser.id;
@@ -126,17 +107,7 @@ function MemberRowActions({
     ? shortId(member.user_id)
     : getMemberLabel(member, currentUser);
   // The owner can only be removed by leaving themselves.
-  const canRemove = isSelf || access !== "owner";
-
-  const copyId = async () => {
-    try {
-      await navigator.clipboard.writeText(member.user_id);
-      toast.success(t("userIdCopied"));
-    } catch (err) {
-      console.error("Failed to copy user id:", err);
-      toast.error(t("copyFailed"));
-    }
-  };
+  if (!isSelf && access === "owner") return null;
 
   const remove = async () => {
     const res = await removeMemberAction(member.user_id);
@@ -157,60 +128,26 @@ function MemberRowActions({
   };
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-            aria-label={t("rowActions", { member: label })}
-          >
-            <MoreHorizontal />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[200px]">
-          <DropdownMenuItem onSelect={copyId} className="gap-2">
-            <Copy className="h-4 w-4 text-muted-foreground" />
-            {t("copyUserId")}
-          </DropdownMenuItem>
-          {canRemove && (
-            <>
-              <DropdownMenuSeparator />
-              {/* Deferred so the menu has closed and returned focus before the
-                  dialog mounts; otherwise the dialog is dismissed as it opens. */}
-              <DropdownMenuItem
-                onSelect={() => {
-                  window.setTimeout(() => setConfirmOpen(true), 0);
-                }}
-                className={isSelf ? "gap-2" : "gap-2 text-destructive"}
-              >
-                {isSelf ? (
-                  <LogOut className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                {isSelf ? t("leaveWorkspace") : t("removeFromWorkspace")}
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <BaseModal
-        type="delete"
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title={isSelf ? t("leaveWorkspace") : t("removeMemberTitle")}
-        description={
-          isSelf
-            ? t("leaveText", { workspace: workspaceName })
-            : t("removeMemberText", { member: label, workspace: workspaceName })
-        }
-        confirmLabel={isSelf ? t("leave") : t("remove")}
-        onConfirm={remove}
-      />
-    </>
+    <BaseModal
+      type="delete"
+      title={isSelf ? t("leaveWorkspace") : t("removeMemberTitle")}
+      description={
+        isSelf
+          ? t("leaveText", { workspace: workspaceName })
+          : t("removeMemberText", { member: label, workspace: workspaceName })
+      }
+      confirmLabel={isSelf ? t("leave") : t("remove")}
+      onConfirm={remove}
+    >
+      <Button
+        variant="destructiveOutline"
+        size="xs"
+        className="px-2 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+      >
+        {isSelf ? <LogOut /> : <Trash2 />}
+        {isSelf ? t("leave") : t("remove")}
+      </Button>
+    </BaseModal>
   );
 }
 

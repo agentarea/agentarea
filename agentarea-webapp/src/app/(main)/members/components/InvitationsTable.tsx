@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Link2, Loader2, Mail, Search } from "lucide-react";
+import { Link2, Loader2, Mail, Search, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import EmptyState from "@/components/EmptyState";
 import Table, { type Column } from "@/components/Table/Table";
@@ -107,14 +107,14 @@ function RevokeButton({ invitation }: { invitation: WorkspaceInvitation }) {
   const isBusy = busy && pending;
   return (
     <Button
-      variant="ghost"
+      variant="destructiveOutline"
       size="xs"
-      className="text-muted-foreground opacity-0 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100 data-[busy=true]:opacity-100"
+      className="px-2 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[busy=true]:opacity-100"
       data-busy={isBusy}
       disabled={isBusy}
       onClick={revoke}
     >
-      {isBusy && <Loader2 className="animate-spin" />}
+      {isBusy ? <Loader2 className="animate-spin" /> : <Unlink />}
       {t("revoke")}
     </Button>
   );

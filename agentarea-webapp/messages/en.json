@@ -180,7 +180,7 @@
     "orderAccess": "Access",
     "orderUserId": "User ID",
     "peopleTitle": "People",
-    "peopleDescription": "Everyone with access to this workspace. Profile details are available for your own account only — other members are identified by their user ID.",
+    "peopleDescription": "Everyone with access to this workspace.",
     "accessColumn": "Workspace access",
     "accessOwner": "Owner",
     "accessMember": "Member",

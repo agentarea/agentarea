@@ -6,6 +6,7 @@ import {
   type WorkspaceMember,
 } from "@/lib/api";
 import { getAuthContext } from "@/lib/getAuthContext";
+import { resolveIdentityProfiles } from "@/lib/identities";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import MembersClient from "./MembersClient";
 
@@ -69,12 +70,32 @@ export default async function MembersData() {
     username,
   });
 
+  // The API knows profile details for the caller only; look the rest up in
+  // the identity provider so members show as people, not ids.
+  const profiles = await resolveIdentityProfiles(members.map((m) => m.user_id));
+  members = members.map((m) => {
+    const profile = profiles.get(m.user_id);
+    if (!profile) return m;
+    return {
+      ...m,
+      email: m.email ?? profile.email,
+      display_name: m.display_name ?? profile.name ?? profile.email,
+    };
+  });
+
+  // A personal workspace is owned by the user whose id it carries, so the
+  // owner is known even when the API predates `owner_user_id` in its
+  // workspace response and leaves the field out.
+  const ownerUserId =
+    active?.owner_user_id ??
+    (active && userId && active.id === userId ? userId : null);
+
   return (
     <MembersClient
       members={members}
       invitations={invitations}
       currentUser={{ id: userId, email, name, username }}
-      ownerUserId={active?.owner_user_id ?? null}
+      ownerUserId={ownerUserId}
       workspaceName={active?.name ?? t("thisWorkspace")}
     />
   );
