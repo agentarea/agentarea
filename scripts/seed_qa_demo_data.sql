@@ -514,7 +514,14 @@ BEGIN
                 agent_id,
                 CASE WHEN i % 3 = 0 THEN 'webhook' WHEN i % 5 = 0 THEN 'polling' ELSE 'cron' END,
                 i % 4 <> 0,
-                json_build_object('qa_seed', true, 'flow', flows[((i - 1) % array_length(flows, 1)) + 1]),
+                -- 'text' is what the agent is asked when the trigger fires; a
+                -- schedule carries nothing else, so seeding without it produces
+                -- triggers that can only fail.
+                json_build_object(
+                    'qa_seed', true,
+                    'flow', flows[((i - 1) % array_length(flows, 1)) + 1],
+                    'text', 'Summarise the latest queue and report what changed.'
+                ),
                 json_build_object('min_priority', CASE WHEN i % 2 = 0 THEN 'medium' ELSE 'low' END),
                 5,
                 i % 3,

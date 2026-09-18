@@ -93,7 +93,11 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
             from agentarea_triggers.domain.enums import ExecutionStatus
             from agentarea_triggers.logging_utils import TriggerNotFoundError
-            from agentarea_triggers.trigger_service import TriggerService
+            from agentarea_triggers.trigger_service import (
+                NO_TASK_TEXT,
+                TriggerService,
+                resolve_task_query,
+            )
 
             database = get_database()
             if not database:
@@ -261,6 +265,33 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 # Create task from trigger
                 task_id = None
                 task_failure = None
+                query = resolve_task_query(trigger, execution_data)
+                if query is None:
+                    # Nothing to ask the agent. Recorded as a failure rather than
+                    # skipped so it shows up in the trigger's history and counts
+                    # toward the auto-disable threshold -- a schedule that cannot
+                    # say what it wants will not start saying it tomorrow.
+                    execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                    logger.warning(
+                        f"Trigger {trigger_id} produced no task: {NO_TASK_TEXT}",
+                        trigger_id=trigger_id,
+                    )
+                    execution_result = await trigger_service.record_execution(
+                        trigger_id=trigger_id,
+                        status=ExecutionStatus.FAILED,
+                        execution_time_ms=execution_time_ms,
+                        error_message=NO_TASK_TEXT,
+                        trigger_data=execution_data,
+                    )
+                    return ExecuteTriggerResult(
+                        trigger_id=trigger_id,
+                        status=TriggerOutcome.FAILED,
+                        execution_id=execution_result.id,
+                        execution_time_ms=execution_time_ms,
+                        error=NO_TASK_TEXT,
+                        trigger_data=execution_data,
+                    )
+
                 try:
                     from agentarea_tasks.domain.models import AgentTask
                     from agentarea_tasks.infrastructure.repository import TaskRepository
@@ -285,23 +316,6 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     # Build task parameters
                     task_params = await trigger_service._build_task_parameters(
                         trigger, execution_data
-                    )
-
-                    # Extract message text for the task query.
-                    extracted_events = execution_data.get("extracted_events", [])
-                    message_texts = [e.get("text") for e in extracted_events if e.get("text")]
-                    if not message_texts:
-                        top_level_text = execution_data.get("text")
-                        if top_level_text:
-                            message_texts = [top_level_text]
-                    if not message_texts:
-                        task_text = trigger.task_parameters.get("text")
-                        if isinstance(task_text, str) and task_text.strip():
-                            message_texts = [task_text.strip()]
-                    query = (
-                        "\n".join(message_texts)
-                        if message_texts
-                        else (trigger.description or f"Execute trigger {trigger.name}")
                     )
 
                     # Pass channel_origin so agent response routes back to the channel
@@ -540,7 +554,11 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             from agentarea_tasks.infrastructure.repository import TaskRepository
             from agentarea_tasks.task_service import TaskService
             from agentarea_tasks.temporal_task_manager import TemporalTaskManager
-            from agentarea_triggers.trigger_service import TriggerService
+            from agentarea_triggers.trigger_service import (
+                NO_TASK_TEXT,
+                TriggerService,
+                resolve_task_query,
+            )
 
             database = get_database()
             async with database.async_session_factory() as session:
@@ -586,22 +604,15 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 # Build task parameters
                 task_params = await trigger_service._build_task_parameters(trigger, execution_data)
 
-                # Extract message text for query (same logic as execute_trigger_activity)
-                extracted_events = execution_data.get("extracted_events", [])
-                message_texts = [e.get("text") for e in extracted_events if e.get("text")]
-                if not message_texts:
-                    top_level_text = execution_data.get("text")
-                    if top_level_text:
-                        message_texts = [top_level_text]
-                if not message_texts:
-                    task_text = trigger.task_parameters.get("text")
-                    if isinstance(task_text, str) and task_text.strip():
-                        message_texts = [task_text.strip()]
-                query = (
-                    "\n".join(message_texts)
-                    if message_texts
-                    else (trigger.description or f"Execute trigger {trigger.name}")
-                )
+                query = resolve_task_query(trigger, execution_data)
+                if query is None:
+                    return CreateTaskFromTriggerResult(
+                        task_id=None,
+                        trigger_id=trigger_id,
+                        status=TaskCreationOutcome.FAILED,
+                        task_parameters=task_params,
+                        error=NO_TASK_TEXT,
+                    )
 
                 task = AgentTask(
                     title=f"Trigger: {trigger.name}",

@@ -192,8 +192,10 @@ class TriggersAgentToolset(Toolset):
         schedule a different agent in the same workspace.
 
         ``task_parameters`` are merged into every task created when the trigger
-        fires. ``conditions`` is an optional rule/LLM condition map evaluated
-        against event data before firing.
+        fires, and must carry ``text`` -- what the agent is asked to do each time.
+        A schedule arrives carrying nothing, so there is no other source for it.
+        ``conditions`` is an optional rule/LLM condition map evaluated against
+        event data before firing.
         """
         from .schemas.dto import TriggerCreate
 

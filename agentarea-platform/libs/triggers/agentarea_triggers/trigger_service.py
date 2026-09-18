@@ -47,6 +47,46 @@ logger = TriggerLogger(__name__)
 
 # Error classes moved to logging_utils.py for consistency
 
+# The task query is resolved here rather than at each execution path because
+# there are two of them -- the service, for webhooks and manual runs, and the
+# Temporal activity, for schedules and pollers -- and they had drifted apart.
+NO_TASK_TEXT = (
+    "Trigger has no task text: nothing arrived with the event and none is set on the trigger"
+)
+
+
+def resolve_task_query(trigger: Trigger, trigger_data: dict[str, Any]) -> str | None:
+    """What the agent is being asked to do, or None when nothing says.
+
+    What actually arrived outranks the standing instruction: text carried by the
+    events that fired the trigger, then a top-level text, then the task text set
+    on the trigger itself. Events arrive under ``events`` or ``extracted_events``
+    depending on which path fired.
+
+    Returns None rather than inventing an ask. The trigger's description used to
+    stand in, but it explains the automation to whoever reads the list -- running
+    an agent against "every weekday at 06:45 it scores the inbound queue"
+    produces a task about the schedule instead of the work.
+    """
+    events = trigger_data.get("events") or trigger_data.get("extracted_events") or []
+    texts = [
+        event["text"]
+        for event in events
+        if isinstance(event, dict) and isinstance(event.get("text"), str) and event["text"].strip()
+    ]
+
+    if not texts:
+        top_level_text = trigger_data.get("text")
+        if isinstance(top_level_text, str) and top_level_text.strip():
+            texts = [top_level_text]
+
+    if not texts:
+        task_text = trigger.task_parameters.get("text")
+        if isinstance(task_text, str) and task_text.strip():
+            texts = [task_text.strip()]
+
+    return "\n".join(texts) if texts else None
+
 
 class TriggerService:
     """High-level service for trigger management that orchestrates persistence and lifecycle."""
@@ -896,6 +936,16 @@ class TriggerService:
         if not trigger_data.timezone or not trigger_data.timezone.strip():
             raise TriggerValidationError("Timezone is required for CRON triggers")
 
+        # A schedule coming due carries nothing with it, so the task text is the
+        # only thing that can tell the agent what to do. Two exemptions, both
+        # because something else supplies the text: webhooks get it from the
+        # call, and a schedule with a data extractor polls a mailbox or a feed
+        # and works on what it finds.
+        if not trigger_data.data_extractor:
+            task_text = (trigger_data.task_parameters or {}).get("text")
+            if not isinstance(task_text, str) or not task_text.strip():
+                raise TriggerValidationError("Task text is required for CRON triggers")
+
     async def _validate_webhook_configuration(self, trigger_data: TriggerCreate) -> None:
         """Validate webhook trigger configuration.
 
@@ -942,6 +992,14 @@ class TriggerService:
                 parts = trigger_update.cron_expression.strip().split()
                 if len(parts) not in [5, 6]:
                     raise TriggerValidationError("Cron expression must have 5 or 6 parts")
+
+            # Editing a schedule into the state create_trigger refuses is the
+            # same mistake, made later. An update that leaves task_parameters
+            # alone leaves the existing text alone with it.
+            if trigger_update.task_parameters is not None and not existing_trigger.data_extractor:
+                task_text = trigger_update.task_parameters.get("text")
+                if not isinstance(task_text, str) or not task_text.strip():
+                    raise TriggerValidationError("Task text is required for CRON triggers")
 
         elif isinstance(existing_trigger, WebhookTrigger):
             if trigger_update.allowed_methods is not None:
@@ -1069,23 +1127,15 @@ class TriggerService:
             # Create task from trigger
             task_id = None
             if self.task_service:
-                # Extract message text for the task query.
-                # Priority: events (poll-based) > top-level text (webhook-parsed) > fallback
-                events = trigger_data.get("events", [])
-                message_texts = [e.get("text") for e in events if e.get("text")]
-                if not message_texts:
-                    top_level_text = trigger_data.get("text")
-                    if top_level_text:
-                        message_texts = [top_level_text]
-                if not message_texts:
-                    task_text = trigger.task_parameters.get("text")
-                    if isinstance(task_text, str) and task_text.strip():
-                        message_texts = [task_text.strip()]
-                query = (
-                    "\n".join(message_texts)
-                    if message_texts
-                    else (trigger.description or f"Execute trigger {trigger.name}")
-                )
+                query = resolve_task_query(trigger, trigger_data)
+                if query is None:
+                    return await self._record_execution_failure(
+                        trigger_id,
+                        NO_TASK_TEXT,
+                        trigger_data,
+                        int((time.time() - start_time) * 1000),
+                        fired_by=fired_by,
+                    )
 
                 channel_origin = trigger_data.get("channel_origin")
 

@@ -390,7 +390,10 @@ class BundleInstaller:
                 agent_id=agent_id,
                 trigger_type="webhook",
                 webhook_type=channel.type,
-                task_parameters={"prompt": channel.prompt},
+                # Under "text", not "prompt": this is the standing instruction
+                # used when an inbound message carries none of its own, and
+                # "text" is the key the execution path reads.
+                task_parameters={"text": channel.prompt},
                 enabled=channel.enabled,
             )
             domain = dto.to_domain(
@@ -453,11 +456,16 @@ class BundleInstaller:
 
             dto = TriggerCreate(
                 name=trigger_name,
-                description=auto.prompt,  # becomes the agent task query on each run
+                description=f"Runs {auto.cron} ({auto.timezone})",
                 agent_id=agent_id,
                 trigger_type="cron",
                 cron_expression=auto.cron,
                 timezone=auto.timezone,
+                # The prompt is the task query, so it goes where the execution
+                # path reads it. It used to be written into description, which
+                # worked only because description stood in for a missing task
+                # text -- and that stand-in is gone.
+                task_parameters={"text": auto.prompt},
                 enabled=auto.enabled,
             )
             domain = dto.to_domain(
