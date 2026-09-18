@@ -46,7 +46,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_VERSION:
       process.env.NEXT_PUBLIC_APP_VERSION ?? packageJson.version,
   },
-  transpilePackages: ["@t3-oss/env-nextjs", "@t3-oss/env-core", "@ory/elements-react"],
+  transpilePackages: ["@agentarea/ui-shell", "@t3-oss/env-nextjs", "@t3-oss/env-core", "@ory/elements-react"],
   // Turbopack (used by default in next dev) needs its own SVG rule,
   // since it does not use the webpack() config below.
   turbopack: {

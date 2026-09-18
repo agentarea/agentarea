@@ -1,0 +1,39 @@
+{
+  "name": "@agentarea/ui-shell",
+  "version": "0.1.0",
+  "description": "The AgentArea application shell: settings sidebar and the shadcn primitives it is built from. Consumed by the web app in this repository and by separate deployments that must not look like a different product.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agentarea/agentarea.git",
+    "directory": "agentarea-webapp/packages/ui-shell"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.6",
+    "@radix-ui/react-separator": "^1.1.7",
+    "@radix-ui/react-slot": "^1.1.2",
+    "@radix-ui/react-tooltip": "^1.1.8",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.475.0",
+    "tailwind-merge": "^3.0.1"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.5.3"
+  }
+}
