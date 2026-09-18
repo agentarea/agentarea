@@ -180,6 +180,10 @@ The following table lists configurable parameters of the chart and their default
 | ingress.tls | list | `[]` |  |
 | backend.enabled | bool | `true` |  |
 | backend.replicaCount | int | `1` |  |
+| backend.workers | int | `1` | Uvicorn worker processes per pod. One process is one event loop, so one pod serves about one CPU core's worth of Python however large its CPU limit is. Prefer replicas over workers -- a pool inside the pod hides a stuck worker from the probes, which poll the pod, not the process. Raise this only when a deliberately larger CPU limit would otherwise go unused. |
+| backend.preStopDelay | int | `5` | Seconds the pod keeps serving after it is marked for deletion, covering the gap before its removal from the Service endpoints has propagated. |
+| backend.shutdownTimeout | int | `20` | Seconds uvicorn then waits for open connections to finish. Must be finite: the API serves SSE, and those connections never close on their own. |
+| backend.terminationGracePeriodSeconds | int | `30` | Total budget the kubelet allows for the two above before SIGKILL. Keep it above preStopDelay + shutdownTimeout, or draining is cut short. |
 | backend.image.repository | string | `"agentarea/agentarea-api"` |  |
 | backend.image.tag | string | `"latest"` |  |
 | backend.image.pullPolicy | string | `""` |  |

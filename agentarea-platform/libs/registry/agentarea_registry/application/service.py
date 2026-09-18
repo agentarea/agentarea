@@ -15,6 +15,7 @@ Source format auto-detected (JSON or YAML).
 Entity-specific details (connection_type, source_type) live in spec JSONB.
 """
 
+import asyncio
 import json
 import logging
 import urllib.request
@@ -35,6 +36,13 @@ from agentarea_registry.infrastructure.repository import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Per-socket-operation timeout for fetching a catalog over HTTP. urllib applies
+# it to each connect and read rather than to the transfer as a whole, so this
+# bounds a stalled host, not a large catalog. The previous 120s bound outlived
+# both the readiness and the liveness probe, so a hung source took the pod down
+# with it before the fetch ever gave up.
+SOURCE_FETCH_TIMEOUT_SECONDS = 30
 
 VALID_REGISTRY_TYPES = (
     "mcp_servers",
@@ -319,7 +327,11 @@ class RegistryService:
             raise ValueError("Managed registry items are changed through the catalog item API")
 
         try:
-            raw_data = self._fetch_source(registry.source_url)
+            # In a worker thread, not on the loop: _fetch_source is a blocking
+            # urlopen, and the API serves every request from one event loop, so
+            # calling it here directly froze the whole process -- /health with
+            # it, which is what the probes poll.
+            raw_data = await asyncio.to_thread(self._fetch_source, registry.source_url)
             parsed_items = self._parse_source(registry.registry_type, raw_data)
 
             new_specs = 0
@@ -750,7 +762,7 @@ class RegistryService:
                     "User-Agent": "agentarea-registry-sync",
                 },
             )
-            with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
+            with urllib.request.urlopen(req, timeout=SOURCE_FETCH_TIMEOUT_SECONDS) as resp:  # noqa: S310
                 raw = resp.read().decode("utf-8")
                 content_type = resp.headers.get("Content-Type", "")
         else:

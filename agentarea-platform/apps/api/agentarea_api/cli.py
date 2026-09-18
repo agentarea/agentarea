@@ -41,8 +41,28 @@ def cli():
 )
 @click.option("--reload/--no-reload", default=False, help="Enable/disable auto-reload")
 @click.option("--log-level", default="info", help="Logging level")
-@click.option("--workers", default=1, help="Number of worker processes")
-def serve(host: str, port: int, reload: bool, log_level: str, workers: int):
+@click.option(
+    "--workers",
+    default=1,
+    envvar="AGENTAREA_API_WORKERS",
+    show_envvar=True,
+    help=(
+        "Worker processes. One process is one event loop, so roughly one CPU "
+        "core however many the pod is allowed; raise this only to match a "
+        "larger CPU limit, otherwise add replicas."
+    ),
+)
+@click.option(
+    "--shutdown-timeout",
+    default=20,
+    envvar="AGENTAREA_API_SHUTDOWN_TIMEOUT",
+    show_envvar=True,
+    help=(
+        "Seconds to wait on SIGTERM for open connections to finish. Must stay "
+        "below the pod's terminationGracePeriodSeconds, minus any preStop wait."
+    ),
+)
+def serve(host: str, port: int, reload: bool, log_level: str, workers: int, shutdown_timeout: int):
     """Start the API server."""
     click.echo(f"Starting AgentArea API server on {host}:{port}")
     click.echo(f"Reload: {reload}, Log Level: {log_level}, Workers: {workers}")
@@ -54,7 +74,11 @@ def serve(host: str, port: int, reload: bool, log_level: str, workers: int):
         reload=reload,
         workers=workers if not reload else 1,  # Workers > 1 incompatible with reload
         log_level=log_level,
-        timeout_graceful_shutdown=3 if reload else None,  # Don't hang on reload
+        # Bounded, always. The API serves SSE, and those connections never end
+        # on their own: waiting for every connection to close meant the process
+        # sat until the pod's grace period expired and was killed, dropping
+        # whatever else was still in flight on each rollout.
+        timeout_graceful_shutdown=3 if reload else shutdown_timeout,
     )
 
 
