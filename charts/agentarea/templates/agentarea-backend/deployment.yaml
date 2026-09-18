@@ -33,6 +33,7 @@ spec:
         {{- end }}
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.backend.terminationGracePeriodSeconds }}
       {{- with .Values.global.security.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -72,7 +73,20 @@ spec:
             - name: health
               containerPort: {{ .Values.global.monitoring.health.port }}
               protocol: TCP
+          {{- if gt (int .Values.backend.preStopDelay) 0 }}
+          lifecycle:
+            preStop:
+              # Keep serving while the endpoint removal propagates. Without
+              # this, SIGTERM and the Service update race, and uvicorn stops
+              # accepting connections that are still being routed here.
+              exec:
+                command: ["/bin/sh", "-c", "sleep {{ .Values.backend.preStopDelay }}"]
+          {{- end }}
           env:
+            - name: AGENTAREA_API_WORKERS
+              value: {{ .Values.backend.workers | quote }}
+            - name: AGENTAREA_API_SHUTDOWN_TIMEOUT
+              value: {{ .Values.backend.shutdownTimeout | quote }}
             {{- include "agentarea.database.secrets.envs" . | nindent 12 }}
             {{- include "agentarea.database.envs" . | nindent 12 }}
             {{- include "agentarea.redis.secrets.envs" . | nindent 12 }}
