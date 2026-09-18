@@ -159,6 +159,39 @@ describe("getTaskSource", () => {
     "named trigger without type"
   );
 
+  // A person pressed "run now". The schedule did not come due, so saying
+  // "Scheduled" would be a plain lie about what happened.
+  assertEqual(
+    getTaskSource({
+      trigger_type: "cron",
+      trigger_name: "Daily summary",
+      fired_by: "user-42",
+    }),
+    {
+      kind: "manual_run",
+      label: "Manual run",
+      detail: "Daily summary",
+      principalId: "user-42",
+    },
+    "manual run of a cron trigger"
+  );
+
+  assertEqual(
+    getTaskSource({
+      trigger_type: "webhook",
+      trigger_name: "GitHub PR",
+      webhook_type: "github",
+      fired_by: "user-42",
+    }),
+    {
+      kind: "manual_run",
+      label: "Manual run",
+      detail: "GitHub PR",
+      principalId: "user-42",
+    },
+    "manual run of a webhook trigger drops the channel it did not come from"
+  );
+
   // channel_origin takes priority over trigger_*
   assertEqual(
     getTaskSource({

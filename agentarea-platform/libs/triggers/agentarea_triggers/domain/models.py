@@ -157,6 +157,15 @@ class TriggerExecution(BaseModel):
     trigger_data: dict[str, Any] = Field(default_factory=dict)
     workflow_id: str | None = None  # Temporal workflow ID
     run_id: str | None = None  # Temporal run ID
+    fired_by: str | None = Field(
+        default=None,
+        description=(
+            "Principal who asked for this one run, when a person did. Empty means "
+            "the trigger's own mechanism fired it -- the schedule came due, or the "
+            "webhook was called. Not the same as created_by, which records whose "
+            "context wrote the row and is filled either way."
+        ),
+    )
 
     class Config:
         """Pydantic model configuration."""

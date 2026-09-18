@@ -109,3 +109,35 @@ describe("existing automation form before the optional catalog loads", () => {
     expect(markup).not.toContain('name="cron_expression"');
   });
 });
+
+describe("who has to state the task up front", () => {
+  const taskField = (markup: string) =>
+    markup.match(/<textarea[^>]*id="task_text"[^>]*>/)?.[0] ?? "";
+
+  it("requires it of a schedule, which fires carrying nothing", () => {
+    const markup = renderToStaticMarkup(
+      <CreateTriggerForm agents={[]} initialData={trigger} />
+    );
+    expect(taskField(markup)).toContain("required");
+  });
+
+  it("does not require it of a webhook, whose text arrives with the call", () => {
+    const markup = renderToStaticMarkup(
+      <CreateTriggerForm
+        agents={[]}
+        initialData={{ ...trigger, trigger_type: "webhook" }}
+      />
+    );
+    expect(taskField(markup)).not.toContain("required");
+  });
+
+  it("does not require it of a poller, which works on what it finds", () => {
+    const markup = renderToStaticMarkup(
+      <CreateTriggerForm
+        agents={[]}
+        initialData={{ ...trigger, data_extractor: "imap" }}
+      />
+    );
+    expect(taskField(markup)).not.toContain("required");
+  });
+});

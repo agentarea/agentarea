@@ -217,6 +217,14 @@ export function CreateTriggerForm({
   const selected = catalog.find((e) => e.id === selectedId);
   const triggerType = initialData?.trigger_type ?? selected?.backend_type ?? "";
   const webhookType = initialData?.webhook_type ?? selected?.webhook_type ?? "";
+  // A schedule comes due carrying nothing with it, so the task text is the only
+  // thing that can tell the agent what to do, and the backend rejects a
+  // schedule saved without one. Two kinds are exempt because something else
+  // supplies the text: webhooks get it from the call, and a poller works on
+  // whatever the mailbox or feed handed it.
+  const taskTextRequired =
+    triggerType === "cron" &&
+    !(initialData?.data_extractor ?? selected?.data_extractor);
   const timezones = Array.from(
     new Set([
       ...TIMEZONES,
@@ -508,7 +516,9 @@ export function CreateTriggerForm({
           </div>
           <section aria-label={t("taskInstructions")} className="space-y-3">
             <div className="grid content-start gap-2">
-              <FormLabel htmlFor="task_text">{t("taskInstructions")}</FormLabel>
+              <FormLabel htmlFor="task_text" required={taskTextRequired}>
+                {t("taskInstructions")}
+              </FormLabel>
               <Textarea
                 id="task_text"
                 value={taskText}
@@ -516,6 +526,7 @@ export function CreateTriggerForm({
                 placeholder={t("taskTextPlaceholder")}
                 variant="document"
                 rows={6}
+                required={taskTextRequired}
               />
             </div>
             {state.errors?.task_parameters && (

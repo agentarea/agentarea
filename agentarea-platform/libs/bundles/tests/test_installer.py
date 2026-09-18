@@ -117,6 +117,35 @@ policies:
 """
 
 
+async def test_an_automation_prompt_becomes_the_task_text():
+    """The bundle schema calls it "task query passed to the agent on each run".
+
+    It used to be written into the trigger's description, which the execution
+    path then picked up because description stood in for a missing task text.
+    With that stand-in gone the prompt has to land where the agent reads it.
+    """
+    inst, deps = _installer()
+    await inst.install(parse_bundle(FULL), {"token": "t"})
+
+    trigger = deps["trigger_service"].created[0]
+    assert trigger.task_parameters["text"] == "go"
+
+
+async def test_a_channel_prompt_becomes_the_task_text():
+    """Same field, same mistake: it was stored under a key nothing reads."""
+    pkg = parse_bundle(
+        'schema_version: "0.1.0"\nname: c\n'
+        "agents: [{key: lead, name: Lead, model: gpt-4o}]\n"
+        "channels:\n"
+        "  - {key: tg, name: TG, type: telegram, agent: lead, prompt: Answer it}\n"
+    )
+    inst, deps = _installer()
+    await inst.install(pkg, {})
+
+    trigger = deps["trigger_service"].created[0]
+    assert trigger.task_parameters["text"] == "Answer it"
+
+
 async def test_policies_install_on_workspace_and_agent():
     inst, deps = _installer()
     res = await inst.install(parse_bundle(POLICIES), {})

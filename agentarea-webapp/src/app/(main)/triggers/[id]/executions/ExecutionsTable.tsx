@@ -1,8 +1,10 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
+import { useTranslations } from "next-intl";
 import type { TriggerExecutionResponse } from "@/api/client/types.gen";
 import Table from "@/components/Table/Table";
+import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getTriggerExecutionStatusPresentation } from "@/lib/status";
 
@@ -10,13 +12,17 @@ interface ExecutionsTableProps {
   executions: TriggerExecutionResponse[];
   triggerId: string;
   currentPage: number;
+  /** Principal id -> display name, resolved by the page via GET /v1/principals. */
+  principalNames?: Record<string, string>;
 }
 
 export default function ExecutionsTable({
   executions,
   triggerId: _triggerId,
   currentPage: _currentPage,
+  principalNames = {},
 }: ExecutionsTableProps) {
+  const t = useTranslations("TriggersPage.detail");
   const columns = [
     {
       accessor: "id",
@@ -42,6 +48,22 @@ export default function ExecutionsTable({
           </StatusIndicator>
         );
       },
+    },
+    {
+      accessor: "fired_by",
+      header: t("executionSource"),
+      // Empty means the trigger fired itself -- the schedule came due, or the
+      // webhook was called. A name means a person asked for this one run.
+      render: (value: string | null) =>
+        value ? (
+          <Badge variant="zinc" size="sm">
+            {principalNames[value]
+              ? `${t("executionManual")} · ${principalNames[value]}`
+              : t("executionManual")}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground">{t("executionAutomatic")}</span>
+        ),
     },
     {
       accessor: "executed_at",

@@ -51,7 +51,7 @@ class TestTriggerExecutionActivities:
             agent_id=uuid4(),
             cron_expression="0 9 * * 1-5",
             timezone="UTC",
-            task_parameters={"test_param": "test_value"},
+            task_parameters={"test_param": "test_value", "text": "Run the daily check"},
             created_by="test_user",
             is_active=True,
         )

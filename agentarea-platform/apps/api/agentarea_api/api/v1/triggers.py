@@ -20,7 +20,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from agentarea_api.api.deps.services import (
@@ -159,6 +159,13 @@ class TriggerExecutionResponse(BaseModel):
     trigger_data: dict[str, Any]
     workflow_id: str | None = None
     run_id: str | None = None
+    fired_by: str | None = Field(
+        default=None,
+        description=(
+            "Principal who asked for this run, when a person did. Null means the "
+            "trigger fired itself. Resolve the name through GET /v1/principals."
+        ),
+    )
 
     @classmethod
     def from_domain_model(cls, execution: Any) -> "TriggerExecutionResponse":
@@ -176,6 +183,7 @@ class TriggerExecutionResponse(BaseModel):
             trigger_data=execution.trigger_data,
             workflow_id=execution.workflow_id,
             run_id=execution.run_id,
+            fired_by=execution.fired_by,
         )
 
 
@@ -241,6 +249,24 @@ class TriggerExecuteRequest(BaseModel):
 
     events: list[dict[str, Any]] = Field(default_factory=list)
     channel_origin: dict[str, Any] = Field(default_factory=dict)
+
+
+class TriggerRunResponse(BaseModel):
+    """Result of firing a trigger once by hand."""
+
+    status: Literal["started", "skipped"] = Field(
+        description=(
+            "'started' when a task was created and is now running. 'skipped' when "
+            "the trigger's own conditions rejected the run -- a real answer about "
+            "the trigger, not an error."
+        )
+    )
+    trigger_id: UUID
+    execution_id: UUID
+    task_id: UUID | None = Field(
+        default=None, description="The task to watch. Absent when the run was skipped."
+    )
+    reason: str | None = Field(default=None, description="Why the run was skipped, when it was.")
 
 
 # Utility Functions
@@ -1194,3 +1220,52 @@ async def execute_trigger(
     except Exception as e:
         logger.error(f"Failed to execute trigger {trigger_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post("/{trigger_id}/run", response_model=TriggerRunResponse)
+async def run_trigger_now(
+    trigger_id: UUID,
+    trigger_service: TriggerService = Depends(get_trigger_service),
+    user_context: UserContext = Depends(get_user_context),
+) -> TriggerRunResponse:
+    """Fire a trigger once, now, because a person asked for it.
+
+    Distinct from ``/execute``, which replays a real event: this carries no event
+    data and records the caller in ``fired_by``, so the run is visibly a manual
+    one and the task it creates belongs to the caller rather than to whoever
+    created the trigger.
+
+    The run is otherwise faithful to a real one -- the trigger's conditions are
+    still evaluated, and a run they reject comes back ``skipped`` with the reason
+    rather than being forced through. A trigger that is switched off still runs:
+    ``is_active`` governs the schedule, not a person asking for one run.
+
+    Returns:
+        The execution, and the task id to watch when one was created.
+    """
+    if not user_context.user_id:
+        raise HTTPException(status_code=401, detail="Authenticated user required")
+
+    try:
+        execution = await trigger_service.execute_trigger(
+            trigger_id, {"events": [], "channel_origin": {}}, fired_by=user_context.user_id
+        )
+    except TriggerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        logger.error(f"Failed to run trigger {trigger_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+    # No execution record at all means the run never happened and nothing said
+    # why. Reporting that as success would put a "started" toast over nothing.
+    if execution is None:
+        raise HTTPException(status_code=500, detail="Trigger run produced no execution")
+
+    task_id = getattr(execution, "task_id", None)
+    return TriggerRunResponse(
+        status="started" if task_id else "skipped",
+        trigger_id=trigger_id,
+        execution_id=execution.id,
+        task_id=task_id,
+        reason=getattr(execution, "error_message", None),
+    )

@@ -83,6 +83,11 @@ class TriggerExecutionORM(BaseModel, WorkspaceScopedMixin):
     workflow_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     run_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # The principal who asked for this one run, when a person did. NULL means the
+    # trigger fired itself. created_by cannot answer this: it is filled for every
+    # execution, including the ones the scheduler writes.
+    fired_by: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+
     # Relationship to trigger
     trigger: Mapped["TriggerORM"] = relationship("TriggerORM", back_populates="executions")
 

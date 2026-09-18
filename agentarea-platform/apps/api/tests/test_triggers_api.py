@@ -796,6 +796,7 @@ class TestTriggersAPI:
         # Should fail validation
         assert response.status_code == 422
 
+
 if __name__ == "__main__":
     pytest.main([__file__])
 
@@ -898,3 +899,57 @@ def _sample_webhook_trigger_data():
         "validation_rules": {},
         "webhook_config": None,
     }
+
+
+class TestRunTriggerNow:
+    """POST /v1/triggers/{id}/run -- firing a trigger once by hand."""
+
+    def test_it_reports_the_task_to_watch(self, client, mock_trigger_service):
+        trigger_id = uuid4()
+        task_id = uuid4()
+        mock_trigger_service.execute_trigger.return_value = MagicMock(
+            id=uuid4(), task_id=task_id, error_message=None
+        )
+
+        response = client.post(f"/v1/triggers/{trigger_id}/run")
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["status"] == "started"
+        assert body["task_id"] == str(task_id)
+
+    def test_it_records_the_caller_as_having_asked_for_the_run(self, client, mock_trigger_service):
+        """Without this the run is indistinguishable from the schedule firing."""
+        trigger_id = uuid4()
+        mock_trigger_service.execute_trigger.return_value = MagicMock(
+            id=uuid4(), task_id=uuid4(), error_message=None
+        )
+
+        client.post(f"/v1/triggers/{trigger_id}/run")
+
+        assert mock_trigger_service.execute_trigger.call_args.kwargs["fired_by"] == "test_user"
+
+    def test_a_run_the_conditions_rejected_is_skipped_not_failed(
+        self, client, mock_trigger_service
+    ):
+        """The trigger answering "not now" is a result, not an error."""
+        trigger_id = uuid4()
+        mock_trigger_service.execute_trigger.return_value = MagicMock(
+            id=uuid4(), task_id=None, error_message="Trigger conditions not met"
+        )
+
+        response = client.post(f"/v1/triggers/{trigger_id}/run")
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["status"] == "skipped"
+        assert body["task_id"] is None
+        assert body["reason"] == "Trigger conditions not met"
+
+    def test_a_trigger_this_workspace_cannot_see_is_404(self, client, mock_trigger_service):
+        trigger_id = uuid4()
+        mock_trigger_service.execute_trigger.side_effect = TriggerNotFoundError("nope")
+
+        response = client.post(f"/v1/triggers/{trigger_id}/run")
+
+        assert response.status_code == 404

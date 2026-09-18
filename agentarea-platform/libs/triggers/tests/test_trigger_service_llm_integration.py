@@ -259,7 +259,10 @@ class TestTriggerServiceLLMIntegration:
             agent_id=uuid4(),
             webhook_id="webhook_123",
             conditions={"type": "llm", "description": "when user uploads a document for analysis"},
-            task_parameters={"llm_parameter_extraction": "extract file details and user intent"},
+            task_parameters={
+                "llm_parameter_extraction": "extract file details and user intent",
+                "text": "Analyse the uploaded document",
+            },
             created_by="test_user",
         )
 

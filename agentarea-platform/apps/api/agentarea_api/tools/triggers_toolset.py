@@ -123,8 +123,10 @@ class TriggersToolset(Toolset):
         given moment use ``runs.start`` with ``scheduled_at`` instead.
 
         ``task_parameters`` are merged into every task created when the trigger
-        fires. ``conditions`` is an optional rule/LLM condition map evaluated
-        against event data before firing.
+        fires, and must carry ``text`` -- what the agent is asked to do each time.
+        A schedule arrives carrying nothing, so there is no other source for it.
+        ``conditions`` is an optional rule/LLM condition map evaluated against
+        event data before firing.
         """
         async with platform_context() as (_session, user_ctx, repo_factory, broker, secret):
             service = await _build_trigger_service(repo_factory, broker, secret)

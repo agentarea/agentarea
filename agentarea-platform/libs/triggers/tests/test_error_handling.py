@@ -67,6 +67,7 @@ class TestTriggerServiceErrorHandling:
             cron_expression="0 9 * * *",
             timezone="UTC",
             created_by="test_user",
+            task_parameters={"text": "Run the daily check"},
         )
 
     async def test_create_trigger_agent_repository_unavailable(

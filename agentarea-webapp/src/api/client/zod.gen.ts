@@ -2943,6 +2943,7 @@ export const zTriggerExecutionResponse = z.object({
   error_message: z.string().nullish(),
   executed_at: z.string(),
   execution_time_ms: z.number().int(),
+  fired_by: z.string().nullish(),
   id: z.string().uuid(),
   run_id: z.string().nullish(),
   status: z.string(),
@@ -2996,6 +2997,19 @@ export const zTriggerResponse = z.object({
   webhook_config: z.record(z.unknown()).nullish(),
   webhook_id: z.string().nullish(),
   webhook_type: z.string().nullish(),
+});
+
+/**
+ * TriggerRunResponse
+ *
+ * Result of firing a trigger once by hand.
+ */
+export const zTriggerRunResponse = z.object({
+  execution_id: z.string().uuid(),
+  reason: z.string().nullish(),
+  status: z.enum(["started", "skipped"]),
+  task_id: z.string().uuid().nullish(),
+  trigger_id: z.string().uuid(),
 });
 
 /**
@@ -5720,6 +5734,16 @@ export const zGetExecutionMetricsV1TriggersTriggerIdMetricsGetQuery = z.object({
  */
 export const zGetExecutionMetricsV1TriggersTriggerIdMetricsGetResponse =
   zExecutionMetricsResponse;
+
+export const zRunTriggerNowV1TriggersTriggerIdRunPostPath = z.object({
+  trigger_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zRunTriggerNowV1TriggersTriggerIdRunPostResponse =
+  zTriggerRunResponse;
 
 export const zGetTriggerStatusV1TriggersTriggerIdStatusGetPath = z.object({
   trigger_id: z.string().uuid(),
