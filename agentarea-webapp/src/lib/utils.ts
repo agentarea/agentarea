@@ -1,3 +1,6 @@
-// Moved to @agentarea/ui-shell so a second deployment can render the same shell.
-// Re-exported from its original path so existing imports keep working.
-export { cn } from "@agentarea/ui-shell";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
