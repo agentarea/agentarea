@@ -13,13 +13,14 @@ re-importing it (keeps the dependency one-way: manager -> builders).
 
 from __future__ import annotations
 
+import inspect
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from .agent_tool_factory import AgentToolFactory
-from .code_tools_loader import create_code_tool_instance
+from .code_tools_loader import create_code_tool_instance, get_code_tool_class
 from .decorator_tool import Toolset, ToolsetAdapter
 from .tool_provider import (
     AgentToolProvider,
@@ -102,7 +103,18 @@ class CodeToolBuilder(ToolBuilder):
     async def _tool_defs(self, spec: ToolSpec, ctx: ToolBuildContext) -> list[dict[str, Any]]:
         disabled = spec.settings.get("disabled_methods", [])
         toolset_methods = {method: False for method in disabled} if disabled else {}
-        instance = create_code_tool_instance(spec.name, toolset_methods)
+        # Workspace-scoped toolsets (context, files, …) refuse to construct
+        # without a workspace_id rather than risk serving one tenant's storage
+        # to another. This path only reads the class's schema, but the
+        # constructor still runs — so pass the id through, or the toolset is
+        # dropped here and the model never learns the tool exists. Toolsets
+        # whose constructor has no such parameter are built without it.
+        extra_kwargs = None
+        if ctx.workspace_id:
+            cls = get_code_tool_class(spec.name)
+            if cls is not None and "workspace_id" in inspect.signature(cls).parameters:
+                extra_kwargs = {"workspace_id": ctx.workspace_id}
+        instance = create_code_tool_instance(spec.name, toolset_methods, extra_kwargs=extra_kwargs)
         if not instance:
             logger.warning("Unknown code tool requested: %s", spec.name)
             return []
