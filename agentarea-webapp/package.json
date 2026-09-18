@@ -24,7 +24,6 @@
     "generate:api": "pnpm generate:openapi && pnpm generate:client && pnpm generate:shared-client"
   },
   "dependencies": {
-    "@agentarea/ui-shell": "workspace:*",
     "@dagrejs/dagre": "^2.0.4",
     "@hey-api/client-next": "^0.5.1",
     "@hookform/resolvers": "^5.0.1",

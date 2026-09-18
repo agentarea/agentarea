@@ -1,3 +1,15 @@
-// Moved to @agentarea/ui-shell so a second deployment can render the same shell.
-// Re-exported from its original path so existing imports keep working.
-export { Skeleton } from "@agentarea/ui-shell";
+import { cn } from "@/lib/utils";
+
+function Skeleton({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("animate-pulse rounded-md bg-muted", className)}
+      {...props}
+    />
+  );
+}
+
+export { Skeleton };
