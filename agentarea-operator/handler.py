@@ -217,8 +217,20 @@ def sync_provider_config(
             {"key": provider_key},
         ).fetchone()
         if not row:
-            raise kopf.PermanentError(
-                f"ProviderSpec with key '{provider_key}' not found"
+            # Temporary, not permanent: the specs are imported from the published
+            # catalog by a separate job, so "not there" is usually "not there yet" —
+            # an install whose catalog import has not run, or has not finished. A
+            # PermanentError here is never retried, so a resource that arrived one
+            # minute early stayed broken until a human touched it, and the only
+            # evidence was a line in this process's log.
+            #
+            # A genuinely wrong provider_key now retries instead of stopping. That
+            # costs a log line a minute and reports itself in the resource's status,
+            # which is a better failure than silence.
+            raise kopf.TemporaryError(
+                f"ProviderSpec with key '{provider_key}' not found "
+                "(catalog not imported yet?)",
+                delay=60,
             )
         provider_spec_id = str(row[0])
 
@@ -489,7 +501,14 @@ def on_provider_config_change(spec, meta, status, namespace, patch, **_):
 
     try:
         config_id, model_count = sync_provider_config(spec, api_key, cr_name)
-    except kopf.PermanentError:
+    except kopf.PermanentError as e:
+        # Record why before giving up. A permanent failure is the one kind nothing
+        # retries, so if it does not reach the resource's status it reaches nobody:
+        # the phase stays at whatever it was, the GitOps application still reports
+        # healthy, and the model is simply missing from the picker with no evidence
+        # anywhere that it was refused.
+        patch.status["phase"] = "Error"
+        patch.status["message"] = str(e)
         raise
     except Exception as e:
         patch.status["phase"] = "Error"
