@@ -7835,20 +7835,6 @@ export type AgentareaApiApiV1RegistriesSyncResponse = {
   updates_flagged: number;
 };
 
-export type RootGetData = {
-  body?: never;
-  path?: never;
-  query?: never;
-  url: "/";
-};
-
-export type RootGetResponses = {
-  /**
-   * Successful Response
-   */
-  200: unknown;
-};
-
 export type HydraJwksProxyWellKnownJwksJsonGetData = {
   body?: never;
   path?: never;
@@ -7927,14 +7913,14 @@ export type OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceR
     200: unknown;
   };
 
-export type HealthCheckHealthGetData = {
+export type HealthHealthGetData = {
   body?: never;
   path?: never;
   query?: never;
   url: "/health";
 };
 
-export type HealthCheckHealthGetResponses = {
+export type HealthHealthGetResponses = {
   /**
    * Successful Response
    */

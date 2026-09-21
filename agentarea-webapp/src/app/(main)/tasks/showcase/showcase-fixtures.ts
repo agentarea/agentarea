@@ -156,7 +156,7 @@ export const pendingInputPart: Part = {
         id: "token",
         question: "Temporary API token",
         type: "secret",
-        secret_name: "showcase-token",
+        secret_name: "showcase-token", // pragma: allowlist secret
         required: true,
       },
     ],

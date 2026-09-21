@@ -27,7 +27,7 @@ describe("uploadAttachment", () => {
       content_type: "text/plain",
       filename: "report.txt",
       sha256:
-        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", // pragma: allowlist secret
       size: 3,
     });
     expect(fetchMock.mock.calls[1][0]).toBe("https://uploads.test/ref-1");

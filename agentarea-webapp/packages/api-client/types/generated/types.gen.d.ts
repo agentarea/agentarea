@@ -1321,10 +1321,14 @@ export type BundleSkill = {
  *
  * One page of a type's catalog plus the context needed to browse it.
  *
- * ``total`` and ``categories`` cover the whole filtered catalog, not the page:
+ * ``total`` and the facets cover the whole filtered catalog, not the page:
  * without them a page that happens to contain no visible matches is
  * indistinguishable from the end of the catalog, and facet counts drift as
  * more pages load.
+ *
+ * ``protocols`` is populated for the connections catalog only, where an entry
+ * is either an MCP server or a plain HTTP API; every other type holds one
+ * kind of thing and gets an empty list.
  */
 export type CatalogBrowseResponse = {
     /**
@@ -1335,6 +1339,10 @@ export type CatalogBrowseResponse = {
      * Items
      */
     items: Array<RegistryItemResponse>;
+    /**
+     * Protocols
+     */
+    protocols: Array<CategoryFacet>;
     /**
      * Total
      */
@@ -12366,6 +12374,12 @@ export type BrowseCatalogV1RegistriesCatalogBrowseGetData = {
          * Restrict to one category facet
          */
         category?: string | null;
+        /**
+         * Protocol
+         *
+         * Restrict connections to one protocol. Only valid for registry_type='mcp_servers'.
+         */
+        protocol?: 'mcp' | 'api' | null;
         /**
          * Sort
          *

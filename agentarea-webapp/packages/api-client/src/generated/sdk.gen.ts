@@ -4375,6 +4375,7 @@ export const executeTriggerV1TriggersTriggerIdExecutePost = <ThrowOnError extend
  * end_time: Optional end time filter
  * user_context: Authentication context
  * trigger_service: Injected trigger service
+ * db_session: Session used to resolve what each run's task cost
  *
  * Returns:
  * Paginated execution history

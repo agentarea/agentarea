@@ -436,8 +436,8 @@ import type {
   HandleWebhookWebhooksWebhookIdPutData,
   HandleWebhookWebhooksWebhookIdPutErrors,
   HandleWebhookWebhooksWebhookIdPutResponses,
-  HealthCheckHealthGetData,
-  HealthCheckHealthGetResponses,
+  HealthHealthGetData,
+  HealthHealthGetResponses,
   HydraAuthRedirectOauth2AuthGetData,
   HydraAuthRedirectOauth2AuthGetResponses,
   HydraDcrProxyOauth2RegisterPostData,
@@ -672,8 +672,6 @@ import type {
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteData,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteErrors,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteResponses,
-  RootGetData,
-  RootGetResponses,
   RotateSecretV1SecretsSecretIdValuePutData,
   RotateSecretV1SecretsSecretIdValuePutErrors,
   RotateSecretV1SecretsSecretIdValuePutResponses,
@@ -824,26 +822,6 @@ export type Options<
 };
 
 /**
- * Root
- *
- * Root endpoint.
- */
-export const rootGet = <ThrowOnError extends boolean = false>(
-  options?: Options<RootGetData, ThrowOnError>
-): RequestResult<RootGetResponses, unknown, ThrowOnError> =>
-  (options?.client ?? client).get<RootGetResponses, unknown, ThrowOnError>({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/",
-    ...options,
-  });
-
-/**
  * Hydra Jwks Proxy
  *
  * Proxy JWKS so token verification works against our API URL.
@@ -977,15 +955,15 @@ export const oauthProtectedResourceMetadataByPathWellKnownOauthProtectedResource
     });
 
 /**
- * Health Check
+ * Health
  *
- * Health check endpoint for the main application.
+ * Health check endpoint.
  */
-export const healthCheckHealthGet = <ThrowOnError extends boolean = false>(
-  options?: Options<HealthCheckHealthGetData, ThrowOnError>
-): RequestResult<HealthCheckHealthGetResponses, unknown, ThrowOnError> =>
+export const healthHealthGet = <ThrowOnError extends boolean = false>(
+  options?: Options<HealthHealthGetData, ThrowOnError>
+): RequestResult<HealthHealthGetResponses, unknown, ThrowOnError> =>
   (options?.client ?? client).get<
-    HealthCheckHealthGetResponses,
+    HealthHealthGetResponses,
     unknown,
     ThrowOnError
   >({
