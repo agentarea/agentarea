@@ -354,8 +354,9 @@ class RegistryItemRepository:
             .where(*conditions)
             .group_by(protocol)
         )
-        rows = (await self.session.execute(query)).all()
-        counts: dict[str, int] = {name: count for name, count in rows}
+        # .tuples() so the pairs arrive typed: over raw Rows the key type is
+        # lost and the dict reads as bytes.
+        counts: dict[str, int] = dict((await self.session.execute(query)).tuples().all())
         return [(name, counts[name]) for name in CATALOG_PROTOCOLS if counts.get(name)]
 
     async def search(
