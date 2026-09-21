@@ -129,8 +129,7 @@ import {
   getWorkspaceSettings,
   updateWorkspaceSettings,
 } from "@/lib/api-dashboard";
-import { getAuthToken } from "@/lib/getAuthToken";
-import { workspaceSlugHeaders } from "@/lib/workspace-request";
+import { workspaceFetch } from "@/lib/workspace-request";
 
 function isUUID(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -253,14 +252,10 @@ export async function createSkillAction(skill: {
 }
 
 export async function uploadSkillAction(formData: FormData) {
-  const authToken = await getAuthToken();
   const uploadUrl = `${env.API_URL}/v1/skills/upload`;
 
-  const response = await fetch(uploadUrl, {
+  const response = await workspaceFetch(uploadUrl, {
     method: "POST",
-    headers: {
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    },
     body: formData,
   });
 
@@ -585,14 +580,10 @@ export async function probeInstanceAuthAction(instanceId: string) {
     return { data: null, error: "Invalid instance ID" };
   }
 
-  const token = await getAuthToken();
   const base = new URL(env.API_URL);
   base.pathname = `/v1/mcp-server-instances/${encodeURIComponent(instanceId)}/probe`;
 
-  const res = await fetch(base.href, {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  const res = await workspaceFetch(base.href, { method: "POST" });
   if (!res.ok) {
     const text = await res.text();
     return { data: null, error: text };
@@ -606,15 +597,11 @@ export async function oauthAuthorizeAction(instanceId: string) {
     return { data: null, error: "Invalid instance ID" };
   }
 
-  const token = await getAuthToken();
   const base = new URL(env.API_URL);
   base.pathname = "/v1/mcp-oauth/authorize";
   base.search = new URLSearchParams({ instance_id: instanceId }).toString();
 
-  const res = await fetch(base.href, {
-    method: "GET",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  const res = await workspaceFetch(base.href, { method: "GET" });
   if (!res.ok) {
     const text = await res.text();
     return { data: null, error: text };
@@ -626,15 +613,11 @@ export async function validateConnectionAction(
   url: string,
   headers: Record<string, string>
 ) {
-  const token = await getAuthToken();
-  const res = await fetch(
+  const res = await workspaceFetch(
     `${env.API_URL}/v1/mcp-server-instances/validate-connection`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, headers }),
     }
   );
@@ -797,16 +780,12 @@ export async function uploadProjectFileAction(
     return { data: null, error: { detail: "Invalid project ID" } };
   }
 
-  const authToken = await getAuthToken();
   // Build URL safely via URL API — base is a trusted server-only env var
   const base = new URL(env.API_URL);
   base.pathname = `/v1/projects/${encodeURIComponent(projectId)}/files`;
 
-  const response = await fetch(base.href, {
+  const response = await workspaceFetch(base.href, {
     method: "POST",
-    headers: {
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    },
     body: formData,
   });
 
@@ -846,15 +825,10 @@ export async function createWorkspaceDirectoryAction(body: CreateWorkspaceDirect
 }
 
 export async function uploadWorkspaceFileAction(formData: FormData) {
-  const authToken = await getAuthToken();
   const uploadUrl = `${env.API_URL}/v1/files`;
 
-  const response = await fetch(uploadUrl, {
+  const response = await workspaceFetch(uploadUrl, {
     method: "POST",
-    headers: {
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      ...(await workspaceSlugHeaders()),
-    },
     body: formData,
   });
 
@@ -870,19 +844,14 @@ export async function uploadWorkspaceFileAction(formData: FormData) {
 }
 
 export async function deleteWorkspaceFileAction(filePath: string) {
-  const authToken = await getAuthToken();
   const encoded = filePath
     .split("/")
     .filter(Boolean)
     .map(encodeURIComponent)
     .join("/");
 
-  const response = await fetch(`${env.API_URL}/v1/files/${encoded}`, {
+  const response = await workspaceFetch(`${env.API_URL}/v1/files/${encoded}`, {
     method: "DELETE",
-    headers: {
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      ...(await workspaceSlugHeaders()),
-    },
   });
 
   if (!response.ok) {
@@ -896,15 +865,9 @@ export async function deleteWorkspaceFileAction(filePath: string) {
 }
 
 export async function moveWorkspaceFileAction(source: string, destination: string) {
-  const authToken = await getAuthToken();
-
-  const response = await fetch(`${env.API_URL}/v1/files/move`, {
+  const response = await workspaceFetch(`${env.API_URL}/v1/files/move`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      ...(await workspaceSlugHeaders()),
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ source, destination }),
   });
 
@@ -940,22 +903,13 @@ export async function initMCPOAuthConnectAction(
   if (!isUUID(instanceId)) {
     return { error: "Invalid instance ID" };
   }
-  const { env } = await import("@/env");
-  const { getAuthToken } = await import("./getAuthToken");
-  const authToken = await getAuthToken();
-
   const params = new URLSearchParams({ instance_id: instanceId });
   if (returnTo) params.set("return_to", returnTo);
   const base = new URL(env.API_URL);
   base.pathname = "/v1/mcp-oauth/authorize";
   base.search = params.toString();
 
-  const resp = await fetch(base.href, {
-    headers: {
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    },
-    redirect: "manual",
-  });
+  const resp = await workspaceFetch(base.href, { redirect: "manual" });
 
   if (!resp.ok) {
     const body = await resp.text();

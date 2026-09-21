@@ -1,3 +1,4 @@
+import { getAuthToken } from "@/lib/getAuthToken";
 import { getActiveWorkspaceSlug } from "@/lib/workspace-context";
 import {
   WORKSPACE_REFERENCE_HEADER,
@@ -32,4 +33,34 @@ export async function resolveRequestWorkspaceSlug(
 export async function workspaceSlugHeaders(): Promise<Record<string, string>> {
   const slug = await getActiveWorkspaceSlug();
   return slug ? { [WORKSPACE_REFERENCE_HEADER]: slug } : {};
+}
+
+/**
+ * Call the API from a server action without going through the generated
+ * client, and still land in the workspace the user is looking at.
+ *
+ * Remembering the two headers per call site is what failed: an OAuth connect
+ * assembled its own request, reached the backend with no slug, and 404'd on
+ * the very instance the page had just rendered. Callers pass a URL and get
+ * the session token and the active slug attached; an explicitly supplied
+ * header still wins, and the body's content type is left alone so multipart
+ * uploads keep their boundary.
+ */
+export async function workspaceFetch(
+  url: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+
+  const token = await getAuthToken();
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  for (const [name, value] of Object.entries(await workspaceSlugHeaders())) {
+    if (!headers.has(name)) {
+      headers.set(name, value);
+    }
+  }
+
+  return fetch(url, { ...init, headers });
 }

@@ -139,6 +139,15 @@ def _safe_frontend_base(return_to: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
+def _instance_detail_url(frontend_base: str, instance_id: str) -> str:
+    """Where the browser lands once the authorization server sends it back.
+
+    Named once because it used to be spelled inline at every redirect, all of
+    them still pointing at /mcp-servers after the page moved to /connections.
+    """
+    return f"{frontend_base}/connections/{instance_id}"
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -277,7 +286,7 @@ async def oauth_callback(
     if error:
         # No state data yet — fall back to relative redirect
         reason = urllib.parse.quote(error_description or error)
-        return RedirectResponse(url=f"/mcp-servers?oauth=error&reason={reason}", status_code=302)
+        return RedirectResponse(url=f"/connections?oauth=error&reason={reason}", status_code=302)
 
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state parameter")
@@ -291,6 +300,7 @@ async def oauth_callback(
     instance_id = state_data["instance_id"]
     # return_to is the frontend origin stored during /authorize
     frontend_base = _safe_frontend_base(state_data.get("return_to", ""))
+    detail_url = _instance_detail_url(frontend_base, instance_id)
     as_meta_dict = state_data["as_metadata"]
     as_metadata = AuthServerMetadata(
         issuer=as_meta_dict["issuer"],
@@ -314,14 +324,14 @@ async def oauth_callback(
     except Exception as exc:
         logger.error("OAuth token exchange failed: %s", exc)
         return RedirectResponse(
-            url=f"{frontend_base}/mcp-servers/{instance_id}?oauth=error&reason=token_exchange_failed",
+            url=f"{detail_url}?oauth=error&reason=token_exchange_failed",
             status_code=302,
         )
 
     access_token = tokens.get("access_token", "")
     if not access_token:
         return RedirectResponse(
-            url=f"{frontend_base}/mcp-servers/{instance_id}?oauth=error&reason=no_access_token",
+            url=f"{detail_url}?oauth=error&reason=no_access_token",
             status_code=302,
         )
 
@@ -404,7 +414,7 @@ async def oauth_callback(
         logger.warning("Failed to schedule tool discovery after OAuth: %s", discover_err)
 
     return RedirectResponse(
-        url=f"{frontend_base}/mcp-servers/{instance_id}?oauth=success",
+        url=f"{detail_url}?oauth=success",
         status_code=302,
     )
 
