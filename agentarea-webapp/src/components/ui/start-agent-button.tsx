@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 /** AgentArea "Start agent" button — dark gradient pill, sliding arrow, grey when disabled. */
 const startAgentVariants = cva(
-  "group relative flex w-full items-center justify-center overflow-hidden font-bold uppercase leading-none tracking-[0.04em] transition-[transform,box-shadow] duration-150 ease-out active:translate-y-0 active:scale-[0.992] focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-none disabled:bg-[#eceef1] disabled:text-[#abaeb6] disabled:shadow-[inset_0_0_0_1px_#e2e4e8] disabled:hover:translate-y-0 disabled:hover:shadow-[inset_0_0_0_1px_#e2e4e8] dark:disabled:bg-[#26282e] dark:disabled:text-[#6b7078] dark:disabled:shadow-[inset_0_0_0_1px_#3a3e46] dark:disabled:hover:shadow-[inset_0_0_0_1px_#3a3e46]",
+  "group relative flex w-full cursor-pointer items-center justify-center overflow-hidden font-bold uppercase leading-none tracking-[0.04em] transition-[transform,box-shadow] duration-150 ease-out active:translate-y-0 active:scale-[0.992] focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-none disabled:bg-[#eceef1] disabled:text-[#abaeb6] disabled:shadow-[inset_0_0_0_1px_#e2e4e8] disabled:hover:translate-y-0 disabled:hover:shadow-[inset_0_0_0_1px_#e2e4e8] dark:disabled:bg-[#26282e] dark:disabled:text-[#6b7078] dark:disabled:shadow-[inset_0_0_0_1px_#3a3e46] dark:disabled:hover:shadow-[inset_0_0_0_1px_#3a3e46]",
   {
     variants: {
       light: {
@@ -19,10 +19,10 @@ const startAgentVariants = cva(
           "text-[#1b1f27] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.96),inset_0_0_0_1px_rgba(205,213,225,0.9),0_1px_2px_rgba(15,23,42,0.08),0_10px_24px_-14px_rgba(15,23,42,0.18)] hover:-translate-y-[1.5px] hover:shadow-[inset_0_1px_0_rgba(255,255,255,1),inset_0_0_0_1px_rgba(191,200,214,0.95),0_3px_8px_rgba(15,23,42,0.08),0_16px_24px_-16px_rgba(15,23,42,0.18)] focus-visible:shadow-[inset_0_1px_0_rgba(255,255,255,1),0_0_0_3px_rgba(47,99,230,0.18),0_10px_24px_-12px_rgba(15,23,42,0.18)]",
       },
       size: {
-        xs: "h-8 gap-3 rounded-[8px] text-[10.5px]",
-        sm: "h-9 gap-3.5 rounded-[9px] text-[11.5px]",
-        md: "h-11 gap-2 rounded-[11px] text-[13px]",
-        lg: "h-[52px] gap-2.5 rounded-[13px] text-[14px]",
+        xs: "h-8 gap-3 rounded-[8px] px-4 text-[10.5px]",
+        sm: "h-9 gap-3.5 rounded-[9px] px-4 text-[11.5px]",
+        md: "h-11 gap-2 rounded-[11px] px-5 text-[13px]",
+        lg: "h-[52px] gap-2.5 rounded-[13px] px-6 text-[14px]",
       },
     },
     defaultVariants: { size: "md", light: false },
@@ -75,7 +75,7 @@ export const StartAgentButton = React.forwardRef<
         )}
       />
       <Slottable>
-        <span>{children ?? "Start agent"}</span>
+        {asChild ? children : <span>{children ?? "Start agent"}</span>}
       </Slottable>
       <ArrowRight
         aria-hidden="true"
