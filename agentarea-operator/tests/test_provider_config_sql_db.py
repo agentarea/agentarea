@@ -38,6 +38,12 @@ pytestmark = pytest.mark.skipif(not DSN, reason="OPERATOR_TEST_DATABASE_URL is n
 # Fernet needs a real key to encrypt with; it never leaves this process.
 TEST_FERNET_KEY = "hEJhTL2vGZ8n1iHxzIxLh0qzRgqQPXnYYqRZcPZrQ0g="  # pragma: allowlist secret
 
+# Named here rather than written inline, so the allowlist pragma the secret scan
+# needs sits on one line instead of every call site — the same shape as API_KEY in
+# test_handler.py.
+GATEWAY_TOKEN = "gateway-token"  # pragma: allowlist secret
+ROTATED_TOKEN = "rotated-token"  # pragma: allowlist secret
+
 
 @pytest.fixture
 def handler(monkeypatch):
@@ -125,7 +131,7 @@ def test_a_platform_provider_config_is_actually_written(handler, provider_spec):
     success for months while writing nothing.
     """
     config_id, model_count = handler.sync_provider_config(
-        _spec(provider_spec), api_key="gateway-token", cr_name="test-cr"
+        _spec(provider_spec), api_key=GATEWAY_TOKEN, cr_name="test-cr"
     )
 
     assert model_count == 1
@@ -155,7 +161,7 @@ def test_a_platform_provider_config_is_actually_written(handler, provider_spec):
             {"id": row.api_key_secret_id},
         ).fetchone()
         assert secret.secret_name == row.api_key
-        assert secret.encrypted_value != "gateway-token"
+        assert secret.encrypted_value != GATEWAY_TOKEN
 
         instance = conn.execute(
             text("SELECT id FROM model_instances WHERE provider_config_id = :id"),
@@ -173,11 +179,11 @@ def test_reconciling_twice_updates_one_configuration(handler, provider_spec):
     it works once and then stops, long after the change that caused it.
     """
     config_id, _ = handler.sync_provider_config(
-        _spec(provider_spec), api_key="gateway-token", cr_name="test-cr"
+        _spec(provider_spec), api_key=GATEWAY_TOKEN, cr_name="test-cr"
     )
 
     renamed = _spec(provider_spec) | {"name": "Renamed"}
-    again, _ = handler.sync_provider_config(renamed, api_key="rotated-token", cr_name="test-cr")
+    again, _ = handler.sync_provider_config(renamed, api_key=ROTATED_TOKEN, cr_name="test-cr")
 
     assert again == config_id
     with handler.engine.begin() as conn:
