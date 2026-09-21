@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from agentarea_common.auth import UserContextDep
 from agentarea_common.di.container import get_container
@@ -99,6 +100,39 @@ _GOVERNANCE_INTERCEPTORS = [
 ]
 
 
+def _first_icon_src(spec: dict[str, Any] | None) -> str | None:
+    """First logo URL declared by a raw registry ServerJSON spec.
+
+    The graph shows a connection by its own logo, so the URL has to travel with
+    the node — the frontend has no registry of its own to look it up in.
+    """
+    icons = (spec or {}).get("icons")
+    if not isinstance(icons, list):
+        return None
+    for icon in icons:
+        if isinstance(icon, dict):
+            src = icon.get("src")
+            if isinstance(src, str) and src:
+                return src
+    return None
+
+
+def _endpoint_host(spec: dict[str, Any] | None) -> str | None:
+    """Host a remote MCP server is reached at — and only the host.
+
+    Enough for the UI to ask that site for its favicon when the registry gave
+    us no logo. The full endpoint URL deliberately stays here: its path or
+    query can carry a token.
+    """
+    url = (spec or {}).get("endpoint_url")
+    if not isinstance(url, str) or not url:
+        return None
+    try:
+        return urlparse(url).hostname
+    except ValueError:
+        return None
+
+
 # --- Endpoint ---
 
 
@@ -172,6 +206,19 @@ async def get_network_topology(
             logger.warning(f"Failed to fetch MCP instances: {e}")
             return []
 
+    async def fetch_mcp_servers() -> list:
+        """Server specs behind the instances — that is where registry logos live."""
+        try:
+            from agentarea_mcp.domain.models import MCPServer
+
+            async with get_database().session() as session:
+                query = select(MCPServer).where(MCPServer.workspace_id.in_(accessible_workspaces))
+                result = await session.execute(query)
+                return list(result.scalars().all())
+        except Exception as e:
+            logger.warning(f"Failed to fetch MCP server specs: {e}")
+            return []
+
     async def fetch_triggers() -> list:
         try:
             from agentarea_triggers.infrastructure.orm import TriggerORM
@@ -202,12 +249,14 @@ async def get_network_topology(
         agents,
         (skills, skill_members),
         mcp_instances,
+        mcp_servers,
         triggers,
         openapi_connections,
     ) = await asyncio.gather(
         fetch_agents(),
         fetch_skills(),
         fetch_mcp_instances(),
+        fetch_mcp_servers(),
         fetch_triggers(),
         fetch_openapi_connections(),
     )
@@ -398,8 +447,10 @@ async def get_network_topology(
         )
 
     # --- Build MCP instance nodes ---
+    server_specs_by_id: dict[str, Any] = {str(s.id): s for s in mcp_servers}
     for instance in mcp_instances:
         instance_id = str(instance.id)
+        server_spec = server_specs_by_id.get(str(getattr(instance, "server_spec_id", "")))
         nodes.append(
             NetworkNode(
                 id=instance_id,
@@ -411,6 +462,9 @@ async def get_network_topology(
                     for k, v in {
                         "tool_count": len(instance.get_available_tools()),
                         "network_scope": instance.network_scope,
+                        "icon_url": _first_icon_src(instance.json_spec)
+                        or _first_icon_src(getattr(server_spec, "json_spec", None)),
+                        "endpoint_host": _endpoint_host(instance.json_spec),
                     }.items()
                     if v is not None
                 },
