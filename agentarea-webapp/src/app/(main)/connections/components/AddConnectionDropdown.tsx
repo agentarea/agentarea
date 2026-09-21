@@ -30,7 +30,7 @@ interface ConnectionOption {
 const OPTIONS: ConnectionOption[] = [
   {
     id: "catalog",
-    href: "/explore?type=mcp_servers",
+    href: "/explore?type=connections",
     iconClass: "bg-primary/10 text-primary dark:bg-white/10 dark:text-white",
     icon: <LayoutGrid className="h-5 w-5" />,
   },

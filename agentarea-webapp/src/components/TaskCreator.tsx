@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
+import { deterministicHue } from "@/lib/avatar-hue";
 import {
   Tooltip,
   TooltipContent,
@@ -73,7 +74,13 @@ export function TaskCreator({ userId, name }: TaskCreatorProps) {
       title={t("showTasksBy", { name })}
       className="group/creator inline-flex min-w-0 items-center gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
-      <EntityAvatar size={20} text={initials} variant="soft" />
+      <EntityAvatar
+        size={20}
+        variant="pigment"
+        hue={deterministicHue(userId)}
+        text={initials}
+        aria-hidden
+      />
       <span className="truncate text-xs text-muted-foreground transition-colors group-hover/creator:text-primary group-hover/creator:underline group-hover/creator:underline-offset-2">
         {name}
       </span>

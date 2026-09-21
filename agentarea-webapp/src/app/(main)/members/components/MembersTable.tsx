@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { Button } from "@/components/ui/button";
 import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
+import { deterministicHue } from "@/lib/avatar-hue";
 import { removeMemberAction } from "../actions";
 import {
   getMemberAccess,
@@ -61,7 +62,13 @@ function MemberCell({
           icon={<User strokeWidth={1.8} />}
         />
       ) : (
-        <EntityAvatar size={28} text={nameInitials(label)} />
+        <EntityAvatar
+          size={28}
+          variant="pigment"
+          hue={deterministicHue(member.user_id || label)}
+          text={nameInitials(label)}
+          aria-hidden
+        />
       )}
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="flex min-w-0 items-center gap-2">

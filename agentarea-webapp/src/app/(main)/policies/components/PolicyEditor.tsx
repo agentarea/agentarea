@@ -43,7 +43,7 @@ interface AgentOption {
   id: string;
   name: string;
   icon?: string | null;
-  color_token?: string | null;
+ 
   tools?: ToolConfigLike[] | null;
   tools_config?: ToolsConfigLike | null;
 }

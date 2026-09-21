@@ -108,7 +108,6 @@ export function BudgetCapPanel({
           size={38}
           color="var(--violet)"
           icon={<Gauge />}
-          lines={false}
         />
         <div>
           <h3 className="text-[14.5px] font-semibold tracking-[-0.01em] text-foreground">

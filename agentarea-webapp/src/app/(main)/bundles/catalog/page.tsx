@@ -4,8 +4,9 @@ import { browseCatalog } from "@/lib/api";
 import CatalogGallery from "../components/CatalogGallery";
 import {
   PAGE,
-  isCatalogType,
+  REGISTRY_TYPE,
   normalize,
+  toCatalogType,
   type CatalogEntry,
   type CatalogType,
   type RegistryItem,
@@ -27,10 +28,10 @@ export default async function BundleCatalogPage({
   searchParams,
 }: BundleCatalogPageProps) {
   const sp = await searchParams;
-  const type: CatalogType = isCatalogType(sp.type) ? sp.type : "bundles";
+  const type: CatalogType = toCatalogType(sp.type) ?? "bundles";
 
-  const { items, total, categories, error } = await browseCatalog({
-    registryType: type,
+  const { items, total, categories, protocols, error } = await browseCatalog({
+    registryType: REGISTRY_TYPE[type],
     limit: PAGE,
     offset: 0,
   });
@@ -54,6 +55,7 @@ export default async function BundleCatalogPage({
         initialEntries={entries}
         initialTotal={total}
         initialCategories={categories}
+        initialProtocols={protocols}
         initialError={error ? "Failed to load catalog." : null}
       />
     </ContentBlock>

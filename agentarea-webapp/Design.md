@@ -487,8 +487,22 @@ heading are too heavy for that scale.
 
 ### Status / banners
 
-Avoid building a status palette. The existing patterns:
+**One entity, one status component.** A status is a shared visual
+language, not a per-page decision: never re-derive a tone, label, dot,
+or icon at the call site.
 
+- **Task status** — every surface that shows a task's state (list row,
+  table cell, page header, inbox, filter select, detail sheet) renders
+  `<TaskStatus status={…} />` from `src/components/TaskStatus.tsx`. It
+  owns tone, pulse, the "done" check marker, and the translated caption.
+  Use `caption="auto" | "never"` for dense rows, and
+  `useTaskStatusLabel(status)` when prose needs the name on its own.
+- **Every other entity status** (agent, trigger, trigger execution, MCP
+  health/verification, OpenAPI connection, API key, payment, policy,
+  invitation, sandbox) — take the presentation from
+  `src/lib/status.ts` (`get<Entity>StatusPresentation`) and feed it to
+  `<StatusIndicator tone pulse icon>`. A status the helpers don't cover
+  gets a new case in `src/lib/status.ts`, never a local colour map.
 - **Inline destructive accent** (e.g. failure count): only the
   number/value turns `text-red-600`; surrounding row stays neutral.
 - **Pills / tags** (e.g. A2UI marker): `rounded-full bg-blue-100
@@ -594,6 +608,12 @@ ship a "we'll do dark mode later" component.
   affordance.
 - Mixing icon libraries.
 - Skipping i18n keys "for now".
+- Re-implementing a status pill/dot at the call site (`bg-green-500`,
+  a bare `<Badge>`, a local `tone` map) instead of `<TaskStatus>` /
+  `src/lib/status.ts` — the copies drift the moment the design moves.
+- Copy-pasting a block of JSX that already exists as a component.
+  Second occurrence of a UI pattern → extract it into
+  `src/components/` and use it in both places in the same change.
 
 ### New-component checklist
 
@@ -609,6 +629,11 @@ ship a "we'll do dark mode later" component.
 - [ ] Strings keyed in `messages/en.json` and `messages/ru.json`.
 - [ ] Page-level component wrapped in `<ContentBlock>`.
 - [ ] Surface choice is intentional — clickable card vs static panel.
+- [ ] Searched `src/components/` first — reused the existing component
+      instead of a second variant of it.
+- [ ] Status shown through `<TaskStatus>` (tasks) or a
+      `src/lib/status.ts` presentation + `<StatusIndicator>` (everything
+      else).
 
 ### References
 
@@ -622,7 +647,9 @@ ship a "we'll do dark mode later" component.
 - `src/app/(main)/dashboard/components/*.tsx` — static panel pattern
   (Spend, Blockers, Agent rows).
 - `src/app/globals.css` — tokens, base styles, utility classes.
+- `src/components/TaskStatus.tsx` + `src/lib/status.ts` +
+  `src/components/ui/status-indicator.tsx` — the status stack.
 
 ---
 
-*Last updated: 2026-05-05*
+*Last updated: 2026-09-20*

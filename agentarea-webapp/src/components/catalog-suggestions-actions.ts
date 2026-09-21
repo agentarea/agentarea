@@ -5,13 +5,16 @@ import {
   zListRegistryItemsV1RegistriesRegistryIdItemsGetResponse,
 } from "@/api/client/zod.gen";
 import {
+  DEFAULT_SORT,
   normalize,
+  REGISTRY_TYPE,
   TYPE_KEYS,
   type CatalogType,
   type RawSpec,
   type RegistryItem,
 } from "@/app/(main)/bundles/components/catalog-data";
 import { browseCatalog, listRegistries, listRegistryItems } from "@/lib/api";
+import type { EntityIdentity } from "@/lib/entity-identity";
 
 const CURATED_SKILLS_SOURCE =
   "https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json";
@@ -20,7 +23,7 @@ export type CatalogSuggestionItem = {
   id: string;
   title: string;
   description: string;
-  iconUrl: string | null;
+  identity: EntityIdentity;
   source: string | null;
   popularityLabel: string | null;
 };
@@ -105,7 +108,7 @@ function toSuggestions(
       id: entry.id,
       title,
       description,
-      iconUrl: entry.iconUrl,
+      identity: entry.identity,
       source,
       popularityLabel: formatPopularity(stars),
     });
@@ -118,8 +121,9 @@ export async function listCatalogSuggestionsAction(
   type: CatalogType,
   max: number
 ): Promise<CatalogSuggestionItem[]> {
-  const registryType = assertCatalogType(type);
-  if (registryType === "skills") {
+  const catalogType = assertCatalogType(type);
+  const registryType = REGISTRY_TYPE[catalogType];
+  if (catalogType === "skills") {
     const { data: registriesData, error: registriesError } =
       await listRegistries({
         registry_type: registryType,
@@ -147,23 +151,18 @@ export async function listCatalogSuggestionsAction(
         zListRegistryItemsV1RegistriesRegistryIdItemsGetResponse.parse(
           data
         ) as RegistryItem[];
-      return toSuggestions(registryType, items, max, true);
+      return toSuggestions(catalogType, items, max, true);
     }
   }
 
   const result = await browseCatalog({
     registryType,
-    sort: "featured",
+    sort: DEFAULT_SORT,
     limit: Math.max(max * 4, max),
     offset: 0,
   });
   if (result.error) {
     throw new Error(errorMessage(result.error, "Failed to load catalog items"));
   }
-  return toSuggestions(
-    registryType,
-    result.items as RegistryItem[],
-    max,
-    false
-  );
+  return toSuggestions(catalogType, result.items as RegistryItem[], max, false);
 }

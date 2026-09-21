@@ -14,9 +14,14 @@ import {
   Server,
   Terminal,
 } from "lucide-react";
+import EntityMark from "@/components/EntityMark";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import {
+  getMCPConnectionIconSrc,
+  openApiIdentity,
+} from "@/lib/entity-identity";
 import { getMcpVerificationStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
@@ -24,7 +29,6 @@ import {
   CONNECTION_TYPE_CONFIG,
   getConnectionTypes,
   getEffectiveMCPVerificationStatus,
-  getMCPConnectionIconSrc,
   getMCPConnectionTitle,
   getMCPInstanceToolCount,
 } from "../utils";
@@ -181,23 +185,10 @@ export function OpenAPIConnectionCard({
   );
 }
 
-function getOpenAPIConnectionInitials(
-  connection?: Pick<OpenAPIConnection, "base_url" | "name">
-): string {
-  if (!connection) return "API";
-
-  try {
-    const hostname = new URL(connection.base_url).hostname
-      .replace(/^api\./, "")
-      .replace(/^www\./, "");
-    const labels = hostname.split(".").filter(Boolean);
-    const domain = labels.length > 1 ? labels[labels.length - 2] : labels[0];
-    return domain ? domain.slice(0, 2).toUpperCase() : "API";
-  } catch {
-    return connection.name.slice(0, 2).toUpperCase() || "API";
-  }
-}
-
+/**
+ * Identity mark for an OpenAPI connection: the favicon of the API it points
+ * at, falling back to the domain initials when that host serves none.
+ */
 export function OpenAPIConnectionMark({
   connection,
   className,
@@ -206,14 +197,10 @@ export function OpenAPIConnectionMark({
   className?: string;
 }) {
   return (
-    <span
-      className={cn(
-        "inline-flex h-6 w-6 items-center justify-center rounded-md bg-zinc-900 text-[9px] font-semibold leading-none tracking-normal text-white dark:bg-zinc-100 dark:text-zinc-950",
-        className
-      )}
-    >
-      {getOpenAPIConnectionInitials(connection)}
-    </span>
+    <EntityMark
+      identity={openApiIdentity(connection ?? {})}
+      className={cn("h-6 w-6 shrink-0 rounded-md text-[9px]", className)}
+    />
   );
 }
 

@@ -11,7 +11,6 @@ import React, {
   useState,
   useTransition,
 } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -24,6 +23,7 @@ import {
   Compass,
   ExternalLink,
   FileText,
+  Globe,
   Loader2,
   Plug,
   Puzzle,
@@ -41,6 +41,7 @@ import type {
   SecretResponse,
 } from "@/api/client/types.gen";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import EntityMark from "@/components/EntityMark";
 import EmptyState from "@/components/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
 import { Badge } from "@/components/ui/badge";
@@ -95,6 +96,8 @@ import {
   DEFAULT_SORT,
   EXPLORE_VIEW_COOKIE,
   FEATURED_TAG,
+  isCatalogProtocol,
+  PROTOCOL_LABELS,
   modelNameMatchesPreferred,
   normalize,
   SORT_KEYS,
@@ -103,6 +106,7 @@ import {
   strArr,
   TYPE_KEYS,
   type CatalogEntry,
+  type CatalogProtocol,
   type CatalogType,
   type RawSpec,
   type RegistryItem,
@@ -128,7 +132,7 @@ const TYPES: { key: CatalogType; label: string; icon: LucideIcon }[] = [
   { key: "bundles", label: "Bundles", icon: Blocks },
   { key: "agents", label: "Agents", icon: Bot },
   { key: "skills", label: "Skills", icon: Puzzle },
-  { key: "mcp_servers", label: "Connections", icon: Plug },
+  { key: "connections", label: "Connections", icon: Plug },
 ];
 
 const VIEW_KEYS = ["grid", "table"] as const;
@@ -145,6 +149,8 @@ type BrowseParams = {
   offset: number;
   q: string;
   category: string;
+  /** The nuqs value, so ALL or anything a hand-edited URL carries. */
+  protocol: string;
   sort: SortMode;
 };
 
@@ -154,16 +160,12 @@ async function fetchPage(params: BrowseParams) {
     offset: params.offset,
     q: params.q || undefined,
     category: params.category === ALL ? undefined : params.category,
+    // ALL, or junk from a hand-edited URL, means "don't filter" rather than a
+    // request the server would reject.
+    protocol: isCatalogProtocol(params.protocol) ? params.protocol : undefined,
     sort: params.sort,
   });
 }
-
-const TYPE_ICON: Record<CatalogType, LucideIcon> = {
-  bundles: Blocks,
-  agents: Bot,
-  skills: Puzzle,
-  mcp_servers: Plug,
-};
 
 // ── Shared "type switch in flight" signal ──
 // The type tabs live in the ContentBlock subheader while the gallery lives in
@@ -375,6 +377,8 @@ type CatalogGalleryProps = {
   /** Items matching the active filters across the whole catalog. */
   initialTotal: number;
   initialCategories: CategoryFacet[];
+  /** MCP/API split; empty for every type but connections. */
+  initialProtocols: CategoryFacet[];
   initialError?: string | null;
   /** Persisted grid/table choice (cookie), seeds the view nuqs default. */
   initialView?: ViewMode;
@@ -385,6 +389,7 @@ export default function CatalogGallery({
   initialEntries,
   initialTotal,
   initialCategories,
+  initialProtocols,
   initialError = null,
   initialView = "grid",
 }: CatalogGalleryProps) {
@@ -428,6 +433,13 @@ export default function CatalogGallery({
       startTransition: explorePending?.startFilterTransition,
     })
   );
+  const [protocol, setProtocol] = useQueryState(
+    "protocol",
+    parseAsString.withDefault(ALL).withOptions({
+      shallow: false,
+      startTransition: explorePending?.startFilterTransition,
+    })
+  );
   const [view] = useQueryState(
     "view",
     parseAsStringLiteral(VIEW_KEYS).withDefault(initialView)
@@ -445,6 +457,7 @@ export default function CatalogGallery({
       entries: initialEntries,
       total: initialTotal,
       categories: initialCategories,
+      protocols: initialProtocols,
       error: initialError,
     })
   );
@@ -477,9 +490,16 @@ export default function CatalogGallery({
       entries: initialEntries,
       total: initialTotal,
       categories: initialCategories,
+      protocols: initialProtocols,
       error: initialError,
     });
-  }, [initialEntries, initialTotal, initialCategories, initialError]);
+  }, [
+    initialEntries,
+    initialTotal,
+    initialCategories,
+    initialProtocols,
+    initialError,
+  ]);
 
   const loadMore = useCallback(async () => {
     dispatch({ type: "appendStart" });
@@ -491,6 +511,7 @@ export default function CatalogGallery({
         offset: paging.entries.length,
         q: query,
         category,
+        protocol,
         sort,
       });
       dispatch({
@@ -498,6 +519,7 @@ export default function CatalogGallery({
         entries: page.items.map((it) => normalize(type, it as RegistryItem)),
         total: page.total,
         categories: page.categories,
+        protocols: page.protocols,
       });
     } catch (e) {
       dispatch({
@@ -505,7 +527,7 @@ export default function CatalogGallery({
         error: e instanceof Error ? e.message : "Failed to load",
       });
     }
-  }, [type, query, category, sort, paging.entries]);
+  }, [type, query, category, protocol, sort, paging.entries]);
 
   // Infinite scroll: auto-load the next page when the sentinel nears the
   // viewport. `canFetchMore` is the in-flight guard — a short page leaves the
@@ -563,7 +585,8 @@ export default function CatalogGallery({
     (itemId ? (paging.entries.find((e) => e.id === itemId) ?? null) : null) ??
     (deepItem?.id === itemId ? deepItem : null);
   // Drives the empty-state copy + "Clear filters" affordance.
-  const hasFilters = query.trim() !== "" || category !== ALL;
+  const hasFilters =
+    query.trim() !== "" || category !== ALL || protocol !== ALL;
 
   // A type switch invalidates the current results, so they're skeletoned. A
   // filter change only narrows them: the list stays and dims, which is what
@@ -576,20 +599,37 @@ export default function CatalogGallery({
     () => paging.categories.map((c) => [c.value, c.count] as [string, number]),
     [paging.categories]
   );
+  const protocols = useMemo(
+    () => paging.protocols.map((p) => [p.value, p.count] as [string, number]),
+    [paging.protocols]
+  );
   const moreAvailable = hasMoreItems(paging);
 
   return (
     <div className="flex gap-6">
-      {/* Facet sidebar — reserved (fixed width) while a type switch is in
-            flight or when the type has categories, so the layout doesn't shift
-            as they arrive. Omitted entirely for category-less types so the grid
-            isn't left with an empty left gutter. Counts come from the server and
-            cover the whole catalog, so they don't drift as more pages load. */}
-      {(busy || categories.length > 0) && (
-        <aside className="hidden w-52 shrink-0 lg:block">
-          {busy ? (
-            <FacetSkeleton />
-          ) : (
+      {/* Facet sidebar — always reserved on desktop so every catalog type keeps
+          the same content width. Types without category facets still render the
+          Category group with its All option. Counts come from the server and cover
+          the whole catalog, so they do not drift as more pages load. */}
+      <aside className="hidden w-52 shrink-0 lg:block">
+        {busy ? (
+          <FacetSkeleton />
+        ) : (
+          <>
+            {/* Connections are not all MCP — an entry may be a plain HTTP API —
+                so the split leads the sidebar when there is one to make. */}
+            {protocols.length > 1 && (
+              <FacetGroup
+                label="Protocol"
+                options={protocols}
+                labels={PROTOCOL_LABELS}
+                selected={protocol}
+                onSelect={(v) => {
+                  void setProtocol(v === ALL ? null : v);
+                  void setItemId(null);
+                }}
+              />
+            )}
             <FacetGroup
               label="Category"
               options={categories}
@@ -599,9 +639,9 @@ export default function CatalogGallery({
                 void setItemId(null);
               }}
             />
-          )}
-        </aside>
-      )}
+          </>
+        )}
+      </aside>
 
       {/* Main */}
       <div className="min-w-0 flex-1 space-y-4">
@@ -682,6 +722,7 @@ export default function CatalogGallery({
                             setDraftQuery("");
                             void setQuery(null);
                             void setCategory(null);
+                            void setProtocol(null);
                           },
                         }
                       : undefined
@@ -761,68 +802,57 @@ function CatalogTable({
           <col className="hidden md:table-column" />
         </colgroup>
         <tbody>
-          {entries.map((e) => {
-            const TypeIcon = TYPE_ICON[e.type];
-            return (
-              <tr
-                key={e.id}
-                onClick={() => onOpen(e)}
-                className="cursor-pointer border-b border-border/40 last:border-0 hover:bg-muted/40"
-              >
-                <td className="w-10 py-2 pl-3 pr-0">
-                  {e.iconUrl ? (
-                    <BrandLogo
-                      src={e.iconUrl}
-                      alt={e.title}
-                      fallback={TypeIcon}
-                      small
-                      cover={e.type === "mcp_servers"}
-                    />
-                  ) : (
-                    <span className="flex h-6 w-6 items-center justify-center rounded border border-border/60 bg-white dark:bg-zinc-800">
-                      <TypeIcon className="h-3.5 w-3.5 text-zinc-400" />
-                    </span>
-                  )}
-                </td>
-                {/* Title column is capped (responsive) so a long name
+          {entries.map((e) => (
+            <tr
+              key={e.id}
+              onClick={() => onOpen(e)}
+              className="cursor-pointer border-b border-border/40 last:border-0 hover:bg-muted/40"
+            >
+              <td className="w-10 py-2 pl-3 pr-0">
+                <EntityMark
+                  identity={e.identity}
+                  brandFallback={false}
+                  className="h-7 w-7 rounded-md border border-border/60 bg-white p-[3px] text-[10px] dark:bg-zinc-800"
+                />
+              </td>
+              {/* Title column is capped (responsive) so a long name
                     truncates with an ellipsis instead of wrapping to multiple
                     lines and blowing up the row height. `min-w-0` on the flex
                     row + the name lets the name shrink; the badges stay
                     `shrink-0` so they're never clipped. */}
-                <td className="max-w-[160px] py-2 pl-2 pr-3 align-middle sm:max-w-[240px] lg:max-w-[340px]">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 truncate font-medium">
-                      {e.title}
-                    </span>
-                    {e.verified && (
-                      <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
-                    )}
-                    {e.category && (
-                      <Badge
-                        variant="light"
-                        size="sm"
-                        className="shrink-0 whitespace-nowrap capitalize"
-                      >
-                        {e.category}
-                      </Badge>
-                    )}
-                  </div>
-                </td>
-                {/* Description absorbs the remaining row width and truncates
+              <td className="max-w-[160px] py-2 pl-2 pr-3 align-middle sm:max-w-[240px] lg:max-w-[340px]">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="min-w-0 truncate font-medium">
+                    {e.title}
+                  </span>
+                  {e.verified && (
+                    <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+                  )}
+                  {e.category && (
+                    <Badge
+                      variant="light"
+                      size="sm"
+                      className="shrink-0 whitespace-nowrap capitalize"
+                    >
+                      {e.category}
+                    </Badge>
+                  )}
+                </div>
+              </td>
+              {/* Description absorbs the remaining row width and truncates
                     with an ellipsis. `w-full` grabs the leftover space (pinning
                     the title column to its content, no dead gap); `max-w-0` is
                     what makes truncation actually work — without it auto table
                     layout grows the column to fit the nowrap text and it spills
                     past the edge with no ellipsis. Together they give the inner
                     block a definite width to clip against. Hidden below md. */}
-                <td className="hidden w-full max-w-0 py-2 pr-4 md:table-cell">
-                  <div className="table-description truncate">
-                    {e.description}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
+              <td className="hidden w-full max-w-0 py-2 pr-4 md:table-cell">
+                <div className="table-description truncate">
+                  {e.description}
+                </div>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -847,11 +877,14 @@ function FacetSkeleton() {
 function FacetGroup({
   label,
   options,
+  labels,
   selected,
   onSelect,
 }: {
   label: string;
   options: [string, number][];
+  /** Display names for machine values ("mcp" reads as "Mcp" otherwise). */
+  labels?: Record<string, string>;
   selected: string;
   onSelect: (v: string) => void;
 }) {
@@ -874,7 +907,7 @@ function FacetGroup({
             )}
           >
             <span className="min-w-0 flex-1 truncate text-left capitalize">
-              {value === ALL ? "All" : value}
+              {value === ALL ? "All" : (labels?.[value] ?? value)}
             </span>
             {count !== null && (
               <span className="text-[10px] tabular-nums text-muted-foreground">
@@ -890,66 +923,26 @@ function FacetGroup({
 
 // ── Card (uniform across every type) ──
 
-// Upstream logo with a graceful fallback to the type glyph if the image 404s
-// or the host blocks hotlinking.
-function BrandLogo({
-  src,
-  alt,
-  fallback: Fallback,
-  small = false,
-  bare = false,
-  cover = false,
-}: {
-  src: string;
-  alt: string;
-  fallback: LucideIcon;
-  small?: boolean;
-  // `bare` drops the framed tile (no bg/border/shadow).
-  bare?: boolean;
-  // `cover` fills the icon edge-to-edge (object-cover, no padding).
-  cover?: boolean;
-}) {
-  const [failed, setFailed] = useState(false);
-  const frame = bare
-    ? ""
-    : "border border-border/60 bg-white shadow-sm dark:bg-zinc-800";
-  if (failed) {
-    return (
-      <span
-        className={cn(
-          "flex items-center justify-center rounded-lg",
-          frame,
-          small ? "h-6 w-6" : "h-9 w-9"
-        )}
-      >
-        <Fallback
-          className={cn("text-zinc-400", small ? "h-3.5 w-3.5" : "h-4 w-4")}
-        />
-      </span>
-    );
-  }
+/**
+ * What a connection speaks. The catalog tile shows the vendor's own logo, so
+ * without this an MCP server and an HTTP API to the same vendor are
+ * indistinguishable — and "Connections" no longer implies MCP.
+ */
+function ProtocolBadge({ protocol }: { protocol: CatalogProtocol }) {
   return (
-    <span
-      className={cn(
-        "flex items-center justify-center overflow-hidden rounded-lg",
-        frame,
-        small ? "h-6 w-6" : "h-10 w-10",
-        !cover && (small ? "p-0.5" : "p-1.5")
+    <Badge variant="secondary" size="sm" className="gap-1 font-normal">
+      {protocol === "mcp" ? (
+        // mcp.svg is fill="currentColor"; as a mask it inherits the badge's
+        // text colour instead of fighting the theme.
+        <span
+          aria-hidden
+          className="h-3 w-3 bg-current [mask-image:url(/mcp.svg)] [mask-position:center] [mask-repeat:no-repeat] [mask-size:contain] [-webkit-mask-image:url(/mcp.svg)] [-webkit-mask-position:center] [-webkit-mask-repeat:no-repeat] [-webkit-mask-size:contain]"
+        />
+      ) : (
+        <Globe className="h-3 w-3" />
       )}
-    >
-      <Image
-        src={src}
-        alt={alt}
-        width={40}
-        height={40}
-        loading="lazy"
-        className={cn(
-          "h-full w-full",
-          cover ? "object-cover" : "object-contain"
-        )}
-        onError={() => setFailed(true)}
-      />
-    </span>
+      {PROTOCOL_LABELS[protocol]}
+    </Badge>
   );
 }
 
@@ -960,7 +953,6 @@ function CatalogCard({
   entry: CatalogEntry;
   onOpen: () => void;
 }) {
-  const TypeIcon = TYPE_ICON[entry.type];
   return (
     <button
       onClick={onOpen}
@@ -982,14 +974,10 @@ function CatalogCard({
             </Badge>
           </span>
         ) : null}
-        {entry.iconUrl ? (
-          <BrandLogo
-            src={entry.iconUrl}
-            alt={entry.title}
-            fallback={TypeIcon}
-            cover={entry.type === "mcp_servers"}
-          />
-        ) : entry.integrations.length > 0 ? (
+        {/* A bundle's value is the integrations it wires up, so when it has
+            no artwork of its own they say more than a monogram would. */}
+        {entry.identity.sources.length === 0 &&
+        entry.integrations.length > 0 ? (
           entry.integrations.slice(0, 4).map((name) => (
             <span
               key={name}
@@ -1000,9 +988,11 @@ function CatalogCard({
             </span>
           ))
         ) : (
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-white shadow-sm dark:bg-zinc-800">
-            <TypeIcon className="h-4 w-4 text-zinc-400" />
-          </span>
+          <EntityMark
+            identity={entry.identity}
+            brandFallback={false}
+            className="h-[52px] w-[52px] rounded-xl border border-border/60 bg-white p-1.5 text-xs shadow-sm dark:bg-zinc-800"
+          />
         )}
         <span className="absolute right-2 top-2">
           <HoverLink text="View" />
@@ -1019,8 +1009,9 @@ function CatalogCard({
           )}
         </div>
         <p className="table-description line-clamp-2">{entry.description}</p>
-        {entry.meta.length > 0 && (
-          <div className="mt-auto flex flex-wrap gap-1 pt-1.5">
+        {(entry.protocol || entry.meta.length > 0) && (
+          <div className="mt-auto flex flex-wrap items-center gap-1 pt-1.5">
+            {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
             {entry.meta.map((m) => (
               <Badge
                 key={m}
@@ -1083,9 +1074,7 @@ function DetailView({
     | undefined;
   const tier = (str(rawMeta?.["agentarea:setup_tier"]) ??
     "unverified") as SetupTier;
-  const TypeIcon = TYPE_ICON[entry.type];
-  const isCatalogApi =
-    entry.type === "mcp_servers" && str(spec.connection_type) === "openapi";
+  const isCatalogApi = entry.protocol === "api";
 
   // Machine tags ("category:x", "repo:y", "featured"…) are provenance, not
   // topical labels — keep them out of the chip row (surfaced elsewhere instead).
@@ -1153,7 +1142,7 @@ function DetailView({
       <BundleInstallWizard
         source={JSON.stringify(spec)}
         title={entry.title}
-        iconUrl={entry.iconUrl}
+        identity={entry.identity}
         onBack={() => setConfiguring(false)}
       />
     );
@@ -1172,19 +1161,11 @@ function DetailView({
       {/* header — icon, title/badges, description, primary action */}
       <div className="flex flex-col gap-4 md:flex-row md:items-start">
         <div className="flex min-w-0 flex-1 items-start gap-4">
-          {entry.iconUrl ? (
-            <BrandLogo
-              src={entry.iconUrl}
-              alt={entry.title}
-              fallback={TypeIcon}
-              bare={entry.type === "mcp_servers"}
-              cover={entry.type === "mcp_servers"}
-            />
-          ) : (
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-white shadow-sm dark:bg-zinc-800">
-              <TypeIcon className="h-5 w-5 text-zinc-400" />
-            </span>
-          )}
+          <EntityMark
+            identity={entry.identity}
+            brandFallback={false}
+            className="h-12 w-12 shrink-0 rounded-lg border border-border/60 bg-white p-1.5 text-sm shadow-sm dark:bg-zinc-800"
+          />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-semibold tracking-tight">
@@ -1196,6 +1177,7 @@ function DetailView({
                   Verified
                 </Badge>
               )}
+              {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
               {entry.category && (
                 <Badge variant="light" size="sm" className="capitalize">
                   {entry.category}
@@ -1216,7 +1198,7 @@ function DetailView({
             <Button asChild variant="outline">
               <Link href="/agents">Go to Agents</Link>
             </Button>
-          ) : entry.type === "mcp_servers" ? (
+          ) : entry.type === "connections" ? (
             isCatalogApi ? (
               <StartAgentButton
                 size="xs"
@@ -1276,7 +1258,7 @@ function DetailView({
       <div className="space-y-5 border-t border-border/60 pt-6">
         {entry.type === "bundles" && <BundleContents spec={spec} />}
         {entry.type === "agents" && <PreferredModels models={entry.meta} />}
-        {entry.type === "mcp_servers" && (
+        {entry.type === "connections" && (
           <>
             <ConnectionSetup tier={tier} />
             {isCatalogApi && (
@@ -1463,7 +1445,9 @@ function CustomOAuthApp({
       setSecrets(await listWorkspaceSecretsAction());
     } catch (error) {
       setSecretsError(
-        error instanceof Error ? error.message : "Failed to load workspace secrets"
+        error instanceof Error
+          ? error.message
+          : "Failed to load workspace secrets"
       );
     } finally {
       loadingSecrets.current = false;

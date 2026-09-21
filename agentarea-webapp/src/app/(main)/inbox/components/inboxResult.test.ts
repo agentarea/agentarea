@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractInboxResult } from "./inboxResult";
+import { extractInboxResult, getInboxResultDetails } from "./inboxResult";
 
 describe("extractInboxResult", () => {
   it("extracts the human response from an SEO result envelope", () => {
@@ -43,5 +43,53 @@ describe("extractInboxResult", () => {
   it("does not treat a non-string response field as a human response", () => {
     const value = { response: { text: "nested" }, state: "unknown" };
     expect(extractInboxResult(value).kind).toBe("structured");
+  });
+
+  it("treats an accounting-only envelope as empty", () => {
+    expect(
+      extractInboxResult({ total_cost: "0", own_cost: "0" })
+    ).toEqual({ kind: "empty", content: null });
+    expect(
+      extractInboxResult({
+        total_cost: "0.0012",
+        own_cost: "0.0012",
+        total_tokens: 840,
+        total_tool_calls: 3,
+      })
+    ).toEqual({ kind: "empty", content: null });
+  });
+
+  it("strips accounting fields from a disclosed structured result", () => {
+    const view = extractInboxResult({
+      output: ["one"],
+      total_cost: "0.5",
+      own_cost: "0.5",
+    });
+
+    expect(view.kind).toBe("structured");
+    expect(view.content).not.toContain("total_cost");
+    expect(view.content).toContain("output");
+  });
+});
+
+describe("getInboxResultDetails", () => {
+  it("omits accounting fields so a cost-only envelope discloses nothing", () => {
+    expect(
+      getInboxResultDetails({
+        response: "Done.",
+        total_cost: "0",
+        own_cost: "0",
+      })
+    ).toBeNull();
+  });
+
+  it("keeps non-accounting envelope fields", () => {
+    expect(
+      getInboxResultDetails({
+        response: "Done.",
+        validation_state: "passed",
+        total_cost: "0",
+      })
+    ).toEqual({ validation_state: "passed" });
   });
 });

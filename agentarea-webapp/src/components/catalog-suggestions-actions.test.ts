@@ -65,6 +65,7 @@ describe("listCatalogSuggestionsAction", () => {
           last_synced_at: NOW,
           last_sync_error: null,
           item_count: 4,
+          recommendation_priority: 100,
           created_at: NOW,
           updated_at: NOW,
         },
@@ -123,7 +124,13 @@ describe("listCatalogSuggestionsAction", () => {
         id: "00000000-0000-4000-8000-000000000003",
         title: "Frontend Design",
         description: "Create polished production interfaces.",
-        iconUrl: null,
+        // Skills ship no artwork; the publishing org's GitHub avatar is what
+        // keeps two of them from looking identical.
+        identity: {
+          kind: "skill",
+          sources: ["https://github.com/anthropics.png?size=128"],
+          initials: "FR",
+        },
         source: "anthropics/claude-code",
         popularityLabel: "47.9K stars",
       },
@@ -131,7 +138,11 @@ describe("listCatalogSuggestionsAction", () => {
         id: "00000000-0000-4000-8000-000000000004",
         title: "MCP Builder",
         description: "Build reliable MCP servers and integrations.",
-        iconUrl: null,
+        identity: {
+          kind: "skill",
+          sources: ["https://github.com/anthropics.png?size=128"],
+          initials: "MC",
+        },
         source: "anthropics/skills",
         popularityLabel: "9.2K stars",
       },
@@ -161,7 +172,7 @@ describe("listCatalogSuggestionsAction", () => {
     expect(listRegistryItems).not.toHaveBeenCalled();
     expect(browseCatalog).toHaveBeenCalledWith({
       registryType: "agents",
-      sort: "featured",
+      sort: "recommended",
       limit: 24,
       offset: 0,
     });

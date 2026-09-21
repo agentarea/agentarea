@@ -35,7 +35,7 @@ interface AgentLike {
   id: string;
   name: string;
   icon?: string | null;
-  color_token?: string | null;
+ 
   tools?: Array<{
     type?: string | null;
     name?: string | null;
@@ -105,7 +105,6 @@ export async function PolicyEditorPageData({
       id: agent.id,
       name: agent.name,
       icon: agent.icon,
-      color_token: agent.color_token,
       tools: Array.isArray(agent.tools) ? agent.tools : null,
       tools_config:
         agent.tools_config && typeof agent.tools_config === "object"

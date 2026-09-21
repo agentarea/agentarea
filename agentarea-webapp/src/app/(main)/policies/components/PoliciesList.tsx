@@ -20,7 +20,7 @@ interface AgentOption {
   id: string;
   name: string;
   icon?: string | null;
-  color_token?: string | null;
+ 
 }
 
 const CATEGORY_ICON: Record<string, LucideIcon> = {

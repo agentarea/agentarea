@@ -47,7 +47,7 @@ export default function SkillsCard({
     >
       {/* top: icon + name */}
       <div className="relative z-[1] mb-[9px] flex items-center gap-[9px]">
-        <SkillTile color={source.color} icon={SourceIcon} variant="card" />
+        <SkillTile skillId={skill.id} variant="card" />
         <span className="truncate text-[13.5px] font-semibold text-foreground">
           {skill.name}
         </span>
@@ -61,10 +61,7 @@ export default function SkillsCard({
       {/* footer: source label pill + network scope */}
       <div className="relative z-[1] flex items-center gap-2">
         <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
-          <span
-            className="h-[7px] w-[7px] rounded-full"
-            style={{ backgroundColor: source.color }}
-          />
+          <SourceIcon className="h-3 w-3" strokeWidth={1.7} />
           {source.label}
         </span>
         <span className="inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">

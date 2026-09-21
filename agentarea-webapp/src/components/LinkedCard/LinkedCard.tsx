@@ -11,7 +11,6 @@ interface LinkedCardProps {
   onClick?: () => void;
   title: string;
   icon?: string | ComponentType<{ className?: string }> | ReactNode;
-  invertIconInDark?: boolean;
   children?: ReactNode;
   subtitle?: ReactNode;
   topRight?: ReactNode;
@@ -24,7 +23,6 @@ export default function LinkedCard({
   onClick,
   title,
   icon,
-  invertIconInDark = false,
   children,
   subtitle,
   topRight,
@@ -74,17 +72,25 @@ export default function LinkedCard({
       <div className="flex flex-col h-full z-10">
         <div className={cn("flex gap-3 mb-2", subtitle ? "items-start" : "items-center")}>
           {hasIcon ? (
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/5 text-primary dark:bg-zinc-800 dark:text-zinc-200 group-hover:bg-primary/10 dark:group-hover:bg-zinc-700/80 dark:group-hover:text-zinc-50 transition-colors duration-300 border border-transparent dark:border-zinc-700/50 dark:group-hover:border-zinc-600">
+            <div
+              className={cn(
+                "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-colors duration-300",
+                // A real logo gets the light plate — it carries its own colour
+                // and needs a ground, not a tint. A category glyph keeps the
+                // tinted box: it inherits `currentColor` and means "a kind of
+                // thing", not "this thing".
+                isStringIcon
+                  ? "avatar-plate"
+                  : "border border-transparent bg-primary/5 text-primary group-hover:bg-primary/10 dark:border-zinc-700/50 dark:bg-zinc-800 dark:text-zinc-200 dark:group-hover:border-zinc-600 dark:group-hover:bg-zinc-700/80 dark:group-hover:text-zinc-50"
+              )}
+            >
               {isStringIcon ? (
                 <Image
                   src={icon as string}
                   alt={title}
                   width={24}
                   height={24}
-                  className={cn(
-                    "h-6 w-6 rounded object-contain transition-transform group-hover:scale-110 duration-300",
-                    invertIconInDark && "dark:invert"
-                  )}
+                  className="h-6 w-6 rounded object-contain transition-transform duration-300 group-hover:scale-110"
                 />
               ) : IconComponent ? (
                 <IconComponent className="h-5 w-5 transition-colors duration-300" />

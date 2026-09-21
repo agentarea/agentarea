@@ -51,7 +51,13 @@ import {
   listSecrets,
   updateAgent,
 } from "@/lib/api";
-import { PAGE, TYPE_KEYS, type CatalogType } from "./catalog-data";
+import {
+  PAGE,
+  REGISTRY_TYPE,
+  TYPE_KEYS,
+  type CatalogProtocol,
+  type CatalogType,
+} from "./catalog-data";
 
 export type AgentLite = { id: string; name: string };
 export type WorkspaceModel = Pick<
@@ -111,6 +117,7 @@ export type CatalogPageResult = {
   /** Items matching the filters across the whole catalog, not just this page. */
   total: number;
   categories: { value: string; count: number }[];
+  protocols: { value: string; count: number }[];
 };
 
 /**
@@ -124,13 +131,14 @@ export async function fetchCatalogPageAction(params: {
   offset: number;
   q?: string;
   category?: string;
+  protocol?: CatalogProtocol;
   sort?: string;
 }): Promise<CatalogPageResult> {
-  const registryType = assertCatalogType(params.type);
-  const { items, total, categories, error } = await browseCatalog({
-    registryType,
+  const { items, total, categories, protocols, error } = await browseCatalog({
+    registryType: REGISTRY_TYPE[assertCatalogType(params.type)],
     q: params.q,
     category: params.category,
+    protocol: params.protocol,
     sort: params.sort,
     limit: PAGE,
     offset: params.offset,
@@ -142,11 +150,13 @@ export async function fetchCatalogPageAction(params: {
     items,
     total,
     categories,
+    protocols,
   });
   return {
     items: parsed.items,
     total: parsed.total,
     categories: parsed.categories,
+    protocols: parsed.protocols ?? [],
   };
 }
 

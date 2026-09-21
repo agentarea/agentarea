@@ -16,7 +16,6 @@ export function ProviderConfigCard({ config }: ProviderConfigCardProps) {
       href={`/admin/provider-configs/edit/${config.id}`}
       title={config.name}
       icon={config.spec?.icon_url}
-      invertIconInDark={true}
       type="edit"
       subtitle={
         <p className="truncate text-xs text-gray-500 w-full">
@@ -51,7 +50,6 @@ export function ProviderSpecCard({ spec }: ProviderSpecCardProps) {
       href={`/admin/provider-configs/create/${spec.id}`}
       title={spec.name}
       icon={spec.icon_url}
-      invertIconInDark={true}
       type="config"
     />
   );
