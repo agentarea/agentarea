@@ -2403,7 +2403,7 @@
         "type": "object"
       },
       "CatalogBrowseResponse": {
-        "description": "One page of a type's catalog plus the context needed to browse it.\n\n``total`` and ``categories`` cover the whole filtered catalog, not the page:\nwithout them a page that happens to contain no visible matches is\nindistinguishable from the end of the catalog, and facet counts drift as\nmore pages load.",
+        "description": "One page of a type's catalog plus the context needed to browse it.\n\n``total`` and the facets cover the whole filtered catalog, not the page:\nwithout them a page that happens to contain no visible matches is\nindistinguishable from the end of the catalog, and facet counts drift as\nmore pages load.\n\n``protocols`` is populated for the connections catalog only, where an entry\nis either an MCP server or a plain HTTP API; every other type holds one\nkind of thing and gets an empty list.",
         "properties": {
           "categories": {
             "items": {
@@ -2419,6 +2419,13 @@
             "title": "Items",
             "type": "array"
           },
+          "protocols": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryFacet"
+            },
+            "title": "Protocols",
+            "type": "array"
+          },
           "total": {
             "title": "Total",
             "type": "integer"
@@ -2427,7 +2434,8 @@
         "required": [
           "items",
           "total",
-          "categories"
+          "categories",
+          "protocols"
         ],
         "title": "CatalogBrowseResponse",
         "type": "object"
@@ -2551,6 +2559,19 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "recommendation_rank": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Curation position within this registry; lower comes first. Omit to publish after the registry's existing items.",
+            "title": "Recommendation Rank"
           },
           "spec": {
             "additionalProperties": true,
@@ -8835,6 +8856,19 @@
             "title": "Name",
             "type": "string"
           },
+          "recommendation_priority": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ordering weight for the 'recommended' catalog sort; lower comes first. Keeps a curated system catalog ahead of a bulk/community mirror. Omit to take the platform default.",
+            "title": "Recommendation Priority"
+          },
           "registry_type": {
             "description": "Catalog entity type: one of ('mcp_servers', 'skills', 'llm_providers', 'llm_models', 'agents', 'bundles')",
             "title": "Registry Type",
@@ -9052,6 +9086,10 @@
             "title": "Name",
             "type": "string"
           },
+          "recommendation_priority": {
+            "title": "Recommendation Priority",
+            "type": "integer"
+          },
           "registry_type": {
             "title": "Registry Type",
             "type": "string"
@@ -9085,6 +9123,7 @@
           "last_synced_at",
           "last_sync_error",
           "item_count",
+          "recommendation_priority",
           "created_at",
           "updated_at"
         ],
@@ -9125,6 +9164,18 @@
               }
             ],
             "title": "Name"
+          },
+          "recommendation_priority": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation Priority"
           },
           "source_url": {
             "anyOf": [
@@ -23699,7 +23750,29 @@
             }
           },
           {
-            "description": "'featured' (default) or 'name'",
+            "description": "Restrict connections to one protocol. Only valid for registry_type='mcp_servers'.",
+            "in": "query",
+            "name": "protocol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "mcp",
+                    "api"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict connections to one protocol. Only valid for registry_type='mcp_servers'.",
+              "title": "Protocol"
+            }
+          },
+          {
+            "description": "'recommended' (default) or 'name'",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -23712,7 +23785,7 @@
                   "type": "null"
                 }
               ],
-              "description": "'featured' (default) or 'name'",
+              "description": "'recommended' (default) or 'name'",
               "title": "Sort"
             }
           },

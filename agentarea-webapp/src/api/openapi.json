@@ -2403,7 +2403,7 @@
         "type": "object"
       },
       "CatalogBrowseResponse": {
-        "description": "One page of a type's catalog plus the context needed to browse it.\n\n``total`` and ``categories`` cover the whole filtered catalog, not the page:\nwithout them a page that happens to contain no visible matches is\nindistinguishable from the end of the catalog, and facet counts drift as\nmore pages load.",
+        "description": "One page of a type's catalog plus the context needed to browse it.\n\n``total`` and the facets cover the whole filtered catalog, not the page:\nwithout them a page that happens to contain no visible matches is\nindistinguishable from the end of the catalog, and facet counts drift as\nmore pages load.\n\n``protocols`` is populated for the connections catalog only, where an entry\nis either an MCP server or a plain HTTP API; every other type holds one\nkind of thing and gets an empty list.",
         "properties": {
           "categories": {
             "items": {
@@ -2419,6 +2419,13 @@
             "title": "Items",
             "type": "array"
           },
+          "protocols": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryFacet"
+            },
+            "title": "Protocols",
+            "type": "array"
+          },
           "total": {
             "title": "Total",
             "type": "integer"
@@ -2427,7 +2434,8 @@
         "required": [
           "items",
           "total",
-          "categories"
+          "categories",
+          "protocols"
         ],
         "title": "CatalogBrowseResponse",
         "type": "object"
@@ -2551,6 +2559,19 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "recommendation_rank": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Curation position within this registry; lower comes first. Omit to publish after the registry's existing items.",
+            "title": "Recommendation Rank"
           },
           "spec": {
             "additionalProperties": true,
@@ -3968,15 +3989,28 @@
       "ExecutionMetricsResponse": {
         "description": "Response model for execution metrics.",
         "properties": {
+          "avg_cost_usd": {
+            "default": 0.0,
+            "description": "Spend per run that produced a costed task.",
+            "title": "Avg Cost Usd",
+            "type": "number"
+          },
           "avg_execution_time_ms": {
             "title": "Avg Execution Time Ms",
             "type": "number"
+          },
+          "costed_executions": {
+            "default": 0,
+            "description": "Runs whose task reported a cost; the divisor behind avg_cost_usd.",
+            "title": "Costed Executions",
+            "type": "integer"
           },
           "failed_executions": {
             "title": "Failed Executions",
             "type": "integer"
           },
           "failure_rate": {
+            "description": "Percentage, 0-100.",
             "title": "Failure Rate",
             "type": "number"
           },
@@ -3989,10 +4023,19 @@
             "type": "integer"
           },
           "period_hours": {
-            "title": "Period Hours",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Window these metrics cover. Null means the whole history.",
+            "title": "Period Hours"
           },
           "success_rate": {
+            "description": "Percentage, 0-100.",
             "title": "Success Rate",
             "type": "number"
           },
@@ -4003,6 +4046,12 @@
           "timeout_executions": {
             "title": "Timeout Executions",
             "type": "integer"
+          },
+          "total_cost_usd": {
+            "default": 0.0,
+            "description": "Spend of the tasks these runs created.",
+            "title": "Total Cost Usd",
+            "type": "number"
           },
           "total_executions": {
             "title": "Total Executions",
@@ -4016,7 +4065,6 @@
         },
         "required": [
           "trigger_id",
-          "period_hours",
           "total_executions",
           "successful_executions",
           "failed_executions",
@@ -8835,6 +8883,19 @@
             "title": "Name",
             "type": "string"
           },
+          "recommendation_priority": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ordering weight for the 'recommended' catalog sort; lower comes first. Keeps a curated system catalog ahead of a bulk/community mirror. Omit to take the platform default.",
+            "title": "Recommendation Priority"
+          },
           "registry_type": {
             "description": "Catalog entity type: one of ('mcp_servers', 'skills', 'llm_providers', 'llm_models', 'agents', 'bundles')",
             "title": "Registry Type",
@@ -9052,6 +9113,10 @@
             "title": "Name",
             "type": "string"
           },
+          "recommendation_priority": {
+            "title": "Recommendation Priority",
+            "type": "integer"
+          },
           "registry_type": {
             "title": "Registry Type",
             "type": "string"
@@ -9085,6 +9150,7 @@
           "last_synced_at",
           "last_sync_error",
           "item_count",
+          "recommendation_priority",
           "created_at",
           "updated_at"
         ],
@@ -9125,6 +9191,18 @@
               }
             ],
             "title": "Name"
+          },
+          "recommendation_priority": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation Priority"
           },
           "source_url": {
             "anyOf": [
@@ -11605,6 +11683,18 @@
       "TriggerExecutionResponse": {
         "description": "Response model for trigger execution data.",
         "properties": {
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the task this run created has spent so far. Null when the run created no task, or the task has not reported a cost yet.",
+            "title": "Cost Usd"
+          },
           "error_message": {
             "anyOf": [
               {
@@ -12361,6 +12451,107 @@
           }
         },
         "title": "UpdateWalletRequest",
+        "type": "object"
+      },
+      "UsageEventListResponse": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/UsageEventResponse"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "events",
+          "next_cursor"
+        ],
+        "title": "UsageEventListResponse",
+        "type": "object"
+      },
+      "UsageEventResponse": {
+        "properties": {
+          "data_json": {
+            "title": "Data Json",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "incarnation_id": {
+            "title": "Incarnation Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "occurred_at": {
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "received_at": {
+            "title": "Received At",
+            "type": "string"
+          },
+          "resource_id": {
+            "title": "Resource Id",
+            "type": "string"
+          },
+          "resource_kind": {
+            "title": "Resource Kind",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sequence",
+          "id",
+          "schema_version",
+          "source",
+          "kind",
+          "workspace_id",
+          "resource_kind",
+          "resource_id",
+          "incarnation_id",
+          "task_id",
+          "occurred_at",
+          "received_at",
+          "data_json"
+        ],
+        "title": "UsageEventResponse",
         "type": "object"
       },
       "ValidateRequest": {
@@ -13186,6 +13377,28 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/": {
+      "get": {
+        "description": "Root endpoint.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Root"
+      }
+    },
     "/.well-known/jwks.json": {
       "get": {
         "description": "Proxy JWKS so token verification works against our API URL.",
@@ -13309,8 +13522,8 @@
     },
     "/health": {
       "get": {
-        "description": "Health check endpoint.",
-        "operationId": "health_health_get",
+        "description": "Health check endpoint for the main application.",
+        "operationId": "health_check_health_get",
         "responses": {
           "200": {
             "content": {
@@ -13326,7 +13539,7 @@
             "bearer": []
           }
         ],
-        "summary": "Health"
+        "summary": "Health Check"
       }
     },
     "/oauth2/auth": {
@@ -17594,6 +17807,7 @@
     },
     "/v1/files": {
       "get": {
+        "description": "List the files a person put in the workspace.\n\nWhat a task produced is not among them: a task's files belong to that run\nand are browsed on the task itself, so they stay out of the workspace view\neven though ``tasks/{id}/workspace/{path}`` remains readable by that name.",
         "operationId": "list_workspace_files_v1_files_get",
         "responses": {
           "200": {
@@ -23699,7 +23913,29 @@
             }
           },
           {
-            "description": "'featured' (default) or 'name'",
+            "description": "Restrict connections to one protocol. Only valid for registry_type='mcp_servers'.",
+            "in": "query",
+            "name": "protocol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "mcp",
+                    "api"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict connections to one protocol. Only valid for registry_type='mcp_servers'.",
+              "title": "Protocol"
+            }
+          },
+          {
+            "description": "'recommended' (default) or 'name'",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -23712,7 +23948,7 @@
                   "type": "null"
                 }
               ],
-              "description": "'featured' (default) or 'name'",
+              "description": "'recommended' (default) or 'name'",
               "title": "Sort"
             }
           },
@@ -26881,7 +27117,7 @@
     },
     "/v1/triggers/{trigger_id}/executions": {
       "get": {
-        "description": "Get execution history for a trigger with filtering and pagination.\n\nReturns paginated execution history for the specified trigger, including\nsuccess/failure status, execution times, and error messages. Supports\nfiltering by status and time range.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    page: Page number for pagination\n    page_size: Number of executions per page\n    status: Optional status filter (success, failed, timeout)\n    start_time: Optional start time filter\n    end_time: Optional end time filter\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    Paginated execution history\n\nRaises:\n    HTTPException: If trigger not found or invalid parameters",
+        "description": "Get execution history for a trigger with filtering and pagination.\n\nReturns paginated execution history for the specified trigger, including\nsuccess/failure status, execution times, and error messages. Supports\nfiltering by status and time range.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    page: Page number for pagination\n    page_size: Number of executions per page\n    status: Optional status filter (success, failed, timeout)\n    start_time: Optional start time filter\n    end_time: Optional end time filter\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n    db_session: Session used to resolve what each run's task cost\n\nReturns:\n    Paginated execution history\n\nRaises:\n    HTTPException: If trigger not found or invalid parameters",
         "operationId": "get_execution_history_v1_triggers__trigger_id__executions_get",
         "parameters": [
           {
@@ -27015,7 +27251,7 @@
     },
     "/v1/triggers/{trigger_id}/metrics": {
       "get": {
-        "description": "Get execution metrics for a trigger.\n\nReturns aggregated metrics including success rate, average execution time,\nand failure counts for the specified time period.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    hours: Time period in hours to analyze (default 24, max 168)\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    Execution metrics for the trigger\n\nRaises:\n    HTTPException: If trigger not found",
+        "description": "Get execution metrics for a trigger.\n\nReturns aggregated counts, success rate, execution time and spend. Spend is\nthe cost of the tasks those runs created, joined at read time \u2014 a run is\nrecorded when its task starts, the bill accrues afterwards.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    hours: Time period in hours to analyze; omitted means the whole history\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n    db_session: Session used for the spend join\n\nReturns:\n    Execution metrics for the trigger\n\nRaises:\n    HTTPException: If trigger not found",
         "operationId": "get_execution_metrics_v1_triggers__trigger_id__metrics_get",
         "parameters": [
           {
@@ -27029,17 +27265,23 @@
             }
           },
           {
-            "description": "Time period in hours (max 7 days)",
+            "description": "Time period in hours (max 1 year). Omit for the trigger's whole history.",
             "in": "query",
             "name": "hours",
             "required": false,
             "schema": {
-              "default": 24,
-              "description": "Time period in hours (max 7 days)",
-              "maximum": 168,
-              "minimum": 1,
-              "title": "Hours",
-              "type": "integer"
+              "anyOf": [
+                {
+                  "maximum": 8760,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Time period in hours (max 1 year). Omit for the trigger's whole history.",
+              "title": "Hours"
             }
           }
         ],
@@ -27256,6 +27498,188 @@
           "v1",
           "protected",
           "triggers"
+        ]
+      }
+    },
+    "/v1/usage/events": {
+      "get": {
+        "description": "Return newest persisted facts first, scoped to the current workspace.",
+        "operationId": "list_usage_events_v1_usage_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "resource_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resource Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "resource_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resource Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "task_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Task Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[1-9]\\d{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageEventListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Usage Events",
+        "tags": [
+          "v1",
+          "protected",
+          "usage"
         ]
       }
     },

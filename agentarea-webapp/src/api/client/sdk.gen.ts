@@ -436,8 +436,8 @@ import type {
   HandleWebhookWebhooksWebhookIdPutData,
   HandleWebhookWebhooksWebhookIdPutErrors,
   HandleWebhookWebhooksWebhookIdPutResponses,
-  HealthHealthGetData,
-  HealthHealthGetResponses,
+  HealthCheckHealthGetData,
+  HealthCheckHealthGetResponses,
   HydraAuthRedirectOauth2AuthGetData,
   HydraAuthRedirectOauth2AuthGetResponses,
   HydraDcrProxyOauth2RegisterPostData,
@@ -571,6 +571,9 @@ import type {
   ListTriggersV1TriggersGetData,
   ListTriggersV1TriggersGetErrors,
   ListTriggersV1TriggersGetResponses,
+  ListUsageEventsV1UsageEventsGetData,
+  ListUsageEventsV1UsageEventsGetErrors,
+  ListUsageEventsV1UsageEventsGetResponses,
   ListWorkspaceFilesV1FilesGetData,
   ListWorkspaceFilesV1FilesGetResponses,
   ListWorkspacesV1WorkspacesGetData,
@@ -669,6 +672,8 @@ import type {
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteData,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteErrors,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteResponses,
+  RootGetData,
+  RootGetResponses,
   RotateSecretV1SecretsSecretIdValuePutData,
   RotateSecretV1SecretsSecretIdValuePutErrors,
   RotateSecretV1SecretsSecretIdValuePutResponses,
@@ -819,6 +824,26 @@ export type Options<
 };
 
 /**
+ * Root
+ *
+ * Root endpoint.
+ */
+export const rootGet = <ThrowOnError extends boolean = false>(
+  options?: Options<RootGetData, ThrowOnError>
+): RequestResult<RootGetResponses, unknown, ThrowOnError> =>
+  (options?.client ?? client).get<RootGetResponses, unknown, ThrowOnError>({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/",
+    ...options,
+  });
+
+/**
  * Hydra Jwks Proxy
  *
  * Proxy JWKS so token verification works against our API URL.
@@ -952,15 +977,15 @@ export const oauthProtectedResourceMetadataByPathWellKnownOauthProtectedResource
     });
 
 /**
- * Health
+ * Health Check
  *
- * Health check endpoint.
+ * Health check endpoint for the main application.
  */
-export const healthHealthGet = <ThrowOnError extends boolean = false>(
-  options?: Options<HealthHealthGetData, ThrowOnError>
-): RequestResult<HealthHealthGetResponses, unknown, ThrowOnError> =>
+export const healthCheckHealthGet = <ThrowOnError extends boolean = false>(
+  options?: Options<HealthCheckHealthGetData, ThrowOnError>
+): RequestResult<HealthCheckHealthGetResponses, unknown, ThrowOnError> =>
   (options?.client ?? client).get<
-    HealthHealthGetResponses,
+    HealthCheckHealthGetResponses,
     unknown,
     ThrowOnError
   >({
@@ -3440,6 +3465,12 @@ export const oauthCallbackV1ConnectionsOauthCallbackGet = <
 
 /**
  * List Workspace Files
+ *
+ * List the files a person put in the workspace.
+ *
+ * What a task produced is not among them: a task's files belong to that run
+ * and are browsed on the task itself, so they stay out of the workspace view
+ * even though ``tasks/{id}/workspace/{path}`` remains readable by that name.
  */
 export const listWorkspaceFilesV1FilesGet = <
   ThrowOnError extends boolean = false,
@@ -9185,6 +9216,7 @@ export const executeTriggerV1TriggersTriggerIdExecutePost = <
  * end_time: Optional end time filter
  * user_context: Authentication context
  * trigger_service: Injected trigger service
+ * db_session: Session used to resolve what each run's task cost
  *
  * Returns:
  * Paginated execution history
@@ -9225,14 +9257,16 @@ export const getExecutionHistoryV1TriggersTriggerIdExecutionsGet = <
  *
  * Get execution metrics for a trigger.
  *
- * Returns aggregated metrics including success rate, average execution time,
- * and failure counts for the specified time period.
+ * Returns aggregated counts, success rate, execution time and spend. Spend is
+ * the cost of the tasks those runs created, joined at read time — a run is
+ * recorded when its task starts, the bill accrues afterwards.
  *
  * Args:
  * trigger_id: The unique identifier of the trigger
- * hours: Time period in hours to analyze (default 24, max 168)
+ * hours: Time period in hours to analyze; omitted means the whole history
  * user_context: Authentication context
  * trigger_service: Injected trigger service
+ * db_session: Session used for the spend join
  *
  * Returns:
  * Execution metrics for the trigger
@@ -9404,6 +9438,36 @@ export const getExecutionTimelineV1TriggersTriggerIdTimelineGet = <
       },
     ],
     url: "/v1/triggers/{trigger_id}/timeline",
+    ...options,
+  });
+
+/**
+ * List Usage Events
+ *
+ * Return newest persisted facts first, scoped to the current workspace.
+ */
+export const listUsageEventsV1UsageEventsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListUsageEventsV1UsageEventsGetData, ThrowOnError>
+): RequestResult<
+  ListUsageEventsV1UsageEventsGetResponses,
+  ListUsageEventsV1UsageEventsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListUsageEventsV1UsageEventsGetResponses,
+    ListUsageEventsV1UsageEventsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/usage/events",
     ...options,
   });
 

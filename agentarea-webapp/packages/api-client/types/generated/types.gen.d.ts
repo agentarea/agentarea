@@ -1407,6 +1407,12 @@ export type CatalogItemCreate = {
      */
     name: string;
     /**
+     * Recommendation Rank
+     *
+     * Curation position within this registry; lower comes first. Omit to publish after the registry's existing items.
+     */
+    recommendation_rank?: number | null;
+    /**
      * Spec
      */
     spec?: {
@@ -2161,15 +2167,29 @@ export type ExecutionLimitsPolicy = {
  */
 export type ExecutionMetricsResponse = {
     /**
+     * Avg Cost Usd
+     *
+     * Spend per run that produced a costed task.
+     */
+    avg_cost_usd?: number;
+    /**
      * Avg Execution Time Ms
      */
     avg_execution_time_ms: number;
+    /**
+     * Costed Executions
+     *
+     * Runs whose task reported a cost; the divisor behind avg_cost_usd.
+     */
+    costed_executions?: number;
     /**
      * Failed Executions
      */
     failed_executions: number;
     /**
      * Failure Rate
+     *
+     * Percentage, 0-100.
      */
     failure_rate: number;
     /**
@@ -2182,10 +2202,14 @@ export type ExecutionMetricsResponse = {
     min_execution_time_ms: number;
     /**
      * Period Hours
+     *
+     * Window these metrics cover. Null means the whole history.
      */
-    period_hours: number;
+    period_hours?: number | null;
     /**
      * Success Rate
+     *
+     * Percentage, 0-100.
      */
     success_rate: number;
     /**
@@ -2196,6 +2220,12 @@ export type ExecutionMetricsResponse = {
      * Timeout Executions
      */
     timeout_executions: number;
+    /**
+     * Total Cost Usd
+     *
+     * Spend of the tasks these runs created.
+     */
+    total_cost_usd?: number;
     /**
      * Total Executions
      */
@@ -4916,6 +4946,12 @@ export type RegistryCreate = {
      */
     name: string;
     /**
+     * Recommendation Priority
+     *
+     * Ordering weight for the 'recommended' catalog sort; lower comes first. Keeps a curated system catalog ahead of a bulk/community mirror. Omit to take the platform default.
+     */
+    recommendation_priority?: number | null;
+    /**
      * Registry Type
      *
      * Catalog entity type: one of ('mcp_servers', 'skills', 'llm_providers', 'llm_models', 'agents', 'bundles')
@@ -5044,6 +5080,10 @@ export type RegistryResponse = {
      */
     name: string;
     /**
+     * Recommendation Priority
+     */
+    recommendation_priority: number;
+    /**
      * Registry Type
      */
     registry_type: string;
@@ -5080,6 +5120,10 @@ export type RegistryUpdate = {
      * Name
      */
     name?: string | null;
+    /**
+     * Recommendation Priority
+     */
+    recommendation_priority?: number | null;
     /**
      * Source Url
      */
@@ -6562,6 +6606,12 @@ export type TriggerExecuteRequest = {
  */
 export type TriggerExecutionResponse = {
     /**
+     * Cost Usd
+     *
+     * What the task this run created has spent so far. Null when the run created no task, or the task has not reported a cost yet.
+     */
+    cost_usd?: number | null;
+    /**
      * Error Message
      */
     error_message?: string | null;
@@ -6937,6 +6987,76 @@ export type UpdateWalletRequest = {
      */
     wallet_type?: string | null;
     x402_config?: X402ConfigSchema | null;
+};
+/**
+ * UsageEventListResponse
+ */
+export type UsageEventListResponse = {
+    /**
+     * Events
+     */
+    events: Array<UsageEventResponse>;
+    /**
+     * Next Cursor
+     */
+    next_cursor: string | null;
+};
+/**
+ * UsageEventResponse
+ */
+export type UsageEventResponse = {
+    /**
+     * Data Json
+     */
+    data_json: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Incarnation Id
+     */
+    incarnation_id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
+    /**
+     * Received At
+     */
+    received_at: string;
+    /**
+     * Resource Id
+     */
+    resource_id: string;
+    /**
+     * Resource Kind
+     */
+    resource_kind: string;
+    /**
+     * Schema Version
+     */
+    schema_version: number;
+    /**
+     * Sequence
+     */
+    sequence: string;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
 };
 /**
  * ValidateRequest
@@ -12249,7 +12369,7 @@ export type BrowseCatalogV1RegistriesCatalogBrowseGetData = {
         /**
          * Sort
          *
-         * 'featured' (default) or 'name'
+         * 'recommended' (default) or 'name'
          */
         sort?: string | null;
         /**
@@ -13788,9 +13908,9 @@ export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetData = {
         /**
          * Hours
          *
-         * Time period in hours (max 7 days)
+         * Time period in hours (max 1 year). Omit for the trigger's whole history.
          */
-        hours?: number;
+        hours?: number | null;
     };
     url: '/v1/triggers/{trigger_id}/metrics';
 };
@@ -13896,6 +14016,63 @@ export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses = {
     200: ExecutionTimelineResponse;
 };
 export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponse = GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses[keyof GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses];
+export type ListUsageEventsV1UsageEventsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Source
+         */
+        source?: string | null;
+        /**
+         * Kind
+         */
+        kind?: string | null;
+        /**
+         * Resource Kind
+         */
+        resource_kind?: string | null;
+        /**
+         * Resource Id
+         */
+        resource_id?: string | null;
+        /**
+         * Task Id
+         */
+        task_id?: string | null;
+        /**
+         * From
+         */
+        from?: string | null;
+        /**
+         * Until
+         */
+        until?: string | null;
+        /**
+         * Cursor
+         */
+        cursor?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/v1/usage/events';
+};
+export type ListUsageEventsV1UsageEventsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListUsageEventsV1UsageEventsGetError = ListUsageEventsV1UsageEventsGetErrors[keyof ListUsageEventsV1UsageEventsGetErrors];
+export type ListUsageEventsV1UsageEventsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: UsageEventListResponse;
+};
+export type ListUsageEventsV1UsageEventsGetResponse = ListUsageEventsV1UsageEventsGetResponses[keyof ListUsageEventsV1UsageEventsGetResponses];
 export type GetDashboardV1WorkspaceDashboardGetData = {
     body?: never;
     path?: never;
