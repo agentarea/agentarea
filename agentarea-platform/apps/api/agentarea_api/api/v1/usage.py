@@ -79,7 +79,9 @@ async def list_usage_events(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     cursor_value = int(cursor) if cursor is not None else None
     if cursor_value is not None and cursor_value > 9223372036854775807:
-        raise HTTPException(status_code=422, detail="Usage cursor exceeds the stored sequence range")
+        raise HTTPException(
+            status_code=422, detail="Usage cursor exceeds the stored sequence range"
+        )
     if lower is not None and upper is not None and lower.exact > upper.exact:
         raise HTTPException(status_code=422, detail="from must not be after until")
     repo = UsageRepository(db_session, user_context)
