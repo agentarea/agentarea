@@ -70,6 +70,7 @@ async def test_post_creates_one_catalog_item():
         version=None,
         spec={"connection_type": "openapi"},
         tags=[],
+        recommendation_rank=None,
     )
 
 

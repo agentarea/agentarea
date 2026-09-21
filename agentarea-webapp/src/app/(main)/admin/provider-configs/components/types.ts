@@ -38,4 +38,7 @@ export interface ProviderConfig {
   provider_spec_key: string | null;
   spec?: ProviderSpec;
   model_instances?: ModelInstance[];
+  // "platform" means the operator supplied this config for every workspace;
+  // it's read-only from the UI (the API refuses writes to it regardless).
+  managed_by?: string | null;
 }
