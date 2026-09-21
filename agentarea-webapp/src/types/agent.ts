@@ -7,11 +7,14 @@ export interface ModelInfo {
 
 export interface ToolSettings {
   disabled_methods?: string[];  // For code tools
-  allowed_tools?: string[];     // For MCP tools
+  allowed_tools?: string[];     // For MCP and OpenAPI tools
+  openapi_connection_id?: string;  // For OpenAPI tools
+  load_mode?: string;
 }
 
+// `agent` is a delegation edge: the tool call hands the task to another agent.
 export interface ToolConfig {
-  type: 'code' | 'mcp' | 'openapi';
+  type: 'code' | 'mcp' | 'openapi' | 'agent';
   name: string;
   settings?: ToolSettings;
 }

@@ -1,93 +1,137 @@
 import * as React from "react";
+import { avatarHueStyle, type AvatarHue } from "@/lib/avatar-hue";
 import { cn } from "@/lib/utils";
 
-/** Default background when no `color` is provided. */
-const DEFAULT_COLOR = "#3b5bdb";
+/** Default background for the `soft` chip when no `color` is given. */
+const SOFT_DEFAULT_COLOR = "#71717a";
 
-/** Diagonal line texture drawn on top of the solid color. */
-const LINE_TEXTURE =
-  "repeating-linear-gradient(135deg, rgba(255,255,255,0.16) 0px, rgba(255,255,255,0.16) 1px, transparent 1px, transparent 7px)";
+/** Below this the 1px hatch stripe is sub-pixel noise rather than texture. */
+const HATCH_FROM = 28;
 
-export type EntityAvatarProps = {
-  /** Square side length in px. Font/icon/radius scale from this. */
+/** Below this a squircle and a plain radius differ by less than half a pixel. */
+const SQUIRCLE_FROM = 40;
+
+type BaseProps = {
+  /** Square side length in px. Font, glyph and radius all scale from this. */
   size?: number;
-  /** Background color. Defaults to blue. */
-  color?: string;
-  /** Initials or short label shown when there's no image/icon. */
+  /** Initials or short label, shown when there is no image or icon. */
   text?: string;
-  /** Icon element shown when there's no image. Sized to the tile automatically. */
+  /** Icon element, shown when there is no image. Sized to the tile. */
   icon?: React.ReactNode;
-  /** Image URL. When set, it fills the tile (object-cover, centered). */
+  /**
+   * How much of the tile the icon fills. The 0.5 default suits a stroke glyph.
+   * A brand logo wants ~0.68: it is optically denser, it usually carries its
+   * own background plate, and at half the tile it reads as a small square
+   * sitting inside a bigger one rather than as a framed mark. Note the hue goes
+   * inert in that case — a logo does not inherit `currentColor`, so the tile is
+   * just a neutral plate and the brand does the identifying.
+   */
+  iconScale?: number;
+  /** Image URL. When set it fills the tile (object-cover, centred). */
   src?: string;
   alt?: string;
-  /** Toggle the diagonal line texture. Defaults to true. */
-  lines?: boolean;
-  /** Corner radius in px. Defaults to ~20% of `size` (lightly rounded square). */
+  /** Corner radius in px. Defaults to ~29.5% of `size`. */
   rounded?: number;
-  /**
-   * "solid" (default): white text/icon on a fully-colored tile.
-   * "soft": colored text/icon on a soft, borderless tint of `color`.
-   */
-  variant?: "solid" | "soft";
+  /** Override the size-driven hatch decision. */
+  hatch?: boolean;
+  /** Set when the name is already rendered next to the tile. */
+  "aria-hidden"?: boolean;
   className?: string;
 };
 
+type IdentityProps = BaseProps & {
+  /**
+   * `graphite` — neutral tile, glyph carries the hue. For things: agents,
+   * catalog entries, connections.
+   * `pigment` — hue fills the tile, mark stays white. For people.
+   */
+  variant?: "graphite" | "pigment";
+  hue: AvatarHue;
+  color?: never;
+};
+
+type SoftProps = BaseProps & {
+  /** A flat, borderless tint — for status and category chips, not identity. */
+  variant: "soft";
+  color?: string;
+  hue?: never;
+};
+
+export type EntityAvatarProps = IdentityProps | SoftProps;
+
 /**
- * Reusable square avatar/tile. Renders, in priority order: an image (stretched
- * to fill), an icon, or text initials — over a colored, line-textured
- * background. Handy for users, agents, skills, workspaces, etc.
+ * The square tile every generated avatar is drawn on. Renders, in priority
+ * order: an image, an icon, or text initials.
+ *
+ * Identity avatars get their depth from simulated light rather than from
+ * saturation — the gradient, lit edge, hairline and shadow all live in
+ * `globals.css` under `.avatar-graphite` / `.avatar-pigment`, so this component
+ * only decides size, shape and what goes in the middle.
  */
-export function EntityAvatar({
-  size = 28,
-  color = DEFAULT_COLOR,
-  text,
-  icon,
-  src,
-  alt,
-  lines = true,
-  rounded,
-  variant = "solid",
-  className,
-}: EntityAvatarProps) {
-  const radius = rounded ?? Math.round(size * 0.2);
-  const soft = variant === "soft";
+export function EntityAvatar(props: EntityAvatarProps) {
+  const {
+    size = 28,
+    text,
+    icon,
+    iconScale = 0.5,
+    src,
+    alt,
+    rounded,
+    hatch,
+    className,
+    "aria-hidden": ariaHidden,
+  } = props;
+
+  const soft = props.variant === "soft";
+  const variant = props.variant ?? "graphite";
+  const radius = rounded ?? Math.round(size * 0.295);
+  const hatched = (hatch ?? size >= HATCH_FROM) && !soft;
+
+  const surface: React.CSSProperties = (() => {
+    if (props.variant === "soft") {
+      const color = props.color ?? SOFT_DEFAULT_COLOR;
+      return {
+        color,
+        backgroundColor: `color-mix(in srgb, ${color} 8%, transparent)`,
+      };
+    }
+    return avatarHueStyle(props.hue);
+  })();
 
   return (
     <span
+      aria-hidden={ariaHidden}
       className={cn(
-        "relative inline-flex shrink-0 items-center justify-center overflow-hidden",
-        !soft && "text-white",
+        "avatar-tile overflow-hidden",
+        variant === "graphite" && "avatar-graphite",
+        variant === "pigment" && "avatar-pigment",
+        hatched && "avatar-hatch",
+        !soft && size >= SQUIRCLE_FROM && "avatar-squircle",
         className
       )}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: radius,
-        color: soft ? color : undefined,
-        backgroundColor: soft
-          ? `color-mix(in srgb, ${color} 8%, transparent)`
-          : color,
-        backgroundImage: lines && !soft ? LINE_TEXTURE : undefined,
-      }}
+      style={{ width: size, height: size, borderRadius: radius, ...surface }}
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}
           alt={alt}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 z-[2] h-full w-full object-cover"
         />
       ) : icon ? (
         <span
-          className="inline-flex items-center justify-center [&>svg]:h-full [&>svg]:w-full"
-          style={{ width: Math.round(size * 0.5), height: Math.round(size * 0.5) }}
+          className="relative z-[2] inline-flex items-center justify-center [&>svg]:h-full [&>svg]:w-full"
+          style={{
+            width: Math.round(size * iconScale),
+            height: Math.round(size * iconScale),
+          }}
         >
           {icon}
         </span>
       ) : text ? (
         <span
-          className="font-semibold uppercase leading-none"
-          style={{ fontSize: Math.round(size * 0.4) }}
+          className="relative z-[2] font-semibold uppercase leading-none tracking-[-0.02em]"
+          style={{ fontSize: Math.round(size * 0.38) }}
         >
           {text}
         </span>
