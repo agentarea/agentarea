@@ -85,8 +85,12 @@ def secret_name_for(config_id: str) -> str:
     return f"provider_config_{config_id}"
 
 
-def store_api_key(conn, workspace_id: str, secret_name: str, api_key: str) -> None:
+def store_api_key(conn, workspace_id: str, secret_name: str, api_key: str) -> str:
     """Encrypt the key into the workspace's secret store, creating or rotating it.
+
+    Returns the secret's id, which the caller stores on the configuration. The name
+    alone is what the runtime resolves through, but the id is the foreign key that
+    stops the secret being deleted out from under a live configuration.
 
     Deliberately not stored on ``provider_configs.api_key``, which holds the *name*
     of a secret and is passed to the secret manager as one. Writing the key there
@@ -101,7 +105,10 @@ def store_api_key(conn, workspace_id: str, secret_name: str, api_key: str) -> No
             "Fernet key the platform API uses."
         )
     encrypted = Fernet(ENCRYPTION_KEY.encode("utf-8")).encrypt(api_key.encode("utf-8")).decode()
-    conn.execute(
+    # RETURNING on the DO UPDATE branch gives the existing row's id, not the one
+    # generated above and discarded — which is what makes this safe to call on
+    # every reconcile.
+    row = conn.execute(
         text(
             "INSERT INTO encrypted_secrets "
             "(id, workspace_id, secret_name, encrypted_value, owner_type, owner_id, "
@@ -109,7 +116,8 @@ def store_api_key(conn, workspace_id: str, secret_name: str, api_key: str) -> No
             "VALUES (:id, :ws, :name, :val, 'provider_config', :owner, :by, now(), now()) "
             "ON CONFLICT (workspace_id, secret_name) DO UPDATE SET "
             "encrypted_value = EXCLUDED.encrypted_value, external_ref = NULL, "
-            "updated_by = EXCLUDED.created_by, updated_at = now()"
+            "updated_by = EXCLUDED.created_by, updated_at = now() "
+            "RETURNING id"
         ),
         {
             "id": str(uuid.uuid4()),
@@ -119,7 +127,8 @@ def store_api_key(conn, workspace_id: str, secret_name: str, api_key: str) -> No
             "owner": secret_name.removeprefix("provider_config_"),
             "by": PLATFORM_PRINCIPAL_ID,
         },
-    )
+    ).fetchone()
+    return str(row[0])
 
 
 def read_secret(namespace: str, secret_name: str, secret_key: str) -> str:
@@ -253,14 +262,14 @@ def sync_provider_config(
         # The configuration stores the NAME of a secret; the key itself goes to the
         # secret store under that name, in the same transaction.
         secret_name = secret_name_for(config_id)
-        store_api_key(conn, workspace_id, secret_name, api_key)
+        secret_id = store_api_key(conn, workspace_id, secret_name, api_key)
 
         if existing:
             conn.execute(
                 text(
                     "UPDATE provider_configs SET "
-                    "name = :name, api_key = :key, endpoint_url = :url, "
-                    "managed_by = :managed_by, "
+                    "name = :name, api_key = :key, api_key_secret_id = :secret_id, "
+                    "endpoint_url = :url, managed_by = :managed_by, "
                     "is_active = true, is_public = :pub, updated_at = now() "
                     "WHERE id = :id"
                 ),
@@ -268,26 +277,35 @@ def sync_provider_config(
                     "id": config_id,
                     "name": name,
                     "key": secret_name,
+                    "secret_id": secret_id,
                     "url": endpoint_url,
                     "managed_by": managed_by,
                     "pub": is_public,
                 },
             )
         else:
+            # Every column here exists on provider_configs, which is less obvious
+            # than it sounds: this statement carried a `source` column for as long
+            # as it has existed and no schema has ever had one. It never showed,
+            # because the operator was failing earlier on permissions and never
+            # reached the insert. Raw SQL against a table whose model lives in
+            # another repository is a standing invitation to this; the test below
+            # runs it against a real Postgres for that reason.
             conn.execute(
                 text(
                     "INSERT INTO provider_configs "
-                    "(id, provider_spec_id, name, api_key, endpoint_url, managed_by, "
-                    "is_active, is_public, source, workspace_id, created_by, "
-                    "created_at, updated_at) "
-                    "VALUES (:id, :spec_id, :name, :key, :url, :managed_by, "
-                    "true, :pub, 'official', :ws, :created_by, now(), now())"
+                    "(id, provider_spec_id, name, api_key, api_key_secret_id, "
+                    "endpoint_url, managed_by, is_active, is_public, "
+                    "workspace_id, created_by, created_at, updated_at) "
+                    "VALUES (:id, :spec_id, :name, :key, :secret_id, :url, "
+                    ":managed_by, true, :pub, :ws, :created_by, now(), now())"
                 ),
                 {
                     "id": config_id,
                     "spec_id": provider_spec_id,
                     "name": name,
                     "key": secret_name,
+                    "secret_id": secret_id,
                     "url": endpoint_url,
                     "managed_by": managed_by,
                     "pub": is_public,
