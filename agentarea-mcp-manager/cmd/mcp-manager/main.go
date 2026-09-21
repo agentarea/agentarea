@@ -35,7 +35,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/workspace"
 )
 
-const version = "0.0.14"
+const version = "0.0.15"
 
 // backendAdapter adapts the backends.Backend interface to providers.Backend interface
 // to avoid import cycles between providers and backends packages
