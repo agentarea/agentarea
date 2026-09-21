@@ -8,7 +8,7 @@ for call-site compatibility, but ``user_context`` is intentionally unused for
 read/write scoping.
 """
 
-from typing import Any
+from typing import Any, Literal, get_args
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
@@ -22,20 +22,44 @@ from agentarea_registry.domain.models import Registry, RegistryItem
 # ``id`` so rows with equal keys can't let OFFSET paging repeat one and drop
 # another. Public: the API validates ``sort`` against these names rather than
 # silently ignoring an unknown one, and the webapp mirrors them in SORT_KEYS.
+#
+# ``recommended`` is the catalog's own curation, not a popularity metric:
+# hand-featured entries first, then whole sources by weight (a curated system
+# catalog outranks an opt-in bulk mirror), then each source's published order
+# (GitHub-star order for skills, official-integrations-first for connections).
+# ``sort_key`` before ``id`` keeps equal ranks alphabetical rather than random.
 CATALOG_SORTS: dict[str, Any] = {
-    "featured": lambda: (
+    "recommended": lambda: (
         RegistryItem.featured.desc(),
+        Registry.recommendation_priority.asc(),
+        RegistryItem.recommendation_rank.asc(),
         RegistryItem.sort_key.asc(),
         RegistryItem.id.asc(),
     ),
     "name": lambda: (RegistryItem.sort_key.asc(), RegistryItem.id.asc()),
 }
-DEFAULT_CATALOG_SORT = "featured"
+DEFAULT_CATALOG_SORT = "recommended"
 
 # The category sources fall back to when they can't classify an entry. It is a
 # bucket, not a peer category, so the facet list sorts it last rather than
 # letting it land mid-alphabet or -- as ordering by size did -- near the top.
 FALLBACK_CATEGORY = "other"
+
+# Connections are not all MCP: a catalog entry is either an MCP server (reached
+# over a transport -- url/command/docker) or a plain HTTP API described by an
+# OpenAPI document. The distinction is what the gallery lets you filter on, and
+# `spec.connection_type` is where every parser records it.
+OPENAPI_CONNECTION_TYPE = "openapi"
+CatalogProtocol = Literal["mcp", "api"]
+# Facet order: the vocabulary is closed, so derive it rather than restating it.
+CATALOG_PROTOCOLS: tuple[CatalogProtocol, ...] = get_args(CatalogProtocol)
+# Only the connections catalog has a protocol dimension; every other registry
+# type holds one kind of thing.
+PROTOCOL_REGISTRY_TYPE = "mcp_servers"
+
+
+def _is_openapi() -> ColumnElement[bool]:
+    return RegistryItem.spec["connection_type"].astext == OPENAPI_CONNECTION_TYPE
 
 
 class RegistryRepository:
@@ -193,6 +217,22 @@ class RegistryItemRepository:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def next_recommendation_rank(self, registry_id: UUID | str) -> int:
+        """Rank that places a new item after everything already in a registry.
+
+        Managed registries have no source order to read a position from, so a
+        published item lands at the end instead of tying with -- and silently
+        outranking, via the alphabetical tiebreak -- the existing catalog.
+        """
+        highest = (
+            await self.session.execute(
+                select(func.max(RegistryItem.recommendation_rank)).where(
+                    RegistryItem.registry_id == registry_id
+                )
+            )
+        ).scalar()
+        return 0 if highest is None else highest + 1
+
     # ── Browsing (the /explore gallery) ──
     #
     # One ordered query across every active registry of a type. Paging each
@@ -204,7 +244,11 @@ class RegistryItemRepository:
     # fetched.
 
     def _browse_filter(
-        self, registry_type: str, q: str | None, category: str | None
+        self,
+        registry_type: str,
+        q: str | None,
+        category: str | None,
+        protocol: str | None = None,
     ) -> list[ColumnElement[bool]]:
         """WHERE clause shared by the page query, its total, and the facets."""
         conditions = [
@@ -213,6 +257,16 @@ class RegistryItemRepository:
         ]
         if category:
             conditions.append(RegistryItem.category == category)
+        if protocol == "api":
+            conditions.append(_is_openapi())
+        elif protocol == "mcp":
+            # IS DISTINCT FROM, not `!=`: an entry that never recorded a
+            # connection_type is an MCP server, and `!=` would drop it.
+            conditions.append(
+                RegistryItem.spec["connection_type"].astext.is_distinct_from(
+                    OPENAPI_CONNECTION_TYPE
+                )
+            )
         if q:
             pattern = f"%{q}%"
             conditions.append(
@@ -225,6 +279,7 @@ class RegistryItemRepository:
         registry_type: str,
         q: str | None = None,
         category: str | None = None,
+        protocol: str | None = None,
         sort: str = DEFAULT_CATALOG_SORT,
         limit: int = 50,
         offset: int = 0,
@@ -234,7 +289,7 @@ class RegistryItemRepository:
         The total is what lets the client know there is more to fetch even when
         the current page contributes nothing visible.
         """
-        conditions = self._browse_filter(registry_type, q, category)
+        conditions = self._browse_filter(registry_type, q, category, protocol)
         join = select(RegistryItem).join(Registry, RegistryItem.registry_id == Registry.id)
 
         order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS[DEFAULT_CATALOG_SORT])()
@@ -251,7 +306,7 @@ class RegistryItemRepository:
         return items, total
 
     async def category_counts(
-        self, registry_type: str, q: str | None = None
+        self, registry_type: str, q: str | None = None, protocol: str | None = None
     ) -> list[tuple[str, int]]:
         """Facet counts over the whole type, not just the loaded page.
 
@@ -265,7 +320,7 @@ class RegistryItemRepository:
         enough (most categories hold one or two entries) that size conveyed
         nothing to begin with.
         """
-        conditions = self._browse_filter(registry_type, q, category=None)
+        conditions = self._browse_filter(registry_type, q, category=None, protocol=protocol)
         query = (
             select(RegistryItem.category, func.count().label("n"))
             .join(Registry, RegistryItem.registry_id == Registry.id)
@@ -278,6 +333,29 @@ class RegistryItemRepository:
         )
         rows = (await self.session.execute(query)).all()
         return [(value, count) for value, count in rows]
+
+    async def protocol_counts(
+        self, registry_type: str, q: str | None = None, category: str | None = None
+    ) -> list[tuple[str, int]]:
+        """How the matching connections split between MCP servers and HTTP APIs.
+
+        Empty for every other registry type: "protocol" is only a question the
+        connections catalog can answer. Like the category facet, this ignores
+        the active protocol so the other side stays reachable, and drops an
+        empty side rather than offering a filter that returns nothing.
+        """
+        if registry_type != PROTOCOL_REGISTRY_TYPE:
+            return []
+        conditions = self._browse_filter(registry_type, q, category, protocol=None)
+        protocol = case((_is_openapi(), "api"), else_="mcp")
+        query = (
+            select(protocol.label("protocol"), func.count())
+            .join(Registry, RegistryItem.registry_id == Registry.id)
+            .where(*conditions)
+            .group_by(protocol)
+        )
+        counts = dict((await self.session.execute(query)).all())
+        return [(name, counts[name]) for name in CATALOG_PROTOCOLS if counts.get(name)]
 
     async def search(
         self,

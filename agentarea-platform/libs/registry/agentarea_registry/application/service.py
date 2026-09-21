@@ -28,7 +28,11 @@ from agentarea_common.utils.slug import generate_slug
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
 
 from agentarea_registry.application.catalog_facets import apply_facets, derive_facets
-from agentarea_registry.domain.models import Registry, RegistryItem
+from agentarea_registry.domain.models import (
+    DEFAULT_REGISTRY_PRIORITY,
+    Registry,
+    RegistryItem,
+)
 from agentarea_registry.infrastructure.repository import (
     DEFAULT_CATALOG_SORT,
     RegistryItemRepository,
@@ -79,6 +83,48 @@ class CatalogItemAlreadyExistsError(ValueError):
     """A registry already contains the requested external identifier."""
 
 
+# Where a curator can declare an item's rank explicitly, instead of relying on
+# its position in the published document. The namespaced spelling is what an
+# AgentArea-curated entry uses inside an upstream MCP server's `metadata`,
+# which is shared with the official registry schema.
+RANK_KEYS = ("recommendation_rank", "agentarea:recommendation_rank")
+
+
+def validated_registry_priority(value: Any) -> int:
+    """A usable registry ordering weight, or a rejection.
+
+    ``None`` is "unspecified" and takes the default. Anything else must be a
+    non-negative int: a stray string or a negative number would silently
+    reorder an entire source ahead of the curated catalog, which is worse than
+    a reconcile that stops and says so.
+    """
+    if value is None:
+        return DEFAULT_REGISTRY_PRIORITY
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"recommendation_priority must be a non-negative integer, got {value!r}")
+    return value
+
+
+def rank_fields(*mappings: Any) -> dict[str, int]:
+    """``{"recommendation_rank": n}`` when a curator declared one, else ``{}``.
+
+    Empty is meaningful: the parser's fallback is the entry's position in the
+    source document, so a missing or malformed rank keeps publication order
+    rather than collapsing a whole source onto one rank.
+    """
+    for mapping in mappings:
+        if not isinstance(mapping, dict):
+            continue
+        for key in RANK_KEYS:
+            value = mapping.get(key)
+            # `isinstance(True, int)` is True, and a negative rank would outrank
+            # every curated entry.
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                continue
+            return {"recommendation_rank": value}
+    return {}
+
+
 class RegistryService:
     """Manages registry CRUD, sync, and spec update operations."""
 
@@ -110,6 +156,7 @@ class RegistryService:
         source_url: str | None,
         description: str | None = None,
         sync_mode: str = "manual",
+        recommendation_priority: int | None = None,
     ) -> Registry:
         if registry_type not in VALID_REGISTRY_TYPES:
             raise ValueError(f"registry_type must be one of {VALID_REGISTRY_TYPES}")
@@ -126,6 +173,7 @@ class RegistryService:
             source_url=source_url,
             description=description,
             sync_mode=sync_mode,
+            recommendation_priority=validated_registry_priority(recommendation_priority),
         )
 
     async def get_registry(self, registry_id: UUID) -> Registry | None:
@@ -141,6 +189,10 @@ class RegistryService:
         return await self.registry_repo.list_all()
 
     async def update_registry(self, registry_id: UUID, **fields) -> Registry | None:
+        if "recommendation_priority" in fields:
+            fields["recommendation_priority"] = validated_registry_priority(
+                fields["recommendation_priority"]
+            )
         return await self.registry_repo.update(registry_id, **fields)
 
     async def delete_registry(self, registry_id: UUID) -> bool:
@@ -158,13 +210,14 @@ class RegistryService:
         registry_type: str,
         query: str | None = None,
         category: str | None = None,
+        protocol: str | None = None,
         sort: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> tuple[list[RegistryItem], int, list[tuple[str, int]]]:
-        """One page of a type's catalog, its total, and the category facets.
+    ) -> tuple[list[RegistryItem], int, list[tuple[str, int]], list[tuple[str, int]]]:
+        """One page of a type's catalog, its total, and its facets.
 
-        Backs the /explore gallery. All three come from the same filter so the
+        Backs the /explore gallery. All of them come from the same filter so the
         page, the "is there more" signal and the sidebar counts can never
         disagree with each other.
         """
@@ -172,12 +225,14 @@ class RegistryService:
             registry_type=registry_type,
             q=query,
             category=category,
+            protocol=protocol,
             sort=sort or DEFAULT_CATALOG_SORT,
             limit=limit,
             offset=offset,
         )
-        categories = await self.item_repo.category_counts(registry_type, q=query)
-        return items, total, categories
+        categories = await self.item_repo.category_counts(registry_type, q=query, protocol=protocol)
+        protocols = await self.item_repo.protocol_counts(registry_type, q=query, category=category)
+        return items, total, categories, protocols
 
     async def search_catalog(
         self,
@@ -208,6 +263,7 @@ class RegistryService:
         version: str | None = None,
         spec: dict[str, Any] | None = None,
         tags: list[str] | None = None,
+        recommendation_rank: int | None = None,
     ) -> RegistryItem:
         """Create one platform-managed catalog definition.
 
@@ -241,6 +297,14 @@ class RegistryService:
             category=facets.category,
             sort_key=facets.sort_key,
             featured=facets.featured,
+            # A managed registry has no source order to take a position from,
+            # so an unranked publication goes to the end rather than tying with
+            # the existing catalog and jumping it on the alphabetical tiebreak.
+            recommendation_rank=(
+                await self.item_repo.next_recommendation_rank(registry_id)
+                if recommendation_rank is None
+                else recommendation_rank
+            ),
         )
         await self.registry_repo.update(
             registry_id,
@@ -349,7 +413,16 @@ class RegistryService:
                     )
 
                     if existing:
-                        for field in ("name", "description", "spec", "tags"):
+                        for field in (
+                            "name",
+                            "description",
+                            "spec",
+                            "tags",
+                            # Re-published in a different position means the
+                            # curator moved it; keeping the old rank would pin
+                            # the catalog to the order of the first ever sync.
+                            "recommendation_rank",
+                        ):
                             if field in item_data:
                                 setattr(existing, field, item_data[field])
                         # Browse facets are derived from the fields just overwritten,
@@ -395,6 +468,7 @@ class RegistryService:
                             tags=item_data.get("tags", []),
                             category=facets.category,
                             sort_key=facets.sort_key,
+                            recommendation_rank=item_data.get("recommendation_rank", 0),
                             featured=facets.featured,
                         )
                         try:
@@ -803,6 +877,20 @@ class RegistryService:
 
     @staticmethod
     def _parse_source(registry_type: str, data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Catalog entries in publication order, each carrying its rank.
+
+        Position *is* the curation signal -- the curated skills artifact is
+        published in GitHub-star order, the connection artifact leads with the
+        official integrations most workspaces want -- and nothing else in the
+        payload expresses it. A parser that read an explicit rank keeps it.
+        """
+        items = RegistryService._parse_entries(registry_type, data)
+        for position, item in enumerate(items):
+            item.setdefault("recommendation_rank", position)
+        return items
+
+    @staticmethod
+    def _parse_entries(registry_type: str, data: dict[str, Any]) -> list[dict[str, Any]]:
         if registry_type == "mcp_servers":
             return RegistryService._parse_mcp_servers(data)
         elif registry_type == "skills":
@@ -880,6 +968,9 @@ class RegistryService:
             title = server.get("title") or _humanize_identifier(identifier)
             description = (server.get("description") or "")[:500]
             version = server.get("version", "latest")
+            # One server can publish a remote, an OCI package and a command;
+            # they share the server's curated rank and break the tie on name.
+            rank = rank_fields(server, server.get("metadata"))
 
             # Remote endpoints → connection_type: "url"
             for remote in server.get("remotes", []):
@@ -917,6 +1008,7 @@ class RegistryService:
                             "raw_spec": server,
                         },
                         "tags": tags,
+                        **rank,
                     }
                 )
 
@@ -948,6 +1040,7 @@ class RegistryService:
                             "raw_spec": server,
                         },
                         "tags": ["docker", "oci"],
+                        **rank,
                     }
                 )
 
@@ -1000,6 +1093,7 @@ class RegistryService:
                             "raw_spec": server,
                         },
                         "tags": ["command", reg_type],
+                        **rank,
                     }
                 )
 
@@ -1039,6 +1133,7 @@ class RegistryService:
                     "version": entry.get("version") or "latest",
                     "spec": spec,
                     "tags": tags,
+                    **rank_fields(entry),
                 }
             )
         return items
@@ -1086,6 +1181,7 @@ class RegistryService:
                     "version": entry.get("version") or "1.0.0",
                     "spec": spec,
                     "tags": entry.get("tags", []),
+                    **rank_fields(entry),
                 }
             )
         return items
@@ -1178,6 +1274,7 @@ class RegistryService:
                         "events_config": entry.get("events_config"),
                     },
                     "tags": entry.get("tags", []),
+                    **rank_fields(entry),
                 }
             )
         return items
@@ -1208,6 +1305,7 @@ class RegistryService:
                     "version": entry.get("schema_version") or entry.get("version") or "0.1.0",
                     "spec": entry,
                     "tags": tags,
+                    **rank_fields(entry, metadata),
                 }
             )
         return items

@@ -1087,8 +1087,12 @@ jobs:
 registryReconcile:
   enabled: true
   # Each entry needs `name` + `source_url`; the catalog type is auto-detected
-  # from the fetched payload. Seed the small official/known-good skills catalog;
-  # the ~123k community mirror remains opt-in and must not drive first-run picks.
+  # from the fetched payload. Optional `recommendation_priority` (default 100,
+  # lower first) weights a whole source in the /explore "Recommended" order --
+  # raise it for a bulk/community mirror so its entries land after the curated
+  # catalog instead of interleaving with it. Seed the small official/known-good
+  # skills catalog; the ~123k community mirror remains opt-in and must not
+  # drive first-run picks.
   registries:
     - name: system-llm-providers
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json

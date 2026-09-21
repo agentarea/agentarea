@@ -517,3 +517,84 @@ class TestParseSourceDispatch:
 
         with pytest.raises(ValueError, match="Unknown registry_type"):
             RegistryService._parse_source("bogus", {})
+
+
+class TestRecommendationRank:
+    """Publication order is the catalog's only usefulness signal — keep it.
+
+    Sources are authored best-first: the curated skills artifact is generated
+    in GitHub-star order and the connection artifact leads with the official
+    integrations. Dropping the position on the floor is what left /explore
+    sorted alphabetically.
+    """
+
+    def test_source_position_becomes_the_rank(self):
+        items = RegistryService._parse_source(
+            "skills",
+            {"skills": [{"name": "most-popular"}, {"name": "obscure"}]},
+        )
+        assert [i["recommendation_rank"] for i in items] == [0, 1]
+
+    def test_a_declared_rank_beats_the_position(self):
+        items = RegistryService._parse_source(
+            "skills",
+            {
+                "skills": [
+                    {"name": "demoted", "recommendation_rank": 5},
+                    {"name": "unranked"},
+                ]
+            },
+        )
+        assert {i["name"]: i["recommendation_rank"] for i in items} == {
+            "demoted": 5,
+            "unranked": 1,
+        }
+
+    @pytest.mark.parametrize("bad", [-1, True, "2", 1.5, None])
+    def test_a_malformed_rank_falls_back_to_the_position(self, bad):
+        # A negative or bool rank would outrank every curated entry; a source
+        # typo must not be able to reorder the catalog.
+        items = RegistryService._parse_source(
+            "skills",
+            {"skills": [{"name": "a"}, {"name": "b", "recommendation_rank": bad}]},
+        )
+        assert [i["recommendation_rank"] for i in items] == [0, 1]
+
+    def test_a_curated_mcp_server_can_declare_its_rank_in_metadata(self):
+        # AgentArea curation rides along inside the upstream server object,
+        # which is shared with the official registry schema.
+        items = RegistryService._parse_source(
+            "mcp_servers",
+            {
+                "servers": [
+                    {
+                        "server": {
+                            "name": "ai.agentarea.catalog/demoted",
+                            "metadata": {"agentarea:recommendation_rank": 5},
+                            "remotes": [{"type": "streamable-http", "url": "https://a.test"}],
+                        }
+                    },
+                    {
+                        "server": {
+                            "name": "ai.agentarea.catalog/unranked",
+                            "remotes": [{"type": "streamable-http", "url": "https://b.test"}],
+                        }
+                    },
+                ]
+            },
+        )
+        assert {i["external_id"]: i["recommendation_rank"] for i in items} == {
+            "ai.agentarea.catalog/demoted": 5,
+            "ai.agentarea.catalog/unranked": 1,
+        }
+
+    def test_every_emitted_item_carries_a_rank(self):
+        # sync_registry writes the column straight from this dict.
+        for registry_type, data in (
+            ("agents", {"agents": [{"name": "A"}]}),
+            ("bundles", {"bundles": [{"name": "b", "schema_version": "0.1.0"}]}),
+            ("llm_providers", {"providers": [{"provider_key": "p", "name": "P"}]}),
+            ("llm_models", {"models": [{"provider_key": "p", "model_name": "m"}]}),
+        ):
+            items = RegistryService._parse_source(registry_type, data)
+            assert items[0]["recommendation_rank"] == 0, registry_type

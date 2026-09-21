@@ -17,7 +17,11 @@ from agentarea_registry.application.service import (
     RegistryService,
 )
 from agentarea_registry.domain.models import Registry, RegistryItem
-from agentarea_registry.infrastructure.repository import CATALOG_SORTS
+from agentarea_registry.infrastructure.repository import (
+    CATALOG_SORTS,
+    PROTOCOL_REGISTRY_TYPE,
+    CatalogProtocol,
+)
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -43,6 +47,15 @@ class RegistryCreate(BaseModel):
         description="Registry source URL; omitted when source_type is 'managed'",
     )
     sync_mode: str = Field(default="manual", description="'auto' or 'manual'")
+    recommendation_priority: int | None = Field(
+        None,
+        ge=0,
+        description=(
+            "Ordering weight for the 'recommended' catalog sort; lower comes first. "
+            "Keeps a curated system catalog ahead of a bulk/community mirror. "
+            "Omit to take the platform default."
+        ),
+    )
 
 
 class RegistryUpdate(BaseModel):
@@ -51,6 +64,7 @@ class RegistryUpdate(BaseModel):
     source_url: str | None = None
     sync_mode: str | None = None
     is_active: bool | None = None
+    recommendation_priority: int | None = Field(None, ge=0)
 
 
 class RegistryResponse(BaseModel):
@@ -65,6 +79,7 @@ class RegistryResponse(BaseModel):
     last_synced_at: UtcDatetime | None
     last_sync_error: str | None
     item_count: int
+    recommendation_priority: int
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -82,6 +97,7 @@ class RegistryResponse(BaseModel):
             last_synced_at=r.last_synced_at,
             last_sync_error=r.last_sync_error,
             item_count=r.item_count,
+            recommendation_priority=r.recommendation_priority,
             created_at=r.created_at,
             updated_at=r.updated_at,
         )
@@ -138,6 +154,14 @@ class CatalogItemCreate(BaseModel):
     version: str | None = Field(None, max_length=100)
     spec: dict[str, Any] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
+    recommendation_rank: int | None = Field(
+        None,
+        ge=0,
+        description=(
+            "Curation position within this registry; lower comes first. "
+            "Omit to publish after the registry's existing items."
+        ),
+    )
 
 
 class CatalogItemUpdate(BaseModel):
@@ -210,6 +234,7 @@ async def create_registry(
             source_url=data.source_url,
             description=data.description,
             sync_mode=data.sync_mode,
+            recommendation_priority=data.recommendation_priority,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -235,15 +260,20 @@ class CategoryFacet(BaseModel):
 class CatalogBrowseResponse(BaseModel):
     """One page of a type's catalog plus the context needed to browse it.
 
-    ``total`` and ``categories`` cover the whole filtered catalog, not the page:
+    ``total`` and the facets cover the whole filtered catalog, not the page:
     without them a page that happens to contain no visible matches is
     indistinguishable from the end of the catalog, and facet counts drift as
     more pages load.
+
+    ``protocols`` is populated for the connections catalog only, where an entry
+    is either an MCP server or a plain HTTP API; every other type holds one
+    kind of thing and gets an empty list.
     """
 
     items: list[RegistryItemResponse]
     total: int
     categories: list[CategoryFacet]
+    protocols: list[CategoryFacet]
 
 
 @router.get("/catalog/browse", response_model=CatalogBrowseResponse)
@@ -252,7 +282,14 @@ async def browse_catalog(
     registry_type: str = Query(..., description="Catalog type to browse"),
     q: str | None = Query(None, description="Free-text filter over name and description"),
     category: str | None = Query(None, description="Restrict to one category facet"),
-    sort: str | None = Query(None, description="'featured' (default) or 'name'"),
+    protocol: CatalogProtocol | None = Query(
+        None,
+        description=(
+            "Restrict connections to one protocol. "
+            f"Only valid for registry_type='{PROTOCOL_REGISTRY_TYPE}'."
+        ),
+    ),
+    sort: str | None = Query(None, description="'recommended' (default) or 'name'"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     service: RegistryService = Depends(get_registry_service),
@@ -269,11 +306,19 @@ async def browse_catalog(
         )
     if sort is not None and sort not in CATALOG_SORTS:
         raise HTTPException(status_code=400, detail=f"sort must be one of {tuple(CATALOG_SORTS)}")
+    # A protocol filter on a type that has no protocols would silently page the
+    # whole catalog while the caller believes it asked for HTTP APIs.
+    if protocol is not None and registry_type != PROTOCOL_REGISTRY_TYPE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"protocol only applies to registry_type='{PROTOCOL_REGISTRY_TYPE}'",
+        )
 
-    items, total, categories = await service.browse_catalog(
+    items, total, categories, protocols = await service.browse_catalog(
         registry_type=registry_type,
         query=q,
         category=category,
+        protocol=protocol,
         sort=sort,
         limit=limit,
         offset=offset,
@@ -282,6 +327,7 @@ async def browse_catalog(
         items=[RegistryItemResponse.from_domain(i) for i in items],
         total=total,
         categories=[CategoryFacet(value=v, count=c) for v, c in categories],
+        protocols=[CategoryFacet(value=v, count=c) for v, c in protocols],
     )
 
 
