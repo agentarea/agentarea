@@ -402,7 +402,7 @@ func TestANameConflictLeavesNothingBehindToBlockTheRetry(t *testing.T) {
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
 
 	spec := map[string]interface{}{"image": "vendor/mcp:1.0", "port": float64(8080)}
-	if err := manager.HandleMCPInstanceCreated(context.Background(), "instance-1", "svc", spec); err == nil {
+	if err := manager.HandleMCPInstanceCreated(context.Background(), "instance-1", "svc", "ws-test", spec); err == nil {
 		t.Fatal("HandleMCPInstanceCreated() error = nil, want the name conflict reported")
 	}
 
@@ -414,7 +414,7 @@ func TestANameConflictLeavesNothingBehindToBlockTheRetry(t *testing.T) {
 	// vouch for the image -- must not be the leftover record.
 	t.Setenv("STUB_INSPECT_RC", "1")
 	t.Setenv("STUB_STATUS", "running")
-	err := manager.HandleMCPInstanceCreated(context.Background(), "instance-1", "svc", spec)
+	err := manager.HandleMCPInstanceCreated(context.Background(), "instance-1", "svc", "ws-test", spec)
 	if err != nil && strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("the retry was refused by the record of the previous failure: %v", err)
 	}

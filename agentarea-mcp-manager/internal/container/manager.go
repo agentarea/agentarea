@@ -1145,7 +1145,7 @@ func mergeEnvironment(template, request map[string]string) map[string]string {
 }
 
 // HandleMCPInstanceCreated handles the creation of an MCP server instance from domain events
-func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name string, jsonSpec map[string]interface{}) error {
+func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name, workspaceID string, jsonSpec map[string]interface{}) error {
 	// Publish validating status
 	if err := m.eventPublisher.PublishValidating(ctx, instanceID, name); err != nil {
 		m.logger.Warn("Failed to publish validating status",
@@ -1155,10 +1155,11 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 
 	// Create MCP server instance model for validation (NO MUTEX LOCK YET)
 	instance := &models.MCPServerInstance{
-		InstanceID: instanceID,
-		Name:       name,
-		JSONSpec:   jsonSpec,
-		Status:     "validating",
+		InstanceID:  instanceID,
+		WorkspaceID: workspaceID,
+		Name:        name,
+		JSONSpec:    jsonSpec,
+		Status:      "validating",
 	}
 
 	// Get current running count before validation (while unlocked)
@@ -1249,7 +1250,10 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		Host:        containerName,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
-		Labels:      make(map[string]string),
+		Labels: map[string]string{
+			"agentarea.io/instance-id":  instanceID,
+			"agentarea.io/workspace-id": workspaceID,
+		},
 		Environment: environment,
 		Command:     command,
 		Isolation:   isolation,

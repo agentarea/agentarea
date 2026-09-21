@@ -14,6 +14,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/sandboxplacement"
 	"github.com/agentarea/mcp-manager/internal/sandboxrunner"
 	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
+	"github.com/agentarea/mcp-manager/internal/usage"
 	"github.com/agentarea/mcp-manager/internal/workspace"
 )
 
@@ -48,6 +49,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer store.Close()
+	usagePublisher := usage.NewPublisher(store.RedisClient())
 
 	var builtinRuntime sandboxruntime.ManagedRuntime
 	var backend *backends.KubernetesBackend
@@ -63,6 +65,7 @@ func main() {
 			os.Exit(1)
 		}
 		defer func() { _ = backend.Shutdown(context.Background()) }()
+		backend.SetUsageRecorder(usagePublisher)
 		builtinRuntime = backend
 	}
 
@@ -70,6 +73,9 @@ func main() {
 	if err != nil {
 		logger.Error("failed to configure sandbox runtime", slog.String("error", err.Error()))
 		os.Exit(1)
+	}
+	if instrumented, ok := runtime.(interface{ SetUsageRecorder(usage.Recorder) }); ok {
+		instrumented.SetUsageRecorder(usagePublisher)
 	}
 	workspaceProvider, err := sandboxruntime.LoadWorkspaceProviderFromEnv()
 	if err != nil {

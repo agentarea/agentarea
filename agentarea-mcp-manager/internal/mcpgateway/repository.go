@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/usage"
+	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -128,7 +130,7 @@ func acquireInstanceLock(ctx context.Context, conn *sql.Conn, instanceID string)
 }
 
 func (r *SQLRepository) LoadInstance(ctx context.Context, instanceID string) (*models.MCPServerInstance, error) {
-	var id, name string
+	var id, name, workspaceID string
 	var instanceJSON, serverJSON, commandJSON []byte
 	var dockerImage, remoteURL sql.NullString
 	// The two json_spec columns have different types — mcp_server_instances.json_spec
@@ -136,11 +138,11 @@ func (r *SQLRepository) LoadInstance(ctx context.Context, instanceID string) (*m
 	// own column. Defaulting both to ::json makes Postgres reject the whole query.
 	err := r.db.QueryRowContext(ctx, `
 SELECT i.id::text, i.name, i.json_spec, COALESCE(s.json_spec, '{}'::jsonb),
-       s.docker_image_url, s.remote_url, COALESCE(s.cmd, 'null'::json)
+       s.docker_image_url, s.remote_url, COALESCE(s.cmd, 'null'::json), i.workspace_id
 FROM mcp_server_instances i
 JOIN mcp_servers s ON s.id::text = i.server_spec_id
 WHERE i.id = $1::uuid
-`, instanceID).Scan(&id, &name, &instanceJSON, &serverJSON, &dockerImage, &remoteURL, &commandJSON)
+`, instanceID).Scan(&id, &name, &instanceJSON, &serverJSON, &dockerImage, &remoteURL, &commandJSON, &workspaceID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrInstanceNotFound
 	}
@@ -180,7 +182,7 @@ WHERE i.id = $1::uuid
 	}
 	// Runtime object names are identity-derived. The user-facing display name
 	// remains in Postgres and never participates in data-plane addressing.
-	return &models.MCPServerInstance{InstanceID: id, Name: id, JSONSpec: serverSpec}, nil
+	return &models.MCPServerInstance{InstanceID: id, Name: id, WorkspaceID: workspaceID, JSONSpec: serverSpec}, nil
 }
 
 // decodeSpecs merges the instance spec over the server spec.
@@ -214,23 +216,36 @@ func decodeSpecs(serverJSON, instanceJSON []byte) (map[string]any, error) {
 // instance to 'starting' on every call both misreports its state and makes
 // generation a count of requests rather than of workload generations.
 func (r *SQLRepository) MarkStarting(ctx context.Context, instanceID string) error {
-	_, err := r.db.ExecContext(ctx, `
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	result, err := tx.ExecContext(ctx, `
 INSERT INTO mcp_runtime_instances(instance_id, generation, state, last_used_at, updated_at)
 VALUES ($1::uuid, 1, 'starting', now(), now())
 ON CONFLICT (instance_id) DO UPDATE
-SET generation = CASE WHEN mcp_runtime_instances.state = 'ready'
-                      THEN mcp_runtime_instances.generation
-                      ELSE mcp_runtime_instances.generation + 1 END,
-    state = CASE WHEN mcp_runtime_instances.state = 'ready' THEN 'ready' ELSE 'starting' END,
-    last_error = NULL,
-    updated_at = now()
+SET generation = mcp_runtime_instances.generation + 1,
+    state = 'starting', last_error = NULL, updated_at = now()
+WHERE mcp_runtime_instances.state NOT IN ('ready', 'starting')
 `, instanceID)
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 0 {
+		if err := recordLifecycleUsage(ctx, tx, instanceID, "mcp.runtime.starting", "demand"); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (r *SQLRepository) MarkFailed(ctx context.Context, instanceID string, cause error) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE mcp_runtime_instances SET state='failed', last_error=$2, updated_at=now() WHERE instance_id=$1::uuid`, instanceID, cause.Error())
-	return err
+	return r.setLifecycleState(ctx, instanceID, "failed", "mcp.runtime.failed", "activation", cause.Error())
 }
 
 func (r *SQLRepository) MarkReadyAndBeginRequest(ctx context.Context, instanceID, requestID string, ttl time.Duration) error {
@@ -239,6 +254,10 @@ func (r *SQLRepository) MarkReadyAndBeginRequest(ctx context.Context, instanceID
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	var previousState string
+	if err := tx.QueryRowContext(ctx, `SELECT state FROM mcp_runtime_instances WHERE instance_id=$1::uuid FOR UPDATE`, instanceID).Scan(&previousState); err != nil {
+		return err
+	}
 	result, err := tx.ExecContext(ctx, `UPDATE mcp_runtime_instances SET state='ready', last_used_at=now(), last_error=NULL, updated_at=now() WHERE instance_id=$1::uuid`, instanceID)
 	if err != nil {
 		return err
@@ -249,6 +268,11 @@ func (r *SQLRepository) MarkReadyAndBeginRequest(ctx context.Context, instanceID
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO mcp_runtime_request_leases(request_id, instance_id, expires_at) VALUES ($1::uuid, $2::uuid, now() + make_interval(secs => $3))`, requestID, instanceID, ttl.Seconds()); err != nil {
 		return err
+	}
+	if previousState != "ready" {
+		if err := recordLifecycleUsage(ctx, tx, instanceID, "mcp.runtime.ready", "demand"); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -360,18 +384,14 @@ SELECT EXISTS(
 			instanceID).Scan(&previousState); err != nil {
 			return err
 		}
-		if _, err := r.db.ExecContext(lockCtx,
-			`UPDATE mcp_runtime_instances SET state='reaping', updated_at=now() WHERE instance_id=$1::uuid`,
-			instanceID); err != nil {
+		if err := r.setLifecycleState(lockCtx, instanceID, "reaping", "mcp.runtime.retiring", "idle", ""); err != nil {
 			return err
 		}
 		if err := remove(lockCtx, instance); err != nil {
-			_, _ = r.db.ExecContext(lockCtx,
-				`UPDATE mcp_runtime_instances SET state=$3, last_error=$2, updated_at=now() WHERE instance_id=$1::uuid`,
-				instanceID, err.Error(), previousState)
-			return err
+			stateErr := r.setLifecycleState(lockCtx, instanceID, previousState, "mcp.runtime.retirement_failed", "idle", err.Error())
+			return errors.Join(err, stateErr)
 		}
-		if _, err := r.db.ExecContext(lockCtx, `UPDATE mcp_runtime_instances SET state='dormant', last_error=NULL, updated_at=now() WHERE instance_id=$1::uuid`, instanceID); err != nil {
+		if err := r.setLifecycleState(lockCtx, instanceID, "dormant", "mcp.runtime.retired", "idle", ""); err != nil {
 			return err
 		}
 		removed = true
@@ -398,18 +418,72 @@ SELECT EXISTS(
 		if active {
 			return ErrInstanceBusy
 		}
-		if _, err := r.db.ExecContext(lockCtx, `
+		tx, err := r.db.BeginTx(lockCtx, nil)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+		if _, err := tx.ExecContext(lockCtx, `
 INSERT INTO mcp_runtime_instances(instance_id, generation, state, last_used_at, updated_at)
 VALUES ($1::uuid, 1, 'reaping', now(), now())
-ON CONFLICT (instance_id) DO UPDATE SET generation=mcp_runtime_instances.generation+1, state='reaping', updated_at=now()
+ON CONFLICT (instance_id) DO UPDATE SET state='reaping', updated_at=now()
 `, instanceID); err != nil {
 			return err
 		}
-		if err := remove(lockCtx, instance); err != nil {
-			_, _ = r.db.ExecContext(lockCtx, `UPDATE mcp_runtime_instances SET state='failed', last_error=$2, updated_at=now() WHERE instance_id=$1::uuid`, instanceID, err.Error())
+		if err := recordLifecycleUsage(lockCtx, tx, instanceID, "mcp.runtime.retiring", "deletion"); err != nil {
 			return err
 		}
-		_, err = r.db.ExecContext(lockCtx, `UPDATE mcp_runtime_instances SET state='dormant', last_error=NULL, updated_at=now() WHERE instance_id=$1::uuid`, instanceID)
-		return err
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		if err := remove(lockCtx, instance); err != nil {
+			stateErr := r.setLifecycleState(lockCtx, instanceID, "failed", "mcp.runtime.retirement_failed", "deletion", err.Error())
+			return errors.Join(err, stateErr)
+		}
+		return r.setLifecycleState(lockCtx, instanceID, "dormant", "mcp.runtime.retired", "deletion", "")
 	})
+}
+
+func (r *SQLRepository) setLifecycleState(ctx context.Context, instanceID, state, kind, reason, lastError string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `UPDATE mcp_runtime_instances SET state=$2, last_error=NULLIF($3, ''), updated_at=now() WHERE instance_id=$1::uuid`, instanceID, state, lastError); err != nil {
+		return err
+	}
+	if err := recordLifecycleUsage(ctx, tx, instanceID, kind, reason); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func recordLifecycleUsage(ctx context.Context, tx *sql.Tx, instanceID, kind, reason string) error {
+	var workspaceID, state string
+	var generation int64
+	var observedAt time.Time
+	if err := tx.QueryRowContext(ctx, `
+SELECT instance.workspace_id, runtime.generation, runtime.state, runtime.updated_at
+FROM mcp_runtime_instances runtime
+JOIN mcp_server_instances instance ON instance.id=runtime.instance_id
+WHERE runtime.instance_id=$1::uuid`, instanceID).Scan(&workspaceID, &generation, &state, &observedAt); err != nil {
+		return err
+	}
+	data, _ := json.Marshal(map[string]any{
+		"generation": generation, "state": state, "reason": reason,
+		"measurement": "control_plane_lifecycle",
+	})
+	// A generation is a control-plane activation, not a physical pod or
+	// container identity. Actual incarnations arrive in backend samples.
+	event := usage.Event{
+		SchemaVersion: usage.SchemaVersion,
+		ID:            uuid.NewString(), Source: "mcp-gateway", Kind: kind,
+		WorkspaceID: workspaceID, ResourceKind: "mcp_instance",
+		ResourceID: instanceID, OccurredAt: observedAt.UTC(), Data: data,
+	}
+	if err := usage.RecordTx(ctx, tx, event); err != nil {
+		return fmt.Errorf("record %s usage for instance %s event %s: %w", kind, instanceID, event.ID, err)
+	}
+	return nil
 }

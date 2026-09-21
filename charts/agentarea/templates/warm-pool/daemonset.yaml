@@ -19,6 +19,7 @@ spec:
       labels:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: warm-pool
+        app.kubernetes.io/managed-by: mcp-manager
         mcp.agentarea.io/status: "waiting"
     spec:
       {{- /*

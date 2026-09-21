@@ -20,6 +20,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontract"
+	"github.com/agentarea/mcp-manager/internal/usage"
 	"github.com/agentarea/mcp-manager/internal/workspace"
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
@@ -82,6 +83,7 @@ type Client struct {
 	timeout                    time.Duration
 	taskLeaseTTL               time.Duration
 	observeExecutorIncarnation func(context.Context, *corev1.Pod) (string, error)
+	usageRecorder              usage.Recorder
 }
 
 // Config holds warm pool configuration
@@ -953,12 +955,12 @@ func (c *Client) markTaskAssigned(ctx context.Context, pod *corev1.Pod, workspac
 		pod.Annotations = make(map[string]string)
 	}
 	if _, ok := pod.Annotations[annotationTaskAssignedAt]; !ok {
-		pod.Annotations[annotationTaskAssignedAt] = now.Format(time.RFC3339)
+		pod.Annotations[annotationTaskAssignedAt] = now.Format(time.RFC3339Nano)
 	}
 	pod.Labels[labelTaskBinding] = taskBinding(workspaceID, taskID)
 	pod.Labels[labelStatus] = statusAssigned
-	pod.Annotations[annotationTaskLastUsedAt] = now.Format(time.RFC3339)
-	pod.Annotations[annotationTaskLeaseUntil] = now.Add(leaseTTL).Format(time.RFC3339)
+	pod.Annotations[annotationTaskLastUsedAt] = now.Format(time.RFC3339Nano)
+	pod.Annotations[annotationTaskLeaseUntil] = now.Add(leaseTTL).Format(time.RFC3339Nano)
 	pod.Annotations[annotationWorkspaceID] = workspaceID
 	pod.Annotations[annotationTaskID] = taskID
 	delete(pod.Annotations, annotationTaskIdleSince)
@@ -967,6 +969,9 @@ func (c *Client) markTaskAssigned(ctx context.Context, pod *corev1.Pod, workspac
 	updated, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, pod, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to assign pod to task %s: %w", taskID, err)
+	}
+	if err := c.recordPodLease(ctx, updated); err != nil {
+		return nil, err
 	}
 	return updated, nil
 }
@@ -996,9 +1001,15 @@ func (c *Client) createTaskPodFromTemplate(ctx context.Context, workspaceID, tas
 			if identityErr := verifyTaskPodIdentity(existing, workspaceID, taskID); identityErr != nil {
 				return nil, identityErr
 			}
+			if err := c.recordPodAllocation(ctx, existing); err != nil {
+				return nil, err
+			}
 			return c.waitForPodRunning(ctx, existing.Name, 120*time.Second)
 		}
 		return nil, fmt.Errorf("failed to create task sandbox pod for %s: %w", taskID, err)
+	}
+	if err := c.recordPodLease(ctx, created); err != nil {
+		return nil, err
 	}
 	return c.waitForPodRunning(ctx, created.Name, 120*time.Second)
 }
@@ -1017,9 +1028,9 @@ func taskPodFromTemplate(template corev1.Pod, namespace, workspaceID, taskID str
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
-	annotations[annotationTaskAssignedAt] = now.Format(time.RFC3339)
-	annotations[annotationTaskLastUsedAt] = now.Format(time.RFC3339)
-	annotations[annotationTaskLeaseUntil] = now.Add(leaseTTL).Format(time.RFC3339)
+	annotations[annotationTaskAssignedAt] = now.Format(time.RFC3339Nano)
+	annotations[annotationTaskLastUsedAt] = now.Format(time.RFC3339Nano)
+	annotations[annotationTaskLeaseUntil] = now.Add(leaseTTL).Format(time.RFC3339Nano)
 	annotations[annotationWorkspaceID] = workspaceID
 	annotations[annotationTaskID] = taskID
 
@@ -1070,9 +1081,9 @@ func (c *Client) DeleteExactPod(ctx context.Context, pod *corev1.Pod) error {
 		return fmt.Errorf("exact sandbox pod name and UID are required")
 	}
 	uid := pod.UID
-	err := c.client.CoreV1().Pods(c.namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{
+	err := c.deletePodWithUsage(ctx, pod, metav1.DeleteOptions{
 		Preconditions: &metav1.Preconditions{UID: &uid},
-	})
+	}, "unsafe_discard")
 	if k8serrors.IsNotFound(err) {
 		return nil
 	}
@@ -1160,9 +1171,9 @@ func (c *Client) RetirePodForTask(ctx context.Context, workspaceID, taskID strin
 		if idleTTL <= 0 {
 			uid := pod.UID
 			resourceVersion := pod.ResourceVersion
-			if err := c.client.CoreV1().Pods(c.namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{
+			if err := c.deletePodWithUsage(ctx, &pod, metav1.DeleteOptions{
 				Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &resourceVersion},
-			}); err != nil {
+			}, "retirement"); err != nil {
 				return fmt.Errorf("failed to delete pod %s for task %s: %w", pod.Name, taskID, err)
 			}
 			continue
@@ -1174,14 +1185,17 @@ func (c *Client) RetirePodForTask(ctx context.Context, workspaceID, taskID strin
 			pod.Annotations = make(map[string]string)
 		}
 		pod.Labels[labelStatus] = statusIdle
-		pod.Annotations[annotationTaskIdleSince] = now.Format(time.RFC3339)
-		pod.Annotations[annotationTaskCleanupAt] = now.Add(idleTTL).Format(time.RFC3339)
+		pod.Annotations[annotationTaskIdleSince] = now.Format(time.RFC3339Nano)
+		pod.Annotations[annotationTaskCleanupAt] = now.Add(idleTTL).Format(time.RFC3339Nano)
 		if err := setTaskOperations(&pod, operations); err != nil {
 			return err
 		}
 		delete(pod.Annotations, annotationTaskLeaseUntil)
 		if _, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, &pod, metav1.UpdateOptions{}); err != nil {
 			return fmt.Errorf("failed to mark pod %s idle for task %s: %w", pod.Name, taskID, err)
+		}
+		if err := c.recordPodLease(ctx, &pod); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1223,8 +1237,8 @@ func (c *Client) BeginTaskOperation(ctx context.Context, pod *corev1.Pod, leaseT
 			return nil, fmt.Errorf("task pod %s has no executor incarnation binding", pod.Name)
 		}
 		current.Labels[labelStatus] = statusAssigned
-		current.Annotations[annotationTaskLastUsedAt] = now.Format(time.RFC3339)
-		current.Annotations[annotationTaskLeaseUntil] = now.Add(leaseTTL).Format(time.RFC3339)
+		current.Annotations[annotationTaskLastUsedAt] = now.Format(time.RFC3339Nano)
+		current.Annotations[annotationTaskLeaseUntil] = now.Add(leaseTTL).Format(time.RFC3339Nano)
 		delete(current.Annotations, annotationTaskIdleSince)
 		delete(current.Annotations, annotationTaskCleanupAt)
 		if err := setTaskOperations(current, operations); err != nil {
@@ -1236,6 +1250,16 @@ func (c *Client) BeginTaskOperation(ctx context.Context, pod *corev1.Pod, leaseT
 		}
 		if err != nil {
 			return nil, fmt.Errorf("register task operation: %w", err)
+		}
+		if err := c.recordPodLease(ctx, updated); err != nil {
+			operation := &TaskOperation{
+				PodName: updated.Name, PodUID: string(updated.UID), Binding: binding, Token: token,
+				ExecutorIncarnation: executorIncarnation,
+			}
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+			cleanupErr := c.EndTaskOperation(cleanupCtx, operation)
+			cancel()
+			return nil, errors.Join(err, cleanupErr)
 		}
 		return &TaskOperation{
 			PodName: updated.Name, PodUID: string(updated.UID), Binding: binding, Token: token,
@@ -1323,8 +1347,8 @@ func (c *Client) updateTaskOperation(ctx context.Context, operation *TaskOperati
 				return fmt.Errorf("task operation renewal TTL must be positive")
 			}
 			operations[operation.Token] = now.Add(leaseTTL).Format(time.RFC3339Nano)
-			pod.Annotations[annotationTaskLastUsedAt] = now.Format(time.RFC3339)
-			pod.Annotations[annotationTaskLeaseUntil] = now.Add(leaseTTL).Format(time.RFC3339)
+			pod.Annotations[annotationTaskLastUsedAt] = now.Format(time.RFC3339Nano)
+			pod.Annotations[annotationTaskLeaseUntil] = now.Add(leaseTTL).Format(time.RFC3339Nano)
 		}
 		if err := setTaskOperations(pod, operations); err != nil {
 			return err
@@ -1333,6 +1357,9 @@ func (c *Client) updateTaskOperation(ctx context.Context, operation *TaskOperati
 			continue
 		} else if err != nil {
 			return fmt.Errorf("update task operation: %w", err)
+		}
+		if !remove {
+			return c.recordPodLease(ctx, pod)
 		}
 		return nil
 	}
@@ -1404,12 +1431,12 @@ func (c *Client) TouchTaskPod(ctx context.Context, pod *corev1.Pod, leaseTTL tim
 		current.Annotations = make(map[string]string)
 	}
 	now := time.Now().UTC()
-	current.Annotations[annotationTaskLastUsedAt] = now.Format(time.RFC3339)
-	current.Annotations[annotationTaskLeaseUntil] = now.Add(leaseTTL).Format(time.RFC3339)
+	current.Annotations[annotationTaskLastUsedAt] = now.Format(time.RFC3339Nano)
+	current.Annotations[annotationTaskLeaseUntil] = now.Add(leaseTTL).Format(time.RFC3339Nano)
 	if _, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, current, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to extend task lease for pod %s: %w", pod.Name, err)
 	}
-	return nil
+	return c.recordPodLease(ctx, current)
 }
 
 // EnsurePodHydrated serializes immutable input materialization in Kubernetes
@@ -1542,10 +1569,14 @@ func (c *Client) renewHydrationClaim(
 			}
 			now := time.Now().UTC()
 			pod.Annotations[annotationHydrationUntil] = now.Add(ttl).Format(time.RFC3339Nano)
-			pod.Annotations[annotationTaskLastUsedAt] = now.Format(time.RFC3339)
-			pod.Annotations[annotationTaskLeaseUntil] = now.Add(c.taskLeaseTTL).Format(time.RFC3339)
+			pod.Annotations[annotationTaskLastUsedAt] = now.Format(time.RFC3339Nano)
+			pod.Annotations[annotationTaskLeaseUntil] = now.Add(c.taskLeaseTTL).Format(time.RFC3339Nano)
 			if _, err := c.client.CoreV1().Pods(c.namespace).Update(ctx, pod, metav1.UpdateOptions{}); err != nil {
 				done <- fmt.Errorf("renew workspace hydration claim: %w", err)
+				return
+			}
+			if err := c.recordPodLease(ctx, pod); err != nil {
+				done <- err
 				return
 			}
 		}
@@ -1650,9 +1681,9 @@ func (c *Client) DeleteExpiredTaskPods(ctx context.Context, now time.Time) (int,
 		}
 		uid := pod.UID
 		resourceVersion := pod.ResourceVersion
-		if err := c.client.CoreV1().Pods(c.namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{
+		if err := c.deletePodWithUsage(ctx, &pod, metav1.DeleteOptions{
 			Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &resourceVersion},
-		}); err != nil {
+		}, "lease_expired"); err != nil {
 			if k8serrors.IsNotFound(err) || k8serrors.IsConflict(err) {
 				continue
 			}

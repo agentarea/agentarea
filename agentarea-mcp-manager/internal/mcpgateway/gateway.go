@@ -7,6 +7,7 @@ package mcpgateway
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/usage"
 	"github.com/google/uuid"
 )
 
@@ -111,6 +113,7 @@ type Gateway struct {
 	policy     Policy
 	logger     *slog.Logger
 	remote     *RemoteUpstream
+	usage      usage.Recorder
 }
 
 func New(repository LifecycleRepository, runtime InstanceRuntime, policy Policy, logger *slog.Logger, remote *RemoteUpstream) (*Gateway, error) {
@@ -125,6 +128,9 @@ func New(repository LifecycleRepository, runtime InstanceRuntime, policy Policy,
 	}
 	return &Gateway{repository: repository, runtime: runtime, policy: policy, logger: logger, remote: remote}, nil
 }
+
+// SetUsageRecorder must be called before serving requests.
+func (g *Gateway) SetUsageRecorder(recorder usage.Recorder) { g.usage = recorder }
 
 // isRemoteUpstream reports whether this upstream is the configured data plane,
 // which is the only destination allowed to receive the machine credential.
@@ -160,6 +166,49 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	request.Header.Del("X-AgentArea-Manager-Authorization")
 
 	requestID := uuid.NewString()
+	startedAt := time.Now()
+	var endedAt time.Time
+	instance, err := g.repository.LoadInstance(request.Context(), instanceID)
+	if err != nil {
+		http.Error(response, "MCP instance is unavailable", http.StatusBadGateway)
+		return
+	}
+	if g.usage != nil {
+		data, _ := json.Marshal(map[string]any{
+			"request_id": requestID, "http_method": request.Method,
+			"started_at": startedAt.UTC(), "transport": "streamable_http",
+		})
+		if err := g.recordRequestUsage(request.Context(), instance, requestID+":started", "mcp.request.started", startedAt, data); err != nil {
+			http.Error(response, "MCP request accounting unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		observed := &usageResponseWriter{ResponseWriter: response}
+		response = observed
+		defer func() {
+			// A proxy panic (including a failed stream copy) is not a known
+			// completion. Keep the start visible rather than fabricate an end.
+			if value := recover(); value != nil {
+				panic(value)
+			}
+			if endedAt.IsZero() {
+				endedAt = time.Now()
+			}
+			outcome := "succeeded"
+			if request.Context().Err() != nil {
+				outcome = "canceled"
+			} else if observed.status >= 400 {
+				outcome = "http_error"
+			}
+			data, _ := json.Marshal(map[string]any{
+				"request_id": requestID, "http_method": request.Method,
+				"started_at": startedAt.UTC(), "ended_at": endedAt.UTC(),
+				"duration_ns": endedAt.Sub(startedAt).Nanoseconds(),
+				"http_status": observed.status, "outcome": outcome,
+				"transport": "streamable_http",
+			})
+			_ = g.recordRequestUsage(context.WithoutCancel(request.Context()), instance, requestID+":completed", "mcp.request.completed", endedAt, data)
+		}()
+	}
 	var upstream string
 	// The start is deliberately detached from the caller's request. A client
 	// abandoning one HTTP request is not a statement that the workload is
@@ -175,16 +224,16 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		context.WithoutCancel(request.Context()), g.policy.StartupTimeout,
 	)
 	err = g.repository.WithInstanceLock(startCtx, instanceID, func(lockCtx context.Context) error {
-		instance, loadErr := g.repository.LoadInstance(lockCtx, instanceID)
-		if loadErr != nil {
-			return loadErr
-		}
+		// The desired instance was resolved before waiting for the lifecycle
+		// lock so concurrent callers also retain an independent request fact.
 		if err := g.repository.MarkStarting(lockCtx, instanceID); err != nil {
 			return err
 		}
 		upstream, err = g.runtime.EnsureReady(lockCtx, instance)
 		if err != nil {
-			if markErr := g.repository.MarkFailed(lockCtx, instanceID, err); markErr != nil {
+			failureCtx, cancel := context.WithTimeout(context.WithoutCancel(lockCtx), 10*time.Second)
+			defer cancel()
+			if markErr := g.repository.MarkFailed(failureCtx, instanceID, err); markErr != nil {
 				// Leaves the row in 'starting'; the idle sweep reclaims it, but
 				// the operator should see why the state is inaccurate.
 				g.logger.Error("could not record MCP start failure",
@@ -196,9 +245,11 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		if err := g.repository.MarkReadyAndBeginRequest(
 			lockCtx, instanceID, requestID, g.policy.RequestLeaseTTL,
 		); err != nil {
-			cleanupErr := g.runtime.Delete(lockCtx, instance)
-			_ = g.repository.MarkFailed(lockCtx, instanceID, err)
-			return errors.Join(err, cleanupErr)
+			failureCtx, cancel := context.WithTimeout(context.WithoutCancel(lockCtx), 10*time.Second)
+			defer cancel()
+			cleanupErr := g.runtime.Delete(failureCtx, instance)
+			markErr := g.repository.MarkFailed(failureCtx, instanceID, err)
+			return errors.Join(err, cleanupErr, markErr)
 		}
 		return nil
 	})
@@ -235,6 +286,16 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	stopHeartbeat := make(chan struct{})
 	heartbeatDone := make(chan error, 1)
 	go g.heartbeat(proxyCtx, cancelProxy, requestID, stopHeartbeat, heartbeatDone)
+	defer func() {
+		endedAt = time.Now()
+		close(stopHeartbeat)
+		heartbeatErr := <-heartbeatDone
+		cancelProxy()
+		if heartbeatErr != nil && !errors.Is(heartbeatErr, context.Canceled) {
+			g.logger.Error("MCP request lease heartbeat failed", slog.String("instance_id", instanceID), slog.String("request_id", requestID), slog.String("error", heartbeatErr.Error()))
+		}
+		g.finishRequest(instanceID, requestID)
+	}()
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.FlushInterval = -1
@@ -257,13 +318,44 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	}
 	proxy.ServeHTTP(response, request.WithContext(proxyCtx))
 
-	close(stopHeartbeat)
-	heartbeatErr := <-heartbeatDone
-	cancelProxy()
-	if heartbeatErr != nil && !errors.Is(heartbeatErr, context.Canceled) {
-		g.logger.Error("MCP request lease heartbeat failed", slog.String("instance_id", instanceID), slog.String("request_id", requestID), slog.String("error", heartbeatErr.Error()))
+}
+
+// Unwrap lets net/http's ResponseController retain flushing and hijacking
+// capabilities without buffering either request or response bodies.
+type usageResponseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *usageResponseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func (w *usageResponseWriter) WriteHeader(status int) {
+	if w.status == 0 && (status >= 200 || status == http.StatusSwitchingProtocols) {
+		w.status = status
 	}
-	g.finishRequest(instanceID, requestID)
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *usageResponseWriter) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func (g *Gateway) recordRequestUsage(ctx context.Context, instance *models.MCPServerInstance, id, kind string, at time.Time, data json.RawMessage) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	err := g.usage.Record(ctx, usage.Event{
+		SchemaVersion: usage.SchemaVersion,
+		ID:            id, Source: "mcp-gateway", Kind: kind,
+		WorkspaceID: instance.WorkspaceID, ResourceKind: "mcp_instance",
+		ResourceID: instance.InstanceID, OccurredAt: at.UTC(), Data: data,
+	})
+	if err != nil {
+		g.logger.Error("MCP usage persistence failed", slog.String("event_id", id), slog.String("instance_id", instance.InstanceID), slog.String("workspace_id", instance.WorkspaceID), slog.String("error", err.Error()))
+	}
+	return err
 }
 
 // RetireHTTP synchronously removes the data-plane workload before desired

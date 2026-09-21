@@ -15,6 +15,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontract"
+	"github.com/agentarea/mcp-manager/internal/usage"
 	"github.com/google/uuid"
 )
 
@@ -38,6 +39,7 @@ type Manager struct {
 	auditTTL            time.Duration
 	cleanupTTL          time.Duration
 	provisioningTimeout time.Duration
+	usageRecorder       usage.Recorder
 }
 
 func NewManager(
@@ -122,7 +124,7 @@ func (m *Manager) discardUnsafeSession(ctx context.Context, session *Session, ca
 	}
 
 	deleteCtx, cancelDelete := context.WithTimeout(context.WithoutCancel(ctx), m.cleanupTTL)
-	deleteErr := m.provider.Delete(deleteCtx, session)
+	deleteErr := m.deleteSession(deleteCtx, session, "unsafe_discard")
 	cancelDelete()
 	if errors.Is(deleteErr, ErrSessionNotFound) {
 		deleteErr = nil
@@ -314,6 +316,10 @@ func (m *Manager) SandboxFileUpload(ctx context.Context, req FileUpload, content
 // WorkspaceRuntime boundary and hydrates a replacement before doing any work.
 func (m *Manager) invalidateMissingSession(ctx context.Context, session *Session, cause error) error {
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.cleanupTTL)
+	if err := m.recordMissing(cleanupCtx, session); err != nil {
+		cancel()
+		return errors.Join(cause, err)
+	}
 	deleteErr := m.store.DeleteIfSession(cleanupCtx, session)
 	cancel()
 	if deleteErr != nil {
@@ -460,7 +466,7 @@ func (m *Manager) RetireSandboxTask(ctx context.Context, workspaceID, taskID str
 		if err != nil {
 			return err
 		}
-		if deleteErr := m.provider.Delete(ctx, session); deleteErr != nil && !errors.Is(deleteErr, ErrSessionNotFound) {
+		if deleteErr := m.deleteSession(ctx, session, "quarantine_retirement"); deleteErr != nil {
 			return deleteErr
 		}
 		return m.store.ClearQuarantineIfSession(ctx, session)
@@ -486,16 +492,16 @@ func (m *Manager) RetireSandboxTask(ctx context.Context, workspaceID, taskID str
 	if idleTTL > 0 {
 		if err := m.provider.Renew(ctx, session, idleTTL); err != nil {
 			if errors.Is(err, ErrSessionNotFound) {
-				return m.store.DeleteIfSession(ctx, session)
+				return errors.Join(m.recordMissing(ctx, session), m.store.DeleteIfSession(ctx, session))
 			}
 			return err
 		}
 		return m.recordLease(ctx, session, idleTTL, false)
 	}
-	if err := m.provider.Delete(ctx, session); err != nil && !errors.Is(err, ErrSessionNotFound) {
+	if err := m.deleteSession(ctx, session, "retirement"); err != nil {
 		return err
 	}
-	return m.store.Delete(ctx, m.provider.Name(), workspaceID, taskID)
+	return m.store.DeleteIfSession(ctx, session)
 }
 
 type managerWithInventory struct {
@@ -574,6 +580,9 @@ func (m *Manager) ensure(ctx context.Context, workspaceID, taskID string) (*Sess
 		if !errors.Is(renewErr, ErrSessionNotFound) {
 			return nil, renewErr
 		}
+		if err := m.recordMissing(ctx, session); err != nil {
+			return nil, err
+		}
 		if err := m.store.DeleteIfSession(ctx, session); err != nil {
 			return nil, err
 		}
@@ -596,6 +605,9 @@ func (m *Manager) ensure(ctx context.Context, workspaceID, taskID string) (*Sess
 			}
 			if !errors.Is(renewErr, ErrSessionNotFound) {
 				return renewErr
+			}
+			if err := m.recordMissing(lockCtx, session); err != nil {
+				return err
 			}
 			if err := m.store.DeleteIfSession(lockCtx, session); err != nil {
 				return err
@@ -630,6 +642,8 @@ func (m *Manager) ensure(ctx context.Context, workspaceID, taskID string) (*Sess
 		if err := m.store.beginProvisioningIfLockOwned(lockCtx, intent, lock); err != nil {
 			return err
 		}
+		requestObservedAt := time.Now().UTC()
+		startUsageErr := m.recordProvisioning(lockCtx, intent, "started", requestObservedAt, time.Time{})
 		createCtx, cancelCreate := context.WithTimeout(lockCtx, m.provisioningTimeout)
 		session, err := m.provider.Create(createCtx, CreateRequest{
 			WorkspaceID:    workspaceID,
@@ -638,22 +652,32 @@ func (m *Manager) ensure(ctx context.Context, workspaceID, taskID string) (*Sess
 			Supervisor:     m.manifest.ExecutionSupervisor,
 		})
 		cancelCreate()
+		phase := "completed"
+		if err != nil || session == nil || session.ID == "" {
+			phase = "failed"
+		}
+		provisioningUsageErr := errors.Join(startUsageErr, m.recordProvisioning(lockCtx, intent, phase, requestObservedAt, time.Now().UTC()))
 		if session == nil || session.ID == "" {
 			if err == nil {
 				err = fmt.Errorf("%s returned no sandbox identity", m.provider.Name())
 			}
-			return errors.Join(err, m.reconcilePendingProvisioning(lockCtx, lock, intent))
+			return errors.Join(err, provisioningUsageErr, m.reconcilePendingProvisioning(lockCtx, lock, intent))
 		}
 		if err != nil {
 			m.bindSessionIdentity(session, workspaceID, taskID)
-			return errors.Join(err, m.cleanupFailedProvisioning(lockCtx, lock, intent, session))
+			return errors.Join(err, provisioningUsageErr, m.cleanupFailedProvisioning(lockCtx, lock, intent, session))
 		}
 		m.bindSessionIdentity(session, workspaceID, taskID)
 		if err := m.store.putProvisioningIfLockOwned(lockCtx, session, intent, lock); err != nil {
-			return errors.Join(err, m.cleanupFailedProvisioning(lockCtx, lock, intent, session))
+			return errors.Join(err, provisioningUsageErr, m.cleanupFailedProvisioning(lockCtx, lock, intent, session))
 		}
 		result = session
-		return nil
+		if err := m.recordAllocation(lockCtx, session); err != nil {
+			return errors.Join(err, provisioningUsageErr)
+		}
+		return errors.Join(provisioningUsageErr, m.recordUsage(lockCtx, session, "sandbox.lease_renewed", uuid.NewString(), time.Now().UTC(), map[string]any{
+			"provider": session.Provider, "expires_at": session.ExpiresAt, "expiry_is_intended": true, "state": "active",
+		}))
 	})
 	return result, err
 }
@@ -667,6 +691,10 @@ func (m *Manager) bindSessionIdentity(session *Session, workspaceID, taskID stri
 	session.TaskID = taskID
 	if session.CreatedAt.IsZero() {
 		session.CreatedAt = time.Now().UTC()
+		if session.Data == nil {
+			session.Data = make(map[string]string)
+		}
+		session.Data["usage_timestamp_source"] = "manager_binding_observed"
 	}
 	if session.LastUsedAt.IsZero() {
 		session.LastUsedAt = session.CreatedAt
@@ -690,7 +718,7 @@ func (m *Manager) cleanupFailedProvisioning(
 	cancelRecord()
 	if recordErr != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.cleanupTTL)
-		deleteErr := m.provider.Delete(cleanupCtx, session)
+		deleteErr := m.deleteSession(cleanupCtx, session, "failed_provisioning")
 		cancel()
 		if errors.Is(deleteErr, ErrSessionNotFound) {
 			deleteErr = nil
@@ -699,7 +727,7 @@ func (m *Manager) cleanupFailedProvisioning(
 	}
 
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.cleanupTTL)
-	deleteErr := m.provider.Delete(cleanupCtx, session)
+	deleteErr := m.deleteSession(cleanupCtx, session, "failed_provisioning")
 	cancel()
 	if errors.Is(deleteErr, ErrSessionNotFound) {
 		deleteErr = nil
@@ -747,9 +775,16 @@ func (m *Manager) reconcilePendingProvisioning(
 			continue
 		}
 		seen[session.ID] = struct{}{}
+		if session.CreatedAt.IsZero() {
+			session.CreatedAt = intent.StartedAt
+			if session.Data == nil {
+				session.Data = make(map[string]string)
+			}
+			session.Data["usage_timestamp_source"] = "provisioning_intent_started"
+		}
 		m.bindSessionIdentity(session, intent.WorkspaceID, intent.TaskID)
 		deleteCtx, cancelDelete := context.WithTimeout(context.WithoutCancel(ctx), m.cleanupTTL)
-		deleteErr := m.provider.Delete(deleteCtx, session)
+		deleteErr := m.deleteSession(deleteCtx, session, "unresolved_provisioning")
 		cancelDelete()
 		if deleteErr != nil && !errors.Is(deleteErr, ErrSessionNotFound) {
 			deleteErrs = append(deleteErrs, fmt.Errorf("delete unresolved sandbox %s: %w", session.ID, deleteErr))
@@ -797,6 +832,9 @@ func (m *Manager) renewExisting(ctx context.Context, session *Session, workspace
 	if session.WorkspaceID != workspaceID {
 		return nil, fmt.Errorf("task %q is already bound to another workspace", session.TaskID)
 	}
+	if err := m.recordAllocation(ctx, session); err != nil {
+		return nil, err
+	}
 	if err := m.renewActive(ctx, session); err != nil {
 		return nil, err
 	}
@@ -814,7 +852,7 @@ func (m *Manager) transitionToIdle(ctx context.Context, session *Session) error 
 	idleCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finalLeaseRenewTimeout)
 	defer cancel()
 	if m.idleLeaseTTL == 0 {
-		if err := m.provider.Delete(idleCtx, session); err != nil && !errors.Is(err, ErrSessionNotFound) {
+		if err := m.deleteSession(idleCtx, session, "idle_retirement"); err != nil {
 			return fmt.Errorf("delete sandbox after operation: %w", err)
 		}
 		return m.store.DeleteIfSession(idleCtx, session)
@@ -834,7 +872,19 @@ func (m *Manager) recordLease(ctx context.Context, session *Session, ttl time.Du
 		session.LastUsedAt = now
 	}
 	session.ExpiresAt = now.Add(ttl)
-	return m.store.Put(ctx, session)
+	storeErr := m.store.Put(ctx, session)
+	if m.usageRecorder == nil {
+		return storeErr
+	}
+	allocationErr := m.recordAllocation(ctx, session)
+	state := "idle"
+	if markUsed {
+		state = "active"
+	}
+	usageErr := m.recordUsage(ctx, session, "sandbox.lease_renewed", uuid.NewString(), now, map[string]any{
+		"provider": session.Provider, "expires_at": session.ExpiresAt, "expiry_is_intended": true, "state": state,
+	})
+	return errors.Join(storeErr, allocationErr, usageErr)
 }
 
 func (m *Manager) executeWithHeartbeat(ctx context.Context, session *Session, req sandboxcontract.ExecuteRequest) (*sandboxcontract.ExecuteResponse, error) {

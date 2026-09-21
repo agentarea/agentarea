@@ -808,6 +808,14 @@ func (d *DockerBackend) specToCreateRequest(spec *InstanceSpec) (models.CreateCo
 		Command:     spec.Command,
 	}
 
+	// Ownership comes from the resolved instance, never caller-supplied labels.
+	req.Labels = make(map[string]string, len(spec.Labels)+2)
+	for key, value := range spec.Labels {
+		req.Labels[key] = value
+	}
+	req.Labels["agentarea.io/workspace-id"] = spec.WorkspaceID
+	req.Labels["agentarea.io/instance-id"] = spec.InstanceID
+
 	// Resolve the confinement for this workload. An MCP server is third-party
 	// code, so the default is a confined tier, not the daemon's defaults.
 	isolation, err := resolveSpecIsolation(spec, d.config.Container.DefaultIsolationTier)

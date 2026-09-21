@@ -10,6 +10,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
+	"github.com/agentarea/mcp-manager/internal/usage"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -36,6 +37,7 @@ type KubernetesBackend struct {
 	scratchSizeLimit resource.Quantity
 	// taskOperations fences composite task work against in-process retirement.
 	taskOperations *sandboxruntime.TaskOperationGate
+	usageRecorder  usage.Recorder
 }
 
 // NewKubernetesBackend creates a new Kubernetes backend
