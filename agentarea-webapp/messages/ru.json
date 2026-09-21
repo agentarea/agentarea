@@ -746,6 +746,8 @@
     "availableProviders": "Доступные провайдеры",
     "providerConfigsSection": "Конфигурации провайдеров",
     "providerSpecsSection": "Спецификации провайдеров",
+    "platformProviderConfigsSection": "Предоставлено платформой",
+    "platformManagedBadge": "Настройка не требуется",
     "deleteProviderConfiguration": "Удалить конфигурацию провайдера",
     "createConfig": "Создать конфигурацию",
     "deleteProviderConfigurationDescription": "Вы уверены, что хотите удалить конфигурацию провайдера \"{configName}\"? Это действие не может быть отменено и приведет к удалению конфигурации.",

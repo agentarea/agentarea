@@ -2,9 +2,19 @@ import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
 import { listProviderConfigsWithModelInstances } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
+import PlatformProviderConfigsView from "./PlatformProviderConfigsView";
 import ProviderConfigsView from "./ProviderConfigsView";
 import ProviderSpecView from "./ProviderSpecView";
 import { ProviderConfig, ProviderSpec } from "./types";
+
+function matchesQuery(config: ProviderConfig, query: string) {
+  return (
+    config.name?.toLowerCase().includes(query) ||
+    config.spec?.name?.toLowerCase().includes(query) ||
+    config.spec?.provider_key?.toLowerCase().includes(query) ||
+    config.provider_spec_name?.toLowerCase().includes(query)
+  );
+}
 
 interface ProvidersDataProps {
   searchQuery?: string;
@@ -54,11 +64,30 @@ export default async function ProvidersData({
     spec: specsMap.get(config.provider_spec_id),
   }));
 
+  // Platform-supplied configs are read-only and get their own section, above
+  // the customer's own -- see PlatformProviderConfigsView.
+  const platformConfigs = enhancedConfigs.filter(
+    (config) => config.managed_by === "platform"
+  );
+  const ownConfigs = enhancedConfigs.filter(
+    (config) => config.managed_by !== "platform"
+  );
+
+  // A spec already covered by a platform config isn't something the customer
+  // can add themselves, so it's dropped from "available providers" entirely
+  // rather than showing up as both configured and addable.
+  const platformSpecIds = new Set(
+    platformConfigs.map((config) => config.provider_spec_id)
+  );
+  const availableProviderSpecs = providerSpecs.filter(
+    (spec) => !platformSpecIds.has(spec.id)
+  );
+
   // Filter provider specs based on search query
-  let filteredProviderSpecs = providerSpecs;
+  let filteredProviderSpecs = availableProviderSpecs;
   if (searchQuery.trim()) {
     const query = searchQuery.toLowerCase();
-    filteredProviderSpecs = providerSpecs.filter(
+    filteredProviderSpecs = availableProviderSpecs.filter(
       (spec) =>
         spec.name?.toLowerCase().includes(query) ||
         spec.provider_key?.toLowerCase().includes(query) ||
@@ -68,24 +97,28 @@ export default async function ProvidersData({
   }
 
   // Filter configs based on search query
-  let filteredConfigs = enhancedConfigs;
+  let filteredPlatformConfigs = platformConfigs;
+  let filteredOwnConfigs = ownConfigs;
   if (searchQuery.trim()) {
     const query = searchQuery.toLowerCase();
-    filteredConfigs = enhancedConfigs.filter(
-      (config) =>
-        config.name?.toLowerCase().includes(query) ||
-        config.spec?.name?.toLowerCase().includes(query) ||
-        config.spec?.provider_key?.toLowerCase().includes(query) ||
-        config.provider_spec_name?.toLowerCase().includes(query)
+    filteredPlatformConfigs = platformConfigs.filter((config) =>
+      matchesQuery(config, query)
+    );
+    filteredOwnConfigs = ownConfigs.filter((config) =>
+      matchesQuery(config, query)
     );
   }
 
-  // Check for empty states
+  // Check for empty states. hasNoConfigs covers platform + own, so a
+  // workspace with only platform-supplied providers is never told it has
+  // none; hasNoOwnConfigs is scoped to the customer's own section only.
   const hasNoConfigs = enhancedConfigs.length === 0;
-  const hasNoSpecs = providerSpecs.length === 0;
+  const hasNoOwnConfigs = ownConfigs.length === 0;
+  const hasNoSpecs = availableProviderSpecs.length === 0;
   const hasNoData = hasNoConfigs && hasNoSpecs;
   const hasNoResults =
-    filteredConfigs.length === 0 &&
+    filteredPlatformConfigs.length === 0 &&
+    filteredOwnConfigs.length === 0 &&
     filteredProviderSpecs.length === 0 &&
     !hasNoData;
 
@@ -112,19 +145,35 @@ export default async function ProvidersData({
     );
   }
 
-  // Render both views
+  // Platform-supplied configurations come first: they are the ones already
+  // working, with nothing for the customer to do. The section is absent
+  // entirely in a deployment that supplies none, which is most of them.
   return (
     <div className="space-y-8">
-      {(filteredConfigs.length > 0 || !searchQuery.trim()) && (
+      {platformConfigs.length > 0 &&
+        (filteredPlatformConfigs.length > 0 || !searchQuery.trim()) && (
+          <div>
+            <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
+              {t("platformProviderConfigsSection")} (
+              {filteredPlatformConfigs.length})
+            </h4>
+            <PlatformProviderConfigsView
+              configs={filteredPlatformConfigs}
+              viewMode={viewMode}
+            />
+          </div>
+        )}
+
+      {(filteredOwnConfigs.length > 0 || !searchQuery.trim()) && (
         <div>
           <h4 className="mb-3 text-xs uppercase text-muted-foreground/80">
-            {t("providerConfigsSection")} ({filteredConfigs.length})
+            {t("providerConfigsSection")} ({filteredOwnConfigs.length})
           </h4>
           <ProviderConfigsView
-            configs={filteredConfigs}
+            configs={filteredOwnConfigs}
             searchQuery={searchQuery}
             viewMode={viewMode}
-            hasNoData={hasNoConfigs}
+            hasNoData={hasNoOwnConfigs}
           />
         </div>
       )}
