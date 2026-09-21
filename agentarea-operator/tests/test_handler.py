@@ -197,6 +197,73 @@ def test_the_instance_gets_the_derived_id_so_billing_can_name_it():
     assert instance["id"] == handler.platform_instance_id("moonshot", "kimi-k2.5")
 
 
+class _Patch:
+    """The part of kopf's patch object these handlers touch."""
+
+    def __init__(self):
+        self.status: dict = {}
+
+
+def test_a_missing_provider_spec_is_retried_rather_than_abandoned(monkeypatch):
+    """Provider specs arrive from a catalog import that runs on its own schedule.
+
+    A resource created before that import finishes asks for a provider_key that is
+    not in the table yet. Raising PermanentError there meant kopf never looked
+    again: the model stayed absent until a human noticed and edited the resource,
+    and nothing outside the operator's log said so.
+    """
+    import kopf
+    import pytest
+
+    conn = _RecordingConn()  # every SELECT answers None — no such provider spec
+    monkeypatch.setattr(
+        handler, "engine", Mock(begin=Mock(return_value=_as_context(conn)))
+    )
+
+    with pytest.raises(kopf.TemporaryError, match="openrouter"):
+        handler.sync_provider_config(
+            {"providerKey": "openrouter", "name": "AgentArea"}, API_KEY, "kimi"
+        )
+
+
+def test_a_permanent_failure_is_written_to_the_resource_status(monkeypatch):
+    """The one failure nothing retries has to say so where a human will look.
+
+    Without this the phase keeps its previous value, the GitOps application stays
+    green, and the only symptom is a model missing from the picker.
+    """
+    import kopf
+    import pytest
+
+    monkeypatch.setattr(handler, "read_secret", lambda *a, **k: API_KEY)
+
+    def refuse(*_args, **_kwargs):
+        raise kopf.PermanentError("SECRET_MANAGER_ENCRYPTION_KEY is not set")
+
+    monkeypatch.setattr(handler, "sync_provider_config", refuse)
+
+    patch = _Patch()
+    with pytest.raises(kopf.PermanentError):
+        handler.on_provider_config_change(
+            spec={"apiKeySecretRef": {"name": "s", "key": "api-key"}},
+            meta={"name": "kimi"},
+            status={},
+            namespace="agentarea",
+            patch=patch,
+        )
+
+    assert patch.status["phase"] == "Error"
+    assert "SECRET_MANAGER_ENCRYPTION_KEY" in patch.status["message"]
+
+
+def _as_context(value):
+    """Wrap a value so `with x.begin() as v` yields it."""
+    ctx = Mock()
+    ctx.__enter__ = Mock(return_value=value)
+    ctx.__exit__ = Mock(return_value=False)
+    return ctx
+
+
 def test_a_spec_another_workspace_owns_is_not_repriced():
     """uq_model_specs_provider_model has no workspace_id, so the lookup can find a
     tenant's own spec for the same model. Repricing it would silently change what
