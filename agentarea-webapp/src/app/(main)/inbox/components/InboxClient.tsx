@@ -264,13 +264,15 @@ export function InboxClient({ items, error }: InboxClientProps) {
             </div>
           </div>
 
-          <aside className="hidden min-h-0 min-w-0 flex-1 overflow-hidden bg-background lg:flex">
-            <InboxClientPanel
-              task={selectedWithEffectiveStatus}
-              onResolve={resolveOne}
-              onClose={() => setSelectedId(null)}
-            />
-          </aside>
+          {!isCompactLayout && (
+            <aside className="hidden min-h-0 min-w-0 flex-1 overflow-hidden bg-background lg:flex">
+              <InboxClientPanel
+                task={selectedWithEffectiveStatus}
+                onResolve={resolveOne}
+                onClose={() => setSelectedId(null)}
+              />
+            </aside>
+          )}
         </div>
       )}
     </ContentBlock>

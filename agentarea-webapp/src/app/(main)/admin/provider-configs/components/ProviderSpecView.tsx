@@ -34,13 +34,15 @@ export default function ProviderSpecView({
       render: (value: string, item: ProviderSpec) => (
         <div className="flex items-center gap-2">
           {item.icon_url && (
-            <Image
-              src={item.icon_url}
-              alt={`${value} icon`}
-              width={20}
-              height={20}
-              className="h-5 w-5 flex-shrink-0 rounded dark:invert"
-            />
+            <span className="avatar-plate grid h-6 w-6 flex-shrink-0 place-items-center rounded-[6px]">
+              <Image
+                src={item.icon_url}
+                alt={`${value} icon`}
+                width={20}
+                height={20}
+                className="h-[16px] w-[16px] object-contain"
+              />
+            </span>
           )}
           <span className="truncate">{value}</span>
         </div>

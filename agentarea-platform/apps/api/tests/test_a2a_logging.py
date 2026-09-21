@@ -1,5 +1,6 @@
 """Unit tests for A2A logging and monitoring functionality."""
 
+import dataclasses
 import logging
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
@@ -211,6 +212,11 @@ class TestA2ALogging:
 
         # Mock dependencies
         mock_deps = MagicMock(spec=ActivityDependencies)
+        # A dataclass field without a default never lands on the class, so
+        # spec= does not cover it: every required dependency has to be put on
+        # the mock by hand or the first one read raises AttributeError.
+        for dependency in dataclasses.fields(ActivityDependencies):
+            setattr(mock_deps, dependency.name, MagicMock())
         mock_deps.event_broker = MagicMock(spec=EventBroker)
 
         # Create activities

@@ -52,31 +52,40 @@ export async function POST(
     }
 
     // Create a readable stream that forwards the SSE data
-    const stream = new ReadableStream({
+    let upstreamReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let downstreamCancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         const reader = response.body?.getReader();
         if (!reader) {
           controller.close();
           return;
         }
+        upstreamReader = reader;
 
         const pump = async () => {
           try {
             while (true) {
               const { done, value } = await reader.read();
               if (done) {
-                controller.close();
+                if (!downstreamCancelled) controller.close();
                 break;
               }
               controller.enqueue(value);
             }
           } catch (error) {
-            console.error("Task creation SSE stream error:", error);
-            controller.error(error);
+            if (!downstreamCancelled) {
+              console.error("Task creation SSE stream error:", error);
+              controller.error(error);
+            }
           }
         };
 
         pump();
+      },
+      async cancel(reason) {
+        downstreamCancelled = true;
+        await upstreamReader?.cancel(reason).catch(() => undefined);
       },
     });
 

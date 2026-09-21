@@ -363,9 +363,21 @@ async def _reconcile(
 
                 registries = await registry_repo.list_all()
                 existing = next((r for r in registries if r.name == registry_name), None)
+                configured_priority = config.get("recommendation_priority")
                 if existing:
                     registry_id = existing.id
                     click.echo(f"Found existing registry: {registry_id}")
+                    # Reconcile is the only way a manifest edit reaches an
+                    # installed platform: without this, changing a source's
+                    # weight would only ever affect brand-new installs.
+                    if (
+                        configured_priority is not None
+                        and configured_priority != existing.recommendation_priority
+                    ):
+                        await service.update_registry(
+                            registry_id, recommendation_priority=configured_priority
+                        )
+                        click.echo(f"Updated recommendation priority: {configured_priority}")
                 else:
                     registry_type = config.get("type")
                     if not registry_type:
@@ -382,6 +394,7 @@ async def _reconcile(
                         source_url=config["source_url"],
                         description=config.get("description"),
                         sync_mode=config.get("sync_mode", "manual"),
+                        recommendation_priority=configured_priority,
                     )
                     registry_id = registry.id
                     click.echo(f"Created registry: {registry_id}")

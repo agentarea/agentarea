@@ -232,6 +232,12 @@ async def list_workspace_files(
     user_context: UserContextDep,
     project_service: ProjectServiceDep,
 ) -> WorkspaceFileListResponse:
+    """List the files a person put in the workspace.
+
+    What a task produced is not among them: a task's files belong to that run
+    and are browsed on the task itself, so they stay out of the workspace view
+    even though ``tasks/{id}/workspace/{path}`` remains readable by that name.
+    """
     svc = _get_artifact_service()
     objects = await svc.list(user_context.workspace_id)
     visible_objects = [obj for obj in objects if not _is_hidden_storage_path(obj.path)]
@@ -245,17 +251,6 @@ async def list_workspace_files(
         for obj in visible_objects
         if not obj.path.endswith("/")
     ]
-    workspace_repository = _get_workspace_repository()
-    task_ids = await workspace_repository.list_task_ids(user_context.workspace_id)
-    for task_id in task_ids:
-        for obj in await workspace_repository.list(user_context.workspace_id, task_id):
-            files.append(
-                WorkspaceFileInfo(
-                    path=f"tasks/{task_id}/workspace/{obj.path}",
-                    size=obj.size,
-                    content_type=obj.content_type,
-                )
-            )
     projects = await project_service.list()
     directories = sorted(
         {obj.path for obj in visible_objects if obj.path.endswith("/")}

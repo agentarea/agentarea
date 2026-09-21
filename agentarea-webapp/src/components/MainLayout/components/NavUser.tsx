@@ -5,6 +5,7 @@ import { useBillingUrl } from "@/lib/use-billing-url";
 import Link from "next/link";
 import { CreditCard, LogOut, Settings } from "lucide-react";
 import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
+import { deterministicHue } from "@/lib/avatar-hue";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +51,9 @@ export function NavUser() {
     return null;
   }
 
+  // Email over name: two people called "User" would otherwise share a colour.
+  const hue = deterministicHue(user.email || user.name);
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -61,6 +65,8 @@ export function NavUser() {
             >
               <EntityAvatar
                 size={28}
+                variant="pigment"
+                hue={hue}
                 src={user.avatar || undefined}
                 alt={user.name}
                 text={nameInitials(user.name)}
@@ -86,6 +92,8 @@ export function NavUser() {
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <EntityAvatar
                   size={32}
+                  variant="pigment"
+                  hue={hue}
                   src={user.avatar || undefined}
                   alt={user.name}
                   text={nameInitials(user.name)}

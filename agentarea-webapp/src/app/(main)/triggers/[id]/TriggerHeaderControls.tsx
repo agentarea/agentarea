@@ -28,9 +28,9 @@ export default function TriggerHeaderControls({
   const pathname = usePathname();
   const tCreate = useTranslations("TriggersPage.create");
   const t = useTranslations("TriggersPage.detail");
-  // The form only exists on the overview route; the executions and metrics tabs
-  // share this header and have nothing to submit.
-  const isOverview = pathname === `/triggers/${triggerId}`;
+  // The form only lives on the edit route; the overview, executions and
+  // metrics tabs share this header and have nothing to submit.
+  const isEditing = pathname === `/triggers/${triggerId}/edit`;
   const isSaving = useFormSubmittingState("create-trigger-form");
   const [isToggling, setIsToggling] = useState(false);
   const [active, setActive] = useState(isActive);
@@ -91,15 +91,20 @@ export default function TriggerHeaderControls({
           {skipped}
         </span>
       )}
+      {/* Primary action of the page, in the same slot and shape as the agent
+          header's "New task" — except on the edit form, where saving is. */}
       <Button
-        size="xs"
-        variant="outline"
+        size={isEditing ? "xs" : "sm"}
+        variant={isEditing ? "outline" : "default"}
+        className={
+          isEditing ? undefined : "h-7 gap-1.5 px-3 text-[12.5px] font-semibold"
+        }
         type="button"
         onClick={handleRunNow}
         disabled={isRunning}
         isLoading={isRunning}
       >
-        <Play />
+        <Play strokeWidth={2} />
         {t("runNow")}
       </Button>
       <Button
@@ -122,7 +127,7 @@ export default function TriggerHeaderControls({
           </>
         )}
       </Button>
-      {isOverview && (
+      {isEditing && (
         <Button
           size="xs"
           type="submit"

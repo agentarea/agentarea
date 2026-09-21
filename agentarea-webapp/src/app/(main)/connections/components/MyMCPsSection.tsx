@@ -3,11 +3,14 @@
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { Server } from "lucide-react";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { deterministicHue } from "@/lib/avatar-hue";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import {
   getMcpHealthStatusPresentation,
@@ -15,10 +18,10 @@ import {
   getOpenApiConnectionDisplayStatus,
   type StatusPresentation,
 } from "@/lib/status";
+import { getMCPConnectionIconSrc } from "@/lib/entity-identity";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 import {
   getEffectiveMCPVerificationStatus,
-  getMCPConnectionIconSrc,
   getMCPInstanceToolCount,
 } from "../utils";
 import {
@@ -133,22 +136,27 @@ export function MyMCPsSection({
                 className="h-7 w-7 shrink-0 rounded-lg text-[9px]"
               />
             ) : (
-              <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-white dark:bg-zinc-800">
-                {providerIcon ? (
-                  <Image
-                    src={providerIcon}
-                    alt=""
-                    aria-hidden="true"
-                    width={18}
-                    height={18}
-                    className="h-[18px] w-[18px] object-contain"
-                  />
-                ) : (
-                  <span className="text-[11px] font-bold text-muted-foreground">
-                    {(value?.[0] || "?").toUpperCase()}
-                  </span>
-                )}
-              </span>
+              <EntityAvatar
+                size={28}
+                rounded={8}
+                hue={deterministicHue(item.id || value || "mcp")}
+                iconScale={providerIcon ? 0.68 : 0.5}
+                icon={
+                  providerIcon ? (
+                    <Image
+                      src={providerIcon}
+                      alt=""
+                      aria-hidden="true"
+                      width={18}
+                      height={18}
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <Server strokeWidth={1.85} />
+                  )
+                }
+                aria-hidden
+              />
             )}
             <div className="min-w-0">
               <div className="truncate text-[13px] font-medium text-foreground">
@@ -245,7 +253,7 @@ export function MyMCPsSection({
               : { label: "Clear search", href: "/connections" }
           }
         />
-        {hasNoData && <CatalogSuggestions type="mcp_servers" />}
+        {hasNoData && <CatalogSuggestions type="connections" />}
       </div>
     );
   }

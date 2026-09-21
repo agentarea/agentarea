@@ -1,9 +1,8 @@
-import { createElement, type ReactNode } from "react";
+import { createElement } from "react";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import {
   Boxes,
-  ChevronRight,
   Clock,
   Gauge,
   ListChecks,
@@ -13,17 +12,26 @@ import {
   Zap,
 } from "lucide-react";
 import { formatRelTime } from "@/app/(main)/dashboard/components/relTime";
+import { HeroDescription } from "@/components/Overview/HeroDescription";
+import {
+  EmptyRow,
+  GlanceRow,
+  HeroMeta,
+  SectionCard,
+  SectionCardHead,
+  SoftTile,
+  Stat,
+  StatStrip,
+} from "@/components/Overview/OverviewCard";
+import { TaskStatus, useTaskStatusLabel } from "@/components/TaskStatus";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { ProviderIcon } from "@/components/ui/provider-icon";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import {
-  agentColorVar,
-  getAgentIconComponent,
-  type AgentColorToken,
-} from "@/lib/agent-identity";
+import { getAgentIconComponent } from "@/lib/agent-identity";
 import type { TaskResponse } from "@/lib/api";
+import type { AvatarHue } from "@/lib/avatar-hue";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import {
   getTaskStatusPresentation,
@@ -31,14 +39,6 @@ import {
 } from "@/lib/status";
 import type { PolicyEffect } from "@/types/policies";
 import { isRunningTask } from "../../shared/taskStatus";
-import { HeroDescription } from "./HeroDescription";
-import {
-  EmptyRow,
-  SectionCard,
-  SectionCardHead,
-  Stat,
-  StatStrip,
-} from "./OverviewCard";
 
 /**
  * Everything the overview needs to render, already resolved by the data
@@ -49,7 +49,7 @@ export type AgentOverviewModel = {
   agentRef: string;
   name: string;
   description?: string | null;
-  colorToken: AgentColorToken;
+  hue: AvatarHue;
   iconKey: string;
   status: StatusPresentation;
   model: {
@@ -164,10 +164,11 @@ export async function AgentOverviewView({
           <div className="flex items-start gap-3">
             <EntityAvatar
               size={34}
-              rounded={5}
-              color={agentColorVar(model.colorToken)}
-              icon={createElement(HeroIcon, { strokeWidth: 1.9 })}
+              rounded={9}
+              hue={model.hue}
+              icon={createElement(HeroIcon, { strokeWidth: 1.85 })}
               className="mt-0.5"
+              aria-hidden
             />
 
             <div className="min-w-0 flex-1">
@@ -421,8 +422,7 @@ export async function AgentOverviewView({
                   <EntityAvatar
                     variant="soft"
                     size={28}
-                    rounded={4}
-                    lines={false}
+                    rounded={7}
                     color={
                       model.pendingApprovals.length > 0
                         ? "var(--status-warning)"
@@ -507,30 +507,6 @@ export async function AgentOverviewView({
 
 /* ------------------------- subcomponents ------------------------- */
 
-function HeroMeta({
-  icon,
-  children,
-}: {
-  icon: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap before:mx-3 before:h-1 before:w-1 before:shrink-0 before:rounded-full before:bg-muted-foreground/40 before:content-[''] first:before:hidden [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:text-muted-foreground/70">
-      {icon}
-      <span>{children}</span>
-    </span>
-  );
-}
-
-/** Muted 28px icon tile for the glance rail rows. */
-function SoftTile({ icon }: { icon: ReactNode }) {
-  return (
-    <span className="grid h-7 w-7 shrink-0 place-items-center rounded bg-muted text-foreground/80 [&>svg]:h-[15px] [&>svg]:w-[15px]">
-      {icon}
-    </span>
-  );
-}
-
 /** "a, b +3" — the first `max` names and a count of the rest. */
 function summarize(
   names: string[],
@@ -553,9 +529,10 @@ function TaskRow({
   hideRunningStatus?: boolean;
 }) {
   const status = String(task.status ?? "unknown");
-  const presentation = getTaskStatusPresentation(status);
+  const label = useTaskStatusLabel(status);
   const visuallyHideStatus =
-    hideRunningStatus && presentation.labelKey === "running";
+    hideRunningStatus &&
+    getTaskStatusPresentation(status).labelKey === "running";
   const resultCost =
     task.result && typeof task.result === "object"
       ? task.result.total_cost
@@ -565,7 +542,7 @@ function TaskRow({
   const title = task.description || task.id;
   const sub = isRunningTask(task)
     ? t("started", { time: when })
-    : `${presentation.label} · ${when}`;
+    : `${label} · ${when}`;
 
   return (
     <Link href={`/tasks/${task.id}`} className="block">
@@ -586,69 +563,13 @@ function TaskRow({
           </div>
         </div>
         {visuallyHideStatus ? (
-          <span className="sr-only">{presentation.label}</span>
+          <span className="sr-only">{label}</span>
         ) : (
-          <StatusIndicator
-            size="sm"
-            tone={presentation.tone}
-            pulse={presentation.pulse}
+          <TaskStatus
+            status={status}
             className="shrink-0 whitespace-nowrap text-[12px] font-medium"
-          >
-            {presentation.label}
-          </StatusIndicator>
+          />
         )}
-      </InteractiveListRow>
-    </Link>
-  );
-}
-
-function GlanceRow({
-  href,
-  tile,
-  title,
-  sub,
-  count,
-  trailing,
-  chevron = true,
-}: {
-  href: string;
-  tile: ReactNode;
-  title: ReactNode;
-  sub: ReactNode;
-  count?: number;
-  trailing?: ReactNode;
-  chevron?: boolean;
-}) {
-  return (
-    <Link href={href} className="block">
-      <InteractiveListRow
-        showIndicator={false}
-        className="px-[15px] py-[11px]"
-        dividerClassName="border-b border-border/60"
-        start={tile}
-        end={
-          <span className="flex items-center gap-[7px] text-[12px] text-muted-foreground">
-            {trailing}
-            {count != null && (
-              <b className="font-semibold text-foreground/80 tabular-nums">
-                {count}
-              </b>
-            )}
-            {chevron && (
-              <ChevronRight
-                className="h-3.5 w-3.5 text-muted-foreground/60"
-                strokeWidth={2}
-              />
-            )}
-          </span>
-        }
-      >
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[12.5px] font-medium">{title}</div>
-          <div className="mt-px truncate text-[11px] text-muted-foreground/80">
-            {sub}
-          </div>
-        </div>
       </InteractiveListRow>
     </Link>
   );

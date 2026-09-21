@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import type { CatalogType } from "@/app/(main)/bundles/components/catalog-data";
+import EntityMark from "@/components/EntityMark";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EntityIcon, type EntityKind } from "@/lib/entity-icons";
 import {
   listCatalogSuggestionsAction,
   type CatalogSuggestionItem,
@@ -16,16 +16,8 @@ import {
 // something in one click instead of facing a dead-end "Browse catalog" button.
 // Clicking a card opens that item's detail in Explore (where Connect/Install
 // lives). Skills come from the small curated registry and are ranked by the
-// source repository's popularity. Other types use the catalog's featured sort.
-
-type CatalogType = "bundles" | "agents" | "skills" | "mcp_servers";
-
-function entityKind(type: CatalogType): EntityKind {
-  if (type === "agents") return "agent";
-  if (type === "mcp_servers") return "mcp";
-  return "skill";
-}
-
+// source repository's popularity. Other types use the catalog's recommended
+// order.
 export default function CatalogSuggestions({
   type,
   label,
@@ -92,22 +84,11 @@ export default function CatalogSuggestions({
                   href={`/explore?type=${type}&item=${it.id}`}
                   className="flex min-h-[70px] items-start gap-2.5 rounded-lg border border-border/60 bg-white px-3 py-2.5 text-sm transition-all hover:-translate-y-px hover:border-border hover:shadow-sm dark:bg-zinc-900"
                 >
-                  {it.iconUrl ? (
-                    <Image
-                      src={it.iconUrl}
-                      alt=""
-                      width={28}
-                      height={28}
-                      className="h-7 w-7 shrink-0 rounded-md object-contain"
-                    />
-                  ) : (
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                      <EntityIcon
-                        kind={entityKind(type)}
-                        className="h-3.5 w-3.5"
-                      />
-                    </span>
-                  )}
+                  <EntityMark
+                    identity={it.identity}
+                    brandFallback={false}
+                    className="h-7 w-7 shrink-0 rounded-md text-[10px]"
+                  />
                   <span className="min-w-0">
                     <span className="block truncate font-medium">
                       {it.title}

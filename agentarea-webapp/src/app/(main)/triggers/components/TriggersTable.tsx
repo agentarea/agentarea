@@ -7,14 +7,13 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import Table, { type Column } from "@/components/Table/Table";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getTriggerStatusPresentation } from "@/lib/status";
-import { cn } from "@/lib/utils";
 import {
   describeTriggerSchedule,
   findTriggerCatalogEntry,
   formatCompactDistance,
   getTriggerDisplayName,
   getTriggerHealth,
-  renderTriggerIcon,
+  TriggerSourceMark,
   type EnrichedTrigger,
   type TriggerCatalogEntry,
 } from "./triggerDisplay";
@@ -45,19 +44,9 @@ export default function TriggersTable({
       render: (_value, trigger) => {
         if (!trigger) return null;
         const entry = findTriggerCatalogEntry(trigger, catalog);
-        const isCron = trigger.trigger_type === "cron";
         return (
           <span className="flex min-w-0 items-center gap-2.5">
-            <span
-              className={cn(
-                "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
-                isCron
-                  ? "bg-primary/10 text-primary"
-                  : "bg-violet-100 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
-              )}
-            >
-              {renderTriggerIcon(entry, trigger, "h-3.5 w-3.5")}
-            </span>
+            <TriggerSourceMark entry={entry} trigger={trigger} size={28} />
             <span className="truncate text-[13px] text-muted-foreground">
               {describeTriggerSchedule(trigger)}
             </span>

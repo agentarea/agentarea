@@ -117,15 +117,15 @@ const A2UITabs: React.FC<{
   const [active, setActive] = React.useState(0);
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex gap-1 border-b border-border">
         {tabs.map((tab, i) => (
           <button
             key={i}
             onClick={() => setActive(i)}
-            className={`px-3 py-1.5 text-sm font-medium ${
+            className={`px-2.5 py-1.5 text-[13px] font-medium leading-5 ${
               active === i
-                ? "border-b-2 border-blue-600 text-blue-600"
-                : "text-gray-600 hover:text-gray-900 dark:text-gray-400"
+                ? "border-b-2 border-foreground text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             {tab.title}
@@ -157,10 +157,10 @@ const A2UIModal: React.FC<{
       </div>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="relative max-h-[80vh] w-full max-w-md overflow-auto rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
+          <div className="relative max-h-[80vh] w-full max-w-md overflow-auto rounded-lg border border-border bg-background p-4 shadow-xl">
             <button
               onClick={() => setOpen(false)}
-              className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+              className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
             >
               ✕
             </button>
@@ -188,17 +188,17 @@ const A2UINode: React.FC<{
 
     case "Text": {
       const variantClass: Record<string, string> = {
-        h1: "text-2xl font-bold",
-        h2: "text-xl font-bold",
-        h3: "text-lg font-semibold",
-        h4: "text-base font-semibold",
-        h5: "text-sm font-semibold",
-        caption: "text-xs text-gray-500",
-        body: "text-sm",
+        h1: "text-base font-semibold leading-6",
+        h2: "text-[15px] font-semibold leading-6",
+        h3: "text-sm font-semibold leading-5",
+        h4: "text-[13px] font-semibold leading-5",
+        h5: "text-[13px] font-medium leading-5",
+        caption: "text-xs leading-5 text-muted-foreground",
+        body: "text-[13px] leading-5",
       };
-      const cls = variantClass[node.variant ?? "body"] ?? "text-sm";
+      const cls = variantClass[node.variant ?? "body"] ?? "text-[13px] leading-5";
       return (
-        <span className={`${cls} text-gray-800 dark:text-gray-200`}>
+        <span className={`${cls} text-foreground/85`}>
           {resolveString(node.text, dm)}
         </span>
       );
@@ -220,7 +220,7 @@ const A2UINode: React.FC<{
       // Render as text placeholder; real impl would use an icon library
       return (
         <span
-          className="inline-block text-gray-600 dark:text-gray-400"
+          className="inline-block text-muted-foreground"
           aria-label={resolveString(node.name, dm)}
           title={resolveString(node.name, dm)}
         >
@@ -241,7 +241,7 @@ const A2UINode: React.FC<{
       return (
         <div className="flex flex-col gap-1">
           {node.description && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs leading-5 text-muted-foreground">
               {resolveString(node.description, dm)}
             </span>
           )}
@@ -255,9 +255,9 @@ const A2UINode: React.FC<{
 
     case "Divider":
       return node.axis === "vertical" ? (
-        <div className="w-px self-stretch bg-gray-200 dark:bg-gray-700" />
+        <div className="w-px self-stretch bg-border" />
       ) : (
-        <hr className="border-gray-200 dark:border-gray-700" />
+        <hr className="border-border" />
       );
 
     // ── Layout ───────────────────────────────────────────────────────────────
@@ -280,7 +280,7 @@ const A2UINode: React.FC<{
       };
       return (
         <div
-          className={`flex flex-row flex-wrap gap-2 ${justifyClass[node.justify ?? "start"] ?? ""} ${alignClass[node.align ?? "stretch"] ?? ""}`}
+          className={`flex flex-row flex-wrap gap-1.5 ${justifyClass[node.justify ?? "start"] ?? ""} ${alignClass[node.align ?? "stretch"] ?? ""}`}
         >
           {renderChildren(children, ctx, depth + 1, visited)}
         </div>
@@ -305,7 +305,7 @@ const A2UINode: React.FC<{
       };
       return (
         <div
-          className={`flex flex-col gap-2 ${justifyClass[node.justify ?? "start"] ?? ""} ${alignClass[node.align ?? "stretch"] ?? ""}`}
+          className={`flex flex-col gap-1.5 ${justifyClass[node.justify ?? "start"] ?? ""} ${alignClass[node.align ?? "stretch"] ?? ""}`}
         >
           {renderChildren(children, ctx, depth + 1, visited)}
         </div>
@@ -315,7 +315,7 @@ const A2UINode: React.FC<{
     case "List":
       return (
         <ul
-          className={`flex gap-1 ${node.direction === "horizontal" ? "flex-row flex-wrap" : "flex-col"}`}
+          className={`flex gap-1.5 ${node.direction === "horizontal" ? "flex-row flex-wrap" : "flex-col"}`}
         >
           {renderChildren(children, ctx, depth + 1, visited)}
         </ul>
@@ -325,7 +325,7 @@ const A2UINode: React.FC<{
 
     case "Card":
       return (
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div className="border-l-2 border-border py-1 pl-3">
           {child ? renderById(child, ctx, depth + 1, visited) : null}
         </div>
       );
@@ -345,9 +345,9 @@ const A2UINode: React.FC<{
     case "Button": {
       const variantClass: Record<string, string> = {
         default:
-          "bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200",
-        primary: "bg-blue-600 text-white hover:bg-blue-700",
-        borderless: "text-blue-600 hover:underline",
+          "border border-border bg-background text-foreground hover:bg-muted",
+        primary: "bg-foreground text-background hover:bg-foreground/85",
+        borderless: "text-foreground underline-offset-4 hover:underline",
       };
       const handleClick = () => {
         if (node.action && ctx.onAction) {
@@ -356,7 +356,7 @@ const A2UINode: React.FC<{
       };
       return (
         <button
-          className={`rounded-md px-3 py-1.5 text-sm font-medium cursor-pointer ${variantClass[node.variant ?? "default"] ?? variantClass.default}`}
+          className={`cursor-pointer rounded-md px-3 py-1.5 text-[13px] font-medium leading-5 ${variantClass[node.variant ?? "default"] ?? variantClass.default}`}
           disabled={node.disabled}
           title={resolveString(node.accessibility?.label, dm)}
           onClick={handleClick}
@@ -378,13 +378,13 @@ const A2UINode: React.FC<{
       return (
         <div className="flex flex-col gap-1">
           {node.label && (
-            <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-[13px] font-medium leading-5 text-foreground">
               {resolveString(node.label, dm)}
             </label>
           )}
           {isLong ? (
             <textarea
-              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+              className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] leading-5 text-foreground"
               placeholder={resolveString(node.placeholder, dm)}
               defaultValue={resolveInputValue(node.value, dm)}
               rows={4}
@@ -392,7 +392,7 @@ const A2UINode: React.FC<{
           ) : (
             <input
               type={inputType}
-              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+              className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] leading-5 text-foreground"
               placeholder={resolveString(node.placeholder, dm)}
               defaultValue={resolveInputValue(node.value, dm)}
             />
@@ -403,7 +403,7 @@ const A2UINode: React.FC<{
 
     case "CheckBox":
       return (
-        <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+        <label className="flex items-center gap-2 text-[13px] leading-5 text-foreground">
           <input
             type="checkbox"
             defaultChecked={!!node.value}
@@ -425,7 +425,7 @@ const A2UINode: React.FC<{
             {options.map((opt) => (
               <span
                 key={opt.value}
-                className="cursor-pointer rounded-full border border-gray-300 px-3 py-0.5 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300"
+                className="cursor-pointer rounded-full border border-border px-2.5 py-0.5 text-[13px] leading-5 text-foreground hover:bg-muted"
               >
                 {opt.label}
               </span>
@@ -437,14 +437,14 @@ const A2UINode: React.FC<{
       return (
         <div className="flex flex-col gap-1">
           {node.label && (
-            <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-[13px] font-medium leading-5 text-foreground">
               {resolveString(node.label, dm)}
             </label>
           )}
           {options.map((opt) => (
             <label
               key={opt.value}
-              className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200"
+              className="flex items-center gap-2 text-[13px] leading-5 text-foreground"
             >
               <input type={isMulti ? "checkbox" : "radio"} value={opt.value} />
               {opt.label}
@@ -458,7 +458,7 @@ const A2UINode: React.FC<{
       return (
         <div className="flex flex-col gap-1">
           {node.label && (
-            <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-[13px] font-medium leading-5 text-foreground">
               {resolveString(node.label, dm)}
             </label>
           )}
@@ -476,7 +476,7 @@ const A2UINode: React.FC<{
       return (
         <div className="flex flex-col gap-1">
           {node.label && (
-            <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-[13px] font-medium leading-5 text-foreground">
               {resolveString(node.label, dm)}
             </label>
           )}
@@ -491,7 +491,7 @@ const A2UINode: React.FC<{
             defaultValue={resolveInputValue(node.value, dm)}
             min={resolveInputValue(node.min, dm)}
             max={resolveInputValue(node.max, dm)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-[13px] leading-5 text-foreground"
           />
         </div>
       );
@@ -519,15 +519,15 @@ const A2UIMessage: React.FC<{
   if (!rootNode) {
     // Surface created but no components yet — show skeleton
     return (
-      <div className="a2ui-surface flex items-center gap-2 rounded-xl bg-gray-50 p-4 text-sm text-gray-400 dark:bg-gray-800/50">
-        <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-blue-400" />
+      <div className="a2ui-surface flex items-center gap-2 py-2 text-[13px] leading-5 text-muted-foreground">
+        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-muted-foreground/60" />
         Rendering UI surface…
       </div>
     );
   }
 
   return (
-    <div className="a2ui-surface rounded-xl bg-gray-50 p-4 dark:bg-gray-800/50">
+    <div className="a2ui-surface min-w-0 py-1">
       <A2UINode node={rootNode} ctx={ctx} />
     </div>
   );

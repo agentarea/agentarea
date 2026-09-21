@@ -1,5 +1,5 @@
+import { SectionCard, StatStrip } from "@/components/Overview/OverviewCard";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SectionCard, StatStrip } from "./OverviewCard";
 
 /**
  * Loading placeholder mirroring the agent overview layout: full-bleed hero,

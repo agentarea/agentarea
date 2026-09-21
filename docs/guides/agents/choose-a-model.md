@@ -57,7 +57,7 @@ different endpoint, a proxy — without touching any agent.
       -d '{
         "provider_spec_id": "<provider-spec-id>",
         "name": "OpenAI (team key)",
-        "api_key": "sk-..."
+        "api_key": "<your-api-key>"
       }'
     ```
 

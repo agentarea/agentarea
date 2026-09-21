@@ -44,6 +44,7 @@ from . import (
     skill_collections,
     skills,
     triggers,
+    usage,
     wallet,
     workspace_config,
     workspace_invitations,
@@ -158,6 +159,7 @@ protected_v1_router.include_router(clients.router)
 
 # Audit logs - PROTECTED
 protected_v1_router.include_router(audit.router)
+protected_v1_router.include_router(usage.router)
 
 # Dashboard + workspace settings - PROTECTED
 protected_v1_router.include_router(dashboard.router)

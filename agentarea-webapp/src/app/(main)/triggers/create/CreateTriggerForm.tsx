@@ -292,8 +292,9 @@ export function CreateTriggerForm({
         title: isEditing ? tSuccess("updated") : tSuccess("created"),
         variant: "success",
       });
+      // The action revalidated both paths, so the destination renders fresh.
+      // A `router.refresh()` here cancels this navigation instead.
       router.push(initialData ? `/triggers/${initialData.id}` : "/triggers");
-      router.refresh();
     } else if (state.errors) {
       toast({
         title: isEditing ? tError("updateFailed") : tError("createFailed"),

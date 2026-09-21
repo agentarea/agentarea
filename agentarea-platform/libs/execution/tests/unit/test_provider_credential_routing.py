@@ -15,9 +15,7 @@ from agentarea_common.constants import (
     MANAGED_BY_PLATFORM,
     PLATFORM_WORKSPACE_ID,
 )
-from agentarea_execution.activities.agent_execution_activities import (
-    _resolve_provider_api_key,
-)
+from agentarea_execution.llm_execution_service import resolve_provider_api_key
 from agentarea_execution.models import LLMCallRequest, ResolvedModelInfo
 
 TENANT_WORKSPACE = "ws"
@@ -101,11 +99,6 @@ class _RecordingFactory:
         )
 
 
-class _Dependencies:
-    def __init__(self, factory):
-        self.secret_manager_factory = factory
-
-
 @pytest.fixture
 def factory(monkeypatch):
     built = _RecordingFactory(
@@ -129,11 +122,11 @@ def factory(monkeypatch):
 
 
 async def test_tenant_config_reads_the_callers_workspace(factory):
-    key = await _resolve_provider_api_key(
+    key = await resolve_provider_api_key(
         reference=SHARED_REFERENCE,
         managed_by=None,
         user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
-        dependencies=_Dependencies(factory),
+        secret_manager_factory=factory,
     )
 
     assert key == "tenant-key"
@@ -148,11 +141,11 @@ async def test_platform_config_reads_the_platform_workspace_not_the_callers(fact
     have their own value served in place of the operator's — on a configuration
     they are deliberately allowed to see but not to write.
     """
-    key = await _resolve_provider_api_key(
+    key = await resolve_provider_api_key(
         reference=SHARED_REFERENCE,
         managed_by=MANAGED_BY_PLATFORM,
         user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
-        dependencies=_Dependencies(factory),
+        secret_manager_factory=factory,
     )
 
     assert key == "platform-key"
@@ -168,11 +161,11 @@ async def test_a_platform_credential_the_operator_never_set_is_not_an_error(fact
     Returning None sends the request without an Authorization header, which is
     also the correct behaviour for an endpoint that authenticates with nothing.
     """
-    key = await _resolve_provider_api_key(
+    key = await resolve_provider_api_key(
         reference="never-created",
         managed_by=MANAGED_BY_PLATFORM,
         user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
-        dependencies=_Dependencies(factory),
+        secret_manager_factory=factory,
     )
 
     assert key is None
@@ -180,11 +173,11 @@ async def test_a_platform_credential_the_operator_never_set_is_not_an_error(fact
 
 async def test_no_reference_touches_no_store(factory):
     """A keyless provider must not produce a lookup for the empty name."""
-    key = await _resolve_provider_api_key(
+    key = await resolve_provider_api_key(
         reference=None,
         managed_by=None,
         user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
-        dependencies=_Dependencies(factory),
+        secret_manager_factory=factory,
     )
 
     assert key is None

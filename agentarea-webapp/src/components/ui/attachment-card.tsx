@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import { Download, X } from "lucide-react";
+import { FileTypeIcon } from "@/components/Chat/utils/fileIcon";
 import { getFileTypeInfo, isImageFile } from "@/utils/fileUtils";
 import { Button } from "./button";
 
@@ -21,11 +22,11 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   const fileInfo = getFileTypeInfo(file);
-  const IconComponent = fileInfo.icon;
   const isImage = isImageFile(file);
 
   // Prepare action button visuals
   const actionSizeClass = actionType === "remove" ? "h-4 w-4" : "h-5 w-5";
+  const actionLabel = `${actionType === "remove" ? "Remove" : "Download"} ${file.name}`;
 
   React.useEffect(() => {
     if (isImage && !imageError) {
@@ -61,7 +62,11 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
               onError={() => setImageError(true)}
             />
           ) : (
-            <IconComponent className={`h-5 w-5 ${fileInfo.color}`} />
+            <FileTypeIcon
+              name={file.name}
+              mimeType={file.type}
+              className="h-5 w-5"
+            />
           )}
 
           <Button
@@ -69,13 +74,10 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
             variant="ghost"
             size="sm"
             onClick={onAction}
+            aria-label={actionLabel}
             className={`${actionSizeClass} absolute -right-1 -top-1 flex-shrink-0 rounded-full bg-zinc-700 p-0 text-white hover:bg-zinc-900 dark:hover:bg-gray-600`}
           >
-            {actionType === "remove" ? (
-              <X />
-            ) : (
-              <Download />
-            )}
+            {actionType === "remove" ? <X /> : <Download />}
           </Button>
         </div>
       </div>
@@ -89,7 +91,11 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
       <div
         className={`flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700`}
       >
-        <IconComponent className={`h-5 w-5 text-gray-500`} />
+        <FileTypeIcon
+          name={file.name}
+          mimeType={file.type}
+          className="h-5 w-5"
+        />
       </div>
 
       <div className="min-w-0 flex-1">
@@ -106,13 +112,10 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
         variant="ghost"
         size="sm"
         onClick={onAction}
+        aria-label={actionLabel}
         className={`${actionSizeClass} absolute -right-1 -top-1 flex-shrink-0 rounded-full bg-zinc-700 p-0 text-white hover:bg-zinc-900 dark:hover:bg-gray-600`}
       >
-        {actionType === "remove" ? (
-          <X />
-        ) : (
-          <Download />
-        )}
+        {actionType === "remove" ? <X /> : <Download />}
       </Button>
     </div>
   );

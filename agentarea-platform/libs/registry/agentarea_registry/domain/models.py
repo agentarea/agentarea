@@ -16,6 +16,12 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+# Registry ordering weight for the ``recommended`` catalog sort: lower comes
+# first. A curated system catalog and an opt-in bulk/community mirror both hold
+# rank-0 items, so without a per-source weight the mirror's first entry would
+# interleave with the curated front page.
+DEFAULT_REGISTRY_PRIORITY = 100
+
 
 class Registry(BaseModel):
     """A configured external source of entity definitions.
@@ -46,6 +52,9 @@ class Registry(BaseModel):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     item_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    recommendation_priority: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=DEFAULT_REGISTRY_PRIORITY
+    )
 
     def __init__(
         self,
@@ -56,6 +65,7 @@ class Registry(BaseModel):
         description: str | None = None,
         sync_mode: str = "manual",
         is_active: bool = True,
+        recommendation_priority: int = DEFAULT_REGISTRY_PRIORITY,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -66,6 +76,7 @@ class Registry(BaseModel):
         self.source_url = source_url
         self.sync_mode = sync_mode
         self.is_active = is_active
+        self.recommendation_priority = recommendation_priority
         self.last_synced_at = None
         self.last_sync_error = None
         self.item_count = 0
@@ -109,6 +120,12 @@ class RegistryItem(BaseModel):
     category: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     sort_key: Mapped[str] = mapped_column(String(255), nullable=False, default="", index=True)
     featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Curation order within the owning registry: lower comes first. Sources are
+    # already authored best-first (the curated skills artifact is ordered by
+    # GitHub stars, the connection artifact leads with official integrations),
+    # and that order is the only usefulness signal the catalog has -- without
+    # persisting it, browsing collapses to alphabetical.
+    recommendation_rank: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     def __init__(
         self,
@@ -122,6 +139,7 @@ class RegistryItem(BaseModel):
         category: str | None = None,
         sort_key: str | None = None,
         featured: bool = False,
+        recommendation_rank: int = 0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -141,6 +159,7 @@ class RegistryItem(BaseModel):
         # that pages in arbitrary order.
         self.sort_key = sort_key if sort_key is not None else name.casefold()
         self.featured = featured
+        self.recommendation_rank = recommendation_rank
 
 
 class RegistryItemInstall(BaseModel):

@@ -37,7 +37,6 @@ import {
 } from "@/components/ui/tooltip";
 import { type DroppedFile } from "@/lib/file-drop";
 import { cn } from "@/lib/utils";
-import { isTaskOwned } from "./drop-rules";
 import { FileTabStrip } from "./file-tabs";
 import {
   buildTree,
@@ -162,18 +161,12 @@ export function FileBrowser({
     )
     .map((node) => ({ ...node, id: node.path }));
   const folderName = folder.split("/").filter(Boolean).at(-1) || t("allFiles");
-  const readOnly = isTaskOwned(folder);
-  const canCreate = Boolean(onNewFolder) && !readOnly;
+  const canCreate = Boolean(onNewFolder);
   // An empty writable folder turns its whole area into the upload affordance.
   // It then owns the drag feedback, so the pane-wide overlay stands down
   // rather than drawing a second dashed rectangle on top of it.
   const showUploadZone =
-    !loading &&
-    !error &&
-    !entries.length &&
-    !search &&
-    Boolean(onBrowseFiles) &&
-    !readOnly;
+    !loading && !error && !entries.length && !search && Boolean(onBrowseFiles);
 
   // A tab whose file has been deleted or moved away must not linger pointing
   // at nothing. Skipped while the listing is unavailable, when every path
@@ -367,13 +360,12 @@ export function FileBrowser({
                     onOpen={(entry) =>
                       entry.file ? open(entry.file.path) : navigate(entry.path)
                     }
-                    onDelete={readOnly ? undefined : onDelete}
+                    onDelete={onDelete}
                     entryProps={dnd.entryProps}
                     loading={loading}
-                    onBrowseFiles={readOnly ? undefined : onBrowseFiles}
+                    onBrowseFiles={onBrowseFiles}
                     showUploadZone={showUploadZone}
                     isDragging={dnd.isDragging}
-                    readOnly={readOnly}
                     emptyMessage={folder ? undefined : emptyMessage}
                   />
                 )}
@@ -405,9 +397,7 @@ export function FileBrowser({
                       file={file}
                       fetchUrl={fetchUrl}
                       fetchHistory={fetchHistory}
-                      onDelete={
-                        onDelete && !isTaskOwned(path) ? onDelete : undefined
-                      }
+                      onDelete={onDelete}
                       onClose={() => setTabs(closeTab(tabs, path))}
                     />
                   )}

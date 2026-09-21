@@ -43,7 +43,7 @@ import NetworkRoutePanel from "../components/NetworkRoutePanel";
 import NetworkAgentNode, {
   type NetworkAgentData,
 } from "../components/nodes/NetworkAgentNode";
-import OrgChartNode from "../components/nodes/OrgChartNode";
+import ResourceNode from "../components/nodes/ResourceNode";
 import type {
   NetworkFlowNodeData,
   NetworkNodeData,
@@ -58,16 +58,8 @@ import {
   focusAgentTopology,
   getNetworkScope,
 } from "../utils/networkConnections";
-import {
-  getAgentResources,
-  NETWORK_AGENT_WIDTH,
-  networkAgentHeight,
-} from "../utils/networkMapLayout";
-import {
-  buildOrgChartLayout,
-  ORG_NODE_HEIGHT,
-  ORG_NODE_WIDTH,
-} from "../utils/orgChartLayout";
+import { getAgentResources, mapNodeSize } from "../utils/networkMapLayout";
+import { buildOrgChartLayout } from "../utils/orgChartLayout";
 import { getPersonRoute, withPeopleRoster } from "../utils/peopleLayout";
 
 export interface NetworkMapProps {
@@ -88,7 +80,7 @@ type MapNodeData =
 const nodeTypes = {
   people: NetworkPeopleNode,
   region: NetworkRegion,
-  organization: OrgChartNode,
+  resource: ResourceNode,
   networkAgent: NetworkAgentNode,
 };
 const edgeTypes = { directional: DirectionalEdge };
@@ -242,17 +234,12 @@ export default function NetworkMapView({
             ...buildOrgChartLayout(
               layoutTopology,
               agentsOnly,
-              (node) => ({
-                width:
-                  node.type === "agent" ? NETWORK_AGENT_WIDTH : ORG_NODE_WIDTH,
-                height:
-                  node.type === "agent" && summary
-                    ? networkAgentHeight(
-                        resourcesByAgent.get(node.id)?.length ?? 0,
-                        expandedAgents.has(node.id)
-                      )
-                    : ORG_NODE_HEIGHT,
-              }),
+              (node) =>
+                mapNodeSize(node, {
+                  summary,
+                  resources: resourcesByAgent,
+                  expanded: expandedAgents,
+                }),
               horizontal ? { direction: "LR", aspectRatio: 2.4 } : undefined
             ),
           },
@@ -337,15 +324,13 @@ export default function NetworkMapView({
         );
     const entityNodes: Node<MapNodeData>[] = layout.nodes.map((node) => ({
       id: node.id,
-      type: node.type === "agent" ? "networkAgent" : "organization",
+      type: node.type === "agent" ? "networkAgent" : "resource",
       position: node.position,
-      width: node.type === "agent" ? NETWORK_AGENT_WIDTH : ORG_NODE_WIDTH,
-      height: summary
-        ? networkAgentHeight(
-            resourcesByAgent.get(node.id)?.length ?? 0,
-            expandedAgents.has(node.id)
-          )
-        : ORG_NODE_HEIGHT,
+      ...mapNodeSize(node, {
+        summary,
+        resources: resourcesByAgent,
+        expanded: expandedAgents,
+      }),
       ariaLabel: `${node.label}, ${t(`types.${node.type}`)}`,
       data: {
         ...node,

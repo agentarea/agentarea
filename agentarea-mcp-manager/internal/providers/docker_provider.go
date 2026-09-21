@@ -18,7 +18,7 @@ type DockerProvider struct {
 
 // ContainerManagerInterface defines the interface for container management
 type ContainerManagerInterface interface {
-	HandleMCPInstanceCreated(ctx context.Context, instanceID, name string, jsonSpec map[string]interface{}) error
+	HandleMCPInstanceCreated(ctx context.Context, instanceID, name, workspaceID string, jsonSpec map[string]interface{}) error
 	HandleMCPInstanceDeleted(ctx context.Context, instanceID string) error
 }
 
@@ -47,7 +47,7 @@ func (p *DockerProvider) CreateInstance(ctx context.Context, instance *models.MC
 
 	// Use the container manager to create the container
 	// This ensures the container is properly tracked in the manager's internal map
-	err = p.containerManager.HandleMCPInstanceCreated(ctx, instance.InstanceID, instance.InstanceID, resolvedSpec)
+	err = p.containerManager.HandleMCPInstanceCreated(ctx, instance.InstanceID, instance.InstanceID, instance.WorkspaceID, resolvedSpec)
 	if err != nil {
 		p.logger.Error("Failed to create container via container manager",
 			slog.String("instance_id", instance.InstanceID),

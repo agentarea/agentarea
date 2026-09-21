@@ -174,7 +174,10 @@ func (p *E2BProvider) Create(ctx context.Context, req CreateRequest) (*Session, 
 	if err := p.lifecycleJSON(ctx, http.MethodPost, "/sandboxes", body, &created); err != nil {
 		return nil, err
 	}
-	session := &Session{ID: created.SandboxID}
+	session := &Session{
+		ID: created.SandboxID, CreatedAt: time.Now().UTC(),
+		Data: map[string]string{"usage_timestamp_source": "provider_create_response_observed"},
+	}
 	if created.SandboxID == "" || created.EnvdVersion == "" {
 		if created.SandboxID == "" {
 			return nil, fmt.Errorf("%s returned an incomplete sandbox response", p.Name())
@@ -186,11 +189,12 @@ func (p *E2BProvider) Create(ctx context.Context, req CreateRequest) (*Session, 
 		return session, err
 	}
 	session.Data = map[string]string{
-		"envd_url":             envdURL,
-		"envd_version":         created.EnvdVersion,
-		"envd_access_token":    created.EnvdAccessToken,
-		"traffic_access_token": created.TrafficAccessToken,
-		"isolation":            p.cfg.Isolation,
+		"envd_url":               envdURL,
+		"envd_version":           created.EnvdVersion,
+		"envd_access_token":      created.EnvdAccessToken,
+		"traffic_access_token":   created.TrafficAccessToken,
+		"isolation":              p.cfg.Isolation,
+		"usage_timestamp_source": "provider_create_response_observed",
 	}
 	if err := p.makeDirectory(ctx, session, WorkspaceRoot); err != nil {
 		return session, fmt.Errorf("initialize %s workspace: %w", p.Name(), err)
@@ -233,7 +237,11 @@ func (p *E2BProvider) ResolveProvisioning(
 		if item.SandboxID == "" {
 			return nil, fmt.Errorf("%s provisioning inventory returned an empty sandbox identity", p.Name())
 		}
-		result = append(result, &Session{ID: item.SandboxID})
+		session := &Session{ID: item.SandboxID, CreatedAt: item.StartedAt}
+		if !item.StartedAt.IsZero() {
+			session.Data = map[string]string{"usage_timestamp_source": "provider_started_at"}
+		}
+		result = append(result, session)
 	}
 	return result, nil
 }
@@ -521,13 +529,30 @@ func (p *E2BProvider) List(ctx context.Context, workspaceID string) ([]SandboxSt
 	if workspaceID == "" {
 		return nil, fmt.Errorf("workspace_id is required")
 	}
-	listed, err := p.listSandboxes(ctx, map[string]string{"agentarea.workspace_id": workspaceID})
+	return p.listInventory(ctx, workspaceID)
+}
+
+func (p *E2BProvider) listUsage(ctx context.Context) ([]SandboxStatus, string, error) {
+	items, err := p.listInventory(ctx, "")
+	return items, "provider_readback", err
+}
+
+func (p *E2BProvider) listInventory(ctx context.Context, workspaceID string) ([]SandboxStatus, error) {
+	metadata := map[string]string{}
+	if workspaceID != "" {
+		metadata["agentarea.workspace_id"] = workspaceID
+	}
+	listed, err := p.listSandboxes(ctx, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("%s inventory: %w", p.Name(), err)
 	}
 	result := make([]SandboxStatus, 0, len(listed))
 	for _, item := range listed {
-		if item.Metadata["agentarea.workspace_id"] != workspaceID || item.SandboxID == "" {
+		// Unscoped usage inventory excludes resources not provisioned by AgentArea.
+		if workspaceID == "" && (item.Metadata["agentarea.workspace_id"] == "" || item.Metadata["agentarea.provisioning_id"] == "") {
+			continue
+		}
+		if (workspaceID != "" && item.Metadata["agentarea.workspace_id"] != workspaceID) || item.SandboxID == "" {
 			return nil, fmt.Errorf("%s inventory returned a sandbox outside the requested workspace", p.Name())
 		}
 		if item.Metadata["agentarea.provisioning_id"] == "" {
@@ -546,7 +571,7 @@ func (p *E2BProvider) List(ctx context.Context, workspaceID string) ([]SandboxSt
 		result = append(result, SandboxStatus{
 			ID:          item.SandboxID,
 			Provider:    p.Name(),
-			WorkspaceID: workspaceID,
+			WorkspaceID: item.Metadata["agentarea.workspace_id"],
 			TaskID:      item.Metadata["agentarea.task_id"],
 			State:       item.State,
 			CreatedAt:   item.StartedAt,

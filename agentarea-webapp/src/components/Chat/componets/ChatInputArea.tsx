@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import {
   ArrowUp,
   FolderKanban,
+  Loader2,
   Paperclip,
   Pause,
   Play,
@@ -19,10 +20,13 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { getAgentIconComponent, resolveAgentIdentity } from "@/lib/agent-identity";
+import {
+  getAgentIconComponent,
+  resolveAgentIdentity,
+} from "@/lib/agent-identity";
 import { cn } from "@/lib/utils";
-import { ContextSelect } from "./ContextSelect";
 import { MentionMenu } from "../MentionMenu";
+import { ContextSelect } from "./ContextSelect";
 
 const NO_PROJECT_VALUE = "__no_project__";
 const DEFAULT_TASK_POLICY_VALUE = "__default_task_policy__";
@@ -69,6 +73,9 @@ export interface ChatInputAreaProps {
    */
   isLoading: boolean;
 
+  /** Keep drafting available while temporarily preventing submission. */
+  isSubmitDisabled?: boolean;
+
   /**
    * Placeholder text
    */
@@ -88,6 +95,14 @@ export interface ChatInputAreaProps {
    * Open file dialog handler
    */
   onOpenFileDialog: () => void;
+
+  /**
+   * File selection handler
+   */
+  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+
+  /** Optional delivery constraint shown when files are selected. */
+  attachmentNotice?: string;
 
   /**
    * File input ref
@@ -130,6 +145,9 @@ export interface ChatInputAreaProps {
    */
   showSendButton?: boolean;
 
+  /** Hide attachment controls on surfaces that cannot deliver files. */
+  showAttachments?: boolean;
+
   /**
    * Send button icon variant
    */
@@ -158,7 +176,7 @@ export interface ChatInputAreaProps {
     name: string;
     description?: string | null;
     icon?: string | null;
-    color_token?: string | null;
+   
   };
 
   /**
@@ -169,7 +187,7 @@ export interface ChatInputAreaProps {
     name: string;
     description?: string | null;
     icon?: string | null;
-    color_token?: string | null;
+   
   }>;
 
   /**
@@ -180,7 +198,7 @@ export interface ChatInputAreaProps {
     name: string;
     description?: string | null;
     icon?: string | null;
-    color_token?: string | null;
+   
   }) => void;
 
   /**
@@ -281,17 +299,21 @@ export function ChatInputArea({
   onInputChange,
   onSubmit,
   isLoading,
+  isSubmitDisabled = false,
   placeholder,
   selectedFiles,
   onRemoveFile,
   onOpenFileDialog,
+  onFileSelect,
+  attachmentNotice,
   fileInputRef,
   textareaRef,
   onKeyDown,
   mentionProps,
   containerRef,
-  variant = "default",
+  variant: _variant = "default",
   showSendButton = true,
+  showAttachments = true,
   sendButtonIcon = "arrow",
   rows = 3,
   className,
@@ -319,18 +341,11 @@ export function ChatInputArea({
     Boolean(availableTaskPolicies?.length && onTaskPolicyChange);
 
   return (
-    <div
-      ref={containerRef}
-      className={cn(
-        "w-full",
-        // variant === "centered" && "mx-auto max-w-3xl",
-        containerClassName
-      )}
-    >
+    <div ref={containerRef} className={cn("w-full", containerClassName)}>
       <form
         onSubmit={onSubmit}
         className={cn(
-          "relative flex flex-col gap-2 transition-all duration-700 ease-out",
+          "relative flex flex-col overflow-hidden rounded-xl border border-border bg-background transition-colors focus-within:border-foreground/30 focus-within:ring-1 focus-within:ring-foreground/10",
           className
         )}
       >
@@ -340,19 +355,19 @@ export function ChatInputArea({
           onChange={onInputChange}
           placeholder={placeholder}
           disabled={isLoading}
-          className={cn(
-            "resize-none transition-all duration-700 ease-out",
-            variant === "centered"
-              ? "min-h-auto h-auto border-none pb-0 pr-12 pt-3"
-              : "max-h-[72px] min-h-[40px] rounded-3xl border py-2 pr-12 transition-colors duration-200 focus:border-primary/50"
-          )}
+          className="min-h-[48px] max-h-48 resize-none rounded-none border-0 bg-transparent px-4 pb-2 pt-3 text-[15px] leading-6 text-foreground shadow-none transition-none placeholder:text-muted-foreground/70 focus-visible:border-transparent dark:bg-transparent sm:min-h-[68px] sm:text-[13px] sm:leading-[21px]"
           rows={rows}
           onKeyDown={onKeyDown}
         />
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 px-2.5 pb-2.5">
           {/* Selected Files Display */}
-          <div className="flex flex-row flex-wrap gap-2">
+          <div
+            className={cn(
+              "flex flex-row flex-wrap gap-2",
+              selectedFiles.length === 0 && "hidden"
+            )}
+          >
             {selectedFiles.length > 0 &&
               selectedFiles.map((file, index) => (
                 <AttachmentCard
@@ -363,6 +378,14 @@ export function ChatInputArea({
                 />
               ))}
           </div>
+          {selectedFiles.length > 0 && attachmentNotice ? (
+            <p
+              role="status"
+              className="px-1 text-[11px] leading-4 text-muted-foreground"
+            >
+              {attachmentNotice}
+            </p>
+          ) : null}
 
           <div className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
             {showContextControls ? (
@@ -451,16 +474,19 @@ export function ChatInputArea({
 
             {/* Action Buttons */}
             <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onOpenFileDialog}
-                disabled={isLoading}
-                className="h-8 w-8 rounded-full p-0 hover:bg-zinc-200 hover:text-text dark:hover:bg-gray-800"
-              >
-                <Paperclip />
-              </Button>
+              {showAttachments && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={onOpenFileDialog}
+                  disabled={isLoading}
+                  aria-label="Attach files"
+                  className="h-8 w-8 rounded-md p-0 text-muted-foreground hover:bg-muted hover:text-foreground dark:hover:bg-muted"
+                >
+                  <Paperclip />
+                </Button>
+              )}
 
               {showSendButton && (
                 <>
@@ -471,13 +497,10 @@ export function ChatInputArea({
                       variant="outline"
                       onClick={onResume}
                       disabled={isResuming}
-                      className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
+                      aria-label="Resume"
+                      className="h-8 w-8 rounded-md border-border text-foreground shadow-none hover:border-border hover:bg-muted hover:text-foreground"
                     >
-                      {isResuming ? (
-                        <LoadingSpinner size="sm" />
-                      ) : (
-                        <Play />
-                      )}
+                      {isResuming ? <LoadingSpinner size="sm" /> : <Play />}
                     </Button>
                   ) : isLoading && onStop ? (
                     <Button
@@ -486,7 +509,8 @@ export function ChatInputArea({
                       variant="destructive"
                       onClick={onStop}
                       disabled={isStopping}
-                      className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
+                      aria-label="Pause"
+                      className="h-8 w-8 rounded-md shadow-none"
                     >
                       {isStopping ? (
                         <LoadingSpinner variant="light" size="sm" />
@@ -498,14 +522,19 @@ export function ChatInputArea({
                     <Button
                       type="submit"
                       size="icon"
+                      aria-label="Send message"
                       disabled={
                         isLoading ||
+                        isSubmitDisabled ||
                         (!input.trim() && selectedFiles.length === 0)
                       }
-                      className="h-8 w-8 rounded-full shadow-sm transition-all duration-200 hover:shadow-md"
+                      className="h-8 w-8 rounded-md bg-foreground text-background shadow-none hover:bg-foreground/85 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
                     >
                       {isLoading ? (
-                        <LoadingSpinner variant="light" size="sm" />
+                        <Loader2
+                          aria-hidden
+                          className="animate-spin motion-reduce:animate-none"
+                        />
                       ) : (
                         <SendIcon />
                       )}
@@ -535,10 +564,7 @@ export function ChatInputArea({
         ref={fileInputRef}
         type="file"
         multiple
-        onChange={(_e) => {
-          // This is a bit hacky, but we don't have a direct handler for file select
-          // The parent component should handle this via fileInputRef
-        }}
+        onChange={onFileSelect}
         className="hidden"
         accept="*/*"
       />

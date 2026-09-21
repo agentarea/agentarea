@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getTaskEvents } from "@/hooks/actions";
-import { apiErrorMessage } from "@/lib/api-errors";
 import { useSSE } from "@/hooks/useSSE";
+import { apiErrorMessage, type ApiResultLike } from "@/lib/api-errors";
 import type {
   DisplayEvent,
   EventLevel,
   WorkflowEventType,
 } from "@/types/events";
 import { canonicalType, EventInput, Part, TERMINAL_TYPES } from "./contract";
+import { loadAllTaskEventPages, TaskEventsHistoryError } from "./history";
 import { normalizeHistory, normalizeSSEEvent } from "./normalize";
 import {
   applyEvent,
+  CompletedRun,
   EventState,
   initialState,
-  TimelineItem,
   TaskStatus,
+  TimelineItem,
 } from "./reducer";
 
 /**
@@ -116,6 +118,7 @@ export interface UseTaskEventsResult {
   status: TaskStatus;
   pendingForm: Part | null;
   terminalMessage: string | null;
+  completedRuns: CompletedRun[];
   rawEvents: DisplayEvent[];
   loading: boolean;
   error: string | null;
@@ -244,15 +247,18 @@ export function useTaskEvents(
 
     void (async () => {
       try {
-        const result = await getTaskEvents(agentId, taskId, {
-          page: 1,
-          page_size: 100,
-        });
-        const data = result.data;
-        if (result.error || !data) {
-          throw new Error(apiErrorMessage(result, "Failed to load events"));
-        }
         if (cancelled) return;
+
+        const historyEvents = await loadAllTaskEventPages(
+          (page, pageSize) =>
+            getTaskEvents(agentId, taskId, {
+              page,
+              page_size: pageSize,
+            }),
+          100,
+          () => cancelled
+        );
+        if (cancelled || historyEvents === null) return;
 
         let next = initialState();
         const rows: DisplayEvent[] = [];
@@ -260,7 +266,7 @@ export function useTaskEvents(
         // while its event is still only in a local `next` would strand it if
         // this loop threw: applied nowhere, yet skipped forever after.
         const foldedIds: string[] = [];
-        for (const event of data.events) {
+        for (const event of historyEvents) {
           const input = normalizeHistory(event);
           if (isControl(input.eventType)) continue;
           const id = eventIdOf(input.data as RawData);
@@ -282,7 +288,16 @@ export function useTaskEvents(
         setRawEvents(rows);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Failed to load events");
+        setError(
+          err instanceof TaskEventsHistoryError
+            ? apiErrorMessage(
+                err.result as ApiResultLike,
+                "Failed to load events"
+              )
+            : err instanceof Error
+              ? err.message
+              : "Failed to load events"
+        );
       } finally {
         if (!cancelled) {
           // Replay whatever streamed in while the fetch was running, in arrival
@@ -323,6 +338,7 @@ export function useTaskEvents(
     status: state.status,
     pendingForm: findPendingForm(state.parts),
     terminalMessage: state.terminalMessage,
+    completedRuns: state.completedRuns,
     rawEvents,
     loading,
     error,

@@ -22,7 +22,7 @@ async def _chunks(*values: bytes):
 
 
 @pytest.mark.asyncio
-async def test_workspace_listing_projects_logical_task_paths_and_hides_storage_keys(
+async def test_workspace_listing_keeps_task_files_out_of_the_workspace_view(
     monkeypatch,
 ) -> None:
     artifact_service = SimpleNamespace(
@@ -69,12 +69,9 @@ async def test_workspace_listing_projects_logical_task_paths_and_hides_storage_k
 
     result = await files.list_workspace_files(SimpleNamespace(workspace_id="ws-1"), project_service)
 
-    assert [item.path for item in result.files] == [
-        "projects/p-1/report.txt",
-        "tasks/t-1/workspace/downloads/image.png",
-    ]
-    workspace_repository.list.assert_awaited_once_with("ws-1", "t-1")
-    workspace_repository.list_task_ids.assert_awaited_once_with("ws-1")
+    assert [item.path for item in result.files] == ["projects/p-1/report.txt"]
+    workspace_repository.list.assert_not_awaited()
+    workspace_repository.list_task_ids.assert_not_awaited()
 
 
 @pytest.mark.asyncio

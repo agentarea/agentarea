@@ -1,3 +1,9 @@
+import type { EntityKind } from "@/lib/entity-icons";
+import {
+  domainInitials,
+  faviconSources,
+  type EntityIdentity,
+} from "@/lib/entity-identity";
 import type {
   NetworkEdgeData,
   NetworkNodeData,
@@ -8,6 +14,46 @@ type AgentConnection = {
   edge: NetworkEdgeData;
   node: NetworkNodeData;
 };
+
+const nodeKinds: Record<NetworkNodeData["type"], EntityKind> = {
+  agent: "agent",
+  mcp_instance: "mcp",
+  openapi_connection: "client",
+  skill: "skill",
+  trigger: "trigger",
+};
+
+function metadataString(
+  node: NetworkNodeData,
+  key: string
+): string | undefined {
+  const value = node.metadata[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/**
+ * How a topology node is depicted, from what `/topology` told us about it: the
+ * MCP registry logo first, then the favicon of the host the connection points
+ * at, then the kind's own mark. The graph never loads the connection records
+ * themselves, which is why those nodes carry `icon_url`, `endpoint_host` and
+ * `base_url` — everything needed to show a service as itself.
+ */
+export function getNodeIdentity(node: NetworkNodeData): EntityIdentity {
+  const kind = nodeKinds[node.type];
+  const logo = metadataString(node, "icon_url");
+  if (logo) return { kind, sources: [logo] };
+
+  const baseUrl = metadataString(node, "base_url");
+  const host = metadataString(node, "endpoint_host") ?? baseUrl;
+  return {
+    kind,
+    sources: faviconSources(host),
+    initials:
+      node.type === "openapi_connection"
+        ? domainInitials(baseUrl, node.label)
+        : undefined,
+  };
+}
 
 export function getNetworkScope(
   node: NetworkNodeData

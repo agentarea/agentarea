@@ -52,7 +52,7 @@ async def service(db_session):
 
 class TestBrowseCatalog:
     async def test_returns_page_total_and_facets_from_one_call(self, service):
-        items, total, categories = await service.browse_catalog("skills", limit=10)
+        items, total, categories, protocols = await service.browse_catalog("skills", limit=10)
         assert [i.name for i in items] == [
             "xls-merge--acme--3",  # featured floats to the top
             "csv-clean--acme--2",
@@ -61,20 +61,24 @@ class TestBrowseCatalog:
         ]
         assert total == 4
         assert categories == [("data", 2), ("other", 1)]
+        # Skills are one kind of thing; only connections split MCP vs API.
+        assert protocols == []
 
     async def test_a_category_page_beyond_the_first_still_reports_the_total(self, service):
         # The ?category=other shape: paging must keep working when the current
         # slice contributes nothing visible.
-        items, total, _ = await service.browse_catalog("skills", category="data", limit=1, offset=5)
+        items, total, _, _ = await service.browse_catalog(
+            "skills", category="data", limit=1, offset=5
+        )
         assert items == []
         assert total == 2
 
     async def test_facets_ignore_the_active_category_so_you_can_switch_away(self, service):
-        _, _, categories = await service.browse_catalog("skills", category="data")
+        _, _, categories, _ = await service.browse_catalog("skills", category="data")
         assert categories == [("data", 2), ("other", 1)]
 
-    async def test_name_sort_drops_the_featured_priority(self, service):
-        items, _, _ = await service.browse_catalog("skills", sort="name", limit=10)
+    async def test_name_sort_drops_the_curation_priority(self, service):
+        items, _, _, _ = await service.browse_catalog("skills", sort="name", limit=10)
         assert [i.name for i in items] == [
             "csv-clean--acme--2",
             "odd-one--acme--4",
@@ -83,13 +87,13 @@ class TestBrowseCatalog:
         ]
 
     async def test_search_narrows_the_page_the_total_and_the_facets_together(self, service):
-        items, total, categories = await service.browse_catalog("skills", query="csv")
+        items, total, categories, _ = await service.browse_catalog("skills", query="csv")
         assert [i.name for i in items] == ["csv-clean--acme--2"]
         assert total == 1
         assert categories == [("data", 1)]
 
     async def test_paging_partitions_the_catalog(self, service):
-        first, total, _ = await service.browse_catalog("skills", limit=2, offset=0)
-        second, _, _ = await service.browse_catalog("skills", limit=2, offset=2)
+        first, total, _, _ = await service.browse_catalog("skills", limit=2, offset=0)
+        second, _, _, _ = await service.browse_catalog("skills", limit=2, offset=2)
         assert len({i.id for i in [*first, *second]}) == 4
         assert total == 4

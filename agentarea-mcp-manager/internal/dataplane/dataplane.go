@@ -111,6 +111,7 @@ func (s *Server) Routes(router gin.IRouter) {
 	})
 
 	group := router.Group("/dataplane/v1", s.authenticate)
+	group.GET("/usage", s.sampleUsage)
 	group.POST("/instances", s.createInstance)
 	group.GET("/instances", s.listInstances)
 	group.GET("/instances/:id", s.getInstance)

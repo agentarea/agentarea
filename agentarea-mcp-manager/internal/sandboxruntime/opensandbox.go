@@ -224,14 +224,15 @@ func (p *OpenSandboxProvider) Create(ctx context.Context, req CreateRequest) (*S
 	if err != nil {
 		return nil, err
 	}
-	session := &Session{ID: sandbox.ID()}
+	session := &Session{ID: sandbox.ID(), CreatedAt: time.Now().UTC()}
 	session.Data = map[string]string{
-		"isolation":        p.cfg.Isolation,
-		"runtime_identity": p.cfg.RuntimeIdentity,
-		"image":            image,
-		"cpu":              p.cfg.ResourceCPU,
-		"memory":           p.cfg.ResourceMemory,
-		"storage":          p.cfg.ResourceStorage,
+		"isolation":              p.cfg.Isolation,
+		"runtime_identity":       p.cfg.RuntimeIdentity,
+		"image":                  image,
+		"cpu":                    p.cfg.ResourceCPU,
+		"memory":                 p.cfg.ResourceMemory,
+		"storage":                p.cfg.ResourceStorage,
+		"usage_timestamp_source": "provider_sdk_create_completed",
 	}
 	// The one-shot connection above is scoped to the non-idempotent create.
 	// Reconnect by the returned identity so safe GET/exec/file operations retain
@@ -240,7 +241,7 @@ func (p *OpenSandboxProvider) Create(ctx context.Context, req CreateRequest) (*S
 	if err != nil {
 		return session, fmt.Errorf("connect provisioned OpenSandbox sandbox: %w", mapOpenSandboxError(err))
 	}
-	if err := p.verifyCreatedSandbox(ctx, sandbox, image, metadata); err != nil {
+	if err := p.verifyCreatedSandbox(ctx, sandbox, session, image, metadata); err != nil {
 		return session, err
 	}
 	if err := p.verifyExecutionSupervisor(ctx, sandbox, req.Supervisor); err != nil {
@@ -290,7 +291,11 @@ func (p *OpenSandboxProvider) ResolveProvisioning(
 			if info.ID == "" {
 				return nil, fmt.Errorf("OpenSandbox provisioning inventory returned an empty sandbox identity")
 			}
-			result = append(result, &Session{ID: info.ID})
+			session := &Session{ID: info.ID, CreatedAt: info.CreatedAt}
+			if !info.CreatedAt.IsZero() {
+				session.Data = map[string]string{"usage_timestamp_source": "provider_started_at"}
+			}
+			result = append(result, session)
 		}
 		if !response.Pagination.HasNextPage {
 			return result, nil
@@ -302,6 +307,7 @@ func (p *OpenSandboxProvider) ResolveProvisioning(
 func (p *OpenSandboxProvider) verifyCreatedSandbox(
 	ctx context.Context,
 	sandbox *opensandbox.Sandbox,
+	session *Session,
 	image string,
 	metadata map[string]string,
 ) error {
@@ -311,6 +317,10 @@ func (p *OpenSandboxProvider) verifyCreatedSandbox(
 	}
 	if info == nil || info.ID != sandbox.ID() {
 		return fmt.Errorf("OpenSandbox control plane returned an inconsistent sandbox identity")
+	}
+	if !info.CreatedAt.IsZero() {
+		session.CreatedAt = info.CreatedAt
+		session.Data["usage_timestamp_source"] = "provider_started_at"
 	}
 	if info.Image == nil {
 		return fmt.Errorf("OpenSandbox control plane did not report the bound image")
@@ -809,11 +819,24 @@ func (p *OpenSandboxProvider) List(ctx context.Context, workspaceID string) ([]S
 	if workspaceID == "" {
 		return nil, fmt.Errorf("workspace_id is required")
 	}
+	return p.listInventory(ctx, workspaceID)
+}
+
+func (p *OpenSandboxProvider) listUsage(ctx context.Context) ([]SandboxStatus, string, error) {
+	items, err := p.listInventory(ctx, "")
+	return items, "validated_allocation_metadata", err
+}
+
+func (p *OpenSandboxProvider) listInventory(ctx context.Context, workspaceID string) ([]SandboxStatus, error) {
+	metadataFilter := map[string]string{}
+	if workspaceID != "" {
+		metadataFilter["agentarea.workspace_id"] = workspaceID
+	}
 	manager := opensandbox.NewSandboxManager(p.cfg.Connection)
 	result := make([]SandboxStatus, 0)
 	for page := 1; page <= maxOpenSandboxInventoryPages; page++ {
 		response, err := manager.ListSandboxInfos(ctx, opensandbox.ListOptions{
-			Metadata: map[string]string{"agentarea.workspace_id": workspaceID},
+			Metadata: metadataFilter,
 			Page:     page,
 			PageSize: 100,
 		})
@@ -825,7 +848,10 @@ func (p *OpenSandboxProvider) List(ctx context.Context, workspaceID string) ([]S
 				continue
 			}
 			metadata := info.Metadata
-			if metadata["agentarea.workspace_id"] != workspaceID {
+			if workspaceID == "" && (metadata["agentarea.workspace_id"] == "" || metadata["agentarea.provisioning_id"] == "") {
+				continue
+			}
+			if workspaceID != "" && metadata["agentarea.workspace_id"] != workspaceID {
 				return nil, fmt.Errorf("OpenSandbox inventory returned sandbox %s outside workspace scope", info.ID)
 			}
 			if metadata["agentarea.provisioning_id"] == "" {

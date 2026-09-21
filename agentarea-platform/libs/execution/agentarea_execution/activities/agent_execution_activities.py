@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import datetime
 from pathlib import PurePosixPath
@@ -39,7 +40,6 @@ from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationRequest,
     authorize_tool_invocation,
 )
-from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.events.contract import LLM_FAILED, canonical_type
 from agentarea_common.money import ZERO, to_money
 from prometheus_client import Counter
@@ -48,6 +48,7 @@ from prometheus_client import Counter
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
+from .. import llm_execution_service
 from ..exceptions import AgentNotFoundError, ModelInstanceNotFoundError, NoModelBoundError
 from ..interfaces import ActivityDependencies
 
@@ -107,28 +108,6 @@ from .heartbeat import auto_heartbeater
 from .runtime_discovery import fetch_runtime_manifest, render_runtime_prompt, runtime_event_data
 
 logger = logging.getLogger(__name__)
-
-
-def resolve_llm_max_tokens(
-    *,
-    requested: int | None,
-    model_cap: int | None,
-    effective_policy: dict[str, Any] | None,
-) -> int:
-    """Resolve the strictest output-token ceiling with no runtime fallback."""
-    policy_cap = ((effective_policy or {}).get("tokens") or {}).get("max_tokens_per_call")
-    if not isinstance(policy_cap, int) or policy_cap <= 0:
-        raise ValueError(
-            "effective policy is missing required runtime limit tokens.max_tokens_per_call"
-        )
-    candidates = [policy_cap]
-    for name, value in (("request.max_tokens", requested), ("model.max_output_tokens", model_cap)):
-        if value is None:
-            continue
-        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-            raise ValueError(f"{name} must be a positive integer")
-        candidates.append(value)
-    return min(candidates)
 
 
 def _make_counter(name: str, doc: str, labels: list[str] | None = None):
@@ -483,54 +462,6 @@ def _enqueue_last_dispatch(instance_id: str, payload: dict) -> None:
         _mcp_last_dispatch_dropped_total.inc()
 
 
-async def _resolve_provider_api_key(
-    *,
-    reference: str | None,
-    managed_by: str | None,
-    user_context: Any,
-    dependencies: ActivityDependencies,
-) -> str | None:
-    """Read the credential this call runs on, from the workspace that owns it.
-
-    ``reference`` is a secret name in both cases. What differs is whose secrets are
-    searched, which is the whole reason this is one function and not a branch
-    repeated at each call site:
-
-      * tenant configuration (managed_by unset) — the caller's own workspace;
-      * platform configuration — the platform workspace, which only the operator
-        writes and which no tenant-scoped read can reach. The scoping that keeps
-        tenants out of each other's secrets is what keeps them out of this one.
-
-    Getting this branch wrong in either direction is silent: the name resolves to
-    None in the wrong workspace and the provider answers 401, which reads as "the
-    user's key is broken" — the one thing neither case is.
-    """
-    if not reference:
-        return None
-
-    from agentarea_common.config import get_database
-
-    if managed_by == MANAGED_BY_PLATFORM:
-        from agentarea_common.auth.context import UserContext
-        from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
-
-        secret_context: Any = UserContext(
-            user_id=PLATFORM_PRINCIPAL_ID,
-            workspace_id=PLATFORM_WORKSPACE_ID,
-        )
-    else:
-        secret_context = user_context
-
-    secret_session = get_database().async_session_factory()
-    try:
-        secret_manager = dependencies.secret_manager_factory.create(
-            session=secret_session, user_context=secret_context
-        )
-        return await secret_manager.get_secret(reference)
-    finally:
-        await secret_session.close()
-
-
 def make_agent_activities(dependencies: ActivityDependencies):
     """Factory function to create agent activities with injected dependencies.
 
@@ -548,6 +479,17 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
     # Create service container
     container = ActivityServiceContainer(dependencies)
+
+    @asynccontextmanager
+    async def model_service_scope(user_context: UserContext):
+        async with ActivityContext(container, user_context) as ctx:
+            yield await ctx.get_model_instance_service()
+
+    llm_service = llm_execution_service.LLMExecutionService(
+        model_service_scope=model_service_scope,
+        secret_manager_factory=dependencies.secret_manager_factory,
+        local_host=dependencies.settings.app.local_host,
+    )
 
     @activity.defn
     async def discover_runtime_manifest_activity() -> RuntimeDiscoveryResult:
@@ -847,218 +789,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
     async def call_llm_activity(
         request: LLMCallRequest,
     ) -> LLMCallResult:
-        """Call LLM with messages and optional tools using streaming."""
-        provider_type: Any | None = None
+        """Adapt one model call to Temporal and the task event transport."""
 
-        try:
-            # model_id must be a UUID representing a model instance ID
-            try:
-                model_uuid = UUID(request.model_id)
-            except ValueError as e:
-                raise ValueError(
-                    f"Invalid model_id: {request.model_id}. "
-                    "Must be a valid UUID representing a model instance."
-                ) from e
-
-            # Create context - prefer workspace_id, fallback to user_context_data
-            if request.workspace_id:
-                user_context = create_user_context(request.user_context_data)
-            elif request.user_context_data:
-                user_context = create_user_context(request.user_context_data)
-            else:
-                raise ValueError("Either workspace_id or user_context_data must be provided")
-
-            # Dual path: use cached resolved_model if provided, else fall back to DB lookup
-            provider_type = None
-            model_name = None
-            endpoint_url = None
-            api_key = None
-            max_output_tokens = None
-            input_cost_per_token = None
-            output_cost_per_token = None
-
-            if request.resolved_model:
-                cached = request.resolved_model
-                provider_type = cached.get("provider_type")
-                model_name = cached.get("model_name")
-                endpoint_url = cached.get("endpoint_url")
-                max_output_tokens = cached.get("max_output_tokens")
-                input_cost_per_token = cached.get("input_cost_per_token")
-                output_cost_per_token = cached.get("output_cost_per_token")
-                api_key_secret_name = cached.get("api_key_secret")
-                if api_key_secret_name:
-                    try:
-                        api_key = await _resolve_provider_api_key(
-                            reference=api_key_secret_name,
-                            managed_by=cached.get("managed_by"),
-                            user_context=user_context,
-                            dependencies=dependencies,
-                        )
-                    except Exception as decrypt_err:
-                        logger.warning(
-                            f"Failed to decrypt cached API key for model {request.model_id}, "
-                            f"falling back to DB lookup: {decrypt_err}",
-                            exc_info=True,
-                        )
-                        # Fall through to DB lookup below
-                        provider_type = None
-
-            if provider_type is None:
-                # Full DB lookup (initial path or fallback from failed cache decrypt)
-                async with ActivityContext(container, user_context) as ctx:
-                    model_instance_service = await ctx.get_model_instance_service()
-                    model_instance = await model_instance_service.get(model_uuid)
-                    if not model_instance:
-                        raise ModelInstanceNotFoundError(
-                            f"Model instance with ID {request.model_id} not found"
-                        )
-
-                    # Extract required parameters from model instance
-                    provider_type = model_instance.provider_config.provider_spec.provider_type
-                    model_name = model_instance.model_spec.model_name
-                    # endpoint_url lives on provider_config (ollama, self-hosted, etc.), not model_spec.
-                    endpoint_url = getattr(
-                        model_instance.provider_config, "endpoint_url", None
-                    ) or getattr(model_instance.model_spec, "endpoint_url", None)
-
-                    # Decode API key from secret manager
-                    # (provider_config.api_key is a secret name/placeholder)
-                    max_output_tokens = getattr(
-                        model_instance.model_spec, "max_output_tokens", None
-                    )
-                    input_cost_per_token = getattr(
-                        model_instance.model_spec, "input_cost_per_token", None
-                    )
-                    output_cost_per_token = getattr(
-                        model_instance.model_spec, "output_cost_per_token", None
-                    )
-                    api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
-                    if api_key_secret_name:
-                        api_key = await _resolve_provider_api_key(
-                            reference=api_key_secret_name,
-                            managed_by=getattr(model_instance.provider_config, "managed_by", None),
-                            user_context=user_context,
-                            dependencies=dependencies,
-                        )
-                    else:
-                        logger.warning(f"No API key found for model instance {model_instance.id}")
-
-            if input_cost_per_token is None or output_cost_per_token is None:
-                raise ValueError("model pricing is not configured; run budget cannot be enforced")
-
-            if endpoint_url:
-                local_host = dependencies.settings.app.local_host
-                endpoint_url = endpoint_url.replace("localhost", local_host).replace(
-                    "127.0.0.1", local_host
-                )
-
-            llm_model = LLMModel(
-                provider_type=str(provider_type),
-                model_name=str(model_name),
-                api_key=api_key,
-                endpoint_url=endpoint_url,
-                input_cost_per_token=input_cost_per_token,
-                output_cost_per_token=output_cost_per_token,
-            )
-
-            # Create structured request
-            effective_max_tokens = resolve_llm_max_tokens(
-                requested=request.max_tokens,
-                model_cap=max_output_tokens,
-                effective_policy=request.effective_policy,
-            )
-
-            llm_request = LLMRequest(
-                messages=request.messages,
-                tools=request.tools,
-                temperature=request.temperature,
-                max_tokens=effective_max_tokens,
-            )
-
-            # Use streaming with ainvoke_stream and publish events
-            complete_content = ""
-            complete_thinking = ""
-            complete_tool_calls = None
-            final_usage = None
-            final_cost = 0.0
-            chunk_index = 0
-
-            # Create event publisher if we have task context
-            event_publisher = None
-            if request.task_id:
-                event_publisher = create_event_publisher(
-                    dependencies.event_broker,
-                    request.task_id,
-                    execution_id=request.execution_id,
-                    iteration=request.iteration,
-                    broker_client=dependencies.broker_client,
-                )
-
-            # Stream the response and collect chunks
-            async for chunk_response in llm_model.ainvoke_stream(llm_request):
-                # Accumulate and publish reasoning/thinking chunks
-                if chunk_response.reasoning_content:
-                    complete_thinking += chunk_response.reasoning_content
-                    if event_publisher:
-                        await event_publisher(
-                            chunk_response.reasoning_content,
-                            chunk_index,
-                            False,
-                            chunk_type="thinking",
-                        )
-                        chunk_index += 1
-
-                # Accumulate content
-                if chunk_response.content:
-                    complete_content += chunk_response.content
-
-                    # Publish chunk event
-                    if event_publisher:
-                        await event_publisher(chunk_response.content, chunk_index, False)
-                        chunk_index += 1
-
-                # Update tool calls (they come complete in each chunk)
-                if chunk_response.tool_calls:
-                    complete_tool_calls = chunk_response.tool_calls
-
-                # Update usage and cost information
-                if chunk_response.usage:
-                    final_usage = chunk_response.usage
-                if chunk_response.cost and chunk_response.cost > 0:
-                    final_cost = max(final_cost, chunk_response.cost)
-
-            if final_usage is None or getattr(final_usage, "total_tokens", 0) <= 0:
-                raise RuntimeError(
-                    "LLM usage accounting unavailable; token and cost policy cannot be enforced"
-                )
-
-            # Publish final chunk event
-            if event_publisher:
-                await event_publisher("", chunk_index, True)
-
-            # Create final response using Pydantic model
-            usage_model = None
-            if final_usage:
-                usage_model = LLMUsage(
-                    prompt_tokens=getattr(final_usage, "prompt_tokens", 0),
-                    completion_tokens=getattr(final_usage, "completion_tokens", 0),
-                    total_tokens=getattr(final_usage, "total_tokens", 0),
-                )
-
-            return LLMCallResult(
-                role="assistant",
-                content=complete_content,
-                thinking=complete_thinking,
-                tool_calls=complete_tool_calls,
-                cost=to_money(final_cost),
-                usage=usage_model,
-            )
-
-        except Exception as e:
-            # Enhanced error handling - create enriched error event if we have event context
+        async def on_error(error: Exception, provider_type: str | None) -> None:
             if request.task_id and request.agent_id and dependencies.event_broker:
                 await publish_enriched_llm_error_event(
-                    error=e,
+                    error=error,
                     task_id=request.task_id,
                     agent_id=request.agent_id,
                     execution_id=request.execution_id or "",
@@ -1067,21 +803,44 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     event_broker=dependencies.event_broker,
                 )
 
-            error_type = type(e).__name__
-            error_message = str(e)
+        try:
+            try:
+                if not request.workspace_id and not request.user_context_data:
+                    raise ValueError("Either workspace_id or user_context_data must be provided")
+                user_context = create_user_context(request.user_context_data)
+            except Exception as error:
+                try:
+                    await on_error(error, None)
+                except Exception:
+                    logger.exception("Failed to publish LLM context error")
+                raise
 
-            # Simplified error raising - workflow will handle enriched events
-            logger.error(f"LLM call failed: {error_message}")
-            from temporalio.exceptions import ApplicationError
+            on_chunk = None
+            if request.task_id:
+                on_chunk = create_event_publisher(
+                    dependencies.event_broker,
+                    request.task_id,
+                    execution_id=request.execution_id,
+                    iteration=request.iteration,
+                    broker_client=dependencies.broker_client,
+                )
 
-            # Import error checking functions from event_publisher
+            return await llm_service.execute(
+                request,
+                user_context=user_context,
+                on_chunk=on_chunk,
+                on_error=on_error,
+            )
+        except Exception as error:
             from .event_publisher import _is_non_retryable_error
 
+            error_message = str(error)
+            logger.error(f"LLM call failed: {error_message}")
             raise ApplicationError(
                 f"LLM call failed: {error_message}",
-                type=error_type,
-                non_retryable=_is_non_retryable_error(e),
-            ) from e
+                type=type(error).__name__,
+                non_retryable=_is_non_retryable_error(error),
+            ) from error
 
     @activity.defn
     @auto_heartbeater
@@ -2018,11 +1777,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
                     try:
-                        api_key = await _resolve_provider_api_key(
+                        api_key = await llm_execution_service.resolve_provider_api_key(
                             reference=api_key_secret_name,
                             managed_by=cached.get("managed_by"),
                             user_context=user_context,
-                            dependencies=dependencies,
+                            secret_manager_factory=dependencies.secret_manager_factory,
                         )
                     except Exception as decrypt_err:
                         logger.warning(
@@ -2059,11 +1818,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                     if api_key_secret_name:
-                        api_key = await _resolve_provider_api_key(
+                        api_key = await llm_execution_service.resolve_provider_api_key(
                             reference=api_key_secret_name,
                             managed_by=getattr(model_instance.provider_config, "managed_by", None),
                             user_context=user_context,
-                            dependencies=dependencies,
+                            secret_manager_factory=dependencies.secret_manager_factory,
                         )
 
             if input_cost_per_token is None or output_cost_per_token is None:
@@ -2125,7 +1884,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     },
                     {"role": "user", "content": compaction_prompt},
                 ],
-                max_tokens=resolve_llm_max_tokens(
+                max_tokens=llm_execution_service.resolve_llm_max_tokens(
                     requested=None,
                     model_cap=max_output_tokens,
                     effective_policy=request.effective_policy,

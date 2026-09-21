@@ -484,6 +484,7 @@ export const zCatalogItemCreate = z.object({
   description: z.string().nullish(),
   external_id: z.string().min(1).max(500),
   name: z.string().min(1).max(255),
+  recommendation_rank: z.number().int().gte(0).nullish(),
   spec: z.record(z.unknown()).optional(),
   tags: z.array(z.string()).optional(),
   version: z.string().max(100).nullish(),
@@ -806,15 +807,18 @@ export const zExecutionLimitsPolicy = z.object({
  * Response model for execution metrics.
  */
 export const zExecutionMetricsResponse = z.object({
+  avg_cost_usd: z.number().optional().default(0),
   avg_execution_time_ms: z.number(),
+  costed_executions: z.number().int().optional().default(0),
   failed_executions: z.number().int(),
   failure_rate: z.number(),
   max_execution_time_ms: z.number().int(),
   min_execution_time_ms: z.number().int(),
-  period_hours: z.number().int(),
+  period_hours: z.number().int().nullish(),
   success_rate: z.number(),
   successful_executions: z.number().int(),
   timeout_executions: z.number().int(),
+  total_cost_usd: z.number().optional().default(0),
   total_executions: z.number().int(),
   trigger_id: z.string().uuid(),
 });
@@ -2060,6 +2064,7 @@ export const zProviderSpecResponse = z.object({
 export const zRegistryCreate = z.object({
   description: z.string().nullish(),
   name: z.string(),
+  recommendation_priority: z.number().int().gte(0).nullish(),
   registry_type: z.string(),
   source_type: z.string(),
   source_url: z.string().nullish(),
@@ -2092,14 +2097,19 @@ export const zRegistryItemResponse = z.object({
  *
  * One page of a type's catalog plus the context needed to browse it.
  *
- * ``total`` and ``categories`` cover the whole filtered catalog, not the page:
+ * ``total`` and the facets cover the whole filtered catalog, not the page:
  * without them a page that happens to contain no visible matches is
  * indistinguishable from the end of the catalog, and facet counts drift as
  * more pages load.
+ *
+ * ``protocols`` is populated for the connections catalog only, where an entry
+ * is either an MCP server or a plain HTTP API; every other type holds one
+ * kind of thing and gets an empty list.
  */
 export const zCatalogBrowseResponse = z.object({
   categories: z.array(zCategoryFacet),
   items: z.array(zRegistryItemResponse),
+  protocols: z.array(zCategoryFacet),
   total: z.number().int(),
 });
 
@@ -2115,6 +2125,7 @@ export const zRegistryResponse = z.object({
   last_sync_error: z.string().nullable(),
   last_synced_at: z.string().nullable(),
   name: z.string(),
+  recommendation_priority: z.number().int(),
   registry_type: z.string(),
   source_type: z.string(),
   source_url: z.string(),
@@ -2129,6 +2140,7 @@ export const zRegistryUpdate = z.object({
   description: z.string().nullish(),
   is_active: z.boolean().nullish(),
   name: z.string().nullish(),
+  recommendation_priority: z.number().int().gte(0).nullish(),
   source_url: z.string().nullish(),
   sync_mode: z.string().nullish(),
 });
@@ -2940,6 +2952,7 @@ export const zTriggerExecuteRequest = z.object({
  * Response model for trigger execution data.
  */
 export const zTriggerExecutionResponse = z.object({
+  cost_usd: z.number().nullish(),
   error_message: z.string().nullish(),
   executed_at: z.string(),
   execution_time_ms: z.number().int(),
@@ -3081,6 +3094,33 @@ export const zAgentOverviewResponse = z.object({
 export const zUpdateAllResponse = z.object({
   errors: z.number().int(),
   updated: z.number().int(),
+});
+
+/**
+ * UsageEventResponse
+ */
+export const zUsageEventResponse = z.object({
+  data_json: z.string(),
+  id: z.string(),
+  incarnation_id: z.string(),
+  kind: z.string(),
+  occurred_at: z.string(),
+  received_at: z.string(),
+  resource_id: z.string(),
+  resource_kind: z.string(),
+  schema_version: z.number().int(),
+  sequence: z.string(),
+  source: z.string(),
+  task_id: z.string(),
+  workspace_id: z.string(),
+});
+
+/**
+ * UsageEventListResponse
+ */
+export const zUsageEventListResponse = z.object({
+  events: z.array(zUsageEventResponse),
+  next_cursor: z.string().nullable(),
 });
 
 /**
@@ -5109,6 +5149,7 @@ export const zBrowseCatalogV1RegistriesCatalogBrowseGetQuery = z.object({
   registry_type: z.string(),
   q: z.string().nullish(),
   category: z.string().nullish(),
+  protocol: z.enum(["mcp", "api"]).nullish(),
   sort: z.string().nullish(),
   limit: z.number().int().gte(1).lte(500).optional().default(50),
   offset: z.number().int().gte(0).optional().default(0),
@@ -5726,7 +5767,7 @@ export const zGetExecutionMetricsV1TriggersTriggerIdMetricsGetPath = z.object({
 });
 
 export const zGetExecutionMetricsV1TriggersTriggerIdMetricsGetQuery = z.object({
-  hours: z.number().int().gte(1).lte(168).optional().default(24),
+  hours: z.number().int().gte(1).lte(8760).nullish(),
 });
 
 /**
@@ -5778,6 +5819,26 @@ export const zGetExecutionTimelineV1TriggersTriggerIdTimelineGetQuery =
  */
 export const zGetExecutionTimelineV1TriggersTriggerIdTimelineGetResponse =
   zExecutionTimelineResponse;
+
+export const zListUsageEventsV1UsageEventsGetQuery = z.object({
+  source: z.string().nullish(),
+  kind: z.string().nullish(),
+  resource_kind: z.string().nullish(),
+  resource_id: z.string().nullish(),
+  task_id: z.string().nullish(),
+  from: z.string().nullish(),
+  until: z.string().nullish(),
+  cursor: z
+    .string()
+    .regex(/^[1-9]\d{0,18}$/)
+    .nullish(),
+  limit: z.number().int().gte(1).lte(100).optional().default(50),
+});
+
+/**
+ * Successful Response
+ */
+export const zListUsageEventsV1UsageEventsGetResponse = zUsageEventListResponse;
 
 /**
  * Successful Response

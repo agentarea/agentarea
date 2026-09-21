@@ -1,9 +1,7 @@
 """LLM output ceilings must come from the persisted effective policy."""
 
 import pytest
-from agentarea_execution.activities.agent_execution_activities import (
-    resolve_llm_max_tokens,
-)
+from agentarea_execution.llm_execution_service import resolve_llm_max_tokens
 
 
 def _policy(cap: int) -> dict:

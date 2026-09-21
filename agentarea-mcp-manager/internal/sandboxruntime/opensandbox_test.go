@@ -296,6 +296,7 @@ func TestOpenSandboxDeleteUsesLifecycleAPIWithoutExecdResolution(t *testing.T) {
 func TestOpenSandboxRejectsDifferentDigestFromControlPlane(t *testing.T) {
 	const expectedImage = "agentarea/runtime@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	const actualImage = "agentarea/runtime@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	providerCreatedAt := time.Date(2026, 9, 18, 12, 0, 0, 123456789, time.UTC)
 	var metadata map[string]string
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -314,7 +315,8 @@ func TestOpenSandboxRejectsDifferentDigestFromControlPlane(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/sandboxes/osb-1":
 			_ = json.NewEncoder(w).Encode(opensandbox.SandboxInfo{
 				ID: "osb-1", Image: &opensandbox.ImageSpec{URI: actualImage}, Metadata: metadata,
-				Status: opensandbox.SandboxStatus{State: opensandbox.StateRunning},
+				Status:    opensandbox.SandboxStatus{State: opensandbox.StateRunning},
+				CreatedAt: providerCreatedAt,
 			})
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/sandboxes/osb-1/endpoints/44772":
 			_ = json.NewEncoder(w).Encode(opensandbox.Endpoint{Endpoint: server.URL})
@@ -340,12 +342,15 @@ func TestOpenSandboxRejectsDifferentDigestFromControlPlane(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = provider.Create(context.Background(), CreateRequest{
+	session, err := provider.Create(context.Background(), CreateRequest{
 		WorkspaceID: "workspace-1", TaskID: "task-1", ProvisioningID: "provision-1",
 		Supervisor: testSupervisorAttestation(),
 	})
 	if err == nil || !strings.Contains(err.Error(), "bound image") {
 		t.Fatalf("Create() error = %v, want strict digest mismatch", err)
+	}
+	if session == nil || !session.CreatedAt.Equal(providerCreatedAt) || session.Data["usage_timestamp_source"] != "provider_started_at" {
+		t.Fatalf("failed initialization lost provider allocation timestamp: %+v", session)
 	}
 }
 

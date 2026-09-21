@@ -30,6 +30,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/sandboxrunner"
 	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 	"github.com/agentarea/mcp-manager/internal/secrets"
+	"github.com/agentarea/mcp-manager/internal/usage"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 	"github.com/agentarea/mcp-manager/internal/workspace"
 )
@@ -46,6 +47,7 @@ func (a *backendAdapter) CreateInstance(ctx context.Context, spec *providers.Bac
 	// Convert providers spec to backends spec
 	innerSpec := &backends.InstanceSpec{
 		InstanceID:  spec.InstanceID,
+		WorkspaceID: spec.WorkspaceID,
 		Name:        spec.Name,
 		ServiceName: spec.ServiceName,
 		Image:       spec.Image,
@@ -262,32 +264,9 @@ func main() {
 	// Container-backed MCP traffic always crosses this demand boundary. It is
 	// the sole owner of cold start, request leases, and idle reclamation; Python
 	// only speaks ordinary MCP Streamable HTTP to the stable manager endpoint.
-	gatewayPolicy, err := mcpgateway.LoadPolicyFromEnv()
-	if err != nil {
-		logger.Error("Failed to configure MCP demand gateway", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	imagePolicy, err := mcpgateway.LoadImagePolicyFromEnv()
-	if err != nil {
-		logger.Error("Failed to configure MCP instance admission", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	gatewayRepository, err := mcpgateway.OpenSQLRepository(ctx, database.BuildConnStr(logger))
-	if err != nil {
-		logger.Error("Failed to initialize MCP demand gateway state", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
+	mcpGateway, gatewayRepository, usageStore := initDemandGateway(ctx, cfg, providerManager, backend, remoteUpstream, logger)
 	defer gatewayRepository.Close()
-	gatewayRuntime, err := mcpgateway.NewProviderRuntime(providerManager, backend, cfg, imagePolicy, gatewayPolicy.StartupTimeout, remoteUpstream)
-	if err != nil {
-		logger.Error("Failed to initialize MCP demand runtime", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	mcpGateway, err := mcpgateway.New(gatewayRepository, gatewayRuntime, gatewayPolicy, logger, remoteUpstream)
-	if err != nil {
-		logger.Error("Failed to initialize MCP demand gateway", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
+	defer usageStore.Close()
 
 	// The MCP backend and sandbox data plane are independent. A built-in
 	// sandbox provider needs the backend runtime; external providers do not.
@@ -303,6 +282,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer sandboxStore.Close()
+	startUsageConsumer(ctx, cancel, usage.NewConsumer(sandboxStore.RedisClient(), usageStore, logger), logger)
+	if instrumented, ok := builtinSandboxRuntime.(interface{ SetUsageRecorder(usage.Recorder) }); ok {
+		instrumented.SetUsageRecorder(usageStore)
+	}
 	baseSandboxRuntime, sandboxProviderName, err := sandboxruntime.NewFromEnv(
 		ctx,
 		builtinSandboxRuntime,
@@ -314,6 +297,9 @@ func main() {
 	if err != nil {
 		logger.Error("Failed to configure sandbox runtime", slog.String("error", err.Error()))
 		os.Exit(1)
+	}
+	if instrumented, ok := baseSandboxRuntime.(interface{ SetUsageRecorder(usage.Recorder) }); ok {
+		instrumented.SetUsageRecorder(usageStore)
 	}
 	workspaceProvider, err := sandboxruntime.LoadWorkspaceProviderFromEnv()
 	if err != nil {
@@ -348,6 +334,7 @@ func main() {
 		logger.Error("Failed to configure sandbox artifact store", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+	artifactRepository.SetUsageRecorder(usageStore)
 	handler.SetSandboxArtifactStore(artifactRepository)
 	handler.SetupRoutes(router)
 	router.Any("/mcp/:instance_id/mcp", gin.WrapH(mcpGateway))
@@ -374,6 +361,7 @@ func main() {
 	}
 
 	go mcpGateway.StartReaper(ctx)
+	startUsageCollectors(ctx, envType, backend, sandboxProviderName, baseSandboxRuntime, artifactRepository, usageStore, logger)
 
 	// Start HTTP server
 	server := &http.Server{
@@ -398,7 +386,11 @@ func main() {
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	select {
+	case <-quit:
+	case <-ctx.Done():
+	}
+	cancel()
 
 	logger.Info("Shutting down server...")
 
@@ -423,6 +415,69 @@ func main() {
 	}
 
 	logger.Info("Server shutdown complete")
+}
+
+func initDemandGateway(ctx context.Context, cfg *config.Config, providerManager *providers.ProviderManager, backend backends.Backend, remoteUpstream *mcpgateway.RemoteUpstream, logger *slog.Logger) (*mcpgateway.Gateway, *mcpgateway.SQLRepository, *usage.Store) {
+	gatewayPolicy, err := mcpgateway.LoadPolicyFromEnv()
+	if err != nil {
+		logger.Error("Failed to configure MCP demand gateway", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	imagePolicy, err := mcpgateway.LoadImagePolicyFromEnv()
+	if err != nil {
+		logger.Error("Failed to configure MCP instance admission", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	gatewayRepository, err := mcpgateway.OpenSQLRepository(ctx, database.BuildConnStr(logger))
+	if err != nil {
+		logger.Error("Failed to initialize MCP demand gateway state", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	usageStore, err := usage.OpenStore(ctx, database.BuildConnStr(logger))
+	if err != nil {
+		logger.Error("Failed to initialize resource usage storage", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	gatewayRuntime, err := mcpgateway.NewProviderRuntime(providerManager, backend, cfg, imagePolicy, gatewayPolicy.StartupTimeout, remoteUpstream)
+	if err != nil {
+		logger.Error("Failed to initialize MCP demand runtime", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	mcpGateway, err := mcpgateway.New(gatewayRepository, gatewayRuntime, gatewayPolicy, logger, remoteUpstream)
+	if err != nil {
+		logger.Error("Failed to initialize MCP demand gateway", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	gatewayRuntime.SetUsageRecorder(usageStore)
+	mcpGateway.SetUsageRecorder(usageStore)
+	return mcpGateway, gatewayRepository, usageStore
+}
+
+func startUsageConsumer(ctx context.Context, cancel context.CancelFunc, consumer *usage.Consumer, logger *slog.Logger) {
+	go func() {
+		if err := consumer.Run(ctx); err != nil && ctx.Err() == nil {
+			logger.Error("Resource usage persistence stopped", slog.String("error", err.Error()))
+			cancel()
+		}
+	}()
+}
+
+func startUsageCollectors(ctx context.Context, envType string, backend backends.Backend, sandboxProviderName string, sandboxRuntime sandboxruntime.ManagedRuntime, artifactRepository *artifactstore.Repository, store *usage.Store, logger *slog.Logger) {
+	if sampler, ok := backend.(usage.Sampler); ok {
+		go runRuntimeUsage(ctx, sampler, store, time.Minute, logger)
+	} else {
+		logger.Error("Selected backend does not support resource usage sampling", slog.String("backend", envType))
+		os.Exit(1)
+	}
+	if sandboxProviderName != "docker" && sandboxProviderName != "kubernetes" && sandboxProviderName != "agentarea" {
+		sampler, ok := sandboxRuntime.(usage.Sampler)
+		if !ok {
+			logger.Error("Selected sandbox provider does not support usage observations", slog.String("provider", sandboxProviderName))
+			os.Exit(1)
+		}
+		go runRuntimeUsage(ctx, sampler, store, time.Minute, logger)
+	}
+	go runStorageUsage(ctx, artifactRepository, store, 5*time.Minute, logger)
 }
 
 // setupLogging configures structured logging

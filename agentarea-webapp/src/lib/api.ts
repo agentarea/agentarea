@@ -11,8 +11,8 @@ import type {
   TaskResponse as ApiTaskResponse,
   CatalogConnectionRequest,
   CreateInvitationBody,
-  CreateWorkspaceDirectoryRequest,
   CreateWalletRequest,
+  CreateWorkspaceDirectoryRequest,
   FundWalletRequest,
   HttpValidationError,
   InstallRequest,
@@ -38,10 +38,10 @@ import type {
   PaginatedResponseSkillResponse,
   PolicyRuleCreateRequest,
   PolicyRuleUpdateRequest,
+  PrincipalResponse,
   ProjectCreate,
   ProjectResponse,
   ProjectUpdate,
-  PrincipalResponse,
   ProviderConfigCreate,
   ProviderConfigResponse,
   ProviderConfigUpdate,
@@ -1246,10 +1246,7 @@ export const getTrigger = async (triggerId: string) => {
   return withStatus(result);
 };
 
-export const updateTrigger = async (
-  triggerId: string,
-  body: TriggerUpdate
-) => {
+export const updateTrigger = async (triggerId: string, body: TriggerUpdate) => {
   const { data, error } = await sdk.updateTriggerV1TriggersTriggerIdPut({
     client: serverClient,
     path: { trigger_id: triggerId },
@@ -1316,11 +1313,18 @@ export const getTriggerExecutions = async (
   return { data, error };
 };
 
-export const getTriggerMetrics = async (triggerId: string) => {
+export const getTriggerMetrics = async (
+  triggerId: string,
+  params?: {
+    /** Window in hours. Omit for the trigger's whole history. */
+    hours?: number;
+  }
+) => {
   const { data, error } =
     await sdk.getExecutionMetricsV1TriggersTriggerIdMetricsGet({
       client: serverClient,
       path: { trigger_id: triggerId },
+      query: params,
     });
   return { data, error };
 };
@@ -1928,11 +1932,14 @@ export const listWorkspaceFiles = async () => {
   return { data, error };
 };
 
-export const createWorkspaceDirectory = async (body: CreateWorkspaceDirectoryRequest) => {
-  const { data, error } = await sdk.createWorkspaceDirectoryV1FilesDirectoriesPost({
-    client: serverClient,
-    body,
-  });
+export const createWorkspaceDirectory = async (
+  body: CreateWorkspaceDirectoryRequest
+) => {
+  const { data, error } =
+    await sdk.createWorkspaceDirectoryV1FilesDirectoriesPost({
+      client: serverClient,
+      body,
+    });
   return { data, error };
 };
 
@@ -2190,8 +2197,6 @@ export const listAuditLogs = async (params?: {
   return { data, error };
 };
 
-
-
 // Convenience helpers built on top of the generated API
 interface TaskEventRecord {
   id: string;
@@ -2268,12 +2273,14 @@ export const listProviderConfigsWithModelInstances = async (params?: {
 // the concatenation, so every page past the first skipped a slice of each
 // registry, and "is there more" was guessed from the merged page length.
 //
-// `total` and `categories` describe the whole filtered catalog, not this page,
+// `total` and the facets describe the whole filtered catalog, not this page,
 // so the caller can tell "nothing matched here yet" apart from "that's all".
 export const browseCatalog = async (params: {
   registryType: string;
   q?: string;
   category?: string;
+  /** Connections only; mirrors CatalogProtocol on the backend. */
+  protocol?: "mcp" | "api";
   sort?: string;
   limit: number;
   offset: number;
@@ -2284,6 +2291,7 @@ export const browseCatalog = async (params: {
       registry_type: params.registryType,
       q: params.q || undefined,
       category: params.category || undefined,
+      protocol: params.protocol || undefined,
       sort: params.sort || undefined,
       limit: params.limit,
       offset: params.offset,
@@ -2294,6 +2302,7 @@ export const browseCatalog = async (params: {
       items: [],
       total: 0,
       categories: [],
+      protocols: [],
       error: error ?? "Failed to load catalog",
     };
   }
@@ -2301,6 +2310,7 @@ export const browseCatalog = async (params: {
     items: data.items,
     total: data.total,
     categories: data.categories,
+    protocols: data.protocols,
     error: null,
   };
 };

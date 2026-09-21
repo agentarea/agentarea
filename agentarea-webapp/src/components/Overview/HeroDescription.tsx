@@ -6,7 +6,7 @@ import { HoverLink } from "@/components/ui/hover-link";
 import { cn } from "@/lib/utils";
 
 /**
- * One-line agent description with a "Show more" toggle that only appears when
+ * One-line entity description with a "Show more" toggle that only appears when
  * the text actually overflows its single line.
  */
 export function HeroDescription({

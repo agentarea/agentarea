@@ -1,14 +1,19 @@
 import React from "react";
+import type {
+  A2UIAction,
+  HumanInputSecretValue,
+} from "@/components/Chat/types";
 import type { Part } from "../contract";
+import { A2uiPart } from "./A2uiPart";
+import { ArtifactPart } from "./ArtifactPart";
+import { FormPart } from "./FormPart";
 import { TextPart } from "./TextPart";
 import { ToolPart } from "./ToolPart";
-import { FormPart } from "./FormPart";
-import { ArtifactPart } from "./ArtifactPart";
-import { A2uiPart } from "./A2uiPart";
-import type { A2UIAction, HumanInputSecretValue } from "@/components/Chat/types";
 
 interface PartRendererProps {
   part: Part;
+  onToolInspect?: () => void;
+  suppressUnavailableDetails?: boolean;
   onFormSubmit?: (
     inputRequestId: string,
     answers: Record<string, unknown>,
@@ -24,6 +29,8 @@ interface PartRendererProps {
 /** Dispatch a Part to its kind-specific renderer. */
 export const PartRenderer: React.FC<PartRendererProps> = ({
   part,
+  onToolInspect,
+  suppressUnavailableDetails,
   onFormSubmit,
   onA2UIAction,
 }) => {
@@ -31,7 +38,13 @@ export const PartRenderer: React.FC<PartRendererProps> = ({
     case "llm":
       return <TextPart part={part} />;
     case "tool":
-      return <ToolPart part={part} />;
+      return (
+        <ToolPart
+          part={part}
+          onInspect={onToolInspect}
+          suppressUnavailableDetails={suppressUnavailableDetails}
+        />
+      );
     case "form":
       return <FormPart part={part} onSubmit={onFormSubmit} />;
     case "artifact":

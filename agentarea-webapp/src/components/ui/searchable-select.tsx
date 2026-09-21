@@ -111,18 +111,20 @@ export function SearchableSelect({
   const renderIcon = (option: SelectOption) => {
     if (option.icon) {
       return (
-        <Image
-          src={option.icon}
-          alt={option.label}
-          width={20}
-          height={20}
-          className="h-5 w-5 rounded dark:invert"
-          onError={(e) => {
-            if (defaultIcon) {
-              e.currentTarget.style.display = "none";
-            }
-          }}
-        />
+        <span className="avatar-plate grid h-6 w-6 flex-shrink-0 place-items-center rounded-[6px]">
+          <Image
+            src={option.icon}
+            alt={option.label}
+            width={20}
+            height={20}
+            className="h-[16px] w-[16px] object-contain"
+            onError={(e) => {
+              if (defaultIcon) {
+                e.currentTarget.style.display = "none";
+              }
+            }}
+          />
+        </span>
       );
     }
 

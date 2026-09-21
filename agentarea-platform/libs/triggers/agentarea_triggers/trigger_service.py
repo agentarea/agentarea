@@ -1593,12 +1593,14 @@ class TriggerService:
 
         return executions, total
 
-    async def get_execution_metrics(self, trigger_id: UUID, hours: int = 24) -> dict[str, Any]:
+    async def get_execution_metrics(
+        self, trigger_id: UUID, hours: int | None = 24
+    ) -> dict[str, Any]:
         """Get execution metrics for a trigger.
 
         Args:
             trigger_id: The trigger ID
-            hours: Time period in hours
+            hours: Time period in hours; ``None`` covers the trigger's whole history
 
         Returns:
             Dictionary with execution metrics

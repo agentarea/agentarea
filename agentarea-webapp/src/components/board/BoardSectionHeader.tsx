@@ -24,7 +24,7 @@ export function BoardSectionHeader({
 }) {
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <EntityAvatar variant="soft" size={22} color={color} icon={icon} lines={false} />
+      <EntityAvatar variant="soft" size={22} color={color} icon={icon} />
       <h2 className="m-0 text-[15px] font-semibold tracking-[-0.018em] text-foreground">
         {title}
       </h2>

@@ -66,7 +66,7 @@ func TestContainerLifecycleIntegration(t *testing.T) {
 	// Start container creation in goroutine
 	errChan := make(chan error, 1)
 	go func() {
-		err := manager.HandleMCPInstanceCreated(ctx, instanceID, name, jsonSpec)
+		err := manager.HandleMCPInstanceCreated(ctx, instanceID, name, "ws-test", jsonSpec)
 		errChan <- err
 	}()
 
@@ -275,7 +275,7 @@ func TestContainerLifecycleValidationFlow(t *testing.T) {
 	// Start validation in goroutine
 	errChan := make(chan error, 1)
 	go func() {
-		err := manager.HandleMCPInstanceCreated(ctx, instanceID, name, invalidSpec)
+		err := manager.HandleMCPInstanceCreated(ctx, instanceID, name, "ws-test", invalidSpec)
 		errChan <- err
 	}()
 

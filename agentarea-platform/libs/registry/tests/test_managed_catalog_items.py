@@ -30,6 +30,7 @@ def _service(*, source_type: str = "managed", registry_type: str = "mcp_servers"
         update=AsyncMock(),
         delete=AsyncMock(return_value=True),
         count_by_registry=AsyncMock(return_value=1),
+        next_recommendation_rank=AsyncMock(return_value=7),
     )
     return RegistryService(registry_repo, item_repo, server_repo=None), registry, item_repo
 
@@ -70,6 +71,37 @@ async def test_create_managed_openapi_item_derives_gallery_facets_and_updates_co
     assert written["sort_key"] == "yandex metrica"
     assert written["featured"] is True
     service.registry_repo.update.assert_awaited_once_with(registry.id, item_count=1)
+
+
+async def test_an_unranked_publication_lands_after_the_existing_catalog():
+    # A managed registry has no source order to read a position from. Leaving
+    # the rank at 0 would tie the new item with everything already published
+    # and let the alphabetical tiebreak jump it to the front of /explore.
+    service, registry, item_repo = _service()
+    item_repo.create.return_value = SimpleNamespace(id=uuid4())
+
+    await service.create_catalog_item(
+        registry.id, external_id="x", name="Later", spec={}, tags=[]
+    )
+
+    assert item_repo.create.await_args.kwargs["recommendation_rank"] == 7
+
+
+async def test_a_publisher_can_place_an_item_explicitly():
+    service, registry, item_repo = _service()
+    item_repo.create.return_value = SimpleNamespace(id=uuid4())
+
+    await service.create_catalog_item(
+        registry.id,
+        external_id="x",
+        name="First",
+        spec={},
+        tags=[],
+        recommendation_rank=0,
+    )
+
+    assert item_repo.create.await_args.kwargs["recommendation_rank"] == 0
+    item_repo.next_recommendation_rank.assert_not_awaited()
 
 
 async def test_direct_write_rejects_a_synchronized_registry():

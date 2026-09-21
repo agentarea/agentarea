@@ -2,25 +2,27 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
 import { browseCatalog } from "@/lib/api";
+import {
+  ALL,
+  DEFAULT_SORT,
+  EXPLORE_VIEW_COOKIE,
+  isCatalogProtocol,
+  isSortMode,
+  normalize,
+  PAGE,
+  REGISTRY_TYPE,
+  toCatalogType,
+  type CatalogEntry,
+  type CatalogType,
+  type RegistryItem,
+  type SortMode,
+} from "../bundles/components/catalog-data";
 import CatalogGallery, {
   ExplorePendingProvider,
   ExploreSortSelect,
   ExploreTypeTabs,
   ExploreViewToggle,
 } from "../bundles/components/CatalogGallery";
-import {
-  ALL,
-  DEFAULT_SORT,
-  EXPLORE_VIEW_COOKIE,
-  PAGE,
-  isCatalogType,
-  isSortMode,
-  normalize,
-  type CatalogEntry,
-  type CatalogType,
-  type RegistryItem,
-  type SortMode,
-} from "../bundles/components/catalog-data";
 
 export const metadata: Metadata = {
   title: "Explore",
@@ -44,10 +46,13 @@ function param(v: string | string[] | undefined): string | undefined {
 // new props, so loaded state can never go stale.
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   const sp = await searchParams;
-  const type: CatalogType = isCatalogType(sp.type) ? sp.type : "bundles";
+  const type: CatalogType = toCatalogType(sp.type) ?? "bundles";
   const query = param(sp.q);
   const categoryParam = param(sp.category);
-  const category = categoryParam && categoryParam !== ALL ? categoryParam : undefined;
+  const category =
+    categoryParam && categoryParam !== ALL ? categoryParam : undefined;
+  // Junk in the URL means "unfiltered" rather than an error page.
+  const protocol = isCatalogProtocol(sp.protocol) ? sp.protocol : undefined;
   const sort: SortMode = isSortMode(sp.sort) ? sp.sort : DEFAULT_SORT;
 
   // Persisted grid/table choice: URL param wins, otherwise the cookie written
@@ -61,10 +66,11 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         ? "table"
         : "grid";
 
-  const { items, total, categories, error } = await browseCatalog({
-    registryType: type,
+  const { items, total, categories, protocols, error } = await browseCatalog({
+    registryType: REGISTRY_TYPE[type],
     q: query,
     category,
+    protocol,
     sort,
     limit: PAGE,
     offset: 0,
@@ -98,6 +104,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
           initialEntries={entries}
           initialTotal={total}
           initialCategories={categories}
+          initialProtocols={protocols}
           initialError={error ? "Failed to load catalog." : null}
           initialView={initialView}
         />

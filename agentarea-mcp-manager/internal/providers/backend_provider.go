@@ -21,6 +21,7 @@ const (
 // (local copy to avoid import cycle).
 type BackendInstanceSpec struct {
 	InstanceID  string
+	WorkspaceID string
 	Name        string
 	ServiceName string
 	Image       string
@@ -134,6 +135,7 @@ func (p *BackendProvider) convertToInstanceSpec(instance *models.MCPServerInstan
 	// unreachable forever.
 	spec := &BackendInstanceSpec{
 		InstanceID:  instance.InstanceID,
+		WorkspaceID: instance.WorkspaceID,
 		Name:        instance.InstanceID,
 		ServiceName: instance.InstanceID,
 	}

@@ -1,15 +1,11 @@
-// Agent visual identity helpers.
+// Agent visual identity: which glyph an agent wears and which hue tints it.
 //
-// Identity is layered:
-//   1. Deterministic-from-id colour + icon (free; works without any backend
-//      change — used as fallback)
-//   2. User-overridden icon and colour (planned: agents.icon /
-//      agents.color_token columns; see follow-up)
-//
-// Public API:
-//   - resolveAgentIdentity(agent) → { color, iconKey }
-//   - AGENT_ICONS (the curated Lucide set the picker exposes)
-//   - getAgentIconComponent(iconKey) → Lucide component
+// Colour is derived from the agent's id and nothing else — see
+// `@/lib/avatar-hue` for the ramp. The glyph is *not*: it used to be picked by
+// the same hash, which handed the researcher a pickaxe and the guard a
+// calculator, and a wrong-on-purpose icon reads as a bug rather than as
+// identity. The curated set below is what a picker offers; until an agent has
+// been given one, every agent wears the same neutral `bot`.
 
 import {
   Bot,
@@ -22,7 +18,6 @@ import {
   GitBranch,
   Headphones,
   Languages,
-  type LucideIcon,
   Mailbox,
   Pencil,
   Pickaxe,
@@ -33,7 +28,16 @@ import {
   Sparkles,
   Wrench,
   Zap,
+  type LucideIcon,
 } from "lucide-react";
+import {
+  deterministicHue,
+  isAvatarHue,
+  type AvatarHue,
+} from "@/lib/avatar-hue";
+
+/** The glyph an agent wears when it has not been given one. */
+export const DEFAULT_AGENT_ICON = "bot";
 
 // Curated Lucide subset for the picker. Names are what we'd surface in UI;
 // keys are stable strings stored on the agent (never localise these).
@@ -64,56 +68,28 @@ const ICON_BY_KEY: Record<string, LucideIcon> = Object.fromEntries(
   AGENT_ICONS.map((i) => [i.key, i.Icon])
 );
 
-// Token names from `tailwind.config.ts` — each maps to a real CSS variable.
-export const AGENT_COLOR_TOKENS = [
-  "chart-1",
-  "chart-2",
-  "chart-3",
-  "chart-4",
-  "chart-5",
-  "primary",
-  "accent",
-] as const;
-export type AgentColorToken = (typeof AGENT_COLOR_TOKENS)[number];
-
-function hash(str: string): number {
-  // djb2-ish — small but well-distributed for our 7-colour space.
-  let h = 5381;
-  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
-export function resolveAgentIdentity(agent: {
+export interface AgentIdentityInput {
   id: string;
   name?: string | null;
+  /** A key from `AGENT_ICONS`, once the agent has been given one. */
   icon?: string | null;
-  color_token?: string | null;
-}): { colorToken: AgentColorToken; iconKey: string } {
-  const seed = hash(agent.id || agent.name || "agent");
-  const fallbackColor = AGENT_COLOR_TOKENS[seed % AGENT_COLOR_TOKENS.length];
-  const fallbackIcon = AGENT_ICONS[seed % AGENT_ICONS.length].key;
+  /** A name from the avatar ramp, once the agent has been given one. */
+  hue?: string | null;
+}
 
-  const colorToken = (
-    agent.color_token && AGENT_COLOR_TOKENS.includes(agent.color_token as AgentColorToken)
-      ? agent.color_token
-      : fallbackColor
-  ) as AgentColorToken;
-  const iconKey =
-    agent.icon && ICON_BY_KEY[agent.icon] ? agent.icon : fallbackIcon;
-
-  return { colorToken, iconKey };
+export function resolveAgentIdentity(agent: AgentIdentityInput): {
+  hue: AvatarHue;
+  iconKey: string;
+} {
+  return {
+    hue: isAvatarHue(agent.hue)
+      ? agent.hue
+      : deterministicHue(agent.id || agent.name || "agent"),
+    iconKey:
+      agent.icon && ICON_BY_KEY[agent.icon] ? agent.icon : DEFAULT_AGENT_ICON,
+  };
 }
 
 export function getAgentIconComponent(iconKey: string): LucideIcon {
   return ICON_BY_KEY[iconKey] ?? Bot;
-}
-
-// Helper for inline styles — gets the HSL from the CSS variable so
-// custom colours mix with the theme cleanly.
-export function agentColorVar(token: AgentColorToken): string {
-  return `hsl(var(--${token}))`;
-}
-
-export function agentColorVarSoft(token: AgentColorToken, alpha = 0.15): string {
-  return `hsl(var(--${token}) / ${alpha})`;
 }

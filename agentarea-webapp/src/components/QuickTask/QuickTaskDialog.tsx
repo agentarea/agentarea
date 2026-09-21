@@ -21,7 +21,7 @@ export const QUICK_TASK_OPEN_EVENT = "workplace:quick-task-open";
 /** Agents carry a couple of presentational fields not in the generated schema. */
 type ApiAgent = AgentResponse & {
   icon?: string | null;
-  color_token?: string | null;
+ 
 };
 
 type ApiProject = ProjectResponse;
@@ -108,7 +108,6 @@ export default function QuickTaskDialog() {
             name: a.name,
             description: a.description ?? null,
             icon: a.icon ?? null,
-            color_token: a.color_token ?? null,
           })
         );
         const projectList: ProjectOption[] = (

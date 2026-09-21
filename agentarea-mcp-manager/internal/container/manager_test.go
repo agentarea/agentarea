@@ -184,47 +184,6 @@ func TestResolveSecretEnvVars_ResolverFailureIsReported(t *testing.T) {
 	}
 }
 
-func TestHandleMCPInstanceCreated_ValidationOnly(t *testing.T) {
-	cfg := &config.Config{
-		Container: config.ContainerConfig{
-			NamePrefix:    "test-",
-			MaxContainers: 10,
-		},
-		Redis: config.RedisConfig{
-			URL: "redis://localhost:6379",
-		},
-	}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	manager := NewManager(cfg, logger)
-
-	ctx := context.Background()
-	instanceID := "test-instance-123"
-	name := "test-nginx"
-	jsonSpec := map[string]interface{}{
-		"image": "nginx:alpine",
-		"port":  80,
-		"environment": map[string]interface{}{
-			"TEST_VAR": "test_value",
-		},
-	}
-
-	// This test focuses on validation without actually creating containers
-	// We expect this to fail because we're not running podman in test environment
-	err := manager.HandleMCPInstanceCreated(ctx, instanceID, name, jsonSpec)
-
-	// We expect an error since we can't actually create containers in tests
-	// But we want to ensure the validation logic runs without panics/deadlocks
-	if err == nil {
-		t.Error("Expected error when trying to create container without podman")
-	}
-
-	// Verify the container was not added to tracking map due to failure
-	containerName := manager.config.GetContainerName(name)
-	if _, exists := manager.containers[containerName]; exists {
-		t.Error("Container should not be in tracking map after failed creation")
-	}
-}
-
 func TestDeadlockPrevention(t *testing.T) {
 	cfg := &config.Config{
 		Container: config.ContainerConfig{

@@ -4,6 +4,12 @@ import type {
   TopologyResponse,
 } from "../types";
 import { getNetworkScope } from "./networkConnections";
+import {
+  CARD_HEIGHT,
+  MIN_LANE_WIDTH,
+  NETWORK_AGENT_WIDTH,
+  RESOURCE_TILE,
+} from "./networkMapLayout";
 
 type PositionedNode = NetworkNodeData & { position: { x: number; y: number } };
 type Region = {
@@ -27,9 +33,17 @@ const HEADER = 64;
 const PADDING = 24;
 const GAP = 40;
 const LANE_GAP = 64;
-const HEIGHT = 104;
-const AGENT_WIDTH = 288;
-const RESOURCE_WIDTH = 240;
+const HEIGHT = CARD_HEIGHT;
+const AGENT_WIDTH = NETWORK_AGENT_WIDTH;
+const RESOURCE_WIDTH = RESOURCE_TILE;
+
+/**
+ * Square tiles pack sideways, so a lane of them stays roughly as wide as it is
+ * tall instead of growing into a single long column.
+ */
+function tileColumns(count: number): number {
+  return Math.min(4, Math.max(1, Math.ceil(Math.sqrt(count))));
+}
 
 function compareText(a: string, b: string) {
   return a < b ? -1 : a > b ? 1 : 0;
@@ -39,10 +53,18 @@ function compareNodes(a: NetworkNodeData, b: NetworkNodeData) {
   return compareText(a.label, b.label) || compareText(a.id, b.id);
 }
 
-function gridSize(count: number, width: number, columns: number) {
+function gridSize(
+  count: number,
+  width: number,
+  columns: number,
+  minWidth = 0
+) {
   const rows = Math.max(1, Math.ceil(count / columns));
   return {
-    width: columns * width + (columns - 1) * GAP + 2 * PADDING,
+    width: Math.max(
+      minWidth,
+      columns * width + (columns - 1) * GAP + 2 * PADDING
+    ),
     height: HEADER + rows * HEIGHT + (rows - 1) * GAP + PADDING,
   };
 }
@@ -179,16 +201,18 @@ export function buildDirectionalLayout(topology: TopologyResponse): {
     ["private", "egress", "unknown"] as const
   ).map((scope) => {
     const nodes = outputs.filter((node) => getNetworkScope(node) === scope);
-    const columns = nodes.length >= 4 ? 2 : 1;
+    const columns = tileColumns(nodes.length);
     return {
       scope,
       nodes,
       columns,
-      ...gridSize(nodes.length, RESOURCE_WIDTH, columns),
+      ...gridSize(nodes.length, RESOURCE_WIDTH, columns, MIN_LANE_WIDTH),
     };
   });
 
-  const inputSize = gridSize(inputs.length, RESOURCE_WIDTH, 1);
+  // Triggers stay a single rail: each one is placed level with the agent it
+  // starts, which a multi-column grid would break.
+  const inputSize = gridSize(inputs.length, RESOURCE_WIDTH, 1, MIN_LANE_WIDTH);
   const agentWidth =
     Math.max(
       AGENT_WIDTH + 2 * PADDING,

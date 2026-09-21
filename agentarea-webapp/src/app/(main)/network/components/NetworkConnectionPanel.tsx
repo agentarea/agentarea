@@ -81,7 +81,13 @@ export default function NetworkConnectionPanel({
     scope === "egress" ? Globe : scope === "private" ? LockKeyhole : HelpCircle;
   const allowed = policy?.tools?.allowed ?? [];
   const denied = policy?.tools?.denied ?? [];
-  const approvals = policy?.approval?.escalation_rules ?? [];
+  const approvalItems = policy?.approval?.requires_human_approval
+    ? [t("allCalls")]
+    : (policy?.approval?.escalation_rules ?? []);
+  const buckets = [denied, allowed, approvalItems].filter(
+    (items) => items.length > 0
+  ).length;
+  const restricted = buckets > 0;
 
   return (
     <aside
@@ -147,9 +153,6 @@ export default function NetworkConnectionPanel({
                 <RefreshCw className="h-3.5 w-3.5" />
               </button>
             </div>
-            <p className="text-[11px] leading-4 text-muted-foreground">
-              {t("policyScope")}
-            </p>
             {state === "loading" && (
               <div
                 className="flex items-center gap-2 py-2 text-xs text-muted-foreground"
@@ -173,41 +176,41 @@ export default function NetworkConnectionPanel({
             )}
             {state === "ready" && policy && (
               <>
-                <RuleList
-                  title={t("denied")}
-                  items={denied}
-                  empty={t("noDenyRules")}
-                  tone="text-red-600 dark:text-red-400"
-                />
-                <RuleList
-                  title={t("allowlist")}
-                  items={allowed}
-                  empty={t("noAllowlist")}
-                  tone="text-foreground"
-                />
-                <RuleList
-                  title={t("approval")}
-                  items={
-                    policy.approval?.requires_human_approval
-                      ? [t("allCalls")]
-                      : approvals
-                  }
-                  empty={t("noApproval")}
-                  tone="text-amber-700 dark:text-amber-400"
-                />
+                {restricted ? (
+                  <>
+                    <RuleList
+                      title={t("denied")}
+                      items={denied}
+                      tone="text-red-600 dark:text-red-400"
+                    />
+                    <RuleList
+                      title={t("allowlist")}
+                      items={allowed}
+                      tone="text-foreground"
+                    />
+                    <RuleList
+                      title={t("approval")}
+                      items={approvalItems}
+                      tone="text-amber-700 dark:text-amber-400"
+                    />
+                    {/* Ordering only changes an outcome when two kinds of rule
+                        can disagree, so it is said only then. */}
+                    {buckets > 1 && (
+                      <p className="text-[11px] leading-4 text-muted-foreground">
+                        {t("precedence")}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-[11px] leading-4">{t("noRestrictions")}</p>
+                )}
                 <p className="text-[11px] leading-4 text-muted-foreground">
-                  {t("precedence")}
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  {t("sources", {
+                  {t("previewNote", {
                     count: policy.source_policy_ids?.length ?? 0,
                   })}
                 </p>
               </>
             )}
-            <p className="text-[11px] leading-4 text-muted-foreground">
-              {t("previewLimit")}
-            </p>
             <Link
               href="/policies"
               className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
@@ -286,36 +289,34 @@ export default function NetworkConnectionPanel({
   );
 }
 
+/**
+ * One bucket of rules. A bucket with nothing in it renders nothing: three
+ * headings each followed by its own "there is nothing here" sentence said less
+ * than the single line the empty preview now shows instead.
+ */
 function RuleList({
   title,
   items,
-  empty,
   tone,
 }: {
   title: string;
   items: string[];
-  empty: string;
   tone: string;
 }) {
+  if (!items.length) return null;
   return (
     <div>
       <p className={`text-[11px] font-semibold ${tone}`}>{title}</p>
-      {items.length ? (
-        <ul className="mt-1.5 flex flex-wrap gap-1">
-          {items.map((item) => (
-            <li
-              key={item}
-              className={`max-w-full break-all rounded border border-border bg-muted/30 px-1.5 py-1 font-mono text-[10px] ${tone}`}
-            >
-              {item}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-          {empty}
-        </p>
-      )}
+      <ul className="mt-1.5 flex flex-wrap gap-1">
+        {items.map((item) => (
+          <li
+            key={item}
+            className={`max-w-full break-all rounded border border-border bg-muted/30 px-1.5 py-1 font-mono text-[10px] ${tone}`}
+          >
+            {item}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

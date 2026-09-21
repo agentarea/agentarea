@@ -31,17 +31,12 @@ export default function SkillRow({
   return (
     <InteractiveListRow
       onClick={open}
-      start={
-        <SkillTile color={source.color} icon={SourceIcon} variant="row" />
-      }
+      start={<SkillTile skillId={skill.id} variant="row" />}
       contentClassName="gap-3"
       end={
         <>
           <span className="skill-col-source inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
-            <span
-              className="h-[7px] w-[7px] rounded-full"
-              style={{ backgroundColor: source.color }}
-            />
+            <SourceIcon className="h-3 w-3" strokeWidth={1.7} />
             {source.label}
           </span>
           <span className="skill-col-scope inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">

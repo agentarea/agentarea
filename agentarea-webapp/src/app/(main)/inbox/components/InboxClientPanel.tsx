@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Check,
   ChevronRight,
@@ -12,6 +13,7 @@ import {
   Zap,
 } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { TaskConversation } from "@/components/Chat/TaskConversation";
 import { TaskStatus } from "@/components/TaskStatus";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +36,8 @@ export function InboxClientPanel({
   onResolve,
   onClose,
 }: InboxClientPanelProps) {
+  const router = useRouter();
+
   if (!task) {
     return (
       <div className="flex h-full flex-1 flex-col items-center justify-center px-10 text-center text-sm text-muted-foreground">
@@ -54,13 +58,44 @@ export function InboxClientPanel({
   const status = task.status;
   const pend = isPending(status);
   const agentName = task.agent_name || "Unknown agent";
-  const result = task.result;
-  const hasResult = extractInboxResult(result).kind !== "empty";
+  const hasResult = extractInboxResult(task.result).kind !== "empty";
   const failureText = task.error || task.failure_reason;
+
+  // Shown only when the transcript carries no assistant answer of its own —
+  // an approval still waiting to run, or a task whose output lives in the
+  // record rather than the event stream.
+  const resultFallback = (
+    <>
+      <InboxResultMessage
+        id={String(task.id)}
+        agentId={task.agent_id}
+        result={task.result}
+        agentName={agentName}
+        timestamp={task.created_at}
+      />
+      {!hasResult && failureText && (
+        <p className="max-w-3xl whitespace-pre-wrap break-words text-sm leading-relaxed text-red-600 dark:text-red-400 [overflow-wrap:anywhere]">
+          {failureText}
+        </p>
+      )}
+      {!hasResult && !failureText && (
+        <p className="text-sm text-muted-foreground">
+          {pend
+            ? "Output will be available after the action runs."
+            : "No output was returned for this task."}
+        </p>
+      )}
+      {hasResult && failureText && (
+        <p className="mt-4 break-words text-sm leading-relaxed text-red-600 dark:text-red-400 [overflow-wrap:anywhere]">
+          {failureText}
+        </p>
+      )}
+    </>
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
-      <header className="shrink-0 border-b border-border px-5 py-4 sm:px-8">
+      <header className="shrink-0 border-b border-border px-5 py-3 sm:px-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
             <AgentAvatar
@@ -95,11 +130,9 @@ export function InboxClientPanel({
           </div>
         </div>
 
-        <h2 className="mt-6 max-w-4xl break-words text-[24px] font-semibold leading-[1.18] tracking-[-0.025em] sm:text-[28px]">
-          {task.description || "Untitled task"}
-        </h2>
-
-        <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
+        {/* The request itself opens the transcript as a user message, exactly
+            as in the chat, so the header does not repeat it. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2.5 py-1">
             <TaskStatus status={status} />
           </span>
@@ -114,68 +147,47 @@ export function InboxClientPanel({
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <main className="mx-auto w-full max-w-4xl px-5 py-7 sm:px-8 sm:py-9">
-          {pend && (
-            <section className="mb-8 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3.5 text-sm leading-relaxed text-foreground/85">
-              <div className="flex items-start gap-2.5">
-                <Zap
-                  size={17}
-                  className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400"
-                  aria-hidden
-                />
-                <p>
-                  Approving will let the agent run{" "}
-                  <b className="font-semibold text-foreground">
-                    {task.escalation_tool_name || "the requested action"}
-                  </b>
-                  .
-                </p>
-              </div>
-            </section>
-          )}
-
-          <section>
-            <InboxResultMessage
-              key={String(task.id)}
-              id={String(task.id)}
-              agentId={task.agent_id}
-              result={task.result}
-              agentName={agentName}
-              timestamp={task.created_at}
+      {pend && (
+        <div className="shrink-0 border-b border-amber-500/25 bg-amber-500/10 px-5 py-2.5 text-sm leading-relaxed text-foreground/85 sm:px-6">
+          <div className="flex items-start gap-2.5">
+            <Zap
+              size={17}
+              className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400"
+              aria-hidden
             />
-            {!hasResult && failureText && (
-              <p className="max-w-3xl whitespace-pre-wrap break-words text-sm leading-relaxed text-red-600 dark:text-red-400 [overflow-wrap:anywhere]">
-                {failureText}
-              </p>
-            )}
-            {!hasResult && !failureText && (
-              <p className="text-sm text-muted-foreground">
-                {pend
-                  ? "Output will be available after the action runs."
-                  : "No output was returned for this task."}
-              </p>
-            )}
-          </section>
+            <p>
+              Approving will let the agent run{" "}
+              <b className="font-semibold text-foreground">
+                {task.escalation_tool_name || "the requested action"}
+              </b>
+              .
+            </p>
+          </div>
+        </div>
+      )}
 
-          {failureText && hasResult && (
-            <section className="mt-7" aria-labelledby="inbox-failure-heading">
-              <h3
-                id="inbox-failure-heading"
-                className="mb-2 text-sm font-semibold"
-              >
-                Failure reason
-              </h3>
-              <p className="break-words text-sm leading-relaxed text-red-600 dark:text-red-400 [overflow-wrap:anywhere]">
-                {failureText}
-              </p>
-            </section>
-          )}
-        </main>
+      {/* Same transcript and composer as /tasks/[id]: read what happened and
+          answer without leaving the inbox. Keyed so switching tasks resets the
+          event stream instead of folding two tasks into one conversation. */}
+      <div className="min-h-0 flex-1">
+        <TaskConversation
+          key={String(task.id)}
+          task={{
+            id: String(task.id),
+            agent_id: task.agent_id,
+            description: task.description,
+            agent_name: task.agent_name,
+            status,
+            created_at: task.created_at,
+          }}
+          currentStatus={status}
+          fallback={resultFallback}
+          onRefresh={() => router.refresh()}
+        />
       </div>
 
       {pend && (
-        <footer className="shrink-0 border-t border-border bg-background px-5 py-3.5 sm:px-8">
+        <footer className="shrink-0 border-t border-border bg-background px-5 py-3.5 sm:px-6">
           <div className="flex gap-2.5 sm:justify-end">
             <button
               onClick={() => onResolve(task, false)}
