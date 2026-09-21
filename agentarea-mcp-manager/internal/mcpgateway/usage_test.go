@@ -45,7 +45,7 @@ func (r usageRuntimeStub) EnsureReady(context.Context, *models.MCPServerInstance
 func (r usageRuntimeStub) Delete(context.Context, *models.MCPServerInstance) error { return nil }
 
 func TestUsageTracksConcurrentHTTPRequestsWithoutInspectingBodies(t *testing.T) {
-	const secret = "private-payload-must-not-be-recorded"
+	const secret = "private-payload-must-not-be-recorded" // pragma: allowlist secret
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || string(body) != secret {

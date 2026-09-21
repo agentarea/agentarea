@@ -309,7 +309,7 @@ async def test_cached_secret_failure_falls_back_to_fresh_model_resolution(
     request = _request()
     reference = "stale-reference"
     request.resolved_model["api_key_secret"] = reference
-    model_scope.record.provider_config.api_key = "fresh-reference"
+    model_scope.record.provider_config.api_key = "fresh-reference"  # pragma: allowlist secret
     secret_store.store.get_secret.side_effect = [RuntimeError("stale secret"), "fresh-key"]
 
     result = await make_service(
@@ -318,7 +318,7 @@ async def test_cached_secret_failure_falls_back_to_fresh_model_resolution(
 
     assert result.content == "hello"
     assert model_scope.contexts == [user_context]
-    assert provider.constructor.call_args.kwargs["api_key"] == "fresh-key"
+    assert provider.constructor.call_args.kwargs["api_key"] == "fresh-key"  # pragma: allowlist secret
     assert provider.constructor.call_args.kwargs["model_name"] == "database-model"
     assert "fresh-key" not in result.model_dump_json()
     assert secret_store.session.close.await_count == 2
