@@ -6,6 +6,7 @@ import type {
 } from "../types";
 import { buildDirectionalLayout } from "./directionalLayout";
 import { getDirectionalRoute } from "./directionalRoute";
+import { CARD_HEIGHT, nodeWidth } from "./networkMapLayout";
 
 function node(
   id: string,
@@ -86,9 +87,9 @@ function intersectsCard(
   card: NetworkNodeData & { position: Point }
 ): boolean {
   const left = card.position.x;
-  const right = left + (card.type === "agent" ? 288 : 240);
+  const right = left + nodeWidth(card);
   const top = card.position.y;
-  const bottom = top + 104;
+  const bottom = top + CARD_HEIGHT;
   if (start.x === end.x) {
     return (
       start.x > left &&
@@ -129,12 +130,15 @@ function verifyRoutes(input: TopologyResponse) {
     const end = route.points[route.points.length - 1];
     const previous = route.points[route.points.length - 2];
     if (route.targetHandle === "flow-target") {
-      expect(end).toEqual({ x: target.position.x, y: target.position.y + 52 });
+      expect(end).toEqual({
+        x: target.position.x,
+        y: target.position.y + CARD_HEIGHT / 2,
+      });
       expect(previous.y).toBe(end.y);
       expect(previous.x).toBeLessThan(end.x);
     } else {
       expect(end).toEqual({
-        x: target.position.x + (target.type === "agent" ? 144 : 120),
+        x: target.position.x + nodeWidth(target) / 2,
         y: target.position.y,
       });
       expect(previous.x).toBe(end.x);

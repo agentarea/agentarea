@@ -1,5 +1,8 @@
 import { createElement } from "react";
+import { Clock, Zap } from "lucide-react";
 import type { TriggerResponse } from "@/api/client/types.gen";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
+import { deterministicHue } from "@/lib/avatar-hue";
 import { cn } from "@/lib/utils";
 
 export interface TriggerCatalogEntry {
@@ -85,21 +88,58 @@ export function getTriggerSourceKey(
 
 /**
  * The catalog owns both the artwork and the name of a channel — which channels
- * exist grows by configuration, so nothing here may switch on the type. The API
- * hands us a resolved `icon_url`; we draw it and ask no questions.
+ * exist grows by configuration, so nothing here may switch on the channel. The
+ * API hands us a resolved `icon_url`; we draw it and ask no questions, and only
+ * when it has none do we fall back to a glyph for the trigger's kind.
  */
 export function renderTriggerIcon(
   entry?: TriggerCatalogEntry | null,
-  _trigger?: TriggerLike,
+  trigger?: TriggerLike,
   className = "h-5 w-5"
 ) {
-  if (!entry?.icon_url) return null;
-  return createElement("img", {
-    src: entry.icon_url,
-    alt: "",
+  if (entry?.icon_url) {
+    return createElement("img", {
+      src: entry.icon_url,
+      alt: "",
+      "aria-hidden": true,
+      className: cn("shrink-0 object-contain", className),
+    });
+  }
+  // A channel the catalog ships no artwork for still has to show *something* —
+  // returning nothing left an empty tinted tile with no mark in it at all. The
+  // split is on `trigger_type`, a column on the model, not on which channel it
+  // is: that stays catalog-driven.
+  return createElement(trigger?.trigger_type === "cron" ? Clock : Zap, {
     "aria-hidden": true,
+    strokeWidth: 1.85,
     className: cn("shrink-0", className),
   });
+}
+
+/**
+ * The event source a trigger listens to, as a tile: the channel's own logo when
+ * the catalog has one, else the kind's glyph, on a graphite tile hued by the
+ * source key. Every non-cron trigger used to share one violet tint, so a list
+ * of GitHub, Slack and Stripe hooks read as one repeated mark.
+ */
+export function TriggerSourceMark({
+  entry,
+  trigger,
+  size = 28,
+}: {
+  entry?: TriggerCatalogEntry | null;
+  trigger?: TriggerLike;
+  size?: number;
+}) {
+  return (
+    <EntityAvatar
+      size={size}
+      hue={deterministicHue(getTriggerSourceKey(entry, trigger))}
+      icon={renderTriggerIcon(entry, trigger, "h-full w-full")}
+      iconScale={entry?.icon_url ? 0.68 : 0.5}
+      aria-hidden
+    />
+  );
 }
 
 export function getTriggerDisplayName(
@@ -238,6 +278,21 @@ export function getTriggerHealth(trigger: TriggerLike): TriggerHealth {
   const threshold = Number(trigger?.failure_threshold ?? 0);
   if (threshold > 0 && failures >= threshold) return "error";
   return trigger?.is_active ? "active" : "paused";
+}
+
+/**
+ * Cost of one run, or of a trigger's history. Sub-dollar amounts keep four
+ * decimals: a run that costs $0.0071 must not read as "$0.01", which is what
+ * the two-decimal money format everywhere else would make of it.
+ */
+export function formatTriggerCost(value: number): string {
+  const fractionDigits = Math.abs(value) > 0 && Math.abs(value) < 1 ? 4 : 2;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(value);
 }
 
 /** Compact relative time like "in 14h" / "3m ago" (matches the design). */

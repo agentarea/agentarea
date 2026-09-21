@@ -302,6 +302,7 @@ export async function createTriggerAction(
     }
 
     if (data) {
+      revalidatePath("/triggers");
       return {
         message: "Trigger created successfully!",
         success: true,

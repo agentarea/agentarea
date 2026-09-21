@@ -1,5 +1,5 @@
-import { DetailSkeleton } from "@/components/Skeleton";
+import TriggerOverviewSkeleton from "./components/TriggerOverviewSkeleton";
 
 export default function Loading() {
-  return <DetailSkeleton />;
+  return <TriggerOverviewSkeleton />;
 }

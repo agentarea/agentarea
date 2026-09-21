@@ -1,10 +1,10 @@
 import { createElement } from "react";
 import { Boxes, Plug, Sparkles } from "lucide-react";
 import {
-  agentColorVar,
   getAgentIconComponent,
   resolveAgentIdentity,
 } from "@/lib/agent-identity";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { ProviderIcon } from "@/components/ui/provider-icon";
 import type { Agent } from "@/types/agent";
 import { InstallAgentButton } from "./InstallAgentButton";
@@ -22,7 +22,7 @@ export function CatalogAgentPreview({
   agent: Agent;
   agentRef: string;
 }) {
-  const { colorToken, iconKey } = resolveAgentIdentity(agent);
+  const { hue, iconKey } = resolveAgentIdentity(agent);
   const HeroIcon = getAgentIconComponent(iconKey);
 
   const modelLabel =
@@ -42,13 +42,13 @@ export function CatalogAgentPreview({
     <div className="mx-auto w-full max-w-[1180px]">
       {/* ===== hero ===== */}
       <header className="flex items-start gap-4 pb-5">
-        <span
-          className="relative flex h-[50px] w-[50px] shrink-0 items-center justify-center overflow-hidden rounded-[13px] text-white [&>svg]:relative [&>svg]:z-10 [&>svg]:h-6 [&>svg]:w-6"
-          style={{ background: agentColorVar(colorToken) }}
-        >
-          {createElement(HeroIcon, { strokeWidth: 1.9 })}
-          <span className="bg-hatch-on-color pointer-events-none absolute inset-0" />
-        </span>
+        <EntityAvatar
+          size={50}
+          rounded={14}
+          hue={hue}
+          icon={createElement(HeroIcon, { strokeWidth: 1.85 })}
+          aria-hidden
+        />
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2.5">

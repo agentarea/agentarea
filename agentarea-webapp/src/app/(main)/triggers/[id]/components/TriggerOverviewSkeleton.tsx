@@ -2,10 +2,10 @@ import { SectionCard, StatStrip } from "@/components/Overview/OverviewCard";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
- * Loading placeholder mirroring the agent overview layout: full-bleed hero,
- * the four-up stat strip and the two-column body (tasks · glance/guardrails).
+ * Loading placeholder mirroring the trigger overview layout: full-bleed hero,
+ * the four-up stat strip and the two-column body (task · runs / context).
  */
-export default function AgentOverviewSkeleton() {
+export default function TriggerOverviewSkeleton() {
   return (
     <div
       aria-hidden="true"
@@ -45,36 +45,35 @@ export default function AgentOverviewSkeleton() {
         </StatStrip>
 
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-          <SectionCard>
-            <CardHeadSkeleton />
-            <Skeleton className="h-[30px] w-full rounded-none" />
-            {Array.from({ length: 2 }).map((_, i) => (
-              <RowSkeleton key={`r-${i}`} />
-            ))}
-            <Skeleton className="h-[30px] w-full rounded-none" />
-            {Array.from({ length: 4 }).map((_, i) => (
-              <RowSkeleton key={`c-${i}`} />
-            ))}
-          </SectionCard>
+          <div className="flex flex-col gap-4">
+            <SectionCard>
+              <CardHeadSkeleton />
+              <div className="space-y-2 px-[15px] py-3">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-4/5" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            </SectionCard>
+            <SectionCard>
+              <CardHeadSkeleton />
+              {Array.from({ length: 3 }).map((_, i) => (
+                <RowSkeleton key={i} />
+              ))}
+            </SectionCard>
+          </div>
 
           <div className="flex flex-col gap-4">
             <SectionCard>
               <CardHeadSkeleton />
-              {Array.from({ length: 3 }).map((_, i) => (
+              {Array.from({ length: 4 }).map((_, i) => (
                 <RowSkeleton key={i} tile />
               ))}
             </SectionCard>
             <SectionCard>
               <CardHeadSkeleton />
-              <div className="space-y-2 border-b border-border/60 px-[15px] py-3">
-                <div className="flex justify-between">
-                  <Skeleton className="h-3 w-28" />
-                  <Skeleton className="h-3 w-20" />
-                </div>
-                <Skeleton className="h-1.5 w-full rounded-[2px]" />
-              </div>
-              <RowSkeleton tile />
-              <RowSkeleton tile />
+              {Array.from({ length: 3 }).map((_, i) => (
+                <RowSkeleton key={i} />
+              ))}
             </SectionCard>
           </div>
         </div>
@@ -99,8 +98,8 @@ function RowSkeleton({ tile = false }: { tile?: boolean }) {
     <div className="flex items-center gap-[11px] border-b border-border/60 px-[15px] py-[11px] last:border-b-0">
       {tile && <Skeleton className="h-7 w-7 rounded" />}
       <div className="min-w-0 flex-1 space-y-1.5">
-        <Skeleton className="h-3.5 w-3/5" />
-        <Skeleton className="h-2.5 w-2/5" />
+        <Skeleton className="h-3 w-40" />
+        <Skeleton className="h-2.5 w-24" />
       </div>
       <Skeleton className="h-3 w-12" />
     </div>

@@ -1,14 +1,16 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { BoardCrossMark } from "@/components/board";
 import { Button } from "@/components/ui/button";
+import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { cn } from "@/lib/utils";
 
 /**
- * Overview building blocks for the agent detail page: a bordered section
- * card with a compact icon+title head, and the four-up stat strip whose cells
- * are separated by dashed board lines.
+ * Overview building blocks shared by the detail pages (agent, trigger): a
+ * bordered section card with a compact icon+title head, the four-up stat strip
+ * whose cells are separated by dashed board lines, and the rail rows that
+ * summarise a linked resource.
  */
 
 const OVERVIEW_SURFACE_CLASS =
@@ -78,6 +80,122 @@ export function EmptyRow({
             {action.label}
           </Link>
         </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------ hero / rail ----------------------------- */
+
+/** Dot-separated meta item for a detail page hero. */
+export function HeroMeta({
+  icon,
+  children,
+}: {
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap before:mx-3 before:h-1 before:w-1 before:shrink-0 before:rounded-full before:bg-muted-foreground/40 before:content-[''] first:before:hidden [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:text-muted-foreground/70">
+      {icon}
+      <span>{children}</span>
+    </span>
+  );
+}
+
+/** Muted 28px icon tile for the glance rail rows. */
+export function SoftTile({ icon }: { icon: ReactNode }) {
+  return (
+    <span className="grid h-7 w-7 shrink-0 place-items-center rounded bg-muted text-foreground/80 [&>svg]:h-[15px] [&>svg]:w-[15px]">
+      {icon}
+    </span>
+  );
+}
+
+/** Title + sub + optional count, as one tappable row of a rail card. */
+export function GlanceRow({
+  href,
+  tile,
+  title,
+  sub,
+  count,
+  trailing,
+  chevron = true,
+}: {
+  href: string;
+  tile: ReactNode;
+  title: ReactNode;
+  sub: ReactNode;
+  count?: number;
+  trailing?: ReactNode;
+  chevron?: boolean;
+}) {
+  return (
+    <Link href={href} className="block">
+      <InteractiveListRow
+        showIndicator={false}
+        className="px-[15px] py-[11px]"
+        dividerClassName="border-b border-border/60"
+        start={tile}
+        end={
+          <span className="flex items-center gap-[7px] text-[12px] text-muted-foreground">
+            {trailing}
+            {count != null && (
+              <b className="font-semibold text-foreground/80 tabular-nums">
+                {count}
+              </b>
+            )}
+            {chevron && (
+              <ChevronRight
+                className="h-3.5 w-3.5 text-muted-foreground/60"
+                strokeWidth={2}
+              />
+            )}
+          </span>
+        }
+      >
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[12.5px] font-medium">{title}</div>
+          <div className="mt-px truncate text-[11px] text-muted-foreground/80">
+            {sub}
+          </div>
+        </div>
+      </InteractiveListRow>
+    </Link>
+  );
+}
+
+/**
+ * Same shape as {@link GlanceRow} for facts that lead nowhere — a schedule, a
+ * webhook endpoint. Rendering those as links would promise a page that does
+ * not exist.
+ */
+export function FactRow({
+  tile,
+  title,
+  sub,
+  trailing,
+}: {
+  tile?: ReactNode;
+  title: ReactNode;
+  sub?: ReactNode;
+  trailing?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 border-b border-border/60 px-[15px] py-[11px] last:border-b-0">
+      {tile}
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[12.5px] font-medium">{title}</div>
+        {sub != null && (
+          <div className="mt-px truncate text-[11px] text-muted-foreground/80">
+            {sub}
+          </div>
+        )}
+      </div>
+      {trailing != null && (
+        <span className="shrink-0 text-[12px] text-muted-foreground">
+          {trailing}
+        </span>
       )}
     </div>
   );
@@ -159,7 +277,7 @@ export function Stat({
   /** Progress fill percentage (0–100). Omit to leave the slot empty. */
   bar?: { pct: number } | null;
   sub: ReactNode;
-  subTone?: "muted" | "up";
+  subTone?: "muted" | "up" | "down";
 }) {
   return (
     <div
@@ -200,9 +318,11 @@ export function Stat({
       <div
         className={cn(
           "mt-2 truncate text-[11px]",
-          subTone === "up"
-            ? "font-medium text-foreground/70"
-            : "text-muted-foreground/70"
+          subTone === "muted"
+            ? "text-muted-foreground/70"
+            : subTone === "down"
+              ? "font-medium text-[var(--status-danger)]"
+              : "font-medium text-foreground/70"
         )}
       >
         {sub}

@@ -5,6 +5,7 @@ import type {
   TopologyResponse,
 } from "../types";
 import { buildDirectionalLayout } from "./directionalLayout";
+import { CARD_HEIGHT, nodeWidth } from "./networkMapLayout";
 
 function node(
   id: string,
@@ -51,7 +52,7 @@ function contains(
   );
 }
 function card(item: Layout["nodes"][number]) {
-  return { ...item, width: item.type === "agent" ? 288 : 240, height: 104 };
+  return { ...item, width: nodeWidth(item), height: CARD_HEIGHT };
 }
 
 describe("buildDirectionalLayout", () => {
@@ -194,10 +195,11 @@ describe("buildDirectionalLayout", () => {
         card(item)
       );
     }
+    // Both unknown-scope resources share the lane's first row, side by side.
     const unknown = required(result.nodes.find(({ id }) => id === "unknown"));
     const api = required(result.nodes.find(({ id }) => id === "api"));
-    expect(unknown.position.y).not.toBe(api.position.y);
-    expect(unknown.position.x).toBe(api.position.x);
+    expect(unknown.position.y).toBe(api.position.y);
+    expect(unknown.position.x).not.toBe(api.position.x);
     const workspace = required(
       result.regions.find(({ kind }) => kind === "workspace")
     );
@@ -258,8 +260,9 @@ describe("buildDirectionalLayout", () => {
     for (const item of agentCards)
       agentRows.set(item.position.y, (agentRows.get(item.position.y) ?? 0) + 1);
     expect(Math.max(...agentRows.values())).toBe(2);
+    // Nine square tiles wrap into a 3×3 grid rather than one tall column.
     expect(new Set(resourceCards.map(({ position }) => position.x)).size).toBe(
-      2
+      3
     );
     for (const item of result.nodes) {
       contains(

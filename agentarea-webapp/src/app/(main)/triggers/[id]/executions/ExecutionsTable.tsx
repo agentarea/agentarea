@@ -7,6 +7,7 @@ import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getTriggerExecutionStatusPresentation } from "@/lib/status";
+import { formatTriggerCost as fmtUsd } from "../../components/triggerDisplay";
 
 interface ExecutionsTableProps {
   executions: TriggerExecutionResponse[];
@@ -82,6 +83,17 @@ export default function ExecutionsTable({
       render: (value: number) => (
         <span className="text-muted-foreground">
           {value != null ? `${value}ms` : "-"}
+        </span>
+      ),
+    },
+    {
+      accessor: "cost_usd",
+      header: t("cost"),
+      // Null means the run created no task, or the task has not reported a
+      // cost yet — different from a run that genuinely cost nothing.
+      render: (value: number | null) => (
+        <span className="tabular-nums text-muted-foreground">
+          {value != null ? fmtUsd(value) : "-"}
         </span>
       ),
     },

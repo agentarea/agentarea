@@ -7,6 +7,7 @@ import {
   listAgentTasks,
   listMCPServerInstances,
   listMCPServers,
+  listOpenAPIConnections,
   listPolicies,
   type TaskResponse,
 } from "@/lib/api";
@@ -15,7 +16,10 @@ import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
 import { getAgentStatusPresentation } from "@/lib/status";
 import type { Agent } from "@/types/agent";
 import type { Policy, PolicyEffect } from "@/types/policies";
-import { resolveAgentToolIcons } from "@/utils/agentToolIcons";
+import {
+  type OpenApiConnectionRef,
+  resolveAgentToolIcons,
+} from "@/utils/agentToolIcons";
 import { isRunningTask } from "../../shared/taskStatus";
 import {
   AgentOverviewView,
@@ -58,6 +62,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     settings,
     mcpInstancesRes,
     mcpServersRes,
+    openApiConnectionsRes,
     policiesRes,
     modelInstanceRes,
   ] = await Promise.all([
@@ -66,6 +71,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     getWorkspaceSettings().catch(() => null),
     listMCPServerInstances().catch(() => ({ data: [] })),
     listMCPServers({ page_size: 100 }).catch(() => ({ data: [] })),
+    listOpenAPIConnections().catch(() => ({ data: [] })),
     listPolicies({ subject_type: "agent", subject_id: realId }).catch(() => ({
       data: [],
     })),
@@ -91,7 +97,12 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     : ((mcpServersData as { items?: McpServer[] } | null | undefined)?.items ??
       []);
   const mcpInstanceList = (mcpInstancesRes?.data as McpInstance[]) ?? [];
-  const toolIcons = resolveAgentToolIcons(agent, mcpInstanceList, mcpServers);
+  const toolIcons = resolveAgentToolIcons(agent, {
+    mcpInstances: mcpInstanceList,
+    mcpServers,
+    openApiConnections:
+      (openApiConnectionsRes?.data as OpenApiConnectionRef[]) ?? [],
+  });
 
   // Agent-scoped governance rules, summarised by effect.
   const policyRules = ((policiesRes?.data as Policy[]) ?? [])
@@ -104,13 +115,13 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     return acc;
   }, {});
 
-  const { colorToken, iconKey } = resolveAgentIdentity(agent);
+  const { hue, iconKey } = resolveAgentIdentity(agent);
 
   const model: AgentOverviewModel = {
     agentRef,
     name: agent.name,
     description: agent.description,
-    colorToken,
+    hue,
     iconKey,
     status: getAgentStatusPresentation(agent.status || "inactive"),
     model: {

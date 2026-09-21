@@ -1,6 +1,7 @@
 import type { NetworkEdgeData } from "../types";
 import type { buildDirectionalLayout } from "./directionalLayout";
 import { getNetworkScope } from "./networkConnections";
+import { CARD_HEIGHT, nodeWidth } from "./networkMapLayout";
 
 type Layout = ReturnType<typeof buildDirectionalLayout>;
 type Point = { x: number; y: number };
@@ -11,12 +12,7 @@ type Route = {
   label: Point;
 };
 
-const CARD_HEIGHT = 104;
 const CLEARANCE = 16;
-
-function width(node: Layout["nodes"][number]) {
-  return node.type === "agent" ? 288 : 240;
-}
 
 function finishRoute(
   points: Point[],
@@ -60,12 +56,12 @@ export function getDirectionalRoute(
   const egress = regions.find(({ kind }) => kind === "egress");
   const privateRegion = regions.find(({ kind }) => kind === "private");
   const targetTop = {
-    x: target.position.x + width(target) / 2,
+    x: target.position.x + nodeWidth(target) / 2,
     y: target.position.y,
   };
   const approachY = targetTop.y - CLEARANCE;
   const sourceRight = {
-    x: source.position.x + width(source),
+    x: source.position.x + nodeWidth(source),
     y: source.position.y + CARD_HEIGHT / 2,
   };
   const sourceBottomY = source.position.y + CARD_HEIGHT;
@@ -77,7 +73,7 @@ export function getDirectionalRoute(
       (region) =>
         region.kind === "agentCluster" &&
         source.position.x >= region.position.x &&
-        source.position.x + width(source) <= region.position.x + region.width &&
+        source.position.x + nodeWidth(source) <= region.position.x + region.width &&
         source.position.y >= region.position.y &&
         sourceBottomY <= region.position.y + region.height
     );
@@ -86,7 +82,7 @@ export function getDirectionalRoute(
         agentLane?.position.x ??
         Math.min(source.position.x, target.position.x) - 24) + 12;
     const start = {
-      x: source.position.x + width(source) / 2,
+      x: source.position.x + nodeWidth(source) / 2,
       y: sourceBottomY,
     };
     return finishRoute(
@@ -119,7 +115,7 @@ export function getDirectionalRoute(
         Math.max(Math.min(corridorX, targetLeft.x), node.position.x) <
           Math.min(
             Math.max(corridorX, targetLeft.x),
-            node.position.x + width(node)
+            node.position.x + nodeWidth(node)
           )
       );
     });
@@ -149,7 +145,7 @@ export function getDirectionalRoute(
   const workspaceRight = workspace
     ? workspace.position.x + workspace.width
     : (agentLane?.position.x ?? source.position.x) +
-      (agentLane?.width ?? width(source)) +
+      (agentLane?.width ?? nodeWidth(source)) +
       32;
   const internalCorridor =
     agentLane && privateRegion

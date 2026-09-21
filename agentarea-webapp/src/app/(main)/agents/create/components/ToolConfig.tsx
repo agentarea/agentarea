@@ -23,7 +23,7 @@ import {
   updateMCPServerInstanceAction as updateMCPServerInstance,
 } from "@/lib/server-actions";
 import { listOpenAPIConnectionsAction as listOpenAPIConnections } from "@/lib/server-actions";
-import { getMCPConnectionIconSrc } from "@/app/(main)/connections/utils";
+import { getMCPConnectionIconSrc } from "@/lib/entity-identity";
 import {
   McpAvailableTool,
   McpInstance,
