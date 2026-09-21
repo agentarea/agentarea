@@ -129,6 +129,29 @@ async def _protected_resource_metadata(resource_path: str) -> JSONResponse:
             # MCP spec: canonical URI of the MCP server endpoint, not the API root.
             "resource": f"{api_base}/{resource_path}",
             "authorization_servers": [as_url],
+            # The scopes a client has to ask for, and the reason harnesses kept
+            # falling off after an hour.
+            #
+            # This document is where an MCP client learns what to put in the
+            # authorization request: the spec has it read `scopes_supported`
+            # from the protected resource, not from the AS. Omitting it is not
+            # a client requesting everything — it is a client requesting
+            # nothing, so Hydra granted nothing, `offline_access` was never
+            # among the granted scopes, and no refresh token was issued. The
+            # access token then died on Hydra's TTL with nothing to renew it,
+            # and the connection read as "needs authentication" roughly an hour
+            # after every sign-in, permanently.
+            #
+            # The stored credential made it unambiguous: the granted scope came
+            # back empty and there was no refresh token beside it, while the
+            # DCR proxy below had registered the client for `offline_access`
+            # all along. The client was entitled to refresh and never asked.
+            #
+            # Same omission, same consequence, as the AS document that used to
+            # be assembled field by field above — this is the resource half of
+            # that fix. Sourced from the one setting that decides what this
+            # server issues, so the two cannot drift apart.
+            "scopes_supported": settings.mcp.MCP_OAUTH_SCOPES.split(),
             "bearer_methods_supported": ["header"],
         }
     )
@@ -265,6 +288,10 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     # it can only ever re-authenticate — but it may not reach outside this set.
     # client_credentials in particular would mint a token with no user behind it,
     # which auth/dependencies.py would then accept as a full principal.
+    #
+    # Asking for nothing gets both, deliberately: RFC 7591 would read an omitted
+    # grant_types as authorization_code alone, registering a client that can
+    # never refresh and has to walk the browser flow again on every expiry.
     allowed_grants = ["authorization_code", "refresh_token"]
     requested_grants = client_data.get("grant_types") or []
     granted = [g for g in allowed_grants if g in requested_grants] or allowed_grants
@@ -324,13 +351,6 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     client_data.setdefault("client_uri", api_base)
     if not client_data.get("contacts"):
         client_data["contacts"] = []
-
-    # RFC 7591 defaults an omitted grant_types to authorization_code alone, which
-    # registers a client that can never refresh: its access token expires on
-    # Hydra's TTL and the user has to walk through the browser flow again. An
-    # explicit choice by the client is left alone.
-    client_data.setdefault("grant_types", ["authorization_code", "refresh_token"])
-    client_data.setdefault("scope", "offline_access openid")
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(15)) as client:
         upstream = await client.post(

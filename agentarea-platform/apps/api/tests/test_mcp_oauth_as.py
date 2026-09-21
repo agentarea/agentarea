@@ -166,6 +166,28 @@ class TestProtectedResourceMetadata:
 
         assert (await self._metadata())["authorization_servers"] == [API_BASE]
 
+    async def test_advertises_offline_access_so_clients_can_refresh(self, monkeypatch):
+        # The scope an MCP client asks for comes from this document. Without
+        # offline_access in it the client requested no scope at all, Hydra
+        # granted none, and no refresh token came back — so every harness went
+        # dead at the access token's TTL and had to be re-authorized by hand.
+        self._patch(monkeypatch, None)
+
+        scopes = (await self._metadata())["scopes_supported"]
+
+        assert "offline_access" in scopes
+
+    async def test_advertised_scopes_match_what_registration_grants(self, monkeypatch):
+        # Two places decide scope: this document tells the client what to ask
+        # for, and the DCR proxy caps what the registration may hold. A client
+        # that asks for something registration refuses gets a failed
+        # authorization, so both read the same setting.
+        self._patch(monkeypatch, None)
+
+        scopes = (await self._metadata())["scopes_supported"]
+
+        assert set(scopes) == set(_Settings.mcp.MCP_OAUTH_SCOPES.split())
+
 
 class TestProtectedResourceMetadataLocations:
     """Where the document is retrievable from (RFC 9728 §3.1).
