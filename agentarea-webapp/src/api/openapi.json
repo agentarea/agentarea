@@ -13377,28 +13377,6 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/": {
-      "get": {
-        "description": "Root endpoint.",
-        "operationId": "root__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Root"
-      }
-    },
     "/.well-known/jwks.json": {
       "get": {
         "description": "Proxy JWKS so token verification works against our API URL.",
@@ -13522,8 +13500,8 @@
     },
     "/health": {
       "get": {
-        "description": "Health check endpoint for the main application.",
-        "operationId": "health_check_health_get",
+        "description": "Health check endpoint.",
+        "operationId": "health_health_get",
         "responses": {
           "200": {
             "content": {
@@ -13539,7 +13517,7 @@
             "bearer": []
           }
         ],
-        "summary": "Health Check"
+        "summary": "Health"
       }
     },
     "/oauth2/auth": {
