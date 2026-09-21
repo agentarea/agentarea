@@ -501,6 +501,12 @@ class LLMModel:
             tool_calls=tool_calls,
             cost=cost,
             usage=usage,
+            reasoning_content=(
+                getattr(message, "reasoning_content", None)
+                or getattr(message, "reasoning", None)
+                or getattr(message, "thinking", None)
+                or ""
+            ),
         )
 
     async def complete(self, request: LLMRequest) -> LLMResponse:

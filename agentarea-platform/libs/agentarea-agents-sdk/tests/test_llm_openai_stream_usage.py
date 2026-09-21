@@ -148,3 +148,52 @@ async def test_litellm_stream_requests_and_preserves_usage(monkeypatch):
     assert chunks[-1].usage is not None
     assert chunks[-1].usage.total_tokens == 15
     assert chunks[-1].cost == pytest.approx(0.02)
+
+
+@pytest.mark.asyncio
+async def test_completion_preserves_reasoning_tools_and_accounting(monkeypatch):
+    from agentarea_agents_sdk.models import llm_model as module
+
+    tool_call = {
+        "id": "call-1",
+        "type": "function",
+        "function": {"name": "lookup", "arguments": '{"x":1}'},
+    }
+
+    async def complete_at_transport(**_params):
+        return module.litellm.ModelResponse(
+            model="test-model",
+            choices=[
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "hello",
+                        "reasoning_content": "why",
+                        "reasoning": "lower-priority reasoning",
+                        "thinking": "lower-priority thinking",
+                        "tool_calls": [tool_call],
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ],
+            usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        )
+
+    monkeypatch.setattr(module, "acompletion", complete_at_transport)
+    model = LLMModel(
+        provider_type="openai",
+        model_name="test-model",
+        input_cost_per_token=0.001,
+        output_cost_per_token=0.002,
+    )
+
+    response = await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
+
+    assert response.reasoning_content == "why"
+    assert response.content == "hello"
+    assert response.tool_calls == [tool_call]
+    assert response.usage is not None
+    assert (response.usage.prompt_tokens, response.usage.completion_tokens) == (10, 5)
+    assert response.usage.total_tokens == 15
+    assert response.cost == pytest.approx(0.02)
