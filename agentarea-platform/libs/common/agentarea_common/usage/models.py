@@ -50,7 +50,12 @@ class ResourceUsageEvent:
             "workspace_id <> '' OR resource_kind = 'platform_runtime'",
             name="ck_resource_usage_events_workspace",
         ),
-        CheckConstraint("jsonb_typeof(data) = 'object'", name="ck_resource_usage_events_data"),
+        # Postgres-only DDL: the shared metadata is also created on SQLite by the
+        # unit-test fixtures, and jsonb_typeof does not exist there -- without the
+        # guard one unreachable constraint fails create_all for every table.
+        CheckConstraint(
+            "jsonb_typeof(data) = 'object'", name="ck_resource_usage_events_data"
+        ).ddl_if(dialect="postgresql"),
         Index("ix_resource_usage_events_workspace_sequence", "workspace_id", "sequence"),
         Index("ix_resource_usage_events_workspace_occurred", "workspace_id", "occurred_at"),
         Index(

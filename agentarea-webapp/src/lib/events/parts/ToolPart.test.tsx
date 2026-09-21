@@ -110,9 +110,11 @@ describe("ToolPart unavailable event details", () => {
       />
     );
 
-    expect(outputMarkup).toContain(">Output<");
+    // Output and error share one details panel now and are told apart by
+    // styling, so there is no section heading left to assert on -- what matters
+    // is that neither is dropped on the way in.
+    expect(outputMarkup).toContain(">Tool details<");
     expect(outputMarkup).toContain("real output");
-    expect(errorMarkup).toContain(">Error<");
     expect(errorMarkup).toContain("real error");
   });
 
@@ -127,7 +129,7 @@ describe("ToolPart unavailable event details", () => {
       />
     );
 
-    expect(markup).toContain(">Output<");
+    expect(markup).toContain(">Tool details<");
     expect(markup).toContain("&quot;error&quot;: null");
   });
 });
