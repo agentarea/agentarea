@@ -664,13 +664,19 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         )
         return failed + timed_out
 
-    async def get_execution_metrics(self, trigger_id: UUID, hours: int = 24) -> dict[str, Any]:
-        """Get execution metrics for a trigger within specified hours."""
+    async def get_execution_metrics(
+        self, trigger_id: UUID, hours: int | None = 24
+    ) -> dict[str, Any]:
+        """Get execution metrics for a trigger. ``hours=None`` covers all history."""
         from datetime import timedelta
 
         from sqlalchemy import case, func
 
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        window = [TriggerExecutionORM.trigger_id == trigger_id]
+        if hours is not None:
+            window.append(
+                TriggerExecutionORM.executed_at >= datetime.utcnow() - timedelta(hours=hours)
+            )
 
         # Get aggregated metrics
         stmt = select(
@@ -687,12 +693,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             func.avg(TriggerExecutionORM.execution_time_ms).label("avg_execution_time_ms"),
             func.min(TriggerExecutionORM.execution_time_ms).label("min_execution_time_ms"),
             func.max(TriggerExecutionORM.execution_time_ms).label("max_execution_time_ms"),
-        ).where(
-            and_(
-                TriggerExecutionORM.trigger_id == trigger_id,
-                TriggerExecutionORM.executed_at >= cutoff_time,
-            )
-        )
+        ).where(and_(*window))
 
         result = await self.session.execute(stmt)
         row = result.first()

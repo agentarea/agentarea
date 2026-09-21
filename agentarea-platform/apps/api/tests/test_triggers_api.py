@@ -18,6 +18,7 @@ from agentarea_api.api.deps.services import (
 from agentarea_api.api.v1.a2a_auth import require_a2a_execute_auth
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.config.database import get_db_session
 from agentarea_common.testing.flows import MainFlow
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
@@ -141,8 +142,21 @@ def override_user_context(mock_auth_context):
     app.dependency_overrides.pop(get_user_context, None)
 
 
+@pytest.fixture
+def mock_db_session():
+    """Session for the spend join: no rows, so every run reads as uncosted."""
+    session = AsyncMock()
+    result = MagicMock()
+    result.all.return_value = []
+    result.one.return_value = MagicMock(total=0, costed=0)
+    session.execute = AsyncMock(return_value=result)
+    return session
+
+
 @pytest.fixture(autouse=True)
-def override_trigger_dependencies(mock_trigger_service, mock_auth_context, mock_health_checker):
+def override_trigger_dependencies(
+    mock_trigger_service, mock_auth_context, mock_health_checker, mock_db_session
+):
     async def _override_trigger_service():
         return mock_trigger_service
 
@@ -155,15 +169,20 @@ def override_trigger_dependencies(mock_trigger_service, mock_auth_context, mock_
     async def _override_secret_manager():
         return AsyncMock()
 
+    async def _override_db_session():
+        return mock_db_session
+
     app.dependency_overrides[get_trigger_service] = _override_trigger_service
     app.dependency_overrides[require_a2a_execute_auth] = _override_auth
     app.dependency_overrides[get_trigger_health_check] = _override_health_checker
     app.dependency_overrides[get_secret_manager] = _override_secret_manager
+    app.dependency_overrides[get_db_session] = _override_db_session
     yield
     app.dependency_overrides.pop(get_trigger_service, None)
     app.dependency_overrides.pop(require_a2a_execute_auth, None)
     app.dependency_overrides.pop(get_trigger_health_check, None)
     app.dependency_overrides.pop(get_secret_manager, None)
+    app.dependency_overrides.pop(get_db_session, None)
 
 
 @pytest.fixture

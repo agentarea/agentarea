@@ -19,8 +19,8 @@ Key endpoints:
 import asyncio
 import json
 import logging
-from datetime import datetime
-from typing import Any, Literal, cast
+from datetime import datetime, timedelta
+from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
 from agentarea_api.api.deps.services import (
@@ -32,11 +32,14 @@ from agentarea_api.api.deps.services import (
 from agentarea_api.api.v1._icons import CHANNEL_ICON_NAMESPACE, build_icon_url
 from agentarea_common.auth.dependencies import UserContext, get_user_context
 from agentarea_common.config.app import get_app_settings
+from agentarea_common.config.database import get_db_session
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_secrets.catalog_service import SecretCatalogService, SecretNotFoundError
+from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
+from agentarea_triggers.infrastructure.orm import TriggerExecutionORM
 from agentarea_triggers.schemas.dto import TriggerCreate, TriggerUpdate
 from agentarea_triggers.trigger_service import (
     TriggerNotFoundError,
@@ -45,6 +48,9 @@ from agentarea_triggers.trigger_service import (
 )
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import Numeric, and_, func, select
+from sqlalchemy import cast as sa_cast
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +172,13 @@ class TriggerExecutionResponse(BaseModel):
             "trigger fired itself. Resolve the name through GET /v1/principals."
         ),
     )
+    cost_usd: float | None = Field(
+        default=None,
+        description=(
+            "What the task this run created has spent so far. Null when the run "
+            "created no task, or the task has not reported a cost yet."
+        ),
+    )
 
     @classmethod
     def from_domain_model(cls, execution: Any) -> "TriggerExecutionResponse":
@@ -214,16 +227,25 @@ class ExecutionMetricsResponse(BaseModel):
     """Response model for execution metrics."""
 
     trigger_id: UUID
-    period_hours: int
+    period_hours: int | None = Field(
+        default=None, description="Window these metrics cover. Null means the whole history."
+    )
     total_executions: int
     successful_executions: int
     failed_executions: int
     timeout_executions: int
-    success_rate: float
-    failure_rate: float
+    success_rate: float = Field(description="Percentage, 0-100.")
+    failure_rate: float = Field(description="Percentage, 0-100.")
     avg_execution_time_ms: float
     min_execution_time_ms: int
     max_execution_time_ms: int
+    total_cost_usd: float = Field(default=0.0, description="Spend of the tasks these runs created.")
+    avg_cost_usd: float = Field(
+        default=0.0, description="Spend per run that produced a costed task."
+    )
+    costed_executions: int = Field(
+        default=0, description="Runs whose task reported a cost; the divisor behind avg_cost_usd."
+    )
 
 
 class ExecutionTimelineResponse(BaseModel):
@@ -270,6 +292,68 @@ class TriggerRunResponse(BaseModel):
 
 
 # Utility Functions
+
+
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+
+
+def _task_cost_expr():
+    """Spend of a task, matching the task repository's own accounting.
+
+    ``own_cost`` excludes what delegated children spent — those are billed on
+    their own rows — and ``total_cost`` is the fallback for results written
+    before the two were split.
+    """
+    return func.coalesce(
+        sa_cast(TaskORM.result.op("->>")("own_cost"), Numeric),
+        sa_cast(TaskORM.result.op("->>")("total_cost"), Numeric),
+        0,
+    )
+
+
+async def _costs_by_task(
+    session: AsyncSession, workspace_id: str, task_ids: list[UUID]
+) -> dict[UUID, float]:
+    """Spend per task id, for the tasks a page of runs created."""
+    if not task_ids:
+        return {}
+    stmt = select(TaskORM.id, _task_cost_expr().label("cost")).where(
+        and_(TaskORM.workspace_id == workspace_id, TaskORM.id.in_(task_ids))
+    )
+    rows = (await session.execute(stmt)).all()
+    return {row.id: float(row.cost or 0) for row in rows}
+
+
+async def _trigger_spend(
+    session: AsyncSession, workspace_id: str, trigger_id: UUID, hours: int | None
+) -> tuple[float, int]:
+    """Total spend of one trigger and how many of its runs produced a task.
+
+    The cost of a run is not on the run: the execution row is written the
+    moment the task is handed off, while the bill accrues over the task's life.
+    So spend is always a join away, never a stored column.
+    """
+    conditions = [
+        TriggerExecutionORM.trigger_id == trigger_id,
+        TriggerExecutionORM.workspace_id == workspace_id,
+        TaskORM.workspace_id == workspace_id,
+    ]
+    if hours is not None:
+        conditions.append(
+            TriggerExecutionORM.executed_at >= datetime.utcnow() - timedelta(hours=hours)
+        )
+
+    stmt = (
+        select(
+            func.coalesce(func.sum(_task_cost_expr()), 0).label("total"),
+            func.count(TaskORM.id).label("costed"),
+        )
+        .select_from(TriggerExecutionORM)
+        .join(TaskORM, TaskORM.id == TriggerExecutionORM.task_id)
+        .where(and_(*conditions))
+    )
+    row = (await session.execute(stmt)).one()
+    return float(row.total or 0), int(row.costed or 0)
 
 
 async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) -> bool:
@@ -898,6 +982,7 @@ async def get_execution_history(
     end_time: datetime | None = Query(None, description="Filter executions before this time"),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
+    db_session: AsyncSession = Depends(get_db_session),
 ) -> ExecutionHistoryResponse:
     """Get execution history for a trigger with filtering and pagination.
 
@@ -914,6 +999,7 @@ async def get_execution_history(
         end_time: Optional end time filter
         user_context: Authentication context
         trigger_service: Injected trigger service
+        db_session: Session used to resolve what each run's task cost
 
     Returns:
         Paginated execution history
@@ -957,6 +1043,17 @@ async def get_execution_history(
         execution_responses = [
             TriggerExecutionResponse.from_domain_model(execution) for execution in executions
         ]
+
+        # What each run cost: the spend sits on the task it created, so it is
+        # resolved here rather than stored on the execution row.
+        costs = await _costs_by_task(
+            db_session,
+            user_context.workspace_id,
+            [response.task_id for response in execution_responses if response.task_id],
+        )
+        for response in execution_responses:
+            if response.task_id is not None:
+                response.cost_usd = costs.get(response.task_id)
 
         return ExecutionHistoryResponse(
             executions=execution_responses,
@@ -1025,20 +1122,28 @@ async def get_trigger_status(
 @router.get("/{trigger_id}/metrics", response_model=ExecutionMetricsResponse)
 async def get_execution_metrics(
     trigger_id: UUID,
-    hours: int = Query(24, ge=1, le=168, description="Time period in hours (max 7 days)"),
+    hours: int | None = Query(
+        None,
+        ge=1,
+        le=8760,
+        description="Time period in hours (max 1 year). Omit for the trigger's whole history.",
+    ),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
+    db_session: AsyncSession = Depends(get_db_session),
 ) -> ExecutionMetricsResponse:
     """Get execution metrics for a trigger.
 
-    Returns aggregated metrics including success rate, average execution time,
-    and failure counts for the specified time period.
+    Returns aggregated counts, success rate, execution time and spend. Spend is
+    the cost of the tasks those runs created, joined at read time — a run is
+    recorded when its task starts, the bill accrues afterwards.
 
     Args:
         trigger_id: The unique identifier of the trigger
-        hours: Time period in hours to analyze (default 24, max 168)
+        hours: Time period in hours to analyze; omitted means the whole history
         user_context: Authentication context
         trigger_service: Injected trigger service
+        db_session: Session used for the spend join
 
     Returns:
         Execution metrics for the trigger
@@ -1054,8 +1159,17 @@ async def get_execution_metrics(
 
         # Get execution metrics
         metrics = await trigger_service.get_execution_metrics(trigger_id, hours)
+        total_cost, costed = await _trigger_spend(
+            db_session, user_context.workspace_id, trigger_id, hours
+        )
 
-        return ExecutionMetricsResponse(trigger_id=trigger_id, **metrics)
+        return ExecutionMetricsResponse(
+            trigger_id=trigger_id,
+            total_cost_usd=round(total_cost, 6),
+            avg_cost_usd=round(total_cost / costed, 6) if costed else 0.0,
+            costed_executions=costed,
+            **metrics,
+        )
 
     except HTTPException:
         raise
