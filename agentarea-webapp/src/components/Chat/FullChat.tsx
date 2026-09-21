@@ -8,12 +8,13 @@ import type { HumanInputSecretValue } from "@/components/Chat/types";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useMentions } from "@/hooks/useMentions";
 import { useTaskActions } from "@/hooks/useTaskActions";
-import { canonicalType } from "@/lib/events/contract";
+import { canonicalType, type Part } from "@/lib/events/contract";
 import { normalizeSSEEvent } from "@/lib/events/normalize";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import {
   applyEvent,
   initialState,
+  type CompletedRun,
   type EventState,
 } from "@/lib/events/reducer";
 import {
@@ -26,6 +27,8 @@ import {
   formatTextForTextarea,
   restoreMentionIds,
 } from "@/utils/mentions";
+import ActivityGroup from "./ActivityGroup";
+import { buildActivitySegments } from "./activityView";
 import { BadgeSuggestions } from "./componets/BadgeSuggestions";
 import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
 import { ChatInputArea } from "./componets/ChatInputArea";
@@ -37,6 +40,7 @@ import { useFileUpload } from "./hooks/useFileUpload";
 // Import hooks
 import { useScrollManagement } from "./hooks/useScrollManagement";
 import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
+import { createTaskWithAttachments } from "./utils/createTaskWithAttachments";
 
 // A user message the person typed. Not a task event — interleaved by arrival.
 interface UserChatMessage {
@@ -52,6 +56,7 @@ interface UserChatMessage {
 interface UserEntry {
   message: UserChatMessage;
   afterPartId: string | null;
+  completedRunCount: number;
 }
 
 export interface Agent {
@@ -59,7 +64,7 @@ export interface Agent {
   name: string;
   description?: string | null;
   icon?: string | null;
-  color_token?: string | null;
+ 
 }
 
 export interface ProjectOption {
@@ -165,68 +170,6 @@ function toStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
-function bufferToHex(buffer: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function bufferToBase64(buffer: ArrayBuffer): string {
-  let binary = "";
-  for (const b of new Uint8Array(buffer)) {
-    binary += String.fromCharCode(b);
-  }
-  return btoa(binary);
-}
-
-// Upload one attachment via the presigned two-step: mint a presigned PUT
-// bound to the file's sha256, then PUT the bytes directly to the object
-// store. Returns the ref the task-create body references.
-async function uploadAttachment(file: File): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-  const sha256Hex = bufferToHex(digest);
-  const sha256Base64 = bufferToBase64(digest);
-  const contentType = file.type || "application/octet-stream";
-
-  const presignResponse = await fetch("/api/files/upload-url", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      filename: file.name,
-      content_type: contentType,
-      sha256: sha256Hex,
-      size: file.size,
-    }),
-  });
-  if (!presignResponse.ok) {
-    const errorBody = await presignResponse.text();
-    throw new Error(
-      errorBody || `Upload presign failed with status ${presignResponse.status}`
-    );
-  }
-  const { ref, upload_url } = (await presignResponse.json()) as {
-    ref: string;
-    upload_url: string;
-  };
-
-  const putResponse = await fetch(upload_url, {
-    method: "PUT",
-    headers: {
-      "x-amz-checksum-sha256": sha256Base64,
-      "Content-Type": contentType,
-    },
-    body: file,
-  });
-  if (!putResponse.ok) {
-    const errorBody = await putResponse.text();
-    throw new Error(
-      errorBody || `File upload failed with status ${putResponse.status}`
-    );
-  }
-
-  return ref;
-}
-
 interface FullChatProps {
   agent: Agent;
   availableAgents?: Agent[];
@@ -272,6 +215,10 @@ export default function FullChat({
 
   const parts = eventState.parts;
   const hasUserMessages = userEntries.length > 0;
+  const visiblePartIds = React.useMemo(
+    () => new Set(parts.map((part) => part.partId)),
+    [parts]
+  );
 
   const pushEvent = React.useCallback(
     (eventType: string, data: Record<string, unknown>) => {
@@ -283,9 +230,17 @@ export default function FullChat({
   );
 
   const addUserMessage = React.useCallback((message: UserChatMessage) => {
-    const order = eventStateRef.current.order;
+    const currentState = eventStateRef.current;
+    const order = currentState.order;
     const afterPartId = order.length ? order[order.length - 1] : null;
-    setUserEntries((prev) => [...prev, { message, afterPartId }]);
+    setUserEntries((prev) => [
+      ...prev,
+      {
+        message,
+        afterPartId,
+        completedRunCount: currentState.completedRuns.length,
+      },
+    ]);
   }, []);
 
   // Ref so the agent-change effect can call the latest clearFiles without
@@ -332,6 +287,7 @@ export default function FullChat({
   const {
     selectedFiles,
     fileInputRef,
+    handleFileSelect,
     removeFile,
     openFileDialog,
     clearFiles,
@@ -551,10 +507,6 @@ export default function FullChat({
       files: selectedFiles.length > 0 ? selectedFiles : undefined,
     };
 
-    addUserMessage(userMessage);
-    setInput("");
-    setInputDisplay("");
-    clearFiles();
     setIsLoading(true);
 
     if (textareaRef.current) {
@@ -562,51 +514,43 @@ export default function FullChat({
     }
 
     try {
-      // Upload each attachment directly to the object store via a presigned
-      // PUT, then reference the returned refs in the JSON task-create body
-      // (task creation is JSON, not multipart).
-      const attachments: string[] = [];
-      for (const file of filesToUpload) {
-        attachments.push(await uploadAttachment(file));
-      }
-
-      const taskData = {
-        description:
-          plainContent || "Use the attached files to complete the task.",
-        project_id: selectedProjectId,
-        task_policy: taskPolicy,
-        parameters: {
-          context: {
+      const response = await createTaskWithAttachments({
+        files: filesToUpload,
+        request: (attachments) => {
+          const taskData = {
+            description:
+              plainContent || "Use the attached files to complete the task.",
             project_id: selectedProjectId,
-            task_policy_rule_id: selectedTaskPolicy?.id,
-            task_policy_rule_name: selectedTaskPolicy?.name,
-          },
-          task_type: "chat",
-          session_id: `chat-${Date.now()}`,
-        },
-        enable_agent_communication: true,
-        ...(attachments.length > 0 ? { attachments } : {}),
-      };
+            task_policy: taskPolicy,
+            parameters: {
+              context: {
+                project_id: selectedProjectId,
+                task_policy_rule_id: selectedTaskPolicy?.id,
+                task_policy_rule_name: selectedTaskPolicy?.name,
+              },
+              task_type: "chat",
+              session_id: `chat-${Date.now()}`,
+            },
+            enable_agent_communication: true,
+            ...(attachments.length > 0 ? { attachments } : {}),
+          };
 
-      const response = await fetch(`/api/agents/${agent.id}/tasks/create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
+          return fetch(`/api/agents/${agent.id}/tasks/create`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "text/event-stream",
+            },
+            body: JSON.stringify(taskData),
+          });
         },
-        body: JSON.stringify(taskData),
+        onAccepted: () => {
+          addUserMessage(userMessage);
+          setInput("");
+          setInputDisplay("");
+          clearFiles();
+        },
       });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(
-          errorBody || `Task creation failed with status ${response.status}`
-        );
-      }
-
-      if (!response.body) {
-        throw new Error("No response body");
-      }
 
       const reader = response.body.getReader();
 
@@ -615,6 +559,7 @@ export default function FullChat({
         buffered: true,
       });
     } catch (error) {
+      setIsLoading(false);
       toast.error("Failed to send message", {
         description: error instanceof Error ? error.message : String(error),
       });
@@ -686,30 +631,89 @@ export default function FullChat({
   const renderItems = React.useMemo(() => {
     const items: Array<
       | { kind: "user"; message: UserChatMessage }
-      | { kind: "part"; partId: string }
+      | {
+          kind: "parts";
+          parts: Part[];
+          key: string;
+          completedRuns?: CompletedRun[];
+        }
     > = [];
+    const terminalOnlyRuns = eventState.completedRuns.filter(
+      (run) =>
+        Boolean(run.terminalAnswer?.trim()) &&
+        !run.partIds.some((partId) => visiblePartIds.has(partId))
+    );
+    const terminalRunsByUserId = new Map<string, CompletedRun[]>();
+    const unanchoredTerminalRuns: CompletedRun[] = [];
+    for (const [runIndex, run] of terminalOnlyRuns.map(
+      (run) => [eventState.completedRuns.indexOf(run), run] as const
+    )) {
+      const entry = userEntries.find(
+        (candidate) => candidate.completedRunCount === runIndex
+      );
+      if (!entry) {
+        unanchoredTerminalRuns.push(run);
+        continue;
+      }
+      const existing = terminalRunsByUserId.get(entry.message.id) ?? [];
+      existing.push(run);
+      terminalRunsByUserId.set(entry.message.id, existing);
+    }
+    const pushUser = (message: UserChatMessage) => {
+      items.push({ kind: "user", message });
+      const terminalRuns = terminalRunsByUserId.get(message.id);
+      if (terminalRuns?.length) {
+        items.push({
+          kind: "parts",
+          parts: [],
+          key: `terminal-${terminalRuns[0].id}`,
+          completedRuns: terminalRuns,
+        });
+      }
+    };
     const usersByAnchor = new Map<string | null, UserChatMessage[]>();
     for (const entry of userEntries) {
       const list = usersByAnchor.get(entry.afterPartId) ?? [];
       list.push(entry.message);
       usersByAnchor.set(entry.afterPartId, list);
     }
-    for (const message of usersByAnchor.get(null) ?? []) {
-      items.push({ kind: "user", message });
-    }
+    for (const message of usersByAnchor.get(null) ?? []) pushUser(message);
+    let pending: Part[] = [];
+    const flush = () => {
+      if (pending.length)
+        items.push({ kind: "parts", parts: pending, key: pending[0].partId });
+      pending = [];
+    };
     for (const part of parts) {
-      items.push({ kind: "part", partId: part.partId });
-      for (const message of usersByAnchor.get(part.partId) ?? []) {
-        items.push({ kind: "user", message });
+      pending.push(part);
+      const messages = usersByAnchor.get(part.partId);
+      if (messages?.length) {
+        flush();
+        for (const message of messages) pushUser(message);
       }
     }
+    flush();
+    const emittedUserIds = new Set(
+      items
+        .filter(
+          (item): item is { kind: "user"; message: UserChatMessage } =>
+            item.kind === "user"
+        )
+        .map((item) => item.message.id)
+    );
+    for (const entry of userEntries) {
+      if (!emittedUserIds.has(entry.message.id)) pushUser(entry.message);
+    }
+    if (unanchoredTerminalRuns.length) {
+      items.push({
+        kind: "parts",
+        parts: [],
+        key: `terminal-${unanchoredTerminalRuns[0].id}`,
+        completedRuns: unanchoredTerminalRuns,
+      });
+    }
     return items;
-  }, [userEntries, parts]);
-
-  const partsById = React.useMemo(() => {
-    const map = new Map(parts.map((p) => [p.partId, p]));
-    return map;
-  }, [parts]);
+  }, [eventState.completedRuns, userEntries, parts, visiblePartIds]);
 
   const terminalTone =
     eventState.status === "failed"
@@ -775,7 +779,7 @@ export default function FullChat({
         <div
           ref={messagesContainerRef}
           onScroll={handleScroll}
-          className={`space-y-3 overflow-y-auto px-3 py-3 ${
+          className={`mx-auto w-full max-w-3xl space-y-4 overflow-y-auto px-4 py-4 md:px-6 ${
             hasUserMessages ? "flex-1" : "min-h-0"
           }`}
         >
@@ -791,18 +795,44 @@ export default function FullChat({
                 />
               );
             }
-            const part = partsById.get(item.partId);
-            if (!part) return null;
+            const ids = new Set(item.parts.map((part) => part.partId));
+            const runs =
+              item.completedRuns ??
+              eventState.completedRuns.map((run) => ({
+                ...run,
+                // Keep each final answer after its run and its user-message anchor.
+                terminalAnswer: (() => {
+                  const lastVisiblePartId = [...run.partIds]
+                    .reverse()
+                    .find((partId) => visiblePartIds.has(partId));
+                  return lastVisiblePartId && ids.has(lastVisiblePartId)
+                    ? run.terminalAnswer
+                    : null;
+                })(),
+              }));
             return (
-              <PartRenderer
-                key={part.partId}
-                part={part}
-                onFormSubmit={handleFormSubmit}
-                onA2UIAction={dispatchA2UIAction}
-              />
+              <React.Fragment key={item.key}>
+                {buildActivitySegments(item.parts, runs).map((segment) =>
+                  segment.kind === "work" ? (
+                    <ActivityGroup
+                      key={segment.run.id}
+                      run={segment.run}
+                      onFormSubmit={handleFormSubmit}
+                      onA2UIAction={dispatchA2UIAction}
+                    />
+                  ) : (
+                    <PartRenderer
+                      key={segment.part.partId}
+                      part={segment.part}
+                      onFormSubmit={handleFormSubmit}
+                      onA2UIAction={dispatchA2UIAction}
+                    />
+                  )
+                )}
+              </React.Fragment>
             );
           })}
-          {eventState.terminalMessage && (
+          {eventState.terminalMessage && eventState.status !== "completed" && (
             <StatusIndicator tone={terminalTone}>
               {eventState.terminalMessage}
             </StatusIndicator>
@@ -825,28 +855,12 @@ export default function FullChat({
       {/* Input Area */}
       <div
         className={cn(
-          "relative mx-auto w-full transition-all duration-700 ease-out group",
-          startCentered && !hasUserMessages ? "max-w-3xl" : ""
+          "group relative mx-auto w-full max-w-3xl px-4 transition-all duration-700 ease-out md:px-6"
         )}
       >
-        {/* Subtle decorative elements for centered state */}
-        {startCentered && !hasUserMessages && (
-          <>
-            <div className="absolute -left-12 top-1/2 -translate-y-1/2 w-24 h-24 bg-primary/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-            <div className="absolute -right-12 top-1/2 -translate-y-1/2 w-24 h-24 bg-sky-500/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-          </>
-        )}
-
         <div
           ref={cardContainerRef}
-          className={cn(
-            "card relative w-full cursor-auto bg-white hover:shadow-none dark:bg-zinc-900",
-            "px-2 pb-2 pt-0 border-t",
-            startCentered && !hasUserMessages
-              ? "border shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] rounded-2xl dark:border-zinc-800 hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)]"
-              : "rounded-t-lg",
-            "transition-all duration-500 ease-out"
-          )}
+          className="relative w-full cursor-auto pb-3"
         >
           <ChatInputArea
             input={input}
@@ -858,6 +872,7 @@ export default function FullChat({
             selectedFiles={selectedFiles}
             onRemoveFile={removeFile}
             onOpenFileDialog={openFileDialog}
+            onFileSelect={handleFileSelect}
             fileInputRef={fileInputRef}
             textareaRef={textareaRef}
             onKeyDown={handleKeyDown}

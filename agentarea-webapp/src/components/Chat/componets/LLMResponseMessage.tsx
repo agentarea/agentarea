@@ -1,30 +1,32 @@
 import React, { useState } from "react";
 import { ChevronRight, Lightbulb } from "lucide-react";
-import { Streamdown } from "streamdown";
-import type { Components } from "streamdown";
+import { MessageMarkdown } from "@/components/Chat/MessageMarkdown";
 import { cn } from "@/lib/utils";
 import { useFormatTimestamp } from "../../../utils/dateUtils";
 import { LLMResponseData } from "../types";
-import { fileAwareMarkdownComponents, preprocessFileLinks } from "../utils/markdownComponents";
 import MessageWrapper from "./MessageWrapper";
 
 const ThinkingBlock: React.FC<{ content: string }> = ({ content }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="mb-2 rounded-lg border border-sky-100 bg-sky-50/40 dark:border-sky-900/60 dark:bg-sky-950/20">
+    <div className="my-2">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-sky-600 dark:text-sky-300"
+        aria-expanded={isExpanded}
+        className="flex w-full items-center gap-1.5 rounded-md py-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ChevronRight
-          className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-90")}
+          className={cn(
+            "h-3 w-3 transition-transform",
+            isExpanded && "rotate-90"
+          )}
         />
         <Lightbulb className="h-3 w-3" />
         <span className="font-medium">Reasoning</span>
       </button>
       {isExpanded && (
-        <div className="whitespace-pre-wrap px-3 pb-2 text-xs text-sky-700/90 dark:text-sky-200/80">
+        <div className="whitespace-pre-wrap py-2 pl-5 text-xs leading-5 text-muted-foreground">
           {content}
         </div>
       )}
@@ -40,10 +42,8 @@ export const LLMResponseMessage: React.FC<{
   return (
     <MessageWrapper>
       <div className="min-w-0 flex-1 pb-1">
-        <div className="flex items-center gap-2 text-xs">
-          <span className="font-medium text-foreground">
-            {agent_name || "Assistant"}
-          </span>
+        <div className="flex items-center gap-2 text-[11px] leading-4 text-muted-foreground">
+          <span>{agent_name || "Assistant"}</span>
           <span className="text-muted-foreground">
             {formatTimestamp(data.timestamp)}
           </span>
@@ -51,13 +51,7 @@ export const LLMResponseMessage: React.FC<{
 
         {data.thinking && <ThinkingBlock content={data.thinking} />}
 
-        <Streamdown
-          className="prose prose-sm mt-1 max-w-none text-zinc-700 dark:prose-invert dark:text-zinc-300"
-          components={fileAwareMarkdownComponents as Components}
-          linkSafety={{ enabled: false }}
-        >
-          {preprocessFileLinks(data.content)}
-        </Streamdown>
+        <MessageMarkdown className="mt-1" content={data.content} />
       </div>
     </MessageWrapper>
   );

@@ -1,7 +1,8 @@
 import React from "react";
-import type { Part } from "../contract";
+import { MessageMarkdown } from "@/components/Chat/MessageMarkdown";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { stripA2UIFromStreamingContent } from "../a2ui";
+import type { Part } from "../contract";
 
 /** Renders an llm part: streamed chunk text or the final assistant content. */
 export const TextPart: React.FC<{ part: Part }> = ({ part }) => {
@@ -19,16 +20,16 @@ export const TextPart: React.FC<{ part: Part }> = ({ part }) => {
   const failed = part.eventType === "llm.call.failed";
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="min-w-0 px-2">
       {failed ? (
         <StatusIndicator tone="danger">LLM call failed</StatusIndicator>
-      ) : streaming ? (
+      ) : streaming && !content ? (
         <StatusIndicator tone="info" pulse>
           Thinking
         </StatusIndicator>
       ) : null}
       {content ? (
-        <p className="whitespace-pre-wrap text-sm text-foreground">{content}</p>
+        <MessageMarkdown content={content} isStreaming={streaming} />
       ) : null}
     </div>
   );

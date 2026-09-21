@@ -29,7 +29,6 @@ export function FolderTable({
   onBrowseFiles,
   showUploadZone,
   isDragging,
-  readOnly,
   emptyMessage,
 }: {
   entries: FolderEntry[];
@@ -47,7 +46,6 @@ export function FolderTable({
   showUploadZone: boolean;
   /** Whether something is being dragged over the surrounding pane. */
   isDragging: boolean;
-  readOnly: boolean;
   /** Replaces the stock description when the whole browser has no files. */
   emptyMessage?: string;
 }) {
@@ -192,11 +190,7 @@ export function FolderTable({
           icons={[FolderOpen]}
           title={search ? t("noResults") : t("emptyFolder")}
           description={
-            search
-              ? t("trySearch")
-              : readOnly
-                ? t("readOnly")
-                : (emptyMessage ?? t("emptyDescription"))
+            search ? t("trySearch") : (emptyMessage ?? t("emptyDescription"))
           }
           className="border-0 bg-transparent py-12 shadow-none"
           action={

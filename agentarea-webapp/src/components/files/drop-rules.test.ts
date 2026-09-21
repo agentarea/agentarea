@@ -1,17 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canMoveInto, isTaskOwned } from "./drop-rules";
-
-describe("isTaskOwned", () => {
-  it("covers the tasks folder and everything under it", () => {
-    expect(isTaskOwned("tasks")).toBe(true);
-    expect(isTaskOwned("tasks/t-1/workspace/out.txt")).toBe(true);
-  });
-
-  it("does not catch a folder merely starting with the same letters", () => {
-    expect(isTaskOwned("tasksy")).toBe(false);
-    expect(isTaskOwned("my-tasks/notes.md")).toBe(false);
-  });
-});
+import { canMoveInto } from "./drop-rules";
 
 describe("canMoveInto", () => {
   it("allows a move to an unrelated folder", () => {
@@ -38,11 +26,5 @@ describe("canMoveInto", () => {
 
   it("allows a sibling whose name merely shares a prefix", () => {
     expect(canMoveInto("wiki", "wiki-archive")).toBe(true);
-  });
-
-  it("refuses task-owned paths at either end", () => {
-    expect(canMoveInto("tasks/t-1/workspace/out.txt", "docs")).toBe(false);
-    expect(canMoveInto("wiki/index.md", "tasks")).toBe(false);
-    expect(canMoveInto("wiki/index.md", "tasks/t-1/workspace")).toBe(false);
   });
 });

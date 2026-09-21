@@ -1,18 +1,18 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useId, useMemo, useState } from "react";
 import { Check, KeyRound, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import BaseMessage from "./BaseMessage";
-import MessageWrapper from "./MessageWrapper";
+import { Textarea } from "@/components/ui/textarea";
 import type {
   HumanInputField,
   HumanInputRequestData,
   HumanInputSecretValue,
 } from "../types";
+import BaseMessage from "./BaseMessage";
+import MessageWrapper from "./MessageWrapper";
 
 interface Props {
   data: HumanInputRequestData;
@@ -32,6 +32,7 @@ function initialValue(field: HumanInputField): FieldValue {
 }
 
 const HumanInputMessage: React.FC<Props> = ({ data }) => {
+  const formId = useId();
   const fields = useMemo(() => data.questions ?? [], [data.questions]);
   const hasSecret = fields.some((f) => f.type === "secret");
 
@@ -81,11 +82,13 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
 
   const renderField = (field: HumanInputField) => {
     const value = values[field.id];
-    const label = (
-      <Label className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-        {field.type === "secret" && (
-          <Lock className="h-3 w-3 text-amber-500" />
-        )}
+    const inputId = `${formId}-${field.id}`;
+    const label = (htmlFor?: string) => (
+      <Label
+        htmlFor={htmlFor}
+        className="flex items-center gap-1.5 text-xs font-medium text-foreground"
+      >
+        {field.type === "secret" && <Lock className="h-3 w-3 text-amber-500" />}
         {field.question}
       </Label>
     );
@@ -94,8 +97,9 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
       case "secret":
         return (
           <div key={field.id} className="flex flex-col gap-1">
-            {label}
+            {label(inputId)}
             <Input
+              id={inputId}
               type="password"
               autoComplete="off"
               placeholder="••••••••"
@@ -111,8 +115,9 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
       case "textarea":
         return (
           <div key={field.id} className="flex flex-col gap-1">
-            {label}
+            {label(inputId)}
             <Textarea
+              id={inputId}
               value={value as string}
               onChange={(e) => setValue(field.id, e.target.value)}
               className="min-h-[70px] text-sm"
@@ -123,8 +128,9 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
       case "number":
         return (
           <div key={field.id} className="flex flex-col gap-1">
-            {label}
+            {label(inputId)}
             <Input
+              id={inputId}
               type="number"
               value={value as string}
               onChange={(e) => setValue(field.id, e.target.value)}
@@ -151,7 +157,7 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
       case "select":
         return (
           <div key={field.id} className="flex flex-col gap-1">
-            {label}
+            {label()}
             <div className="flex flex-col gap-1">
               {(field.options ?? []).map((opt) => (
                 <label
@@ -174,7 +180,7 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
       case "multiselect":
         return (
           <div key={field.id} className="flex flex-col gap-1">
-            {label}
+            {label()}
             <div className="flex flex-col gap-1">
               {(field.options ?? []).map((opt) => {
                 const arr = (value as string[]) ?? [];
@@ -207,8 +213,9 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
       default: // text
         return (
           <div key={field.id} className="flex flex-col gap-1">
-            {label}
+            {label(inputId)}
             <Input
+              id={inputId}
               type="text"
               value={value as string}
               onChange={(e) => setValue(field.id, e.target.value)}
@@ -218,9 +225,34 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
     }
   };
 
+  if (isResolved) {
+    return (
+      <MessageWrapper type="tool-result" icon={<Check className="text-muted-foreground" />}>
+        <details className="group min-w-0 flex-1 text-[13px] leading-5">
+          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-1 py-0.5 text-foreground/80 outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <span className="font-medium">Information provided</span>
+            <span className="min-w-0 truncate text-muted-foreground">
+              {data.question || "Additional information"}
+            </span>
+          </summary>
+          <div className="space-y-1 pb-1 pl-3 pt-1 text-muted-foreground">
+            <p>Response submitted. The task has resumed.</p>
+            {fields.length > 0 && (
+              <ul className="list-disc space-y-0.5 pl-4">
+                {fields.map((field) => (
+                  <li key={field.id}>{field.question}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </details>
+      </MessageWrapper>
+    );
+  }
+
   return (
     <MessageWrapper
-      type={isResolved ? "tool-result" : "tool-call"}
+      type="tool-call"
       icon={
         hasSecret ? (
           <KeyRound className="text-amber-500" />
@@ -238,26 +270,16 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
           </div>
         }
         headerRight={
-          isResolved ? (
-            <span className="text-green-600">Provided</span>
-          ) : (
-            <span className="animate-pulse text-amber-600">Input required</span>
-          )
+          <span className="animate-pulse text-amber-600">Input required</span>
         }
-        collapsed={isResolved}
+        collapsed={false}
       >
-        {isResolved ? (
-          <p className="text-sm text-muted-foreground">
-            Response submitted. The task has resumed.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            <div className="space-y-3">{fields.map(renderField)}</div>
-            <Button size="sm" onClick={handleSubmit} disabled={!canSubmit}>
-              Submit
-            </Button>
-          </div>
-        )}
+        <div className="space-y-3">
+          <div className="space-y-3">{fields.map(renderField)}</div>
+          <Button size="sm" onClick={handleSubmit} disabled={!canSubmit}>
+            Submit
+          </Button>
+        </div>
       </BaseMessage>
     </MessageWrapper>
   );

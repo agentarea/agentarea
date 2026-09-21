@@ -1,6 +1,5 @@
 import React from "react";
-import { Streamdown } from "streamdown";
-import type { Components } from "streamdown";
+import { MessageMarkdown } from "@/components/Chat/MessageMarkdown";
 import { useFormatTimestamp } from "../../../utils/dateUtils";
 import BaseMessage from "./BaseMessage";
 import MessageWrapper from "./MessageWrapper";
@@ -26,20 +25,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
         headerLeft={agent_name || "Assistant"}
         headerRight={formatTimestamp(timestamp)}
       >
-        <Streamdown
-          className="prose prose-sm dark:prose-invert max-w-none"
-          components={
-            {
-              think: (props: Record<string, unknown>) => (
-                <div className="text-xs text-gray-400 dark:text-gray-300">
-                  {props.children as React.ReactNode}
-                </div>
-              ),
-            } as Components
-          }
-        >
-          {content}
-        </Streamdown>
+        <MessageMarkdown content={content} />
       </BaseMessage>
     </MessageWrapper>
   );

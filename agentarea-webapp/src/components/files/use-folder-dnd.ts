@@ -9,7 +9,7 @@ import {
   type DroppedFile,
 } from "@/lib/file-drop";
 import { cn } from "@/lib/utils";
-import { canMoveInto, isTaskOwned } from "./drop-rules";
+import { canMoveInto } from "./drop-rules";
 import type { TreeNode } from "./file-tree";
 
 /** Drag and drop for a folder view: OS files land in a folder, and items move
@@ -43,12 +43,10 @@ export function useFolderDnd({
 
   /** Make a folder — a row, a tree node, the root — a drop target. */
   const folderTarget = (folderPath: string) => {
-    const writable = !isTaskOwned(folderPath);
     const handlers: DropHandlers = {
-      onFiles:
-        onUploadFiles && writable
-          ? (dropped) => onUploadFiles(dropped, folderPath)
-          : undefined,
+      onFiles: onUploadFiles
+        ? (dropped) => onUploadFiles(dropped, folderPath)
+        : undefined,
       // With nothing dragged yet the target is merely potential, so it stays
       // enabled; the specific pairing is judged once a source is known.
       onMove:
@@ -85,7 +83,7 @@ export function useFolderDnd({
   };
 
   const dragSource = (path: string) =>
-    onMove && !isTaskOwned(path)
+    onMove
       ? {
           ...dragSourceProps(path),
           onDragStart: (event: DragEvent) => {
