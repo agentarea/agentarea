@@ -25,7 +25,7 @@ export function SegmentedControl<T extends string = string>({
       {...props}
       variant={variant}
       className={cn(
-        "rounded-md border border-border/70 bg-transparent p-0.5 shadow-none",
+        "rounded-md border border-border/70 bg-transparent p-0.5 shadow-none dark:border-zinc-700 dark:bg-zinc-900",
         className
       )}
       itemClassName={cn(

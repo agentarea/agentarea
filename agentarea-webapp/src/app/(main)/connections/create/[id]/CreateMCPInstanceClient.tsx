@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Badge, badgeVariants } from "@/components/ui/badge";
+import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import Divider from "@/components/ui/divider";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
@@ -647,7 +648,10 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         {/* OAuth pane */}
         {showOAuth && (
           <div className="mt-6 space-y-3">
-            <p className="text-sm text-muted-foreground">{t("oauthSupported")}</p>
+            <div className="flex items-center gap-2">
+              <FormLabel icon={ShieldCheck}>{t("authorization")}</FormLabel>
+              <BlueprintBadge>{t("oauthDetected")}</BlueprintBadge>
+            </div>
             <StartAgentButton
               type="button"
               size="xs"
