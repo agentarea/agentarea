@@ -4,6 +4,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import UUID
 
 import httpx
@@ -1264,9 +1265,18 @@ class MCPServerInstanceService:
         except UnsafeUrlError:
             logger.debug("Auth-method detection refused for unsafe URL %s", mcp_url, exc_info=True)
             return []
+        # Rebuild the probe target from the validated parts so the scheme is one
+        # of two fixed values and no fragment or userinfo rides along; the
+        # request never goes to the raw user string.
+        parts = urlsplit(mcp_url)
+        scheme = "https" if parts.scheme.lower() == "https" else "http"
+        host = parts.hostname or ""
+        netloc = f"{host}:{parts.port}" if parts.port else host
+        query = f"?{parts.query}" if parts.query else ""
+        probe_url = f"{scheme}://{netloc}{parts.path}{query}"
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
-                resp = await client.get(mcp_url, follow_redirects=False)
+                resp = await client.get(probe_url, follow_redirects=False)
         except Exception:
             logger.debug("Auth-method detection failed for %s", mcp_url, exc_info=True)
             return []
@@ -1279,7 +1289,7 @@ class MCPServerInstanceService:
         www_auth = resp.headers.get("www-authenticate", "").lower()
         if "resource_metadata" in www_auth or "bearer" in www_auth:
             try:
-                await MCPOAuthClientService().discover_auth_server(mcp_url)
+                await MCPOAuthClientService().discover_auth_server(probe_url)
                 return ["oauth", "credentials"]
             except Exception:
                 logger.debug("OAuth discovery failed for %s", mcp_url, exc_info=True)
