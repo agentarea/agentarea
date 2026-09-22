@@ -19269,7 +19269,7 @@
     },
     "/v1/mcp-server-instances/validate-connection": {
       "post": {
-        "description": "Test a connection to an MCP server without creating an instance.",
+        "description": "Test a connection to an MCP server without creating an instance.\n\n``server_id`` (optional) is the catalog spec being connected; with it, an\nauth failure also reports the spec endpoint's ``auth_methods``.",
         "operationId": "validate_connection_v1_mcp_server_instances_validate_connection_post",
         "requestBody": {
           "content": {
