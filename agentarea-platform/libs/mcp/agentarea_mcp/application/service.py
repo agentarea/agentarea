@@ -1260,8 +1260,13 @@ class MCPServerInstanceService:
         the right auth form up front instead of after a first failed attempt.
         """
         try:
+            validate_outbound_url(mcp_url, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
+        except UnsafeUrlError:
+            logger.debug("Auth-method detection refused for unsafe URL %s", mcp_url, exc_info=True)
+            return []
+        try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
-                resp = await client.get(mcp_url, follow_redirects=True)
+                resp = await client.get(mcp_url, follow_redirects=False)
         except Exception:
             logger.debug("Auth-method detection failed for %s", mcp_url, exc_info=True)
             return []
