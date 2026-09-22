@@ -623,6 +623,28 @@
         "loadServersFailed": "Failed to load MCP servers",
         "specNotFound": "MCP server spec not found",
         "serverNotSelected": "MCP server is not selected"
+      },
+      "connect": {
+        "nameLabel": "Name",
+        "nameHint": "Shown across agents, tasks and audit logs. Must be unique in this workspace.",
+        "detecting": "Checking how this server authorizes connections…",
+        "connect": "Connect",
+        "connecting": "Connecting…",
+        "tryAgain": "Try Again",
+        "retryProbe": "Retry",
+        "probeFailed": "Could not reach the server to detect its authorization method.",
+        "oauthTab": "OAuth",
+        "manualTab": "Manual",
+        "oauthSupported": "This server supports OAuth authorization.",
+        "authorizeOAuth": "Authorize with OAuth",
+        "haveCredentials": "Have credentials? Enter manually instead",
+        "openEndpoint": "This server does not require authorization.",
+        "toolsFound": "{count} tools found",
+        "encryptionNote": "Credentials are encrypted at rest and scoped to this workspace.",
+        "connectionFailed": "Connection failed",
+        "createFailed": "Failed to create connection",
+        "oauthDiscoveryFailed": "OAuth discovery failed — this server may not support OAuth",
+        "oauthStartFailed": "Failed to start OAuth flow"
       }
     },
     "instanceForm": {

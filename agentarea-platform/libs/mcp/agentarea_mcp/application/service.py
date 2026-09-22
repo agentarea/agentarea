@@ -1226,21 +1226,59 @@ class MCPServerInstanceService:
             all_msgs.append(str(e))
             combined = " ".join(all_msgs)
 
-            if "401" in combined:
-                return {
-                    "valid": False,
-                    "errors": ["Authentication failed — check your credentials"],
-                }
-            if "403" in combined:
+            # The transport fallback (streamable HTTP -> SSE) surfaces only the
+            # last failure, so a 401 on /mcp is often masked by a 404 on /sse.
+            # Ask the endpoint directly whether it wants auth so the caller can
+            # tell "wrong credentials" from "unreachable" and render the right form.
+            auth_methods = await self._detect_auth_methods(url)
+            needs_auth = auth_methods in (["oauth", "credentials"], ["credentials"])
+            if "403" in combined and "401" not in combined:
                 return {
                     "valid": False,
                     "errors": ["Access denied — insufficient permissions"],
+                    "auth_methods": auth_methods,
+                }
+            if "401" in combined or needs_auth:
+                return {
+                    "valid": False,
+                    "errors": ["Authentication failed — check your credentials"],
+                    "auth_methods": auth_methods,
                 }
             logger.warning("validate_connection failed for %s: %s", url, e, exc_info=True)
             return {
                 "valid": False,
                 "errors": ["Connection failed. Verify the URL, headers, and server availability."],
             }
+
+    async def _detect_auth_methods(self, mcp_url: str) -> "list[str]":
+        """Classify an endpoint's unauthenticated challenge without creating an instance.
+
+        ``["oauth", "credentials"]`` when the 401/403 advertises a bearer challenge
+        and authorization-server discovery succeeds, ``["credentials"]`` for any
+        other auth challenge, ``["none"]`` for an open endpoint, ``[]`` when the
+        endpoint could not be classified. Lets the create-connection page render
+        the right auth form up front instead of after a first failed attempt.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+                resp = await client.get(mcp_url, follow_redirects=True)
+        except Exception:
+            logger.debug("Auth-method detection failed for %s", mcp_url, exc_info=True)
+            return []
+
+        if resp.status_code in (200, 405):
+            return ["none"]
+        if resp.status_code not in (401, 403):
+            return []
+
+        www_auth = resp.headers.get("www-authenticate", "").lower()
+        if "resource_metadata" in www_auth or "bearer" in www_auth:
+            try:
+                await MCPOAuthClientService().discover_auth_server(mcp_url)
+                return ["oauth", "credentials"]
+            except Exception:
+                logger.debug("OAuth discovery failed for %s", mcp_url, exc_info=True)
+        return ["credentials"]
 
     async def probe_instance_auth(self, instance_id: UUID) -> dict[str, Any]:
         import httpx
