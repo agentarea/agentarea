@@ -8,6 +8,7 @@ from typing import Any, cast
 from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
     decide_tool_policy,
+    tool_matches_any,
 )
 from agentarea_common.events.contract import canonical_type, ensure_terminal_message
 from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
@@ -55,7 +56,7 @@ def policy_requires_approval(effective_policy: dict[str, Any] | None, tool_name:
     approval = (effective_policy or {}).get("approval") or {}
     if approval.get("requires_human_approval") is True:
         return True
-    return tool_name in (approval.get("escalation_rules") or [])
+    return tool_matches_any(tool_name, approval.get("escalation_rules") or [])
 
 
 def policy_approvers(effective_policy: dict[str, Any] | None) -> list[str]:
@@ -72,7 +73,13 @@ def approvers_for_tool(effective_policy: dict[str, Any] | None, tool_name: str) 
     existing soft default, see issue #198).
     """
     approval = (effective_policy or {}).get("approval") or {}
-    per_tool = (approval.get("approvers_by_tool") or {}).get(tool_name)
+    by_tool = approval.get("approvers_by_tool") or {}
+    # Keyed by whatever the rule targeted, which may be a pattern; an exact
+    # lookup would drop a pattern rule's own approvers onto the global list.
+    per_tool = by_tool.get(tool_name) or next(
+        (refs for pattern, refs in by_tool.items() if tool_matches_any(tool_name, [pattern])),
+        None,
+    )
     if per_tool:
         return list(per_tool)
     return list(approval.get("approvers") or [])
