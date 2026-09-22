@@ -624,7 +624,8 @@ export async function oauthAuthorizeAction(instanceId: string) {
 
 export async function validateConnectionAction(
   url: string,
-  headers: Record<string, string>
+  headers: Record<string, string>,
+  serverId?: string
 ) {
   const token = await getAuthToken();
   const res = await fetch(
@@ -635,7 +636,7 @@ export async function validateConnectionAction(
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ url, headers }),
+      body: JSON.stringify({ url, headers, server_id: serverId }),
     }
   );
   if (!res.ok) {

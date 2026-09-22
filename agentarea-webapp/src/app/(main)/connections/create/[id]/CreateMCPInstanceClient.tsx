@@ -370,7 +370,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
   const probe = useCallback(async () => {
     setAuthMode("loading");
     setProbeError(null);
-    const result = await validateConnectionAction(endpointUrl, {});
+    const result = await validateConnectionAction(endpointUrl, {}, server.id);
     const data = result.data as ValidationResult | null;
     if (result.error || !data) {
       setProbeError(apiErrorText(result.error, t("probeFailed")));
@@ -387,7 +387,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     }
     setProbeError(data.errors?.[0] || t("probeFailed"));
     setAuthMode("error");
-  }, [endpointUrl, t]);
+  }, [endpointUrl, server.id, t]);
 
   const probedRef = useRef(false);
   useEffect(() => {
@@ -450,7 +450,11 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     setValidation(null);
     setIsWorking(true);
     try {
-      const result = await validateConnectionAction(endpointUrl, buildHeaders());
+      const result = await validateConnectionAction(
+        endpointUrl,
+        buildHeaders(),
+        server.id
+      );
       const data = result.data as ValidationResult | null;
       if (result.error || !data) {
         setError(apiErrorText(result.error, t("connectionFailed")));

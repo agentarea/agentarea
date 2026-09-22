@@ -4,7 +4,6 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from urllib.parse import urlsplit
 from uuid import UUID
 
 import httpx
@@ -1194,8 +1193,18 @@ class MCPServerInstanceService:
                 return await session.list_tools()
 
     async def validate_connection(
-        self, url: str, headers: dict[str, str] | None = None
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        *,
+        server_id: str | None = None,
     ) -> dict[str, Any]:
+        """Probe ``url`` with list_tools without creating an instance.
+
+        ``server_id`` names the catalog spec the caller is connecting; when it
+        is given and its stored endpoint is ``url``, an auth failure also
+        reports ``auth_methods`` so the create page can render the right form.
+        """
         if not url:
             return {"valid": False, "errors": ["URL is required"]}
 
@@ -1231,7 +1240,7 @@ class MCPServerInstanceService:
             # last failure, so a 401 on /mcp is often masked by a 404 on /sse.
             # Ask the endpoint directly whether it wants auth so the caller can
             # tell "wrong credentials" from "unreachable" and render the right form.
-            auth_methods = await self._detect_auth_methods(url)
+            auth_methods = await self._catalog_auth_methods(url, server_id)
             needs_auth = auth_methods in (["oauth", "credentials"], ["credentials"])
             if "403" in combined and "401" not in combined:
                 return {
@@ -1251,6 +1260,20 @@ class MCPServerInstanceService:
                 "errors": ["Connection failed. Verify the URL, headers, and server availability."],
             }
 
+    async def _catalog_auth_methods(self, url: str, server_id: str | None) -> "list[str]":
+        """Detect auth methods for a catalog spec, using the endpoint stored on it.
+
+        The probe only ever dials a URL recorded in the catalog: the caller's
+        ``url`` must match the spec's own ``remote_url``, and it is the stored
+        value that is contacted. Without a spec there is nothing to detect.
+        """
+        if not server_id:
+            return []
+        spec = await self.mcp_server_repository.get_server_by_id(str(server_id))
+        if spec is None or not spec.remote_url or spec.remote_url != url:
+            return []
+        return await self._detect_auth_methods(spec.remote_url)
+
     async def _detect_auth_methods(self, mcp_url: str) -> "list[str]":
         """Classify an endpoint's unauthenticated challenge without creating an instance.
 
@@ -1265,24 +1288,9 @@ class MCPServerInstanceService:
         except UnsafeUrlError:
             logger.debug("Auth-method detection refused for unsafe URL %s", mcp_url, exc_info=True)
             return []
-        # Rebuild the probe target from the validated parts so the scheme is one
-        # of two fixed values and no fragment or userinfo rides along; the
-        # request never goes to the raw user string.
-        parts = urlsplit(mcp_url)
-        scheme = "https" if parts.scheme.lower() == "https" else "http"
-        host = parts.hostname or ""
-        netloc = f"{host}:{parts.port}" if parts.port else host
-        query = f"?{parts.query}" if parts.query else ""
-        probe_url = f"{scheme}://{netloc}{parts.path}{query}"
-        # Reaching the user's own MCP endpoint is the feature, so the host is
-        # user-chosen by design. validate_outbound_url above resolves it and
-        # refuses private ranges (and enforces the egress allowlist when set),
-        # and redirects are off so the probe cannot be bounced elsewhere.
-        # CodeQL cannot model that guard as a barrier, hence the marker below;
-        # the a2a and trigger push webhooks post to user URLs the same way.
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
-                resp = await client.get(probe_url, follow_redirects=False)  # lgtm[py/partial-ssrf]
+                resp = await client.get(mcp_url, follow_redirects=False)
         except Exception:
             logger.debug("Auth-method detection failed for %s", mcp_url, exc_info=True)
             return []
@@ -1295,7 +1303,7 @@ class MCPServerInstanceService:
         www_auth = resp.headers.get("www-authenticate", "").lower()
         if "resource_metadata" in www_auth or "bearer" in www_auth:
             try:
-                await MCPOAuthClientService().discover_auth_server(probe_url)
+                await MCPOAuthClientService().discover_auth_server(mcp_url)
                 return ["oauth", "credentials"]
             except Exception:
                 logger.debug("OAuth discovery failed for %s", mcp_url, exc_info=True)
