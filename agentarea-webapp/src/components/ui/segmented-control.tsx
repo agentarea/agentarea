@@ -29,7 +29,7 @@ export function SegmentedControl<T extends string = string>({
         className
       )}
       itemClassName={cn(
-        "h-7 min-w-24 rounded-[5px] px-4 text-xs",
+        "h-7 min-w-24 justify-center rounded-[5px] px-4 text-xs",
         itemClassName
       )}
       activePillClassName={cn(
