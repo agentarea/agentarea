@@ -1274,9 +1274,15 @@ class MCPServerInstanceService:
         netloc = f"{host}:{parts.port}" if parts.port else host
         query = f"?{parts.query}" if parts.query else ""
         probe_url = f"{scheme}://{netloc}{parts.path}{query}"
+        # Reaching the user's own MCP endpoint is the feature, so the host is
+        # user-chosen by design. validate_outbound_url above resolves it and
+        # refuses private ranges (and enforces the egress allowlist when set),
+        # and redirects are off so the probe cannot be bounced elsewhere.
+        # CodeQL cannot model that guard as a barrier, hence the marker below;
+        # the a2a and trigger push webhooks post to user URLs the same way.
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
-                resp = await client.get(probe_url, follow_redirects=False)
+                resp = await client.get(probe_url, follow_redirects=False)  # lgtm[py/partial-ssrf]
         except Exception:
             logger.debug("Auth-method detection failed for %s", mcp_url, exc_info=True)
             return []
