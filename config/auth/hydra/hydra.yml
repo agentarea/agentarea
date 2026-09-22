@@ -73,7 +73,7 @@ oidc:
       # a shared salt makes pairwise subject identifiers linkable across installs.
       salt: ""
   dynamic_client_registration:
-    enabled: true
+    enabled: false
 
 log:
   level: debug
