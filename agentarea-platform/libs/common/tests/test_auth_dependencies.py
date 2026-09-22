@@ -344,3 +344,49 @@ async def test_hydra_token_workspace_claim_is_ignored():
     assert context is not None
     assert context.user_id == "alice"
     assert context.workspace_id == "alice"
+
+
+@pytest.mark.asyncio
+async def test_hydra_token_without_a_user_is_refused():
+    """A client_credentials token names the client as its subject; nobody logged in."""
+    from agentarea_common.auth.dependencies import _try_hydra_token
+
+    jwks = Mock()
+    jwks.get_signing_key_from_jwt.return_value = Mock(key="public-key")
+    settings = Mock()
+    settings.mcp.HYDRA_AUDIENCE = "https://api.example.test"
+
+    with (
+        patch("agentarea_common.auth.dependencies._get_hydra_jwks", return_value=jwks),
+        patch("agentarea_common.config.get_settings", return_value=settings),
+        patch(
+            "jwt.decode",
+            return_value={
+                "sub": "90eaf1b8-5c71-48a5-a5f2-8da8c9a66771",
+                "client_id": "90eaf1b8-5c71-48a5-a5f2-8da8c9a66771",
+            },
+        ),
+    ):
+        context = await _try_hydra_token("oauth-token", Mock(spec=Request))
+
+    assert context is None
+
+
+@pytest.mark.asyncio
+async def test_hydra_token_issued_to_a_user_through_a_client_is_accepted():
+    from agentarea_common.auth.dependencies import _try_hydra_token
+
+    jwks = Mock()
+    jwks.get_signing_key_from_jwt.return_value = Mock(key="public-key")
+    settings = Mock()
+    settings.mcp.HYDRA_AUDIENCE = "https://api.example.test"
+
+    with (
+        patch("agentarea_common.auth.dependencies._get_hydra_jwks", return_value=jwks),
+        patch("agentarea_common.config.get_settings", return_value=settings),
+        patch("jwt.decode", return_value={"sub": "alice", "client_id": "codex-client"}),
+    ):
+        context = await _try_hydra_token("oauth-token", Mock(spec=Request))
+
+    assert context is not None
+    assert context.user_id == "alice"

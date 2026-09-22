@@ -333,6 +333,11 @@ async def _try_hydra_token(token: str, request: Request) -> UserContext | None:
         subject = payload.get("sub", "")
         if not subject:
             return None
+        # Hydra names the client itself as the subject of a client_credentials
+        # token: no user logged in, so there is no principal to act as.
+        if subject == payload.get("client_id"):
+            logger.warning("Hydra token refused: subject is its own client %s", subject)
+            return None
 
         return UserContext(
             user_id=subject,
