@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Loader2, Lock, Plus, Trash2, Unlock } from "lucide-react";
+import { Braces, Link, Loader2, Lock, Plus, Trash2, Unlock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Textarea } from "@/components/ui/textarea";
 import { formatApiError } from "@/lib/api-errors";
 import {
@@ -301,22 +302,31 @@ export function AddOpenAPIForm() {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>{t("openApiSpec")}</Label>
-          <div className="flex gap-1 rounded-md border p-0.5 text-xs">
-            <button
-              type="button"
-              className={`rounded px-2 py-0.5 transition-colors ${specMode === "url" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => switchMode("url")}
-            >
-              {t("url")}
-            </button>
-            <button
-              type="button"
-              className={`rounded px-2 py-0.5 transition-colors ${specMode === "json" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => switchMode("json")}
-            >
-              {t("pasteJson")}
-            </button>
-          </div>
+          <SegmentedControl<SpecMode>
+            value={specMode}
+            onChange={switchMode}
+            layoutId="openapi-spec-mode-control"
+            items={[
+              {
+                value: "url",
+                label: (
+                  <span className="flex items-center gap-1.5 whitespace-nowrap">
+                    <Link aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />
+                    {t("url")}
+                  </span>
+                ),
+              },
+              {
+                value: "json",
+                label: (
+                  <span className="flex items-center gap-1.5 whitespace-nowrap">
+                    <Braces aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />
+                    {t("pasteJson")}
+                  </span>
+                ),
+              },
+            ]}
+          />
         </div>
 
         {specMode === "url" ? (
