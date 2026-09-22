@@ -5,9 +5,19 @@ import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ExternalLink, Github, Globe, Key, Lock, Tag } from "lucide-react";
+import {
+  ExternalLink,
+  Github,
+  Globe,
+  Key,
+  KeyRound,
+  Lock,
+  ShieldCheck,
+  Tag,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Badge, badgeVariants } from "@/components/ui/badge";
 import Divider from "@/components/ui/divider";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
@@ -619,22 +629,39 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         {(probeState === "needs_oauth" || probeState === "needs_both") && (
           <div className="mt-6 space-y-4">
             {probeState === "needs_both" && (
-              <div className="flex w-fit rounded-lg border p-0.5">
-                <button
-                  type="button"
-                  className={`rounded-md px-4 py-1.5 text-sm transition-colors ${authTab === "oauth" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => setAuthTab("oauth")}
-                >
-                  OAuth
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-md px-4 py-1.5 text-sm transition-colors ${authTab === "manual" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => setAuthTab("manual")}
-                >
-                  Manual
-                </button>
-              </div>
+              <SegmentedControl
+                items={[
+                  {
+                    value: "oauth",
+                    label: (
+                      <span className="flex items-center gap-1.5 whitespace-nowrap">
+                        <ShieldCheck
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5"
+                          strokeWidth={1.8}
+                        />
+                        OAuth
+                      </span>
+                    ),
+                  },
+                  {
+                    value: "manual",
+                    label: (
+                      <span className="flex items-center gap-1.5 whitespace-nowrap">
+                        <KeyRound
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5"
+                          strokeWidth={1.8}
+                        />
+                        Manual
+                      </span>
+                    ),
+                  },
+                ]}
+                value={authTab}
+                onChange={setAuthTab}
+                layoutId="connection-auth-mode-control"
+              />
             )}
 
             {(authTab === "oauth" || probeState === "needs_oauth") && (

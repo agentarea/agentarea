@@ -34,7 +34,7 @@ const VARIANTS: Record<
   },
 };
 
-interface CountSegmentedControlProps<T extends string = string> {
+export interface CountSegmentedControlProps<T extends string = string> {
   items: CountSegmentedControlItem<T>[];
   value: T;
   onChange: (value: T) => void;
@@ -78,9 +78,10 @@ export function CountSegmentedControl<T extends string = string>({
           <button
             key={item.value}
             type="button"
+            aria-pressed={isActive}
             onClick={() => onChange(item.value)}
             className={cn(
-              "relative inline-flex h-7 shrink-0 items-center gap-2 rounded-md px-3 text-[12.5px] font-normal tracking-normal transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "relative inline-flex h-7 shrink-0 cursor-pointer items-center gap-2 rounded-md px-3 text-[12.5px] font-normal tracking-normal transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               isActive
                 ? styles.activeText
                 : "text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-zinc-100",
