@@ -1117,9 +1117,9 @@
       "uploadFiles": "Загрузить файлы",
       "descriptionLabel": "Описание",
       "sourceHint": {
-        "content": "Опишите скилл прямо здесь в Markdown.",
-        "github": "Синхронизируйте SKILL.md прямо из репозитория.",
-        "upload": "Загрузите архив .zip с файлом SKILL.md."
+        "content": "Опишите скилл прямо здесь в Markdown",
+        "github": "Синхронизируйте SKILL.md прямо из репозитория",
+        "upload": "Загрузите архив .zip с файлом SKILL.md"
       },
       "markdownPane": "Markdown",
       "previewPane": "Превью",
