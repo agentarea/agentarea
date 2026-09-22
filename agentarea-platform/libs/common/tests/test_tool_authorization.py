@@ -40,6 +40,18 @@ def test_policy_escalation_requires_approval():
     )
 
 
+def test_escalation_rules_match_the_same_patterns_the_allowlist_does():
+    # `approval tool:send_*` compiles straight into escalation_rules, and the
+    # write boundary accepts it, so matching it exactly made the rule install,
+    # show up in the UI and never fire — an approval gate that was not there.
+    policy = {"approval": {"escalation_rules": ["send_*"]}}
+
+    assert decide_tool_policy(policy, "send_email").action is (
+        ToolAuthorizationAction.REQUIRE_APPROVAL
+    )
+    assert decide_tool_policy(policy, "read_db").action is ToolAuthorizationAction.ALLOW
+
+
 def test_a_non_empty_allowlist_still_restricts():
     policy = {"tools": {"allowed": ["web_*"]}}
 

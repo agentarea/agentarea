@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-__all__ = ["ToolAuthorizationAction", "ToolAuthorizationDecision", "ToolAuthorizationRequest"]
+__all__ = [
+    "ToolAuthorizationAction",
+    "ToolAuthorizationDecision",
+    "ToolAuthorizationRequest",
+    "tool_matches_any",
+]
 
 
 class ToolAuthorizationAction(StrEnum):
@@ -77,22 +82,25 @@ def decide_tool_policy(
     tools = (effective_policy or {}).get("tools") or {}
 
     denied = tools.get("denied") or []
-    if _matches_any(tool_name, denied):
+    if tool_matches_any(tool_name, denied):
         return ToolAuthorizationDecision(
             ToolAuthorizationAction.DENY,
             f"tool '{tool_name}' is denied by policy",
         )
 
     allowed = tools.get("allowed")
-    if allowed is not None and not _matches_any(tool_name, allowed):
+    if allowed is not None and not tool_matches_any(tool_name, allowed):
         return ToolAuthorizationDecision(
             ToolAuthorizationAction.DENY,
             f"tool '{tool_name}' is not permitted by the policy allowlist",
         )
 
+    # Patterns, like the two lists above: `approval tool:send_*` is writable and
+    # compiles straight into escalation_rules, so matching it exactly would let
+    # an approval gate install, render in the UI, and never fire.
     approval = (effective_policy or {}).get("approval") or {}
-    if approval.get("requires_human_approval") is True or tool_name in (
-        approval.get("escalation_rules") or []
+    if approval.get("requires_human_approval") is True or tool_matches_any(
+        tool_name, approval.get("escalation_rules") or []
     ):
         return ToolAuthorizationDecision(
             ToolAuthorizationAction.REQUIRE_APPROVAL,
@@ -102,5 +110,11 @@ def decide_tool_policy(
     return ToolAuthorizationDecision(ToolAuthorizationAction.ALLOW, "allowed by task policy")
 
 
-def _matches_any(name: str, patterns: list[str]) -> bool:
+def tool_matches_any(name: str, patterns: list[str]) -> bool:
+    """Whether a tool name matches any policy pattern.
+
+    Every list a policy holds tool names in — denied, allowed, escalation_rules,
+    the keys of approvers_by_tool — is matched through here, so one rule spelling
+    means the same thing wherever it is read.
+    """
     return any(fnmatch.fnmatch(name, pattern) for pattern in patterns)
