@@ -16,11 +16,18 @@ export const TextPart: React.FC<{ part: Part }> = ({ part }) => {
   // Agents embed A2UI surface JSON after a delimiter in the streamed text; the
   // surface renders as its own part, so never show the raw markup here.
   const content = stripA2UIFromStreamingContent(raw);
-  const streaming = part.eventType === "llm.call.chunk";
+  const streaming = part.eventType === "llm.call.chunk" && data.is_final !== true;
+  const thinking = typeof data.thinking === "string" ? data.thinking : "";
   const failed = part.eventType === "llm.call.failed";
 
   return (
     <div className="min-w-0 px-2">
+      {thinking && (
+        <details open={streaming && !content} className="mb-2 text-xs text-muted-foreground">
+          <summary className="cursor-pointer py-1 font-medium">Reasoning</summary>
+          <div className="whitespace-pre-wrap py-1 leading-5">{thinking}</div>
+        </details>
+      )}
       {failed ? (
         <StatusIndicator tone="danger">LLM call failed</StatusIndicator>
       ) : streaming && !content ? (

@@ -246,6 +246,69 @@ async def test_feed_terminates_on_canonical_history():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("follow_execution", "expected"), [(False, [1]), (True, [1, 2, 3])])
+async def test_web_feed_follows_execution_while_a2a_ends_at_completed_turn(
+    follow_execution, expected
+):
+    turn = TaskEventEnvelope(
+        event_type="task.completed",
+        event_id=_uid(1),
+        timestamp=None,
+        data={"execution_status": "waiting"},
+    )
+    snapshot = await _snapshot_of(turn)
+    stream = _FakeStream(
+        [
+            _evt(2, "llm.call.started"),
+            _evt(3, "execution.finished"),
+            _evt(4, "unused"),
+        ]
+    )
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream,
+            task_id=_TASK,
+            snapshot=snapshot,
+            terminal_types=frozenset({"task.completed", "execution.finished"}),
+            follow_execution=follow_execution,
+        )
+    )
+    assert [event.event_id for event in out] == [_uid(n) for n in expected]
+
+
+@pytest.mark.asyncio
+async def test_web_feed_keeps_live_follow_up_wait_open_until_execution_finishes():
+    snapshot = await _snapshot_of(_env(1, "task.started"))
+    stream = _FakeStream(
+        [
+            IntegrationEvent(
+                id=_uid(2),
+                type="task.completed",
+                source="w",
+                subject=_TASK,
+                data={"execution_status": "waiting"},
+            ),
+            _evt(3, "execution.finished"),
+            _evt(4, "unused"),
+        ]
+    )
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream,
+            task_id=_TASK,
+            snapshot=snapshot,
+            terminal_types=frozenset({"task.completed", "execution.finished"}),
+            follow_execution=True,
+        )
+    )
+    assert [event.event_type for event in out] == [
+        "task.started",
+        "task.completed",
+        "execution.finished",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_feed_excludes_chunks_by_canonical_name():
     # exclude_types passed as canonical "llm.call.chunk" drops chunk rows.
     canonical_terminal = frozenset({"task.completed"})

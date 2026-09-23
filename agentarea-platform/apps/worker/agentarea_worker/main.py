@@ -145,7 +145,6 @@ class AgentAreaWorker:
         from agentarea_common.auth.workspace_authorization import (
             WorkspaceScopedAuthorizationService,
         )
-        from agentarea_common.auth.workspace_permission import WorkspaceScopedPermissionService
         from agentarea_common.config.app import get_app_settings
         from agentarea_common.di.container import register_factory, register_singleton
         from agentarea_common.extensions import discover_extensions
@@ -206,8 +205,15 @@ class AgentAreaWorker:
             register_factory(PermissionService, perm_factory)
             perm_impl = "extension:permissions"
         else:
-            register_singleton(PermissionService, WorkspaceScopedPermissionService())
-            perm_impl = "WorkspaceScopedPermissionService"
+            raise RuntimeError(
+                "No PermissionService is available: ACCESS_CONTROL_BACKEND="
+                f"{backend!r} selects no graph backend and no 'permissions' extension "
+                "is installed. Refusing to start rather than falling back to an "
+                "implementation that allows every check -- an authorization backend "
+                "that is merely absent must not read as permission granted. Set "
+                "ACCESS_CONTROL_BACKEND=openfga (or keto) and point it at a running "
+                "instance."
+            )
 
         if perm_factory and perm_impl != "extension:permissions":
             logger.warning(

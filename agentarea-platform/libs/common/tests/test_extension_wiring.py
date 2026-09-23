@@ -1,7 +1,6 @@
 # tests/unit/test_extension_wiring.py
 import pytest
 from agentarea_common.auth.permission import PermissionService
-from agentarea_common.auth.workspace_permission import WorkspaceScopedPermissionService
 from agentarea_common.di.container import get_container
 from agentarea_common.extensions.registry import ExtensionRegistry
 from agentarea_common.features.service import DeploymentMode, FeatureService
@@ -19,7 +18,7 @@ def clean():
 
 def wire_di(
     deployment_mode: str = "oss",
-    backend: str = "disabled",
+    backend: str = "",
     openfga_impl: PermissionService | None = None,
     keto_impl: PermissionService | None = None,
 ):
@@ -48,18 +47,21 @@ def wire_di(
     elif perm_factory:
         container.register_factory(PermissionService, perm_factory)
     else:
-        container.register_singleton(PermissionService, WorkspaceScopedPermissionService())
+        raise RuntimeError("no PermissionService available; refusing to start")
 
 
-def test_oss_wiring_uses_workspace_permission():
-    wire_di("oss")
-    container = get_container()
-    perm = container.get(PermissionService)
-    assert isinstance(perm, WorkspaceScopedPermissionService)
+def test_wiring_without_a_backend_refuses_to_start():
+    """An absent authorization backend must not read as permission granted."""
+    with pytest.raises(RuntimeError, match="no PermissionService"):
+        wire_di("oss")
 
 
 def test_oss_wiring_registers_feature_service():
-    wire_di("oss")
+    class _Pdp(PermissionService):
+        async def check(self, user_id, permission, resource_type, resource_id):
+            return False
+
+    wire_di("oss", backend="openfga", openfga_impl=_Pdp())
     container = get_container()
     fs = container.get(FeatureService)
     assert fs.mode == DeploymentMode.OSS

@@ -81,6 +81,11 @@ export async function TasksData({
       <EmptyState
         title={t("noTasks")}
         description={t("noTasksDescription")}
+        hints={[
+          { text: t("noTasksHintStart"), href: "/agents" },
+          { text: t("noTasksHintTrigger"), href: "/triggers" },
+          { text: t("noTasksHintElsewhere") },
+        ]}
         iconsType="tasks"
         // Tasks are started from an agent, so the way out of an empty list is
         // the agent picker -- which carries its own "create an agent" empty

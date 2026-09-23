@@ -8,7 +8,14 @@
  */
 import React from "react";
 import Image from "next/image";
+import { useA2UIDataModel } from "../hooks/useA2UIDataModel";
 import { A2UIAction, A2UIComponent, A2UISurfaceData } from "../types";
+import {
+  buildButtonAction,
+  resolvePointer,
+  selectedChoices,
+  toggleChoice,
+} from "../utils/a2uiForm";
 
 // ── DynamicString resolution ──────────────────────────────────────────────────
 
@@ -44,20 +51,6 @@ function resolveInputValue(
     : undefined;
 }
 
-function resolvePointer(obj: unknown, pointer: string): unknown {
-  const parts = (pointer || "/")
-    .replace(/^\//, "")
-    .split("/")
-    .map((p) => p.replace(/~1/g, "/").replace(/~0/g, "~"));
-  return parts.reduce(
-    (cur: unknown, key): unknown =>
-      cur != null && typeof cur === "object"
-        ? (cur as Record<string, unknown>)[key]
-        : undefined,
-    obj
-  );
-}
-
 // ── URL sanitization ─────────────────────────────────────────────────────────
 
 function sanitizeMediaUrl(url: string): string {
@@ -79,7 +72,13 @@ interface RenderCtx {
   components: Record<string, A2UIComponent>;
   dataModel: Record<string, unknown>;
   surfaceId: string;
-  onAction?: (action: A2UIAction, sourceComponentId: string) => void;
+  disabled?: boolean;
+  onValueChange: (path: string, value: unknown) => void;
+  onAction?: (
+    action: A2UIAction,
+    sourceComponentId: string,
+    context: Record<string, unknown>
+  ) => void;
 }
 
 function renderById(
@@ -174,6 +173,157 @@ const A2UIModal: React.FC<{
   );
 };
 
+const A2UIInput: React.FC<{ node: A2UIComponent; ctx: RenderCtx }> = ({
+  node,
+  ctx,
+}) => {
+  const id = React.useId();
+  const [local, setLocal] = React.useState({
+    source: node.value,
+    value: node.value as unknown,
+  });
+  if (local.source !== node.value)
+    setLocal({ source: node.value, value: node.value });
+  const binding =
+    node.value && typeof node.value === "object" && "path" in node.value
+      ? node.value.path
+      : null;
+  const value =
+    binding !== null ? resolvePointer(ctx.dataModel, binding) : local.value;
+  const update = (next: unknown) => {
+    if (binding !== null) ctx.onValueChange(binding, next);
+    else setLocal({ source: node.value, value: next });
+  };
+  const label = resolveString(node.label, ctx.dataModel);
+  const textValue =
+    typeof value === "string" || typeof value === "number" ? value : "";
+  const inputClass =
+    "w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] leading-5 text-foreground";
+
+  if (node.component === "CheckBox") {
+    return (
+      <label className="flex items-center gap-2 text-[13px] leading-5 text-foreground">
+        <input
+          type="checkbox"
+          checked={value === true}
+          onChange={(event) => update(event.target.checked)}
+        />
+        {label}
+      </label>
+    );
+  }
+  if (node.component === "ChoicePicker") {
+    const selected = selectedChoices(value);
+    const multiple = node.variant === "multipleSelection";
+    const choose = (option: string) =>
+      update(toggleChoice(selected, option, multiple));
+    return (
+      <fieldset className="flex flex-col gap-1">
+        {label && (
+          <legend className="text-[13px] font-medium leading-5">{label}</legend>
+        )}
+        <div
+          className={
+            node.displayStyle === "chips"
+              ? "flex flex-wrap gap-2"
+              : "flex flex-col gap-1"
+          }
+        >
+          {(node.options ?? []).map((option) =>
+            node.displayStyle === "chips" ? (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={selected.includes(option.value)}
+                className="rounded-full border border-border px-2.5 py-0.5 text-[13px] aria-pressed:bg-muted"
+                onClick={() => choose(option.value)}
+              >
+                {option.label}
+              </button>
+            ) : (
+              <label
+                key={option.value}
+                className="flex items-center gap-2 text-[13px] leading-5"
+              >
+                <input
+                  type={multiple ? "checkbox" : "radio"}
+                  name={id}
+                  value={option.value}
+                  checked={selected.includes(option.value)}
+                  onChange={() => choose(option.value)}
+                />
+                {option.label}
+              </label>
+            )
+          )}
+        </div>
+      </fieldset>
+    );
+  }
+  const secret = node.component === "TextField" && node.variant === "obscured";
+  const type =
+    node.component === "Slider"
+      ? "range"
+      : node.component === "DateTimeInput"
+        ? node.enableDate && node.enableTime
+          ? "datetime-local"
+          : node.enableDate
+            ? "date"
+            : "time"
+        : node.variant === "number"
+          ? "number"
+          : secret
+            ? "password"
+            : "text";
+  return (
+    <div className="flex flex-col gap-1">
+      {label && (
+        <label
+          htmlFor={id}
+          className="text-[13px] font-medium leading-5 text-foreground"
+        >
+          {label}
+        </label>
+      )}
+      {node.component === "TextField" && node.variant === "longText" ? (
+        <textarea
+          id={id}
+          className={inputClass}
+          rows={4}
+          value={textValue}
+          placeholder={resolveString(node.placeholder, ctx.dataModel)}
+          onChange={(event) => update(event.target.value)}
+        />
+      ) : (
+        <input
+          id={id}
+          type={type}
+          className={inputClass}
+          disabled={secret || node.disabled}
+          value={secret ? "" : textValue}
+          min={resolveInputValue(node.min, ctx.dataModel)}
+          max={resolveInputValue(node.max, ctx.dataModel)}
+          placeholder={resolveString(node.placeholder, ctx.dataModel)}
+          onChange={(event) =>
+            update(
+              type === "number" || type === "range"
+                ? event.target.value === ""
+                  ? ""
+                  : event.target.valueAsNumber
+                : event.target.value
+            )
+          }
+        />
+      )}
+      {secret && (
+        <p className="text-xs text-muted-foreground">
+          Use the secure input form to submit secrets.
+        </p>
+      )}
+    </div>
+  );
+};
+
 const A2UINode: React.FC<{
   node: A2UIComponent;
   ctx: RenderCtx;
@@ -196,7 +346,8 @@ const A2UINode: React.FC<{
         caption: "text-xs leading-5 text-muted-foreground",
         body: "text-[13px] leading-5",
       };
-      const cls = variantClass[node.variant ?? "body"] ?? "text-[13px] leading-5";
+      const cls =
+        variantClass[node.variant ?? "body"] ?? "text-[13px] leading-5";
       return (
         <span className={`${cls} text-foreground/85`}>
           {resolveString(node.text, dm)}
@@ -350,14 +501,18 @@ const A2UINode: React.FC<{
         borderless: "text-foreground underline-offset-4 hover:underline",
       };
       const handleClick = () => {
-        if (node.action && ctx.onAction) {
-          ctx.onAction(node.action as A2UIAction, node.id);
-        }
+        const send = buildButtonAction({
+          action: node.action,
+          dataModel: dm,
+          disabled: ctx.disabled,
+        });
+        if (send && ctx.onAction)
+          ctx.onAction(send.action, node.id, send.context);
       };
       return (
         <button
           className={`cursor-pointer rounded-md px-3 py-1.5 text-[13px] font-medium leading-5 ${variantClass[node.variant ?? "default"] ?? variantClass.default}`}
-          disabled={node.disabled}
+          disabled={node.disabled || ctx.disabled}
           title={resolveString(node.accessibility?.label, dm)}
           onClick={handleClick}
         >
@@ -366,135 +521,12 @@ const A2UINode: React.FC<{
       );
     }
 
-    case "TextField": {
-      const variantType: Record<string, string> = {
-        shortText: "text",
-        longText: "text",
-        number: "number",
-        obscured: "password",
-      };
-      const inputType = variantType[node.variant ?? "shortText"] ?? "text";
-      const isLong = node.variant === "longText";
-      return (
-        <div className="flex flex-col gap-1">
-          {node.label && (
-            <label className="text-[13px] font-medium leading-5 text-foreground">
-              {resolveString(node.label, dm)}
-            </label>
-          )}
-          {isLong ? (
-            <textarea
-              className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] leading-5 text-foreground"
-              placeholder={resolveString(node.placeholder, dm)}
-              defaultValue={resolveInputValue(node.value, dm)}
-              rows={4}
-            />
-          ) : (
-            <input
-              type={inputType}
-              className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] leading-5 text-foreground"
-              placeholder={resolveString(node.placeholder, dm)}
-              defaultValue={resolveInputValue(node.value, dm)}
-            />
-          )}
-        </div>
-      );
-    }
-
+    case "TextField":
     case "CheckBox":
-      return (
-        <label className="flex items-center gap-2 text-[13px] leading-5 text-foreground">
-          <input
-            type="checkbox"
-            defaultChecked={!!node.value}
-            className="rounded"
-          />
-          {resolveString(node.label, dm)}
-        </label>
-      );
-
-    case "ChoicePicker": {
-      const options: Array<{ label: string; value: string }> =
-        node.options ?? [];
-      const isMulti = node.variant === "multipleSelection";
-      const useChips = node.displayStyle === "chips";
-
-      if (useChips) {
-        return (
-          <div className="flex flex-wrap gap-2">
-            {options.map((opt) => (
-              <span
-                key={opt.value}
-                className="cursor-pointer rounded-full border border-border px-2.5 py-0.5 text-[13px] leading-5 text-foreground hover:bg-muted"
-              >
-                {opt.label}
-              </span>
-            ))}
-          </div>
-        );
-      }
-
-      return (
-        <div className="flex flex-col gap-1">
-          {node.label && (
-            <label className="text-[13px] font-medium leading-5 text-foreground">
-              {resolveString(node.label, dm)}
-            </label>
-          )}
-          {options.map((opt) => (
-            <label
-              key={opt.value}
-              className="flex items-center gap-2 text-[13px] leading-5 text-foreground"
-            >
-              <input type={isMulti ? "checkbox" : "radio"} value={opt.value} />
-              {opt.label}
-            </label>
-          ))}
-        </div>
-      );
-    }
-
+    case "ChoicePicker":
     case "Slider":
-      return (
-        <div className="flex flex-col gap-1">
-          {node.label && (
-            <label className="text-[13px] font-medium leading-5 text-foreground">
-              {resolveString(node.label, dm)}
-            </label>
-          )}
-          <input
-            type="range"
-            min={resolveInputValue(node.min, dm) ?? 0}
-            max={resolveInputValue(node.max, dm)}
-            defaultValue={typeof node.value === "number" ? node.value : 0}
-            className="w-full"
-          />
-        </div>
-      );
-
     case "DateTimeInput":
-      return (
-        <div className="flex flex-col gap-1">
-          {node.label && (
-            <label className="text-[13px] font-medium leading-5 text-foreground">
-              {resolveString(node.label, dm)}
-            </label>
-          )}
-          <input
-            type={
-              node.enableDate && node.enableTime
-                ? "datetime-local"
-                : node.enableDate
-                  ? "date"
-                  : "time"
-            }
-            defaultValue={resolveInputValue(node.value, dm)}
-            min={resolveInputValue(node.min, dm)}
-            max={resolveInputValue(node.max, dm)}
-            className="rounded-md border border-border bg-background px-3 py-1.5 text-[13px] leading-5 text-foreground"
-          />
-        </div>
-      );
+      return <A2UIInput node={node} ctx={ctx} />;
 
     default:
       return null;
@@ -505,13 +537,21 @@ const A2UINode: React.FC<{
 
 const A2UIMessage: React.FC<{
   data: A2UISurfaceData;
-  onAction?: (action: A2UIAction, sourceComponentId: string) => void;
-}> = ({ data, onAction }) => {
+  disabled?: boolean;
+  onAction?: (
+    action: A2UIAction,
+    sourceComponentId: string,
+    context: Record<string, unknown>
+  ) => void;
+}> = ({ data, onAction, disabled }) => {
   const { surface } = data;
+  const [dataModel, setValue] = useA2UIDataModel(surface.dataModel);
   const ctx: RenderCtx = {
     components: surface.components,
-    dataModel: surface.dataModel,
+    dataModel,
     surfaceId: surface.surfaceId,
+    disabled,
+    onValueChange: setValue,
     onAction,
   };
 
@@ -527,9 +567,9 @@ const A2UIMessage: React.FC<{
   }
 
   return (
-    <div className="a2ui-surface min-w-0 py-1">
+    <fieldset disabled={disabled} className="a2ui-surface min-w-0 py-1">
       <A2UINode node={rootNode} ctx={ctx} />
-    </div>
+    </fieldset>
   );
 };
 

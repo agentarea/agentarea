@@ -69,6 +69,9 @@ export default function ModelBadge({
       {isLoading ? (
         <Skeleton className={cn("rounded", isSm ? "h-2.5 w-12" : "h-3 w-16")} />
       ) : (
+        // The provider name is the icon's job and the tooltip's; spelling it
+        // out again turned every badge into "claude-sonnet-4 (openrouter)",
+        // where the half that identifies the model got the least room.
         <span
           className={cn(
             "font-medium text-gray-700",
@@ -77,9 +80,6 @@ export default function ModelBadge({
         >
           {getModelName()}
         </span>
-      )}
-      {providerName && !isLoading && !isSm && (
-        <span className="text-xs text-gray-500">({providerName})</span>
       )}
     </div>
   );

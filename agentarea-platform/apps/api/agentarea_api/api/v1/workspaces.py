@@ -11,6 +11,7 @@ from typing import Annotated
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_database
 from agentarea_common.rebac import (
@@ -105,7 +106,12 @@ class CreateWorkspaceBody(BaseModel):
 router = APIRouter(tags=["workspaces"])
 
 
-@router.post("/workspaces", response_model=WorkspaceResponse, status_code=201)
+@router.post(
+    "/workspaces",
+    response_model=WorkspaceResponse,
+    status_code=201,
+    dependencies=[unrestricted("anyone may create a workspace; they become its owner")],
+)
 async def create_workspace(
     body: CreateWorkspaceBody,
     user: UserContextDep,
@@ -145,7 +151,11 @@ async def create_workspace(
     )
 
 
-@router.get("/workspaces", response_model=list[WorkspaceResponse])
+@router.get(
+    "/workspaces",
+    response_model=list[WorkspaceResponse],
+    dependencies=[enforced_in_handler("returns only the workspaces this user owns or belongs to")],
+)
 async def list_workspaces(
     user: UserContextDep,
     service: WorkspaceServiceDep,

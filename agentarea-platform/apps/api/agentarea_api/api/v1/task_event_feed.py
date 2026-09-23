@@ -66,6 +66,7 @@ async def open_task_event_feed(
     terminal_types: frozenset[str],
     exclude_types: frozenset[str] = frozenset(),
     include_chunks: bool = True,
+    follow_execution: bool = False,
 ) -> AsyncIterator[TaskEventEnvelope]:
     """Yield a task's events (catch-up then live) and close the broker when done.
 
@@ -92,6 +93,7 @@ async def open_task_event_feed(
             snapshot=lambda: _load_snapshot(tid, workspace_id),
             terminal_types=terminal_types,
             exclude_types=exclude_types,
+            follow_execution=follow_execution,
         ):
             yield env
     finally:

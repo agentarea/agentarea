@@ -42,7 +42,7 @@ from agentarea_execution.workflows.agent_execution_workflow import (
 from temporalio import activity
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.testing import WorkflowEnvironment
-from temporalio.worker import Worker
+from temporalio.worker import Replayer, Worker
 
 # ---------------------------------------------------------------------------
 # Shared mock activities
@@ -159,12 +159,20 @@ def _mock_call_llm_request_input(request: LLMCallRequest) -> dict[str, Any]:
                             }
                         ),
                     },
-                }
+                },
+                {
+                    "id": "premature_completion",
+                    "type": "function",
+                    "function": {
+                        "name": "completion",
+                        "arguments": json.dumps({"result": "Not answered yet", "artifacts": []}),
+                    },
+                },
             ],
             "finish_reason": "tool_calls",
-        "cost": 0.001,
-        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-    }
+            "cost": 0.001,
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        }
     tool_payload = None
     for message in request.messages:
         if message.get("name") == "request_user_input":
@@ -172,7 +180,12 @@ def _mock_call_llm_request_input(request: LLMCallRequest) -> dict[str, Any]:
             break
     assert tool_payload is not None
     assert tool_payload["answers"] == {"environment": "dev"}
-    assert tool_payload["secret_refs"]["api_token"]["secret_ref"] == "secret:service/api_token"
+    assert tool_payload["secret_refs"] == {
+        "api_token": {
+            "secret_name": "service/api_token",
+            "secret_ref": "secret:service/api_token",
+        }
+    }
     return {
         "content": "",
         "role": "assistant",
@@ -282,9 +295,7 @@ async def _wait_until_initialized(handle, attempts: int = 100) -> None:
         if state.get("status") == "executing":
             return
         await asyncio.sleep(0.05)
-    raise AssertionError(
-        f"workflow never reached executing status; last state={state!r}"
-    )
+    raise AssertionError(f"workflow never reached executing status; last state={state!r}")
 
 
 async def _wait_for_status(handle, status: str, attempts: int = 100) -> None:
@@ -393,6 +404,9 @@ async def test_request_user_input_waits_for_queued_reply_then_continues():
                 assert "task.completed" in published_types, published_types
                 assert "running" in _status_updates
                 assert "completed" in _status_updates
+                event_types = [event["event_type"] for event in _published]
+                assert event_types.index("input.response") < event_types.index("task.completed")
+                assert event_types[-1] == "execution.finished"
 
 
 @pytest.mark.asyncio
@@ -431,16 +445,12 @@ async def test_pause_resume_signals_flip_queryable_state():
                 # the signal handler immediately, independent of the
                 # blocking activity.
                 await _wait_until_initialized(handle)
-                await handle.signal(
-                    AgentExecutionWorkflow.pause_execution, "test pause"
-                )
+                await handle.signal(AgentExecutionWorkflow.pause_execution, "test pause")
                 state = await handle.query(AgentExecutionWorkflow.get_current_state)
                 assert state["paused"] is True, state
                 assert state["pause_reason"] == "test pause", state
 
-                await handle.signal(
-                    AgentExecutionWorkflow.resume_execution, "test resume"
-                )
+                await handle.signal(AgentExecutionWorkflow.resume_execution, "test resume")
                 state = await handle.query(AgentExecutionWorkflow.get_current_state)
                 assert state["paused"] is False, state
                 assert state["pause_reason"] == "", state
@@ -503,9 +513,7 @@ async def test_workflow_command_queue_message_publishes_event():
 
                 published_types = {e.get("event_type") for e in _published}
                 assert "MessageQueued" in published_types, published_types
-                assert "WorkflowCommandReceived" in published_types, (
-                    published_types
-                )
+                assert "WorkflowCommandReceived" in published_types, published_types
 
 
 @pytest.mark.asyncio
@@ -570,9 +578,7 @@ async def test_workflow_command_change_model_swaps_model_and_publishes_event():
                 assert "WorkflowCommandReceived" in published_types, published_types
 
                 # The ModelChanged event carries the new model identity.
-                changed = next(
-                    e for e in _published if e.get("event_type") == "ModelChanged"
-                )
+                changed = next(e for e in _published if e.get("event_type") == "ModelChanged")
                 serialized = json.dumps(changed)
                 assert new_model_name in serialized, changed
                 assert new_model_id in serialized, changed
@@ -618,6 +624,96 @@ async def test_unknown_workflow_command_is_ignored_no_event():
                 await handle.result()
 
                 published_types = {e.get("event_type") for e in _published}
-                assert "WorkflowCommandReceived" not in published_types, (
-                    published_types
+                assert "WorkflowCommandReceived" not in published_types, published_types
+
+
+@pytest.mark.asyncio
+async def test_required_input_timeout_is_blocked_without_a_second_llm_call_and_replays():
+    env = await WorkflowEnvironment.start_time_skipping(
+        data_converter=pydantic_data_converter,
+    )
+    async with env:
+        task_queue = f"test-{uuid.uuid4()}"
+        activities = [
+            activity_fn for activity_fn in _ALL_ACTIVITIES if activity_fn is not _mock_call_llm
+        ] + [_mock_call_llm_request_input]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            async with Worker(
+                env.client,
+                task_queue=task_queue,
+                workflows=[AgentExecutionWorkflow],
+                activities=activities,
+                activity_executor=executor,
+                workflow_runner=create_workflow_runner(),
+            ):
+                handle = await env.client.start_workflow(
+                    AgentExecutionWorkflow.run,
+                    _make_request(),
+                    id=f"test-{uuid.uuid4()}",
+                    task_queue=task_queue,
+                    execution_timeout=timedelta(hours=1),
                 )
+                result = await handle.result()
+                assert result.success is False
+                assert result.status == "blocked"
+                assert result.failure_reason == "input_timeout"
+                assert _request_input_llm_calls == 1
+                assert "blocked" in _status_updates
+                event_types = [event["event_type"] for event in _published]
+                assert "task.completed" not in event_types
+                failed = next(event for event in _published if event["event_type"] == "task.failed")
+                assert failed["data"]["blocked"] is True
+                await Replayer(
+                    workflows=[AgentExecutionWorkflow],
+                    data_converter=pydantic_data_converter,
+                    workflow_runner=create_workflow_runner(),
+                ).replay_workflow(await handle.fetch_history())
+
+
+@pytest.mark.asyncio
+async def test_cancellation_interrupts_required_input_without_another_llm_call():
+    from temporalio.client import WorkflowFailureError
+    from temporalio.exceptions import CancelledError
+
+    env = await WorkflowEnvironment.start_time_skipping(
+        data_converter=pydantic_data_converter,
+    )
+    async with env:
+        task_queue = f"test-{uuid.uuid4()}"
+        activities = [
+            activity_fn for activity_fn in _ALL_ACTIVITIES if activity_fn is not _mock_call_llm
+        ] + [_mock_call_llm_request_input]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            async with Worker(
+                env.client,
+                task_queue=task_queue,
+                workflows=[AgentExecutionWorkflow],
+                activities=activities,
+                activity_executor=executor,
+                workflow_runner=create_workflow_runner(),
+            ):
+                handle = await env.client.start_workflow(
+                    AgentExecutionWorkflow.run,
+                    _make_request(),
+                    id=f"test-{uuid.uuid4()}",
+                    task_queue=task_queue,
+                    execution_timeout=timedelta(hours=1),
+                )
+                await _wait_for_status(handle, "waiting_for_input")
+                await handle.cancel()
+                with pytest.raises(WorkflowFailureError) as failure:
+                    await handle.result()
+                assert isinstance(failure.value.cause, CancelledError)
+                assert _request_input_llm_calls == 1
+                assert "completed" not in _status_updates
+                assert _status_updates[-1] == "cancelled"
+                terminal_events = [
+                    event
+                    for event in _published
+                    if event["event_type"] in {"task.cancelled", "execution.finished"}
+                ]
+                assert [event["event_type"] for event in terminal_events] == [
+                    "task.cancelled",
+                    "execution.finished",
+                ]
+                assert terminal_events[-1]["data"]["execution_status"] == "cancelled"

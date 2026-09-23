@@ -58,6 +58,7 @@ class EventTypes:
     WORKFLOW_COMPLETED: Final[str] = "task.completed"
     WORKFLOW_FAILED: Final[str] = "task.failed"
     WORKFLOW_CANCELLED: Final[str] = "task.cancelled"
+    EXECUTION_FINISHED: Final[str] = "execution.finished"
     WORKFLOW_AWAITING_FOLLOW_UP: Final[str] = "task.awaiting_follow_up"
     WORKFLOW_AWAITING_CONTINUATION: Final[str] = "task.awaiting_continuation"
     WORKFLOW_CONTINUED: Final[str] = "task.continued"

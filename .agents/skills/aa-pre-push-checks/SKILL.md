@@ -99,6 +99,14 @@ pnpm run lint
 pnpm run build
 ```
 
+That is the whole webapp gate: **no CI job runs `pnpm test` or Playwright here**.
+So `vitest` passing is not push evidence, and a red `vitest` file that only
+asserts rendered markup is a test to delete, not a push blocker
+(`agentarea-webapp/AGENTS.md` §"TESTS (THIS DIR)"). What a UI diff owes instead
+is the surface exercised: run the app and drive the changed screen, or
+`pnpm test:e2e:smoke` against a stand already on :3000 when the diff moves a
+whole flow.
+
 **`cli-test`**:
 
 ```sh

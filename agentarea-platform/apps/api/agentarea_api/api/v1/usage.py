@@ -4,6 +4,7 @@ import json
 from typing import Annotated
 
 from agentarea_common.auth import UserContextDep
+from agentarea_common.auth.route_authz import requires_workspace_admin
 from agentarea_common.config.database import get_db_session
 from agentarea_common.usage.models import ResourceUsageEvent
 from agentarea_common.usage.repository import UsageRepository, UsageTimeBound
@@ -57,7 +58,9 @@ class UsageEventListResponse(BaseModel):
     next_cursor: str | None
 
 
-@router.get("/events", response_model=UsageEventListResponse)
+@router.get(
+    "/events", response_model=UsageEventListResponse, dependencies=[requires_workspace_admin()]
+)
 async def list_usage_events(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,

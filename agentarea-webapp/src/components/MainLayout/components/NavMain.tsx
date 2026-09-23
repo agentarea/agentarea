@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -29,6 +36,11 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+
+// useLayoutEffect has no meaning during SSR and React warns when it is called
+// there, so the server falls back to the passive one it can actually run.
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 type NavItem = {
   title: string;
@@ -103,7 +115,9 @@ function NavSectionGroup({
             />
           </CollapsibleTrigger>
         </SidebarGroupLabel>
-        <CollapsibleContent className="pt-1">{children}</CollapsibleContent>
+        <CollapsibleContent className="aa-collapsible">
+          <div className="pt-1">{children}</div>
+        </CollapsibleContent>
       </SidebarGroup>
     </Collapsible>
   );
@@ -162,8 +176,14 @@ export function NavMain({
       }
     };
   }, []);
-  // Секция с активной страницей всегда раскрыта, остальные — как их оставил пользователь
-  useEffect(() => {
+  // Секция с активной страницей всегда раскрыта, остальные — как их оставил
+  // пользователь.
+  //
+  // Restoring in a passive effect let the browser paint the active-section-only
+  // state first and the saved state a frame later, so every navigation shoved
+  // the sections below it down the sidebar. A layout effect lands the same
+  // change before paint, while the server and first client render still agree.
+  useIsomorphicLayoutEffect(() => {
     const saved = localStorage.getItem(SECTIONS_STORAGE_KEY);
     sectionsRestored.current = true;
     if (!saved) return;
@@ -192,7 +212,7 @@ export function NavMain({
   }, [openSections]);
 
   // Восстанавливаем только открытые коллапсы из localStorage при инициализации
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const savedOpenCollapsibles = localStorage.getItem("navOpenCollapsibles");
     if (savedOpenCollapsibles) {
       try {

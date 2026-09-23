@@ -50,10 +50,87 @@ async def test_failed_workflow_outcome_recovers_stale_running_task():
 
 
 @pytest.mark.asyncio
-async def test_live_temporal_status_does_not_downgrade_persisted_completion():
-    task = _task(status="completed")
+@pytest.mark.parametrize(
+    "business_status",
+    [
+        "waiting_for_input",
+        "waiting_for_approval",
+        "waiting_for_continuation",
+        "completed",
+        "blocked",
+    ],
+)
+async def test_live_execution_preserves_business_status(business_status):
+    task = _task(status=business_status)
     service = _service({"execution_status": "running", "status": "running"})
 
     enriched = await service._enrich_task_with_workflow_status(task)
 
-    assert enriched.status == "completed"
+    assert enriched.status == business_status
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        "waiting_for_input",
+        "waiting_for_approval",
+        "waiting_for_continuation",
+        "completed",
+        "blocked",
+    ],
+)
+async def test_closed_execution_recovers_business_outcome(outcome):
+    task = _task()
+    result = {"status": outcome, "response": "Task outcome"}
+    service = _service({"execution_status": "completed", "status": outcome, "result": result})
+
+    enriched = await service._enrich_task_with_workflow_status(task)
+
+    assert enriched.status == outcome
+    assert enriched.result == result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("business_status", ["waiting_for_input", "blocked", "failed", "completed"])
+async def test_engine_completion_without_business_outcome_preserves_task(business_status):
+    task = _task(status=business_status)
+    task.result = {"response": "Persisted outcome"}
+    service = _service({"execution_status": "completed", "status": "completed", "result": None})
+
+    enriched = await service._enrich_task_with_workflow_status(task)
+
+    assert enriched.status == business_status
+    assert enriched.result == {"response": "Persisted outcome"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("execution_status", "outcome"),
+    [
+        ("failed", "failed"),
+        ("cancelled", "cancelled"),
+        ("canceled", "cancelled"),
+        ("failed", "blocked"),
+    ],
+)
+async def test_execution_failure_reconciles_waiting_task(execution_status, outcome):
+    service = _service(
+        {"execution_status": execution_status, "status": outcome, "error": "Execution stopped"}
+    )
+
+    enriched = await service._enrich_task_with_workflow_status(_task("waiting_for_input"))
+
+    assert enriched.status == outcome
+    assert enriched.error_message == "Execution stopped"
+
+
+@pytest.mark.asyncio
+async def test_business_result_overrides_engine_completion():
+    result = {"status": "blocked", "response": "Required credentials are unavailable"}
+    service = _service({"execution_status": "completed", "status": "completed", "result": result})
+
+    enriched = await service._enrich_task_with_workflow_status(_task())
+
+    assert enriched.status == "blocked"
+    assert enriched.result == result

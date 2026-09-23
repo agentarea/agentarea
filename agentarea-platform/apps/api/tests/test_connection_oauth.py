@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_api.api.v1 import connection_oauth
+from agentarea_api.api.v1.oauth_app_credentials import workspace_secret_value
 from agentarea_common.auth.context import UserContext
 from fastapi import HTTPException
 
@@ -248,7 +249,7 @@ async def test_workspace_secret_source_rejects_connection_owned_secret():
     manager = SimpleNamespace(get_secret=AsyncMock(return_value="must-not-be-read"))
 
     with pytest.raises(HTTPException, match="must be a user-owned workspace secret"):
-        await connection_oauth._workspace_secret_value(
+        await workspace_secret_value(
             catalog,
             manager,
             secret_id,

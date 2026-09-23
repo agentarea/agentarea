@@ -59,6 +59,32 @@ export function findTriggerCatalogEntry(
   );
 }
 
+/**
+ * What kind of thing starts this automation, which is the distinction that
+ * matters when reading the list: a channel you have to stand up end to end
+ * (Telegram, Slack), something else's event reaching us (GitHub, Stripe), or
+ * the clock. "cron vs webhook" is the transport underneath and says nothing
+ * about which of those three you are looking at.
+ */
+export type TriggerLane = "channel" | "event" | "schedule";
+
+export function getTriggerLane(
+  trigger: TriggerLike,
+  entry?: TriggerCatalogEntry | null
+): TriggerLane {
+  // The catalog is the authority on which lane a source belongs to; it grows by
+  // configuration, so nothing here may switch on the channel by name.
+  if (entry?.kind === "messaging") return "channel";
+  if (entry?.kind === "event") return "event";
+  if (entry?.kind === "schedule") return "schedule";
+
+  // Without a catalog entry, fall back to the model's own columns. An extractor
+  // means something parsed an inbound message for us, which is what a channel
+  // does; on a cron trigger it means a poller, which is still the clock.
+  if (trigger.trigger_type === "cron") return "schedule";
+  return trigger.data_extractor ? "channel" : "event";
+}
+
 // webhook_type only means anything for webhook triggers — the backend stores a
 // "generic" default on cron triggers too, which must not mask the schedule.
 function effectiveWebhookType(trigger?: TriggerLike) {

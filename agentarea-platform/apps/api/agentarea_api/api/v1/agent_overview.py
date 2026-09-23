@@ -13,6 +13,7 @@ from typing import cast as type_cast
 from uuid import UUID
 
 from agentarea_common.auth import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config.database import get_db_session
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_tasks.infrastructure.orm import TaskORM
@@ -60,7 +61,13 @@ class AgentOverviewResponse(BaseModel):
     upcoming: list[UpcomingItem]
 
 
-@router.get("/overview", response_model=AgentOverviewResponse)
+@router.get(
+    "/overview",
+    response_model=AgentOverviewResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_agent_overview(
     agent_id: UUID,
     user_context: UserContextDep,

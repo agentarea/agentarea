@@ -222,7 +222,14 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
                 failure_reason = _result_field(result, "failure_reason")
                 error_message = _result_field(result, "error_message")
 
-                if task_status == "blocked":
+                if task_status in {
+                    "waiting_for_input",
+                    "waiting_for_approval",
+                    "waiting_for_continuation",
+                }:
+                    outcome_status = task_status
+                    task_success = None
+                elif task_status == "blocked":
                     outcome_status = "blocked"
                     task_success = False
                     failure_reason = failure_reason or "blocked"

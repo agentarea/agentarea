@@ -15,6 +15,7 @@ from agentarea_api.api.deps.services import (
     SecretCatalogServiceDep,
     UserContextDep,
 )
+from agentarea_common.auth.route_authz import enforced_in_handler, requires_workspace_admin
 from agentarea_secrets.catalog_service import (
     SURFACED_OWNER_TYPES,
     DuplicateSecretNameError,
@@ -134,7 +135,15 @@ def _managed(exc: ManagedSecretError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
 
 
-@router.get("", response_model=list[SecretResponse])
+@router.get(
+    "",
+    response_model=list[SecretResponse],
+    dependencies=[
+        enforced_in_handler(
+            "visibility is decided per row: the caller's own secrets and the ones connections hold for them"
+        )
+    ],
+)
 async def list_secrets(
     catalog: SecretCatalogServiceDep,
     db_session: DatabaseSessionDep,
@@ -167,7 +176,12 @@ async def list_secrets(
     return out
 
 
-@router.post("", response_model=SecretResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=SecretResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[requires_workspace_admin()],
+)
 async def create_secret(payload: SecretCreate, catalog: SecretCatalogServiceDep) -> SecretResponse:
     try:
         secret = await catalog.create_user_secret(payload.name, payload.value, payload.description)
@@ -180,7 +194,15 @@ async def create_secret(payload: SecretCreate, catalog: SecretCatalogServiceDep)
     return SecretResponse.of(secret, [])
 
 
-@router.get("/{secret_id}", response_model=SecretResponse)
+@router.get(
+    "/{secret_id}",
+    response_model=SecretResponse,
+    dependencies=[
+        enforced_in_handler(
+            "visibility is decided per row: the caller's own secrets and the ones connections hold for them"
+        )
+    ],
+)
 async def get_secret(
     secret_id: UUID,
     catalog: SecretCatalogServiceDep,
@@ -218,7 +240,9 @@ async def get_secret(
     return SecretResponse.of(secret, [SecretConsumer(**c.__dict__) for c in consumers], owner_name)
 
 
-@router.patch("/{secret_id}", response_model=SecretResponse)
+@router.patch(
+    "/{secret_id}", response_model=SecretResponse, dependencies=[requires_workspace_admin()]
+)
 async def update_secret_description(
     secret_id: UUID, payload: SecretDescriptionUpdate, catalog: SecretCatalogServiceDep
 ) -> SecretResponse:
@@ -232,7 +256,9 @@ async def update_secret_description(
     return SecretResponse.of(secret, [SecretConsumer(**c.__dict__) for c in consumers])
 
 
-@router.put("/{secret_id}/value", response_model=SecretResponse)
+@router.put(
+    "/{secret_id}/value", response_model=SecretResponse, dependencies=[requires_workspace_admin()]
+)
 async def rotate_secret(
     secret_id: UUID, payload: SecretValueUpdate, catalog: SecretCatalogServiceDep
 ) -> SecretResponse:
@@ -247,7 +273,11 @@ async def rotate_secret(
     return SecretResponse.of(secret, [SecretConsumer(**c.__dict__) for c in consumers])
 
 
-@router.delete("/{secret_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{secret_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[requires_workspace_admin()],
+)
 async def delete_secret(secret_id: UUID, catalog: SecretCatalogServiceDep) -> None:
     try:
         await catalog.delete_user_secret(secret_id)

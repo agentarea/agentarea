@@ -8,6 +8,8 @@ from typing import Any
 from agentarea_common.money import ZERO, Money
 from pydantic import BaseModel, Field
 
+from ..interaction import InteractionCapabilities
+
 
 # Define a simple Message class to avoid SDK imports in workflows
 class Message(BaseModel):
@@ -136,6 +138,9 @@ class ContinueAsNewState(BaseModel):
     pending_escalations: dict[str, PendingEscalation] = Field(default_factory=dict)
     pending_input_requests: dict[str, dict[str, Any]] = Field(default_factory=dict)
     a2ui_action_queue: list[dict[str, Any]] = Field(default_factory=list)
+    interaction_contract_enabled: bool | None = None
+    interaction_capabilities: InteractionCapabilities | None = None
+    a2ui_surfaces: dict[str, dict[str, str]] = Field(default_factory=dict)
     awaiting_input: bool = False
     paused: bool = False
     pause_reason: str = ""
@@ -171,6 +176,10 @@ class AgentExecutionState(BaseModel):
     messages: list[Message] = Field(default_factory=list)
     agent_config: dict[str, Any] = Field(default_factory=dict)
     available_tools: list[dict[str, Any]] = Field(default_factory=list)
+    interaction_capabilities: InteractionCapabilities = Field(
+        default_factory=InteractionCapabilities
+    )
+    a2ui_surfaces: dict[str, dict[str, str]] = Field(default_factory=dict)
     final_response: str | None = None
     success: bool = False
     failure_reason: str | None = None

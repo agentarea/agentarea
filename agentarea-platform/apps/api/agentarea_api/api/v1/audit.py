@@ -7,6 +7,7 @@ from uuid import UUID
 from agentarea_common.audit.models import AuditEventORM
 from agentarea_common.audit.repository import AuditRepository
 from agentarea_common.auth import UserContextDep
+from agentarea_common.auth.route_authz import requires_workspace_admin
 from agentarea_common.config.database import get_db_session
 from agentarea_common.utils.types import UtcDatetime
 from fastapi import APIRouter, Depends, Query
@@ -64,7 +65,7 @@ class AuditLogListResponse(BaseModel):
 DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 
 
-@router.get("/", response_model=AuditLogListResponse)
+@router.get("/", response_model=AuditLogListResponse, dependencies=[requires_workspace_admin()])
 async def list_audit_logs(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,

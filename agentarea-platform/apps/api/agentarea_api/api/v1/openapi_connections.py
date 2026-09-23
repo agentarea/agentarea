@@ -7,6 +7,7 @@ from uuid import UUID
 
 import httpx
 from agentarea_api.api.deps.services import get_openapi_connection_service
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_openapi.application.service import OpenAPIConnectionService, fetch_and_parse_spec
@@ -87,7 +88,13 @@ class SpecPreviewResponse(BaseModel):
     tools: list[dict[str, str]] = []
 
 
-@router.post("/preview-spec", response_model=SpecPreviewResponse)
+@router.post(
+    "/preview-spec",
+    response_model=SpecPreviewResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def preview_spec(
     request: SpecPreviewRequest,
     _service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
@@ -145,7 +152,14 @@ async def preview_spec(
     )
 
 
-@router.post("/", response_model=OpenAPIConnectionResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=OpenAPIConnectionResponse,
+    status_code=201,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_connection(
     request: OpenAPIConnectionCreate,
     service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
@@ -169,7 +183,13 @@ async def create_connection(
         ) from e
 
 
-@router.get("/", response_model=list[OpenAPIConnectionResponse])
+@router.get(
+    "/",
+    response_model=list[OpenAPIConnectionResponse],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_connections(
     status: str | None = Query(None),
     search: str | None = Query(None),
@@ -188,7 +208,13 @@ async def list_connections(
     return results
 
 
-@router.get("/{connection_id}", response_model=OpenAPIConnectionResponse)
+@router.get(
+    "/{connection_id}",
+    response_model=OpenAPIConnectionResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_connection(
     connection_id: UUID,
     service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
@@ -201,7 +227,13 @@ async def get_connection(
     return resp
 
 
-@router.patch("/{connection_id}", response_model=OpenAPIConnectionResponse)
+@router.patch(
+    "/{connection_id}",
+    response_model=OpenAPIConnectionResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def update_connection(
     connection_id: UUID,
     request: OpenAPIConnectionUpdate,
@@ -222,7 +254,13 @@ async def update_connection(
     return resp
 
 
-@router.delete("/{connection_id}", status_code=204)
+@router.delete(
+    "/{connection_id}",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def delete_connection(
     connection_id: UUID,
     service: OpenAPIConnectionService = Depends(get_openapi_connection_service),
@@ -232,7 +270,12 @@ async def delete_connection(
         raise HTTPException(status_code=404, detail="Connection not found")
 
 
-@router.post("/{connection_id}/discover-tools")
+@router.post(
+    "/{connection_id}/discover-tools",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def discover_tools(
     connection_id: UUID,
     service: OpenAPIConnectionService = Depends(get_openapi_connection_service),

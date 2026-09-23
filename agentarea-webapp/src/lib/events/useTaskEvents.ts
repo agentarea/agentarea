@@ -14,7 +14,9 @@ import {
   applyEvent,
   CompletedRun,
   EventState,
+  findPendingForm,
   initialState,
+  isInteractionClosed,
   TaskStatus,
   TimelineItem,
 } from "./reducer";
@@ -28,8 +30,12 @@ import {
 
 type RawData = Record<string, unknown>;
 
-function isTerminal(eventType: string): boolean {
-  return TERMINAL_TYPES.has(canonicalType(eventType));
+function isTerminal(event: EventInput): boolean {
+  const type = canonicalType(event.eventType);
+  return (
+    type === "execution.finished" ||
+    (TERMINAL_TYPES.has(type) && event.data.execution_status !== "waiting")
+  );
 }
 
 // SSE transport/control frames (connection lifecycle, keepalives) are not task
@@ -98,24 +104,12 @@ function toDisplayRow(
   };
 }
 
-/** The first unresolved input/approval form part, if any. */
-function findPendingForm(parts: Part[]): Part | null {
-  for (const part of parts) {
-    if (part.kind !== "form") continue;
-    if (
-      part.eventType === "input.request" ||
-      part.eventType === "approval.request"
-    ) {
-      return part;
-    }
-  }
-  return null;
-}
-
 export interface UseTaskEventsResult {
   parts: Part[];
   timeline: TimelineItem[];
   status: TaskStatus;
+  executionStatus: EventState["executionStatus"];
+  isInteractionClosed: (part: Part) => boolean;
   pendingForm: Part | null;
   terminalMessage: string | null;
   completedRuns: CompletedRun[];
@@ -201,7 +195,7 @@ export function useTaskEvents(
       const normalized = normalizeSSEEvent(sseEvent.type, sseEvent.data);
       if (!normalized) return;
       push(normalized);
-      if (isTerminal(normalized.eventType)) {
+      if (isTerminal(normalized)) {
         terminalReachedRef.current = true;
         disconnectRef.current();
       }
@@ -336,7 +330,9 @@ export function useTaskEvents(
     parts: state.parts,
     timeline: state.timeline,
     status: state.status,
-    pendingForm: findPendingForm(state.parts),
+    executionStatus: state.executionStatus,
+    isInteractionClosed: (part) => isInteractionClosed(state, part),
+    pendingForm: findPendingForm(state),
     terminalMessage: state.terminalMessage,
     completedRuns: state.completedRuns,
     rawEvents,

@@ -17,10 +17,12 @@ import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import { useTaskEvents } from "@/lib/events/useTaskEvents";
+import { getTaskStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import ActivityGroup from "./ActivityGroup";
 import { buildActivitySegments } from "./activityView";
 import { ChatInputArea } from "./componets/ChatInputArea";
+import { useA2UIActions } from "./hooks/useA2UIActions";
 import { useFileUpload } from "./hooks/useFileUpload";
 import { useScrollManagement } from "./hooks/useScrollManagement";
 import { deliverTaskMessage } from "./utils/deliverTaskMessage";
@@ -52,6 +54,8 @@ export default function AgentChat({
 
   const {
     parts,
+    executionStatus,
+    isInteractionClosed,
     pendingForm,
     terminalMessage,
     status: streamStatus,
@@ -62,6 +66,8 @@ export default function AgentChat({
   });
 
   const actions = useTaskActions(agent.id, taskId);
+  const { dispatchAction } = useA2UIActions(agent.id, taskId);
+  const effectiveStatus = parts.length > 0 ? streamStatus : status;
 
   const {
     messagesContainerRef,
@@ -86,7 +92,8 @@ export default function AgentChat({
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   const isActive =
-    QUEUEABLE_STATUSES.includes(status) || status === "waiting_for_input";
+    QUEUEABLE_STATUSES.includes(effectiveStatus) ||
+    effectiveStatus === "waiting_for_input";
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -127,7 +134,9 @@ export default function AgentChat({
           pendingForm?.eventType === "input.request"
             ? pendingForm.partId
             : undefined,
-        queueOnCurrentTask: QUEUEABLE_STATUSES.includes(status),
+        queueOnCurrentTask:
+          executionStatus !== "finished" &&
+          QUEUEABLE_STATUSES.includes(effectiveStatus),
       });
       if (delivery.route === "followup" && !delivery.taskId) {
         toast.error("Failed to create new task");
@@ -157,12 +166,9 @@ export default function AgentChat({
     }
   };
 
-  const terminalTone =
-    streamStatus === "failed"
-      ? "danger"
-      : streamStatus === "cancelled"
-        ? "warning"
-        : "success";
+  // The banner colour is the task's own status colour — same source as the
+  // status chip on every list, header and inbox row.
+  const terminalTone = getTaskStatusPresentation(streamStatus).tone;
 
   return (
     <Card
@@ -189,12 +195,16 @@ export default function AgentChat({
                 key={segment.run.id}
                 run={segment.run}
                 onFormSubmit={handleFormSubmit}
+                onA2UIAction={dispatchAction}
+                isInteractionClosed={isInteractionClosed}
               />
             ) : (
               <PartRenderer
                 key={segment.part.partId}
                 part={segment.part}
                 onFormSubmit={handleFormSubmit}
+                onA2UIAction={dispatchAction}
+                interactionClosed={isInteractionClosed(segment.part)}
               />
             )
           )}

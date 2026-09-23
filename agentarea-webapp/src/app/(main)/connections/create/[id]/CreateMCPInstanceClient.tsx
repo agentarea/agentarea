@@ -499,7 +499,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     setError(null);
     try {
       const instanceId = createdInstanceId ?? (await createInstance({})).id;
-      const result = await oauthAuthorizeAction(instanceId);
+      const result = await oauthAuthorizeAction({ instance_id: instanceId });
       if (result.error || !result.data?.authorize_url) {
         setError(apiErrorText(result.error, t("oauthDiscoveryFailed")));
         return;

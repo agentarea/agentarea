@@ -15,8 +15,8 @@ from agentarea_api.api.deps.services import (
 )
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
-from agentarea_tasks.task_service import TaskService
 from agentarea_common.testing.flows import MainFlow
+from agentarea_tasks.task_service import TaskService
 from httpx import ASGITransport, AsyncClient
 
 
@@ -58,7 +58,7 @@ def mock_task_service(mock_agent_service):
 
     async def _get_task(task_id):
         agent = mock_agent_service.get.return_value
-        return SimpleNamespace(id=task_id, agent_id=getattr(agent, "id", None))
+        return SimpleNamespace(id=task_id, agent_id=getattr(agent, "id", None), execution_id=None)
 
     service.get_task.side_effect = _get_task
     return service
@@ -112,29 +112,52 @@ class TestA2UIActionEndpoint:
     """Test POST /v1/agents/{agent_id}/tasks/{task_id}/a2ui/action"""
 
     @pytest.mark.asyncio
-    async def test_send_action_success(
-        self, async_client, mock_agent_service, mock_workflow_service
+    @pytest.mark.parametrize("stored_execution_id", ["custom-workflow-run-42", None])
+    @pytest.mark.parametrize("business_status", ["waiting_for_input", "completed"])
+    async def test_action_reaches_associated_live_execution(
+        self,
+        async_client,
+        mock_agent_service,
+        mock_workflow_service,
+        mock_task_service,
+        stored_execution_id,
+        business_status,
     ):
-        """Action accepted when agent exists, a2ui enabled, task running."""
         agent = _make_agent(a2ui_enabled=True)
         mock_agent_service.get.return_value = agent
-        mock_workflow_service.get_workflow_status.return_value = {"status": "running"}
-        mock_workflow_service.send_a2ui_action.return_value = True
-
         task_id = uuid4()
+        execution_id = stored_execution_id or f"task-{task_id}"
+        mock_task_service.get_task.side_effect = None
+        mock_task_service.get_task.return_value = SimpleNamespace(
+            id=task_id,
+            agent_id=agent.id,
+            execution_id=stored_execution_id,
+            status=business_status,
+        )
+        delivered_actions = []
+
+        async def lookup_workflow(candidate):
+            if candidate != execution_id:
+                return {"status": "unknown"}
+            return {"execution_status": "running", "status": business_status}
+
+        async def deliver_action(candidate, action):
+            if candidate != execution_id:
+                return False
+            delivered_actions.append(action)
+            return True
+
+        mock_workflow_service.get_workflow_status.side_effect = lookup_workflow
+        mock_workflow_service.send_a2ui_action.side_effect = deliver_action
+
         response = await async_client.post(
             f"/v1/agents/{agent.id}/tasks/{task_id}/a2ui/action",
             json=SAMPLE_ACTION,
         )
 
         assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "accepted"
-        assert data["action_name"] == "submitForm"
-
-        mock_workflow_service.send_a2ui_action.assert_called_once_with(
-            f"agent-task-{task_id}", SAMPLE_ACTION
-        )
+        assert response.json()["status"] == "accepted"
+        assert delivered_actions == [SAMPLE_ACTION]
 
     @pytest.mark.asyncio
     async def test_agent_not_found_returns_404(self, async_client, mock_agent_service):
@@ -232,13 +255,20 @@ class TestA2UIActionEndpoint:
         assert "Task not found" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_completed_task_returns_400(
-        self, async_client, mock_agent_service, mock_workflow_service
+    @pytest.mark.parametrize("outcome", ["completed", "blocked", "waiting_for_input"])
+    async def test_closed_execution_rejects_action_regardless_of_business_status(
+        self,
+        async_client,
+        mock_agent_service,
+        mock_workflow_service,
+        outcome,
     ):
-        """Cannot send action to a completed task."""
         agent = _make_agent(a2ui_enabled=True)
         mock_agent_service.get.return_value = agent
-        mock_workflow_service.get_workflow_status.return_value = {"status": "completed"}
+        mock_workflow_service.get_workflow_status.return_value = {
+            "execution_status": "completed",
+            "status": outcome,
+        }
 
         response = await async_client.post(
             f"/v1/agents/{agent.id}/tasks/{uuid4()}/a2ui/action",
@@ -246,7 +276,7 @@ class TestA2UIActionEndpoint:
         )
 
         assert response.status_code == 400
-        assert "completed" in response.json()["detail"]
+        mock_workflow_service.send_a2ui_action.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_failed_task_returns_400(

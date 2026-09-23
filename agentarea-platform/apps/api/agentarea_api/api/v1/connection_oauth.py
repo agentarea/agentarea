@@ -19,14 +19,18 @@ from agentarea_api.api.deps.services import (
     SecretCatalogServiceDep,
     get_real_secret_manager,
 )
+from agentarea_api.api.v1.oauth_app_credentials import (
+    CustomOAuthAppFields,
+    resolve_custom_oauth_app,
+)
 from agentarea_api.api.v1.registries import require_platform_catalog_write
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
-from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_mcp.application.auth_service import MCPAuthService, MissingCredentialsError
 from agentarea_mcp.application.oauth_client_service import PKCEPair
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
@@ -35,8 +39,6 @@ from agentarea_openapi.application.url_validator import validate_url
 from agentarea_openapi.infrastructure.repository import OpenAPIConnectionRepository
 from agentarea_openapi.schemas.dto import OpenAPIConnectionCreate
 from agentarea_registry.infrastructure.repository import RegistryItemRepository, RegistryRepository
-from agentarea_secrets.catalog_service import SecretCatalogService, SecretNotFoundError
-from agentarea_secrets.models import EncryptedSecret
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -52,45 +54,21 @@ _STATE_TTL_SECONDS = 600
 _MANAGED_CREDENTIALS_PREFIX = "connection_oauth_client:"
 
 
-class CatalogConnectionRequest(BaseModel):
+class CatalogConnectionRequest(CustomOAuthAppFields):
     """Connect with AgentArea credentials, or override them from Advanced."""
 
     model_config = ConfigDict(extra="forbid")
 
     credential_mode: Literal["managed", "custom"] = "managed"
-    client_id: str | None = Field(default=None, min_length=1, max_length=512)
-    client_secret: str | None = Field(default=None, min_length=1, max_length=4096)
-    client_id_secret_id: UUID | None = Field(
-        default=None,
-        description="Existing user-owned workspace secret containing the OAuth client ID.",
-    )
-    client_secret_secret_id: UUID | None = Field(
-        default=None,
-        description="Existing user-owned workspace secret containing the OAuth client secret.",
-    )
     return_to: str = Field(default="", max_length=2048)
 
     @model_validator(mode="after")
     def validate_credential_sources(self) -> "CatalogConnectionRequest":
-        fields = (
-            self.client_id,
-            self.client_secret,
-            self.client_id_secret_id,
-            self.client_secret_secret_id,
-        )
         if self.credential_mode == "managed":
-            if any(value is not None for value in fields):
+            if self.has_any_custom_credential():
                 raise ValueError("Managed connections do not accept custom OAuth credentials.")
             return self
-
-        for label, value, secret_id in (
-            ("client ID", self.client_id, self.client_id_secret_id),
-            ("client secret", self.client_secret, self.client_secret_secret_id),
-        ):
-            if (value is None) == (secret_id is None):
-                raise ValueError(
-                    f"Custom OAuth {label} must be entered or selected from workspace secrets."
-                )
+        self.validate_custom_credential_sources()
         return self
 
 
@@ -234,34 +212,6 @@ async def _managed_credentials(manager, key: str) -> tuple[str, str]:
     return client_id, client_secret
 
 
-async def _workspace_secret_value(
-    catalog: SecretCatalogService,
-    manager: BaseSecretManager,
-    secret_id: UUID,
-    label: str,
-) -> tuple[EncryptedSecret, str]:
-    """Resolve a stable, workspace-checked reference without exposing its value."""
-    try:
-        secret = await catalog.get(secret_id)
-    except SecretNotFoundError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Selected OAuth {label} secret is not available in this workspace.",
-        ) from exc
-    if secret.owner_type is not None:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Selected OAuth {label} must be a user-owned workspace secret.",
-        )
-    value = await manager.get_secret(secret.secret_name)
-    if not value:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Selected OAuth {label} secret has no value.",
-        )
-    return secret, value
-
-
 @router.put(
     "/oauth/apps/{provider_key}",
     response_model=ManagedOAuthAppResponse,
@@ -286,6 +236,11 @@ async def configure_managed_oauth_app(
 @router.post(
     "/catalog/{item_id}/connect",
     response_model=CatalogConnectionResponse,
+    dependencies=[
+        unrestricted(
+            "starts an OAuth flow for the caller against a trusted catalog template; the platform app it uses is configured elsewhere and is admin-gated"
+        )
+    ],
 )
 async def connect_catalog_item(
     item_id: UUID,
@@ -334,31 +289,13 @@ async def connect_catalog_item(
         credential_config["client_id"] = client_id
         credentials: dict[str, Any] = {}
     else:
-        if body.client_id_secret_id is not None:
-            client_id_secret, client_id = await _workspace_secret_value(
-                secret_catalog,
-                workspace_secret_manager,
-                body.client_id_secret_id,
-                "client ID",
-            )
-            credential_config["client_id_secret_name"] = client_id_secret.secret_name
-            credential_references.append((client_id_secret.id, "client_id"))
-        else:
-            client_id = str(body.client_id)
-            credential_config["client_id"] = client_id
-
-        if body.client_secret_secret_id is not None:
-            client_secret, _ = await _workspace_secret_value(
-                secret_catalog,
-                workspace_secret_manager,
-                body.client_secret_secret_id,
-                "client secret",
-            )
-            credential_config["client_secret_secret_name"] = client_secret.secret_name
-            credential_references.append((client_secret.id, "client_secret"))
-            credentials = {}
-        else:
-            credentials = {"client_secret": body.client_secret}
+        resolved = await resolve_custom_oauth_app(
+            body, catalog=secret_catalog, manager=workspace_secret_manager
+        )
+        client_id = resolved.client_id
+        credential_config = resolved.config
+        credential_references = resolved.references
+        credentials = resolved.credentials
 
     connection_service = OpenAPIConnectionService(
         repository_factory=repository_factory,
@@ -436,7 +373,12 @@ async def connect_catalog_item(
     return CatalogConnectionResponse(connection_id=connection.id, authorize_url=authorize_url)
 
 
-@public_router.get("/oauth/callback")
+@public_router.get(
+    "/oauth/callback",
+    dependencies=[
+        enforced_in_handler("the signed OAuth state token is the only credential this callback has")
+    ],
+)
 async def oauth_callback(
     db_session: DatabaseSessionDep,
     code: str | None = Query(None),

@@ -1089,6 +1089,44 @@ export const zMcpContainersHealthResponse = z.object({
 });
 
 /**
+ * MCPOAuthAuthorizeRequest
+ *
+ * Start an OAuth flow for one MCP instance.
+ *
+ * ``auto`` registers AgentArea with the authorization server (RFC 7591).
+ * ``custom`` uses an OAuth app the workspace registered with the provider —
+ * the only option when the provider has no Dynamic Client Registration.
+ */
+export const zMcpoAuthAuthorizeRequest = z.object({
+  client_id: z.string().min(1).max(512).nullish(),
+  client_id_secret_id: z.string().uuid().nullish(),
+  client_secret: z.string().min(1).max(4096).nullish(),
+  client_secret_secret_id: z.string().uuid().nullish(),
+  credential_mode: z.enum(["auto", "custom"]).optional().default("auto"),
+  instance_id: z.string().uuid(),
+  return_to: z.string().max(2048).optional().default(""),
+});
+
+/**
+ * MCPOAuthPreflightResponse
+ *
+ * What the UI needs before it can offer a Connect action.
+ *
+ * ``ready`` — Connect can run unattended (the server supports DCR).
+ * ``oauth_app_required`` — ask for a client ID/secret first.
+ * ``unsupported`` — this server cannot be authorized this way; say why.
+ */
+export const zMcpoAuthPreflightResponse = z.object({
+  authorization_endpoint: z.string().nullish(),
+  connected: z.boolean(),
+  detail: z.string().optional().default(""),
+  instance_id: z.string().uuid(),
+  issuer: z.string().nullish(),
+  scopes: z.array(z.string()).optional(),
+  status: z.enum(["ready", "oauth_app_required", "unsupported"]),
+});
+
+/**
  * MCPServerCreate
  *
  * Payload for creating an MCP server spec (catalog template).
@@ -2805,16 +2843,41 @@ export const zTokenPolicy = z.object({
 });
 
 /**
+ * ToolMethodResponse
+ *
+ * One callable method of a code toolset.
+ */
+export const zToolMethodResponse = z.object({
+  description: z.string(),
+  display_name: z.string(),
+  effect: z.enum(["read", "write", "destructive", "privileged"]).nullish(),
+  name: z.string(),
+  requires_user_confirmation: z.boolean().optional().default(false),
+});
+
+/**
  * ToolResponse
  *
  * Unified tool response format.
+ *
+ * Code tools carry the catalog metadata the UI needs to group and label them:
+ * ``plane`` separates the agent's own runtime from the platform surface, and
+ * ``effect`` on each method says what a call can break. Without these on the
+ * wire a client has to hand-maintain a mirror of the toolset registry.
  */
 export const zToolResponse = z.object({
+  available_methods: z.array(zToolMethodResponse).optional(),
+  category: z.string().optional().default(""),
   description: z.string(),
-  input_schema: z.record(z.unknown()),
+  display_name: z.string().optional().default(""),
+  input_schema: z.record(z.unknown()).optional(),
   mcp_instance_id: z.string().uuid().nullish(),
   mcp_instance_name: z.string().nullish(),
   name: z.string(),
+  plane: z
+    .enum(["runtime", "build", "operate", "observe", "govern", "federate"])
+    .nullish(),
+  requires_user_confirmation: z.boolean().optional().default(false),
   type: z.enum(["code", "mcp"]),
 });
 
@@ -4298,10 +4361,17 @@ export const zGetOauthLinkV1McpOauthLinksLinkIdGetPath = z.object({
  */
 export const zGetOauthLinkV1McpOauthLinksLinkIdGetResponse = zOAuthLinkResponse;
 
-export const zOauthAuthorizeV1McpOauthAuthorizeGetQuery = z.object({
-  instance_id: z.string().uuid(),
-  return_to: z.string().optional().default(""),
-});
+export const zOauthAuthorizeV1McpOauthAuthorizePostBody =
+  zMcpoAuthAuthorizeRequest;
+
+/**
+ * Response Oauth Authorize V1 Mcp Oauth Authorize Post
+ *
+ * Successful Response
+ */
+export const zOauthAuthorizeV1McpOauthAuthorizePostResponse = z.record(
+  z.string()
+);
 
 export const zOauthCallbackV1McpOauthCallbackGetQuery = z.object({
   code: z.string().optional(),
@@ -4309,6 +4379,16 @@ export const zOauthCallbackV1McpOauthCallbackGetQuery = z.object({
   error: z.string().optional(),
   error_description: z.string().optional(),
 });
+
+export const zOauthPreflightV1McpOauthPreflightGetQuery = z.object({
+  instance_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zOauthPreflightV1McpOauthPreflightGetResponse =
+  zMcpoAuthPreflightResponse;
 
 /**
  * Response List Mcp Server Instances V1 Mcp Server Instances  Get

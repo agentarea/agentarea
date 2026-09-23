@@ -73,6 +73,14 @@ export type AgentOverviewModel = {
     doneToday: number;
     failedToday: number;
   };
+  /** Scheduled fires and queued runs, soonest first. */
+  upcoming: {
+    id: string;
+    firesAt: string;
+    kind: string;
+    title: string;
+    href: string | null;
+  }[];
   runningTasks: TaskResponse[];
   recentTasks: TaskResponse[];
   pendingApprovals: TaskResponse[];
@@ -98,6 +106,21 @@ function agoText(iso: string | null | undefined, t: Translator): string {
   const rel = formatRelTime(iso ?? null, t);
   if (!iso || rel === t("relJustNow")) return rel;
   return t("agoFmt", { time: rel });
+}
+
+// "in 3h" — the same compact units, pointing forward. formatRelTime only
+// measures elapsed time, so every future moment comes back as "just now".
+function inText(iso: string, t: Translator): string {
+  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
+  if (mins < 1) return t("relJustNow");
+  const hours = Math.round(mins / 60);
+  const rel =
+    mins < 60
+      ? t("relMinutes", { count: mins })
+      : hours < 24
+        ? t("relHours", { count: hours })
+        : t("relDays", { count: Math.round(hours / 24) });
+  return t("inFmt", { time: rel });
 }
 
 // Keep semantic color on the tiny marker only. The label stays neutral so the
@@ -294,6 +317,21 @@ export async function AgentOverviewView({
               title={t("tasks")}
               link={{ label: t("allTasks"), href: `/agents/${agentRef}/tasks` }}
             />
+            <CollapsibleGroup
+              label={t("upcoming")}
+              count={model.upcoming.length}
+              color="hsl(var(--muted-foreground) / 0.6)"
+              sticky={false}
+              headerClassName="h-[30px] px-[15px]"
+            >
+              {model.upcoming.length === 0 ? (
+                <EmptyRow text={t("nothingUpcoming")} />
+              ) : (
+                model.upcoming.map((item) => (
+                  <UpcomingRow key={item.id} item={item} t={t} />
+                ))
+              )}
+            </CollapsibleGroup>
             <CollapsibleGroup
               label={t("running")}
               count={model.runningTasks.length}
@@ -519,6 +557,54 @@ function summarize(
   return rest > 0 ? `${shown} ${t("more", { count: rest })}` : shown;
 }
 
+/**
+ * One piece of scheduled or queued work. Same one-line shape as TaskRow, but
+ * the time points forward and there is no cost yet to show.
+ */
+function UpcomingRow({
+  item,
+  t,
+}: {
+  item: AgentOverviewModel["upcoming"][number];
+  t: Translator;
+}) {
+  const isTrigger = item.kind === "trigger";
+  const row = (
+    <InteractiveListRow
+      className="px-[15px] py-[11px]"
+      dividerClassName="border-b border-border/60"
+      contentClassName="gap-3"
+      start={
+        <EntityAvatar
+          variant="soft"
+          size={20}
+          rounded={5}
+          color="hsl(var(--muted-foreground))"
+          icon={isTrigger ? <Clock strokeWidth={1.8} /> : <ListChecks strokeWidth={1.8} />}
+          aria-hidden
+        />
+      }
+      end={
+        <span className="whitespace-nowrap text-[11.5px] text-muted-foreground">
+          {inText(item.firesAt, t)}
+        </span>
+      }
+    >
+      <div className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+        {item.title}
+      </div>
+    </InteractiveListRow>
+  );
+
+  return item.href ? (
+    <Link href={item.href} className="block">
+      {row}
+    </Link>
+  ) : (
+    row
+  );
+}
+
 function TaskRow({
   task,
   t,
@@ -540,9 +626,9 @@ function TaskRow({
   const cost = Number(task.total_cost ?? resultCost ?? 0);
   const when = agoText(task.created_at, t);
   const title = task.description || task.id;
-  const sub = isRunningTask(task)
-    ? t("started", { time: when })
-    : `${label} · ${when}`;
+  // Status, title, time and cost all sit on one line: the title is the only
+  // part worth the width, so everything else is fixed and the title truncates.
+  const timeText = isRunningTask(task) ? t("started", { time: when }) : when;
 
   return (
     <Link href={`/tasks/${task.id}`} className="block">
@@ -550,26 +636,31 @@ function TaskRow({
         className="px-[15px] py-[11px]"
         dividerClassName="border-b border-border/60"
         contentClassName="gap-3"
+        // Leads the row, icon first. It is the only place the status is named
+        // now -- the caption underneath used to repeat it, so every row said
+        // "Completed" twice.
+        start={
+          visuallyHideStatus ? (
+            <span className="sr-only">{label}</span>
+          ) : (
+            <TaskStatus
+              status={status}
+              className="shrink-0 whitespace-nowrap text-[12px] font-medium"
+            />
+          )
+        }
         end={
-          <span className="w-[46px] text-right text-[11.5px] text-muted-foreground tabular-nums">
-            {cost > 0 ? fmtUsd(cost) : "—"}
+          <span className="flex items-center gap-3 text-[11.5px] text-muted-foreground">
+            <span className="whitespace-nowrap">{timeText}</span>
+            <span className="w-[46px] text-right tabular-nums">
+              {cost > 0 ? fmtUsd(cost) : "—"}
+            </span>
           </span>
         }
       >
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[12.5px] font-medium">{title}</div>
-          <div className="mt-px truncate text-[11px] text-muted-foreground/80">
-            {sub}
-          </div>
+        <div className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+          {title}
         </div>
-        {visuallyHideStatus ? (
-          <span className="sr-only">{label}</span>
-        ) : (
-          <TaskStatus
-            status={status}
-            className="shrink-0 whitespace-nowrap text-[12px] font-medium"
-          />
-        )}
       </InteractiveListRow>
     </Link>
   );

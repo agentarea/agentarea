@@ -26,18 +26,24 @@ def create_event_publisher(
     iteration: int | None = None,
     broker_client=None,
 ):
-    """Create an event publisher function for chunk events.
+    """Create a publisher that converts callback deltas into chunk snapshots.
 
     ``execution_id`` and ``iteration`` identify the LLM call this chunk belongs
     to. The read side supersedes by part id, and an llm part's id is built from
     exactly these two fields, so a chunk without them cannot be matched to the
     call it is streaming and never renders as text.
 
+    Each snapshot carries cumulative ``chunk`` text and ``thinking`` reasoning
+    for this invocation, including the empty final callback. A new publisher
+    starts a fresh snapshot for a retry of the same part.
+
     ``broker_client`` (a ``BrokerClient``) additionally XADDs each chunk to the
     per-task live stream so the A2A read side tails tokens the same way it tails
     durable events (ADR-0018). Chunks are stream-only (not persisted); the DB
     keeps only durable events.
     """
+    text = ""
+    thinking = ""
 
     async def publish_chunk_event(
         chunk: str,
@@ -48,11 +54,18 @@ def create_event_publisher(
         """Publish LLM chunk event.
 
         Args:
-            chunk: The text content of the chunk.
+            chunk: The incoming delta for the selected channel.
             chunk_index: Sequence number.
             is_final: Whether this is the last chunk.
             chunk_type: "text" for regular content, "thinking" for reasoning blocks.
         """
+        nonlocal text, thinking
+
+        if chunk_type == "thinking":
+            thinking += chunk
+        else:
+            text += chunk
+
         try:
             publisher = resolve_event_broker(event_broker)
 
@@ -64,7 +77,8 @@ def create_event_publisher(
                     "task_id": task_id,
                     "execution_id": execution_id,
                     "iteration": iteration,
-                    "chunk": chunk,
+                    "chunk": text,
+                    "thinking": thinking,
                     "chunk_index": chunk_index,
                     "is_final": is_final,
                     "chunk_type": chunk_type,

@@ -439,6 +439,11 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
             <EmptyState
               title={t("noSkills")}
               description={t("noSkillsDescription")}
+              hints={[
+                { text: t("noSkillsHintWrite"), href: "/skills/create" },
+                { text: t("noSkillsHintImport"), href: "/skills/create" },
+                { text: t("noSkillsHintInstall"), href: "/explore?type=skills" },
+              ]}
               iconsType="skills"
               action={{
                 label: t("addSkill"),

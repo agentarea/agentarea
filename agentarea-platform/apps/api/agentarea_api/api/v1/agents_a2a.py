@@ -33,6 +33,7 @@ from agentarea_api.api.v1.a2a_auth import (
 from agentarea_api.api.v1.task_event_feed import open_task_event_feed
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.context_manager import ContextManager
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.events.contract import (
     LLM_CHUNK,
     TASK_CANCELLED,
@@ -1844,7 +1845,11 @@ async def _dispatch_rpc_method(
     return create_error_response(request_id, -32601, f"Method not found: {method}")
 
 
-@router.post("/rpc", response_model=None)
+@router.post(
+    "/rpc",
+    response_model=None,
+    dependencies=[unrestricted("A2A JSON-RPC surface; the agent card and task auth govern it")],
+)
 async def handle_agent_jsonrpc(
     agent_id: UUID,
     request: Request,
@@ -2023,7 +2028,12 @@ async def handle_agent_jsonrpc(
         return create_error_response(request_id, -32603, f"Internal error: {e}")
 
 
-@router.get("/well-known")
+@router.get(
+    "/well-known",
+    dependencies=[
+        unrestricted("agent discovery document, the contract an A2A peer reads before talking")
+    ],
+)
 async def get_agent_well_known(
     agent_id: UUID,
     request: Request,

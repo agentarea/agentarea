@@ -1,8 +1,14 @@
+import { listTriggerCatalog } from "@/lib/api";
+import {
+  findTriggerCatalogEntry,
+  getTriggerLane,
+  type TriggerCatalogEntry,
+} from "./triggerDisplay";
 import { getTriggersCached } from "./triggersData";
 import TriggersTypeFilter from "./TriggersTypeFilter";
 
 /**
- * Server wrapper that computes the per-type counts (shared, request-cached
+ * Server wrapper that computes the per-lane counts (shared, request-cached
  * trigger fetch) and renders the client-side filter tabs.
  */
 export default async function TriggersTypeFilterSection({
@@ -10,13 +16,21 @@ export default async function TriggersTypeFilterSection({
 }: {
   currentType: string;
 }) {
-  const { triggers } = await getTriggersCached();
+  const [{ triggers }, catalogResponse] = await Promise.all([
+    getTriggersCached(),
+    listTriggerCatalog(),
+  ]);
+  const catalog = (catalogResponse.data ?? []) as TriggerCatalogEntry[];
+
+  const lanes = triggers.map((trigger) =>
+    getTriggerLane(trigger, findTriggerCatalogEntry(trigger, catalog))
+  );
 
   const counts = {
     all: triggers.length,
-    cron: triggers.filter((trigger) => trigger.trigger_type === "cron").length,
-    webhook: triggers.filter((trigger) => trigger.trigger_type === "webhook")
-      .length,
+    channel: lanes.filter((lane) => lane === "channel").length,
+    event: lanes.filter((lane) => lane === "event").length,
+    schedule: lanes.filter((lane) => lane === "schedule").length,
   };
 
   return <TriggersTypeFilter currentType={currentType} counts={counts} />;
