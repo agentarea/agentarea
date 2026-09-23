@@ -405,3 +405,39 @@ async def test_authorize_persists_dcr_credentials_before_redirecting(monkeypatch
     auth_kwargs = auth_create.await_args.kwargs
     assert auth_kwargs["config"]["client_id"] == "dcr-client-id"
     assert auth_kwargs["credentials"]["client_secret"] == "dcr-secret"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "description",
+    [
+        "access_denied",
+        "https://evil.example/phish",
+        "//evil.example",
+        "a&next=https://evil.example",
+    ],
+)
+async def test_callback_error_returns_to_the_frontend_with_the_reason_as_data(
+    monkeypatch, description
+):
+    monkeypatch.setattr(
+        mcp_oauth_connect,
+        "get_settings",
+        lambda: SimpleNamespace(app=SimpleNamespace(FRONTEND_BASE_URL="https://app.agentarea.ai/")),
+    )
+
+    response = await mcp_oauth_connect.oauth_callback(
+        db_session=None,
+        code=None,
+        state=None,
+        error="access_denied",
+        error_description=description,
+    )
+
+    location = urllib.parse.urlparse(response.headers["location"])
+    assert (location.scheme, location.netloc, location.path) == (
+        "https",
+        "app.agentarea.ai",
+        "/connections",
+    )
+    assert urllib.parse.parse_qs(location.query) == {"oauth": ["error"], "reason": [description]}

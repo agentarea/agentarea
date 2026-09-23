@@ -32,12 +32,12 @@ def resolve_interaction_capabilities(
             workflow_metadata.get("source"),
             workflow_metadata.get("created_via"),
         )
-        web = not (
+        started_by_schedule = bool(
             task_parameters.get("trigger_id")
             or task_parameters.get("trigger_type")
             or workflow_metadata.get("scheduled_at")
         )
-        web = web and all(
+        web = not started_by_schedule and all(
             source in (None, "", "web", "api", "rest", "manual") for source in sources
         )
     return InteractionCapabilities(

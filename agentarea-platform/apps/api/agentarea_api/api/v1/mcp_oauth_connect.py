@@ -448,9 +448,12 @@ async def oauth_callback(
     remote AS). The state token proves the flow was initiated by our /authorize.
     """
     if error:
-        # No state data yet — fall back to relative redirect
-        reason = urllib.parse.quote(error_description or error)
-        return RedirectResponse(url=f"/connections?oauth=error&reason={reason}", status_code=302)
+        # The state is not read on this branch, so there is no stored return_to:
+        # land on the configured frontend, with the reason carried as query data.
+        query = urllib.parse.urlencode({"oauth": "error", "reason": error_description or error})
+        return RedirectResponse(
+            url=f"{_safe_frontend_base('')}/connections?{query}", status_code=302
+        )
 
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state parameter")

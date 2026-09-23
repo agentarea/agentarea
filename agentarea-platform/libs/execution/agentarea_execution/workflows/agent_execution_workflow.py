@@ -2457,8 +2457,6 @@ class AgentExecutionWorkflow:
         Regular MCP/code tools run sequentially (they may have side effects
         that depend on execution order).
         """
-        import asyncio
-
         execution_limits = (self.state.effective_policy or {}).get("execution") or {}
         max_per_turn = execution_limits.get("max_tool_calls_per_turn")
         max_total = execution_limits.get("max_tool_calls_total")
