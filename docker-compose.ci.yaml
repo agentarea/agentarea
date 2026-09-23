@@ -1,9 +1,10 @@
 # CI overlay for docker-compose.yaml — used by the OpenAPI fuzz job.
 #
 # Three things differ from local dev:
-#   1. The API image is BUILT from the PR source in the job and tagged
-#      `agentarea/agentarea-api:latest`, so we must NOT re-pull it from the
-#      registry (the base file sets `pull_policy: always`).
+#   1. The API and worker images are BUILT from the PR source in the job and
+#      tagged `agentarea/agentarea-api:latest` / `agentarea/agentarea-worker:latest`,
+#      so we must NOT re-pull them from the registry (the base file sets
+#      `pull_policy: always`).
 #   2. The fuzz harness mints ephemeral Kratos identities from the GitHub
 #      runner host, which needs the Kratos ADMIN API (4434) published — the
 #      base file only exposes the public API (4433).
@@ -23,12 +24,20 @@
 #      (exactly what dev already does) and live outside the workspace, so both
 #      problems disappear.
 #
-# Usage: docker compose -f docker-compose.yaml -f docker-compose.ci.yaml up -d app kratos temporal
+# Usage: docker compose -f docker-compose.yaml -f docker-compose.ci.yaml up -d app kratos temporal agentarea-worker
 services:
   app:
     pull_policy: never
   app_migrations:
     pull_policy: never
+  agentarea-worker:
+    pull_policy: never
+    environment:
+      # The job env exports WORKFLOW__TEMPORAL_SERVER_URL=localhost:7233 for
+      # processes on the runner, and the base file interpolates it into the
+      # container, where localhost is the worker itself. The worker connects to
+      # Temporal at startup, so it needs the service name.
+      - WORKFLOW__TEMPORAL_SERVER_URL=temporal:7233
   rustfs:
     volumes:
       - rustfs_ci_data:/data

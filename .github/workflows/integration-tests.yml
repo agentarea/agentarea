@@ -309,9 +309,11 @@ jobs:
           REDIS_URL: ${{ env.REDIS_URL }}
 
   # OpenAPI contract + stateful CRUD fuzz against the FULL live stack (the PR's
-  # API image + Kratos + Postgres + Temporal, via docker compose). This is the
-  # only layer that catches persistence/constraint 5xx on real create paths
-  # (e.g. the MCP slug NOT NULL 500 that mocked/hermetic suites missed).
+  # API and worker images + Kratos + Postgres + Temporal + OpenFGA, via docker
+  # compose). This is the only layer that catches persistence/constraint 5xx on
+  # real create paths (e.g. the MCP slug NOT NULL 500 that mocked/hermetic
+  # suites missed), and the only one that boots the worker the way a deployment
+  # does: a worker that cannot reach /readyz fails the job.
   api-fuzz:
     name: OpenAPI fuzz (live stack)
     runs-on: ubuntu-latest
@@ -339,6 +341,12 @@ jobs:
           # 500 from /sessions/whoami. This key is generated per run and dies
           # with the job, so widening it here gives nothing away.
           chmod 644 config/auth/kratos/jwks.json
+          # The worker builds its secret manager at startup and refuses an
+          # empty key; gen-dev-secrets leaves it alone on purpose (rotating it
+          # would orphan every stored secret), so this throwaway stack gets one.
+          key=$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')
+          sed -i "s|^SECRET_MANAGER_ENCRYPTION_KEY=.*|SECRET_MANAGER_ENCRYPTION_KEY=${key}|" .env
+          grep -q "^SECRET_MANAGER_ENCRYPTION_KEY=${key}$" .env
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -356,10 +364,23 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Start stack (db, kratos, temporal, api)
+      - name: Build worker image from PR source
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./agentarea-platform
+          file: ./agentarea-platform/apps/worker/Dockerfile
+          tags: agentarea/agentarea-worker:latest
+          load: true
+          push: false
+          # Own scope: the API build above writes mode=max to the default one,
+          # and two images sharing it evict each other's layers.
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,mode=max,scope=worker
+
+      - name: Start stack (db, kratos, temporal, openfga, api, worker)
         run: |
           docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
-            up -d app kratos temporal
+            up -d app kratos temporal agentarea-worker
 
       - name: Wait for API + Kratos to be ready
         run: |
@@ -379,6 +400,30 @@ jobs:
               logs --tail=150 app app_migrations kratos db
             exit 1
           fi
+
+      - name: Wait for the worker to report ready
+        # The compose healthcheck probes the worker's /readyz, which answers 200
+        # only once the worker reached its database, Redis and OpenFGA and every
+        # Temporal worker is polling. A restart means it died during startup:
+        # fail on the first one instead of waiting out the crash loop.
+        run: |
+          for _ in $(seq 1 60); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' agentarea-worker)
+            restarts=$(docker inspect -f '{{.RestartCount}}' agentarea-worker)
+            if [ "$status" = "healthy" ]; then
+              echo "worker ready"; exit 0
+            fi
+            if [ "$restarts" -gt 0 ]; then
+              echo "::error::the worker exited during startup (restarts: $restarts)"
+              break
+            fi
+            sleep 5
+          done
+          [ "$restarts" -gt 0 ] || echo "::error::the worker did not report ready in time (health: $status)"
+          docker compose -f docker-compose.yaml -f docker-compose.ci.yaml ps
+          docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
+            logs --tail=200 agentarea-worker temporal openfga
+          exit 1
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -439,6 +484,8 @@ jobs:
           # from its tokenizer was invisible.
           docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
             logs --tail=200 kratos || true
+          docker compose -f docker-compose.yaml -f docker-compose.ci.yaml \
+            logs --tail=200 agentarea-worker || true
 
       - name: Tear down
         if: always()

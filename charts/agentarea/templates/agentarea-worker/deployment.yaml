@@ -11,6 +11,13 @@ metadata:
     {{- end }}
 spec:
   replicas: {{ .Values.worker.replicaCount }}
+  {{- with .Values.worker.minReadySeconds }}
+  minReadySeconds: {{ . }}
+  {{- end }}
+  {{- with .Values.worker.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "agentarea.selectorLabels" . | nindent 6 }}
@@ -135,6 +142,46 @@ spec:
             {{- if .Values.worker.extraEnv }}
             {{- toYaml .Values.worker.extraEnv | nindent 12 }}
             {{- end }}
+          ports:
+            - name: health
+              containerPort: {{ .Values.worker.healthPort }}
+              protocol: TCP
+          {{- with .Values.worker.startupProbe }}
+          {{- if .enabled }}
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+            successThreshold: 1
+          {{- end }}
+          {{- end }}
+          {{- with .Values.worker.readinessProbe }}
+          {{- if .enabled }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+            successThreshold: 1
+          {{- end }}
+          {{- end }}
+          {{- with .Values.worker.livenessProbe }}
+          {{- if .enabled }}
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: health
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+            successThreshold: 1
+          {{- end }}
+          {{- end }}
           {{- if or .Values.worker.resources .Values.global.workloads.resources.mainContainer }}
           resources:
             {{- if .Values.worker.resources }}

@@ -32,6 +32,8 @@ from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
 
+from agentarea_worker.health import HealthServer, WorkerHealth, WorkerHealthSettings
+
 # Load environment variables
 dotenv.load_dotenv()
 
@@ -97,6 +99,13 @@ class AgentAreaWorker:
         self._inbound_dedup = None
         self.container_monitor = None
         self.worker_shutdown_event = asyncio.Event()
+        self.health = WorkerHealth()
+        # All interfaces: the kubelet probes the pod IP, not loopback.
+        self.health_server = HealthServer(
+            self.health,
+            host="0.0.0.0",  # noqa: S104
+            port=WorkerHealthSettings().HEALTH_PORT,
+        )
 
     async def signal_handler(self, signum: int, frame: Any) -> None:
         """Handle shutdown signals gracefully."""
@@ -121,6 +130,8 @@ class AgentAreaWorker:
             raise RuntimeError("Client not connected. Call connect() first.")
 
         settings = get_settings()
+
+        await self._check_database()
 
         # Create basic dependencies for activities
         dependencies = create_activity_dependencies()
@@ -286,6 +297,14 @@ class AgentAreaWorker:
 
         logger.info("Worker created and configured")
 
+    async def _check_database(self) -> None:
+        from agentarea_common.config.database import get_database
+        from sqlalchemy import text
+
+        async with get_database().engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+        logger.info("Database reachable")
+
     async def _setup_channel_subscribers(self, dependencies) -> None:
         """Wire inbound stream consumer + outbound delivery consumer.
 
@@ -409,31 +428,45 @@ class AgentAreaWorker:
         self.container_monitor = await start_container_monitoring()
 
         # Start workers in background
-        worker_task = asyncio.create_task(self.worker.run())
-        trigger_task = (
-            asyncio.create_task(self.trigger_worker.run()) if self.trigger_worker else None
-        )
+        pollers = {w.task_queue: w for w in (self.worker, self.trigger_worker) if w}
+        worker_tasks = {queue: asyncio.create_task(w.run()) for queue, w in pollers.items()}
+        self.health.mark_started(pollers)
 
-        # Wait for shutdown signal
-        await self.worker_shutdown_event.wait()
+        # Wait for a shutdown signal, or for a Temporal worker to stop on its own:
+        # a worker that stopped polling must take the process down with it, not
+        # leave a pod that looks alive and does nothing.
+        shutdown = asyncio.create_task(self.worker_shutdown_event.wait())
+        await asyncio.wait([shutdown, *worker_tasks.values()], return_when=asyncio.FIRST_COMPLETED)
+        stopped = [queue for queue, task in worker_tasks.items() if task.done()]
+        if stopped:
+            logger.error("Temporal worker stopped unexpectedly on %s", ", ".join(stopped))
+        else:
+            logger.info("Shutdown signal received, stopping worker...")
 
-        logger.info("Shutdown signal received, stopping worker...")
-        worker_task.cancel()
-        if trigger_task:
-            trigger_task.cancel()
-
-        for task in [worker_task, trigger_task]:
-            if task:
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    # Expected during worker shutdown - task cancellation is normal
-                    pass
+        shutdown.cancel()
+        for task in worker_tasks.values():
+            task.cancel()
+        failure: Exception | None = None
+        for queue, task in worker_tasks.items():
+            try:
+                await task
+            except asyncio.CancelledError:
+                # Expected during worker shutdown - task cancellation is normal
+                pass
+            except Exception as e:
+                logger.error("Temporal worker on %s failed", queue, exc_info=True)
+                failure = failure or e
         logger.info("Workers stopped")
+
+        if stopped:
+            raise RuntimeError(
+                f"Temporal worker on {', '.join(stopped)} stopped polling"
+            ) from failure
 
     async def start(self) -> None:
         """Start the worker with proper initialization."""
         try:
+            await self.health_server.start()
             await self.connect()
             await self.create_worker()
             await self.run()
@@ -483,6 +516,8 @@ class AgentAreaWorker:
         if self.client:
             # Temporal client doesn't have explicit close method
             self.client = None
+
+        await self.health_server.stop()
 
         logger.info("Worker shutdown complete")
 

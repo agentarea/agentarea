@@ -465,6 +465,20 @@ services:
       # Development
       # - DEBUG=true
       - ENVIRONMENT=production
+    # /readyz is 200 once the worker reached its dependencies and every Temporal
+    # worker is polling. Probed with Python: the worker image ships no curl.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8081/readyz', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
     networks:
       - temporal-network
       - default
