@@ -152,6 +152,7 @@ install_bundle() {
   download "config/auth/kratos/identity.schema.json" "$AGENTAREA_HOME/config/auth/kratos/identity.schema.json"
   download "config/auth/kratos/oidc.github.jsonnet" "$AGENTAREA_HOME/config/auth/kratos/oidc.github.jsonnet"
   download "config/auth/kratos/oidc.google.jsonnet" "$AGENTAREA_HOME/config/auth/kratos/oidc.google.jsonnet"
+  download "config/auth/openfga/authorization-model.json" "$AGENTAREA_HOME/config/auth/openfga/authorization-model.json"
   download "agentarea-platform/temporal-config/development-sql.yaml" "$AGENTAREA_HOME/agentarea-platform/temporal-config/development-sql.yaml"
   download "scripts/lib/secrets.sh" "$AGENTAREA_HOME/scripts/lib/secrets.sh"
 
