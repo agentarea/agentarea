@@ -261,13 +261,13 @@ async function buildResourceIndex(
     ["provider_config"],
     () => fetchData(listProviderConfigs()),
     "Provider config",
-    (id) => `/admin/provider-configs/edit/${id}`
+    (id) => `/models/edit/${id}`
   );
   queue(
     ["api_key"],
     () => fetchData(listAPIKeys()),
     "API key",
-    () => "/admin/api-keys"
+    () => "/settings/api-keys"
   );
 
   await Promise.all(jobs);
@@ -326,7 +326,7 @@ function resolveActor(
     return {
       label: `API key ${shortId(event.actor_id)}`,
       description: event.actor_id,
-      href: "/admin/api-keys",
+      href: "/settings/api-keys",
       actor_type: actorType,
     };
   }
@@ -419,7 +419,7 @@ function fallbackResourceHref(type: string, id: string | null): string | null {
   if (!id) {
     if (type === "mcp_server" || type === "mcp_instance") return "/connections";
     if (type === "governance_policy" || type === "policy") return "/policies";
-    if (type === "api_key") return "/admin/api-keys";
+    if (type === "api_key") return "/settings/api-keys";
     return null;
   }
 
@@ -444,9 +444,9 @@ function fallbackResourceHref(type: string, id: string | null): string | null {
     case "openapi_connection":
       return "/connections?tab=openapi";
     case "provider_config":
-      return `/admin/provider-configs/edit/${id}`;
+      return `/models/edit/${id}`;
     case "api_key":
-      return "/admin/api-keys";
+      return "/settings/api-keys";
     default:
       return null;
   }

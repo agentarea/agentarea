@@ -16,14 +16,14 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import {
+  TaskResourceAttach,
+  type TaskResourceRef,
+} from "@/components/ResourcePicker/TaskResourceAttach";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { AttachmentCard } from "@/components/ui/attachment-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  getAgentIconComponent,
-  resolveAgentIdentity,
-} from "@/lib/agent-identity";
 import { cn } from "@/lib/utils";
 import { MentionMenu } from "../MentionMenu";
 import { ContextSelect } from "./ContextSelect";
@@ -240,6 +240,15 @@ export interface ChatInputAreaProps {
   onTaskPolicyChange?: (policyId: string | null) => void;
 
   /**
+   * MCP servers and skills attached to this run on top of the agent's own.
+   * Present only where a task is being composed; absent leaves the control out.
+   */
+  taskMcps?: TaskResourceRef[];
+  taskSkills?: TaskResourceRef[];
+  onTaskMcpsChange?: (next: TaskResourceRef[]) => void;
+  onTaskSkillsChange?: (next: TaskResourceRef[]) => void;
+
+  /**
    * Stop/Pause handler
    */
   onStop?: () => void;
@@ -327,6 +336,10 @@ export function ChatInputArea({
   currentTaskPolicyId,
   availableTaskPolicies,
   onTaskPolicyChange,
+  taskMcps,
+  taskSkills,
+  onTaskMcpsChange,
+  onTaskSkillsChange,
   onStop,
   onResume,
   isStopping = false,
@@ -392,6 +405,10 @@ export function ChatInputArea({
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-hidden sm:flex-nowrap sm:gap-2">
                 {currentAgent && availableAgents?.length && onAgentChange ? (
                   <div className="min-w-0 basis-full sm:basis-auto">
+                    {/* Trigger and options share one avatar. Rendering a bare
+                        icon on the trigger dropped the hue, which is the part
+                        that differs per agent — so picking another one left
+                        the composer looking unchanged. */}
                     <ContextSelect
                       // Narrower than the other chips: agent names run long,
                       // and the project/policy defaults must stay readable.
@@ -407,17 +424,13 @@ export function ChatInputArea({
                         if (nextAgent) onAgentChange(nextAgent);
                       }}
                       options={availableAgents}
-                      renderTriggerIcon={(option) => {
-                        const { iconKey } = resolveAgentIdentity(option);
-                        const Icon = getAgentIconComponent(iconKey);
-
-                        return (
-                          <Icon
-                            className="h-3.5 w-3.5 shrink-0 text-zinc-400 dark:text-zinc-300"
-                            strokeWidth={2}
-                          />
-                        );
-                      }}
+                      renderTriggerIcon={(option) => (
+                        <AgentAvatar
+                          agent={option}
+                          size="xs"
+                          className="shrink-0"
+                        />
+                      )}
                       renderOptionIcon={(option) => (
                         <AgentAvatar
                           agent={option}
@@ -467,6 +480,16 @@ export function ChatInputArea({
                       },
                       ...availableTaskPolicies,
                     ]}
+                  />
+                ) : null}
+
+                {taskMcps && taskSkills && onTaskMcpsChange && onTaskSkillsChange ? (
+                  <TaskResourceAttach
+                    mcps={taskMcps}
+                    skills={taskSkills}
+                    onMcpsChange={onTaskMcpsChange}
+                    onSkillsChange={onTaskSkillsChange}
+                    disabled={isLoading}
                   />
                 ) : null}
               </div>

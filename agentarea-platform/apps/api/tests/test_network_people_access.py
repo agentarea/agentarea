@@ -52,6 +52,7 @@ def actor():
         user_id="actor",
         workspace_id="current",
         accessible_workspaces=["current", "other"],
+        admin_workspaces=["current"],
         email="actor@example.test",
     )
 
@@ -145,7 +146,7 @@ async def test_actual_edge_authorizer_allows_verified_members_and_owner_without_
 
 async def test_admin_denial_precedes_graph_and_database_reads(actor, monkeypatch, authorization):
     gate = AsyncMock(return_value=False)
-    monkeypatch.setattr(authorization, "can_write_workspace", gate)
+    monkeypatch.setattr(authorization, "can_administer_workspace", gate)
     graph_loader = MagicMock()
     monkeypatch.setattr(network_people, "get_workspace_membership_graph", graph_loader)
     db_session = SimpleNamespace(execute=AsyncMock())

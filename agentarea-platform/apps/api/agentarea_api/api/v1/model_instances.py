@@ -8,6 +8,7 @@ from agentarea_api.api.deps.services import get_provider_service
 from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
+from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
@@ -103,7 +104,13 @@ class ModelInstanceResponse(BaseModel):
 
 
 # Model Instance endpoints
-@router.post("/", response_model=ModelInstanceResponse)
+@router.post(
+    "/",
+    response_model=ModelInstanceResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_model_instance(
     data: ModelInstanceCreate,
     user_context: UserContextDep,
@@ -141,7 +148,13 @@ class ModelInstanceBulkCreateResponse(BaseModel):
     failed_count: int
 
 
-@router.post("/bulk", response_model=ModelInstanceBulkCreateResponse)
+@router.post(
+    "/bulk",
+    response_model=ModelInstanceBulkCreateResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_model_instances_bulk(
     data: ModelInstanceBulkCreateRequest,
     user_context: UserContextDep,
@@ -191,7 +204,13 @@ async def create_model_instances_bulk(
     )
 
 
-@router.get("/", response_model=list[ModelInstanceResponse])
+@router.get(
+    "/",
+    response_model=list[ModelInstanceResponse],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_model_instances(
     user_context: UserContextDep,
     provider_config_id: UUID | None = None,
@@ -208,7 +227,13 @@ async def list_model_instances(
     return [ModelInstanceResponse.from_domain(instance) for instance in instances]
 
 
-@router.get("/{instance_id}", response_model=ModelInstanceResponse)
+@router.get(
+    "/{instance_id}",
+    response_model=ModelInstanceResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_model_instance(
     instance_id: UUID,
     user_context: UserContextDep,
@@ -221,7 +246,12 @@ async def get_model_instance(
     return ModelInstanceResponse.from_domain(instance)
 
 
-@router.delete("/{instance_id}")
+@router.delete(
+    "/{instance_id}",
+    dependencies=[
+        enforced_in_handler("per-object permission resolved by the PDP once the object is loaded")
+    ],
+)
 async def delete_model_instance(
     instance_id: UUID,
     user_context: UserContextDep,
@@ -235,7 +265,13 @@ async def delete_model_instance(
     return {"message": "Model instance deleted successfully"}
 
 
-@router.post("/test", response_model=ModelInstanceTestResponse)
+@router.post(
+    "/test",
+    response_model=ModelInstanceTestResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def validate_model_instance(
     data: ModelInstanceTestRequest,
     user_context: UserContextDep,

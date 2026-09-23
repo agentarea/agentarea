@@ -746,3 +746,51 @@ async def test_task_status_hides_raw_workflow_error(monkeypatch):
     assert response.status_code == 200
     assert response.json()["error"] is None
     assert "private-value" not in response.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("business_status", "execution_status"),
+    [
+        ("waiting_for_input", "running"),
+        ("waiting_for_approval", "running"),
+        ("completed", "running"),
+        ("blocked", "completed"),
+    ],
+)
+async def test_task_status_exposes_business_state_separately_from_execution(
+    monkeypatch, business_status, execution_status
+):
+    context = UserContext(user_id="user-a", workspace_id="workspace-a")
+    agent_id = uuid4()
+    task_id = uuid4()
+    task = SimpleNamespace(
+        agent_id=agent_id,
+        execution_id="associated-workflow",
+        status=business_status,
+        error_message=None,
+        result={"status": business_status},
+    )
+    task_service = SimpleNamespace(
+        get_task_with_workflow_status=AsyncMock(return_value=task),
+    )
+
+    async def execution_detail(execution_id):
+        if execution_id != task.execution_id:
+            raise LookupError(execution_id)
+        return {"status": business_status, "execution_status": execution_status}
+
+    workflow_service = SimpleNamespace(get_workflow_status=execution_detail)
+    app = FastAPI()
+    app.include_router(agents_tasks.router, prefix="/v1")
+    app.dependency_overrides[get_user_context] = lambda: context
+    app.dependency_overrides[get_read_task_service] = lambda: task_service
+    app.dependency_overrides[get_temporal_workflow_service] = lambda: workflow_service
+    monkeypatch.setattr(agents_tasks, "_list_task_artifact_items", AsyncMock(return_value=[]))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/v1/agents/{agent_id}/tasks/{task_id}/status")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == business_status
+    assert response.json()["execution_status"] == execution_status

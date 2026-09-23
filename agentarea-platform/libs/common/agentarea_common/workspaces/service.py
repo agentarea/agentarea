@@ -53,6 +53,10 @@ class InvitationAlreadyAccepted(Exception):  # noqa: N818
     pass
 
 
+class InvitationAddressedElsewhere(Exception):  # noqa: N818
+    """The invitation names an email that is not the caller's."""
+
+
 class MembershipRemovalRejected(Exception):  # noqa: N818
     """A membership removal was refused by a workspace rule."""
 
@@ -122,15 +126,42 @@ class WorkspaceInvitationService:
         invitation.status = INVITATION_STATUS_REVOKED
         return await self.invitation_repo.update(invitation)
 
-    async def accept(self, *, token: str, user_id: str) -> WorkspaceInvitation:
+    async def preview(
+        self, *, token: str, user_id: str, user_email: str | None
+    ) -> WorkspaceInvitation:
+        """Return the invitation ``user_id`` could accept right now, or raise why not."""
+        return await self._redeemable(token=token, user_id=user_id, user_email=user_email)
+
+    async def accept(
+        self, *, token: str, user_id: str, user_email: str | None
+    ) -> WorkspaceInvitation:
         """Accept an invitation as ``user_id``.
 
         Idempotent for the same acceptor. The caller owns granting workspace
         membership in the configured authorization graph.
         """
+        invitation = await self._redeemable(token=token, user_id=user_id, user_email=user_email)
+        if invitation.status == INVITATION_STATUS_ACCEPTED:
+            return invitation
+
+        invitation.status = INVITATION_STATUS_ACCEPTED
+        invitation.accepted_at = _utcnow()
+        invitation.accepted_by_user_id = user_id
+        await self.invitation_repo.update(invitation)
+
+        return invitation
+
+    async def _redeemable(
+        self, *, token: str, user_id: str, user_email: str | None
+    ) -> WorkspaceInvitation:
         invitation = await self.invitation_repo.get_by_token_hash(_hash_token(token))
         if invitation is None:
             raise InvitationNotFound("invalid token")
+
+        # Checked before any state so a caller the invitation is not for learns
+        # nothing about it.
+        if not _is_addressed_to(invitation, user_email):
+            raise InvitationAddressedElsewhere("invitation addressed to another account")
 
         if invitation.status == INVITATION_STATUS_REVOKED:
             raise InvitationRevoked("invitation revoked")
@@ -143,12 +174,16 @@ class WorkspaceInvitationService:
         if invitation.is_expired(_utcnow()):
             raise InvitationExpired("invitation expired")
 
-        invitation.status = INVITATION_STATUS_ACCEPTED
-        invitation.accepted_at = _utcnow()
-        invitation.accepted_by_user_id = user_id
-        await self.invitation_repo.update(invitation)
-
         return invitation
+
+
+def _is_addressed_to(invitation: WorkspaceInvitation, email: str | None) -> bool:
+    """An open link is for whoever holds it; an emailed one only for that address."""
+    if invitation.email is None:
+        return True
+    if email is None:
+        return False
+    return invitation.email.strip().casefold() == email.strip().casefold()
 
 
 @dataclass(frozen=True)

@@ -26,6 +26,26 @@ def test_tool_in_escalation_rules_requires_approval():
     assert policy_requires_approval(policy, "delete_file") is True
 
 
+def test_pattern_in_escalation_rules_requires_approval():
+    policy = {"approval": {"escalation_rules": ["send_*"]}}
+    assert policy_requires_approval(policy, "send_email") is True
+    assert policy_requires_approval(policy, "read_db") is False
+
+
+def test_approvers_for_tool_matches_a_pattern_key():
+    # The per-tool approvers are keyed by whatever the rule targeted, so a
+    # pattern rule must resolve its own approvers rather than silently falling
+    # back to the global list.
+    policy = {
+        "approval": {
+            "approvers": ["user:root"],
+            "approvers_by_tool": {"send_*": ["user:alice"]},
+        }
+    }
+    assert approvers_for_tool(policy, "send_email") == ["user:alice"]
+    assert approvers_for_tool(policy, "read_db") == ["user:root"]
+
+
 def test_tool_not_in_escalation_rules_no_approval():
     policy = {"approval": {"escalation_rules": ["send_email"]}}
     assert policy_requires_approval(policy, "read_db") is False

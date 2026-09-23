@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import {
   ArrowLeft,
   CreditCard,
-  SlidersHorizontal,
   Key,
   ScrollText,
   User,
@@ -43,8 +42,7 @@ export function SettingsSidebarContent() {
     {
       label: t("workspace"),
       items: [
-        { title: t("apiKeys"), href: "/admin/api-keys", icon: Key },
-        { title: t("workspaceSettings"), href: "/admin/workspace", icon: SlidersHorizontal },
+        { title: t("apiKeys"), href: "/settings/api-keys", icon: Key },
         { title: t("auditLog"), href: "/settings/audit", icon: ScrollText },
       ],
     },

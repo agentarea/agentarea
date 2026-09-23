@@ -73,9 +73,6 @@ export const createClientConfig: CreateClientConfig = (config) => ({
         status: response.status,
         statusText: response.statusText,
       });
-      throw new Error(
-        `Forbidden: Received a 403 response from the API (${response.url})`
-      );
     }
 
     return response;

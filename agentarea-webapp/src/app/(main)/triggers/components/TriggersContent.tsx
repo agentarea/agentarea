@@ -2,7 +2,11 @@ import { getTranslations } from "next-intl/server";
 import type { AgentResponse } from "@/api/client/types.gen";
 import { listAgents, listTriggerCatalog } from "@/lib/api";
 import { getTriggersCached } from "./triggersData";
-import type { TriggerCatalogEntry } from "./triggerDisplay";
+import {
+  findTriggerCatalogEntry,
+  getTriggerLane,
+  type TriggerCatalogEntry,
+} from "./triggerDisplay";
 import TriggersList from "./TriggersList";
 
 interface TriggersContentProps {
@@ -47,14 +51,12 @@ export default async function TriggersContent({
     agent_name: agentMap.get(trigger.agent_id) || "Unknown Agent",
   }));
 
-  // Filter by trigger type (All / Cron / Webhook)
-  if (typeFilter === "cron") {
+  // Filter by what starts the automation (All / Channels / Events / Schedules)
+  if (typeFilter !== "all") {
     enrichedTriggers = enrichedTriggers.filter(
-      (trigger) => trigger.trigger_type === "cron"
-    );
-  } else if (typeFilter === "webhook") {
-    enrichedTriggers = enrichedTriggers.filter(
-      (trigger) => trigger.trigger_type === "webhook"
+      (trigger) =>
+        getTriggerLane(trigger, findTriggerCatalogEntry(trigger, catalog)) ===
+        typeFilter
     );
   }
 

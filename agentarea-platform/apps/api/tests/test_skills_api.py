@@ -8,8 +8,26 @@ from agentarea_agents.application.skill_service import SkillFileInfo, SkillServi
 from agentarea_api.api.v1.skills import get_skill_service
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.di.container import get_container
 from agentarea_common.testing.flows import MainFlow
 from httpx import ASGITransport, AsyncClient
+
+
+@pytest.fixture(autouse=True)
+def _graph_client():
+    """Ownership grants need a graph client, and there is no longer a mode without one.
+
+    ``ACCESS_CONTROL_BACKEND`` no longer has a "disabled" value, so the grant
+    path is always live and answers 503 when the client is missing — which is
+    the point. Tests that create resources register a stub instead of relying on
+    authorization being switched off.
+    """
+    from agentarea_common.rebac.openfga_client import OpenFGAClient
+
+    container = get_container()
+    container.register_singleton(OpenFGAClient, AsyncMock(spec=OpenFGAClient))
+    yield
+    container.clear()
 
 
 @pytest_asyncio.fixture

@@ -28,6 +28,7 @@ from enum import StrEnum
 from agentarea_api.api.deps.services import ReadAgentServiceDep
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.identity_directory import get_identity_directory, identity_for
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
@@ -63,7 +64,13 @@ class PrincipalResponse(BaseModel):
 
 # Registered on the bare prefix, not "/": this is read with a query string on
 # every call, and a 307 to add a trailing slash would double every request.
-@router.get("", response_model=list[PrincipalResponse])
+@router.get(
+    "",
+    response_model=list[PrincipalResponse],
+    dependencies=[
+        unrestricted("resolves ids the caller already holds into display names, nothing more")
+    ],
+)
 async def resolve_principals(
     user_context: UserContextDep,
     agent_service: ReadAgentServiceDep,

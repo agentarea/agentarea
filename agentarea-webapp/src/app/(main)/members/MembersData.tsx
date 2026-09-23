@@ -6,7 +6,7 @@ import {
   type WorkspaceInvitation,
   type WorkspaceMember,
 } from "@/lib/api";
-import { formatApiError } from "@/lib/api-errors";
+import { formatApiError, getApiStatus } from "@/lib/api-errors";
 import { getAuthContext } from "@/lib/getAuthContext";
 import { resolveIdentityProfiles } from "@/lib/identities";
 import { getWorkspaceContext } from "@/lib/workspace-context";
@@ -38,15 +38,24 @@ export default async function MembersData() {
     listWorkspaceInvitations(workspaceId),
   ]);
 
+  // Pending invitations are admin-only. A member seeing the page is not an
+  // error: they get the roster without the invitations, which is the whole
+  // difference the 403 is there to express.
+  const invitationsForbidden = getApiStatus(invitationsRes) === 403;
+
   // A failed call is not an empty workspace. Reporting "no members" when the
   // membership graph is down hides an outage behind a plausible screen.
-  const failure = membersRes.error ?? invitationsRes.error;
+  const failure =
+    membersRes.error ??
+    (invitationsForbidden ? undefined : invitationsRes.error);
   if (failure) {
     return loadError(formatApiError(failure));
   }
 
   let members: WorkspaceMember[] = membersRes.data ?? [];
-  const invitations: WorkspaceInvitation[] = invitationsRes.data ?? [];
+  const invitations: WorkspaceInvitation[] = invitationsForbidden
+    ? []
+    : (invitationsRes.data ?? []);
 
   // The API knows profile details for the caller only; look the rest up in
   // the identity provider so members show as people, not ids.

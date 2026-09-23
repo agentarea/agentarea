@@ -24,6 +24,11 @@ interface TasksListProps {
    * as the id.
    */
   principalNames?: Record<string, string>;
+  /**
+   * Drop the agent column. Set on agent-scoped listings, where every row names
+   * the same agent the page is already about.
+   */
+  showAgent?: boolean;
 }
 
 function formatUsdCost(value: number) {
@@ -35,6 +40,7 @@ export default function TasksList({
   viewMode = "table",
   catalog = [],
   principalNames = {},
+  showAgent = true,
 }: TasksListProps) {
   const t = useTranslations("TasksPage");
   const router = useRouter();
@@ -71,20 +77,24 @@ export default function TasksList({
         </p>
       ),
     },
-    {
-      accessor: "agent_name",
-      header: t("agent"),
-      headerClassName: "w-[190px]",
-      cellClassName: "w-[190px] max-w-[190px]",
-      render: (value: string, row: TaskWithAgent) => (
-        <AgentLink
-          agent={{ id: row.agent_id, name: value || "Unknown Agent" }}
-          size="xs"
-          onClick={(event) => event.stopPropagation()}
-          nameClassName="text-xs"
-        />
-      ),
-    },
+    ...(showAgent
+      ? [
+          {
+            accessor: "agent_name",
+            header: t("agent"),
+            headerClassName: "w-[190px]",
+            cellClassName: "w-[190px] max-w-[190px]",
+            render: (value: string, row: TaskWithAgent) => (
+              <AgentLink
+                agent={{ id: row.agent_id, name: value || "Unknown Agent" }}
+                size="xs"
+                onClick={(event) => event.stopPropagation()}
+                nameClassName="text-xs"
+              />
+            ),
+          },
+        ]
+      : []),
     {
       accessor: "parameters",
       header: t("source"),
@@ -135,7 +145,11 @@ export default function TasksList({
     return (
       <div>
         <Table
-          className="min-w-[1060px] table-fixed"
+          className={
+            showAgent
+              ? "min-w-[1060px] table-fixed"
+              : "min-w-[870px] table-fixed"
+          }
           data={initialTasks}
           columns={taskColumns}
           onRowClick={(task) => {

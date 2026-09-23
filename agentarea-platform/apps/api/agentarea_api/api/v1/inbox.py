@@ -10,6 +10,7 @@ from agentarea_agents.application.agent_service import AgentService
 from agentarea_api.api.deps.services import get_read_agent_service, get_read_task_service
 from agentarea_api.api.v1.agents_tasks import TaskWithAgent
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -76,7 +77,13 @@ async def _pending_escalations_for_tasks(
     }
 
 
-@router.get("/", response_model=InboxResponse)
+@router.get(
+    "/",
+    response_model=InboxResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_inbox_items(
     user_context: UserContextDep,
     status: str | None = Query(None, description="Filter to a specific inbox status"),

@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config.app import get_app_settings
 from agentarea_mcp.application.client_service import ClientService
@@ -77,7 +78,14 @@ def _to_response(client) -> ClientResponse:
     return resp
 
 
-@router.post("/", response_model=ClientResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=ClientResponse,
+    status_code=201,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_client(
     data: ClientCreate,
     user_context: UserContextDep,
@@ -92,7 +100,13 @@ async def create_client(
     return _to_response(client)
 
 
-@router.get("/", response_model=list[ClientResponse])
+@router.get(
+    "/",
+    response_model=list[ClientResponse],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_clients(
     user_context: UserContextDep,
     service: ClientServiceDep,
@@ -103,7 +117,13 @@ async def list_clients(
     return [_to_response(c) for c in clients]
 
 
-@router.get("/{client_id}", response_model=ClientResponse)
+@router.get(
+    "/{client_id}",
+    response_model=ClientResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_client(
     client_id: UUID,
     user_context: UserContextDep,
@@ -115,7 +135,13 @@ async def get_client(
     return _to_response(client)
 
 
-@router.patch("/{client_id}", response_model=ClientResponse)
+@router.patch(
+    "/{client_id}",
+    response_model=ClientResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def update_client(
     client_id: UUID,
     data: ClientUpdate,
@@ -128,7 +154,13 @@ async def update_client(
     return _to_response(client)
 
 
-@router.delete("/{client_id}", status_code=204)
+@router.delete(
+    "/{client_id}",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def delete_client(
     client_id: UUID,
     user_context: UserContextDep,
@@ -139,7 +171,13 @@ async def delete_client(
         raise HTTPException(status_code=404, detail="Client not found")
 
 
-@router.post("/{client_id}/skills", status_code=204)
+@router.post(
+    "/{client_id}/skills",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def add_skill_to_client(
     client_id: UUID,
     body: AssociationBody,
@@ -149,7 +187,13 @@ async def add_skill_to_client(
     await service.add_skill(client_id, body.id)
 
 
-@router.delete("/{client_id}/skills/{skill_id}", status_code=204)
+@router.delete(
+    "/{client_id}/skills/{skill_id}",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def remove_skill_from_client(
     client_id: UUID,
     skill_id: UUID,
@@ -159,7 +203,13 @@ async def remove_skill_from_client(
     await service.remove_skill(client_id, skill_id)
 
 
-@router.post("/{client_id}/mcp-instances", status_code=204)
+@router.post(
+    "/{client_id}/mcp-instances",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def add_mcp_instance_to_client(
     client_id: UUID,
     body: McpInstanceAssociationBody,
@@ -169,7 +219,13 @@ async def add_mcp_instance_to_client(
     await service.add_mcp_instance(client_id, body.id, body.namespace_prefix)
 
 
-@router.delete("/{client_id}/mcp-instances/{mcp_instance_id}", status_code=204)
+@router.delete(
+    "/{client_id}/mcp-instances/{mcp_instance_id}",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def remove_mcp_instance_from_client(
     client_id: UUID,
     mcp_instance_id: UUID,

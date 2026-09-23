@@ -4725,6 +4725,62 @@
         "title": "InvitationEmailDelivery",
         "type": "string"
       },
+      "InvitationPreviewBody": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "InvitationPreviewBody",
+        "type": "object"
+      },
+      "InvitationPreviewResponse": {
+        "description": "What an invitee is shown before joining: who asked, where to, until when.\n\nThe caller is not a member yet, so nothing else about the workspace leaves\nthis endpoint. The inviter fields are nullable because the identity\nprovider may not resolve them; the client states that rather than guessing.",
+        "properties": {
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "inviter_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inviter Display Name"
+          },
+          "inviter_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inviter Email"
+          },
+          "workspace_name": {
+            "title": "Workspace Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_name",
+          "inviter_display_name",
+          "inviter_email",
+          "expires_at"
+        ],
+        "title": "InvitationPreviewResponse",
+        "type": "object"
+      },
       "InvitationResponse": {
         "properties": {
           "accepted_at": {
@@ -5078,6 +5134,153 @@
           "status"
         ],
         "title": "MCPInstanceHealthResponse",
+        "type": "object"
+      },
+      "MCPOAuthAuthorizeRequest": {
+        "additionalProperties": false,
+        "description": "Start an OAuth flow for one MCP instance.\n\n``auto`` registers AgentArea with the authorization server (RFC 7591).\n``custom`` uses an OAuth app the workspace registered with the provider \u2014\nthe only option when the provider has no Dynamic Client Registration.",
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_id_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Existing user-owned workspace secret containing the OAuth client ID.",
+            "title": "Client Id Secret Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
+          "client_secret_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Existing user-owned workspace secret containing the OAuth client secret.",
+            "title": "Client Secret Secret Id"
+          },
+          "credential_mode": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "custom"
+            ],
+            "title": "Credential Mode",
+            "type": "string"
+          },
+          "instance_id": {
+            "format": "uuid",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "return_to": {
+            "default": "",
+            "maxLength": 2048,
+            "title": "Return To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id"
+        ],
+        "title": "MCPOAuthAuthorizeRequest",
+        "type": "object"
+      },
+      "MCPOAuthPreflightResponse": {
+        "description": "What the UI needs before it can offer a Connect action.\n\n``ready`` \u2014 Connect can run unattended (the server supports DCR).\n``oauth_app_required`` \u2014 ask for a client ID/secret first.\n``unsupported`` \u2014 this server cannot be authorized this way; say why.",
+        "properties": {
+          "authorization_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorization Endpoint"
+          },
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "instance_id": {
+            "format": "uuid",
+            "title": "Instance Id",
+            "type": "string"
+          },
+          "issuer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "oauth_app_required",
+              "unsupported"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id",
+          "status",
+          "connected"
+        ],
+        "title": "MCPOAuthPreflightResponse",
         "type": "object"
       },
       "MCPServerConnectionCreateRequest": {
@@ -11396,11 +11599,74 @@
         "title": "TokenPolicy",
         "type": "object"
       },
-      "ToolResponse": {
-        "description": "Unified tool response format.",
+      "ToolMethodResponse": {
+        "description": "One callable method of a code toolset.",
         "properties": {
           "description": {
             "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "effect": {
+            "anyOf": [
+              {
+                "enum": [
+                  "read",
+                  "write",
+                  "destructive",
+                  "privileged"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effect"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "requires_user_confirmation": {
+            "default": false,
+            "title": "Requires User Confirmation",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "description"
+        ],
+        "title": "ToolMethodResponse",
+        "type": "object"
+      },
+      "ToolResponse": {
+        "description": "Unified tool response format.\n\nCode tools carry the catalog metadata the UI needs to group and label them:\n``plane`` separates the agent's own runtime from the platform surface, and\n``effect`` on each method says what a call can break. Without these on the\nwire a client has to hand-maintain a mirror of the toolset registry.",
+        "properties": {
+          "available_methods": {
+            "items": {
+              "$ref": "#/components/schemas/ToolMethodResponse"
+            },
+            "title": "Available Methods",
+            "type": "array"
+          },
+          "category": {
+            "default": "",
+            "title": "Category",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "default": "",
+            "title": "Display Name",
             "type": "string"
           },
           "input_schema": {
@@ -11435,6 +11701,30 @@
             "title": "Name",
             "type": "string"
           },
+          "plane": {
+            "anyOf": [
+              {
+                "enum": [
+                  "runtime",
+                  "build",
+                  "operate",
+                  "observe",
+                  "govern",
+                  "federate"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plane"
+          },
+          "requires_user_confirmation": {
+            "default": false,
+            "title": "Requires User Confirmation",
+            "type": "boolean"
+          },
           "type": {
             "enum": [
               "code",
@@ -11447,8 +11737,7 @@
         "required": [
           "name",
           "type",
-          "description",
-          "input_schema"
+          "description"
         ],
         "title": "ToolResponse",
         "type": "object"
@@ -13547,7 +13836,7 @@
     },
     "/oauth2/register": {
       "post": {
-        "description": "Dynamic Client Registration (RFC 7591) \u2014 proxy to Hydra admin API.\n\nHydra v2 doesn't expose public DCR; we proxy POST /oauth2/register to\nHydra's admin endpoint so Cursor / Claude Desktop can self-register.\n\nWe inject server-side defaults:\n  - skip_consent: true \u2014 MCP clients accessing their own workspace don't need consent\n  - audience: [API_BASE_URL] \u2014 ensures issued JWTs have the correct audience for validation\n  - grant_types / scope \u2014 so the client can refresh instead of re-authorizing",
+        "description": "Dynamic Client Registration (RFC 7591) \u2014 proxy to Hydra admin API.\n\nHydra's own public DCR lets the registering client pick its grants and\naudience; this proxy registers through the admin API instead so it can fix\nthem. Hydra's public DCR must stay disabled, or it bypasses this endpoint.\n\nWe inject server-side defaults:\n  - skip_consent: true \u2014 MCP clients accessing their own workspace don't need consent\n  - audience: [API_BASE_URL] \u2014 ensures issued JWTs have the correct audience for validation\n  - grant_types / scope \u2014 so the client can refresh instead of re-authorizing",
         "operationId": "hydra_dcr_proxy_oauth2_register_post",
         "responses": {
           "200": {
@@ -16715,7 +17004,7 @@
     },
     "/v1/api-keys/{token_id}": {
       "delete": {
-        "description": "Immediately revoke an API key.",
+        "description": "Immediately revoke an API key.\n\nThe key's creator, or a workspace admin. The repository is scoped to the\nworkspace, not to the caller, so without this a member could cut off a\ncolleague's integrations.",
         "operationId": "revoke_api_key_v1_api_keys__token_id__delete",
         "parameters": [
           {
@@ -18452,7 +18741,7 @@
     },
     "/v1/invitations/accept": {
       "post": {
-        "description": "Accept an invitation as the authenticated user.\n\nIdempotent for the same acceptor.",
+        "description": "Accept an invitation as the authenticated user.\n\nAn invitation sent to an email address is only accepted by the account\nsigned in under that address. Idempotent for the same acceptor.",
         "operationId": "accept_invitation_v1_invitations_accept_post",
         "requestBody": {
           "content": {
@@ -18492,6 +18781,55 @@
           }
         ],
         "summary": "Accept Invitation",
+        "tags": [
+          "v1",
+          "protected",
+          "workspace-invitations"
+        ]
+      }
+    },
+    "/v1/invitations/preview": {
+      "post": {
+        "description": "Describe an invitation the caller could accept: workspace, inviter, expiry.\n\nThe token travels in the body so it stays out of access logs.",
+        "operationId": "preview_invitation_v1_invitations_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationPreviewBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Invitation",
         "tags": [
           "v1",
           "protected",
@@ -18925,40 +19263,30 @@
       }
     },
     "/v1/mcp-oauth/authorize": {
-      "get": {
-        "description": "Initiate MCP OAuth flow: discover AS, register client, redirect to auth page.\n\n1. Look up the MCP instance's remote URL\n2. Discover the authorization server (RFC 9728 \u2192 RFC 8414)\n3. Dynamically register as an OAuth client (RFC 7591)\n4. Generate PKCE pair and state\n5. Redirect user to the authorization endpoint",
-        "operationId": "oauth_authorize_v1_mcp_oauth_authorize_get",
-        "parameters": [
-          {
-            "description": "MCP instance to connect",
-            "in": "query",
-            "name": "instance_id",
-            "required": true,
-            "schema": {
-              "description": "MCP instance to connect",
-              "format": "uuid",
-              "title": "Instance Id",
-              "type": "string"
+      "post": {
+        "description": "Initiate MCP OAuth flow and return the URL to send the user to.\n\n1. Look up the MCP instance's remote URL\n2. Discover the authorization server (RFC 9728 \u2192 RFC 8414)\n3. Register dynamically (RFC 7591), or take the workspace's own OAuth app\n4. Persist the client credentials on an auth config\n5. Generate PKCE pair and state, and build the authorization URL",
+        "operationId": "oauth_authorize_v1_mcp_oauth_authorize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPOAuthAuthorizeRequest"
+              }
             }
           },
-          {
-            "description": "Frontend URL to redirect after OAuth completes",
-            "in": "query",
-            "name": "return_to",
-            "required": false,
-            "schema": {
-              "default": "",
-              "description": "Frontend URL to redirect after OAuth completes",
-              "title": "Return To",
-              "type": "string"
-            }
-          }
-        ],
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Oauth Authorize V1 Mcp Oauth Authorize Post",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
@@ -19058,6 +19386,59 @@
         "tags": [
           "v1",
           "public",
+          "mcp-oauth-connect"
+        ]
+      }
+    },
+    "/v1/mcp-oauth/preflight": {
+      "get": {
+        "description": "Report whether this instance can be authorized, and with what.\n\nEvery outcome is a 200: \"this server has no OAuth\" is an answer the UI\nrenders, not a failure it has to decode from an error response.",
+        "operationId": "oauth_preflight_v1_mcp_oauth_preflight_get",
+        "parameters": [
+          {
+            "description": "MCP instance to inspect",
+            "in": "query",
+            "name": "instance_id",
+            "required": true,
+            "schema": {
+              "description": "MCP instance to inspect",
+              "format": "uuid",
+              "title": "Instance Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPOAuthPreflightResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Oauth Preflight",
+        "tags": [
+          "v1",
+          "protected",
           "mcp-oauth-connect"
         ]
       }

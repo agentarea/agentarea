@@ -11,7 +11,13 @@ import logging
 from uuid import UUID
 
 from agentarea_api.api.deps.services import DatabaseSessionDep
+from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import (
+    enforced_in_handler,
+    requires_workspace_admin,
+    unrestricted,
+)
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.access_token_service import APIKeyService
 from agentarea_mcp.infrastructure.auth_repository import APIKeyRepository
@@ -80,7 +86,17 @@ class APIKeyCreateResponse(APIKeyResponse):
 # ---------------------------------------------------------------------------
 
 
-@router.post("/", response_model=APIKeyCreateResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=APIKeyCreateResponse,
+    status_code=201,
+    dependencies=[
+        unrestricted(
+            "mints a token that authenticates as its creator; grants no authority "
+            "the caller does not already have"
+        )
+    ],
+)
 async def create_api_key(
     data: APIKeyCreateRequest,
     service: APIKeyService = Depends(get_api_key_service),
@@ -97,7 +113,7 @@ async def create_api_key(
         raise HTTPException(status_code=500, detail=f"Failed to create token: {exc}") from exc
 
 
-@router.get("/", response_model=list[APIKeyResponse])
+@router.get("/", response_model=list[APIKeyResponse], dependencies=[requires_workspace_admin()])
 async def list_api_keys(
     user_context: UserContextDep,
     service: APIKeyService = Depends(get_api_key_service),
@@ -107,7 +123,7 @@ async def list_api_keys(
     return [APIKeyResponse.model_validate(t) for t in tokens]
 
 
-@router.get("/{token_id}", response_model=APIKeyResponse)
+@router.get("/{token_id}", response_model=APIKeyResponse, dependencies=[requires_workspace_admin()])
 async def get_api_key(
     token_id: UUID,
     user_context: UserContextDep,
@@ -120,13 +136,32 @@ async def get_api_key(
     return APIKeyResponse.model_validate(token)
 
 
-@router.delete("/{token_id}", status_code=204)
+@router.delete(
+    "/{token_id}",
+    status_code=204,
+    dependencies=[
+        enforced_in_handler(
+            "the key's creator, or a workspace admin; needs the record loaded first"
+        )
+    ],
+)
 async def revoke_api_key(
     token_id: UUID,
     user_context: UserContextDep,
     service: APIKeyService = Depends(get_api_key_service),
 ):
-    """Immediately revoke an API key."""
+    """Immediately revoke an API key.
+
+    The key's creator, or a workspace admin. The repository is scoped to the
+    workspace, not to the caller, so without this a member could cut off a
+    colleague's integrations.
+    """
+    record = await service.get_token(token_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="API key not found")
+    if str(record.created_by) != user_context.user_id:
+        await assert_workspace_admin(user_context)
+
     revoked = await service.revoke_token(token_id)
     if not revoked:
         raise HTTPException(status_code=404, detail="API key not found")

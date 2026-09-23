@@ -76,7 +76,10 @@ export default function TaskDetailsPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-3xl space-y-4 p-4" aria-hidden="true">
+      <div
+        className="mx-auto w-full max-w-3xl space-y-4 p-4"
+        aria-hidden="true"
+      >
         {Array.from({ length: 5 }).map((_, index) => (
           <div
             key={index}
@@ -103,7 +106,12 @@ export default function TaskDetailsPage() {
     );
   }
 
-  const currentStatus = taskStatus?.status || task.status;
+  const currentStatus =
+    conversationActivity &&
+    !conversationActivity.eventsLoading &&
+    !conversationActivity.eventsError
+      ? conversationActivity.streamStatus
+      : taskStatus?.status || task.status;
   const executionTime = taskStatus?.execution_time || "N/A";
   const startTime = taskStatus?.start_time || task.created_at || "";
   const endTime = taskStatus?.end_time;
@@ -147,7 +155,14 @@ export default function TaskDetailsPage() {
                 result: task.result,
               }}
               currentStatus={currentStatus}
-              isActive={conversationActivity?.streamStatus === "running"}
+              executionStatus={
+                conversationActivity?.executionStatus ??
+                taskStatus?.execution_status
+              }
+              isActive={
+                currentStatus === "running" &&
+                conversationActivity?.executionStatus === "running"
+              }
               startTime={startTime}
               endTime={endTime}
               executionTime={executionTime}

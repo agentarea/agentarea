@@ -4,14 +4,19 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Paperclip } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronRight,
+  FileText,
+  Paperclip,
+  SlidersHorizontal,
+  Webhook,
+} from "lucide-react";
 import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
 import { AgentSelect } from "@/components/AgentSelect";
 import ConfigSheet from "@/components/ConfigSheet";
 import { FileTree } from "@/components/files/file-tree";
 import FormLabel from "@/components/FormLabel/FormLabel";
-import { McpPicker } from "@/components/ResourcePicker/McpPicker";
-import { SkillPicker } from "@/components/ResourcePicker/SkillPicker";
 import { SecretSelect } from "@/components/SecretSelect";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -29,7 +34,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
 import { useToast } from "@/hooks/use-toast";
-import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { cn } from "@/lib/utils";
 import {
   composeTaskParameters,
@@ -45,6 +49,7 @@ import {
   type TriggerFormState,
 } from "./actions";
 import { CronScheduler } from "./CronScheduler";
+import { triggerShape } from "./triggerShape";
 import { TriggerExecutionContext } from "./TriggerExecutionContext";
 
 interface CreateTriggerFormProps {
@@ -68,8 +73,6 @@ const KIND_ORDER: TriggerCatalogEntry["kind"][] = [
 ];
 
 type SelectableResource = TaskParameterRef;
-const McpIcon = ENTITY_ICONS.mcp;
-const SkillIcon = ENTITY_ICONS.skill;
 
 const TIMEZONES = [
   "UTC",
@@ -215,16 +218,11 @@ export function CreateTriggerForm({
   );
 
   const selected = catalog.find((e) => e.id === selectedId);
-  const triggerType = initialData?.trigger_type ?? selected?.backend_type ?? "";
   const webhookType = initialData?.webhook_type ?? selected?.webhook_type ?? "";
-  // A schedule comes due carrying nothing with it, so the task text is the only
-  // thing that can tell the agent what to do, and the backend rejects a
-  // schedule saved without one. Two kinds are exempt because something else
-  // supplies the text: webhooks get it from the call, and a poller works on
-  // whatever the mailbox or feed handed it.
-  const taskTextRequired =
-    triggerType === "cron" &&
-    !(initialData?.data_extractor ?? selected?.data_extractor);
+  const { triggerType, isChannel, taskTextRequired } = triggerShape({
+    selected,
+    initialData,
+  });
   const timezones = Array.from(
     new Set([
       ...TIMEZONES,
@@ -386,86 +384,6 @@ export function CreateTriggerForm({
       </div>
     </ConfigSheet>
   );
-  const mcpControl = (
-    <ConfigSheet
-      title={t("taskMcps")}
-      description={t("taskMcpsHint")}
-      triggerComponent={
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="justify-start gap-1.5 px-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <McpIcon />
-          {t("taskMcpsPlaceholder")}
-        </Button>
-      }
-    >
-      <div className="min-h-0 overflow-y-auto pb-6">
-        <McpPicker
-          resources={resources}
-          selectedIds={taskMcps.map((mcp) => mcp.id)}
-          onAdd={(mcp) =>
-            setTaskMcps((previous) =>
-              previous.some((item) => item.id === mcp.id)
-                ? previous
-                : [...previous, { id: mcp.id, name: mcp.name }]
-            )
-          }
-          onRemove={(mcp) =>
-            setTaskMcps((previous) =>
-              previous.filter((item) => item.id !== mcp.id)
-            )
-          }
-        />
-      </div>
-    </ConfigSheet>
-  );
-  const skillControl = (
-    <ConfigSheet
-      title={t("taskSkills")}
-      description={t("taskSkillsHint")}
-      triggerComponent={
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="justify-start gap-1.5 px-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <SkillIcon />
-          {t("taskSkillsPlaceholder")}
-        </Button>
-      }
-    >
-      <div className="min-h-0 overflow-y-auto pb-6">
-        <SkillPicker
-          resources={resources}
-          selectedIds={taskSkills.map((skill) => skill.id)}
-          onAdd={(skill) =>
-            setTaskSkills((previous) =>
-              previous.some((item) => item.id === skill.id)
-                ? previous
-                : [
-                    ...previous,
-                    {
-                      id: skill.id,
-                      name: skill.name,
-                      description: skill.description,
-                    },
-                  ]
-            )
-          }
-          onRemove={(skill) =>
-            setTaskSkills((previous) =>
-              previous.filter((item) => item.id !== skill.id)
-            )
-          }
-        />
-      </div>
-    </ConfigSheet>
-  );
-
   return (
     <form
       id="create-trigger-form"
@@ -497,6 +415,19 @@ export function CreateTriggerForm({
           value={JSON.stringify(selectedEvents)}
         />
       )}
+      {/* A channel shows no method checkboxes, and the update action reads the
+          methods straight off them with no fallback — carrying them hidden is
+          what keeps an edit from saving an empty allowed_methods. */}
+      {triggerType === "webhook" &&
+        isChannel &&
+        selectedMethods.map((method) => (
+          <input
+            key={method}
+            type="hidden"
+            name={`method_${method}`}
+            value="on"
+          />
+        ))}
       <div className="mx-auto grid w-full max-w-6xl gap-6 pb-10 pt-2 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-8">
         <div className="min-w-0 space-y-6" data-task-authoring>
           <div className="grid content-start gap-2">
@@ -514,12 +445,91 @@ export function CreateTriggerForm({
             {state.errors?.name && (
               <p className="text-sm text-destructive">{state.errors.name[0]}</p>
             )}
+            {/* The type belongs beside the name: it is picked once, it decides
+                which of the fields below even appear, and as a labelled block
+                of its own inside "When to run" it took a whole section to
+                hold one dropdown. */}
+            <div className="flex flex-wrap items-center gap-2">
+              {!isEditing ? (
+                <>
+                  <Select
+                    value={selectedId}
+                    onValueChange={(value) => {
+                      setSelectedId(value);
+                      setTypeMissing(false);
+                    }}
+                  >
+                    <SelectTrigger
+                      id="trigger_type_select"
+                      aria-label={t("triggerType")}
+                      className="h-8 w-auto min-w-[13rem] gap-2 text-sm"
+                    >
+                      <SelectValue placeholder={t("selectType")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {orderedKinds.map((kind) => (
+                        <SelectGroup key={kind}>
+                          <SelectLabel>{kindLabels[kind] ?? kind}</SelectLabel>
+                          {catalog
+                            .filter((entry) => entry.kind === kind)
+                            .map((entry) => (
+                              <SelectItem key={entry.id} value={entry.id}>
+                                <span className="flex items-center gap-2">
+                                  {/* The catalog owns the artwork — drawing it
+                                      from a map here is how channels the map
+                                      never heard of ended up as dots. */}
+                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
+                                    {renderTriggerIcon(
+                                      entry,
+                                      undefined,
+                                      "h-4 w-4"
+                                    )}
+                                  </span>
+                                  {entry.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                        </SelectGroup>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {catalogFailed && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {t("catalogLoadFailed")}
+                    </p>
+                  )}
+                  {(typeMissing || state.errors?.trigger_type) && (
+                    <p className="text-sm text-destructive">
+                      {state.errors?.trigger_type?.[0] ?? t("selectType")}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <span className="flex items-center gap-2 rounded-md bg-muted px-2 py-1 text-sm text-muted-foreground">
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                    {renderTriggerIcon(selected, initialData, "h-4 w-4")}
+                  </span>
+                  {selected?.name ?? initialData.trigger_type}
+                </span>
+              )}
+            </div>
           </div>
           <section aria-label={t("taskInstructions")} className="space-y-3">
             <div className="grid content-start gap-2">
-              <FormLabel htmlFor="task_text" required={taskTextRequired}>
+              {/* Until a type is picked neither answer is true yet, so the
+                  label stays bare rather than claiming the text is optional. */}
+              <FormLabel
+                htmlFor="task_text"
+                required={taskTextRequired}
+                optional={Boolean(triggerType) && !taskTextRequired}
+              >
                 {t("taskInstructions")}
               </FormLabel>
+              {Boolean(triggerType) && !taskTextRequired && (
+                <p className="text-xs text-muted-foreground">
+                  {t(isChannel ? "taskTextFromChannel" : "taskTextFromCall")}
+                </p>
+              )}
               <Textarea
                 id="task_text"
                 value={taskText}
@@ -546,68 +556,6 @@ export function CreateTriggerForm({
             >
               {t("whenToRun")}
             </h2>
-            {!isEditing ? (
-              <div className="grid content-start gap-2">
-                <FormLabel htmlFor="trigger_type_select" required>
-                  {t("triggerType")}
-                </FormLabel>
-                <Select
-                  value={selectedId}
-                  onValueChange={(value) => {
-                    setSelectedId(value);
-                    setTypeMissing(false);
-                  }}
-                >
-                  <SelectTrigger id="trigger_type_select">
-                    <SelectValue placeholder={t("selectType")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {orderedKinds.map((kind) => (
-                      <SelectGroup key={kind}>
-                        <SelectLabel>{kindLabels[kind] ?? kind}</SelectLabel>
-                        {catalog
-                          .filter((entry) => entry.kind === kind)
-                          .map((entry) => (
-                            <SelectItem key={entry.id} value={entry.id}>
-                              <span className="flex items-center gap-2">
-                                {/* The catalog owns the artwork — drawing it
-                                    from a map here is how channels the map
-                                    never heard of ended up as dots. */}
-                                <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
-                                  {renderTriggerIcon(
-                                    entry,
-                                    undefined,
-                                    "h-4 w-4"
-                                  )}
-                                </span>
-                                {entry.name}
-                              </span>
-                            </SelectItem>
-                          ))}
-                      </SelectGroup>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {catalogFailed && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {t("catalogLoadFailed")}
-                  </p>
-                )}
-                {(typeMissing || state.errors?.trigger_type) && (
-                  <p className="text-sm text-destructive">
-                    {state.errors?.trigger_type?.[0] ?? t("selectType")}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="grid content-start gap-2">
-                <FormLabel>{t("triggerType")}</FormLabel>
-                <p className="text-sm font-medium">
-                  {selected?.name ?? initialData.trigger_type}
-                </p>
-              </div>
-            )}
             {triggerType === "cron" && (
               <>
                 <div className="grid gap-2">
@@ -707,12 +655,16 @@ export function CreateTriggerForm({
                 )}
               </>
             )}
-            {triggerType === "webhook" && availableEvents.length > 0 && (
+            {triggerType === "webhook" && !isChannel && availableEvents.length > 0 && (
               <details className="group/events rounded-md border border-border/60">
                 <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm [&::-webkit-details-marker]:hidden">
                   <ChevronRight
                     aria-hidden="true"
-                    className="h-3.5 w-3.5 text-muted-foreground group-open/events:rotate-90"
+                    className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open/events:rotate-90 motion-reduce:transition-none"
+                  />
+                  <Webhook
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 text-muted-foreground"
                   />
                   <span>{t("eventTypes")}</span>
                   <span className="ml-auto text-xs text-muted-foreground">
@@ -753,13 +705,14 @@ export function CreateTriggerForm({
             <summary className="flex cursor-pointer list-none items-center gap-2 py-2 text-sm text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
               <ChevronRight
                 aria-hidden="true"
-                className="h-3.5 w-3.5 group-open/settings:rotate-90"
+                className="h-3.5 w-3.5 transition-transform group-open/settings:rotate-90 motion-reduce:transition-none"
               />
+              <SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />
               {t("runSettings")}
             </summary>
             <div className="space-y-5 py-4">
               <div className="grid content-start gap-2">
-                <FormLabel htmlFor="failure_threshold">
+                <FormLabel htmlFor="failure_threshold" icon={AlertTriangle}>
                   {t("failureThreshold")}
                 </FormLabel>
                 <Input
@@ -772,9 +725,9 @@ export function CreateTriggerForm({
                   defaultValue={initialData?.failure_threshold || ""}
                 />
               </div>
-              {triggerType === "webhook" && (
+              {triggerType === "webhook" && !isChannel && (
                 <div className="grid gap-2">
-                  <FormLabel>{t("allowedMethods")}</FormLabel>
+                  <FormLabel icon={Webhook}>{t("allowedMethods")}</FormLabel>
                   <div className="flex flex-wrap gap-3">
                     {HTTP_METHODS.map((method) => (
                       <div key={method} className="flex items-center gap-2">
@@ -796,7 +749,7 @@ export function CreateTriggerForm({
                 </div>
               )}
               <div className="grid gap-2">
-                <FormLabel htmlFor="description">
+                <FormLabel htmlFor="description" icon={FileText}>
                   {t("triggerDescription")}
                 </FormLabel>
                 <Textarea
@@ -852,8 +805,6 @@ export function CreateTriggerForm({
                 )}
               </div>
             }
-            mcpControl={mcpControl}
-            skillControl={skillControl}
             fileControl={fileControl}
             onRemoveMcp={(id) =>
               setTaskMcps((previous) =>

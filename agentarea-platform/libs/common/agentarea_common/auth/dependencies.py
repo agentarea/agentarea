@@ -82,6 +82,7 @@ async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
             exc_info=True,
         )
 
+    administered: list[str] = []
     try:
         from agentarea_common.config.database import get_database
         from agentarea_common.workspaces.repository import WorkspaceRepository
@@ -94,7 +95,12 @@ async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
         for workspace in owned_workspaces:
             if workspace.id not in accessible:
                 accessible.append(workspace.id)
+            administered.append(workspace.id)
     except Exception as exc:
+        # Ownership is what grants administrative authority, so a failure here
+        # leaves ``admin_workspaces`` empty and admin-gated endpoints answer 403.
+        # Denying an admin action is recoverable; granting one on a failed lookup
+        # is not.
         logger.warning(
             "Could not resolve owned workspaces for user %s: %s",
             user_context.user_id,
@@ -103,6 +109,7 @@ async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
         )
 
     user_context.accessible_workspaces = accessible
+    user_context.admin_workspaces = administered
 
 
 def _apply_workspace_override(user_context: UserContext, requested: str | None) -> None:
@@ -332,6 +339,11 @@ async def _try_hydra_token(token: str, request: Request) -> UserContext | None:
 
         subject = payload.get("sub", "")
         if not subject:
+            return None
+        # Hydra names the client itself as the subject of a client_credentials
+        # token: no user logged in, so there is no principal to act as.
+        if subject == payload.get("client_id"):
+            logger.warning("Hydra token refused: subject is its own client %s", subject)
             return None
 
         return UserContext(

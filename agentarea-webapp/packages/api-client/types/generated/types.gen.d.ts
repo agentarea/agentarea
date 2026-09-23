@@ -2637,6 +2637,42 @@ export type InvitationCreatedResponse = {
  */
 export type InvitationEmailDelivery = 'sent' | 'not_requested' | 'not_configured' | 'failed';
 /**
+ * InvitationPreviewBody
+ */
+export type InvitationPreviewBody = {
+    /**
+     * Token
+     */
+    token: string;
+};
+/**
+ * InvitationPreviewResponse
+ *
+ * What an invitee is shown before joining: who asked, where to, until when.
+ *
+ * The caller is not a member yet, so nothing else about the workspace leaves
+ * this endpoint. The inviter fields are nullable because the identity
+ * provider may not resolve them; the client states that rather than guessing.
+ */
+export type InvitationPreviewResponse = {
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Inviter Display Name
+     */
+    inviter_display_name: string | null;
+    /**
+     * Inviter Email
+     */
+    inviter_email: string | null;
+    /**
+     * Workspace Name
+     */
+    workspace_name: string;
+};
+/**
  * InvitationResponse
  */
 export type InvitationResponse = {
@@ -2854,6 +2890,88 @@ export type McpInstanceHealthResponse = {
      * Status
      */
     status: string;
+};
+/**
+ * MCPOAuthAuthorizeRequest
+ *
+ * Start an OAuth flow for one MCP instance.
+ *
+ * ``auto`` registers AgentArea with the authorization server (RFC 7591).
+ * ``custom`` uses an OAuth app the workspace registered with the provider —
+ * the only option when the provider has no Dynamic Client Registration.
+ */
+export type McpoAuthAuthorizeRequest = {
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Client Id Secret Id
+     *
+     * Existing user-owned workspace secret containing the OAuth client ID.
+     */
+    client_id_secret_id?: string | null;
+    /**
+     * Client Secret
+     */
+    client_secret?: string | null;
+    /**
+     * Client Secret Secret Id
+     *
+     * Existing user-owned workspace secret containing the OAuth client secret.
+     */
+    client_secret_secret_id?: string | null;
+    /**
+     * Credential Mode
+     */
+    credential_mode?: 'auto' | 'custom';
+    /**
+     * Instance Id
+     */
+    instance_id: string;
+    /**
+     * Return To
+     */
+    return_to?: string;
+};
+/**
+ * MCPOAuthPreflightResponse
+ *
+ * What the UI needs before it can offer a Connect action.
+ *
+ * ``ready`` — Connect can run unattended (the server supports DCR).
+ * ``oauth_app_required`` — ask for a client ID/secret first.
+ * ``unsupported`` — this server cannot be authorized this way; say why.
+ */
+export type McpoAuthPreflightResponse = {
+    /**
+     * Authorization Endpoint
+     */
+    authorization_endpoint?: string | null;
+    /**
+     * Connected
+     */
+    connected: boolean;
+    /**
+     * Detail
+     */
+    detail?: string;
+    /**
+     * Instance Id
+     */
+    instance_id: string;
+    /**
+     * Issuer
+     */
+    issuer?: string | null;
+    /**
+     * Scopes
+     */
+    scopes?: Array<string>;
+    /**
+     * Status
+     */
+    status: 'ready' | 'oauth_app_required' | 'unsupported';
 };
 /**
  * MCPServerConnectionCreateRequest
@@ -6403,19 +6521,63 @@ export type TokenPolicy = {
     max_tokens_per_call?: number | null;
 };
 /**
- * ToolResponse
+ * ToolMethodResponse
  *
- * Unified tool response format.
+ * One callable method of a code toolset.
  */
-export type ToolResponse = {
+export type ToolMethodResponse = {
     /**
      * Description
      */
     description: string;
     /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Effect
+     */
+    effect?: 'read' | 'write' | 'destructive' | 'privileged' | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Requires User Confirmation
+     */
+    requires_user_confirmation?: boolean;
+};
+/**
+ * ToolResponse
+ *
+ * Unified tool response format.
+ *
+ * Code tools carry the catalog metadata the UI needs to group and label them:
+ * ``plane`` separates the agent's own runtime from the platform surface, and
+ * ``effect`` on each method says what a call can break. Without these on the
+ * wire a client has to hand-maintain a mirror of the toolset registry.
+ */
+export type ToolResponse = {
+    /**
+     * Available Methods
+     */
+    available_methods?: Array<ToolMethodResponse>;
+    /**
+     * Category
+     */
+    category?: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Display Name
+     */
+    display_name?: string;
+    /**
      * Input Schema
      */
-    input_schema: {
+    input_schema?: {
         [key: string]: unknown;
     };
     /**
@@ -6430,6 +6592,14 @@ export type ToolResponse = {
      * Name
      */
     name: string;
+    /**
+     * Plane
+     */
+    plane?: 'runtime' | 'build' | 'operate' | 'observe' | 'govern' | 'federate' | null;
+    /**
+     * Requires User Confirmation
+     */
+    requires_user_confirmation?: boolean;
     /**
      * Type
      */
@@ -9883,6 +10053,26 @@ export type AcceptInvitationV1InvitationsAcceptPostResponses = {
     200: AcceptInvitationResponse;
 };
 export type AcceptInvitationV1InvitationsAcceptPostResponse = AcceptInvitationV1InvitationsAcceptPostResponses[keyof AcceptInvitationV1InvitationsAcceptPostResponses];
+export type PreviewInvitationV1InvitationsPreviewPostData = {
+    body: InvitationPreviewBody;
+    path?: never;
+    query?: never;
+    url: '/v1/invitations/preview';
+};
+export type PreviewInvitationV1InvitationsPreviewPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type PreviewInvitationV1InvitationsPreviewPostError = PreviewInvitationV1InvitationsPreviewPostErrors[keyof PreviewInvitationV1InvitationsPreviewPostErrors];
+export type PreviewInvitationV1InvitationsPreviewPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: InvitationPreviewResponse;
+};
+export type PreviewInvitationV1InvitationsPreviewPostResponse = PreviewInvitationV1InvitationsPreviewPostResponses[keyof PreviewInvitationV1InvitationsPreviewPostResponses];
 export type ListMcpAuthConfigsV1McpAuthConfigsGetData = {
     body?: never;
     path?: never;
@@ -10090,38 +10280,30 @@ export type GetOauthLinkV1McpOauthLinksLinkIdGetResponses = {
     200: OAuthLinkResponse;
 };
 export type GetOauthLinkV1McpOauthLinksLinkIdGetResponse = GetOauthLinkV1McpOauthLinksLinkIdGetResponses[keyof GetOauthLinkV1McpOauthLinksLinkIdGetResponses];
-export type OauthAuthorizeV1McpOauthAuthorizeGetData = {
-    body?: never;
+export type OauthAuthorizeV1McpOauthAuthorizePostData = {
+    body: McpoAuthAuthorizeRequest;
     path?: never;
-    query: {
-        /**
-         * Instance Id
-         *
-         * MCP instance to connect
-         */
-        instance_id: string;
-        /**
-         * Return To
-         *
-         * Frontend URL to redirect after OAuth completes
-         */
-        return_to?: string;
-    };
+    query?: never;
     url: '/v1/mcp-oauth/authorize';
 };
-export type OauthAuthorizeV1McpOauthAuthorizeGetErrors = {
+export type OauthAuthorizeV1McpOauthAuthorizePostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type OauthAuthorizeV1McpOauthAuthorizeGetError = OauthAuthorizeV1McpOauthAuthorizeGetErrors[keyof OauthAuthorizeV1McpOauthAuthorizeGetErrors];
-export type OauthAuthorizeV1McpOauthAuthorizeGetResponses = {
+export type OauthAuthorizeV1McpOauthAuthorizePostError = OauthAuthorizeV1McpOauthAuthorizePostErrors[keyof OauthAuthorizeV1McpOauthAuthorizePostErrors];
+export type OauthAuthorizeV1McpOauthAuthorizePostResponses = {
     /**
+     * Response Oauth Authorize V1 Mcp Oauth Authorize Post
+     *
      * Successful Response
      */
-    200: unknown;
+    200: {
+        [key: string]: string;
+    };
 };
+export type OauthAuthorizeV1McpOauthAuthorizePostResponse = OauthAuthorizeV1McpOauthAuthorizePostResponses[keyof OauthAuthorizeV1McpOauthAuthorizePostResponses];
 export type OauthCallbackV1McpOauthCallbackGetData = {
     body?: never;
     path?: never;
@@ -10158,6 +10340,33 @@ export type OauthCallbackV1McpOauthCallbackGetResponses = {
      */
     200: unknown;
 };
+export type OauthPreflightV1McpOauthPreflightGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Instance Id
+         *
+         * MCP instance to inspect
+         */
+        instance_id: string;
+    };
+    url: '/v1/mcp-oauth/preflight';
+};
+export type OauthPreflightV1McpOauthPreflightGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthPreflightV1McpOauthPreflightGetError = OauthPreflightV1McpOauthPreflightGetErrors[keyof OauthPreflightV1McpOauthPreflightGetErrors];
+export type OauthPreflightV1McpOauthPreflightGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpoAuthPreflightResponse;
+};
+export type OauthPreflightV1McpOauthPreflightGetResponse = OauthPreflightV1McpOauthPreflightGetResponses[keyof OauthPreflightV1McpOauthPreflightGetResponses];
 export type ListMcpServerInstancesV1McpServerInstancesGetData = {
     body?: never;
     path?: never;

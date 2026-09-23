@@ -16,7 +16,7 @@ interface WorkplaceChatProps {
   availableAgents: Agent[];
   availableProjects?: ProjectOption[];
   availableTaskPolicies?: TaskPolicyOption[];
-  badgeSuggestions?: BadgeSuggestion[];
+  badgeSuggestions?: BadgeSuggestion[] | Promise<BadgeSuggestion[]>;
 }
 
 /**

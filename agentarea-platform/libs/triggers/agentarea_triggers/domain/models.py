@@ -1,12 +1,19 @@
 """Trigger domain models."""
 
+import logging
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from .enums import ExecutionStatus, TriggerType, WebhookType
+
+logger = logging.getLogger(__name__)
+
+# Passed as validation context when rebuilding a trigger from a stored row, so
+# the datetime invariants report instead of raising. See validate_datetime_fields.
+RECONSTITUTING: dict[str, Any] = {"reconstituting": True}
 
 
 class Trigger(BaseModel):
@@ -44,15 +51,34 @@ class Trigger(BaseModel):
         return v.strip()
 
     @model_validator(mode="after")
-    def validate_datetime_fields(self) -> "Trigger":
-        """Validate datetime field relationships."""
+    def validate_datetime_fields(self, info: ValidationInfo) -> "Trigger":
+        """Validate datetime field relationships.
+
+        Building a trigger this way out of order is a programming error and
+        still raises. Reading one back is different: the three stamps are
+        written by different processes, so clock skew alone can invert them,
+        and a stored row that trips this would otherwise become permanently
+        unreadable -- including through the endpoint you would use to fix it.
+        Reconstitution therefore reports the skew and returns the row as it is.
+        """
+        problems = []
         if self.updated_at < self.created_at:
-            raise ValueError("updated_at cannot be before created_at")
-
+            problems.append("updated_at cannot be before created_at")
         if self.last_execution_at and self.last_execution_at < self.created_at:
-            raise ValueError("last_execution_at cannot be before created_at")
+            problems.append("last_execution_at cannot be before created_at")
 
-        return self
+        if not problems:
+            return self
+
+        if (info.context or {}).get("reconstituting"):
+            logger.warning(
+                "Trigger %s has inconsistent timestamps and was loaded as-is: %s",
+                self.id,
+                "; ".join(problems),
+            )
+            return self
+
+        raise ValueError(problems[0])
 
     def should_disable_due_to_failures(self) -> bool:
         """Check if trigger should be disabled due to consecutive failures."""

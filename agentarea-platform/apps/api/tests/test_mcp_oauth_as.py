@@ -18,6 +18,7 @@ API_BASE = "https://api.example.com"
 
 HYDRA = "https://oauth.example.com"
 HYDRA_ADMIN = "http://hydra-admin.internal:4445"
+REDIRECT = ["http://127.0.0.1:33418/callback"]
 
 # Trimmed to the fields these tests reason about; the point of the passthrough
 # is precisely that fields nobody enumerated still reach the client.
@@ -310,7 +311,7 @@ class TestDynamicClientRegistration:
     """A client registered without the refresh grant can only ever re-auth."""
 
     def test_registers_the_client_for_refresh_by_default(self, hydra):
-        hydra.post("/oauth2/register", json={"client_name": "probe"})
+        hydra.post("/oauth2/register", json={"client_name": "probe", "redirect_uris": REDIRECT})
 
         sent = _FakeAsyncClient.sent[-1]
         assert "refresh_token" in sent["grant_types"]
@@ -320,7 +321,7 @@ class TestDynamicClientRegistration:
 
     def test_default_scope_covers_every_advertised_hydra_scope(self, hydra):
         """Codex requests the advertised set, which Hydra validates per client."""
-        hydra.post("/oauth2/register", json={"client_name": "Codex"})
+        hydra.post("/oauth2/register", json={"client_name": "Codex", "redirect_uris": REDIRECT})
 
         registered = set(_FakeAsyncClient.sent[-1]["scope"].split())
         assert set(HYDRA_DOC["scopes_supported"]) <= registered
@@ -328,7 +329,20 @@ class TestDynamicClientRegistration:
     def test_respects_grant_types_the_client_asked_for(self, hydra):
         hydra.post(
             "/oauth2/register",
-            json={"client_name": "probe", "grant_types": ["authorization_code"]},
+            json={
+                "client_name": "probe",
+                "grant_types": ["authorization_code"],
+                "redirect_uris": REDIRECT,
+            },
         )
 
         assert _FakeAsyncClient.sent[-1]["grant_types"] == ["authorization_code"]
+
+    def test_refuses_a_client_with_no_redirect_uri(self, hydra):
+        """Without a callback the client can never log anyone in; it is only a row in Hydra."""
+        for body in ({}, {"client_name": "probe"}, {"client_name": "probe", "redirect_uris": []}):
+            response = hydra.post("/oauth2/register", json=body)
+
+            assert response.status_code == 400, body
+            assert response.json()["error"] == "invalid_redirect_uri"
+        assert _FakeAsyncClient.sent == []

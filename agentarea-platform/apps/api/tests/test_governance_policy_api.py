@@ -68,9 +68,9 @@ def audit_capture(monkeypatch):
 
 
 class _DenyAuthorizationService(WorkspaceScopedAuthorizationService):
-    """Simulates a non-admin workspace member for the assert_workspace_admin gate."""
+    """A workspace member who does not own it: may write entities, may not administer."""
 
-    async def can_write_workspace(self, user_context: UserContext, workspace_id: str) -> bool:
+    async def can_administer_workspace(self, user_context: UserContext, workspace_id: str) -> bool:
         return False
 
 
@@ -82,7 +82,12 @@ def _register_authz():
 
 
 def _context(workspace_id: str = "workspace-a") -> UserContext:
-    return UserContext(user_id=f"user-{workspace_id}", workspace_id=workspace_id)
+    # Policy rules are admin-gated: this context stands in for the workspace owner.
+    return UserContext(
+        user_id=f"user-{workspace_id}",
+        workspace_id=workspace_id,
+        admin_workspaces=[workspace_id],
+    )
 
 
 def _app_for(session: AsyncSession, context: UserContext) -> FastAPI:

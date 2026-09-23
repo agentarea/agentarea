@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
     display_name="Shell",
     description="Run bash commands in an isolated sandbox.",
     category="utility",
+    plane="runtime",
     requires_user_confirmation=True,
 )
 class ShellToolset(Toolset):
@@ -60,7 +61,7 @@ class ShellToolset(Toolset):
         self._auth_secret = auth_secret or ""
         self._http_client = http_client
 
-    @tool_method
+    @tool_method(effect="destructive")
     async def bash(
         self,
         command: str,

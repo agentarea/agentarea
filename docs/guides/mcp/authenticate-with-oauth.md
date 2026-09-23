@@ -8,7 +8,7 @@ related:
   - /guides/mcp/pass-secrets
   - /guides/mcp/issue-access-tokens
   - /concepts/integration/mcp
-last_updated: 2026-07-29
+last_updated: 2026-09-22
 ---
 
 Do this when a remote MCP server rejects a static token and expects an OAuth
@@ -17,8 +17,15 @@ server](/guides/mcp/pass-secrets) instead when the provider issues a long-lived
 API key you can paste.
 
 AgentArea acts as the OAuth client. It discovers the authorization server from
-the MCP endpoint, registers itself, runs PKCE, and stores the resulting token as
-an auth config linked to the instance. The agent never sees the token.
+the MCP endpoint, registers itself where the provider allows it, runs PKCE, and
+stores the resulting token as an auth config linked to the instance. The agent
+never sees the token.
+
+Providers split into two cases, and which one you are in decides whether there
+is anything to prepare: those that implement Dynamic Client Registration
+(RFC 7591) let AgentArea register itself, and those that do not — Google and
+GitHub among them — require an OAuth app you register with the provider and
+supply per connection. Ask the preflight endpoint rather than guessing.
 
 ## Prerequisites
 
@@ -37,10 +44,43 @@ an auth config linked to the instance. The agent never sees the token.
 ## Steps
 
 <Steps titleSize="h3">
+  <Step title="Ask what the provider needs">
+    ```bash
+    curl -s "$AGENTAREA_URL/v1/mcp-oauth/preflight?instance_id=$INSTANCE_ID" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN"
+    ```
+
+    ```json
+    {
+      "instance_id": "76216436-01e9-4ebc-a8d5-9023ed773cce",
+      "status": "oauth_app_required",
+      "connected": false,
+      "detail": "https://accounts.google.com does not support Dynamic Client Registration (RFC 7591), so AgentArea cannot register itself. Register an OAuth app with this provider and connect with its client ID and secret.",
+      "issuer": "https://accounts.google.com",
+      "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+      "scopes": ["https://www.googleapis.com/auth/gmail.modify"]
+    }
+    ```
+
+    `status` decides the next step:
+
+    | `status` | What it means | Next |
+    |---|---|---|
+    | `ready` | The provider implements RFC 7591 | Authorize with no credentials |
+    | `oauth_app_required` | No dynamic registration; `detail` names the issuer | Register an app with the provider, then authorize with `credential_mode: custom` |
+    | `unsupported` | No OAuth discovery here; `detail` says what failed | Use [Pass secrets to an MCP server](/guides/mcp/pass-secrets), or nothing if the server needs no token |
+
+    Every outcome is a 200 — the endpoint answers a question about capability
+    rather than failing. It runs live discovery against the MCP URL on each call,
+    so expect a round trip to the provider.
+  </Step>
+
   <Step title="Start the flow">
     ```bash
-    curl -s "$AGENTAREA_URL/v1/mcp-oauth/authorize?instance_id=$INSTANCE_ID&return_to=https://app.example.com" \
-      -H "Authorization: Bearer $AGENTAREA_TOKEN"
+    curl -s -X POST "$AGENTAREA_URL/v1/mcp-oauth/authorize" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"instance_id\": \"$INSTANCE_ID\", \"return_to\": \"https://app.example.com\"}"
     ```
 
     ```json
@@ -53,9 +93,17 @@ an auth config linked to the instance. The agent never sees the token.
     yourself.
 
     Behind that single call AgentArea discovers the authorization server from the MCP
-    URL, registers as a client via Dynamic Client Registration where the provider
-    supports it, generates a PKCE S256 pair, and stores the flow state in Redis keyed
-    by `state`.
+    URL, registers as a client via Dynamic Client Registration, generates a PKCE S256
+    pair, persists the client credentials on an auth config, and stores the flow state
+    in Redis keyed by `state`. The state holds a reference to those credentials, never
+    a copy of the client secret.
+
+    The requested scopes come from the resource's own metadata (RFC 9728) where it
+    publishes them, since that is the only place a provider states what the MCP
+    endpoint itself accepts. `offline_access` is added only when the authorization
+    server advertises it — asking a provider for a scope it never claimed risks
+    `invalid_scope` on the consent screen, which costs the whole authorization
+    rather than just its refresh token.
 
     `return_to` is where the browser lands afterwards. It is validated against an
     allowed base, so an arbitrary URL is rejected.
@@ -67,27 +115,46 @@ an auth config linked to the instance. The agent never sees the token.
 
     The callback is public — it must be, because the provider redirects a browser to
     it — and it is protected by the `state` token rather than your API key. It
-    exchanges the code for tokens, writes an auth config of type `oauth2` holding the
-    access token, refresh token, scope, and expiry, links it to the instance via
-    `auth_config_id`, and then redirects the browser to
-    `{return_to}/mcp-servers/{instance_id}?oauth=success`.
+    exchanges the code for tokens, updates the auth config created in the previous
+    step with the access token, refresh token, scope, and expiry, links it to the
+    instance via `auth_config_id`, and then redirects the browser to
+    `{return_to}/connections/{instance_id}?oauth=success`.
 
     Tool discovery is kicked off in the background at that point, so the tool list
     may be a moment behind the redirect.
   </Step>
 
-  <Step title="Handle a provider without dynamic registration">
-    Some authorization servers do not implement RFC 7591. The flow then needs a
-    pre-registered OAuth app, supplied to the API as environment variables:
+  <Step title="Connect a provider without dynamic registration">
+    When preflight returned `oauth_app_required`, register an OAuth app with the
+    provider yourself, using your deployment's callback URL
+    (`$AGENTAREA_URL/v1/mcp-oauth/callback`) as its redirect URI. Then pass its
+    credentials with the authorize call:
 
-    ```text
-    MCP_OAUTH_CLIENT_ID=<your registered client id>
-    MCP_OAUTH_CLIENT_SECRET=<your registered client secret>
+    ```bash
+    curl -s -X POST "$AGENTAREA_URL/v1/mcp-oauth/authorize" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"instance_id\": \"$INSTANCE_ID\", \"credential_mode\": \"custom\", \"client_id\": \"$CLIENT_ID\", \"client_secret\": \"$CLIENT_SECRET\"}"
     ```
 
-    Register the app with the provider using the callback URL of your deployment.
-    Without these, `/authorize` returns 502 naming the issuer that refused
-    registration.
+    The credentials belong to the connection, not to the deployment: each workspace
+    authorizes through its own app, and the client secret is stored encrypted under
+    the connection's auth config.
+
+    Either credential can instead reference an existing workspace secret, which is
+    what to use when you rotate the app without re-authorizing every connection:
+
+    ```bash
+    curl -s -X POST "$AGENTAREA_URL/v1/mcp-oauth/authorize" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"instance_id\": \"$INSTANCE_ID\", \"credential_mode\": \"custom\", \"client_id_secret_id\": \"$CLIENT_ID_SECRET_ID\", \"client_secret_secret_id\": \"$CLIENT_SECRET_SECRET_ID\"}"
+    ```
+
+    Exactly one source per credential. Sending both a value and a secret id for the
+    same credential, or neither, is rejected with 422 rather than one silently
+    winning. Referenced secrets must be user-owned workspace secrets — a secret
+    already owned by another entity is refused.
   </Step>
 </Steps>
 
@@ -138,10 +205,17 @@ only succeeds if the OAuth credential was stored correctly.
     documents OAuth for MCP; if it uses a plain API key, use
     [Pass secrets to an MCP server](/guides/mcp/pass-secrets) .
   </Accordion>
-  <Accordion title="502 naming the issuer and Dynamic Client Registration">
+  <Accordion title='422 with code "oauth_app_required"'>
     The authorization server has no registration endpoint, or registration
-    failed. Register an OAuth app manually and set `MCP_OAUTH_CLIENT_ID` and
-    `MCP_OAUTH_CLIENT_SECRET` .
+    failed, so there is no client for AgentArea to authorize as. The response
+    names the issuer in `detail.issuer` . Register an OAuth app with that
+    provider and retry with `credential_mode: custom` .
+  </Accordion>
+  <Accordion title="A verified connection still cannot call tools">
+    A remote server that lists its tools without a token verifies as reachable
+    and stores its tool list while nobody is authorized; the tool calls are what
+    401. Check `auth_config_id` on the instance — `null` means no token is
+    stored, regardless of `verification.status` .
   </Accordion>
   <Accordion title="The callback reports an invalid or expired state">
     Flow state is held in Redis with a bounded lifetime and is consumed on first

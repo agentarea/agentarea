@@ -21,6 +21,7 @@ from .tool_definition import toolset
     display_name="Workspace Files",
     description="List, fetch API download paths for, and delete workspace files.",
     category="platform",
+    plane="runtime",
     requires_user_confirmation=True,
 )
 class WorkspaceFilesToolset(Toolset):
@@ -65,7 +66,7 @@ class WorkspaceFilesToolset(Toolset):
             return path[len(self.base_prefix) + 1 :]
         return path
 
-    @tool_method
+    @tool_method(effect="read")
     async def list(self, prefix: str = "", max_items: int = 200) -> str:
         """List files in the current workspace's storage."""
         try:
@@ -96,7 +97,7 @@ class WorkspaceFilesToolset(Toolset):
         except Exception as exc:
             return json.dumps({"error": str(exc)})
 
-    @tool_method
+    @tool_method(effect="read")
     async def get_url(self, path: str, expires_in: int = 3600) -> str:
         """Return an AgentArea API download path for a workspace file."""
         try:
@@ -127,7 +128,7 @@ class WorkspaceFilesToolset(Toolset):
         except Exception as exc:
             return json.dumps({"error": str(exc), "path": path})
 
-    @tool_method
+    @tool_method(effect="destructive")
     async def delete(self, path: str) -> str:
         """Delete a workspace file."""
         try:

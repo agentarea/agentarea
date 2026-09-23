@@ -2,6 +2,7 @@ from uuid import UUID
 
 from agentarea_api.api.deps.services import get_model_spec_repository
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.domain.models import ModelSpec
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
@@ -86,7 +87,11 @@ class ModelSpecResponse(BaseModel):
 
 
 # Model Spec endpoints
-@router.get("/", response_model=list[ModelSpecResponse])
+@router.get(
+    "/",
+    response_model=list[ModelSpecResponse],
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def list_model_specs(
     user_context: UserContextDep,
     provider_spec_id: UUID | None = None,
@@ -101,7 +106,11 @@ async def list_model_specs(
     return [ModelSpecResponse.from_domain(spec) for spec in model_specs]
 
 
-@router.get("/by-provider/{provider_spec_id}", response_model=list[ModelSpecResponse])
+@router.get(
+    "/by-provider/{provider_spec_id}",
+    response_model=list[ModelSpecResponse],
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def list_model_specs_by_provider(
     provider_spec_id: UUID,
     user_context: UserContextDep,
@@ -116,7 +125,11 @@ async def list_model_specs_by_provider(
     return [ModelSpecResponse.from_domain(spec) for spec in model_specs]
 
 
-@router.get("/by-provider/{provider_spec_id}/{model_name}", response_model=ModelSpecResponse)
+@router.get(
+    "/by-provider/{provider_spec_id}/{model_name}",
+    response_model=ModelSpecResponse,
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def get_model_spec_by_provider_and_name(
     provider_spec_id: UUID,
     model_name: str,
@@ -132,7 +145,11 @@ async def get_model_spec_by_provider_and_name(
     return ModelSpecResponse.from_domain(model_spec)
 
 
-@router.get("/{model_spec_id}", response_model=ModelSpecResponse)
+@router.get(
+    "/{model_spec_id}",
+    response_model=ModelSpecResponse,
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def get_model_spec(
     model_spec_id: UUID,
     user_context: UserContextDep,
@@ -145,7 +162,13 @@ async def get_model_spec(
     return ModelSpecResponse.from_domain(model_spec)
 
 
-@router.post("/", response_model=ModelSpecResponse)
+@router.post(
+    "/",
+    response_model=ModelSpecResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_model_spec(
     data: ModelSpecCreate,
     user_context: UserContextDep,
@@ -185,7 +208,13 @@ async def create_model_spec(
     return ModelSpecResponse.from_domain(created_spec)
 
 
-@router.patch("/{model_spec_id}", response_model=ModelSpecResponse)
+@router.patch(
+    "/{model_spec_id}",
+    response_model=ModelSpecResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def update_model_spec(
     model_spec_id: UUID,
     data: ModelSpecUpdate,
@@ -205,7 +234,12 @@ async def update_model_spec(
     return ModelSpecResponse.from_domain(updated_spec)
 
 
-@router.delete("/{model_spec_id}")
+@router.delete(
+    "/{model_spec_id}",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def delete_model_spec(
     model_spec_id: UUID,
     user_context: UserContextDep,
@@ -218,7 +252,13 @@ async def delete_model_spec(
     return {"message": "Model specification deleted successfully"}
 
 
-@router.post("/upsert", response_model=ModelSpecResponse)
+@router.post(
+    "/upsert",
+    response_model=ModelSpecResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def upsert_model_spec(
     data: ModelSpecCreate,
     user_context: UserContextDep,

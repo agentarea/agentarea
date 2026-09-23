@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   taskEvents: {
     parts: [],
+    timeline: [],
+    executionStatus: "running",
+    isInteractionClosed: () => false,
     status: "idle",
     pendingForm: null,
     terminalMessage: null,
@@ -29,6 +32,14 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/events/useTaskEvents", () => ({
   useTaskEvents: () => mocks.taskEvents,
+}));
+
+vi.mock("@/components/Chat/hooks/useA2UIActions", () => ({
+  useA2UIActions: () => ({ dispatchAction: vi.fn() }),
+}));
+
+vi.mock("@/hooks/use-attachable-resources", () => ({
+  useAttachableResources: vi.fn(),
 }));
 
 vi.mock("@/hooks/useTaskActions", () => ({

@@ -16,6 +16,7 @@ from agentarea_agents.schemas.import_export import (
     ToolConfig,
 )
 from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
+from agentarea_agents_sdk.tools.tool_definition import ToolEffect, ToolPlane
 from agentarea_api.api.deps.services import (
     get_agent_service,
     get_mcp_server_instance_service,
@@ -24,10 +25,11 @@ from agentarea_api.api.deps.services import (
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
+from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.config.database import get_db_session
 from agentarea_mcp.application.service import MCPServerInstanceService
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ._access_control_grants import grant_resource_owner
@@ -161,7 +163,13 @@ async def _overlay_approval_flags(
         response.tools = [TOOL_CONFIG_ADAPTER.validate_python(t) for t in applied]
 
 
-@router.post("/", response_model=AgentResponse)
+@router.post(
+    "/",
+    response_model=AgentResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_agent(
     data: AgentCreate,
     user_context: UserContextDep,
@@ -193,13 +201,36 @@ async def create_agent(
     return response
 
 
+class ToolMethodResponse(BaseModel):
+    """One callable method of a code toolset."""
+
+    name: str
+    display_name: str
+    description: str
+    effect: ToolEffect | None = None
+    requires_user_confirmation: bool = False
+
+
 class ToolResponse(BaseModel):
-    """Unified tool response format."""
+    """Unified tool response format.
+
+    Code tools carry the catalog metadata the UI needs to group and label them:
+    ``plane`` separates the agent's own runtime from the platform surface, and
+    ``effect`` on each method says what a call can break. Without these on the
+    wire a client has to hand-maintain a mirror of the toolset registry.
+    """
 
     name: str
     type: Literal["code", "mcp"]
     description: str
-    input_schema: dict[str, Any]
+    display_name: str = ""
+    category: str = ""
+    plane: ToolPlane | None = None
+    requires_user_confirmation: bool = False
+    available_methods: list[ToolMethodResponse] = Field(default_factory=list)
+    # Per-call schema. MCP tools advertise one; a code toolset dispatches over
+    # several methods instead, so theirs stays empty and the methods carry it.
+    input_schema: dict[str, Any] = Field(default_factory=dict)
     mcp_instance_id: UUID | None = None
     mcp_instance_name: str | None = None
 
@@ -221,7 +252,11 @@ def _mcp_tool_response(tool: dict[str, Any], instance) -> ToolResponse | None:
     )
 
 
-@router.get("/tools", response_model=list[ToolResponse])
+@router.get(
+    "/tools",
+    response_model=list[ToolResponse],
+    dependencies=[unrestricted("the toolset catalogue is the same for every workspace")],
+)
 async def get_all_tools(
     user_context: UserContextDep,
     include: str = Query(
@@ -259,7 +294,16 @@ async def get_all_tools(
                     name=tool_name,
                     type="code",
                     description=tool_meta.get("description", ""),
-                    input_schema=tool_meta.get("input_schema", {}),
+                    display_name=tool_meta.get("display_name") or tool_name,
+                    category=tool_meta.get("category", ""),
+                    plane=tool_meta.get("plane"),
+                    requires_user_confirmation=bool(
+                        tool_meta.get("requires_user_confirmation", False)
+                    ),
+                    available_methods=[
+                        ToolMethodResponse(**method)
+                        for method in tool_meta.get("available_methods", [])
+                    ],
                 )
             )
 
@@ -283,7 +327,13 @@ async def get_all_tools(
     return tools
 
 
-@router.get("/{agent_id}", response_model=AgentResponse)
+@router.get(
+    "/{agent_id}",
+    response_model=AgentResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_agent(
     agent_id: str,
     user_context: UserContextDep,
@@ -305,7 +355,13 @@ async def get_agent(
     return response
 
 
-@router.post("/{agent_id}/install", response_model=AgentResponse)
+@router.post(
+    "/{agent_id}/install",
+    response_model=AgentResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def install_agent(
     agent_id: str,
     user_context: UserContextDep,
@@ -329,8 +385,20 @@ async def install_agent(
     return AgentResponse.from_domain(agent, include_skills=True)
 
 
-@router.get("", response_model=list[AgentResponse])
-@router.get("/", response_model=list[AgentResponse])
+@router.get(
+    "",
+    response_model=list[AgentResponse],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
+@router.get(
+    "/",
+    response_model=list[AgentResponse],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_agents(
     user_context: UserContextDep,
     session: DatabaseSessionDep,
@@ -351,7 +419,13 @@ async def list_agents(
     return responses
 
 
-@router.patch("/{agent_id}", response_model=AgentResponse)
+@router.patch(
+    "/{agent_id}",
+    response_model=AgentResponse,
+    dependencies=[
+        enforced_in_handler("per-object permission resolved by the PDP once the object is loaded")
+    ],
+)
 async def update_agent(
     agent_id: str,
     data: AgentUpdate,
@@ -378,7 +452,12 @@ async def update_agent(
     return response
 
 
-@router.delete("/{agent_id}")
+@router.delete(
+    "/{agent_id}",
+    dependencies=[
+        enforced_in_handler("per-object permission resolved by the PDP once the object is loaded")
+    ],
+)
 async def delete_agent(
     agent_id: str,
     user_context: UserContextDep,

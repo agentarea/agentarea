@@ -55,9 +55,9 @@ def _mock_payment(**overrides):
 
 
 class _DenyAuthorizationService(WorkspaceScopedAuthorizationService):
-    """Simulates a non-admin workspace member for the assert_workspace_admin gate."""
+    """A workspace member who does not own it: may write entities, may not administer."""
 
-    async def can_write_workspace(self, user_context, workspace_id) -> bool:
+    async def can_administer_workspace(self, user_context, workspace_id) -> bool:
         return False
 
 
@@ -79,8 +79,9 @@ def client(mock_service):
     app.include_router(router)
     app.dependency_overrides[get_wallet_service] = lambda: mock_service
     app.dependency_overrides[ensure_agent_exists] = lambda: None
+    # Wallet credentials and budgets are admin-gated; act as the workspace owner.
     app.dependency_overrides[get_user_context] = lambda: UserContext(
-        user_id="user-1", workspace_id="ws-1"
+        user_id="user-1", workspace_id="ws-1", admin_workspaces=["ws-1"]
     )
     return TestClient(app)
 
@@ -98,12 +99,15 @@ class TestCreateWallet:
     def test_create_201(self, client, mock_service):
         mock_service.create_wallet.return_value = _mock_wallet()
 
-        resp = client.post(f"/agents/{AGENT_ID}/wallet", json={
-            "wallet_type": "x402",
-            "x402_config": {"network": "eip155:8453"},
-            "service_budget_usd": 5.0,
-            "service_budget_period": "execution",
-        })
+        resp = client.post(
+            f"/agents/{AGENT_ID}/wallet",
+            json={
+                "wallet_type": "x402",
+                "x402_config": {"network": "eip155:8453"},
+                "service_budget_usd": 5.0,
+                "service_budget_period": "execution",
+            },
+        )
 
         assert resp.status_code == 201
         data = resp.json()
@@ -112,21 +116,28 @@ class TestCreateWallet:
 
     def test_create_409_duplicate(self, client, mock_service):
         from agentarea_wallet.domain.exceptions import WalletAlreadyExistsError
+
         mock_service.create_wallet.side_effect = WalletAlreadyExistsError("exists")
 
-        resp = client.post(f"/agents/{AGENT_ID}/wallet", json={
-            "wallet_type": "x402",
-            "x402_config": {"network": "eip155:8453"},
-        })
+        resp = client.post(
+            f"/agents/{AGENT_ID}/wallet",
+            json={
+                "wallet_type": "x402",
+                "x402_config": {"network": "eip155:8453"},
+            },
+        )
 
         assert resp.status_code == 409
 
     def test_create_400_validation(self, client, mock_service):
         mock_service.create_wallet.side_effect = ValueError("x402_config required")
 
-        resp = client.post(f"/agents/{AGENT_ID}/wallet", json={
-            "wallet_type": "x402",
-        })
+        resp = client.post(
+            f"/agents/{AGENT_ID}/wallet",
+            json={
+                "wallet_type": "x402",
+            },
+        )
 
         assert resp.status_code == 400
         assert "x402_config" in resp.json()["detail"]
@@ -147,6 +158,7 @@ class TestGetWallet:
 
     def test_get_404(self, client, mock_service):
         from agentarea_wallet.domain.exceptions import WalletNotFoundError
+
         mock_service.get_wallet.side_effect = WalletNotFoundError("not found")
 
         resp = client.get(f"/agents/{AGENT_ID}/wallet")
@@ -162,19 +174,26 @@ class TestUpdateWallet:
     def test_update_200(self, client, mock_service):
         mock_service.update_wallet.return_value = _mock_wallet(service_budget_usd=10.0)
 
-        resp = client.put(f"/agents/{AGENT_ID}/wallet", json={
-            "service_budget_usd": 10.0,
-        })
+        resp = client.put(
+            f"/agents/{AGENT_ID}/wallet",
+            json={
+                "service_budget_usd": 10.0,
+            },
+        )
 
         assert resp.status_code == 200
 
     def test_update_404(self, client, mock_service):
         from agentarea_wallet.domain.exceptions import WalletNotFoundError
+
         mock_service.update_wallet.side_effect = WalletNotFoundError("not found")
 
-        resp = client.put(f"/agents/{AGENT_ID}/wallet", json={
-            "service_budget_usd": 10.0,
-        })
+        resp = client.put(
+            f"/agents/{AGENT_ID}/wallet",
+            json={
+                "service_budget_usd": 10.0,
+            },
+        )
 
         assert resp.status_code == 404
 
@@ -193,6 +212,7 @@ class TestDeleteWallet:
 
     def test_delete_404(self, client, mock_service):
         from agentarea_wallet.domain.exceptions import WalletNotFoundError
+
         mock_service.delete_wallet.side_effect = WalletNotFoundError("not found")
 
         resp = client.delete(f"/agents/{AGENT_ID}/wallet")
@@ -217,6 +237,7 @@ class TestGetBalance:
 
     def test_balance_404(self, client, mock_service):
         from agentarea_wallet.domain.exceptions import WalletNotFoundError
+
         mock_service.get_wallet.side_effect = WalletNotFoundError("not found")
 
         resp = client.get(f"/agents/{AGENT_ID}/wallet/balance")
@@ -256,19 +277,26 @@ class TestFundWallet:
     def test_fund_200(self, client, mock_service):
         mock_service.update_wallet.return_value = _mock_wallet(service_budget_usd=20.0)
 
-        resp = client.post(f"/agents/{AGENT_ID}/wallet/fund", json={
-            "service_budget_usd": 20.0,
-        })
+        resp = client.post(
+            f"/agents/{AGENT_ID}/wallet/fund",
+            json={
+                "service_budget_usd": 20.0,
+            },
+        )
 
         assert resp.status_code == 200
 
     def test_fund_404(self, client, mock_service):
         from agentarea_wallet.domain.exceptions import WalletNotFoundError
+
         mock_service.update_wallet.side_effect = WalletNotFoundError("not found")
 
-        resp = client.post(f"/agents/{AGENT_ID}/wallet/fund", json={
-            "service_budget_usd": 20.0,
-        })
+        resp = client.post(
+            f"/agents/{AGENT_ID}/wallet/fund",
+            json={
+                "service_budget_usd": 20.0,
+            },
+        )
 
         assert resp.status_code == 404
 
@@ -282,9 +310,12 @@ class TestWalletMutationsRequireAdmin:
     def test_fund_403_for_non_admin(self, client, mock_service):
         register_singleton(AuthorizationService, _DenyAuthorizationService())
 
-        resp = client.post(f"/agents/{AGENT_ID}/wallet/fund", json={
-            "service_budget_usd": 20.0,
-        })
+        resp = client.post(
+            f"/agents/{AGENT_ID}/wallet/fund",
+            json={
+                "service_budget_usd": 20.0,
+            },
+        )
 
         assert resp.status_code == 403
         mock_service.update_wallet.assert_not_called()

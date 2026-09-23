@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import {
   Box,
   Cloud,
@@ -22,16 +25,16 @@ import {
   getMCPConnectionIconSrc,
   openApiIdentity,
 } from "@/lib/entity-identity";
-import { getMcpVerificationStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
 import {
   CONNECTION_TYPE_CONFIG,
   getConnectionTypes,
-  getEffectiveMCPVerificationStatus,
   getMCPConnectionTitle,
   getMCPInstanceToolCount,
 } from "../utils";
+import { getMcpConnectionState } from "../state";
+import type { ConnectionUsage } from "../usage";
 
 interface MCPServerSpecCardProps {
   server: MCPServer;
@@ -41,6 +44,8 @@ interface MCPServerSpecCardProps {
 interface MCPInstanceCardProps {
   instance: MCPInstance;
   serverSpec?: MCPServer;
+  /** Per-connection usage; omitted when the caller has no agent data. */
+  usage?: ConnectionUsage;
 }
 
 function getMCPIcon(name: string) {
@@ -108,11 +113,29 @@ function getMCPIcon(name: string) {
 export function MCPInstanceCard({
   instance,
   serverSpec,
+  usage,
 }: MCPInstanceCardProps) {
+  const t = useTranslations("MCPServersPage.table");
+  const tState = useTranslations("MCPServersPage.state");
   const specType = (instance.json_spec?.type as string) || "docker";
   const toolCount = getMCPInstanceToolCount(instance);
-  const vStatus = getEffectiveMCPVerificationStatus(instance);
-  const statusPresentation = getMcpVerificationStatusPresentation(vStatus);
+  const connectionState = getMcpConnectionState({
+    verification: instance.verification,
+    last_dispatch: instance.last_dispatch,
+    toolCount,
+  });
+  // Granted beats available: a card that brags "400 tools" hides whether any
+  // agent holds them, which is the fact worth scanning for.
+  const grantedLabel = usage
+    ? t("toolsGranted", {
+        granted:
+          usage.grantedTools === null
+            ? t("allTools")
+            : `${usage.grantedTools} / ${toolCount}`,
+      })
+    : toolCount > 0
+      ? t("toolsTotal", { total: toolCount })
+      : null;
 
   const typeLabel =
     specType === "command"
@@ -136,15 +159,23 @@ export function MCPInstanceCard({
         <div className="flex items-center gap-1.5 w-full">
           <StatusIndicator
             size="sm"
-            tone={statusPresentation.tone}
-            pulse={statusPresentation.pulse}
+            tone={connectionState.tone}
+            pulse={connectionState.pulse}
             className="shrink-0"
           >
-            {statusPresentation.label}
+            {tState(connectionState.key)}
           </StatusIndicator>
           <span className="truncate text-xs text-gray-500">{typeLabel}</span>
-          {toolCount > 0 && (
-            <span className="text-xs text-gray-400">· {toolCount} tools</span>
+          {grantedLabel && (
+            <span className="text-xs text-gray-400">· {grantedLabel}</span>
+          )}
+          {usage && (
+            <span className="shrink-0 text-xs text-gray-400">
+              ·{" "}
+              {usage.agents === 0
+                ? t("unused")
+                : t("agentCount", { count: usage.agents })}
+            </span>
           )}
         </div>
       }

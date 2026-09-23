@@ -1,11 +1,19 @@
 import * as React from "react";
-import { LucideIcon } from "lucide-react";
+import { ArrowRight, LucideIcon } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+/** One concrete route out of an empty page: what you can do, not what is missing. */
+export type EmptyStateHint = {
+  text: string;
+  href?: string;
+};
 
 interface EmptyStateProps {
   title: string;
   description: string;
+  hints?: EmptyStateHint[];
   icons?: LucideIcon[];
   action?: {
     label: string;
@@ -44,6 +52,7 @@ function IconTile({
 export function EmptyState({
   title,
   description,
+  hints,
   icons = [],
   action,
   className,
@@ -92,6 +101,29 @@ export function EmptyState({
       <p className="mx-auto mt-1 max-w-[320px] whitespace-pre-line text-[12px] leading-relaxed text-muted-foreground">
         {description}
       </p>
+      {hints && hints.length > 0 && (
+        // Left-aligned inside a centered block: a ragged-right list stays
+        // scannable, while centering each line turns it into prose again.
+        <ul className="mx-auto mt-4 flex w-fit max-w-[360px] flex-col gap-1.5 text-left">
+          {hints.map((hint) => (
+            <li key={hint.text} className="flex items-start gap-2">
+              <ArrowRight className="mt-[3px] size-3 shrink-0 text-muted-foreground/50" />
+              {hint.href ? (
+                <Link
+                  href={hint.href}
+                  className="text-[12px] leading-relaxed text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  {hint.text}
+                </Link>
+              ) : (
+                <span className="text-[12px] leading-relaxed text-muted-foreground">
+                  {hint.text}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
         {action && (
           <Button

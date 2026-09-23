@@ -53,7 +53,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
                     </h3>
                     {agent.active_task_count != null && agent.active_task_count > 0 && (
                       <Badge variant="blue" className="shrink-0 text-xs">
-                        {agent.active_task_count}
+                        {agent.active_task_count} running
                       </Badge>
                     )}
                   </div>
@@ -84,10 +84,22 @@ export default function AgentCard({ agent }: AgentCardProps) {
             >
               <div className="pointer-events-none absolute inset-0 bg-white opacity-0 transition-opacity duration-300 group-hover:opacity-100 dark:bg-zinc-800" />
               <div className="relative z-10 flex items-center justify-between">
+                {/* These are what the agent is wired to — MCP servers, APIs,
+                    other agents — so the row is labelled for what it is rather
+                    than leaving a bare stack of logos to be guessed at. */}
                 {agent.tool_icons && agent.tool_icons.length > 0 ? (
-                  <AgentToolIcons maxDisplay={5} tools={agent.tool_icons} />
+                  <div className="flex min-w-0 items-center gap-2">
+                    <AgentToolIcons maxDisplay={5} tools={agent.tool_icons} />
+                    <span className="truncate text-xs text-muted-foreground">
+                      {agent.tool_icons.length === 1
+                        ? "1 connection"
+                        : `${agent.tool_icons.length} connections`}
+                    </span>
+                  </div>
                 ) : (
-                  <span className="text-xs text-muted-foreground">No tools</span>
+                  <span className="text-xs text-muted-foreground">
+                    No connections
+                  </span>
                 )}
                 <HoverLink text="View agent" />
               </div>
