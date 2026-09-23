@@ -5,12 +5,11 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
-import { CheckCircle, Loader2, Trash2 } from "lucide-react";
+import { Check, CheckCircle, Copy, Loader2, Trash2 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { Button } from "@/components/ui/button";
-import { CopyableText } from "@/components/ui/copyable-text";
 import {
   Dialog,
   DialogContent,
@@ -124,6 +123,7 @@ export default function APIKeysClient({
   const [revoking, setRevoking] = useState(false);
 
   const [newToken, setNewToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const token = searchParams.get("new_token");
@@ -153,8 +153,20 @@ export default function APIKeysClient({
     router.refresh();
   }
 
+  async function handleCopyToken() {
+    if (!newToken) return;
+    try {
+      await navigator.clipboard.writeText(newToken);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+    }
+  }
+
   function handleCloseTokenModal() {
     setNewToken(null);
+    setCopied(false);
     router.replace("/admin/api-keys");
   }
 
@@ -328,7 +340,23 @@ export default function APIKeysClient({
               {t("created.warning")}
             </DialogDescription>
           </DialogHeader>
-          <CopyableText text={newToken ?? ""} />
+          <div className="space-y-2 py-1">
+            <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
+              <code className="flex-1 break-all text-sm">{newToken}</code>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0"
+                onClick={handleCopyToken}
+              >
+                {copied ? (
+                  <Check className="text-green-500" />
+                ) : (
+                  <Copy />
+                )}
+              </Button>
+            </div>
+          </div>
           <DialogFooter>
             <Button size="sm" onClick={handleCloseTokenModal}>
               {t("created.done")}
