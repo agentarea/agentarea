@@ -76,6 +76,7 @@ go test ./...       # Test all
 - **NEVER** publish events to Redis only → must also store in DB
 - **NEVER** run migrations from project root → `cd apps/api && alembic upgrade head`
 - **NEVER** use "SIMPLE" in code/comments
+- **NEVER** add a frontend test by default → a webapp change gets **no test**. Only two things earn one: a pure `.ts` module (no React, no DOM), or an e2e flow. Never `renderToStaticMarkup` + `expect(markup).toContain(...)`, never a test that mocks the pieces the component is made of and then asserts the markup those mocks produced. If UI logic feels worth testing, that is the signal it is not UI — lift it into a pure function and test the function. Full rule: `agentarea-webapp/AGENTS.md` → "TESTS (THIS DIR)"
 
 ## SUBMODULE GUIDES
 
