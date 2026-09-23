@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -22,6 +22,7 @@ import {
 } from "./actions";
 import { useNetwork } from "./NetworkProvider";
 import type { NetworkNodeData, TopologyResponse } from "./types";
+import { findFocusedNode } from "./utils/focusNode";
 import AccessGraphView from "./views/AccessGraphView";
 import NetworkMapView from "./views/NetworkMapView";
 import OrgChartView from "./views/OrgChartView";
@@ -43,9 +44,6 @@ export function NetworkHeaderTabs() {
 
   return (
     <div className="flex min-w-0 items-center gap-3 py-1.5">
-      <span className="hidden font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground md:inline">
-        Lens
-      </span>
       <AnimatedTabs
         tabs={[
           { value: "topology", label: t("topology") },
@@ -62,14 +60,10 @@ export function NetworkHeaderTabs() {
 }
 
 export function NetworkHeaderControls() {
-  const { topology, loading, fetchTopology } = useNetwork();
+  const { loading, fetchTopology } = useNetwork();
 
   return (
     <div className="flex items-center gap-2">
-      <div className="hidden items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50/70 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300 sm:flex">
-        <CircleDot className="h-3 w-3 text-emerald-500" />
-        {topology ? `${topology.nodes.length} nodes mapped` : "Loading map"}
-      </div>
       <Button
         variant="ghost"
         size="icon"
@@ -87,9 +81,20 @@ export function NetworkHeaderControls() {
 export default function NetworkClient() {
   const { topology, loading, error, fetchTopology, view } = useNetwork();
   const t = useTranslations("NetworkPage.integration");
+  const searchParams = useSearchParams();
+  const focus = searchParams.get("focus");
   const [selectedNode, setSelectedNode] = useState<NetworkNodeData | null>(
     null
   );
+  // Applied once per focus value: the graph opens on what the caller pointed
+  // at, and closing the panel has to stay closed rather than snapping back.
+  const appliedFocus = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!topology || appliedFocus.current === focus) return;
+    appliedFocus.current = focus;
+    setSelectedNode(findFocusedNode(topology.nodes, focus));
+  }, [topology, focus]);
 
   const handleSelect = (node: NetworkNodeData | null) => {
     setSelectedNode(node);

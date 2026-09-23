@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { Brain, Globe, KeyRound, type LucideIcon } from "lucide-react";
 import Table from "@/components/Table/Table";
-import { Badge } from "@/components/ui/badge";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { SecretRowActions } from "./SecretRowActions";
 
 export type SecretConsumer = {
@@ -27,19 +28,39 @@ export type Secret = {
   owner?: SecretOwner | null;
 };
 
-/** How each owning entity is labelled, and where its page lives. */
+/** How each owning entity is labelled, drawn, and where its page lives. */
 const OWNERS: Record<
   string,
-  { label: string; href: (id: string) => string | null }
+  { label: string; icon: LucideIcon; href: (id: string) => string | null }
 > = {
-  provider_config: { label: "LLM provider", href: () => "/admin/provider-configs" },
-  mcp_instance: { label: "MCP connection", href: (id) => `/connections/${id}` },
+  provider_config: { label: "LLM provider", icon: Brain, href: () => "/models" },
+  mcp_instance: {
+    label: "MCP connection",
+    icon: ENTITY_ICONS.mcp,
+    href: (id) => `/connections/${id}`,
+  },
   // Auth configs are edited inside the connection they belong to, so there is
   // no page of their own to link at.
-  mcp_auth_config: { label: "MCP authentication", href: () => null },
-  openapi_connection: { label: "API connection", href: () => "/connections/openapi" },
-  trigger: { label: "Trigger", href: (id) => `/triggers/${id}` },
-  agent: { label: "Agent wallet", href: (id) => `/agents/${id}` },
+  mcp_auth_config: {
+    label: "MCP authentication",
+    icon: KeyRound,
+    href: () => null,
+  },
+  openapi_connection: {
+    label: "API connection",
+    icon: Globe,
+    href: () => "/connections/openapi",
+  },
+  trigger: {
+    label: "Trigger",
+    icon: ENTITY_ICONS.trigger,
+    href: (id) => `/triggers/${id}`,
+  },
+  agent: {
+    label: "Agent wallet",
+    icon: ENTITY_ICONS.agent,
+    href: (id) => `/agents/${id}`,
+  },
 };
 
 const CONSUMER_LABELS: Record<string, string> = {
@@ -70,9 +91,13 @@ function BelongsTo({ secret }: { secret: Secret }) {
   const href = meta?.href(owner.id) ?? null;
   // A secret can outlive whatever created it; saying so beats inventing a name.
   const name = owner.name ?? "deleted";
+  const Icon = meta?.icon;
 
   return (
     <span className="flex flex-wrap items-center gap-1.5">
+      {Icon && (
+        <Icon aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
+      )}
       <span className="text-muted-foreground">{meta?.label ?? owner.type}</span>
       {href ? (
         <Link
@@ -97,11 +122,13 @@ const columns = [
         // The stored name is synthesised from the owner's id and reads as
         // noise; the slot it fills is what identifies it to a human, and the
         // next column says which connection it belongs to.
+        //
+        // No "Managed" badge here. It was set on every secret that had an
+        // owner, so a token you pasted in yourself came back labelled as
+        // something the platform provisioned — and it only ever repeated what
+        // the next column already spells out.
         <span className="flex items-center gap-2">
           <span>{row.owner.field ?? OWNERS[row.owner.type]?.label ?? row.name}</span>
-          <Badge variant="light" size="sm">
-            Managed
-          </Badge>
         </span>
       ) : (
         <span>{row.name}</span>

@@ -89,6 +89,13 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     (u) => u.kind === "trigger"
   );
 
+  // Work that has not happened yet, soonest first (the API already sorts it).
+  // `running_task` is dropped: the Running group lists those from the task
+  // query, and one run in two places reads as two runs.
+  const upcoming = (overview?.upcoming ?? [])
+    .filter((u) => u.kind !== "running_task")
+    .slice(0, 6);
+
   // Resolve the agent's tools into names via the live MCP registry so refs map
   // to real server names (same as the /agents list).
   const mcpServersData = mcpServersRes?.data;
@@ -156,8 +163,29 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
       doneToday: overview?.tasks_done_today ?? 0,
       failedToday: overview?.tasks_failed_today ?? 0,
     },
+    upcoming: upcoming.map((u) => ({
+      // A cron trigger contributes one entry per fire time, so the id has to
+      // carry the moment as well as the thing that fires.
+      id: `${u.kind}-${u.trigger_id ?? u.task_id ?? "none"}-${u.fires_at}`,
+      firesAt: u.fires_at,
+      kind: u.kind,
+      title: u.title,
+      href: u.task_id
+        ? `/tasks/${u.task_id}`
+        : u.trigger_id
+          ? `/triggers/${u.trigger_id}`
+          : null,
+    })),
     runningTasks: tasks.filter(isRunningTask),
-    recentTasks: tasks.filter((task) => !isRunningTask(task)).slice(0, 5),
+    // Queued work is listed under Upcoming, not here -- "recent" is what has
+    // already run, and showing a pending task in both reads as two tasks.
+    recentTasks: tasks
+      .filter(
+        (task) =>
+          !isRunningTask(task) &&
+          !["pending", "submitted"].includes(String(task.status ?? ""))
+      )
+      .slice(0, 5),
     pendingApprovals: tasks.filter(
       (task) => String(task.status ?? "") === "input_required"
     ),

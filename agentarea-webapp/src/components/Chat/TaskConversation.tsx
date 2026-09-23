@@ -12,10 +12,11 @@ import {
 } from "@/components/Chat/activityView";
 import { ChatInputArea } from "@/components/Chat/componets/ChatInputArea";
 import { UserMessage as UserMessageComponent } from "@/components/Chat/componets/UserMessage";
+import { useA2UIActions } from "@/components/Chat/hooks/useA2UIActions";
 import { useFileUpload } from "@/components/Chat/hooks/useFileUpload";
 import { useScrollManagement } from "@/components/Chat/hooks/useScrollManagement";
 import type {
-  A2UIAction,
+  A2UIActionHandler,
   HumanInputSecretValue,
 } from "@/components/Chat/types";
 import { deliverTaskMessage } from "@/components/Chat/utils/deliverTaskMessage";
@@ -30,6 +31,7 @@ import type { TaskWithAgent } from "@/lib/api";
 import type { Part } from "@/lib/events/contract";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import { useTaskEvents } from "@/lib/events/useTaskEvents";
+import { getTaskStatusPresentation } from "@/lib/status";
 
 const QUEUEABLE_STATUSES = ["running", "paused", "blocked", "completed"];
 
@@ -41,6 +43,7 @@ export type TaskConversationTask = Pick<TaskWithAgent, "id" | "agent_id"> &
 export interface TaskConversationActivity {
   parts: Part[];
   streamStatus: string;
+  executionStatus: "running" | "waiting" | "finished";
   activitySummary: ReturnType<typeof buildActivitySummary>;
   terminalMessage: string | null;
   eventsLoading: boolean;
@@ -53,11 +56,7 @@ interface TaskConversationProps {
   fallback?: React.ReactNode;
   onActivityChange?: (activity: TaskConversationActivity) => void;
   onRefresh?: () => Promise<void> | void;
-  onA2UIAction?: (
-    action: A2UIAction,
-    surfaceId: string,
-    sourceComponentId: string
-  ) => void;
+  onA2UIAction?: A2UIActionHandler;
 }
 
 export function TaskConversation({
@@ -86,6 +85,9 @@ export function TaskConversation({
 
   const {
     parts,
+    timeline,
+    executionStatus,
+    isInteractionClosed,
     status: streamStatus,
     pendingForm,
     terminalMessage,
@@ -98,6 +100,8 @@ export function TaskConversation({
     autoConnect: true,
   });
   const actions = useTaskActions(task.agent_id, task.id);
+  const { dispatchAction } = useA2UIActions(task.agent_id, task.id);
+  const dispatchA2UIAction = onA2UIAction ?? dispatchAction;
   const activitySummary = useMemo(
     () => buildActivitySummary(parts, parts.length),
     [parts]
@@ -106,17 +110,15 @@ export function TaskConversation({
     () => buildActivitySegments(parts, completedRuns),
     [completedRuns, parts]
   );
-  const status = currentStatus || task.status || "";
   const historyReady = !eventsLoading && !eventsError;
+  const status =
+    historyReady && (parts.length > 0 || timeline.length > 0)
+      ? streamStatus
+      : currentStatus || task.status || "";
   const isActive =
     QUEUEABLE_STATUSES.includes(status) || status === "waiting_for_input";
   const lastAssistantText = lastVisibleAssistantContent(activitySegments);
-  const terminalTone =
-    streamStatus === "failed"
-      ? "danger"
-      : streamStatus === "cancelled"
-        ? "warning"
-        : "success";
+  const terminalTone = getTaskStatusPresentation(streamStatus).tone;
   const showTerminalMessage =
     streamStatus !== "completed" &&
     !!terminalMessage &&
@@ -129,7 +131,8 @@ export function TaskConversation({
   useEffect(() => {
     onActivityChange?.({
       parts,
-      streamStatus,
+      streamStatus: status,
+      executionStatus,
       activitySummary,
       terminalMessage,
       eventsLoading,
@@ -139,9 +142,10 @@ export function TaskConversation({
     activitySummary,
     eventsError,
     eventsLoading,
+    executionStatus,
     onActivityChange,
     parts,
-    streamStatus,
+    status,
     terminalMessage,
   ]);
 
@@ -177,7 +181,8 @@ export function TaskConversation({
           pendingForm?.eventType === "input.request"
             ? pendingForm.partId
             : undefined,
-        queueOnCurrentTask: QUEUEABLE_STATUSES.includes(status),
+        queueOnCurrentTask:
+          executionStatus !== "finished" && QUEUEABLE_STATUSES.includes(status),
       });
       if (delivery.route === "followup" && !delivery.taskId) {
         toast.error("Failed to create new task");
@@ -308,14 +313,16 @@ export function TaskConversation({
                 key={segment.run.id}
                 run={segment.run}
                 onFormSubmit={handleFormSubmit}
-                onA2UIAction={onA2UIAction}
+                isInteractionClosed={isInteractionClosed}
+                onA2UIAction={dispatchA2UIAction}
               />
             ) : (
               <PartRenderer
                 key={segment.part.partId}
                 part={segment.part}
+                interactionClosed={isInteractionClosed(segment.part)}
                 onFormSubmit={handleFormSubmit}
-                onA2UIAction={onA2UIAction}
+                onA2UIAction={dispatchA2UIAction}
               />
             )
           )}

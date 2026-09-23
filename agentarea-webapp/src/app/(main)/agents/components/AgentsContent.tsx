@@ -114,6 +114,11 @@ export default async function AgentsContent({
         <EmptyState
           title={t("noAgentsTitle")}
           description={t("noAgentsDescription")}
+          hints={[
+            { text: t("noAgentsHintBuild"), href: "/agents/create" },
+            { text: t("noAgentsHintInstall"), href: "/explore?type=agents" },
+            { text: t("noAgentsHintHarness"), href: "/clients" },
+          ]}
           iconsType="agent"
           action={{ label: t("createAgent"), href: "/agents/create" }}
         />

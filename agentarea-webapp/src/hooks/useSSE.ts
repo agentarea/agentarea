@@ -15,6 +15,62 @@ interface UseSSEOptions {
   headers?: Record<string, string>;
 }
 
+// Part/lifecycle names are canonical; timeline and transport events keep their wire names.
+const eventTypes = [
+  "task.started",
+  "task.completed",
+  "task.failed",
+  "task.cancelled",
+  "task.awaiting_follow_up",
+  "task.awaiting_continuation",
+  "task.continued",
+  "execution.finished",
+  "llm.call.started",
+  "llm.call.chunk",
+  "llm.call.completed",
+  "llm.call.failed",
+  "tool.call",
+  "tool.result",
+  "input.request",
+  "input.response",
+  "approval.request",
+  "approval.response",
+  "artifact.created",
+  "artifact.updated",
+  "artifact.validation.started",
+  "artifact.validation.completed",
+  "a2ui.create",
+  "a2ui.update.components",
+  "a2ui.update.data",
+  "a2ui.delete",
+  "IterationStarted",
+  "IterationCompleted",
+  "BudgetWarning",
+  "BudgetExceeded",
+  "ServicePayment",
+  "ServiceBudgetWarning",
+  "ServiceBudgetExceeded",
+  "ContextCompacted",
+  "ContextWarning",
+  "WorkflowContinuedAsNew",
+  "AgentDelegationStarted",
+  "AgentDelegationCompleted",
+  "AgentDelegationFailed",
+  "ModelChanged",
+  "ModelResolutionFallback",
+  "ModelUnavailable",
+  "RuntimeDiscovered",
+  "WorkflowCommandReceived",
+  "MessageQueued",
+  "MessageRemoved",
+  "MessageProcessed",
+  "connected",
+  "task_created",
+  "execution_paused",
+  "execution_resumed",
+  "error",
+];
+
 export function useSSE(url: string | null, options: UseSSEOptions = {}) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,37 +131,6 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
           console.error("Failed to parse SSE message:", e);
         }
       };
-
-      // Named SSE events use the backend's canonical PascalCase event_type as
-      // the event name (see _format_sse_event / eventTypes.ts). Listening for
-      // snake_case names here means none of these listeners ever fire, so live
-      // events never reach the UI. Keep the snake_case system events (connected,
-      // task_*) that really are emitted lowercase.
-      const eventTypes = [
-        "WorkflowStarted",
-        "WorkflowCompleted",
-        "WorkflowFailed",
-        "WorkflowCancelled",
-        "IterationStarted",
-        "IterationCompleted",
-        "LLMCallStarted",
-        "LLMCallCompleted",
-        "LLMCallFailed",
-        "LLMCallChunk",
-        "ToolCallStarted",
-        "ToolCallCompleted",
-        "ToolCallFailed",
-        "HumanApprovalRequested",
-        "HumanApprovalReceived",
-        "HumanApprovalDenied",
-        "ContextWarning",
-        "ContextCompacted",
-        "connected",
-        "task_created",
-        "task_completed",
-        "task_failed",
-        "error",
-      ];
 
       eventTypes.forEach((eventType) => {
         eventSource.addEventListener(eventType, (event) => {

@@ -22,7 +22,9 @@ interface ConditionalLayoutProps {
 // therefore must not be wrapped in the app shell / sidebar.
 const NO_LAYOUT_ROUTES = ["/auth", "/error", "/404", "/500"];
 
-const SETTINGS_ROUTES = ["/settings", "/admin/api-keys", "/admin/workspace"];
+// Everything that used to live under /admin now sits beneath /settings, so the
+// one prefix covers it.
+const SETTINGS_ROUTES = ["/settings"];
 
 export default function ConditionalLayout({
   children,

@@ -440,7 +440,7 @@ export default function ProviderConfigForm({
 
       // Redirect if autoRedirect is enabled and no custom handler
       if (autoRedirect && !onAfterSubmit) {
-        router.push("/admin/provider-configs");
+        router.push("/models");
         return;
       }
 
@@ -469,7 +469,7 @@ export default function ProviderConfigForm({
     if (onCancel) {
       onCancel();
     } else if (autoRedirect) {
-      router.push("/admin/provider-configs");
+      router.push("/models");
     }
   };
 

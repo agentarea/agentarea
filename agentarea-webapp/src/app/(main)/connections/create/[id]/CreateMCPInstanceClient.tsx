@@ -20,8 +20,8 @@ import {
   checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration,
   validateConnectionAction,
   probeInstanceAuthAction,
-  oauthAuthorizeAction,
 } from "@/lib/server-actions";
+import { OAuthConnectPanel } from "../../OAuthConnectPanel";
 import type { MCPServer } from "../../types";
 import { createMCPServerInstance } from "../../actions";
 import { getConnectionType, MCP_CONSTANTS } from "../../utils";
@@ -426,28 +426,6 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     }
   };
 
-  // OAuth flow
-  const handleOAuth = async () => {
-    if (!createdInstanceId) return;
-    setIsWorking(true);
-    setError(null);
-    try {
-      const result = await oauthAuthorizeAction(createdInstanceId);
-      if (result.error || !result.data?.authorize_url) {
-        setError(
-          result.error ||
-            "OAuth discovery failed — this server may not support OAuth"
-        );
-        return;
-      }
-      window.location.href = result.data.authorize_url;
-    } catch {
-      setError("Failed to start OAuth flow");
-    } finally {
-      setIsWorking(false);
-    }
-  };
-
   const verified = validation?.status === "ok";
 
   // Create lives in the subheader (consistent with every other form). The body
@@ -639,18 +617,16 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
 
             {(authTab === "oauth" || probeState === "needs_oauth") && (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  This server supports OAuth authorization.
-                </p>
-                <StartAgentButton
-                  type="button"
-                  size="xs"
-                  className="w-auto"
-                  onClick={handleOAuth}
-                  isLoading={isWorking}
-                >
-                  Authorize with OAuth
-                </StartAgentButton>
+                {/* Asks the server what it needs rather than assuming a plain
+                    Connect will do: providers without dynamic client
+                    registration collect a client ID/secret here instead. */}
+                {createdInstanceId && (
+                  <OAuthConnectPanel
+                    instanceId={createdInstanceId}
+                    isUrlType
+                    compact
+                  />
+                )}
                 {probeState === "needs_oauth" && (
                   <button
                     type="button"

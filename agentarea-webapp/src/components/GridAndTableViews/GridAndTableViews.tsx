@@ -1,7 +1,6 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import EmptyState from "@/components/EmptyState/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
 import Table from "@/components/Table/Table";
 import { TabsContent } from "@/components/ui/tabs";
@@ -19,8 +18,6 @@ type Column<T> = {
   render?(value: unknown, item?: T): React.ReactNode;
   headerClassName?: string;
   cellClassName?: string;
-  sortable?: boolean;
-  sortableDirection?: "asc" | "desc";
 };
 
 const TabsView = ({
@@ -30,7 +27,6 @@ const TabsView = ({
   children,
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
-  emptyState?: React.ReactNode;
   leftComponent?: React.ReactNode;
   routeChange: string;
   children: React.ReactNode;
@@ -83,7 +79,8 @@ export default function GridAndTableViews<T extends GridItem>({
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
   isEmpty?: boolean;
-  emptyState?: React.ReactNode;
+  /** Required: a generic "no data" card teaches the user nothing. */
+  emptyState: React.ReactNode;
   leftComponent?: React.ReactNode;
   routeChange: string;
   data: T[];
@@ -95,8 +92,6 @@ export default function GridAndTableViews<T extends GridItem>({
   /** Extra attributes for each row and card, e.g. drag source or drop target. */
   rowProps?: (item: T) => React.HTMLAttributes<HTMLElement>;
 }) {
-  const t = useTranslations("Common");
-
   return (
     <TabsView
       routeChange={routeChange}
@@ -104,18 +99,7 @@ export default function GridAndTableViews<T extends GridItem>({
       leftComponent={leftComponent}
     >
       {!data.length ? (
-        emptyState || (
-          <EmptyState
-            title={t("emptyState.title")}
-            description={t("emptyState.description")}
-            iconsType="agent"
-            action={
-              searchParams?.search
-                ? { label: t("clearSearch"), href: routeChange }
-                : undefined
-            }
-          />
-        )
+        emptyState
       ) : (
         <>
           <TabsContent value="grid">
@@ -163,11 +147,10 @@ export default function GridAndTableViews<T extends GridItem>({
               data={data}
               columns={columns}
               rowProps={rowProps}
-              onRowClick={
-                itemLink
-                  ? (item) => window.location.assign(itemLink(item))
-                  : undefined
-              }
+              // The row goes where the card goes. Passed as a href rather than
+              // a click handler: this component renders on the server, so a
+              // closure never reaches the browser and the rows were inert.
+              rowHref={(item) => (item.itemLink ?? itemLink)?.(item) ?? ""}
             />
           </TabsContent>
         </>
@@ -190,7 +173,8 @@ export function GridAndTableSectionsViews<T extends GridItem>({
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
   isEmpty?: boolean;
-  emptyState?: React.ReactNode;
+  /** Required: a generic "no data" card teaches the user nothing. */
+  emptyState: React.ReactNode;
   leftComponent?: React.ReactNode;
   routeChange: string;
   data: {
@@ -198,7 +182,8 @@ export function GridAndTableSectionsViews<T extends GridItem>({
     sectioName?: string;
     cardClassName?: string;
     data: T[];
-    emptyState?: React.ReactNode;
+    /** Required: what this section holds and how it gets filled. */
+    emptyState: React.ReactNode;
     itemLink?: (item: T) => string;
   }[];
   columns: Column<T>[];
@@ -207,8 +192,6 @@ export function GridAndTableSectionsViews<T extends GridItem>({
   cardClassName?: string;
   gridClassName?: string;
 }) {
-  const t = useTranslations("Common");
-
   return (
     <TabsView
       routeChange={routeChange}
@@ -216,18 +199,7 @@ export function GridAndTableSectionsViews<T extends GridItem>({
       leftComponent={leftComponent}
     >
       {!data.length ? (
-        emptyState || (
-          <EmptyState
-            title={t("emptyState.title")}
-            description={t("emptyState.description")}
-            iconsType="agent"
-            action={
-              searchParams?.search
-                ? { label: t("clearSearch"), href: routeChange }
-                : undefined
-            }
-          />
-        )
+        emptyState
       ) : (
         <>
           {data.map((sectionData, key) => (
@@ -285,29 +257,14 @@ export function GridAndTableSectionsViews<T extends GridItem>({
                         <Table
                           data={sectionData.data}
                           columns={columns}
-                          onRowClick={
-                            linkFn
-                              ? (item) => window.location.assign(linkFn(item))
-                              : undefined
-                          }
+                          rowHref={(item) => linkFn?.(item) ?? ""}
                         />
                       );
                     })()}
                   </TabsContent>
                 </>
               ) : (
-                sectionData.emptyState || (
-                  <EmptyState
-                    title={t("emptyState.title")}
-                    description={t("emptyState.description")}
-                    iconsType="agent"
-                    action={
-                      searchParams?.search
-                        ? { label: t("clearSearch"), href: routeChange }
-                        : undefined
-                    }
-                  />
-                )
+                sectionData.emptyState
               )}
             </React.Fragment>
           ))}

@@ -38,7 +38,9 @@ function asComponentArray(value: unknown): A2UIComponentNode[] {
   if (!Array.isArray(value)) return [];
   return value.filter(
     (c): c is A2UIComponentNode =>
-      !!c && typeof c === "object" && typeof (c as { id?: unknown }).id === "string"
+      !!c &&
+      typeof c === "object" &&
+      typeof (c as { id?: unknown }).id === "string"
   );
 }
 
@@ -104,27 +106,43 @@ export function stripA2UIFromStreamingContent(content: string): string {
   return content.substring(0, idx).trimEnd();
 }
 
-/** Apply a JSON Pointer (RFC 6901) write to a plain object (shallow, in-place). */
-function applyJsonPointer(
+/** Write into a copied root, cloning the modified path to preserve old snapshots. */
+export function applyJsonPointer(
   obj: Record<string, unknown>,
   pointer: string,
   value: unknown
 ): void {
   if (pointer === "/" || pointer === "") {
-    Object.assign(obj, value ?? {});
+    if (value && typeof value === "object") {
+      for (const [key, entry] of Object.entries(value)) {
+        if (key !== "__proto__" && key !== "constructor" && key !== "prototype")
+          obj[key] = entry;
+      }
+    }
     return;
   }
   const parts = pointer
     .replace(/^\//, "")
     .split("/")
     .map((p) => p.replace(/~1/g, "/").replace(/~0/g, "~"));
+  if (
+    parts.some(
+      (part) =>
+        part === "__proto__" || part === "constructor" || part === "prototype"
+    )
+  )
+    return;
   let target = obj;
   for (let i = 0; i < parts.length - 1; i++) {
-    let next = target[parts[i]];
-    if (next == null || typeof next !== "object") {
-      next = {};
-      target[parts[i]] = next;
-    }
+    const current = Object.hasOwn(target, parts[i])
+      ? target[parts[i]]
+      : undefined;
+    const next = Array.isArray(current)
+      ? [...current]
+      : current && typeof current === "object"
+        ? { ...current }
+        : {};
+    target[parts[i]] = next;
     target = next as Record<string, unknown>;
   }
   const last = parts[parts.length - 1];

@@ -1,13 +1,12 @@
 import {
   Bot,
-  Boxes,
   Brain,
   ClipboardList,
-  Compass,
   FileText,
   GalleryVerticalEnd,
   Gauge,
   KeyRound,
+  LayoutGrid,
   Network,
   Plug,
   ShieldCheck,
@@ -64,6 +63,12 @@ export const navData = {
           url: "/triggers",
           icon: Zap,
         },
+        {
+          title: "Catalog",
+          titleKey: "explore",
+          url: "/explore",
+          icon: LayoutGrid,
+        },
       ],
     },
     {
@@ -83,12 +88,6 @@ export const navData = {
       labelKey: "build",
       items: [
         {
-          title: "Explore",
-          titleKey: "explore",
-          url: "/explore",
-          icon: Compass,
-        },
-        {
           title: "Agents",
           titleKey: "agents",
           url: "/agents",
@@ -107,7 +106,7 @@ export const navData = {
           icon: Plug,
         },
         {
-          title: "Clients",
+          title: "Harnesses",
           titleKey: "clients",
           url: "/clients",
           icon: Terminal,
@@ -115,7 +114,7 @@ export const navData = {
         {
           title: "Models",
           titleKey: "providerConfigs",
-          url: "/admin/provider-configs",
+          url: "/models",
           icon: Brain,
         },
       ],
@@ -124,12 +123,6 @@ export const navData = {
       label: "Govern",
       labelKey: "govern",
       items: [
-        {
-          title: "Sandboxes",
-          titleKey: "sandboxes",
-          url: "/sandboxes",
-          icon: Boxes,
-        },
         {
           title: "Network",
           titleKey: "network",

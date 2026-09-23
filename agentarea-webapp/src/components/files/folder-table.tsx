@@ -1,8 +1,16 @@
 "use client";
 
-import type { HTMLAttributes } from "react";
+import { useState, type HTMLAttributes } from "react";
 import { useFormatter, useTranslations } from "next-intl";
-import { FileText, Folder, FolderOpen, Search, Trash2, Upload, X } from "lucide-react";
+import {
+  FileText,
+  Folder,
+  FolderOpen,
+  Search,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import EmptyState from "@/components/EmptyState/EmptyState";
 import { TableSkeleton } from "@/components/Skeleton";
 import Table from "@/components/Table/Table";
@@ -11,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatFileSize } from "@/utils/fileUtils";
 import type { BrowsedFile, TreeNode } from "./file-tree";
+import { isEntrySortKey, sortEntries, type EntrySort } from "./sort-entries";
 
 export type FolderEntry = TreeNode & { id: string };
 
@@ -52,6 +61,10 @@ export function FolderTable({
   const t = useTranslations("FilesPage");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
+  const [sort, setSort] = useState<EntrySort>({
+    accessor: "name",
+    direction: "asc",
+  });
 
   const entryButton = (entry: TreeNode) => (
     <button
@@ -97,7 +110,11 @@ export function FolderTable({
         <TableSkeleton
           rows={6}
           columns={[
-            { header: t("name"), cellClassName: "w-full", barClassName: "h-4 w-56" },
+            {
+              header: t("name"),
+              cellClassName: "w-full",
+              barClassName: "h-4 w-56",
+            },
             {
               header: t("modified"),
               headerClassName: "hidden lg:table-cell",
@@ -115,18 +132,24 @@ export function FolderTable({
         />
       ) : entries.length ? (
         <Table<FolderEntry>
-          data={entries}
+          data={sortEntries(entries, sort)}
           rowProps={entryProps}
+          sort={sort}
+          onSortChange={({ accessor, direction }) => {
+            if (isEntrySortKey(accessor)) setSort({ accessor, direction });
+          }}
           columns={[
             {
               header: t("name"),
               accessor: "name",
               render: (_, entry) => entry && entryButton(entry),
               cellClassName: "w-full",
+              sortable: true,
             },
             {
               header: t("modified"),
               accessor: "modified",
+              sortable: true,
               headerClassName: "hidden lg:table-cell",
               cellClassName:
                 "hidden whitespace-nowrap text-xs text-muted-foreground lg:table-cell",
@@ -140,6 +163,7 @@ export function FolderTable({
             {
               header: t("size"),
               accessor: "size",
+              sortable: true,
               headerClassName: "text-right",
               cellClassName:
                 "whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground",
@@ -195,7 +219,10 @@ export function FolderTable({
           className="border-0 bg-transparent py-12 shadow-none"
           action={
             search
-              ? { label: tCommon("clearSearch"), onClick: () => onSearchChange("") }
+              ? {
+                  label: tCommon("clearSearch"),
+                  onClick: () => onSearchChange(""),
+                }
               : undefined
           }
         />

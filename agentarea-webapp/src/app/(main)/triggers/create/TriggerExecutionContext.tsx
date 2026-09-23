@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { ChevronRight, FileText, X } from "lucide-react";
+import { ChevronRight, FileText, Network, X } from "lucide-react";
 import type {
   AgentResponse,
   McpServerInstanceResponse,
@@ -31,8 +31,6 @@ type TriggerExecutionContextProps = {
   resourceErrors: string[];
   refreshKey: number;
   orchestratorControl: ReactNode;
-  mcpControl: ReactNode;
-  skillControl: ReactNode;
   fileControl: ReactNode;
   onRemoveMcp: (id: string) => void;
   onRemoveSkill: (id: string) => void;
@@ -188,6 +186,13 @@ export function TriggerExecutionContext(props: TriggerExecutionContextProps) {
   const empty = (key: string) => (
     <p className="py-1 text-xs text-muted-foreground">{t(key)}</p>
   );
+  // Triggers used to carry their own MCP servers and skills. They no longer
+  // can, but ones saved back then still do, and an edit must not quietly drop
+  // them — so they stay listed, removable, and labelled as the leftovers they
+  // are rather than looking like something this form still offers.
+  const carriedOver = [...resources.mcps, ...resources.skills].some(
+    (resource) => resource.taskRefIds.length > 0
+  );
 
   return (
     <aside aria-label={t("execution.title")} className="min-w-0">
@@ -280,7 +285,7 @@ export function TriggerExecutionContext(props: TriggerExecutionContextProps) {
             </ResourceGroup>
           )}
 
-          <ResourceGroup title={t("execution.mcps")} control={props.mcpControl}>
+          <ResourceGroup title={t("execution.mcps")}>
             {!pending &&
               !current?.error &&
               !props.resourceErrors.includes("mcps") &&
@@ -346,10 +351,7 @@ export function TriggerExecutionContext(props: TriggerExecutionContextProps) {
             ))}
           </ResourceGroup>
 
-          <ResourceGroup
-            title={t("execution.skills")}
-            control={props.skillControl}
-          >
+          <ResourceGroup title={t("execution.skills")}>
             {!pending &&
               !current?.error &&
               !props.resourceErrors.includes("skills") &&
@@ -423,6 +425,22 @@ export function TriggerExecutionContext(props: TriggerExecutionContextProps) {
                 </ResourceRow>
               ))}
             </ResourceGroup>
+          )}
+
+          {carriedOver && (
+            <p className="rounded-md border border-border/60 bg-muted/40 px-2.5 py-2 text-xs text-muted-foreground">
+              {t("execution.carriedOver")}
+            </p>
+          )}
+
+          {props.selectedAgentId && (
+            <Link
+              href={`/network?focus=agent:${props.selectedAgentId}`}
+              className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
+            >
+              <Network className="h-3.5 w-3.5" />
+              {t("execution.viewInNetwork")}
+            </Link>
           )}
         </InfoPanelBody>
       </InfoPanelShell>

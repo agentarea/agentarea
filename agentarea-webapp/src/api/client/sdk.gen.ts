@@ -583,15 +583,18 @@ import type {
   MoveWorkspaceFileV1FilesMovePostResponses,
   OauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGetData,
   OauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGetResponses,
-  OauthAuthorizeV1McpOauthAuthorizeGetData,
-  OauthAuthorizeV1McpOauthAuthorizeGetErrors,
-  OauthAuthorizeV1McpOauthAuthorizeGetResponses,
+  OauthAuthorizeV1McpOauthAuthorizePostData,
+  OauthAuthorizeV1McpOauthAuthorizePostErrors,
+  OauthAuthorizeV1McpOauthAuthorizePostResponses,
   OauthCallbackV1ConnectionsOauthCallbackGetData,
   OauthCallbackV1ConnectionsOauthCallbackGetErrors,
   OauthCallbackV1ConnectionsOauthCallbackGetResponses,
   OauthCallbackV1McpOauthCallbackGetData,
   OauthCallbackV1McpOauthCallbackGetErrors,
   OauthCallbackV1McpOauthCallbackGetResponses,
+  OauthPreflightV1McpOauthPreflightGetData,
+  OauthPreflightV1McpOauthPreflightGetErrors,
+  OauthPreflightV1McpOauthPreflightGetResponses,
   OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetData,
   OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetErrors,
   OauthProtectedResourceMetadataByPathWellKnownOauthProtectedResourceResourcePathGetResponses,
@@ -1019,8 +1022,9 @@ export const hydraAuthRedirectOauth2AuthGet = <
  *
  * Dynamic Client Registration (RFC 7591) — proxy to Hydra admin API.
  *
- * Hydra v2 doesn't expose public DCR; we proxy POST /oauth2/register to
- * Hydra's admin endpoint so Cursor / Claude Desktop can self-register.
+ * Hydra's own public DCR lets the registering client pick its grants and
+ * audience; this proxy registers through the admin API instead so it can fix
+ * them. Hydra's public DCR must stay disabled, or it bypasses this endpoint.
  *
  * We inject server-side defaults:
  * - skip_consent: true — MCP clients accessing their own workspace don't need consent
@@ -2905,6 +2909,10 @@ export const createApiKeyV1ApiKeysPost = <ThrowOnError extends boolean = false>(
  * Revoke Api Key
  *
  * Immediately revoke an API key.
+ *
+ * The key's creator, or a workspace admin. The repository is scoped to the
+ * workspace, not to the caller, so without this a member could cut off a
+ * colleague's integrations.
  */
 export const revokeApiKeyV1ApiKeysTokenIdDelete = <
   ThrowOnError extends boolean = false,
@@ -4222,26 +4230,26 @@ export const getOauthLinkV1McpOauthLinksLinkIdGet = <
 /**
  * Oauth Authorize
  *
- * Initiate MCP OAuth flow: discover AS, register client, redirect to auth page.
+ * Initiate MCP OAuth flow and return the URL to send the user to.
  *
  * 1. Look up the MCP instance's remote URL
  * 2. Discover the authorization server (RFC 9728 → RFC 8414)
- * 3. Dynamically register as an OAuth client (RFC 7591)
- * 4. Generate PKCE pair and state
- * 5. Redirect user to the authorization endpoint
+ * 3. Register dynamically (RFC 7591), or take the workspace's own OAuth app
+ * 4. Persist the client credentials on an auth config
+ * 5. Generate PKCE pair and state, and build the authorization URL
  */
-export const oauthAuthorizeV1McpOauthAuthorizeGet = <
+export const oauthAuthorizeV1McpOauthAuthorizePost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<OauthAuthorizeV1McpOauthAuthorizeGetData, ThrowOnError>
+  options: Options<OauthAuthorizeV1McpOauthAuthorizePostData, ThrowOnError>
 ): RequestResult<
-  OauthAuthorizeV1McpOauthAuthorizeGetResponses,
-  OauthAuthorizeV1McpOauthAuthorizeGetErrors,
+  OauthAuthorizeV1McpOauthAuthorizePostResponses,
+  OauthAuthorizeV1McpOauthAuthorizePostErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).get<
-    OauthAuthorizeV1McpOauthAuthorizeGetResponses,
-    OauthAuthorizeV1McpOauthAuthorizeGetErrors,
+  (options.client ?? client).post<
+    OauthAuthorizeV1McpOauthAuthorizePostResponses,
+    OauthAuthorizeV1McpOauthAuthorizePostErrors,
     ThrowOnError
   >({
     security: [
@@ -4253,6 +4261,10 @@ export const oauthAuthorizeV1McpOauthAuthorizeGet = <
     ],
     url: "/v1/mcp-oauth/authorize",
     ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
@@ -4285,6 +4297,39 @@ export const oauthCallbackV1McpOauthCallbackGet = <
       },
     ],
     url: "/v1/mcp-oauth/callback",
+    ...options,
+  });
+
+/**
+ * Oauth Preflight
+ *
+ * Report whether this instance can be authorized, and with what.
+ *
+ * Every outcome is a 200: "this server has no OAuth" is an answer the UI
+ * renders, not a failure it has to decode from an error response.
+ */
+export const oauthPreflightV1McpOauthPreflightGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<OauthPreflightV1McpOauthPreflightGetData, ThrowOnError>
+): RequestResult<
+  OauthPreflightV1McpOauthPreflightGetResponses,
+  OauthPreflightV1McpOauthPreflightGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    OauthPreflightV1McpOauthPreflightGetResponses,
+    OauthPreflightV1McpOauthPreflightGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/mcp-oauth/preflight",
     ...options,
   });
 

@@ -13,11 +13,13 @@ import type {
   PaginatedResponseSkillResponse,
   ProviderConfigCreate,
   ProviderConfigUpdate,
+  SecretResponse,
   SkillResponse,
   UpdateWalletRequest,
 } from "@/api/client/types.gen";
 import {
   zCreateWorkspaceDirectoryRequest,
+  zListSecretsV1SecretsGetResponse,
   zProviderConfigCreate,
   zProviderConfigUpdate,
 } from "@/api/client/zod.gen";
@@ -96,6 +98,7 @@ import {
   listProjects,
   listProviderSpecs,
   listProviderSpecsWithModels,
+  listSecrets,
   listSkillMembers,
   listSkills,
   listTaskArtifacts,
@@ -129,6 +132,7 @@ import {
   getWorkspaceSettings,
   updateWorkspaceSettings,
 } from "@/lib/api-dashboard";
+import { apiErrorMessage } from "@/lib/api-errors";
 import { workspaceFetch } from "@/lib/workspace-request";
 
 function isUUID(value: string): boolean {
@@ -591,22 +595,82 @@ export async function probeInstanceAuthAction(instanceId: string) {
   return { data: await res.json(), error: null };
 }
 
-export async function oauthAuthorizeAction(instanceId: string) {
+/**
+ * Workspace secrets a user may reuse as OAuth app credentials.
+ *
+ * Shared by every Connect flow that offers "pick from workspace secrets", so
+ * they all filter the same way (`owner` set means the secret belongs to another
+ * entity and is not reusable).
+ */
+export async function listWorkspaceSecretsAction(): Promise<SecretResponse[]> {
+  const { data, error } = await listSecrets();
+  if (error || !data) {
+    throw new Error(apiErrorMessage({ error }, "Failed to load workspace secrets"));
+  }
+  return zListSecretsV1SecretsGetResponse.parse(data);
+}
+
+export async function mcpOAuthPreflightAction(instanceId: string) {
   // Validate UUID to prevent SSRF/path injection in downstream fetch URL
-  if (!/^[a-f0-9-]{36}$/i.test(instanceId)) {
+  if (!isUUID(instanceId)) {
+    return { data: null, error: "Invalid instance ID" };
+  }
+
+  const base = new URL(env.API_URL);
+  base.pathname = "/v1/mcp-oauth/preflight";
+  base.search = new URLSearchParams({ instance_id: instanceId }).toString();
+
+  const res = await workspaceFetch(base.href, { method: "GET" });
+  if (!res.ok) {
+    return { data: null, error: await readApiError(res) };
+  }
+  return { data: await res.json(), error: null };
+}
+
+export async function oauthAuthorizeAction(
+  body: {
+    instance_id: string;
+    credential_mode?: "auto" | "custom";
+    client_id?: string;
+    client_secret?: string;
+    client_id_secret_id?: string;
+    client_secret_secret_id?: string;
+    return_to?: string;
+  }
+) {
+  // Validate UUID to prevent SSRF/path injection in downstream fetch URL
+  if (!isUUID(body.instance_id)) {
     return { data: null, error: "Invalid instance ID" };
   }
 
   const base = new URL(env.API_URL);
   base.pathname = "/v1/mcp-oauth/authorize";
-  base.search = new URLSearchParams({ instance_id: instanceId }).toString();
 
-  const res = await workspaceFetch(base.href, { method: "GET" });
+  const res = await workspaceFetch(base.href, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) {
-    const text = await res.text();
-    return { data: null, error: text };
+    return { data: null, error: await readApiError(res) };
   }
   return { data: await res.json(), error: null };
+}
+
+/**
+ * Decode a FastAPI error body into a sentence.
+ *
+ * `res.text()` on its own puts the raw `{"detail":{...}}` envelope in front of
+ * the user, which is how "this connection needs an OAuth app" used to reach
+ * them as JSON.
+ */
+async function readApiError(res: Response) {
+  const text = await res.text();
+  try {
+    return apiErrorMessage({ error: JSON.parse(text), status: res.status }, "Request failed");
+  } catch {
+    return text || `Request failed (${res.status})`;
+  }
 }
 
 export async function validateConnectionAction(
@@ -894,30 +958,6 @@ export async function previewOpenAPISpecAction(body: {
   spec_json?: string;
 }) {
   return await previewOpenAPISpec(body);
-}
-
-export async function initMCPOAuthConnectAction(
-  instanceId: string,
-  returnTo: string = ""
-) {
-  if (!isUUID(instanceId)) {
-    return { error: "Invalid instance ID" };
-  }
-  const params = new URLSearchParams({ instance_id: instanceId });
-  if (returnTo) params.set("return_to", returnTo);
-  const base = new URL(env.API_URL);
-  base.pathname = "/v1/mcp-oauth/authorize";
-  base.search = params.toString();
-
-  const resp = await workspaceFetch(base.href, { redirect: "manual" });
-
-  if (!resp.ok) {
-    const body = await resp.text();
-    return { error: body };
-  }
-
-  const data = await resp.json();
-  return { authorize_url: data.authorize_url };
 }
 
 // Wallet actions

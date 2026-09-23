@@ -2,10 +2,11 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import type { PaginatedResponseMcpServerResponse } from "@/api/client/types.gen";
 import EmptyState from "@/components/EmptyState";
-import { listMCPServerInstances, listMCPServers, listOpenAPIConnections } from "@/lib/api";
+import { listAgents, listMCPServerInstances, listMCPServers, listOpenAPIConnections } from "@/lib/api";
 import MCPSkeleton, { mcpSkeletonColumns } from "./MCPSkeleton";
 import { MyMCPsSection } from "./MyMCPsSection";
 import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
+import { buildConnectionUsage } from "../usage";
 
 interface MCPServersContentProps {
   searchQuery?: string;
@@ -67,10 +68,14 @@ async function MyConnectionsSectionServer({
 }) {
   const t = await getTranslations("MCPServersPage");
 
-  // Fetch instances and OpenAPI connections in parallel
-  const [instancesResponse, openApiResponse] = await Promise.all([
+  // Instances, OpenAPI connections and agents in parallel. Agents are fetched
+  // once and inverted locally into per-connection usage — the per-instance
+  // consumers endpoint scans every agent, so calling it per row would be a
+  // full scan per connection.
+  const [instancesResponse, openApiResponse, agentsResponse] = await Promise.all([
     listMCPServerInstances(),
     listOpenAPIConnections(),
+    listAgents(),
   ]);
 
   if (instancesResponse.error) {
@@ -90,6 +95,10 @@ async function MyConnectionsSectionServer({
 
   const mcpInstances = (instancesResponse.data || []) as MCPInstance[];
   const openApiConnections = (openApiResponse.data || []) as OpenAPIConnection[];
+  const usage = buildConnectionUsage(
+    agentsResponse.error ? [] : (agentsResponse.data ?? []),
+    mcpInstances.map((instance) => ({ id: instance.id, name: instance.name }))
+  );
 
   // Filter MCP instances based on search query
   const filteredInstances = searchQuery.trim()
@@ -144,6 +153,7 @@ async function MyConnectionsSectionServer({
         mcpInstances={filteredInstances}
         mcpServers={mcpServers}
         openApiConnections={filteredOpenApi}
+        usage={usage}
         viewMode={viewMode}
         searchQuery={searchQuery}
         hasNoData={mcpInstances.length === 0 && openApiConnections.length === 0}

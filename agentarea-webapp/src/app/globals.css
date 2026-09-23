@@ -718,6 +718,50 @@
   }
 }
 
+/* Sidebar sections expand and collapse to their measured height. Radix
+   publishes that height on --radix-collapsible-content-height; without it the
+   only options are an instant jump or a hard-coded max-height that clips. */
+@keyframes aa-collapsible-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes aa-collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+.aa-collapsible {
+  overflow: hidden;
+}
+
+.aa-collapsible[data-state="open"] {
+  animation: aa-collapsible-down 200ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.aa-collapsible[data-state="closed"] {
+  animation: aa-collapsible-up 180ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-collapsible[data-state="open"],
+  .aa-collapsible[data-state="closed"] {
+    animation: none;
+  }
+}
+
 /* Hide dashed separator for the last message */
 .aa-message-wrapper:last-child .aa-dashed {
   display: none;

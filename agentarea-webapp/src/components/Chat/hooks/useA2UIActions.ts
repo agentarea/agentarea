@@ -7,6 +7,7 @@
  */
 
 import { useCallback } from "react";
+import { toast } from "sonner";
 import { A2UIAction } from "../types";
 import { sendA2UIActionAction } from "./actions";
 
@@ -25,7 +26,9 @@ export function useA2UIActions(agentId: string, taskId: string | null) {
       try {
         await sendA2UIActionAction(agentId, taskId, payload);
       } catch (err) {
-        console.error("A2UI action error:", err);
+        toast.error("The task did not accept the action", {
+          description: err instanceof Error ? err.message : String(err),
+        });
       }
     },
     [agentId, taskId]
