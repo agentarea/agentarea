@@ -391,9 +391,11 @@ export function ChatInputArea({
             {showContextControls ? (
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-hidden sm:flex-nowrap sm:gap-2">
                 {currentAgent && availableAgents?.length && onAgentChange ? (
-                  <div className="basis-full sm:basis-auto">
+                  <div className="min-w-0 basis-full sm:basis-auto">
                     <ContextSelect
-                      className="min-w-0 sm:shrink"
+                      // Narrower than the other chips: agent names run long,
+                      // and the project/policy defaults must stay readable.
+                      className="min-w-0 sm:max-w-[12rem] sm:shrink"
                       icon={FolderKanban}
                       label={t("agent")}
                       value={currentAgent.id}

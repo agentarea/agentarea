@@ -177,6 +177,11 @@ interface FullChatProps {
   availableProjects?: ProjectOption[];
   availableTaskPolicies?: TaskPolicyOption[];
   startCentered?: boolean;
+  /**
+   * Drop the page gutters around the composer so it sits flush in a host that
+   * draws its own frame, like the quick-task dialog.
+   */
+  embedded?: boolean;
   taskId?: string;
   onTaskCreated?: (taskId: string) => void;
   onTaskStarted?: (taskId: string) => void;
@@ -192,6 +197,7 @@ export default function FullChat({
   availableAgents,
   onAgentChange,
   startCentered = false,
+  embedded = false,
   placeholder,
   welcomeComponent,
   taskId,
@@ -855,12 +861,13 @@ export default function FullChat({
       {/* Input Area */}
       <div
         className={cn(
-          "group relative mx-auto w-full max-w-3xl px-4 transition-all duration-700 ease-out md:px-6"
+          "group relative mx-auto w-full transition-all duration-700 ease-out",
+          !embedded && "max-w-3xl px-4 md:px-6"
         )}
       >
         <div
           ref={cardContainerRef}
-          className="relative w-full cursor-auto pb-3"
+          className={cn("relative w-full cursor-auto", !embedded && "pb-3")}
         >
           <ChatInputArea
             input={input}
