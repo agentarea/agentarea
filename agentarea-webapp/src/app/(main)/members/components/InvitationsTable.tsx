@@ -14,12 +14,9 @@ import {
   type StatusIndicatorTone,
 } from "@/components/ui/status-indicator";
 import type { WorkspaceInvitation } from "@/lib/api";
+import { formatDate } from "@/utils/dateUtils";
 import { revokeInvitationAction } from "../actions";
-import {
-  formatDate,
-  getInvitationStatus,
-  type InvitationStatusKey,
-} from "./membersShared";
+import { getInvitationStatus, type InvitationStatusKey } from "./membersShared";
 
 interface InvitationsTableProps {
   invitations: WorkspaceInvitation[];

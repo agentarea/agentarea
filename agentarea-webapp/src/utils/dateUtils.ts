@@ -1,6 +1,18 @@
 import { useLocale, useTranslations } from "next-intl";
 import { formatDistanceToNow } from "date-fns";
 
+/** Calendar date in the active locale ("23 Sept 2026"); "—" when missing. */
+export function formatDate(value: string | null | undefined, locale: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(locale, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export const getValidTimestamp = (timestamp?: string | null): number | null => {
   if (!timestamp) {
     return null;

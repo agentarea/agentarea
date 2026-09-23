@@ -112,7 +112,8 @@
     "at": "at",
     "deleteDescription": "Are you sure you want to delete \"{itemName}\"? This action cannot be undone.",
     "retry": "Try again",
-    "clearSearch": "Clear search"
+    "clearSearch": "Clear search",
+    "copyFailed": "Couldn’t copy to clipboard"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -300,7 +301,6 @@
     "joinsAsMember": "Anyone who uses the link joins as a member.",
     "inviteLinkCopied": "Invite link copied",
     "thisWorkspace": "this workspace",
-    "copyFailed": "Couldn’t copy to clipboard",
     "orderExpires": "Expiry",
     "orderRecipient": "Recipient"
   },
@@ -1384,9 +1384,9 @@
     },
     "created": {
       "title": "API Key Created",
+      "description": "“{name}” is ready to use.",
+      "keyLabel": "API key",
       "warning": "Make sure to copy your API key now. You won't be able to see it again!",
-      "copied": "Copied to clipboard",
-      "copy": "Copy",
       "done": "Done"
     },
     "revoke": {

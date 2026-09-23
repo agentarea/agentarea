@@ -99,17 +99,6 @@ export function shortId(id: string): string {
   return id.length > 13 ? `${id.slice(0, 13)}…` : id;
 }
 
-export function formatDate(value: string | null | undefined, locale: string) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString(locale, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 export type InvitationStatusKey = "pending" | "soon" | "today" | "expired";
 
 export function getInvitationStatus(

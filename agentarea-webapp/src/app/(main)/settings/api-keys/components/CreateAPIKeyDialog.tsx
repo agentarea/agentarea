@@ -1,13 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Calendar, Key } from "lucide-react";
+import { Calendar, Clock, Key } from "lucide-react";
 import { useForm } from "react-hook-form";
-import type { ApiKeyCreateRequest, ApiKeyCreateResponse } from "@/api/client/types.gen";
+import type {
+  ApiKeyCreateRequest,
+  ApiKeyCreateResponse,
+} from "@/api/client/types.gen";
 import { zApiKeyCreateRequest } from "@/api/client/zod.gen";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import {
+  OneTimeSecretField,
+  SuccessModalContent,
+  SuccessModalDetail,
+} from "@/components/SuccessModal";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,22 +28,28 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { formatDate } from "@/utils/dateUtils";
 import { createAPIKeyAction } from "../actions";
 
 interface CreateAPIKeyDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: (token?: string) => void;
 }
 
+/**
+ * Create form, then — in the same dialog — the new key, shown once. Mount it
+ * with a fresh `key` per opening so a reopened dialog starts on the form.
+ */
 export default function CreateAPIKeyDialog({
   open,
   onOpenChange,
-  onSuccess,
 }: CreateAPIKeyDialogProps) {
   const t = useTranslations("APIKeysPage");
+  const locale = useLocale();
+  const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [created, setCreated] = useState<ApiKeyCreateResponse | null>(null);
 
   const {
     register,
@@ -68,11 +83,8 @@ export default function CreateAPIKeyDialog({
         return;
       }
 
-      const token = (result.data as ApiKeyCreateResponse)?.token;
-
-      reset();
-      onOpenChange(false);
-      onSuccess?.(token);
+      setCreated(result.data as ApiKeyCreateResponse);
+      router.refresh();
     } catch (_error) {
       toast({
         title: t("error.createFailed"),
@@ -89,6 +101,31 @@ export default function CreateAPIKeyDialog({
       onOpenChange(false);
     }
   };
+
+  if (created) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <SuccessModalContent
+          title={t("created.title")}
+          description={t("created.description", { name: created.name })}
+          doneLabel={t("created.done")}
+          onDone={() => onOpenChange(false)}
+        >
+          <OneTimeSecretField
+            label={t("created.keyLabel")}
+            icon={Key}
+            value={created.token}
+            warning={t("created.warning")}
+          />
+          <SuccessModalDetail label={t("table.expires")} icon={Clock}>
+            {created.expires_at
+              ? formatDate(created.expires_at, locale)
+              : t("never")}
+          </SuccessModalDetail>
+        </SuccessModalContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
