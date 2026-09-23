@@ -2763,6 +2763,44 @@ export type InvitationEmailDelivery =
   | "failed";
 
 /**
+ * InvitationPreviewBody
+ */
+export type InvitationPreviewBody = {
+  /**
+   * Token
+   */
+  token: string;
+};
+
+/**
+ * InvitationPreviewResponse
+ *
+ * What an invitee is shown before joining: who asked, where to, until when.
+ *
+ * The caller is not a member yet, so nothing else about the workspace leaves
+ * this endpoint. The inviter fields are nullable because the identity
+ * provider may not resolve them; the client states that rather than guessing.
+ */
+export type InvitationPreviewResponse = {
+  /**
+   * Expires At
+   */
+  expires_at: string;
+  /**
+   * Inviter Display Name
+   */
+  inviter_display_name: string | null;
+  /**
+   * Inviter Email
+   */
+  inviter_email: string | null;
+  /**
+   * Workspace Name
+   */
+  workspace_name: string;
+};
+
+/**
  * InvitationResponse
  */
 export type InvitationResponse = {
@@ -10924,6 +10962,33 @@ export type AcceptInvitationV1InvitationsAcceptPostResponses = {
 
 export type AcceptInvitationV1InvitationsAcceptPostResponse =
   AcceptInvitationV1InvitationsAcceptPostResponses[keyof AcceptInvitationV1InvitationsAcceptPostResponses];
+
+export type PreviewInvitationV1InvitationsPreviewPostData = {
+  body: InvitationPreviewBody;
+  path?: never;
+  query?: never;
+  url: "/v1/invitations/preview";
+};
+
+export type PreviewInvitationV1InvitationsPreviewPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type PreviewInvitationV1InvitationsPreviewPostError =
+  PreviewInvitationV1InvitationsPreviewPostErrors[keyof PreviewInvitationV1InvitationsPreviewPostErrors];
+
+export type PreviewInvitationV1InvitationsPreviewPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: InvitationPreviewResponse;
+};
+
+export type PreviewInvitationV1InvitationsPreviewPostResponse =
+  PreviewInvitationV1InvitationsPreviewPostResponses[keyof PreviewInvitationV1InvitationsPreviewPostResponses];
 
 export type ListMcpAuthConfigsV1McpAuthConfigsGetData = {
   body?: never;

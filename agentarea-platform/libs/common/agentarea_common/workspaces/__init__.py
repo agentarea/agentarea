@@ -28,6 +28,7 @@ from .repository import (
     WorkspaceRepository,
 )
 from .service import (
+    InvitationAddressedElsewhere,
     InvitationAlreadyAccepted,
     InvitationExpired,
     InvitationNotFound,
@@ -47,6 +48,7 @@ __all__ = [
     "INVITATION_STATUS_ACCEPTED",
     "INVITATION_STATUS_PENDING",
     "INVITATION_STATUS_REVOKED",
+    "InvitationAddressedElsewhere",
     "InvitationAlreadyAccepted",
     "InvitationExpired",
     "InvitationNotFound",

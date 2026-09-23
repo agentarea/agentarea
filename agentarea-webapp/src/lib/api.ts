@@ -17,6 +17,7 @@ import type {
   HttpValidationError,
   InstallRequest,
   InvitationCreatedResponse,
+  InvitationPreviewResponse,
   InvitationResponse,
   ListPolicyRulesV1PoliciesGetData,
   ListRelationshipsV1AccessControlRelationshipsGetData,
@@ -1406,6 +1407,14 @@ export const revokeWorkspaceInvitation = async (
   return withStatus(result);
 };
 
+export const previewWorkspaceInvitation = async (token: string) => {
+  const result = await sdk.previewInvitationV1InvitationsPreviewPost({
+    client: serverClient,
+    body: { token },
+  });
+  return withStatus(result);
+};
+
 export const acceptWorkspaceInvitation = async (token: string) => {
   const result = await sdk.acceptInvitationV1InvitationsAcceptPost({
     client: serverClient,
@@ -2354,6 +2363,7 @@ export type Project = ProjectResponse;
 export type WorkspaceMember = MemberResponse;
 export type WorkspaceInvitation = InvitationResponse;
 export type WorkspaceInvitationCreated = InvitationCreatedResponse;
+export type WorkspaceInvitationPreview = InvitationPreviewResponse;
 
 // --- Workspace secrets -----------------------------------------------------
 // Values only ever travel inwards: no endpoint here returns one, so nothing

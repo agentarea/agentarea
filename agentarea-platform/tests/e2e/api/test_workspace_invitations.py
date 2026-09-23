@@ -8,6 +8,7 @@ Covers:
   4. revoked token — accept after revoke fails 410
   5. cross-workspace listing blocked — Bob can't list Alice's invitations
   6. double-accept idempotent — Bob accepting twice returns same membership
+  7. emailed invitation — only the addressed account can preview or accept it
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ def test_invitation_happy_path(
     """Alice creates invite for her workspace; Bob accepts; Bob is now a member."""
     workspace = alice.identity_id
 
-    invitation = _create_invitation(alice_client, workspace, email="bob@example.com")
+    invitation = _create_invitation(alice_client, workspace, email=bob.email.upper())
     token = invitation["token"]
     assert invitation["status"] == "pending"
     assert invitation["workspace_id"] == workspace
@@ -64,17 +65,13 @@ def test_invitation_happy_path(
     # Now Bob can list members of Alice's workspace (he's a member).
     # A member's email/display_name come from their *identity*, resolved through
     # the identity provider, NOT from the invitation — the invitation email
-    # ("bob@example.com" above) is only a delivery hint, and the link can be
-    # redeemed by whoever holds it.
+    # (upper-cased above) only says who may redeem the link.
     members = _members(bob_client, workspace)
     user_ids = {m["user_id"] for m in members}
     assert bob.identity_id in user_ids
     bob_member = next(m for m in members if m["user_id"] == bob.identity_id)
     assert bob_member["email"] == bob.email
     assert bob_member["display_name"] == bob.email
-
-    # The invitation email was a delivery hint and must not become the identity.
-    assert bob_member["email"] != "bob@example.com"
 
     # Alice sees the same identity for Bob — resolution is not limited to the
     # caller looking at themselves, which is what made this list read as a
@@ -99,6 +96,38 @@ def test_invitation_happy_path(
     assert all(i["id"] != invitation["id"] for i in pending), (
         "accepted invitation should not appear in pending list"
     )
+
+
+@pytest.mark.integration
+def test_emailed_invitation_is_only_for_its_addressee(
+    alice, alice_client: httpx.Client, bob, bob_client: httpx.Client, user_factory
+) -> None:
+    workspace = alice.identity_id
+    token = _create_invitation(alice_client, workspace, email=bob.email)["token"]
+
+    carol = user_factory("carol")
+    with httpx.Client(
+        base_url=bob_client.base_url,
+        headers={"Authorization": f"Bearer {carol.jwt}"},
+        timeout=10.0,
+    ) as carol_client:
+        preview = carol_client.post("/v1/invitations/preview", json={"token": token})
+        assert preview.status_code == 403, preview.text
+        accept = carol_client.post("/v1/invitations/accept", json={"token": token})
+        assert accept.status_code == 403, accept.text
+
+    preview = bob_client.post("/v1/invitations/preview", json={"token": token})
+    assert preview.status_code == 200, preview.text
+    assert set(preview.json()) == {
+        "workspace_name",
+        "inviter_display_name",
+        "inviter_email",
+        "expires_at",
+    }
+    assert preview.json()["inviter_email"] == alice.email
+
+    accept = bob_client.post("/v1/invitations/accept", json={"token": token})
+    assert accept.status_code == 200, accept.text
 
 
 @pytest.mark.integration

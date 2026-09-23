@@ -609,6 +609,9 @@ import type {
   PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostData,
   PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostErrors,
   PreviewEffectivePolicyV1GovernanceEffectivePolicyPreviewPostResponses,
+  PreviewInvitationV1InvitationsPreviewPostData,
+  PreviewInvitationV1InvitationsPreviewPostErrors,
+  PreviewInvitationV1InvitationsPreviewPostResponses,
   PreviewSpecV1OpenapiConnectionsPreviewSpecPostData,
   PreviewSpecV1OpenapiConnectionsPreviewSpecPostErrors,
   PreviewSpecV1OpenapiConnectionsPreviewSpecPostResponses,
@@ -3910,7 +3913,8 @@ export const getInboxItemsV1InboxGet = <ThrowOnError extends boolean = false>(
  *
  * Accept an invitation as the authenticated user.
  *
- * Idempotent for the same acceptor.
+ * An invitation sent to an email address is only accepted by the account
+ * signed in under that address. Idempotent for the same acceptor.
  */
 export const acceptInvitationV1InvitationsAcceptPost = <
   ThrowOnError extends boolean = false,
@@ -3934,6 +3938,42 @@ export const acceptInvitationV1InvitationsAcceptPost = <
       },
     ],
     url: "/v1/invitations/accept",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Preview Invitation
+ *
+ * Describe an invitation the caller could accept: workspace, inviter, expiry.
+ *
+ * The token travels in the body so it stays out of access logs.
+ */
+export const previewInvitationV1InvitationsPreviewPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<PreviewInvitationV1InvitationsPreviewPostData, ThrowOnError>
+): RequestResult<
+  PreviewInvitationV1InvitationsPreviewPostResponses,
+  PreviewInvitationV1InvitationsPreviewPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    PreviewInvitationV1InvitationsPreviewPostResponses,
+    PreviewInvitationV1InvitationsPreviewPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/invitations/preview",
     ...options,
     headers: {
       "Content-Type": "application/json",
