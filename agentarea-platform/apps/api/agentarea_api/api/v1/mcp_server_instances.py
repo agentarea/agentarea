@@ -226,10 +226,19 @@ async def validate_connection(
     user_context: UserContextDep,
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
 ):
-    """Test a connection to an MCP server without creating an instance."""
+    """Test a connection to an MCP server without creating an instance.
+
+    ``server_id`` (optional) is the catalog spec being connected; with it, an
+    auth failure also reports the spec endpoint's ``auth_methods``.
+    """
     url = data.get("url", "")
     headers = data.get("headers")
-    result = await service.validate_connection(url=url, headers=headers)
+    raw_server_id = data.get("server_id")
+    try:
+        server_id = str(UUID(str(raw_server_id))) if raw_server_id else None
+    except ValueError:
+        server_id = None
+    result = await service.validate_connection(url=url, headers=headers, server_id=server_id)
     return result
 
 

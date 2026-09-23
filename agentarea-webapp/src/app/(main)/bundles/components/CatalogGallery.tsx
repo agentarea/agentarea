@@ -14,6 +14,7 @@ import React, {
 import Link from "next/link";
 import {
   AlertTriangle,
+  ArrowDownAZ,
   BadgeCheck,
   Blocks,
   Bot,
@@ -30,6 +31,7 @@ import {
   Search,
   Send,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Star,
   Telescope,
@@ -41,8 +43,8 @@ import type {
   SecretResponse,
 } from "@/api/client/types.gen";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import EntityMark from "@/components/EntityMark";
 import EmptyState from "@/components/EmptyState";
+import EntityMark from "@/components/EntityMark";
 import HeaderTabs from "@/components/HeaderTabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,6 +59,7 @@ import {
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { HoverLink } from "@/components/ui/hover-link";
 import { Input } from "@/components/ui/input";
+import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
 import ModelBadge from "@/components/ui/model-badge";
 import {
   Popover,
@@ -71,6 +74,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
+import { ToolbarButton } from "@/components/ui/toolbar";
 import { cn } from "@/lib/utils";
 import { getCookie, setCookie } from "@/utils/cookies";
 import {
@@ -97,9 +101,9 @@ import {
   EXPLORE_VIEW_COOKIE,
   FEATURED_TAG,
   isCatalogProtocol,
-  PROTOCOL_LABELS,
   modelNameMatchesPreferred,
   normalize,
+  PROTOCOL_LABELS,
   SORT_KEYS,
   SORT_LABELS,
   str,
@@ -354,18 +358,29 @@ export function ExploreSortSelect({
   if (itemId) return null;
 
   return (
-    <Select value={sort} onValueChange={(v) => void setSort(v as SortMode)}>
-      <SelectTrigger className="h-8 w-[152px]" aria-label="Sort catalog">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {SORT_KEYS.map((key) => (
-          <SelectItem key={key} value={key}>
-            {SORT_LABELS[key]}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Popover>
+      <PopoverTrigger asChild>
+        <ToolbarButton aria-label="Display options">
+          <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+          Display
+        </ToolbarButton>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-52 p-1.5">
+        <MenuSectionLabel>Ordering</MenuSectionLabel>
+        <MenuRow
+          icon={<Sparkles className="h-3.5 w-3.5" />}
+          label={SORT_LABELS.recommended}
+          selected={sort === "recommended"}
+          onClick={() => void setSort("recommended")}
+        />
+        <MenuRow
+          icon={<ArrowDownAZ className="h-3.5 w-3.5" />}
+          label={SORT_LABELS.name}
+          selected={sort === "name"}
+          onClick={() => void setSort("name")}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 

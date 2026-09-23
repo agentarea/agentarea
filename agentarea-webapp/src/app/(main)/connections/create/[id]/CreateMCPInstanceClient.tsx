@@ -1,14 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ExternalLink, Github, Globe, Key, Lock, Tag } from "lucide-react";
+import {
+  ExternalLink,
+  Github,
+  Globe,
+  Key,
+  KeyRound,
+  Lock,
+  ShieldCheck,
+  Tag,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Badge, badgeVariants } from "@/components/ui/badge";
+import { BlueprintBadge } from "@/components/ui/blueprint-badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import Divider from "@/components/ui/divider";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import FormLabel from "@/components/FormLabel/FormLabel";
@@ -19,7 +31,6 @@ import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import {
   checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration,
   validateConnectionAction,
-  probeInstanceAuthAction,
   oauthAuthorizeAction,
 } from "@/lib/server-actions";
 import type { MCPServer } from "../../types";
@@ -41,14 +52,15 @@ interface FieldSpec {
   choices?: string[];
 }
 
+/** Shape of `POST /mcp-server-instances/validate-connection`. */
 interface ValidationResult {
-  status: string;
+  valid: boolean;
+  errors?: string[];
   tool_count?: number;
   tools?: Array<{ name: string; description: string }>;
-  message?: string;
+  /** Present on an auth failure: how the endpoint wants to be authorized. */
+  auth_methods?: string[];
 }
-
-type ProbeState = "idle" | "needs_oauth" | "needs_both";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -65,6 +77,8 @@ interface McpJsonSpec {
   repository?: { url?: string; source?: string };
   websiteUrl?: string;
   available_tools?: unknown[];
+  /** Auth methods cached on the spec by a previous probe. */
+  auth_methods?: string[];
 }
 
 function getSpec(server: MCPServer): McpJsonSpec {
@@ -238,10 +252,11 @@ function SpecHeader({
 }
 
 function EncryptionNote() {
+  const t = useTranslations("MCPServersPage.createInstance.connect");
   return (
     <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground/60">
       <Lock className="h-3.5 w-3.5" />
-      Credentials are encrypted at rest and scoped to this workspace.
+      {t("encryptionNote")}
     </div>
   );
 }
@@ -255,11 +270,67 @@ interface UrlFormValues {
   fields: Record<string, string>;
 }
 
+/**
+ * How the endpoint wants to be authorized. Resolved on mount — from the spec's
+ * cached `auth_methods`, or by validating the bare endpoint — so the user lands
+ * on the right form immediately instead of discovering it after a first
+ * "Connect" that has already created a (broken) instance.
+ */
+type AuthMode =
+  | "loading" // probing the endpoint
+  | "fields" // spec declares headers → fill them in, validate, create
+  | "none" // endpoint is open → Connect creates the instance directly
+  | "oauth" // OAuth only (manual entry offered as a fallback link)
+  | "credentials" // manual credentials only
+  | "both" // OAuth or manual, user picks
+  | "error"; // probe failed → retry, or Force create from the subheader
+
+const DEFAULT_CREDENTIAL_FIELD: FieldSpec = {
+  name: "Authorization",
+  isSecret: true,
+  placeholder: "Bearer your-token",
+};
+
+function modeFromMethods(methods: string[]): AuthMode {
+  const oauth = methods.includes("oauth");
+  const credentials = methods.includes("credentials");
+  if (oauth && credentials) return "both";
+  if (oauth) return "oauth";
+  if (credentials) return "credentials";
+  return "none";
+}
+
+// Env vars a spec may declare for manual auth; shown as the credential inputs.
+const CREDENTIAL_ENV_NAMES = new Set(["AUTHORIZATION", "API_KEY", "TOKEN"]);
+
+function credentialFieldsFromSpec(server: MCPServer): FieldSpec[] {
+  const named = ((server.env_schema ?? []) as unknown as FieldSpec[])
+    .filter((e) => e.name && CREDENTIAL_ENV_NAMES.has(e.name.toUpperCase()))
+    .map<FieldSpec>((e) => ({ ...e, isSecret: true }));
+  return named.length > 0 ? named : [DEFAULT_CREDENTIAL_FIELD];
+}
+
+/** Server actions return the raw API body on failure; surface its `detail`. */
+function apiErrorText(raw: string | null | undefined, fallback: string): string {
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw) as { detail?: unknown };
+    const d = parsed.detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d) && typeof d[0]?.msg === "string") return d[0].msg;
+  } catch {
+    /* not JSON — fall through to the raw text */
+  }
+  return raw;
+}
+
 function UrlConnectForm({ server }: { server: MCPServer }) {
   const router = useRouter();
+  const t = useTranslations("MCPServersPage.createInstance.connect");
   const remoteHeaders = getRemoteHeaders(server);
   const hasFields = remoteHeaders.length > 0;
   const endpointUrl = server.remote_url || "";
+  const cachedMethods = getSpec(server).auth_methods;
 
   const defaultFieldValues: Record<string, string> = {};
   for (const h of remoteHeaders) {
@@ -273,10 +344,18 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     },
   });
 
+  const [authMode, setAuthMode] = useState<AuthMode>(() => {
+    if (hasFields) return "fields";
+    if (Array.isArray(cachedMethods) && cachedMethods.length > 0) {
+      return modeFromMethods(cachedMethods);
+    }
+    return "loading";
+  });
+  const credentialFields = credentialFieldsFromSpec(server);
+  const [authTab, setAuthTab] = useState<"oauth" | "manual">("oauth");
+  const [probeError, setProbeError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const [probeState, setProbeState] = useState<ProbeState>("idle");
-  const [authTab, setAuthTab] = useState<"oauth" | "manual">("manual");
   const [createdInstanceId, setCreatedInstanceId] = useState<string | null>(
     null
   );
@@ -286,9 +365,49 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     name: string;
   } | null>(null);
 
+  // Detect the auth method up front by validating the bare endpoint (no
+  // instance is created for this). An auth failure reports `auth_methods`.
+  const probe = useCallback(async () => {
+    setAuthMode("loading");
+    setProbeError(null);
+    const result = await validateConnectionAction(endpointUrl, {}, server.id);
+    const data = result.data as ValidationResult | null;
+    if (result.error || !data) {
+      setProbeError(apiErrorText(result.error, t("probeFailed")));
+      setAuthMode("error");
+      return;
+    }
+    if (data.valid) {
+      setAuthMode("none");
+      return;
+    }
+    if (data.auth_methods && data.auth_methods.length > 0) {
+      setAuthMode(modeFromMethods(data.auth_methods));
+      return;
+    }
+    setProbeError(data.errors?.[0] || t("probeFailed"));
+    setAuthMode("error");
+  }, [endpointUrl, server.id, t]);
+
+  const probedRef = useRef(false);
+  useEffect(() => {
+    if (authMode !== "loading" || probedRef.current) return;
+    probedRef.current = true;
+    void probe();
+  }, [authMode, probe]);
+
+  // Which header inputs are shown: the spec's own, or the probed credential hints.
+  const activeFields = authMode === "fields" ? remoteHeaders : credentialFields;
+  const showManualFields =
+    authMode === "fields" ||
+    authMode === "credentials" ||
+    (authMode === "both" && authTab === "manual");
+  const showOAuth =
+    authMode === "oauth" || (authMode === "both" && authTab === "oauth");
+
   // Build headers dict from form field values
   const buildHeaders = (): Record<string, string> => {
-    const vals = getValues("fields");
+    const vals = getValues("fields") ?? {};
     const headers: Record<string, string> = {};
     for (const [key, val] of Object.entries(vals)) {
       if (val?.trim()) headers[key] = val.trim();
@@ -296,165 +415,111 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     return headers;
   };
 
-  // Validate connection (fields present)
+  const createInstance = async (headers: Record<string, string>) => {
+    const { instanceName } = getValues();
+    const instanceResult = await createMCPServerInstance({
+      name: instanceName,
+      description: server.description,
+      server_spec_id: server.id,
+      json_spec: {
+        type: "url",
+        endpoint_url: endpointUrl,
+        ...(Object.keys(headers).length > 0 ? { headers } : {}),
+      },
+    });
+
+    if (instanceResult.error) {
+      const d = instanceResult.error.detail;
+      throw new Error(
+        typeof d === "string"
+          ? d
+          : Array.isArray(d) && d[0]?.msg
+            ? d[0].msg
+            : t("createFailed")
+      );
+    }
+    const created = instanceResult.data;
+    if (!created) throw new Error(t("createFailed"));
+    setCreatedInstanceId(created.id);
+    return created;
+  };
+
+  // Validate the entered credentials against the endpoint (no instance yet).
   const handleValidate = async () => {
     setError(null);
     setValidation(null);
     setIsWorking(true);
-
     try {
-      if (hasFields) {
-        const result = await validateConnectionAction(
-          endpointUrl,
-          buildHeaders()
-        );
-
-        if (result.error) {
-          setError(result.error);
-          return;
-        }
-        if (result.data?.status === "auth_error") {
-          setError(result.data.message || "Authentication failed");
-          return;
-        }
-        if (result.data?.status !== "ok") {
-          setError(result.data?.message || "Connection failed");
-          return;
-        }
-
-        setValidation(result.data);
+      const result = await validateConnectionAction(
+        endpointUrl,
+        buildHeaders(),
+        server.id
+      );
+      const data = result.data as ValidationResult | null;
+      if (result.error || !data) {
+        setError(apiErrorText(result.error, t("connectionFailed")));
         return;
       }
-
-      // No fields — probe for auth method
-      const { instanceName } = getValues();
-      const instanceResult = await createMCPServerInstance({
-        name: instanceName,
-        description: server.description,
-        server_spec_id: server.id,
-        json_spec: { type: "url", endpoint_url: endpointUrl },
-      });
-
-      if (instanceResult.error) {
-        const d = instanceResult.error.detail;
-        throw new Error(
-          typeof d === "string"
-            ? d
-            : Array.isArray(d) && d[0]?.msg
-              ? d[0].msg
-              : "Failed to create instance"
-        );
-      }
-
-      const created = instanceResult.data;
-      if (!created) {
-        throw new Error("Failed to create instance");
-      }
-      setCreatedInstanceId(created.id);
-
-      const probeResult = await probeInstanceAuthAction(created.id);
-
-      if (probeResult.data?.status === "ok") {
-        router.push(`/connections/${created.id}`);
+      if (!data.valid) {
+        setError(data.errors?.[0] || t("connectionFailed"));
         return;
       }
-      if (probeResult.data?.status === "auth_required") {
-        const methods = probeResult.data.methods || [];
-        if (methods.includes("oauth")) {
-          setProbeState(
-            methods.includes("credentials") ? "needs_both" : "needs_oauth"
-          );
-          setAuthTab("oauth");
-          return;
-        }
-      }
-
-      router.push(`/connections/${created.id}`);
+      setValidation(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Connection failed");
+      setError(err instanceof Error ? err.message : t("connectionFailed"));
     } finally {
       setIsWorking(false);
     }
   };
 
-  // Create instance after successful validation
+  // Create the instance (after validation, or directly for open endpoints).
   const handleCreate = async () => {
     setIsWorking(true);
     setError(null);
     try {
       const { instanceName } = getValues();
-      const headers = buildHeaders();
-
-      const instanceResult = await createMCPServerInstance({
-        name: instanceName,
-        description: server.description,
-        server_spec_id: server.id,
-        json_spec: {
-          type: "url",
-          endpoint_url: endpointUrl,
-          ...(Object.keys(headers).length > 0 ? { headers } : {}),
-        },
-      });
-
-      if (instanceResult.error) {
-        const d = instanceResult.error.detail;
-        throw new Error(
-          typeof d === "string"
-            ? d
-            : Array.isArray(d) && d[0]?.msg
-              ? d[0].msg
-              : "Failed to create instance"
-        );
-      }
-
-      const created = instanceResult.data;
-      if (!created) {
-        throw new Error("Failed to create instance");
-      }
-      const vStatus = created?.verification?.status;
+      const created = await createInstance(buildHeaders());
+      const vStatus = created.verification?.status;
       if (vStatus === "in_progress" || vStatus === "never_attempted") {
         setVerifyingInstance({ id: created.id, name: instanceName });
       } else {
         router.push(`/connections/${created.id}`);
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create connection"
-      );
+      setError(err instanceof Error ? err.message : t("createFailed"));
     } finally {
       setIsWorking(false);
     }
   };
 
-  // OAuth flow
+  // OAuth flow: the authorize endpoint is bound to an instance, so create it
+  // (once) right before redirecting to the authorization server.
   const handleOAuth = async () => {
-    if (!createdInstanceId) return;
     setIsWorking(true);
     setError(null);
     try {
-      const result = await oauthAuthorizeAction(createdInstanceId);
+      const instanceId = createdInstanceId ?? (await createInstance({})).id;
+      const result = await oauthAuthorizeAction(instanceId);
       if (result.error || !result.data?.authorize_url) {
-        setError(
-          result.error ||
-            "OAuth discovery failed — this server may not support OAuth"
-        );
+        setError(apiErrorText(result.error, t("oauthDiscoveryFailed")));
         return;
       }
       window.location.href = result.data.authorize_url;
-    } catch {
-      setError("Failed to start OAuth flow");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("oauthStartFailed"));
     } finally {
       setIsWorking(false);
     }
   };
 
-  const verified = validation?.status === "ok";
+  const verified = validation?.valid === true;
 
   // Create lives in the subheader (consistent with every other form). The body
   // "Connect" button only authorizes / validates the connection.
   const nameValue = watch("instanceName");
-  const canCreate = !!nameValue?.trim() && verified;
-  const canForce = !!nameValue?.trim();
+  const hasName = !!nameValue?.trim();
+  const canCreate = hasName && verified;
+  const canForce = hasName;
 
   const handleCreateRef = useRef<() => void>(() => {});
   handleCreateRef.current = handleCreate;
@@ -487,6 +552,27 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     return () => form.removeEventListener("mcp-force-create", handler);
   }, []);
 
+  const segmentedItems = [
+    {
+      value: "oauth" as const,
+      label: (
+        <span className="flex items-center gap-1.5 whitespace-nowrap">
+          <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />
+          {t("oauthTab")}
+        </span>
+      ),
+    },
+    {
+      value: "manual" as const,
+      label: (
+        <span className="flex items-center gap-1.5 whitespace-nowrap">
+          <KeyRound aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />
+          {t("manualTab")}
+        </span>
+      ),
+    },
+  ];
+
   return (
     <>
       {verifyingInstance && (
@@ -513,26 +599,92 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
         {/* Instance name */}
         <div className="flex flex-col gap-2">
           <FormLabel htmlFor="instance-name" icon={Tag} required>
-            Name
+            {t("nameLabel")}
           </FormLabel>
           <Input
             id="instance-name"
             autoComplete="off"
             {...register("instanceName", { required: true })}
           />
-          <p className="text-xs text-muted-foreground/60">
-            Shown across agents, tasks and audit logs. Must be unique in this
-            workspace.
-          </p>
+          <p className="text-xs text-muted-foreground/60">{t("nameHint")}</p>
         </div>
 
         {/* Error */}
         {error && <FormError className="mt-6">{error}</FormError>}
 
-        {/* Spec fields */}
-        {hasFields && probeState === "idle" && (
+        {/* Probing the endpoint for its auth method */}
+        {authMode === "loading" && (
+          <div className="mt-6 space-y-3" aria-busy="true" aria-live="polite">
+            <p className="text-sm text-muted-foreground">{t("detecting")}</p>
+            <Skeleton className="h-9 w-[200px]" />
+            <Skeleton className="h-9 w-full" />
+          </div>
+        )}
+
+        {/* Probe failed: retry, or Force create from the subheader */}
+        {authMode === "error" && (
+          <div className="mt-6 flex flex-col gap-2">
+            <FormError>{probeError ?? t("probeFailed")}</FormError>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full max-w-[200px]"
+              onClick={() => void probe()}
+            >
+              {t("retryProbe")}
+            </Button>
+          </div>
+        )}
+
+        {/* OAuth / Manual switcher */}
+        {authMode === "both" && (
+          <div className="mt-6">
+            <SegmentedControl
+              items={segmentedItems}
+              value={authTab}
+              onChange={setAuthTab}
+              layoutId="connection-auth-mode-control"
+            />
+          </div>
+        )}
+
+        {/* OAuth pane */}
+        {showOAuth && (
+          <div className="mt-6 space-y-3">
+            <div className="flex items-center gap-2">
+              <FormLabel icon={ShieldCheck}>{t("authorization")}</FormLabel>
+              <BlueprintBadge>{t("oauthDetected")}</BlueprintBadge>
+            </div>
+            <StartAgentButton
+              type="button"
+              size="xs"
+              className="w-auto"
+              onClick={handleOAuth}
+              isLoading={isWorking}
+              disabled={isWorking || !hasName}
+            >
+              {t("authorizeOAuth")}
+            </StartAgentButton>
+            {authMode === "oauth" && (
+              <button
+                type="button"
+                className="block text-xs text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => {
+                  setAuthMode("both");
+                  setAuthTab("manual");
+                }}
+              >
+                {t("haveCredentials")}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Header / credential fields (spec-declared or probed) */}
+        {showManualFields && !validation && (
           <div className="mt-6 space-y-4">
-            {remoteHeaders.map((field) => (
+            {activeFields.map((field) => (
               <div key={field.name} className="flex flex-col gap-2">
                 <FormLabel
                   htmlFor={`field-${field.name}`}
@@ -572,31 +724,37 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
           </div>
         )}
 
+        {/* Open endpoint: nothing to enter */}
+        {authMode === "none" && !validation && (
+          <p className="mt-6 text-sm text-muted-foreground">{t("openEndpoint")}</p>
+        )}
+
         {/* Validation success — discovered tools preview. Creation itself is
             triggered from the subheader (Create instance / Force create). */}
-        {validation?.status === "ok" &&
+        {validation?.valid &&
           validation.tools &&
           validation.tools.length > 0 && (
             <div className="mt-6">
               <ToolsTable
                 tools={validation.tools}
-                label={`${validation.tools.length} tools found`}
+                label={t("toolsFound", { count: validation.tools.length })}
               />
             </div>
           )}
 
-        {/* Connect button — initial state (Try Again stacks below, same width) */}
-        {!validation && probeState === "idle" && (
+        {/* Connect: validates entered credentials, or creates directly for an
+            open endpoint. Try Again stacks below, same width. */}
+        {(showManualFields || authMode === "none") && !validation && (
           <div className="mt-6 flex flex-col gap-2">
             <StartAgentButton
               type="button"
               size="xs"
               className="max-w-[200px]"
-              onClick={handleValidate}
+              onClick={authMode === "none" ? handleCreate : handleValidate}
               isLoading={isWorking}
-              disabled={isWorking}
+              disabled={isWorking || !hasName}
             >
-              {isWorking ? "Connecting…" : "Connect"}
+              {isWorking ? t("connecting") : t("connect")}
             </StartAgentButton>
             {error && (
               <Button
@@ -609,86 +767,8 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
                   setValidation(null);
                 }}
               >
-                Try Again
+                {t("tryAgain")}
               </Button>
-            )}
-          </div>
-        )}
-
-        {/* OAuth/Manual switcher (probe detected auth) */}
-        {(probeState === "needs_oauth" || probeState === "needs_both") && (
-          <div className="mt-6 space-y-4">
-            {probeState === "needs_both" && (
-              <div className="flex w-fit rounded-lg border p-0.5">
-                <button
-                  type="button"
-                  className={`rounded-md px-4 py-1.5 text-sm transition-colors ${authTab === "oauth" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => setAuthTab("oauth")}
-                >
-                  OAuth
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-md px-4 py-1.5 text-sm transition-colors ${authTab === "manual" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => setAuthTab("manual")}
-                >
-                  Manual
-                </button>
-              </div>
-            )}
-
-            {(authTab === "oauth" || probeState === "needs_oauth") && (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  This server supports OAuth authorization.
-                </p>
-                <StartAgentButton
-                  type="button"
-                  size="xs"
-                  className="w-auto"
-                  onClick={handleOAuth}
-                  isLoading={isWorking}
-                >
-                  Authorize with OAuth
-                </StartAgentButton>
-                {probeState === "needs_oauth" && (
-                  <button
-                    type="button"
-                    className="block text-xs text-muted-foreground transition-colors hover:text-foreground"
-                    onClick={() => {
-                      setProbeState("needs_both");
-                      setAuthTab("manual");
-                    }}
-                  >
-                    Have credentials? Enter manually instead
-                  </button>
-                )}
-              </div>
-            )}
-
-            {authTab === "manual" && probeState === "needs_both" && (
-              <div className="space-y-3">
-                <div className="flex flex-col gap-2">
-                  <FormLabel htmlFor="manual-header" icon={Key}>
-                    Authorization
-                  </FormLabel>
-                  <Input
-                    id="manual-header"
-                    placeholder="Bearer your-token"
-                    {...register("fields.Authorization")}
-                  />
-                </div>
-                <StartAgentButton
-                  type="button"
-                  size="xs"
-                  className="w-auto"
-                  onClick={handleCreate}
-                  isLoading={isWorking}
-                  disabled={isWorking}
-                >
-                  Connect
-                </StartAgentButton>
-              </div>
             )}
           </div>
         )}

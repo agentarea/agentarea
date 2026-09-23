@@ -24,6 +24,8 @@ import {
 import { Streamdown } from "streamdown";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { Button } from "@/components/ui/button";
+import { BlueprintBadge } from "@/components/ui/blueprint-badge";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -477,30 +479,41 @@ export function CreateSkillForm() {
     >
       {/* ---------------- source switcher + hint ---------------- */}
       <div className="mb-6 flex flex-wrap items-center gap-x-3.5 gap-y-2">
-        <SegPill<Source>
+        <SegmentedControl<Source>
           value={source}
           onChange={setSource}
-          options={[
+          layoutId="skill-source-control"
+          items={[
             {
               value: "content",
-              label: tCreate("writeContent"),
-              icon: <FileCode className="h-3.5 w-3.5" strokeWidth={1.7} />,
+              label: (
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
+                  <FileCode aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  {tCreate("writeContent")}
+                </span>
+              ),
             },
             {
               value: "github",
-              label: tCreate("importFromGithub"),
-              icon: <Github className="h-3.5 w-3.5" strokeWidth={1.7} />,
+              label: (
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
+                  <Github aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  {tCreate("importFromGithub")}
+                </span>
+              ),
             },
             {
               value: "upload",
-              label: tCreate("uploadFiles"),
-              icon: <Upload className="h-3.5 w-3.5" strokeWidth={1.7} />,
+              label: (
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
+                  <Upload aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  {tCreate("uploadFiles")}
+                </span>
+              ),
             },
           ]}
         />
-        <span className="text-[12.5px] text-muted-foreground">
-          {sourceHints[source]}
-        </span>
+        <BlueprintBadge>{sourceHints[source]}</BlueprintBadge>
       </div>
 
       {/* ---------------- name + description ---------------- */}

@@ -125,7 +125,7 @@ def test_a_platform_provider_config_is_actually_written(handler, provider_spec):
     success for months while writing nothing.
     """
     config_id, model_count = handler.sync_provider_config(
-        _spec(provider_spec), api_key="gateway-token", cr_name="test-cr"
+        _spec(provider_spec), api_key="gateway-token", cr_name="test-cr"  # pragma: allowlist secret
     )
 
     assert model_count == 1
@@ -173,7 +173,7 @@ def test_reconciling_twice_updates_one_configuration(handler, provider_spec):
     it works once and then stops, long after the change that caused it.
     """
     config_id, _ = handler.sync_provider_config(
-        _spec(provider_spec), api_key="gateway-token", cr_name="test-cr"
+        _spec(provider_spec), api_key="gateway-token", cr_name="test-cr"  # pragma: allowlist secret
     )
 
     renamed = _spec(provider_spec) | {"name": "Renamed"}
