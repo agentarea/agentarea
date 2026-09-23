@@ -51,7 +51,7 @@ function formatPolicyDescription(policy: ApiPolicy) {
 /** Composer-shaped skeleton shown while agents/projects/policies load. */
 function QuickTaskComposerSkeleton() {
   return (
-    <div className="rounded-2xl border p-3" aria-hidden="true">
+    <div className="rounded-xl border p-3" aria-hidden="true">
       <Skeleton className="h-16 w-full rounded-lg" />
       <div className="mt-3 flex items-center gap-2">
         <Skeleton className="h-7 w-28 rounded-md" />
@@ -153,14 +153,34 @@ export default function QuickTaskDialog() {
     [router]
   );
 
+  // Focus belongs in the composer, never on the close button: Radix would
+  // otherwise pick it while the skeleton shows, and on a ⌘J open it draws the
+  // keyboard focus ring there.
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const focusComposer = React.useCallback(() => {
+    contentRef.current?.querySelector("textarea")?.focus();
+  }, []);
+  const composerReady = selectedAgent !== null;
+
+  // First open: the composer mounts only once the data arrives.
+  React.useEffect(() => {
+    if (open && composerReady) focusComposer();
+  }, [open, composerReady, focusComposer]);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
+        ref={contentRef}
         data-quick-task-dialog
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          focusComposer();
+        }}
         closeClassName="right-2 top-2"
         className={cn(
-          // extra top padding gives the close button its own strip above the composer
-          "top-[24%] max-w-2xl translate-y-0 gap-0 overflow-hidden rounded-2xl border bg-background px-3 pb-3 pt-7 shadow-2xl",
+          // extra top padding gives the close button its own strip above the
+          // composer; the radius is the composer's 12px plus the 8px inset
+          "top-[24%] max-w-2xl translate-y-0 gap-0 overflow-hidden rounded-[20px] border bg-background p-2 pt-7 sm:rounded-[20px] shadow-2xl",
           "data-[state=closed]:slide-out-to-top-[20%] data-[state=open]:slide-in-from-top-[20%]"
         )}
       >
@@ -176,9 +196,10 @@ export default function QuickTaskDialog() {
               availableTaskPolicies={policies}
               onTaskCreated={handleTaskCreated}
               startCentered
-              className="!h-auto !max-w-none !gap-0 !py-0"
+              embedded
+              className="!h-auto min-w-0 !max-w-none !gap-0 !py-0"
             />
-            <div className="mt-2.5 flex items-center justify-end gap-4 text-[11px] text-muted-foreground/70">
+            <div className="mt-2 flex items-center justify-end gap-4 px-1 text-[11px] text-muted-foreground/70">
               <span className="inline-flex items-center gap-1.5">
                 <Kbd keys={["↵"]} />
                 {t("toCreate")}

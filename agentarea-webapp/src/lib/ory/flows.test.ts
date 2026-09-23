@@ -72,6 +72,7 @@ const config = {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.ORY_SDK_URL = "https://ory.sh/";
+  delete process.env.ORY_BROWSER_URL;
   vi.mocked(getPublicUrl).mockResolvedValue("https://example.com");
   vi.mocked(handleFlowError).mockReturnValue(async () => undefined);
 });
@@ -109,6 +110,15 @@ for (const tc of testCases) {
       await tc.fn(config, {});
       expect(redirect).toHaveBeenCalledWith(
         `https://example.com/self-service/${tc.flowType}/browser?`,
+        "replace"
+      );
+    });
+
+    test("restarts the flow on Ory's public URL when one is set", async () => {
+      process.env.ORY_BROWSER_URL = "http://localhost:4433";
+      await tc.fn(config, {});
+      expect(redirect).toHaveBeenCalledWith(
+        `http://localhost:4433/self-service/${tc.flowType}/browser?`,
         "replace"
       );
     });

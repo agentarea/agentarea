@@ -157,6 +157,7 @@
   },
   "Sidebar": {
     "dashboard": "Дашборд",
+    "newTask": "Новая задача",
     "inbox": "Входящие",
     "admin": "Админ",
     "workplace": "Рабочее место",

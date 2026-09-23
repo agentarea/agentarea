@@ -45,7 +45,7 @@ export function ContextSelect({
       <SelectTrigger
         aria-label={label}
         className={cn(
-          "group h-7 w-fit min-w-0 max-w-full rounded-md border border-transparent bg-transparent pl-1.5 pr-1.5 text-left text-xs text-zinc-500 shadow-none sm:max-w-[18rem] lg:max-w-[20rem]",
+          "group h-7 w-fit min-w-0 max-w-full rounded-md border border-transparent bg-transparent pl-1.5 pr-1.5 text-left text-xs text-zinc-500 shadow-none sm:max-w-[14rem]",
           "transition-all duration-150 ease-out hover:bg-zinc-100/70 hover:text-zinc-500",
           "hover:rounded-md focus:border-transparent focus:ring-0 focus-visible:ring-0 data-[state=open]:rounded-md data-[state=open]:bg-zinc-100/80 data-[state=open]:text-zinc-500",
           "[&>svg]:ml-2 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0 [&>svg]:text-zinc-400 [&>svg]:opacity-100 group-hover:[&>svg]:text-zinc-400 data-[state=open]:[&>svg]:text-zinc-400",

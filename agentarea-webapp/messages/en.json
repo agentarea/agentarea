@@ -157,6 +157,7 @@
   },
   "Sidebar": {
     "dashboard": "Dashboard",
+    "newTask": "New task",
     "inbox": "Inbox",
     "admin": "Admin",
     "workplace": "Workplace",

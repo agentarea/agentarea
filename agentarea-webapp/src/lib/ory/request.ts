@@ -41,13 +41,20 @@ export function startNewFlow(
 ) {
   // Take advantage of the fact, that Ory handles the flow creation for us and redirects the user to the default
   // return to automatically if they're logged in already.
+  //
+  // Go straight to Ory's public URL when there is one. Our own /self-service
+  // only bounces there (proxy.ts), and on a client-side navigation Next takes
+  // that same-origin URL for an app route: it fetches it as RSC, the
+  // cross-origin bounce fails, and dev flashes "Failed to fetch RSC payload"
+  // before falling back to a full page load. An external origin gets the full
+  // page load straight away.
   return redirect(
     new URL(
       "/self-service/" +
         flowType.toString() +
         "/browser?" +
         urlQueryToSearchParams(params).toString(),
-      baseUrl
+      process.env.ORY_BROWSER_URL || baseUrl
     ).toString(),
     RedirectType.replace
   );
