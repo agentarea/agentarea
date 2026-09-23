@@ -2098,5 +2098,20 @@
     "effectCap": "{count} cap",
     "effectAllow": "{count} allow",
     "effectSafety": "{count} safety"
+  },
+  "SecretsPage": {
+    "newSecret": "New secret",
+    "createDialog": {
+      "title": "New secret",
+      "description": "Stored encrypted. You won't be able to read it back — only replace it.",
+      "nameLabel": "Name",
+      "namePlaceholder": "openai-key",
+      "nameHint": "Lowercase letters, digits, - and _.",
+      "valueLabel": "Value",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Which account this key belongs to",
+      "footerNote": "Reuse it across LLM providers and API connections.",
+      "submit": "Create secret"
+    }
   }
 }

@@ -1,21 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { FileText, Key, Loader2, Plus, Tag } from "lucide-react";
 import type { SecretResponse } from "@/api/client/types.gen";
-import { Button } from "@/components/ui/button";
+import FormLabel from "@/components/FormLabel/FormLabel";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  BlueprintDialogContent,
+  BlueprintFields,
+} from "@/components/ui/blueprint-sheet";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { createSecretAction } from "../actions";
 
 type CreateSecretDialogProps = {
@@ -33,6 +30,7 @@ export function CreateSecretDialog({
   showTrigger = true,
   onCreated,
 }: CreateSecretDialogProps = {}) {
+  const t = useTranslations("SecretsPage");
   const router = useRouter();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
@@ -72,36 +70,44 @@ export function CreateSecretDialog({
         <DialogTrigger asChild>
           <Button className="shrink-0" size="xs">
             <Plus />
-            New secret
+            {t("newSecret")}
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>New secret</DialogTitle>
-          <DialogDescription>
-            Stored encrypted. You won&apos;t be able to read it back — only
-            replace it.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="secret-name">Name</Label>
+      <BlueprintDialogContent
+        title={t("createDialog.title")}
+        description={t("createDialog.description")}
+        note={t("createDialog.footerNote")}
+        actions={
+          <Button
+            size="sm"
+            onClick={submit}
+            disabled={pending || !name || !value}
+          >
+            {pending && <Loader2 className="animate-spin" />}
+            {t("createDialog.submit")}
+          </Button>
+        }
+      >
+        <BlueprintFields>
+          <div className="space-y-2">
+            <FormLabel htmlFor="secret-name" icon={Tag}>
+              {t("createDialog.nameLabel")}
+            </FormLabel>
             <Input
               id="secret-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="openai-key"
+              placeholder={t("createDialog.namePlaceholder")}
               autoComplete="off"
             />
-            <p className="text-xs text-muted-foreground">
-              Lowercase letters, digits, <code>-</code> and <code>_</code>.
-            </p>
+            <p className="note">{t("createDialog.nameHint")}</p>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="secret-value">Value</Label>
+          <div className="space-y-2">
+            <FormLabel htmlFor="secret-value" icon={Key}>
+              {t("createDialog.valueLabel")}
+            </FormLabel>
             <Input
               id="secret-value"
               type="password"
@@ -111,36 +117,25 @@ export function CreateSecretDialog({
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="secret-description">Description (optional)</Label>
+          <div className="space-y-2">
+            <FormLabel htmlFor="secret-description" icon={FileText} optional>
+              {t("createDialog.descriptionLabel")}
+            </FormLabel>
             <Input
               id="secret-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Which account this key belongs to"
+              placeholder={t("createDialog.descriptionPlaceholder")}
             />
           </div>
 
-          {error ? (
-            <p className="text-sm text-destructive" role="alert">
+          {error && (
+            <p className="form-error" role="alert">
               {error}
             </p>
-          ) : null}
-        </div>
-
-        <DialogFooter>
-          <Button
-            variant="ghost"
-            onClick={() => setOpen(false)}
-            disabled={pending}
-          >
-            Cancel
-          </Button>
-          <Button onClick={submit} disabled={pending || !name || !value}>
-            {pending ? "Saving…" : "Create secret"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+          )}
+        </BlueprintFields>
+      </BlueprintDialogContent>
     </Dialog>
   );
 }

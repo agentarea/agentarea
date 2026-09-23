@@ -5,18 +5,12 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, LayoutGrid, Plus } from "lucide-react";
 import {
+  BlueprintDialogContent,
   BlueprintDivider,
   BlueprintSheet,
 } from "@/components/ui/blueprint-sheet";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { OpenAPIConnectionMark } from "./MCPCard";
 
@@ -79,11 +73,7 @@ export function AddConnectionDropdown() {
           {t("trigger")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="gap-0 p-0 sm:max-w-[496px] sm:rounded-[10px]">
-        <DialogHeader className="space-y-1.5 px-6 pb-4 pt-5">
-          <DialogTitle>{t("title")}</DialogTitle>
-          <DialogDescription>{t("description")}</DialogDescription>
-        </DialogHeader>
+      <BlueprintDialogContent title={t("title")} description={t("description")}>
         <BlueprintSheet>
           <BlueprintDivider />
           {OPTIONS.map((option) => (
@@ -124,7 +114,7 @@ export function AddConnectionDropdown() {
             </Fragment>
           ))}
         </BlueprintSheet>
-      </DialogContent>
+      </BlueprintDialogContent>
     </Dialog>
   );
 }

@@ -2099,5 +2099,20 @@
     "effectCap": "{count} лимит",
     "effectAllow": "{count} разрешение",
     "effectSafety": "{count} безопасность"
+  },
+  "SecretsPage": {
+    "newSecret": "Новый секрет",
+    "createDialog": {
+      "title": "Новый секрет",
+      "description": "Хранится в зашифрованном виде. Прочитать значение потом нельзя — только заменить.",
+      "nameLabel": "Название",
+      "namePlaceholder": "openai-key",
+      "nameHint": "Строчные латинские буквы, цифры, - и _.",
+      "valueLabel": "Значение",
+      "descriptionLabel": "Описание",
+      "descriptionPlaceholder": "К какому аккаунту относится ключ",
+      "footerNote": "Используйте его в LLM-провайдерах и API-подключениях.",
+      "submit": "Создать секрет"
+    }
   }
 }
