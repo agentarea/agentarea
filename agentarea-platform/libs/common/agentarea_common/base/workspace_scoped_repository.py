@@ -10,6 +10,23 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.context import ServicePrincipal, UserContext
+from ..rebac.ownership import grant_resource_owner
+
+
+def as_record_ids(ids: set[str]) -> list[Any]:
+    """Coerce graph object ids to the column's type.
+
+    The graph stores object ids as strings; the column is a UUID. Postgres
+    coerces on its own, SQLite (used by tests) does not, and a silently empty
+    ``IN`` reads as "you may see nothing" rather than as a bug.
+    """
+    coerced: list[Any] = []
+    for value in ids:
+        try:
+            coerced.append(UUID(str(value)))
+        except ValueError:
+            coerced.append(value)
+    return coerced
 
 
 class WorkspaceScopedRepository[T]:
@@ -127,16 +144,20 @@ class WorkspaceScopedRepository[T]:
         self,
         limit: int | None = None,
         offset: int | None = None,
+        ids: set[str] | None = None,
         **filters: Any,
     ) -> list[T]:
-        """List all records in the current workspace.
+        """List records in the current workspace, optionally narrowed to ``ids``.
 
-        Returns ALL workspace resources. Access control and filtering should be
-        handled by authorization layer (future ReBAC implementation).
+        The workspace filter answers "whose data"; ``ids`` answers "which of it
+        this caller may see", and comes from the authorization graph
+        (``readable_resource_ids``). It is applied in SQL rather than over the
+        result, so pagination still counts the rows the caller actually gets.
 
         Args:
             limit: Maximum number of records to return
             offset: Number of records to skip
+            ids: Restrict to these record ids; ``None`` applies no id filter
             **filters: Additional field filters
 
         Returns:
@@ -147,6 +168,9 @@ class WorkspaceScopedRepository[T]:
 
             # Apply workspace filtering only
             query = query.where(self._get_workspace_filter())
+
+            if ids is not None:
+                query = query.where(cast(Any, self.model_class).id.in_(as_record_ids(ids)))
 
             # Apply additional filters
             for field, value in filters.items():
@@ -199,7 +223,9 @@ class WorkspaceScopedRepository[T]:
     async def create(self, **kwargs: Any) -> T:
         """Create a new record in the current workspace.
 
-        Automatically sets created_by and workspace_id from user context.
+        Automatically sets created_by and workspace_id from user context, and
+        records ownership in the authorization graph for models that declare
+        ``__graph_resource__``.
 
         Args:
             **kwargs: Field values for the new record
@@ -217,11 +243,37 @@ class WorkspaceScopedRepository[T]:
             self.session.add(record)
             await self.session.commit()
             await self.session.refresh(record)
-
-            return record
         except Exception:
             await self.session.rollback()
             raise
+
+        await self._record_graph_ownership(record)
+        return record
+
+    async def _record_graph_ownership(self, record: T) -> None:
+        """Grant the creator ownership of a graph-governed row.
+
+        Only models that opt in with ``__graph_resource__`` reach the graph; for
+        everything else the workspace column is the whole story. The grant runs
+        after the commit, so a failed insert never leaves a tuple behind -- the
+        reverse, a committed row whose grant failed, raises here and is retried
+        by the caller, because the alternative is a resource nobody can reach.
+
+        This lives in the repository rather than at the call sites deliberately:
+        an agent created through the platform toolset and one created through
+        POST /v1/agents are the same row, and only one of those paths used to
+        remember (see ``agentarea_common.rebac.ownership``).
+        """
+        if not getattr(self.model_class, "__graph_resource__", False):
+            return
+        record_id = getattr(record, "id", None)
+        if record_id is None:
+            return
+        await grant_resource_owner(
+            resource_id=record_id,
+            workspace_id=self.user_context.workspace_id,
+            user_id=self.user_context.user_id,
+        )
 
     async def update(self, id: UUID | str, creator_scoped: bool = False, **kwargs: Any) -> T | None:
         """Update a record by ID within the current workspace.

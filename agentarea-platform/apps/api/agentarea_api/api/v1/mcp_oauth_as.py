@@ -158,13 +158,23 @@ async def _protected_resource_metadata(resource_path: str) -> JSONResponse:
     )
 
 
-@oauth_as_router.get("/.well-known/oauth-protected-resource")
+@oauth_as_router.get(
+    "/.well-known/oauth-protected-resource",
+    dependencies=[
+        unrestricted("RFC 9728 discovery document, fetched unauthenticated by every OAuth client")
+    ],
+)
 async def oauth_protected_resource_metadata() -> JSONResponse:
     """The root location, which is what our own ``WWW-Authenticate`` points at."""
     return await _protected_resource_metadata("mcp")
 
 
-@oauth_as_router.get("/.well-known/oauth-protected-resource/{resource_path:path}")
+@oauth_as_router.get(
+    "/.well-known/oauth-protected-resource/{resource_path:path}",
+    dependencies=[
+        unrestricted("RFC 9728 discovery document, fetched unauthenticated by every OAuth client")
+    ],
+)
 async def oauth_protected_resource_metadata_by_path(resource_path: str) -> JSONResponse:
     """The RFC 9728 §3.1 location, which strict clients derive from the resource URI.
 
@@ -176,7 +186,12 @@ async def oauth_protected_resource_metadata_by_path(resource_path: str) -> JSONR
     return await _protected_resource_metadata(resource_path)
 
 
-@oauth_as_router.get("/.well-known/oauth-authorization-server")
+@oauth_as_router.get(
+    "/.well-known/oauth-authorization-server",
+    dependencies=[
+        unrestricted("RFC 9728 discovery document, fetched unauthenticated by every OAuth client")
+    ],
+)
 async def oauth_authorization_server_metadata() -> JSONResponse:
     """RFC 8414: serve Hydra's OIDC config at the standard AS discovery path.
 
@@ -229,7 +244,14 @@ async def oauth_authorization_server_metadata() -> JSONResponse:
 # ---------------------------------------------------------------------------
 
 
-@oauth_as_router.get("/oauth2/auth")
+@oauth_as_router.get(
+    "/oauth2/auth",
+    dependencies=[
+        unrestricted(
+            "proxied to the OAuth provider, which is the party that authenticates the caller"
+        )
+    ],
+)
 async def hydra_auth_redirect(request: Request) -> Response:
     """Redirect the browser to Hydra's actual /oauth2/auth endpoint.
 
@@ -384,6 +406,11 @@ async def hydra_dcr_proxy(request: Request) -> Response:
 @oauth_as_router.get(
     "/oauth2/{path:path}",
     operation_id="hydra_oauth2_proxy_oauth2__path__get",
+    dependencies=[
+        unrestricted(
+            "proxied to the OAuth provider, which is the party that authenticates the caller"
+        )
+    ],
 )
 @oauth_as_router.post(
     "/oauth2/{path:path}",
@@ -435,7 +462,12 @@ async def hydra_oauth2_proxy(path: str, request: Request) -> Response:
     )
 
 
-@oauth_as_router.get("/.well-known/jwks.json")
+@oauth_as_router.get(
+    "/.well-known/jwks.json",
+    dependencies=[
+        unrestricted("RFC 9728 discovery document, fetched unauthenticated by every OAuth client")
+    ],
+)
 async def hydra_jwks_proxy(request: Request) -> Response:
     """Proxy JWKS so token verification works against our API URL."""
     hydra_url = _hydra_public_url()

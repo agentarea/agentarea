@@ -54,8 +54,11 @@ class FakeSkillRepo:
         source_type=None,
         network_scope=None,
         from_registry=None,
+        ids=None,
     ):
         rows = list(self._skills)
+        if ids is not None:
+            rows = [s for s in rows if str(s.id) in ids]
         if search:
             rows = [s for s in rows if search.lower() in (s.name or "").lower()]
         if source_type:

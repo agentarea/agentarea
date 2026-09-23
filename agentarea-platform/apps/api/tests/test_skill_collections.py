@@ -18,9 +18,22 @@ from agentarea_api.api.v1 import access_control, skill_collections
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_common.workspaces.models import Workspace, WorkspaceMembership
 from agentarea_mcp.domain.models import MCPServer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+
+@pytest.fixture(autouse=True)
+def _graph_ownership(monkeypatch):
+    """Creating a row records ownership; here the graph is scenery.
+
+    ``libs/common/tests/test_graph_resource_ownership.py`` is where that write
+    is the subject.
+    """
+    allow_all_permissions()
+    return install_graph_ownership_stub(monkeypatch)
+
 
 # Tables needed across the collection + skill graph (SQLite in-memory).
 _TABLES = [
@@ -300,7 +313,9 @@ async def test_relationships_maps_collection_grant(session_factory, monkeypatch)
         monkeypatch.setattr(access_control, "get_graph_client", lambda: graph)
         monkeypatch.setattr(access_control, "_assert_workspace_admin", AsyncMock())
 
-        result = await access_control.list_relationships(context, session, namespace="SkillCollection")
+        result = await access_control.list_relationships(
+            context, session, namespace="SkillCollection"
+        )
 
         assert result.count == 1
         item = result.relationships[0]
@@ -344,7 +359,9 @@ async def test_relationships_filters_cross_workspace_tuples(session_factory, mon
         monkeypatch.setattr(access_control, "get_graph_client", lambda: graph)
         monkeypatch.setattr(access_control, "_assert_workspace_admin", AsyncMock())
 
-        result = await access_control.list_relationships(context, session, namespace="SkillCollection")
+        result = await access_control.list_relationships(
+            context, session, namespace="SkillCollection"
+        )
 
         assert result.count == 1
         assert result.relationships[0].object == str(collection.id)
@@ -442,7 +459,9 @@ async def test_create_relationship_disabled_raises_503(monkeypatch):
         namespace="Skill", object=str(uuid4()), relation="viewers", subject_id="Agent:x"
     )
     with pytest.raises(access_control.HTTPException) as exc_info:
-        await access_control.create_relationship(req, context, None)  # db_session unused: 503 precedes the guard
+        await access_control.create_relationship(
+            req, context, None
+        )  # db_session unused: 503 precedes the guard
     assert exc_info.value.status_code == 503
 
 

@@ -13,9 +13,14 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
     """MCP Server model with workspace awareness and audit trail."""
 
     __tablename__ = "mcp_servers"
+
     __table_args__ = (
         UniqueConstraint("workspace_id", "slug", name="uq_mcp_servers_workspace_slug"),
     )
+
+    #: Governed by the authorization graph: creating one writes
+    #: ``resource:<id>`` tuples so its creator can reach it afterwards.
+    __graph_resource__ = True
 
     name: Mapped[str] = mapped_column(String, nullable=False)
     slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)

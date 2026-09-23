@@ -13,7 +13,7 @@ from agentarea_agents.application.collection_service import SkillCollectionServi
 from agentarea_agents.infrastructure.collection_repository import SkillCollectionRepository
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_common.auth import UserContextDep
-from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
 from fastapi import APIRouter, Depends, HTTPException
@@ -137,9 +137,7 @@ async def get_collection(
 @router.put(
     "/{collection_id}",
     response_model=CollectionSummaryResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "skill_collection", id_param="collection_id")],
 )
 async def update_collection(
     collection_id: UUID,
@@ -169,9 +167,7 @@ async def update_collection(
 @router.delete(
     "/{collection_id}",
     status_code=204,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("delete", "skill_collection", id_param="collection_id")],
 )
 async def delete_collection(
     collection_id: UUID,
@@ -188,9 +184,7 @@ async def delete_collection(
 @router.post(
     "/{collection_id}/skills",
     status_code=204,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "skill_collection", id_param="collection_id")],
 )
 async def add_skill_to_collection(
     collection_id: UUID,
@@ -216,9 +210,7 @@ async def add_skill_to_collection(
 @router.delete(
     "/{collection_id}/skills/{skill_id}",
     status_code=204,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "skill_collection", id_param="collection_id")],
 )
 async def remove_skill_from_collection(
     collection_id: UUID,

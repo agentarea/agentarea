@@ -82,31 +82,16 @@ async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
             exc_info=True,
         )
 
-    administered: list[str] = []
-    try:
-        from agentarea_common.config.database import get_database
-        from agentarea_common.workspaces.repository import WorkspaceRepository
+    # Imported here: `workspaces` pulls in repositories that import this module.
+    from ..workspaces.authority import administered_workspace_ids
 
-        database = get_database()
-        async with database.async_session_factory() as session:
-            owned_workspaces = await WorkspaceRepository(session).list_owned_by_user(
-                user_context.user_id
-            )
-        for workspace in owned_workspaces:
-            if workspace.id not in accessible:
-                accessible.append(workspace.id)
-            administered.append(workspace.id)
-    except Exception as exc:
-        # Ownership is what grants administrative authority, so a failure here
-        # leaves ``admin_workspaces`` empty and admin-gated endpoints answer 403.
-        # Denying an admin action is recoverable; granting one on a failed lookup
-        # is not.
-        logger.warning(
-            "Could not resolve owned workspaces for user %s: %s",
-            user_context.user_id,
-            exc,
-            exc_info=True,
-        )
+    # Ownership is what grants administrative authority. A failed lookup returns
+    # an empty list, so admin-gated endpoints answer 403: denying an admin action
+    # is recoverable, granting one on a failed lookup is not.
+    administered = await administered_workspace_ids(user_context.user_id)
+    for workspace_id in administered:
+        if workspace_id not in accessible:
+            accessible.append(workspace_id)
 
     user_context.accessible_workspaces = accessible
     user_context.admin_workspaces = administered

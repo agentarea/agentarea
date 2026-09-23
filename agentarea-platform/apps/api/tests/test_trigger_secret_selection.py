@@ -16,9 +16,21 @@ from agentarea_api.api.v1 import triggers
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_secrets.catalog_service import SecretCatalogService, SecretNotFoundError
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+
+
+@pytest.fixture(autouse=True)
+def _graph_ownership(monkeypatch):
+    """Creating a row records ownership; here the graph is scenery.
+
+    ``libs/common/tests/test_graph_resource_ownership.py`` is where that write
+    is the subject.
+    """
+    allow_all_permissions()
+    return install_graph_ownership_stub(monkeypatch)
 
 
 @pytest.fixture

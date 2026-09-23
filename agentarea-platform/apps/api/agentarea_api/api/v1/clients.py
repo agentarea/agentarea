@@ -5,7 +5,12 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.auth.resource_visibility import readable_resource_ids
+from agentarea_common.auth.route_authz import (
+    enforced_in_handler,
+    requires,
+    unrestricted,
+)
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config.app import get_app_settings
 from agentarea_mcp.application.client_service import ClientService
@@ -103,9 +108,7 @@ async def create_client(
 @router.get(
     "/",
     response_model=list[ClientResponse],
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[enforced_in_handler("narrowed to the rows the graph says this caller may read")],
 )
 async def list_clients(
     user_context: UserContextDep,
@@ -113,16 +116,18 @@ async def list_clients(
     limit: int = 100,
     offset: int = 0,
 ):
-    clients = await service.list(limit=limit, offset=offset)
+    clients = await service.list(
+        limit=limit,
+        offset=offset,
+        ids=await readable_resource_ids(user_context.user_id),
+    )
     return [_to_response(c) for c in clients]
 
 
 @router.get(
     "/{client_id}",
     response_model=ClientResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("read", "client", id_param="client_id")],
 )
 async def get_client(
     client_id: UUID,
@@ -138,9 +143,7 @@ async def get_client(
 @router.patch(
     "/{client_id}",
     response_model=ClientResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "client", id_param="client_id")],
 )
 async def update_client(
     client_id: UUID,
@@ -157,9 +160,7 @@ async def update_client(
 @router.delete(
     "/{client_id}",
     status_code=204,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("delete", "client", id_param="client_id")],
 )
 async def delete_client(
     client_id: UUID,
@@ -174,9 +175,7 @@ async def delete_client(
 @router.post(
     "/{client_id}/skills",
     status_code=204,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "client", id_param="client_id")],
 )
 async def add_skill_to_client(
     client_id: UUID,
@@ -190,9 +189,7 @@ async def add_skill_to_client(
 @router.delete(
     "/{client_id}/skills/{skill_id}",
     status_code=204,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "client", id_param="client_id")],
 )
 async def remove_skill_from_client(
     client_id: UUID,
@@ -206,9 +203,7 @@ async def remove_skill_from_client(
 @router.post(
     "/{client_id}/mcp-instances",
     status_code=204,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "client", id_param="client_id")],
 )
 async def add_mcp_instance_to_client(
     client_id: UUID,
@@ -222,9 +217,7 @@ async def add_mcp_instance_to_client(
 @router.delete(
     "/{client_id}/mcp-instances/{mcp_instance_id}",
     status_code=204,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "client", id_param="client_id")],
 )
 async def remove_mcp_instance_from_client(
     client_id: UUID,
