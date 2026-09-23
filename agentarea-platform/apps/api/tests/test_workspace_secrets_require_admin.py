@@ -71,7 +71,7 @@ def test_the_owner_still_rotates_a_secret() -> None:
     client, catalog = _client(_owner())
     catalog.rotate_user_secret.return_value = SimpleNamespace(
         id=SECRET_ID,
-        secret_name="STRIPE_KEY",  # noqa: S106 -- a secret's name, not its value
+        secret_name="STRIPE_KEY",  # noqa: S106 -- a secret's name, not its value  # pragma: allowlist secret
         description=None,
         created_at=datetime(2026, 9, 22, tzinfo=UTC),
         updated_at=datetime(2026, 9, 22, tzinfo=UTC),

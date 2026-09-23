@@ -404,7 +404,7 @@ async def test_authorize_persists_dcr_credentials_before_redirecting(monkeypatch
     assert query["client_id"] == ["dcr-client-id"]
     auth_kwargs = auth_create.await_args.kwargs
     assert auth_kwargs["config"]["client_id"] == "dcr-client-id"
-    assert auth_kwargs["credentials"]["client_secret"] == "dcr-secret"
+    assert auth_kwargs["credentials"]["client_secret"] == "dcr-secret"  # pragma: allowlist secret
 
 
 @pytest.mark.asyncio
