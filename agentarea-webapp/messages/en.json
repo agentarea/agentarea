@@ -2112,6 +2112,23 @@
       "descriptionPlaceholder": "Which account this key belongs to",
       "footerNote": "Reuse it across LLM providers and API connections.",
       "submit": "Create secret"
+    },
+    "rowActions": {
+      "actionsFor": "Actions for {name}",
+      "replaceValue": "Replace value"
+    },
+    "replaceDialog": {
+      "title": "Replace value",
+      "description": "Sets a new value for {name}.",
+      "usedIn": "Used in {count, plural, one {# place} other {# places}} — all of them switch to the new value immediately.",
+      "valueLabel": "New value",
+      "submit": "Replace"
+    },
+    "deleteDialog": {
+      "title": "Delete {name}?",
+      "inUse": "Something still uses this secret. Detach it there first — deleting is refused while anything points at it.",
+      "irreversible": "This cannot be undone.",
+      "deleting": "Deleting…"
     }
   }
 }
