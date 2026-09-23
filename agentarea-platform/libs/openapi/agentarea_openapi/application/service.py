@@ -50,6 +50,22 @@ _SAFE_HEADERS = frozenset(
 )
 
 
+class _SpecLoader(yaml.SafeLoader):
+    """SafeLoader that keeps timestamps as their source text.
+
+    A spec is stored and returned as JSON, and SafeLoader would turn an
+    unquoted ``version: 2024-01-01`` into a ``datetime.date`` that neither
+    json nor the response models accept.
+    """
+
+
+_SpecLoader.add_constructor("tag:yaml.org,2002:timestamp", _SpecLoader.construct_yaml_str)
+
+
+def _load_yaml_spec(text: str) -> Any:
+    return yaml.load(text, Loader=_SpecLoader)  # noqa: S506 -- a SafeLoader subclass
+
+
 def _secret_key(connection_id: str | UUID, header_name: str) -> str:
     """Build the secret manager key for a header value."""
     return f"openapi:{connection_id}:header:{header_name}"
@@ -119,11 +135,11 @@ async def fetch_and_parse_spec(
     text = content.decode(resp.encoding or "utf-8", errors="replace")
 
     if url.endswith((".yaml", ".yml")):
-        return yaml.safe_load(text)
+        return _load_yaml_spec(text)
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        return yaml.safe_load(text)
+        return _load_yaml_spec(text)
 
 
 class OpenAPIConnectionService:

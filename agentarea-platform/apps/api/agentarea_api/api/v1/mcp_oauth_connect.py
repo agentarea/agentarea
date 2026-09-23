@@ -21,6 +21,7 @@ Implements the client-side of:
     - OAuth 2.1 + PKCE (S256)
 """
 
+import asyncio
 import json
 import logging
 import secrets
@@ -43,6 +44,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.config import get_settings
+from agentarea_common.config.database import get_database
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
 from agentarea_mcp.application.auth_service import MCPAuthService
@@ -548,27 +550,10 @@ async def oauth_callback(
         as_metadata.issuer,
     )
 
-    # Trigger tool discovery in background — don't block the redirect
-    try:
-        # Build service with the same session context
-        from agentarea_common.base.repository_factory import RepositoryFactory
-        from agentarea_mcp.application.service import MCPServerInstanceService
-
-        factory = RepositoryFactory(session=db_session, user_context=user_context)
-        # Event broker is optional for tool discovery
-        service = MCPServerInstanceService(
-            repository_factory=factory,
-            event_broker=_NoopEventBroker(),
-            secret_manager=secret_manager,
-        )
-        # Fire and forget — don't block the user redirect
-        import asyncio
-
-        task = asyncio.create_task(_discover_after_oauth(service, UUID(instance_id), db_session))
-        _background_tasks.add(task)
-        task.add_done_callback(_background_tasks.discard)
-    except Exception as discover_err:
-        logger.warning("Failed to schedule tool discovery after OAuth: %s", discover_err)
+    # Discovery must not block the redirect; it runs after this request's session is closed.
+    task = asyncio.create_task(_discover_after_oauth(user_context, UUID(instance_id)))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
     return RedirectResponse(
         url=f"{detail_url}?oauth=success",
@@ -576,17 +561,22 @@ async def oauth_callback(
     )
 
 
-async def _discover_after_oauth(
-    service,
-    instance_id: UUID,
-    db_session,
-) -> None:
-    """Background task: discover tools after OAuth connect completes."""
+async def _discover_after_oauth(user_context: UserContext, instance_id: UUID) -> None:
+    """Background task: discover tools after OAuth connect completes, on its own session."""
+    from agentarea_common.base.repository_factory import RepositoryFactory
+    from agentarea_mcp.application.service import MCPServerInstanceService
+
     try:
-        success = await service.discover_and_store_tools(instance_id)
+        async with get_database().session() as session:
+            service = MCPServerInstanceService(
+                repository_factory=RepositoryFactory(session=session, user_context=user_context),
+                event_broker=_NoopEventBroker(),
+                secret_manager=get_real_secret_manager(session=session, user_context=user_context),
+            )
+            success = await service.discover_and_store_tools(instance_id)
         if success:
             logger.info("Post-OAuth tool discovery succeeded for %s", instance_id)
         else:
             logger.warning("Post-OAuth tool discovery returned False for %s", instance_id)
-    except Exception as e:
-        logger.warning("Post-OAuth tool discovery failed for %s: %s", instance_id, e)
+    except Exception:
+        logger.exception("Post-OAuth tool discovery failed for %s", instance_id)
