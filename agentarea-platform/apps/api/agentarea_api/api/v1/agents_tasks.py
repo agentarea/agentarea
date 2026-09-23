@@ -51,6 +51,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import text
 
+from ._task_authority import requires_task_authority
+
 logger = logging.getLogger(__name__)
 
 
@@ -261,9 +263,7 @@ class ContinueTaskPayload(BaseModel):
 
 @global_tasks_router.post(
     "/{task_id}/continue",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_task_authority()],
 )
 async def continue_task_execution(
     task_id: UUID,
@@ -1594,9 +1594,7 @@ async def get_task_summary(
 
 @router.delete(
     "/{task_id}",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_task_authority()],
 )
 async def cancel_agent_task(
     agent_id: UUID,
@@ -1634,9 +1632,7 @@ async def cancel_agent_task(
 
 @router.post(
     "/{task_id}/pause",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_task_authority()],
 )
 async def pause_agent_task(
     agent_id: UUID,
@@ -1695,9 +1691,7 @@ async def pause_agent_task(
 
 @router.post(
     "/{task_id}/resume",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_task_authority()],
 )
 async def resume_agent_task(
     agent_id: UUID,
@@ -1759,9 +1753,7 @@ async def resume_agent_task(
 
 @router.post(
     "/{task_id}/a2ui/action",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_task_authority()],
 )
 async def send_a2ui_action(
     agent_id: UUID,
@@ -1816,9 +1808,7 @@ async def send_a2ui_action(
 
 @router.post(
     "/{task_id}/input",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_task_authority()],
 )
 async def submit_task_input(
     agent_id: UUID,
@@ -1960,9 +1950,7 @@ async def _resolve_model_info(
 
 @router.post(
     "/{task_id}/command",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_task_authority()],
 )
 async def send_task_command(
     agent_id: UUID,
@@ -2049,9 +2037,7 @@ async def send_task_command(
 
 @router.post(
     "/{task_id}/resolve-escalation",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_task_authority()],
 )
 async def resolve_task_escalation(
     agent_id: UUID,

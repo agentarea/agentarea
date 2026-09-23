@@ -32,7 +32,7 @@ from agentarea_api.api.deps.services import (
     MCPServerInstanceServiceDep,
 )
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.auth.tool_authorization import decide_tool_policy
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
@@ -112,6 +112,30 @@ def _iter_jsonrpc_tool_calls(payload: Any) -> list[tuple[str, dict[str, Any]]]:
     return calls
 
 
+async def authorize_mcp_tool_call(
+    tool_name: str,
+    user_context,
+    session,
+    *,
+    policy: dict[str, Any] | None = None,
+) -> None:
+    """Deny one MCP tool call when the workspace policy does not permit it."""
+    if policy is None:
+        resolver = GovernancePolicyResolver(RepositoryFactory(session, user_context))
+        snapshot = await resolver.resolve(
+            workspace_id=user_context.workspace_id,
+            user_id=user_context.user_id,
+        )
+        policy = snapshot.to_json_dict()
+
+    decision = decide_tool_policy(policy, tool_name)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Tool call denied: {tool_name}: {decision.reason}",
+        )
+
+
 async def _authorize_mcp_tool_calls(body: bytes, user_context, session) -> None:
     """Deny JSON-RPC tool calls the governance policy does not permit.
 
@@ -138,12 +162,12 @@ async def _authorize_mcp_tool_calls(body: bytes, user_context, session) -> None:
     policy = snapshot.to_json_dict()
 
     for tool_name, _tool_args in tool_calls:
-        decision = decide_tool_policy(policy, tool_name)
-        if not decision.allowed:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Tool call denied: {tool_name}: {decision.reason}",
-            )
+        await authorize_mcp_tool_call(
+            tool_name,
+            user_context,
+            session,
+            policy=policy,
+        )
 
 
 async def _resolve_upstream_url(instance, server_spec) -> tuple[str, str | None]:
@@ -255,12 +279,12 @@ def _guard_and_pin_upstream(
 @router.post(
     "/{instance_id}/mcp",
     operation_id="proxy_instance_v1_mcp__instance_id__mcp_post",
-    dependencies=[unrestricted("proxies to an MCP instance the caller's workspace already owns")],
+    dependencies=[requires("use", "mcp_instance", id_param="instance_id")],
 )
 @router.delete(
     "/{instance_id}/mcp",
     operation_id="proxy_instance_v1_mcp__instance_id__mcp_delete",
-    dependencies=[unrestricted("proxies to an MCP instance the caller's workspace already owns")],
+    dependencies=[requires("use", "mcp_instance", id_param="instance_id")],
 )
 async def proxy_instance(
     instance_id: UUID,

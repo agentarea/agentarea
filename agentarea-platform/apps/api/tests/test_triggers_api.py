@@ -19,9 +19,22 @@ from agentarea_api.api.v1.a2a_auth import require_a2a_execute_auth
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.config.database import get_db_session
+from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_common.testing.flows import MainFlow
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+
+
+@pytest.fixture(autouse=True)
+def _graph_ownership(monkeypatch):
+    """Creating a row records ownership; here the graph is scenery.
+
+    ``libs/common/tests/test_graph_resource_ownership.py`` is where that write
+    is the subject.
+    """
+    allow_all_permissions()
+    return install_graph_ownership_stub(monkeypatch)
+
 
 # Mock trigger system components when not available
 try:

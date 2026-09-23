@@ -14,7 +14,19 @@ from agentarea_api.api.v1.a2a_auth import require_a2a_execute_auth
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from fastapi.testclient import TestClient
+
+
+@pytest.fixture(autouse=True)
+def _graph_ownership(monkeypatch):
+    """Creating a row records ownership; here the graph is scenery.
+
+    ``libs/common/tests/test_graph_resource_ownership.py`` is where that write
+    is the subject.
+    """
+    allow_all_permissions()
+    return install_graph_ownership_stub(monkeypatch)
 
 
 @pytest.fixture
@@ -369,6 +381,7 @@ class TestTriggersAPISimple:
 
         # Should fail validation
         assert response.status_code == 422
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

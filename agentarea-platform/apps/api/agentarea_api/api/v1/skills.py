@@ -17,7 +17,8 @@ from agentarea_agents.schemas.skills_dto import (
 )
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
-from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.auth.resource_visibility import readable_resource_ids
+from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -259,11 +260,12 @@ async def upload_skill(
     "",
     response_model=PaginatedResponse[SkillResponse],
     dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+        enforced_in_handler("the tenant half is narrowed to what the graph says is readable")
     ],
 )
 async def list_skills(
     skill_service: SkillServiceDep,
+    user_context: UserContextDep,
     pagination: PaginationParams = Depends(),
     source_type: str | None = Query(None, description="Filter by source type"),
     network_scope: str | None = Query(None, description="Filter by network scope"),
@@ -277,6 +279,7 @@ async def list_skills(
         source_type=source_type,
         network_scope=network_scope,
         from_registry=from_registry,
+        ids=await readable_resource_ids(user_context.user_id),
     )
     return PaginatedResponse(
         items=[SkillResponse.from_skill(skill) for skill in skills],
@@ -291,17 +294,24 @@ async def list_skills(
     "/{skill_id}",
     response_model=SkillResponse,
     dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+        enforced_in_handler(
+            "the PDP decides for a tenant row; a catalog projection is platform data"
+        )
     ],
 )
 async def get_skill(
     skill_id: UUID,
     skill_service: SkillServiceDep,
+    user_context: UserContextDep,
 ):
     """Get a skill by ID (tenant or catalog)."""
     skill = await skill_service.get_with_catalog(skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+    if not getattr(skill, "is_catalog", False):
+        # A tenant row; the catalog projection beside it is platform data and
+        # carries no ownership tuples to check.
+        await require_permission("read", "skill", str(skill_id), user_context.user_id)
     return SkillResponse.from_skill(skill)
 
 
@@ -470,9 +480,7 @@ async def delete_skill(
 @router.post(
     "/{skill_id}/members",
     response_model=SkillMemberResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "skill", id_param="skill_id")],
 )
 async def add_skill_member(
     skill_id: UUID,
@@ -526,9 +534,7 @@ async def list_skill_members(
 
 @router.delete(
     "/{skill_id}/members/{child_skill_id}",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "skill", id_param="skill_id")],
 )
 async def remove_skill_member(
     skill_id: UUID,

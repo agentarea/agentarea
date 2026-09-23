@@ -90,20 +90,43 @@ async def list_workspace_ids_for_member(graph: MembershipGraph, user_id: str) ->
     return sorted(workspace_ids)
 
 
+def workspace_baseline_role(workspace_id: str, user_id: str) -> RelationTuple:
+    """The role a plain member holds over everything in the workspace.
+
+    ``Workspace#members`` on its own confers nothing: the model gives the root
+    project ``reader or ... or admin from workspace``, with no branch for a
+    member. Membership therefore has to *grant* something, and what it grants is
+    read over the root project, which cascades to every resource hung off it.
+
+    Read and no more, because that is what membership already meant in practice:
+    the workspace-scoped repository showed a member every row, while the graph
+    refused them ``can_write`` on anything they did not create. The difference is
+    that the grant is now a tuple somebody can see, audit and take away.
+    """
+    return RelationTuple(
+        namespace="project",
+        object=f"{workspace_id}-root",
+        relation="reader",
+        subject_id=_user_subject(user_id),
+    )
+
+
 async def grant_workspace_membership(
     graph: MembershipGraph,
     *,
     workspace_id: str,
     user_id: str,
 ) -> None:
-    if await check_workspace_membership(graph, workspace_id=workspace_id, user_id=user_id):
-        return
-    try:
-        await graph.write_tuple(workspace_membership(workspace_id, user_id))
-    except (KetoError, OpenFGAError) as exc:
-        if "already exist" in str(exc):
-            return
-        raise
+    for relationship in (
+        workspace_membership(workspace_id, user_id),
+        workspace_baseline_role(workspace_id, user_id),
+    ):
+        try:
+            await graph.write_tuple(relationship)
+        except (KetoError, OpenFGAError) as exc:
+            if "already exist" in str(exc):
+                continue
+            raise
 
 
 async def revoke_workspace_membership(
@@ -112,14 +135,16 @@ async def revoke_workspace_membership(
     workspace_id: str,
     user_id: str,
 ) -> None:
-    if not await check_workspace_membership(graph, workspace_id=workspace_id, user_id=user_id):
-        return
-    try:
-        await graph.delete_tuple(workspace_membership(workspace_id, user_id))
-    except (KetoError, OpenFGAError) as exc:
-        if "did not exist" in str(exc) or "does not exist" in str(exc):
-            return
-        raise
+    for relationship in (
+        workspace_membership(workspace_id, user_id),
+        workspace_baseline_role(workspace_id, user_id),
+    ):
+        try:
+            await graph.delete_tuple(relationship)
+        except (KetoError, OpenFGAError) as exc:
+            if "did not exist" in str(exc) or "does not exist" in str(exc):
+                continue
+            raise
 
 
 def _user_subject(user_id: str) -> str:

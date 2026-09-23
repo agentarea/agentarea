@@ -31,7 +31,7 @@ from agentarea_api.api.deps.services import (
 )
 from agentarea_api.api.v1._icons import CHANNEL_ICON_NAMESPACE, build_icon_url
 from agentarea_common.auth.dependencies import UserContext, get_user_context
-from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.config.app import get_app_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -756,9 +756,7 @@ async def get_trigger(
 @router.put(
     "/{trigger_id}",
     response_model=TriggerResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "trigger", id_param="trigger_id")],
 )
 async def update_trigger(
     trigger_id: UUID,
@@ -867,9 +865,7 @@ async def update_trigger(
 @router.delete(
     "/{trigger_id}",
     status_code=204,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("delete", "trigger", id_param="trigger_id")],
 )
 async def delete_trigger(
     secret_manager: BaseSecretManagerDep,
@@ -927,9 +923,7 @@ async def delete_trigger(
 @router.post(
     "/{trigger_id}/enable",
     response_model=dict[str, Any],
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "trigger", id_param="trigger_id")],
 )
 async def enable_trigger(
     trigger_id: UUID,
@@ -977,9 +971,7 @@ async def enable_trigger(
 @router.post(
     "/{trigger_id}/disable",
     response_model=dict[str, Any],
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "trigger", id_param="trigger_id")],
 )
 async def disable_trigger(
     trigger_id: UUID,
@@ -1367,9 +1359,7 @@ async def get_execution_correlations(
 @router.post(
     "/{trigger_id}/execute",
     response_model=dict[str, Any],
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "trigger", id_param="trigger_id")],
 )
 async def execute_trigger(
     trigger_id: UUID,
@@ -1429,9 +1419,7 @@ async def execute_trigger(
 @router.post(
     "/{trigger_id}/run",
     response_model=TriggerRunResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "trigger", id_param="trigger_id")],
 )
 async def run_trigger_now(
     trigger_id: UUID,

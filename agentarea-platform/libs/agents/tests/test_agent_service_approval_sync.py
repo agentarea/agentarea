@@ -19,10 +19,21 @@ from agentarea_common.audit.models import AuditEventORM
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.testing import install_graph_ownership_stub
 from agentarea_governance.domain.rules import PolicyEffect, PolicySubjectType
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+
+@pytest.fixture(autouse=True)
+def _graph(monkeypatch):
+    """Creating an agent records ownership; here the graph is scenery.
+
+    ``agentarea_common/tests/test_graph_resource_ownership.py`` is where that
+    write is the subject.
+    """
+    return install_graph_ownership_stub(monkeypatch)
 
 
 @pytest.fixture
@@ -96,9 +107,7 @@ async def test_create_agent_lifts_toggle_into_a_rule_and_strips_the_flag(session
         service = _service(session, context)
 
         agent = await service.create_agent(
-            AgentCreate(
-                name="Approver", model_id=None, tools=[_code_tool("agentarea/shell", True)]
-            )
+            AgentCreate(name="Approver", model_id=None, tools=[_code_tool("agentarea/shell", True)])
         )
 
         rules = await _rules(session, context, agent.id)
@@ -112,9 +121,7 @@ async def test_create_agent_without_confirmation_writes_no_rule(session_factory)
         service = _service(session, context)
 
         agent = await service.create_agent(
-            AgentCreate(
-                name="Plain", model_id=None, tools=[_code_tool("agentarea/shell", False)]
-            )
+            AgentCreate(name="Plain", model_id=None, tools=[_code_tool("agentarea/shell", False)])
         )
 
         assert await _rules(session, context, agent.id) == []
@@ -142,9 +149,7 @@ async def test_update_agent_unticking_removes_the_rule(session_factory):
         context = _context()
         service = _service(session, context)
         agent = await service.create_agent(
-            AgentCreate(
-                name="Editable", model_id=None, tools=[_code_tool("agentarea/shell", True)]
-            )
+            AgentCreate(name="Editable", model_id=None, tools=[_code_tool("agentarea/shell", True)])
         )
         assert {r.target for r in await _rules(session, context, agent.id)} == {"tool:shell"}
 
