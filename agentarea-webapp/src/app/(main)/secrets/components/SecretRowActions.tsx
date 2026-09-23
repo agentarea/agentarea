@@ -4,20 +4,15 @@ import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Key, Loader2, MoreHorizontal } from "lucide-react";
+import { toast } from "sonner";
+import BaseModal from "@/components/BaseModal";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import {
   BlueprintDialogContent,
   BlueprintFields,
 } from "@/components/ui/blueprint-sheet";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,6 +55,16 @@ export function SecretRowActions({ secret }: { secret: Secret }) {
       close();
       router.refresh();
     });
+  };
+
+  const remove = async () => {
+    const result = await deleteSecretAction(secret.id);
+    if (result.error) {
+      toast.error(t("deleteDialog.failed"), { description: result.error });
+      return;
+    }
+    toast.success(t("deleteDialog.deleted", { name: secret.name }));
+    startTransition(() => router.refresh());
   };
 
   const usageCount = secret.used_by?.length ?? 0;
@@ -137,46 +142,32 @@ export function SecretRowActions({ secret }: { secret: Secret }) {
         </BlueprintDialogContent>
       </Dialog>
 
-      <Dialog open={mode === "delete"} onOpenChange={(o) => !o && close()}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {t("deleteDialog.title", { name: secret.name })}
-            </DialogTitle>
-            <DialogDescription>
-              {usageCount > 0
-                ? t("deleteDialog.inUse")
-                : t("deleteDialog.irreversible")}
-            </DialogDescription>
-          </DialogHeader>
-          {usageCount > 0 ? (
-            <ul className="space-y-1 text-sm text-muted-foreground">
+      <BaseModal
+        type="delete"
+        open={mode === "delete"}
+        onOpenChange={(o) => !o && close()}
+        title={t("deleteDialog.title", { name: secret.name })}
+        description={
+          usageCount > 0 ? (
+            <>
+              {t("deleteDialog.inUse")}
               {secret.used_by?.map((c) => (
-                <li key={`${c.consumer_type}-${c.consumer_id}-${c.field}`}>
+                <span
+                  key={`${c.consumer_type}-${c.consumer_id}-${c.field}`}
+                  className="mt-1 block"
+                >
                   {c.consumer_type} · {c.field}
-                </li>
+                </span>
               ))}
-            </ul>
-          ) : null}
-          {error ? (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <DialogFooter>
-            <Button variant="ghost" onClick={close} disabled={pending}>
-              {tCommon("cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => run(() => deleteSecretAction(secret.id))}
-              disabled={pending}
-            >
-              {pending ? t("deleteDialog.deleting") : tCommon("delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </>
+          ) : (
+            t("deleteDialog.irreversible")
+          )
+        }
+        // Deleting is refused while anything points at the secret.
+        confirmDisabled={usageCount > 0}
+        onConfirm={remove}
+      />
     </>
   );
 }

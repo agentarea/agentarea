@@ -2126,9 +2126,10 @@
     },
     "deleteDialog": {
       "title": "Delete {name}?",
-      "inUse": "Something still uses this secret. Detach it there first — deleting is refused while anything points at it.",
+      "inUse": "This secret is still in use. Detach it from these places first:",
       "irreversible": "This cannot be undone.",
-      "deleting": "Deleting…"
+      "failed": "Couldn't delete the secret",
+      "deleted": "Secret {name} deleted"
     }
   }
 }

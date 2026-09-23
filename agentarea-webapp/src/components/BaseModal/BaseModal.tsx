@@ -23,6 +23,8 @@ interface BaseModalProps {
   type: "delete" | "confirm";
   /** Overrides the default "Delete"/"Confirm" label on the confirm button. */
   confirmLabel?: React.ReactNode;
+  /** Keeps the confirm button disabled, e.g. when the action would be refused. */
+  confirmDisabled?: boolean;
   /**
    * Controlled mode — open the dialog from somewhere that can't host a
    * trigger (a dropdown-menu item, a keyboard shortcut…). Both must be passed.
@@ -38,6 +40,7 @@ export default function BaseModal({
   onConfirm,
   type,
   confirmLabel,
+  confirmDisabled,
   open,
   onOpenChange,
 }: BaseModalProps) {
@@ -181,7 +184,7 @@ export default function BaseModal({
           <Button
             size="sm"
             onClick={handleConfirm}
-            disabled={isLoading}
+            disabled={isLoading || confirmDisabled}
             variant={type === "delete" ? "destructive" : "default"}
           >
             {confirmLabel ??
