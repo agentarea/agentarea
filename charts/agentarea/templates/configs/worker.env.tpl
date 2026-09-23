@@ -12,6 +12,7 @@ TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY: "true"
 DEBUG: "false"
 ENVIRONMENT: "production"
 MCP_MANAGER_URL: "http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}"
+AGENTAREA_WF_HEALTH_PORT: "{{ .Values.worker.healthPort }}"
 {{- end }}
 
 {{- define "agentarea.worker.envs" }}
@@ -55,4 +56,9 @@ MCP_MANAGER_URL: "http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Va
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-worker
       key: MCP_MANAGER_URL
+- name: AGENTAREA_WF_HEALTH_PORT
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-worker
+      key: AGENTAREA_WF_HEALTH_PORT
 {{- end }}

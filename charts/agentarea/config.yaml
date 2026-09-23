@@ -188,6 +188,7 @@ groups:
       DEBUG: 'false'
       ENVIRONMENT: 'production'
       MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
+      AGENTAREA_WF_HEALTH_PORT: '{{ .Values.worker.healthPort }}'
 
   application:
     secrets:

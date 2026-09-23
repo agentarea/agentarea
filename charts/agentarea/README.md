@@ -247,6 +247,12 @@ The following table lists configurable parameters of the chart and their default
 | worker.image.repository | string | `"agentarea/agentarea-worker"` |  |
 | worker.image.tag | string | `"latest"` |  |
 | worker.image.pullPolicy | string | `""` |  |
+| worker.healthPort | int | `8081` | Port of the worker's health endpoint, passed to the container as AGENTAREA_WF_HEALTH_PORT. /readyz answers 200 once the database, the authorization backend and Redis are reachable and every Temporal worker is polling; /livez answers 200 while the event loop responds. |
+| worker.minReadySeconds | int | `10` | Seconds a new pod must stay ready before it counts as available, so a pod that passes readiness and then crashes cannot retire an old replica. |
+| worker.strategy | object | `{"rollingUpdate":{"maxSurge":1,"maxUnavailable":0},"type":"RollingUpdate"}` | Rollout strategy. maxUnavailable 0 keeps every old replica until its replacement is available: a new ReplicaSet that never becomes ready stalls the rollout instead of taking the running workers down. |
+| worker.startupProbe | object | `{"enabled":true,"failureThreshold":60,"periodSeconds":5,"timeoutSeconds":3}` | Probes /readyz until the worker first reports ready, holding off the other two probes. periodSeconds x failureThreshold is the startup budget (Temporal connect, OpenFGA bootstrap, database and Redis checks): 5 minutes. |
+| worker.readinessProbe | object | `{"enabled":true,"failureThreshold":3,"periodSeconds":10,"timeoutSeconds":3}` | Probes /readyz. The worker serves no traffic, so readiness only gates rollouts: an old replica is retired only for a replacement that is polling. |
+| worker.livenessProbe | object | `{"enabled":true,"failureThreshold":6,"periodSeconds":10,"timeoutSeconds":5}` | Probes /livez, answered by the event loop the Temporal workers run on. A loop blocked for about periodSeconds x failureThreshold gets restarted. |
 | worker.resources | object | `{}` |  |
 | worker.podAnnotations | object | `{}` |  |
 | worker.podLabels | object | `{}` |  |
