@@ -246,13 +246,6 @@
     "createFailed": "Failed to create invitation.",
     "inviteLinkHint": "Share this link. It is shown only once.",
     "done": "Done",
-    "acceptTitle": "Accept invitation",
-    "acceptDescription": "You have been invited to join a workspace.",
-    "acceptButton": "Accept invitation",
-    "acceptNoToken": "This invitation link is missing its token.",
-    "acceptFailed": "Failed to accept invitation. The link may be expired or invalid.",
-    "acceptSuccess": "You have joined the workspace.",
-    "goToWorkspace": "Go to workspace",
     "tabMembers": "Members",
     "tabInvitations": "Invitations",
     "searchPlaceholder": "Search by user ID or email…",
@@ -310,6 +303,27 @@
     "copyFailed": "Couldn’t copy to clipboard",
     "orderExpires": "Expiry",
     "orderRecipient": "Recipient"
+  },
+  "InvitationDialog": {
+    "title": "Workspace invitation",
+    "joinTitle": "Join {workspace}",
+    "invitedBy": "<b>{inviter}</b> invited you to join the <b>{workspace}</b> workspace.",
+    "invitedByUnknown": "You have been invited to join the <b>{workspace}</b> workspace.",
+    "expires": "The invitation expires on {date}.",
+    "loading": "Loading invitation…",
+    "accept": "Accept invitation",
+    "decline": "Not now",
+    "close": "Close",
+    "unavailableTitle": "Invitation unavailable",
+    "problem": {
+      "missing_token": "This invitation link is missing its token. Ask the person who invited you for a new link.",
+      "not_found": "This invitation link is not valid. It may be mistyped, or a newer link may have replaced it.",
+      "wrong_account": "This invitation was sent to a different email address. Sign in with that account to accept it.",
+      "expired": "This invitation has expired. Ask the person who invited you for a new link.",
+      "revoked": "This invitation was revoked. Ask the workspace for a new link if you still need access.",
+      "already_accepted": "This invitation has already been used by another account.",
+      "unknown": "The invitation could not be processed: {message}"
+    }
   },
   "NavUser": {
     "settings": "Settings",

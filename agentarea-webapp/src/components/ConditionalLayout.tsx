@@ -1,8 +1,10 @@
 "use client";
 
+import { Suspense } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import AuthGuard from "@/components/auth/AuthGuard";
+import InvitationDialog from "@/components/InvitationDialog/InvitationDialog";
 import { AppSidebarContent } from "@/components/MainLayout/components/AppSidebar";
 import QuickTaskDialog from "@/components/QuickTask/QuickTaskDialog";
 import { SettingsSidebarContent } from "@/components/SettingsLayout/SettingsSidebar";
@@ -93,6 +95,9 @@ export default function ConditionalLayout({
       </div>
       <ThemeToggle className="fixed bottom-2 right-2 z-50" />
       <QuickTaskDialog />
+      <Suspense fallback={null}>
+        <InvitationDialog />
+      </Suspense>
     </SidebarProvider>
   );
 }

@@ -1,8 +1,17 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createWorkspace } from "@/lib/api";
+import { cookies } from "next/headers";
+import {
+  acceptWorkspaceInvitation,
+  createWorkspace,
+  previewWorkspaceInvitation,
+} from "@/lib/api";
+import { formatApiError } from "@/lib/api-errors";
+import {
+  classifyInvitationError,
+  type InvitationFailure,
+} from "@/lib/invitations";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import { WORKSPACE_SLUG_COOKIE } from "@/lib/workspaces";
 
@@ -47,4 +56,56 @@ export async function createWorkspaceAction(name: string) {
 
   await setActiveSlug(data.slug);
   return { data };
+}
+
+const MISSING_TOKEN: InvitationFailure = {
+  problem: "missing_token",
+  message: "",
+};
+
+function invitationFailure(result: {
+  error?: unknown;
+  status?: number;
+}): InvitationFailure {
+  const message = formatApiError(result.error);
+  return {
+    problem: classifyInvitationError(result.status, message),
+    message,
+  };
+}
+
+export async function previewInvitationAction(token: string) {
+  if (!token) {
+    return { ok: false as const, error: MISSING_TOKEN };
+  }
+  const result = await previewWorkspaceInvitation(token);
+  if (result.error || !result.data) {
+    return { ok: false as const, error: invitationFailure(result) };
+  }
+  return { ok: true as const, data: result.data };
+}
+
+export async function acceptInvitationAction(token: string) {
+  if (!token) {
+    return { ok: false as const, error: MISSING_TOKEN };
+  }
+  const result = await acceptWorkspaceInvitation(token);
+  if (result.error || !result.data) {
+    return { ok: false as const, error: invitationFailure(result) };
+  }
+
+  // Joining a workspace is a request to work in it, so it becomes the active one.
+  const { workspaces } = await getWorkspaceContext();
+  const joined = workspaces.find(
+    (workspace) => workspace.id === result.data?.workspace_id
+  );
+  if (!joined) {
+    console.error(
+      "[invitation] joined workspace missing from the workspace list:",
+      result.data.workspace_id
+    );
+    return { ok: true as const };
+  }
+  await setActiveSlug(joined.slug);
+  return { ok: true as const };
 }
