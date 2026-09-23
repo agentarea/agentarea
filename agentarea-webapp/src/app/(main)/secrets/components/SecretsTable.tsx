@@ -1,9 +1,13 @@
 "use client";
 
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { KeyRound, Lock } from "lucide-react";
 import Table, { type Column } from "@/components/Table/Table";
-import { Badge } from "@/components/ui/badge";
+import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
+import { BlueprintBadge } from "@/components/ui/blueprint-badge";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
+import { deterministicHue } from "@/lib/avatar-hue";
 import { SecretRowActions } from "./SecretRowActions";
 import { useSecretTypeLabel } from "./useSecretTypeLabel";
 
@@ -41,92 +45,136 @@ const OWNER_HREFS: Record<string, (id: string) => string | null> = {
   agent: (id) => `/agents/${id}`,
 };
 
-function BelongsTo({ secret }: { secret: Secret }) {
+/** Two-line cell for the owning/consuming entity. */
+function CellLines({
+  primary,
+  secondary,
+}: {
+  primary: React.ReactNode;
+  secondary?: React.ReactNode;
+}) {
+  return (
+    <span className="flex min-w-0 flex-col gap-0.5 text-xs">
+      <span className="flex min-w-0 items-center gap-2">{primary}</span>
+      {secondary ? (
+        <span className="truncate text-xs text-muted-foreground">
+          {secondary}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function SecretCell({ secret }: { secret: Secret }) {
   const t = useTranslations("SecretsPage.table");
   const typeLabel = useSecretTypeLabel();
   const owner = secret.owner;
 
-  if (!owner) {
-    const used = secret.used_by ?? [];
-    if (used.length === 0) {
-      return <span className="text-muted-foreground">{t("notUsed")}</span>;
-    }
-    const kinds = new Set(used.map((c) => typeLabel(c.consumer_type)));
-    return (
-      <span>
-        {used.length} × {Array.from(kinds).join(", ")}
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <EntityAvatar
+        aria-hidden
+        size={20}
+        hue={deterministicHue(secret.id)}
+        // Managed secrets are changed where they belong, so they read as locked.
+        icon={
+          owner ? <Lock strokeWidth={1.85} /> : <KeyRound strokeWidth={1.85} />
+        }
+      />
+      <span className="truncate font-medium">
+        {/* The stored name of a managed secret is synthesised from the owner's
+            id and reads as noise; the slot it fills identifies it to a human. */}
+        {owner ? (owner.field ?? typeLabel(owner.type)) : secret.name}
       </span>
+      {owner && <BlueprintBadge>{t("managed")}</BlueprintBadge>}
+    </span>
+  );
+}
+
+function UsedByCell({ secret }: { secret: Secret }) {
+  const t = useTranslations("SecretsPage.table");
+  const typeLabel = useSecretTypeLabel();
+  const owner = secret.owner;
+
+  if (owner) {
+    const href = OWNER_HREFS[owner.type]?.(owner.id) ?? null;
+    return (
+      <CellLines
+        primary={
+          // A secret can outlive whatever created it; saying so beats
+          // inventing a name.
+          !owner.name ? (
+            <span className="text-muted-foreground">{t("deletedOwner")}</span>
+          ) : href ? (
+            <Link
+              href={href}
+              className="truncate underline-offset-2 hover:text-primary hover:underline"
+            >
+              {owner.name}
+            </Link>
+          ) : (
+            <span className="truncate">{owner.name}</span>
+          )
+        }
+        secondary={typeLabel(owner.type)}
+      />
     );
   }
 
-  const href = OWNER_HREFS[owner.type]?.(owner.id) ?? null;
-  // A secret can outlive whatever created it; saying so beats inventing a name.
-  const name = owner.name ?? t("deletedOwner");
+  const used = secret.used_by ?? [];
+  if (used.length === 0) {
+    return (
+      <span className="text-xs text-muted-foreground">{t("notUsed")}</span>
+    );
+  }
 
+  const kinds = Array.from(
+    new Set(used.map((c) => typeLabel(c.consumer_type)))
+  );
   return (
-    <span className="flex flex-wrap items-center gap-1.5">
-      <span className="text-muted-foreground">{typeLabel(owner.type)}</span>
-      {href ? (
-        <Link
-          href={href}
-          className="underline underline-offset-2 hover:text-foreground"
-        >
-          {name}
-        </Link>
-      ) : (
-        <span>{name}</span>
-      )}
-    </span>
+    <CellLines
+      primary={<span className="truncate">{kinds.join(", ")}</span>}
+      secondary={t("places", { count: used.length })}
+    />
   );
 }
 
 export function SecretsTable({ secrets }: { secrets: Secret[] }) {
   const t = useTranslations("SecretsPage.table");
-  const typeLabel = useSecretTypeLabel();
-  const locale = useLocale();
 
   const columns: Column<Secret>[] = [
     {
       header: t("name"),
       accessor: "name",
-      render: (_, row) =>
-        !row ? null : row.owner ? (
-          // The stored name is synthesised from the owner's id and reads as
-          // noise; the slot it fills is what identifies it to a human, and the
-          // next column says which connection it belongs to.
-          <span className="flex items-center gap-2">
-            <span>{row.owner.field ?? typeLabel(row.owner.type)}</span>
-            <Badge variant="light" size="sm">
-              {t("managed")}
-            </Badge>
-          </span>
-        ) : (
-          <span>{row.name}</span>
-        ),
+      render: (_, row) => (row ? <SecretCell secret={row} /> : null),
     },
     {
       header: t("description"),
       accessor: "description",
-      render: (value) => (value as string | null) || "—",
+      cellClassName: "max-w-[300px]",
+      render: (value) => (
+        <span className="block truncate text-xs text-muted-foreground">
+          {(value as string | null | undefined) || "-"}
+        </span>
+      ),
     },
     {
-      header: t("belongsTo"),
+      header: t("usedBy"),
       accessor: "owner",
-      render: (_, row) => (row ? <BelongsTo secret={row} /> : null),
+      headerClassName: "w-[30%]",
+      render: (_, row) => (row ? <UsedByCell secret={row} /> : null),
     },
     {
       header: t("updated"),
       accessor: "updated_at",
-      headerClassName: "w-[120px]",
-      cellClassName: "whitespace-nowrap text-xs text-muted-foreground",
-      render: (value) =>
-        value
-          ? new Date(value as string).toLocaleDateString(locale, {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            })
-          : "—",
+      headerClassName: "w-[150px]",
+      cellClassName: "whitespace-nowrap",
+      render: (value) => (
+        <TableDateDisplay
+          dateString={(value as string | null | undefined) ?? ""}
+          onlyDate
+        />
+      ),
     },
     {
       header: "",

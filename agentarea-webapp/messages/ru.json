@@ -2134,11 +2134,12 @@
     "table": {
       "name": "Название",
       "description": "Описание",
-      "belongsTo": "Принадлежит",
       "updated": "Обновлён",
       "managed": "Управляемый",
-      "notUsed": "Пока не используется",
-      "deletedOwner": "удалён"
+      "notUsed": "Не используется",
+      "deletedOwner": "удалён",
+      "usedBy": "Где используется",
+      "places": "{count, plural, one {# место} few {# места} many {# мест} other {# места}}"
     },
     "types": {
       "provider_config": "LLM-провайдер",

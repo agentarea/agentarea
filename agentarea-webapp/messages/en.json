@@ -2133,11 +2133,12 @@
     "table": {
       "name": "Name",
       "description": "Description",
-      "belongsTo": "Belongs to",
       "updated": "Updated",
       "managed": "Managed",
       "notUsed": "Not used yet",
-      "deletedOwner": "deleted"
+      "deletedOwner": "deleted",
+      "usedBy": "Used by",
+      "places": "{count, plural, one {# place} other {# places}}"
     },
     "types": {
       "provider_config": "LLM provider",
