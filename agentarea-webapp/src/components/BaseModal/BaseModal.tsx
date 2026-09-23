@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { CheckCircle, Loader2, Trash2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { ModalFeaturedIcon } from "./ModalFeaturedIcon";
 
 interface BaseModalProps {
   title: string | React.ReactNode;
@@ -23,6 +24,8 @@ interface BaseModalProps {
   type: "delete" | "confirm";
   /** Overrides the default "Delete"/"Confirm" label on the confirm button. */
   confirmLabel?: React.ReactNode;
+  /** Keeps the confirm button disabled, e.g. when the action would be refused. */
+  confirmDisabled?: boolean;
   /**
    * Controlled mode — open the dialog from somewhere that can't host a
    * trigger (a dropdown-menu item, a keyboard shortcut…). Both must be passed.
@@ -38,6 +41,7 @@ export default function BaseModal({
   onConfirm,
   type,
   confirmLabel,
+  confirmDisabled,
   open,
   onOpenChange,
 }: BaseModalProps) {
@@ -59,112 +63,11 @@ export default function BaseModal({
     setIsOpen(false);
   };
 
-  const getIcon = () => {
-    if (type === "delete") {
-      return <Trash2 className="h-6 w-6" />;
-    }
-    return <CheckCircle className="h-6 w-6" />;
-  };
-
-  const getIconBackground = () => {
-    if (type === "delete") {
-      return "bg-destructive/30 text-destructive dark:bg-destructive dark:text-zinc-200";
-    }
-    return "bg-accent/30 text-accent dark:bg-accent-foreground/20 dark:text-accent";
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent className="max-w-[400px] overflow-hidden">
-        <div className="relative w-max">
-          <div
-            data-featured-icon="true"
-            className={`*:data-icon:size-6 relative flex size-12 shrink-0 items-center justify-center rounded-full ${getIconBackground()}`}
-          >
-            {getIcon()}
-            <svg
-              width="336"
-              height="336"
-              viewBox="0 0 336 336"
-              fill="none"
-              className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-zinc-300 dark:text-zinc-500"
-            >
-              <mask
-                id="mask0_4947_375931"
-                maskUnits="userSpaceOnUse"
-                x="0"
-                y="0"
-                width="336"
-                height="336"
-                style={{ maskType: "alpha" }}
-              >
-                <rect
-                  width="336"
-                  height="336"
-                  fill="url(#paint0_radial_4947_375931)"
-                ></rect>
-              </mask>
-              <g mask="url(#mask0_4947_375931)">
-                <circle
-                  cx="168"
-                  cy="168"
-                  r="47.5"
-                  stroke="currentColor"
-                ></circle>
-                <circle
-                  cx="168"
-                  cy="168"
-                  r="47.5"
-                  stroke="currentColor"
-                ></circle>
-                <circle
-                  cx="168"
-                  cy="168"
-                  r="71.5"
-                  stroke="currentColor"
-                ></circle>
-                <circle
-                  cx="168"
-                  cy="168"
-                  r="95.5"
-                  stroke="currentColor"
-                ></circle>
-                <circle
-                  cx="168"
-                  cy="168"
-                  r="119.5"
-                  stroke="currentColor"
-                ></circle>
-                <circle
-                  cx="168"
-                  cy="168"
-                  r="143.5"
-                  stroke="currentColor"
-                ></circle>
-                <circle
-                  cx="168"
-                  cy="168"
-                  r="167.5"
-                  stroke="currentColor"
-                ></circle>
-              </g>
-              <defs>
-                <radialGradient
-                  id="paint0_radial_4947_375931"
-                  cx="0"
-                  cy="0"
-                  r="1"
-                  gradientUnits="userSpaceOnUse"
-                  gradientTransform="translate(168 168) rotate(90) scale(168 168)"
-                >
-                  <stop></stop>
-                  <stop offset="1" stopOpacity="0"></stop>
-                </radialGradient>
-              </defs>
-            </svg>
-          </div>
-        </div>
+        <ModalFeaturedIcon type={type === "delete" ? "delete" : "success"} />
         <DialogHeader className="relative z-10 mt-3">
           <DialogTitle className="pb-2">{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -181,7 +84,7 @@ export default function BaseModal({
           <Button
             size="sm"
             onClick={handleConfirm}
-            disabled={isLoading}
+            disabled={isLoading || confirmDisabled}
             variant={type === "delete" ? "destructive" : "default"}
           >
             {confirmLabel ??

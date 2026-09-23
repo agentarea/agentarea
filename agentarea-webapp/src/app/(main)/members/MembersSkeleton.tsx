@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ToolbarDivider } from "@/components/ui/toolbar";
 
 // Shown while the members page fetches on the server. Keeps the real
-// breadcrumb; the toolbar counts, section copy and table need data and are
+// breadcrumb; the toolbar counts and table need data and are
 // skeletoned in the same shape the loaded page takes.
 export default async function MembersSkeleton() {
   const t = await getTranslations("MembersPage");
@@ -25,11 +25,7 @@ export default async function MembersSkeleton() {
         </div>
       }
     >
-      <section className="space-y-3" aria-hidden="true">
-        <div className="space-y-1.5">
-          <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-3 w-[420px] max-w-full" />
-        </div>
+      <div aria-hidden="true">
         <TableSkeleton
           rows={5}
           columns={[
@@ -42,7 +38,7 @@ export default async function MembersSkeleton() {
             { headerClassName: "w-0", barClassName: "h-7 w-7" },
           ]}
         />
-      </section>
+      </div>
     </ContentBlock>
   );
 }

@@ -112,7 +112,8 @@
     "at": "at",
     "deleteDescription": "Are you sure you want to delete \"{itemName}\"? This action cannot be undone.",
     "retry": "Try again",
-    "clearSearch": "Clear search"
+    "clearSearch": "Clear search",
+    "copyFailed": "Couldn’t copy to clipboard"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -212,8 +213,6 @@
     "removeConfirm": "Remove this member from the workspace?",
     "noMembersTitle": "No members yet",
     "noMembersDescription": "Invite people to collaborate in this workspace.",
-    "invitationsTitle": "Invitations",
-    "invitationsDescription": "Invitation links you created. Each one can be used until it expires — create new links from “Invite people”.",
     "cancel": "Cancel",
     "removeConfirmTitle": "Remove member",
     "removeConfirmDescription": "{member} will lose access to this workspace and everything in it. Their agents, tasks and files stay in the workspace.",
@@ -254,8 +253,6 @@
     "ordering": "Ordering",
     "orderAccess": "Access",
     "orderUserId": "User ID",
-    "peopleTitle": "People",
-    "peopleDescription": "Everyone with access to this workspace.",
     "accessColumn": "Workspace access",
     "accessOwner": "Owner",
     "accessMember": "Member",
@@ -301,7 +298,6 @@
     "joinsAsMember": "Anyone who uses the link joins as a member.",
     "inviteLinkCopied": "Invite link copied",
     "thisWorkspace": "this workspace",
-    "copyFailed": "Couldn’t copy to clipboard",
     "orderExpires": "Expiry",
     "orderRecipient": "Recipient"
   },
@@ -1361,8 +1357,7 @@
       "status": "Status",
       "created": "Created",
       "expires": "Expires",
-      "lastUsed": "Last Used",
-      "actions": "Actions"
+      "lastUsed": "Last Used"
     },
     "never": "Never",
     "status": {
@@ -1378,16 +1373,14 @@
       "expiresInDays": "Expires In (Days)",
       "expiresInDaysPlaceholder": "Leave empty for no expiration",
       "createButton": "Create Key",
-      "cancel": "Cancel",
-      "creating": "Creating...",
       "success": "API Key Created",
       "successDescription": "Your API key has been created successfully."
     },
     "created": {
       "title": "API Key Created",
+      "description": "“{name}” is ready to use.",
+      "keyLabel": "API key",
       "warning": "Make sure to copy your API key now. You won't be able to see it again!",
-      "copied": "Copied to clipboard",
-      "copy": "Copy",
       "done": "Done"
     },
     "revoke": {
@@ -2216,5 +2209,54 @@
     "upcoming": "Upcoming",
     "nothingUpcoming": "Nothing scheduled in the next 7 days.",
     "inFmt": "in {time}"
+  },
+  "SecretsPage": {
+    "newSecret": "New secret",
+    "createDialog": {
+      "title": "New secret",
+      "description": "Stored encrypted. You won't be able to read it back — only replace it.",
+      "nameLabel": "Name",
+      "namePlaceholder": "openai-key",
+      "nameHint": "Lowercase letters, digits, - and _.",
+      "valueLabel": "Value",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Which account this key belongs to",
+      "footerNote": "Reuse it across LLM providers and API connections.",
+      "submit": "Create secret"
+    },
+    "rowActions": {
+      "replace": "Replace"
+    },
+    "replaceDialog": {
+      "title": "Replace value",
+      "description": "Sets a new value for {name}.",
+      "usedIn": "Used in {count, plural, one {# place} other {# places}} — all of them switch to the new value immediately.",
+      "valueLabel": "New value",
+      "submit": "Replace"
+    },
+    "deleteDialog": {
+      "title": "Delete {name}?",
+      "inUse": "This secret is still in use. Detach it from these places first:",
+      "irreversible": "This cannot be undone.",
+      "failed": "Couldn't delete the secret",
+      "deleted": "Secret {name} deleted"
+    },
+    "table": {
+      "name": "Name",
+      "description": "Description",
+      "updated": "Updated",
+      "notUsed": "Not used yet",
+      "deletedOwner": "deleted",
+      "usedBy": "Used by",
+      "places": "{count, plural, one {# place} other {# places}}"
+    },
+    "types": {
+      "provider_config": "LLM provider",
+      "mcp_instance": "MCP connection",
+      "mcp_auth_config": "MCP authentication",
+      "openapi_connection": "API connection",
+      "trigger": "Trigger",
+      "agent": "Agent wallet"
+    }
   }
 }

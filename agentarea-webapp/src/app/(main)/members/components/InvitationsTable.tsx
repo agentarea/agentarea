@@ -7,19 +7,16 @@ import { Link2, Loader2, Mail, Search, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import EmptyState from "@/components/EmptyState";
 import Table, { type Column } from "@/components/Table/Table";
-import { Button } from "@/components/ui/button";
+import { TableRowAction } from "@/components/Table/TableRowAction";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import {
   StatusIndicator,
   type StatusIndicatorTone,
 } from "@/components/ui/status-indicator";
 import type { WorkspaceInvitation } from "@/lib/api";
+import { formatDate } from "@/utils/dateUtils";
 import { revokeInvitationAction } from "../actions";
-import {
-  formatDate,
-  getInvitationStatus,
-  type InvitationStatusKey,
-} from "./membersShared";
+import { getInvitationStatus, type InvitationStatusKey } from "./membersShared";
 
 interface InvitationsTableProps {
   invitations: WorkspaceInvitation[];
@@ -106,17 +103,16 @@ function RevokeButton({ invitation }: { invitation: WorkspaceInvitation }) {
 
   const isBusy = busy && pending;
   return (
-    <Button
+    <TableRowAction
       variant="destructiveOutline"
-      size="xs"
-      className="px-2 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[busy=true]:opacity-100"
+      className="data-[busy=true]:opacity-100"
       data-busy={isBusy}
       disabled={isBusy}
       onClick={revoke}
+      icon={isBusy ? <Loader2 className="animate-spin" /> : <Unlink />}
     >
-      {isBusy ? <Loader2 className="animate-spin" /> : <Unlink />}
       {t("revoke")}
-    </Button>
+    </TableRowAction>
   );
 }
 

@@ -1,10 +1,14 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { Brain, Globe, KeyRound, type LucideIcon } from "lucide-react";
-import Table from "@/components/Table/Table";
-import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { KeyRound, Lock } from "lucide-react";
+import Table, { type Column } from "@/components/Table/Table";
+import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
+import { deterministicHue } from "@/lib/avatar-hue";
 import { SecretRowActions } from "./SecretRowActions";
+import { useSecretTypeLabel } from "./useSecretTypeLabel";
 
 export type SecretConsumer = {
   consumer_type: string;
@@ -28,144 +32,162 @@ export type Secret = {
   owner?: SecretOwner | null;
 };
 
-/** How each owning entity is labelled, drawn, and where its page lives. */
-const OWNERS: Record<
-  string,
-  { label: string; icon: LucideIcon; href: (id: string) => string | null }
-> = {
-  provider_config: { label: "LLM provider", icon: Brain, href: () => "/models" },
-  mcp_instance: {
-    label: "MCP connection",
-    icon: ENTITY_ICONS.mcp,
-    href: (id) => `/connections/${id}`,
-  },
+/** Where each owning entity's page lives. */
+const OWNER_HREFS: Record<string, (id: string) => string | null> = {
+  provider_config: () => "/models",
+  mcp_instance: (id) => `/connections/${id}`,
   // Auth configs are edited inside the connection they belong to, so there is
   // no page of their own to link at.
-  mcp_auth_config: {
-    label: "MCP authentication",
-    icon: KeyRound,
-    href: () => null,
-  },
-  openapi_connection: {
-    label: "API connection",
-    icon: Globe,
-    href: () => "/connections/openapi",
-  },
-  trigger: {
-    label: "Trigger",
-    icon: ENTITY_ICONS.trigger,
-    href: (id) => `/triggers/${id}`,
-  },
-  agent: {
-    label: "Agent wallet",
-    icon: ENTITY_ICONS.agent,
-    href: (id) => `/agents/${id}`,
-  },
+  mcp_auth_config: () => null,
+  openapi_connection: () => "/connections/openapi",
+  trigger: (id) => `/triggers/${id}`,
+  agent: (id) => `/agents/${id}`,
 };
 
-const CONSUMER_LABELS: Record<string, string> = {
-  provider_config: "LLM provider",
-  openapi_connection: "API connection",
-  mcp_instance: "MCP connection",
-};
-
-function BelongsTo({ secret }: { secret: Secret }) {
-  const owner = secret.owner;
-
-  if (!owner) {
-    const used = secret.used_by ?? [];
-    if (used.length === 0) {
-      return <span className="text-muted-foreground">Not used yet</span>;
-    }
-    const kinds = new Set(
-      used.map((c) => CONSUMER_LABELS[c.consumer_type] ?? c.consumer_type)
-    );
-    return (
-      <span>
-        {used.length} × {Array.from(kinds).join(", ")}
-      </span>
-    );
-  }
-
-  const meta = OWNERS[owner.type];
-  const href = meta?.href(owner.id) ?? null;
-  // A secret can outlive whatever created it; saying so beats inventing a name.
-  const name = owner.name ?? "deleted";
-  const Icon = meta?.icon;
-
+/** Two-line cell for the owning/consuming entity. */
+function CellLines({
+  primary,
+  secondary,
+}: {
+  primary: React.ReactNode;
+  secondary?: React.ReactNode;
+}) {
   return (
-    <span className="flex flex-wrap items-center gap-1.5">
-      {Icon && (
-        <Icon aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
-      )}
-      <span className="text-muted-foreground">{meta?.label ?? owner.type}</span>
-      {href ? (
-        <Link
-          href={href}
-          className="underline underline-offset-2 hover:text-foreground"
-        >
-          {name}
-        </Link>
-      ) : (
-        <span>{name}</span>
-      )}
+    <span className="flex min-w-0 flex-col gap-0.5 text-xs">
+      <span className="flex min-w-0 items-center gap-2">{primary}</span>
+      {secondary ? (
+        <span className="truncate text-xs text-muted-foreground">
+          {secondary}
+        </span>
+      ) : null}
     </span>
   );
 }
 
-const columns = [
-  {
-    header: "Name",
-    accessor: "name",
-    render: (_value: string, row: Secret) =>
-      row.owner ? (
-        // The stored name is synthesised from the owner's id and reads as
-        // noise; the slot it fills is what identifies it to a human, and the
-        // next column says which connection it belongs to.
-        //
-        // No "Managed" badge here. It was set on every secret that had an
-        // owner, so a token you pasted in yourself came back labelled as
-        // something the platform provisioned — and it only ever repeated what
-        // the next column already spells out.
-        <span className="flex items-center gap-2">
-          <span>{row.owner.field ?? OWNERS[row.owner.type]?.label ?? row.name}</span>
-        </span>
-      ) : (
-        <span>{row.name}</span>
-      ),
-  },
-  {
-    header: "Description",
-    accessor: "description",
-    render: (value: string | null) => value || "—",
-  },
-  {
-    header: "Belongs to",
-    accessor: "owner",
-    render: (_value: unknown, row: Secret) => <BelongsTo secret={row} />,
-  },
-  {
-    header: "Updated",
-    accessor: "updated_at",
-    render: (value: string | null) =>
-      value
-        ? new Date(value).toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-          })
-        : "—",
-  },
-  {
-    header: "",
-    accessor: "id",
-    // Managed secrets are changed through the connection that owns them, so
-    // they get no menu here.
-    render: (_value: string, row: Secret) =>
-      row.owner ? null : <SecretRowActions secret={row} />,
-  },
-];
+function SecretCell({ secret }: { secret: Secret }) {
+  const typeLabel = useSecretTypeLabel();
+  const owner = secret.owner;
+
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <EntityAvatar
+        aria-hidden
+        size={20}
+        hue={deterministicHue(secret.id)}
+        // Managed secrets are changed where they belong, so they read as locked.
+        icon={
+          owner ? <Lock strokeWidth={1.85} /> : <KeyRound strokeWidth={1.85} />
+        }
+      />
+      <span className="truncate font-medium">
+        {/* The stored name of a managed secret is synthesised from the owner's
+            id and reads as noise; the slot it fills identifies it to a human. */}
+        {owner ? (owner.field ?? typeLabel(owner.type)) : secret.name}
+      </span>
+      {/* No "Managed" badge here. It was set on every secret that had an
+          owner, so a token you pasted in yourself came back labelled as
+          something the platform provisioned — and it only ever repeated what
+          the "Used by" column already spells out. */}
+    </span>
+  );
+}
+
+function UsedByCell({ secret }: { secret: Secret }) {
+  const t = useTranslations("SecretsPage.table");
+  const typeLabel = useSecretTypeLabel();
+  const owner = secret.owner;
+
+  if (owner) {
+    const href = OWNER_HREFS[owner.type]?.(owner.id) ?? null;
+    return (
+      <CellLines
+        primary={
+          // A secret can outlive whatever created it; saying so beats
+          // inventing a name.
+          !owner.name ? (
+            <span className="text-muted-foreground">{t("deletedOwner")}</span>
+          ) : href ? (
+            <Link
+              href={href}
+              className="truncate underline-offset-2 hover:text-primary hover:underline"
+            >
+              {owner.name}
+            </Link>
+          ) : (
+            <span className="truncate">{owner.name}</span>
+          )
+        }
+        secondary={typeLabel(owner.type)}
+      />
+    );
+  }
+
+  const used = secret.used_by ?? [];
+  if (used.length === 0) {
+    return (
+      <span className="text-xs text-muted-foreground">{t("notUsed")}</span>
+    );
+  }
+
+  const kinds = Array.from(
+    new Set(used.map((c) => typeLabel(c.consumer_type)))
+  );
+  return (
+    <CellLines
+      primary={<span className="truncate">{kinds.join(", ")}</span>}
+      secondary={t("places", { count: used.length })}
+    />
+  );
+}
 
 export function SecretsTable({ secrets }: { secrets: Secret[] }) {
+  const t = useTranslations("SecretsPage.table");
+
+  const columns: Column<Secret>[] = [
+    {
+      header: t("name"),
+      accessor: "name",
+      render: (_, row) => (row ? <SecretCell secret={row} /> : null),
+    },
+    {
+      header: t("description"),
+      accessor: "description",
+      cellClassName: "max-w-[300px]",
+      render: (value) => (
+        <span className="block truncate text-xs text-muted-foreground">
+          {(value as string | null | undefined) || "-"}
+        </span>
+      ),
+    },
+    {
+      header: t("usedBy"),
+      accessor: "owner",
+      headerClassName: "w-[30%]",
+      render: (_, row) => (row ? <UsedByCell secret={row} /> : null),
+    },
+    {
+      header: t("updated"),
+      accessor: "updated_at",
+      headerClassName: "w-[150px]",
+      cellClassName: "whitespace-nowrap",
+      render: (value) => (
+        <TableDateDisplay
+          dateString={(value as string | null | undefined) ?? ""}
+          onlyDate
+        />
+      ),
+    },
+    {
+      header: "",
+      accessor: "actions",
+      headerClassName: "w-0",
+      cellClassName: "text-right",
+      // Managed secrets are changed through the connection that owns them, so
+      // they get no actions here.
+      render: (_, row) =>
+        row && !row.owner ? <SecretRowActions secret={row} /> : null,
+    },
+  ];
+
   return <Table data={secrets} columns={columns} />;
 }

@@ -1,6 +1,5 @@
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { listSecrets } from "@/lib/api";
-import { CreateSecretDialog } from "./CreateSecretDialog";
 import { SecretsEmptyState } from "./SecretsEmptyState";
 import { SecretsTable, type Secret } from "./SecretsTable";
 
@@ -31,18 +30,9 @@ export async function SecretsData() {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-sm font-medium">Workspace secrets</h2>
-        <CreateSecretDialog />
-      </div>
-
-      {secrets.length === 0 ? (
-        <SecretsEmptyState />
-      ) : (
-        <SecretsTable secrets={secrets} />
-      )}
-    </div>
+  return secrets.length === 0 ? (
+    <SecretsEmptyState />
+  ) : (
+    <SecretsTable secrets={secrets} />
   );
 }

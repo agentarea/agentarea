@@ -31,21 +31,6 @@ interface MembersClientProps {
   workspaceName: string;
 }
 
-function SectionHead({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="space-y-0.5">
-      <h2 className="text-sm font-medium">{title}</h2>
-      <p className="text-xs text-muted-foreground">{description}</p>
-    </div>
-  );
-}
-
 export default function MembersClient({
   members,
   invitations,
@@ -140,32 +125,20 @@ export default function MembersClient({
       }
     >
       {tab === "members" ? (
-        <section className="space-y-3">
-          <SectionHead
-            title={t("peopleTitle")}
-            description={t("peopleDescription")}
-          />
-          <MembersTable
-            members={visibleMembers}
-            currentUser={currentUser}
-            ownerUserId={ownerUserId}
-            workspaceName={workspaceName}
-            query={q}
-            onInvite={openInvite}
-          />
-        </section>
+        <MembersTable
+          members={visibleMembers}
+          currentUser={currentUser}
+          ownerUserId={ownerUserId}
+          workspaceName={workspaceName}
+          query={q}
+          onInvite={openInvite}
+        />
       ) : (
-        <section className="space-y-3">
-          <SectionHead
-            title={t("invitationsTitle")}
-            description={t("invitationsDescription")}
-          />
-          <InvitationsTable
-            invitations={visibleInvitations}
-            query={q}
-            onInvite={openInvite}
-          />
-        </section>
+        <InvitationsTable
+          invitations={visibleInvitations}
+          query={q}
+          onInvite={openInvite}
+        />
       )}
 
       <InviteDialog

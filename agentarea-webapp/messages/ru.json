@@ -112,7 +112,8 @@
     "at": "в",
     "deleteDescription": "Вы уверены, что хотите удалить \"{itemName}\"? Это действие не может быть отменено.",
     "retry": "Повторить",
-    "clearSearch": "Сбросить поиск"
+    "clearSearch": "Сбросить поиск",
+    "copyFailed": "Не удалось скопировать в буфер обмена"
   },
   "admin": {
     "title": "Панель администратора",
@@ -213,8 +214,6 @@
     "removeConfirm": "Удалить этого участника из рабочего пространства?",
     "noMembersTitle": "Пока нет участников",
     "noMembersDescription": "Пригласите людей для совместной работы в этом пространстве.",
-    "invitationsTitle": "Приглашения",
-    "invitationsDescription": "Созданные вами ссылки-приглашения. Каждой можно воспользоваться до истечения срока — новые ссылки создаются через «Пригласить».",
     "cancel": "Отмена",
     "removeConfirmTitle": "Удалить участника",
     "removeConfirmDescription": "{member} потеряет доступ к этому пространству и всему в нём. Его агенты, задачи и файлы останутся в пространстве.",
@@ -255,8 +254,6 @@
     "ordering": "Сортировка",
     "orderAccess": "По доступу",
     "orderUserId": "По ID пользователя",
-    "peopleTitle": "Люди",
-    "peopleDescription": "Все, у кого есть доступ к этому рабочему пространству.",
     "accessColumn": "Доступ",
     "accessOwner": "Владелец",
     "accessMember": "Участник",
@@ -302,7 +299,6 @@
     "joinsAsMember": "Любой, кто воспользуется ссылкой, присоединится как участник.",
     "inviteLinkCopied": "Ссылка-приглашение скопирована",
     "thisWorkspace": "это пространство",
-    "copyFailed": "Не удалось скопировать в буфер обмена",
     "orderExpires": "По сроку",
     "orderRecipient": "По получателю"
   },
@@ -1362,8 +1358,7 @@
       "status": "Статус",
       "created": "Создан",
       "expires": "Истекает",
-      "lastUsed": "Последнее использование",
-      "actions": "Действия"
+      "lastUsed": "Последнее использование"
     },
     "never": "Никогда",
     "status": {
@@ -1379,16 +1374,14 @@
       "expiresInDays": "Истекает через (дней)",
       "expiresInDaysPlaceholder": "Оставьте пустым для бессрочного ключа",
       "createButton": "Создать ключ",
-      "cancel": "Отмена",
-      "creating": "Создание...",
       "success": "API ключ создан",
       "successDescription": "Ваш API ключ успешно создан."
     },
     "created": {
       "title": "API ключ создан",
+      "description": "Ключ «{name}» готов к использованию.",
+      "keyLabel": "API ключ",
       "warning": "Обязательно скопируйте API ключ сейчас. Вы не сможете увидеть его снова!",
-      "copied": "Скопировано в буфер обмена",
-      "copy": "Копировать",
       "done": "Готово"
     },
     "revoke": {
@@ -2217,5 +2210,54 @@
     "upcoming": "Предстоит",
     "nothingUpcoming": "На ближайшие 7 дней ничего не запланировано.",
     "inFmt": "через {time}"
+  },
+  "SecretsPage": {
+    "newSecret": "Новый секрет",
+    "createDialog": {
+      "title": "Новый секрет",
+      "description": "Хранится в зашифрованном виде. Прочитать значение потом нельзя — только заменить.",
+      "nameLabel": "Название",
+      "namePlaceholder": "openai-key",
+      "nameHint": "Строчные латинские буквы, цифры, - и _.",
+      "valueLabel": "Значение",
+      "descriptionLabel": "Описание",
+      "descriptionPlaceholder": "К какому аккаунту относится ключ",
+      "footerNote": "Используйте его в LLM-провайдерах и API-подключениях.",
+      "submit": "Создать секрет"
+    },
+    "rowActions": {
+      "replace": "Заменить"
+    },
+    "replaceDialog": {
+      "title": "Заменить значение",
+      "description": "Задайте другое значение для {name}.",
+      "usedIn": "Используется в {count, plural, one {# месте} few {# местах} many {# местах} other {# местах}} — везде сразу подставится новое значение.",
+      "valueLabel": "Новое значение",
+      "submit": "Заменить"
+    },
+    "deleteDialog": {
+      "title": "Удалить {name}?",
+      "inUse": "Секрет ещё используется. Сначала отвяжите его здесь:",
+      "irreversible": "Это действие нельзя отменить.",
+      "failed": "Не удалось удалить секрет",
+      "deleted": "Секрет {name} удалён"
+    },
+    "table": {
+      "name": "Название",
+      "description": "Описание",
+      "updated": "Обновлён",
+      "notUsed": "Не используется",
+      "deletedOwner": "удалён",
+      "usedBy": "Где используется",
+      "places": "{count, plural, one {# место} few {# места} many {# мест} other {# места}}"
+    },
+    "types": {
+      "provider_config": "LLM-провайдер",
+      "mcp_instance": "MCP-подключение",
+      "mcp_auth_config": "MCP-аутентификация",
+      "openapi_connection": "API-подключение",
+      "trigger": "Триггер",
+      "agent": "Кошелёк агента"
+    }
   }
 }
