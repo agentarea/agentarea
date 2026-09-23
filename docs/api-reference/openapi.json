@@ -4725,6 +4725,62 @@
         "title": "InvitationEmailDelivery",
         "type": "string"
       },
+      "InvitationPreviewBody": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "InvitationPreviewBody",
+        "type": "object"
+      },
+      "InvitationPreviewResponse": {
+        "description": "What an invitee is shown before joining: who asked, where to, until when.\n\nThe caller is not a member yet, so nothing else about the workspace leaves\nthis endpoint. The inviter fields are nullable because the identity\nprovider may not resolve them; the client states that rather than guessing.",
+        "properties": {
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "inviter_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inviter Display Name"
+          },
+          "inviter_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inviter Email"
+          },
+          "workspace_name": {
+            "title": "Workspace Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_name",
+          "inviter_display_name",
+          "inviter_email",
+          "expires_at"
+        ],
+        "title": "InvitationPreviewResponse",
+        "type": "object"
+      },
       "InvitationResponse": {
         "properties": {
           "accepted_at": {
@@ -18685,7 +18741,7 @@
     },
     "/v1/invitations/accept": {
       "post": {
-        "description": "Accept an invitation as the authenticated user.\n\nIdempotent for the same acceptor.",
+        "description": "Accept an invitation as the authenticated user.\n\nAn invitation sent to an email address is only accepted by the account\nsigned in under that address. Idempotent for the same acceptor.",
         "operationId": "accept_invitation_v1_invitations_accept_post",
         "requestBody": {
           "content": {
@@ -18725,6 +18781,55 @@
           }
         ],
         "summary": "Accept Invitation",
+        "tags": [
+          "v1",
+          "protected",
+          "workspace-invitations"
+        ]
+      }
+    },
+    "/v1/invitations/preview": {
+      "post": {
+        "description": "Describe an invitation the caller could accept: workspace, inviter, expiry.\n\nThe token travels in the body so it stays out of access logs.",
+        "operationId": "preview_invitation_v1_invitations_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationPreviewBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Invitation",
         "tags": [
           "v1",
           "protected",

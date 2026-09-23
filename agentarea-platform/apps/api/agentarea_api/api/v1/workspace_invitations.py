@@ -30,6 +30,7 @@ from agentarea_common.rebac import (
 )
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_common.workspaces import (
+    InvitationAddressedElsewhere,
     InvitationAlreadyAccepted,
     InvitationExpired,
     InvitationNotFound,
@@ -132,6 +133,24 @@ class AcceptInvitationBody(BaseModel):
     token: str
 
 
+class InvitationPreviewBody(BaseModel):
+    token: str
+
+
+class InvitationPreviewResponse(BaseModel):
+    """What an invitee is shown before joining: who asked, where to, until when.
+
+    The caller is not a member yet, so nothing else about the workspace leaves
+    this endpoint. The inviter fields are nullable because the identity
+    provider may not resolve them; the client states that rather than guessing.
+    """
+
+    workspace_name: str
+    inviter_display_name: str | None
+    inviter_email: str | None
+    expires_at: UtcDatetime
+
+
 class AcceptInvitationResponse(BaseModel):
     workspace_id: str
     user_id: str
@@ -227,6 +246,19 @@ def _raise_membership_graph_unavailable(exc: Exception) -> NoReturn:
 
 
 GRAPH_ERRORS = (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError)
+
+INVITATION_ERROR_STATUS: dict[type[Exception], int] = {
+    InvitationNotFound: 404,
+    InvitationAddressedElsewhere: 403,
+    InvitationExpired: 410,
+    InvitationRevoked: 410,
+    InvitationAlreadyAccepted: 409,
+}
+INVITATION_ERRORS = tuple(INVITATION_ERROR_STATUS)
+
+
+def _raise_invitation_error(exc: Exception) -> NoReturn:
+    raise HTTPException(status_code=INVITATION_ERROR_STATUS[type(exc)], detail=str(exc)) from exc
 
 
 async def _list_member_ids(workspace_id: str) -> list[str]:
@@ -339,8 +371,48 @@ async def revoke_invitation(
         raise HTTPException(status_code=404, detail="Invitation not found") from exc
 
 
-# Accept lives at top-level /invitations/accept — by design the acceptor
+# Preview and accept live at top-level /invitations — by design the invitee
 # need not (yet) be a member of the target workspace.
+@router.post(
+    "/invitations/preview",
+    response_model=InvitationPreviewResponse,
+)
+async def preview_invitation(
+    body: InvitationPreviewBody,
+    user: UserContextDep,
+    service: InvitationServiceDep,
+    session: SessionDep,
+):
+    """Describe an invitation the caller could accept: workspace, inviter, expiry.
+
+    The token travels in the body so it stays out of access logs.
+    """
+    try:
+        invitation = await service.preview(
+            token=body.token, user_id=user.user_id, user_email=user.email
+        )
+    except INVITATION_ERRORS as exc:
+        _raise_invitation_error(exc)
+
+    workspace = await WorkspaceRepository(session).get(invitation.workspace_id)
+    if workspace is None:
+        logger.error(
+            "Invitation %s points at missing workspace %s",
+            invitation.id,
+            invitation.workspace_id,
+        )
+        raise HTTPException(status_code=404, detail="invitation workspace not found")
+
+    inviters = await _resolve_identities([invitation.invited_by])
+    inviter = inviters.get(invitation.invited_by)
+    return InvitationPreviewResponse(
+        workspace_name=workspace.name,
+        inviter_display_name=inviter.display_name if inviter else None,
+        inviter_email=inviter.email if inviter else None,
+        expires_at=invitation.expires_at,
+    )
+
+
 @router.post(
     "/invitations/accept",
     response_model=AcceptInvitationResponse,
@@ -356,18 +428,15 @@ async def accept_invitation(
 ):
     """Accept an invitation as the authenticated user.
 
-    Idempotent for the same acceptor.
+    An invitation sent to an email address is only accepted by the account
+    signed in under that address. Idempotent for the same acceptor.
     """
     try:
-        invitation = await service.accept(token=body.token, user_id=user.user_id)
-    except InvitationNotFound as exc:
-        raise HTTPException(status_code=404, detail="invalid token") from exc
-    except InvitationExpired as exc:
-        raise HTTPException(status_code=410, detail="invitation expired") from exc
-    except InvitationRevoked as exc:
-        raise HTTPException(status_code=410, detail="invitation revoked") from exc
-    except InvitationAlreadyAccepted as exc:
-        raise HTTPException(status_code=409, detail="invitation already accepted") from exc
+        invitation = await service.accept(
+            token=body.token, user_id=user.user_id, user_email=user.email
+        )
+    except INVITATION_ERRORS as exc:
+        _raise_invitation_error(exc)
 
     try:
         await memberships.record(

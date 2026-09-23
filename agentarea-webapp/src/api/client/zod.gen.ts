@@ -994,6 +994,29 @@ export const zInvitationCreatedResponse = z.object({
 });
 
 /**
+ * InvitationPreviewBody
+ */
+export const zInvitationPreviewBody = z.object({
+  token: z.string(),
+});
+
+/**
+ * InvitationPreviewResponse
+ *
+ * What an invitee is shown before joining: who asked, where to, until when.
+ *
+ * The caller is not a member yet, so nothing else about the workspace leaves
+ * this endpoint. The inviter fields are nullable because the identity
+ * provider may not resolve them; the client states that rather than guessing.
+ */
+export const zInvitationPreviewResponse = z.object({
+  expires_at: z.string(),
+  inviter_display_name: z.string().nullable(),
+  inviter_email: z.string().nullable(),
+  workspace_name: z.string(),
+});
+
+/**
  * InvitationResponse
  */
 export const zInvitationResponse = z.object({
@@ -4271,6 +4294,15 @@ export const zAcceptInvitationV1InvitationsAcceptPostBody =
  */
 export const zAcceptInvitationV1InvitationsAcceptPostResponse =
   zAcceptInvitationResponse;
+
+export const zPreviewInvitationV1InvitationsPreviewPostBody =
+  zInvitationPreviewBody;
+
+/**
+ * Successful Response
+ */
+export const zPreviewInvitationV1InvitationsPreviewPostResponse =
+  zInvitationPreviewResponse;
 
 /**
  * Response List Mcp Auth Configs V1 Mcp Auth Configs  Get
