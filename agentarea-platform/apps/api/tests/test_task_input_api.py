@@ -32,7 +32,14 @@ def _app_for(
 
         async def _get_task(task_id):
             agent = agent_service.get.return_value
-            return SimpleNamespace(id=task_id, agent_id=getattr(agent, "id", None))
+            # Acting on a run requires being the person who started it, so the
+            # default double stages a task this caller owns. A test that wants
+            # the refusal passes its own task_service.
+            return SimpleNamespace(
+                id=task_id,
+                agent_id=getattr(agent, "id", None),
+                user_id=context.user_id,
+            )
 
         task_service.get_task.side_effect = _get_task
 

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
-@router.get("/health")
+@router.get("/health", dependencies=[unrestricted("liveness probe, returns no workspace data")])
 async def webhook_health_check(
     webhook_manager=Depends(get_public_webhook_manager),
 ) -> dict[str, Any]:
@@ -32,6 +32,11 @@ async def webhook_health_check(
     operation_id="handle_webhook_webhooks__webhook_id__get",
     summary="Handle webhook requests",
     description="Process incoming webhook requests for registered triggers",
+    dependencies=[
+        unrestricted(
+            "the webhook id is the credential; external senders carry no workspace session"
+        )
+    ],
 )
 @router.post(
     "/{webhook_id}",
@@ -74,12 +79,18 @@ async def webhook_health_check(
     operation_id="handle_webhook_webhooks__webhook_id__head",
     summary="Handle webhook requests",
     description="Process incoming webhook requests for registered triggers",
+    dependencies=[
+        unrestricted("public webhook sink; authenticity is the signed payload, not a session")
+    ],
 )
 @router.options(
     "/{webhook_id}",
     operation_id="handle_webhook_webhooks__webhook_id__options",
     summary="Handle webhook requests",
     description="Process incoming webhook requests for registered triggers",
+    dependencies=[
+        unrestricted("public webhook sink; authenticity is the signed payload, not a session")
+    ],
 )
 async def handle_webhook(
     webhook_id: str, request: Request, webhook_manager=Depends(get_public_webhook_manager)

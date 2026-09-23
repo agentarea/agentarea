@@ -30,8 +30,14 @@ class ClientService:
     async def get(self, client_id: UUID | str) -> Client | None:
         return await self.repository.get_by_id(client_id)
 
-    async def list(self, limit: int | None = None, offset: int | None = None) -> list[Client]:
-        return await self.repository.list_all(limit=limit, offset=offset)
+    async def list(
+        self,
+        limit: int | None = None,
+        offset: int | None = None,
+        ids: set[str] | None = None,
+    ) -> list[Client]:
+        """List clients, narrowed to ``ids`` when the caller has a readable set."""
+        return await self.repository.list_all(limit=limit, offset=offset, ids=ids)
 
     async def delete(self, client_id: UUID | str) -> bool:
         return await self.repository.delete(client_id)

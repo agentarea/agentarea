@@ -25,6 +25,7 @@ from agentarea_api.api.deps.services import (
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
+from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.config.database import get_db_session
 from agentarea_mcp.application.service import MCPServerInstanceService
@@ -331,7 +332,9 @@ async def get_all_tools(
     "/{agent_id}",
     response_model=AgentResponse,
     dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+        enforced_in_handler(
+            "the PDP decides once the id is resolved; catalog projections are platform data"
+        )
     ],
 )
 async def get_agent(
@@ -345,7 +348,11 @@ async def get_agent(
     if not resolved_id:
         raise HTTPException(status_code=404, detail="Agent not found")
     agent = await agent_service.get_with_skills(resolved_id)
-    if not agent:
+    if agent:
+        # A tenant row: the graph decides. Checked after resolution because the
+        # path may carry a slug, and the graph is keyed by id.
+        await require_permission("read", "agent", str(resolved_id), user_context.user_id)
+    else:
         # Fall back to a read-only catalog projection (no DB row materialized).
         agent = await agent_service.get_with_catalog(resolved_id)
     if not agent:
@@ -389,14 +396,14 @@ async def install_agent(
     "",
     response_model=list[AgentResponse],
     dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+        enforced_in_handler("rows the graph says this caller may read; see readable_resource_ids")
     ],
 )
 @router.get(
     "/",
     response_model=list[AgentResponse],
     dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+        enforced_in_handler("rows the graph says this caller may read; see readable_resource_ids")
     ],
 )
 async def list_agents(
@@ -404,16 +411,23 @@ async def list_agents(
     session: DatabaseSessionDep,
     agent_service: AgentService = Depends(get_read_agent_service),
 ):
-    """List all workspace agents.
+    """List the agents in this workspace the caller may read.
 
-    Access Control:
-        Returns all agents within the current user's workspace (workspace isolation).
-        All users in the same workspace can see all workspace agents.
-
-        Note: User-level access control should be implemented via authorization
-        layer (future access-control) rather than query parameters.
+    The workspace column narrows the query to one tenant; the graph then decides
+    which of those rows this caller sees. A plain member reads them all through
+    the root-project role their membership grants, so the two answers usually
+    agree -- the point is that revoking that role now actually removes the rows,
+    instead of leaving a tuple nobody consults.
     """
     agents = await agent_service.list()
+    readable = await readable_resource_ids(user_context.user_id)
+    agents = [
+        agent
+        for agent in agents
+        # Catalog projections are platform data, not workspace resources: they
+        # have no tuples, and gating them would empty Explore for everyone.
+        if getattr(agent, "is_catalog", False) or str(agent.id) in readable
+    ]
     responses = [AgentResponse.from_domain(agent) for agent in agents]
     await _overlay_approval_flags(session, user_context, responses)
     return responses

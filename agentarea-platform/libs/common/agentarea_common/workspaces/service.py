@@ -311,6 +311,7 @@ class WorkspaceService:
         self,
         workspace_repo: WorkspaceRepository,
         on_created: Callable[[Workspace], Awaitable[None]] | None = None,
+        before_insert: Callable[[Workspace], Awaitable[None]] | None = None,
     ) -> None:
         self.workspace_repo = workspace_repo
         # Fired exactly once when a workspace row is genuinely inserted (not on
@@ -318,6 +319,15 @@ class WorkspaceService:
         # provisioning here (e.g. baseline governance policies) without this
         # base library depending on those domains.
         self._on_created = on_created
+        # Fired with the fully-built row *before* it is inserted, for admission
+        # work that lives outside Postgres and therefore cannot join its
+        # transaction -- the authorization graph. Raising here means no row is
+        # written at all, which is the failure worth having: the alternative is
+        # a committed workspace whose tuples are missing, so its own owner is
+        # refused on everything and nothing ever retries. Anything this writes
+        # for a row that then fails to insert is inert: tuples about a workspace
+        # id that does not exist grant nobody anything.
+        self._before_insert = before_insert
 
     async def ensure_personal(self, user_id: str, *, email: str | None = None) -> Workspace:
         """Idempotently provision the user's personal workspace (id == user_id).
@@ -404,6 +414,8 @@ class WorkspaceService:
         for _ in range(5):
             workspace = build(await self._next_free_slug(slug_base))
             try:
+                if self._before_insert is not None:
+                    await self._before_insert(workspace)
                 created = await self.workspace_repo.add(workspace)
                 if self._on_created is not None:
                     await self._on_created(created)

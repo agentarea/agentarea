@@ -14,19 +14,25 @@ from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture(autouse=True)
-def _graph_client():
-    """Ownership grants need a graph client, and there is no longer a mode without one.
+def graph():
+    """Ownership grants and list filtering both need a graph client.
 
     ``ACCESS_CONTROL_BACKEND`` no longer has a "disabled" value, so the grant
     path is always live and answers 503 when the client is missing — which is
     the point. Tests that create resources register a stub instead of relying on
     authorization being switched off.
+
+    ``list_objects`` starts empty, which is the honest default: a caller the
+    graph has never heard of may read nothing. Tests that expect rows back say
+    which ids are readable.
     """
     from agentarea_common.rebac.openfga_client import OpenFGAClient
 
+    client = AsyncMock(spec=OpenFGAClient)
+    client.list_objects.return_value = []
     container = get_container()
-    container.register_singleton(OpenFGAClient, AsyncMock(spec=OpenFGAClient))
-    yield
+    container.register_singleton(OpenFGAClient, client)
+    yield client
     container.clear()
 
 
@@ -69,7 +75,7 @@ def override_dependencies(mock_skill_service, mock_user_context):
 
 @pytest.mark.flow(MainFlow.SKILLS)
 @pytest.mark.asyncio
-async def test_list_skills_returns_metadata_only(async_client, mock_skill_service):
+async def test_list_skills_returns_metadata_only(async_client, mock_skill_service, graph):
     now = datetime.utcnow()
     skill_one = MagicMock()
     skill_one.id = uuid4()
@@ -100,6 +106,7 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
     skill_two.content = "# Second Skill"
 
     mock_skill_service.list_paginated.return_value = ([skill_one, skill_two], 2)
+    graph.list_objects.return_value = [str(skill_one.id), str(skill_two.id)]
 
     response = await async_client.get("/v1/skills")
 
@@ -135,12 +142,14 @@ async def test_list_skills_returns_metadata_only(async_client, mock_skill_servic
         source_type=None,
         network_scope=None,
         from_registry=None,
+        ids={str(skill_one.id), str(skill_two.id)},
     )
 
 
 @pytest.mark.asyncio
-async def test_list_skills_accepts_pagination_and_search(async_client, mock_skill_service):
+async def test_list_skills_accepts_pagination_and_search(async_client, mock_skill_service, graph):
     mock_skill_service.list_paginated.return_value = ([], 21)
+    graph.list_objects.return_value = ["b1f0a3d6-0000-4000-8000-000000000001"]
 
     response = await async_client.get(
         "/v1/skills?page=2&page_size=10&search=github"
@@ -163,6 +172,9 @@ async def test_list_skills_accepts_pagination_and_search(async_client, mock_skil
         source_type="github",
         network_scope="egress",
         from_registry=False,
+        # The readable set is a filter like any other, and it reaches SQL rather
+        # than trimming the page afterwards, so `total` stays truthful.
+        ids={"b1f0a3d6-0000-4000-8000-000000000001"},
     )
 
 

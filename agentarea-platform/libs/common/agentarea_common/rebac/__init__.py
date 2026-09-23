@@ -15,8 +15,17 @@ from .models import (
 )
 from .openfga_bootstrap import bootstrap_openfga
 from .openfga_client import OpenFGAClient, OpenFGAError, OpenFGAUnavailableError
+from .ownership import (
+    OWNER_RELATIONS,
+    ResourceOwnershipError,
+    grant_resource_owner,
+    resolve_graph_client,
+    root_project_id,
+    write_tuple_idempotent,
+)
 
 __all__ = [
+    "OWNER_RELATIONS",
     "CheckResult",
     "ExpandNode",
     "KetoClient",
@@ -27,6 +36,11 @@ __all__ = [
     "OpenFGAUnavailableError",
     "RelationQuery",
     "RelationTuple",
+    "ResourceOwnershipError",
     "SubjectSet",
     "bootstrap_openfga",
+    "grant_resource_owner",
+    "resolve_graph_client",
+    "root_project_id",
+    "write_tuple_idempotent",
 ]

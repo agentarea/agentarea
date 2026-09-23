@@ -281,9 +281,17 @@ class MCPServerService(BaseCrudService[MCPServer]):
         search: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        ids: set[str] | None = None,
     ) -> tuple[list[MCPServer], int]:
+        """List server specs, narrowed to ``ids`` when the caller has a readable set."""
         return await self.repository.list_servers(
-            status=status, is_public=is_public, tag=tag, search=search, limit=limit, offset=offset
+            status=status,
+            is_public=is_public,
+            tag=tag,
+            search=search,
+            limit=limit,
+            offset=offset,
+            ids=ids,
         )
 
     async def get(self, id: UUID) -> MCPServer | None:

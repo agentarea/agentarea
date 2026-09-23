@@ -15,6 +15,10 @@ class TriggerORM(BaseModel, WorkspaceScopedMixin, AuditMixin):
 
     __tablename__ = "triggers"
 
+    #: Governed by the authorization graph: creating one writes
+    #: ``resource:<id>`` tuples so its creator can reach it afterwards.
+    __graph_resource__ = True
+
     # Basic trigger fields
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")

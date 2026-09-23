@@ -5,7 +5,8 @@ from uuid import UUID
 from agentarea_api.api.deps.services import get_mcp_server_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
-from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.auth.resource_visibility import readable_resource_ids
+from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.service import MCPServerService
@@ -91,7 +92,11 @@ async def create_mcp_server(
 @router.get(
     "/",
     response_model=PaginatedResponse[MCPServerResponse],
-    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+    dependencies=[
+        enforced_in_handler(
+            "tenant specs are narrowed to what the graph says is readable; the catalog is not"
+        )
+    ],
 )
 async def list_mcp_servers(
     user_context: UserContextDep,
@@ -108,6 +113,7 @@ async def list_mcp_servers(
         search=pagination.search,
         limit=pagination.limit,
         offset=pagination.offset,
+        ids=await readable_resource_ids(user_context.user_id),
     )
     return PaginatedResponse(
         items=[MCPServerResponse.from_domain(server) for server in servers],
@@ -121,7 +127,11 @@ async def list_mcp_servers(
 @router.get(
     "/{server_id}",
     response_model=MCPServerResponse,
-    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+    dependencies=[
+        enforced_in_handler(
+            "the PDP decides for a tenant spec; a catalog projection is platform data"
+        )
+    ],
 )
 async def get_mcp_server(
     server_id: str,
@@ -134,6 +144,11 @@ async def get_mcp_server(
     server = await mcp_server_service.get(resolved_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP Server not found")
+    if not getattr(server, "is_catalog", False):
+        # A tenant spec; the catalog projection beside it is platform data with
+        # no ownership tuples of its own. Checked after resolution because the
+        # path may carry a slug.
+        await require_permission("read", "mcp_server", str(resolved_id), user_context.user_id)
     return MCPServerResponse.from_domain(server)
 
 
@@ -183,9 +198,7 @@ async def delete_mcp_server(
 
 @router.post(
     "/{server_id}/deploy",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "mcp_server", id_param="server_id")],
 )
 async def deploy_mcp_server(
     server_id: str,

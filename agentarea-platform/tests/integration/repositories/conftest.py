@@ -8,6 +8,7 @@ and repository fixtures for testing AgentArea repositories.
 from datetime import datetime
 from uuid import UUID, uuid4
 
+import pytest
 import pytest_asyncio
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.repository import AgentRepository
@@ -51,6 +52,14 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
+
+@pytest.fixture(autouse=True)
+def _graph_ownership(monkeypatch):
+    """Creating a governed row writes ownership tuples; here the graph is scenery."""
+    from agentarea_common.testing.graph import install_graph_ownership_stub
+
+    return install_graph_ownership_stub(monkeypatch)
 
 
 @pytest_asyncio.fixture(scope="function")

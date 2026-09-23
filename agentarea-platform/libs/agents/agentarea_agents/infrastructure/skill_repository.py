@@ -3,7 +3,10 @@
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from agentarea_common.base.workspace_scoped_repository import (
+    WorkspaceScopedRepository,
+    as_record_ids,
+)
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
@@ -113,9 +116,17 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         source_type: str | None = None,
         network_scope: str | None = None,
         from_registry: bool | None = None,
+        ids: set[str] | None = None,
     ) -> tuple[list[Skill], int]:
-        """List skills with pagination and optional name/description search."""
+        """List skills with pagination and optional name/description search.
+
+        ``ids`` narrows the tenant half to what the authorization graph says the
+        caller may read. It is a SQL filter rather than a pass over the result so
+        that ``total`` counts the rows the caller actually gets.
+        """
         filters = [self._get_workspace_filter()]
+        if ids is not None:
+            filters.append(self.model_class.id.in_(as_record_ids(ids)))
         if search:
             search_term = f"%{search.strip()}%"
             filters.append(

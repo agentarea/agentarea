@@ -71,17 +71,27 @@ def get_workspace_service(session: SessionDep, user: UserContextDep) -> Workspac
             logger.exception("failed to seed default policies for workspace %s", workspace.id)
             await session.rollback()
             raise
-        try:
-            await seed_workspace(
-                workspace_id=workspace.id,
-                creator_user_id=workspace.owner_user_id,
-            )
-        except Exception:
-            logger.exception("failed to seed authorization graph for workspace %s", workspace.id)
+
+    async def seed_authorization_graph(workspace: Workspace) -> None:
+        """Write the workspace's graph tuples before its row exists.
+
+        Before the row, deliberately. The graph is a second system and cannot
+        join Postgres' transaction, so one of the two has to go first, and the
+        harmless order is this one: tuples about a workspace id that was never
+        inserted grant nobody anything, while a committed row with no tuples has
+        no `Workspace#admin` and no root project -- its own owner is refused on
+        every object the PDP governs, and nothing retries, because the row looks
+        finished. Raising here means the create simply fails.
+        """
+        await seed_workspace(
+            workspace_id=workspace.id,
+            creator_user_id=workspace.owner_user_id,
+        )
 
     return WorkspaceService(
         WorkspaceRepository(session),
         on_created=on_workspace_created,
+        before_insert=seed_authorization_graph,
     )
 
 
@@ -130,9 +140,9 @@ async def create_workspace(
 
     workspace = await service.create_shared(owner_user_id=user.user_id, name=name)
 
-    # The creation hook already seeds the graph fail-soft; re-run fail-loud here so
-    # a deliberate create surfaces a graph outage as 503 instead of a silently
-    # unusable workspace. seed_workspace is idempotent.
+    # The creation hook already seeded the graph and raised on failure; this
+    # re-assert is idempotent and kept so a deliberate create keeps answering
+    # 503 with this endpoint's wording rather than the hook's.
     try:
         await seed_workspace(workspace_id=workspace.id, creator_user_id=user.user_id)
     except HTTPException:

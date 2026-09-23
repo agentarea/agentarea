@@ -14385,7 +14385,7 @@
     },
     "/v1/agents": {
       "get": {
-        "description": "List all workspace agents.\n\nAccess Control:\n    Returns all agents within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace agents.\n\n    Note: User-level access control should be implemented via authorization\n    layer (future access-control) rather than query parameters.",
+        "description": "List the agents in this workspace the caller may read.\n\nThe workspace column narrows the query to one tenant; the graph then decides\nwhich of those rows this caller sees. A plain member reads them all through\nthe root-project role their membership grants, so the two answers usually\nagree -- the point is that revoking that role now actually removes the rows,\ninstead of leaving a tuple nobody consults.",
         "operationId": "list_agents_v1_agents_get",
         "responses": {
           "200": {
@@ -14418,7 +14418,7 @@
     },
     "/v1/agents/": {
       "get": {
-        "description": "List all workspace agents.\n\nAccess Control:\n    Returns all agents within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace agents.\n\n    Note: User-level access control should be implemented via authorization\n    layer (future access-control) rather than query parameters.",
+        "description": "List the agents in this workspace the caller may read.\n\nThe workspace column narrows the query to one tenant; the graph then decides\nwhich of those rows this caller sees. A plain member reads them all through\nthe root-project role their membership grants, so the two answers usually\nagree -- the point is that revoking that role now actually removes the rows,\ninstead of leaving a tuple nobody consults.",
         "operationId": "list_agents_v1_agents__get",
         "responses": {
           "200": {

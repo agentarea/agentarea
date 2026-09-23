@@ -4,6 +4,7 @@ import json
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_secrets.catalog_service import (
     DuplicateSecretNameError,
     ManagedSecretError,
@@ -12,6 +13,7 @@ from agentarea_secrets.catalog_service import (
     SecretNotFoundError,
 )
 from agentarea_secrets.naming import SecretNameError
+from fastapi import HTTPException
 
 from .base import platform_context
 
@@ -31,6 +33,12 @@ class SecretsToolset(Toolset):
     let an agent name a secret after a connection and overwrite that
     connection's live credentials — `(workspace_id, secret_name)` is unique, so
     a colliding write is an update.
+
+    Writing is gated on the same authority as ``POST /v1/secrets``. Without
+    that, an agent is a second door onto the same store: a member who cannot
+    mint a workspace credential through the API could mint one by asking an
+    agent to. Listing stays open — it returns names, never values, exactly as
+    the REST listing does.
     """
 
     @tool_method(effect="read")
@@ -67,6 +75,10 @@ class SecretsToolset(Toolset):
             _event_broker,
             secret_mgr,
         ):
+            try:
+                await assert_workspace_admin(user_ctx)
+            except HTTPException as exc:
+                return json.dumps({"created": False, "error": exc.detail})
             catalog = SecretCatalogService(session, user_ctx, secret_mgr)
             try:
                 secret = await catalog.create_user_secret(name, value, description)
@@ -84,6 +96,10 @@ class SecretsToolset(Toolset):
             _event_broker,
             secret_mgr,
         ):
+            try:
+                await assert_workspace_admin(user_ctx)
+            except HTTPException as exc:
+                return json.dumps({"deleted": False, "error": exc.detail})
             catalog = SecretCatalogService(session, user_ctx, secret_mgr)
             try:
                 secret = await catalog.get_by_name(name)

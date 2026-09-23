@@ -58,7 +58,13 @@ def mock_task_service(mock_agent_service):
 
     async def _get_task(task_id):
         agent = mock_agent_service.get.return_value
-        return SimpleNamespace(id=task_id, agent_id=getattr(agent, "id", None), execution_id=None)
+        return SimpleNamespace(
+            id=task_id,
+            agent_id=getattr(agent, "id", None),
+            # Acting on a run requires having started it.
+            user_id="test_user",
+            execution_id=None,
+        )
 
     service.get_task.side_effect = _get_task
     return service
@@ -133,6 +139,8 @@ class TestA2UIActionEndpoint:
             agent_id=agent.id,
             execution_id=stored_execution_id,
             status=business_status,
+            # Acting on a run requires having started it.
+            user_id="test_user",
         )
         delivered_actions = []
 
@@ -189,7 +197,7 @@ class TestA2UIActionEndpoint:
         mock_agent_service.get.return_value = agent
 
         async def _foreign_task(task_id):
-            return SimpleNamespace(id=task_id, agent_id=uuid4())
+            return SimpleNamespace(id=task_id, agent_id=uuid4(), user_id="test_user")
 
         mock_task_service.get_task.side_effect = _foreign_task
 
