@@ -96,7 +96,7 @@ export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
               accentClassName="text-primary"
               title={t("noAgents")}
               description={t("noAgentsHint")}
-              additionAction={{ label: t("createFirstAgent"), href: "/agents" }}
+              action={{ label: t("createFirstAgent"), href: "/agents/create" }}
               className="border-0 bg-transparent p-6 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent"
             />
           </div>

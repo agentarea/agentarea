@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { DetailSkeleton } from "@/components/Skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,20 @@ export default function OpenAPIConnectionDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [editingHeaders, setEditingHeaders] = useState(false);
   const [savingHeaders, setSavingHeaders] = useState(false);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const oauthResult = searchParams.get("oauth");
+    if (oauthResult === "success") {
+      toast.success("Account connected");
+      router.replace(`/connections/openapi/${connectionId}`, { scroll: false });
+    } else if (oauthResult === "error") {
+      toast.error("Could not connect account", {
+        description: searchParams.get("reason") || "OAuth authorization failed",
+      });
+      router.replace(`/connections/openapi/${connectionId}`, { scroll: false });
+    }
+  }, [connectionId, router]);
 
   useEffect(() => {
     const load = async () => {

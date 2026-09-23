@@ -28,6 +28,7 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/google/uuid"
 
+	"github.com/agentarea/mcp-manager/internal/usage"
 	"github.com/agentarea/mcp-manager/internal/workspace"
 )
 
@@ -58,8 +59,9 @@ type s3Client interface {
 }
 
 type Repository struct {
-	cfg    Config
-	client s3Client
+	cfg      Config
+	client   s3Client
+	recorder usage.Recorder
 }
 
 type Artifact struct {
@@ -231,7 +233,11 @@ func (r *Repository) PublishStream(ctx context.Context, workspaceID, taskID, sou
 		}
 	}
 	reservationCommitted = true
-	return Artifact{ID: id, Path: normalized, Name: name, Size: expectedSize, ContentType: contentType, SHA256: hash, CreatedAt: now, objectKey: key}, nil
+	artifact := Artifact{ID: id, Path: normalized, Name: name, Size: expectedSize, ContentType: contentType, SHA256: hash, CreatedAt: now, objectKey: key}
+	if err := r.recordPublication(ctx, workspaceID, taskID, artifact); err != nil {
+		return Artifact{}, err
+	}
+	return artifact, nil
 }
 
 func (r *Repository) List(ctx context.Context, workspaceID, taskID string) ([]Artifact, error) {

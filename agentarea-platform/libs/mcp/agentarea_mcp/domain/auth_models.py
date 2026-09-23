@@ -64,9 +64,15 @@ class MCPAuthConfig(BaseModel, WorkspaceScopedMixin):
             if not self.config.get("header_name"):
                 raise ValueError("api_key auth requires 'header_name' in config")
         elif self.auth_type == AUTH_TYPE_OAUTH2:
-            for field in ("client_id", "token_url"):
-                if not self.config.get(field):
-                    raise ValueError(f"oauth2 auth requires '{field}' in config")
+            if not self.config.get("token_url"):
+                raise ValueError("oauth2 auth requires 'token_url' in config")
+            client_id = self.config.get("client_id")
+            client_id_secret_name = self.config.get("client_id_secret_name")
+            if bool(client_id) == bool(client_id_secret_name):
+                raise ValueError(
+                    "oauth2 auth requires exactly one of 'client_id' or "
+                    "'client_id_secret_name' in config"
+                )
 
 
 class MCPOAuthLink(BaseModel, WorkspaceScopedMixin):

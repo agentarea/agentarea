@@ -4,7 +4,11 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from agentarea_api.api.deps.services import BaseSecretManagerDep, DatabaseSessionDep
+from agentarea_api.api.deps.services import (
+    BaseSecretManagerDep,
+    DatabaseSessionDep,
+    SecretCatalogServiceDep,
+)
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.auth_service import MCPAuthService
@@ -150,12 +154,14 @@ async def update_mcp_auth_config(
 async def delete_mcp_auth_config(
     config_id: UUID,
     user_context: UserContextDep,
+    secret_catalog: SecretCatalogServiceDep,
     service: MCPAuthService = Depends(get_mcp_auth_service),
 ):
     try:
         deleted = await service.delete(config_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="MCP auth config not found")
+        await secret_catalog.clear_references("mcp_auth_config", str(config_id))
     except ValueError as exc:
         # Linked instances prevent deletion → 409 Conflict
         raise HTTPException(status_code=409, detail=str(exc)) from exc

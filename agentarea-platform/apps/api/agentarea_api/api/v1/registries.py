@@ -9,9 +9,19 @@ from uuid import UUID
 from agentarea_api.api.deps.services import get_registry_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.utils.types import UtcDatetime
-from agentarea_registry.application.service import VALID_REGISTRY_TYPES, RegistryService
+from agentarea_registry.application.service import (
+    VALID_REGISTRY_TYPES,
+    CatalogItemAlreadyExistsError,
+    CatalogItemNotFoundError,
+    RegistryNotFoundError,
+    RegistryService,
+)
 from agentarea_registry.domain.models import Registry, RegistryItem
-from agentarea_registry.infrastructure.repository import CATALOG_SORTS
+from agentarea_registry.infrastructure.repository import (
+    CATALOG_SORTS,
+    PROTOCOL_REGISTRY_TYPE,
+    CatalogProtocol,
+)
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -24,10 +34,28 @@ router = APIRouter(prefix="/registries", tags=["registries"])
 class RegistryCreate(BaseModel):
     name: str = Field(..., description="Human-readable registry name")
     description: str | None = Field(None)
-    registry_type: str = Field(..., description="Entity type: 'mcp_servers' or 'skills'")
-    source_type: str = Field(..., description="Fetch method: 'url', 'github', or 'api'")
-    source_url: str = Field(..., description="URL to the registry source (JSON or YAML)")
+    registry_type: str = Field(
+        ...,
+        description=f"Catalog entity type: one of {VALID_REGISTRY_TYPES}",
+    )
+    source_type: str = Field(
+        ...,
+        description="Source mode: 'url', 'github', 'api', or platform-managed 'managed'",
+    )
+    source_url: str | None = Field(
+        None,
+        description="Registry source URL; omitted when source_type is 'managed'",
+    )
     sync_mode: str = Field(default="manual", description="'auto' or 'manual'")
+    recommendation_priority: int | None = Field(
+        None,
+        ge=0,
+        description=(
+            "Ordering weight for the 'recommended' catalog sort; lower comes first. "
+            "Keeps a curated system catalog ahead of a bulk/community mirror. "
+            "Omit to take the platform default."
+        ),
+    )
 
 
 class RegistryUpdate(BaseModel):
@@ -36,6 +64,7 @@ class RegistryUpdate(BaseModel):
     source_url: str | None = None
     sync_mode: str | None = None
     is_active: bool | None = None
+    recommendation_priority: int | None = Field(None, ge=0)
 
 
 class RegistryResponse(BaseModel):
@@ -50,6 +79,7 @@ class RegistryResponse(BaseModel):
     last_synced_at: UtcDatetime | None
     last_sync_error: str | None
     item_count: int
+    recommendation_priority: int
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -67,6 +97,7 @@ class RegistryResponse(BaseModel):
             last_synced_at=r.last_synced_at,
             last_sync_error=r.last_sync_error,
             item_count=r.item_count,
+            recommendation_priority=r.recommendation_priority,
             created_at=r.created_at,
             updated_at=r.updated_at,
         )
@@ -114,11 +145,46 @@ class RegistryItemResponse(BaseModel):
         )
 
 
+class CatalogItemCreate(BaseModel):
+    """Definition published directly into a platform-managed catalog."""
+
+    external_id: str = Field(..., min_length=1, max_length=500)
+    name: str = Field(..., min_length=1, max_length=255)
+    description: str | None = None
+    version: str | None = Field(None, max_length=100)
+    spec: dict[str, Any] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    recommendation_rank: int | None = Field(
+        None,
+        ge=0,
+        description=(
+            "Curation position within this registry; lower comes first. "
+            "Omit to publish after the registry's existing items."
+        ),
+    )
+
+
+class CatalogItemUpdate(BaseModel):
+    external_id: str | None = Field(None, min_length=1, max_length=500)
+    name: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = None
+    version: str | None = Field(None, max_length=100)
+    spec: dict[str, Any] | None = None
+    tags: list[str] | None = None
+
+
+class SkippedItem(BaseModel):
+    external_id: str
+    reason: str
+
+
 class SyncResponse(BaseModel):
     new_specs: int
     updates_flagged: int
     unchanged: int
     total: int
+    skipped: int = 0
+    skipped_items: list[SkippedItem] = Field(default_factory=list)
 
 
 class UpdateAllResponse(BaseModel):
@@ -168,6 +234,7 @@ async def create_registry(
             source_url=data.source_url,
             description=data.description,
             sync_mode=data.sync_mode,
+            recommendation_priority=data.recommendation_priority,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -193,15 +260,20 @@ class CategoryFacet(BaseModel):
 class CatalogBrowseResponse(BaseModel):
     """One page of a type's catalog plus the context needed to browse it.
 
-    ``total`` and ``categories`` cover the whole filtered catalog, not the page:
+    ``total`` and the facets cover the whole filtered catalog, not the page:
     without them a page that happens to contain no visible matches is
     indistinguishable from the end of the catalog, and facet counts drift as
     more pages load.
+
+    ``protocols`` is populated for the connections catalog only, where an entry
+    is either an MCP server or a plain HTTP API; every other type holds one
+    kind of thing and gets an empty list.
     """
 
     items: list[RegistryItemResponse]
     total: int
     categories: list[CategoryFacet]
+    protocols: list[CategoryFacet]
 
 
 @router.get("/catalog/browse", response_model=CatalogBrowseResponse)
@@ -210,7 +282,14 @@ async def browse_catalog(
     registry_type: str = Query(..., description="Catalog type to browse"),
     q: str | None = Query(None, description="Free-text filter over name and description"),
     category: str | None = Query(None, description="Restrict to one category facet"),
-    sort: str | None = Query(None, description="'featured' (default) or 'name'"),
+    protocol: CatalogProtocol | None = Query(
+        None,
+        description=(
+            "Restrict connections to one protocol. "
+            f"Only valid for registry_type='{PROTOCOL_REGISTRY_TYPE}'."
+        ),
+    ),
+    sort: str | None = Query(None, description="'recommended' (default) or 'name'"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     service: RegistryService = Depends(get_registry_service),
@@ -227,11 +306,19 @@ async def browse_catalog(
         )
     if sort is not None and sort not in CATALOG_SORTS:
         raise HTTPException(status_code=400, detail=f"sort must be one of {tuple(CATALOG_SORTS)}")
+    # A protocol filter on a type that has no protocols would silently page the
+    # whole catalog while the caller believes it asked for HTTP APIs.
+    if protocol is not None and registry_type != PROTOCOL_REGISTRY_TYPE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"protocol only applies to registry_type='{PROTOCOL_REGISTRY_TYPE}'",
+        )
 
-    items, total, categories = await service.browse_catalog(
+    items, total, categories, protocols = await service.browse_catalog(
         registry_type=registry_type,
         query=q,
         category=category,
+        protocol=protocol,
         sort=sort,
         limit=limit,
         offset=offset,
@@ -240,6 +327,7 @@ async def browse_catalog(
         items=[RegistryItemResponse.from_domain(i) for i in items],
         total=total,
         categories=[CategoryFacet(value=v, count=c) for v, c in categories],
+        protocols=[CategoryFacet(value=v, count=c) for v, c in protocols],
     )
 
 
@@ -328,8 +416,10 @@ async def sync_registry(
     try:
         stats = await service.sync_registry(registry_id)
         return SyncResponse(**stats)
-    except ValueError as e:
+    except RegistryNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Sync failed: {e}") from e
 
@@ -349,6 +439,33 @@ async def list_registry_items(
     return [RegistryItemResponse.from_domain(i) for i in items]
 
 
+@router.post(
+    "/{registry_id}/items",
+    response_model=RegistryItemResponse,
+    status_code=201,
+    dependencies=[Depends(require_platform_catalog_write)],
+)
+async def create_catalog_item(
+    registry_id: UUID,
+    data: CatalogItemCreate,
+    user_context: UserContextDep,
+    service: RegistryService = Depends(get_registry_service),
+):
+    """Publish one definition without putting catalog data in the OSS image."""
+    try:
+        item = await service.create_catalog_item(
+            registry_id,
+            **data.model_dump(),
+        )
+    except RegistryNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CatalogItemAlreadyExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RegistryItemResponse.from_domain(item)
+
+
 @router.get("/catalog/items/{item_id}", response_model=RegistryItemResponse)
 async def get_catalog_item(
     item_id: UUID,
@@ -359,6 +476,51 @@ async def get_catalog_item(
     if not item:
         raise HTTPException(status_code=404, detail="Catalog item not found")
     return RegistryItemResponse.from_domain(item)
+
+
+@router.patch(
+    "/catalog/items/{item_id}",
+    response_model=RegistryItemResponse,
+    dependencies=[Depends(require_platform_catalog_write)],
+)
+async def update_catalog_item(
+    item_id: UUID,
+    data: CatalogItemUpdate,
+    user_context: UserContextDep,
+    service: RegistryService = Depends(get_registry_service),
+):
+    """Change a directly managed definition in place."""
+    fields = data.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    try:
+        item = await service.update_catalog_item(item_id, **fields)
+    except (CatalogItemNotFoundError, RegistryNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CatalogItemAlreadyExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RegistryItemResponse.from_domain(item)
+
+
+@router.delete(
+    "/catalog/items/{item_id}",
+    status_code=204,
+    dependencies=[Depends(require_platform_catalog_write)],
+)
+async def delete_catalog_item(
+    item_id: UUID,
+    user_context: UserContextDep,
+    service: RegistryService = Depends(get_registry_service),
+) -> None:
+    """Remove a directly managed catalog definition."""
+    try:
+        await service.delete_catalog_item(item_id)
+    except (CatalogItemNotFoundError, RegistryNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # ── Update specs ──

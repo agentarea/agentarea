@@ -1,7 +1,7 @@
 ---
 title: Registry and catalog
 type: concept
-summary: Built-in agents, MCP servers, skills, and model specs live in a global catalog and are instantiated into a workspace on demand — not copied into every tenant behind a sentinel workspace id.
+description: "Built-in agents, MCP servers, skills, and model specs live in a global catalog and are instantiated into a workspace on demand."
 prerequisites:
   - /concepts/integration/mcp
 related:
@@ -10,8 +10,6 @@ related:
   - /concepts/agents/what-is-an-agent
 last_updated: 2026-07-29
 ---
-
-# Registry and catalog
 
 A registry is a configured external source of definitions. A catalog item is one
 cached definition from that source. Both are global — they are not scoped to a
@@ -170,6 +168,11 @@ have left two answers to "where does a built-in definition live".
 
 ## Related
 
-- [Bundles](/concepts/integration/bundles) — the format a catalog `bundles` item
-  holds.
-- [MCP](/concepts/integration/mcp) — what a synced `mcp_servers` item becomes.
+<Columns cols={2}>
+  <Card title="Bundles" icon="plug" href="/concepts/integration/bundles">
+    The format a catalog `bundles` item holds
+  </Card>
+  <Card title="MCP" icon="plug" href="/concepts/integration/mcp">
+    What a synced `mcp_servers` item becomes
+  </Card>
+</Columns>

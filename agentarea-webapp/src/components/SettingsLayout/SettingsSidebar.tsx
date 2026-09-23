@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   ArrowLeft,
   CreditCard,
-  Download,
+  SlidersHorizontal,
   Github,
   Key,
   ScrollText,
@@ -25,25 +25,33 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { useBillingUrl } from "@/lib/use-billing-url";
+
+
+
 
 export function SettingsSidebarContent() {
   const pathname = usePathname();
   const t = useTranslations("SettingsSidebar");
   const { open } = useSidebar();
+  // Empty on any deployment that does not sell, which is the open default.
+  const billingUrl = useBillingUrl();
 
   const settingsNav = [
     {
       label: t("account"),
       items: [
         { title: t("profile"), href: "/settings", icon: User },
-        { title: t("billing"), href: "/settings/billing", icon: CreditCard },
+        ...(billingUrl
+          ? [{ title: t("billing"), href: billingUrl, icon: CreditCard }]
+          : []),
       ],
     },
     {
       label: t("workspace"),
       items: [
         { title: t("apiKeys"), href: "/admin/api-keys", icon: Key },
-        { title: t("importExport"), href: "/admin/workspace", icon: Download },
+        { title: t("workspaceSettings"), href: "/admin/workspace", icon: SlidersHorizontal },
         { title: t("auditLog"), href: "/settings/audit", icon: ScrollText },
       ],
     },

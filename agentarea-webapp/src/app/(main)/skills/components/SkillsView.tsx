@@ -3,20 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  ArrowDownAZ,
-  Clock,
-  Inbox,
-  Layers,
-  Rows3,
-  Tag,
-} from "lucide-react";
+import { ArrowDownAZ, Clock, Inbox, Layers, Rows3, Tag } from "lucide-react";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import DisplayMenu from "@/components/DisplayMenu/DisplayMenu";
 import EmptyState from "@/components/EmptyState";
 import HeaderTabs from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
 import { GroupHeader } from "@/components/ui/group-header";
+import { ToolbarDivider } from "@/components/ui/toolbar";
 import { listSkillsAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 import type { PaginatedSkills, Skill } from "@/types/skill";
@@ -25,12 +19,7 @@ import { getValidTimestamp } from "@/utils/dateUtils";
 import SkillRow from "./SkillRow";
 import SkillsCard from "./SkillsCard";
 import SkillsContentSkeleton from "./SkillsContentSkeleton";
-import {
-  SCOPE_ORDER,
-  scopeMeta,
-  SOURCE_ORDER,
-  sourceMeta,
-} from "./skillsMeta";
+import { SCOPE_ORDER, scopeMeta, SOURCE_ORDER, sourceMeta } from "./skillsMeta";
 
 type GroupKey = "source" | "scope" | "none";
 type OrderKey = "name" | "created";
@@ -281,7 +270,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
               ))}
             </div>
 
-            <div className="mx-1 h-[18px] w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />
+            <ToolbarDivider />
           </>
         ) : (
           <div className="min-w-0 flex-1">

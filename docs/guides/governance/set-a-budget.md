@@ -1,7 +1,7 @@
 ---
 title: Set a budget
 type: guide
-summary: Cap monthly spend, per-run spend, service spend or tokens for a workspace, agent, user or single task, and confirm the ceiling reached the run.
+description: "Cap monthly spend, per-run spend, service spend or tokens for a workspace, agent, user or single task, and confirm the ceiling reached the run."
 prerequisites:
   - /concepts/governance/budgets-and-quotas
 related:
@@ -10,8 +10,6 @@ related:
   - /concepts/governance/policy-engine
 last_updated: 2026-07-29
 ---
-
-# Set a budget
 
 Do this to bound what an agent can spend before it spends it. There are four
 ceilings — monthly spend, per-run spend, service spend and tokens — and they are
@@ -28,83 +26,87 @@ adjusting those rather than creating them from nothing.
 
 ## Prerequisites
 
+<Info>
 - You can create policy rules through `/v1/policies`.
 - Read [budgets and quotas](/concepts/governance/budgets-and-quotas), in
   particular which ceiling is admission-only.
 
 Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
+</Info>
 
 ## Steps
 
-### 1. Choose the ceiling
+<Steps titleSize="h3">
+  <Step title="Choose the ceiling">
+    | Ceiling | Target and params | Enforced | Pick when |
+    |---|---|---|---|
+    | Monthly spend | `spend`, `{"amount_usd": "...", "period": "month"}` | task creation | you need a hard stop on workspace spend per calendar month |
+    | Per-run spend | `spend`, `{"amount_usd": "...", "period": "run"}` | inside the loop and before each LLM and tool call | you need to bound one runaway task |
+    | Service spend | `service`, `{"amount_usd": "..."}` | before each tool call | the agent makes paid calls on your behalf |
+    | Tokens | `tokens`, `{"max_tokens": N}` | before each LLM call | you bound by context rather than cost |
 
-| Ceiling | Target and params | Enforced | Pick when |
-|---|---|---|---|
-| Monthly spend | `spend`, `{"amount_usd": "...", "period": "month"}` | task creation | you need a hard stop on workspace spend per calendar month |
-| Per-run spend | `spend`, `{"amount_usd": "...", "period": "run"}` | inside the loop and before each LLM and tool call | you need to bound one runaway task |
-| Service spend | `service`, `{"amount_usd": "..."}` | before each tool call | the agent makes paid calls on your behalf |
-| Tokens | `tokens`, `{"max_tokens": N}` | before each LLM call | you bound by context rather than cost |
+    Amounts are accepted as a string or a number; use a decimal string such as
+    `"250.00"` to avoid float rounding. They come back as strings.
+  </Step>
 
-Amounts are accepted as a string or a number; use a decimal string such as
-`"250.00"` to avoid float rounding. They come back as strings.
+  <Step title="Create the cap">
+    ```bash
+    curl -s -X POST "$API/v1/policies" \
+      -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+      -d '{
+            "subject_type": "workspace",
+            "subject_id": "'"$WORKSPACE_ID"'",
+            "target": "spend",
+            "effect": "cap",
+            "params": {"amount_usd": "250.00", "period": "month"}
+          }'
+    ```
 
-### 2. Create the cap
+    Scope it more tightly by changing the subject. `subject_type: "agent"` with the
+    agent UUID bounds one agent; `subject_type: "user"` with a user id bounds
+    whatever that person launches. Lower scopes may only lower the number.
+  </Step>
 
-```bash
-curl -s -X POST "$API/v1/policies" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{
-        "subject_type": "workspace",
-        "subject_id": "'"$WORKSPACE_ID"'",
-        "target": "spend",
-        "effect": "cap",
-        "params": {"amount_usd": "250.00", "period": "month"}
-      }'
-```
+  <Step title="Adjust an existing cap instead of stacking one">
+    The workspace baseline already contains a monthly and a per-run cap. Find the row
+    and patch it rather than adding a second:
 
-Scope it more tightly by changing the subject. `subject_type: "agent"` with the
-agent UUID bounds one agent; `subject_type: "user"` with a user id bounds
-whatever that person launches. Lower scopes may only lower the number.
+    ```bash
+    curl -s -H "Authorization: Bearer $TOKEN" \
+      "$API/v1/policies?subject_type=workspace&subject_id=$WORKSPACE_ID&effect=cap" \
+      | python3 -c '
+    import json,sys
+    for r in json.load(sys.stdin):
+        print(r["id"], r["target"], r["params"])'
+    ```
 
-### 3. Adjust an existing cap instead of stacking one
+    ```bash
+    curl -s -X PATCH "$API/v1/policies/$RULE_ID" \
+      -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+      -d '{"params": {"amount_usd": "100.00", "period": "month"}}'
+    ```
 
-The workspace baseline already contains a monthly and a per-run cap. Find the row
-and patch it rather than adding a second:
+    `PATCH` replaces `params` wholesale, so include `period` even when only the
+    amount changes. To switch a cap off without deleting it, send
+    `{"enabled": false}` — disabled rules are skipped when the layer compiles.
+  </Step>
 
-```bash
-curl -s -H "Authorization: Bearer $TOKEN" \
-  "$API/v1/policies?subject_type=workspace&subject_id=$WORKSPACE_ID&effect=cap" \
-  | python3 -c '
-import json,sys
-for r in json.load(sys.stdin):
-    print(r["id"], r["target"], r["params"])'
-```
+  <Step title="Bound a single task">
+    A per-task ceiling rides on task creation:
 
-```bash
-curl -s -X PATCH "$API/v1/policies/$RULE_ID" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"params": {"amount_usd": "100.00", "period": "month"}}'
-```
+    ```bash
+    curl -s -X POST "$API/v1/agents/$AGENT_ID/tasks/" \
+      -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+      -d '{
+            "description": "Summarise the Q3 report",
+            "task_policy": {"budget": {"run_budget_usd": "2.50"}}
+          }'
+    ```
 
-`PATCH` replaces `params` wholesale, so include `period` even when only the
-amount changes. To switch a cap off without deleting it, send
-`{"enabled": false}` — disabled rules are skipped when the layer compiles.
-
-### 4. Bound a single task
-
-A per-task ceiling rides on task creation:
-
-```bash
-curl -s -X POST "$API/v1/agents/$AGENT_ID/tasks/" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{
-        "description": "Summarise the Q3 report",
-        "task_policy": {"budget": {"run_budget_usd": "2.50"}}
-      }'
-```
-
-This can only tighten. A task asking for more than the agent or workspace allows
-is rejected.
+    This can only tighten. A task asking for more than the agent or workspace allows
+    is rejected.
+  </Step>
+</Steps>
 
 ## Verify
 
@@ -166,49 +168,62 @@ for e in json.load(sys.stdin)["events"]:
 
 ## Troubleshooting
 
-**`422` when creating the rule or previewing.** A lower scope tried to raise a
-higher one's ceiling. Budgets merge by taking the minimum, and the resolver
-rejects rather than silently clamping so the mistake is visible. Raise the parent
-first, or lower the child.
-
-**The cap was set and the task still overspent.** The monthly cap is admission
-control only. A task that starts under the cap runs to completion no matter how
-far past the cap the workspace goes, and the check is a read-then-decide with no
-lock, so concurrent task creation can cross it. For a hard per-task bound use the
-run budget, which is enforced inside the loop and before each call.
-
-**Month-to-date looks wrong.** It is summed from `total_cost` on the workspace's
-task rows from the first of the current UTC month. Spend from a task still in
-flight is not fully counted until it finishes, so the figure trails reality while
-work is running.
-
-**A task is rejected because a ceiling is missing.** Runtime execution requires
-an explicit run budget, total and per-call token ceilings, and agent-loop limits
-in the resolved governance snapshot. Deleting the persisted workspace defaults
-does not reveal a built-in numeric fallback; it makes the runtime contract
-invalid. Restore the missing policy rows and re-check the preview output.
-
-**`max_tokens_per_call` appears lower than expected.** It is enforced on every
-LLM call. The resolver takes the strictest positive value from the effective
-policy, the request, and the model's declared output capability, so inspect all
-three sources before changing the workspace rule.
-
-**The numbers do not match between the loop and the per-call gate.** They are two
-enforcement points reading one resolved ceiling — the tighter of the per-request
-budget and the policy value. If they disagree, the request carried its own
-`budget_usd`; the minimum wins, so check what the caller sent.
-
-**A budget denial appears as a failed activity, not a graceful stop.** The
-per-call gate raises rather than returning a message the model can answer. The
-graceful path — the loop noticing exhaustion and completing — comes from the
-in-workflow tracker. Both are expected; which you see depends on where the
-ceiling was crossed.
+<AccordionGroup>
+  <Accordion title="`422` when creating the rule or previewing">
+    A lower scope tried to raise a higher one's ceiling. Budgets merge by taking
+    the minimum, and the resolver rejects rather than silently clamping so the
+    mistake is visible. Raise the parent first, or lower the child.
+  </Accordion>
+  <Accordion title="The cap was set and the task still overspent">
+    The monthly cap is admission control only. A task that starts under the cap
+    runs to completion no matter how far past the cap the workspace goes, and
+    the check is a read-then-decide with no lock, so concurrent task creation
+    can cross it. For a hard per-task bound use the run budget, which is
+    enforced inside the loop and before each call.
+  </Accordion>
+  <Accordion title="Month-to-date looks wrong">
+    It is summed from `total_cost` on the workspace's task rows from the first
+    of the current UTC month. Spend from a task still in flight is not fully
+    counted until it finishes, so the figure trails reality while work is
+    running.
+  </Accordion>
+  <Accordion title="A task is rejected because a ceiling is missing">
+    Runtime execution requires an explicit run budget, total and per-call token
+    ceilings, and agent-loop limits in the resolved governance snapshot.
+    Deleting the persisted workspace defaults does not reveal a built-in numeric
+    fallback; it makes the runtime contract invalid. Restore the missing policy
+    rows and re-check the preview output.
+  </Accordion>
+  <Accordion title="`max_tokens_per_call` appears lower than expected">
+    It is enforced on every LLM call. The resolver takes the strictest positive
+    value from the effective policy, the request, and the model's declared
+    output capability, so inspect all three sources before changing the
+    workspace rule.
+  </Accordion>
+  <Accordion title="The numbers do not match between the loop and the per-call gate">
+    They are two enforcement points reading one resolved ceiling — the tighter
+    of the per-request budget and the policy value. If they disagree, the
+    request carried its own `budget_usd` ; the minimum wins, so check what the
+    caller sent.
+  </Accordion>
+  <Accordion title="A budget denial appears as a failed activity, not a graceful stop">
+    The per-call gate raises rather than returning a message the model can
+    answer. The graceful path — the loop noticing exhaustion and completing —
+    comes from the in-workflow tracker. Both are expected; which you see depends
+    on where the ceiling was crossed.
+  </Accordion>
+</AccordionGroup>
 
 ## Related
 
-- [Budgets and quotas](/concepts/governance/budgets-and-quotas) — the enforcement
-  points and their thresholds.
-- [The policy engine](/concepts/governance/policy-engine) — how ceilings merge
-  across scopes.
-- [Authorize a tool call](/guides/governance/authorize-a-tool-call) — the other
-  restriction you write as a policy rule.
+<Columns cols={2}>
+  <Card title="Budgets and quotas" icon="scale-balanced" href="/concepts/governance/budgets-and-quotas">
+    The enforcement points and their thresholds
+  </Card>
+  <Card title="The policy engine" icon="scale-balanced" href="/concepts/governance/policy-engine">
+    How ceilings merge across scopes
+  </Card>
+  <Card title="Authorize a tool call" icon="scale-balanced" href="/guides/governance/authorize-a-tool-call">
+    The other restriction you write as a policy rule
+  </Card>
+</Columns>

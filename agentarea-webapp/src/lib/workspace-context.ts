@@ -25,7 +25,7 @@ const EMPTY: WorkspaceContext = { workspaces: [], active: null };
 /**
  * Fetch the caller's workspaces without going through the generated client.
  *
- * The client wrapper stamps X-Workspace-Slug on every request, and the backend
+ * The client wrapper stamps X-AgentArea-Workspace on every request, and the backend
  * 403s a slug the caller is not a member of — including on this endpoint. A
  * cookie left over from a workspace the user was removed from would therefore
  * break the one call needed to recover from it. Listing is user-scoped anyway,

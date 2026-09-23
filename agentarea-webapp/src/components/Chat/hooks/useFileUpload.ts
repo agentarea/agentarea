@@ -86,6 +86,9 @@ export function useFileUpload(): UseFileUploadReturn {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     setSelectedFiles((prev) => [...prev, ...files]);
+    // Browsers do not fire change when the same file remains selected. Reset
+    // after capturing it so a removed file can be selected again.
+    e.currentTarget.value = "";
   };
 
   /**

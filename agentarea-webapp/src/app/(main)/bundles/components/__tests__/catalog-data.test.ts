@@ -121,6 +121,19 @@ describe("catalog data normalization", () => {
     "skill: explicit display_name wins over generated title"
   );
 
+  assertEqual(
+    normalize(
+      "skills",
+      item({
+        name: "mcp-builder--anthropics-skills--abc123",
+        tags: ["repo:anthropics-skills"],
+        spec: { original_name: "mcp-builder" },
+      })
+    ).title,
+    "MCP Builder",
+    "skill: original name keeps meaningful words and common acronyms"
+  );
+
   // ── server-derived facets win over local re-derivation ──
   // Browsing is filtered, sorted and counted in SQL against the row's stored
   // category/featured columns. If a card re-derived them and disagreed, an item
@@ -129,7 +142,11 @@ describe("catalog data normalization", () => {
   assertEqual(
     normalize(
       "skills",
-      item({ name: "x--y--z", tags: ["category:design"], category: "documents" })
+      item({
+        name: "x--y--z",
+        tags: ["category:design"],
+        category: "documents",
+      })
     ).category,
     "documents",
     "facets: server category wins over the tag-derived one"
@@ -152,6 +169,75 @@ describe("catalog data normalization", () => {
     normalize("skills", item({ name: "x", tags: ["featured"] })).featured,
     true,
     "facets: falls back to the featured tag when the server sent no flag"
+  );
+
+  // ── icon candidates (the card falls through these on a 404) ──
+  // One URL was not enough: the curated connection catalog ships a local icon
+  // *and* a hosted fallback, and a card that gave up on the first failure
+  // showed the same generic glyph as every other card on the page.
+
+  assertEqual(
+    normalize(
+      "connections",
+      item({
+        name: "GitHub",
+        spec: {
+          raw_spec: {
+            icons: [{ src: "/api/static/icons/mcp/github.ico" }],
+            metadata: {
+              "agentarea:logo_source_url": "https://cdn.test/github.png",
+            },
+          },
+        },
+      })
+    ).identity.sources,
+    ["/api/static/icons/mcp/github.ico", "https://cdn.test/github.png"],
+    "icons: the curated fallback is kept behind the primary logo"
+  );
+
+  assertEqual(
+    normalize(
+      "connections",
+      item({
+        name: "Dupe",
+        spec: {
+          icon: "https://cdn.test/a.png",
+          raw_spec: { icons: [{ src: "https://cdn.test/a.png" }] },
+        },
+      })
+    ).identity.sources,
+    ["https://cdn.test/a.png"],
+    "icons: the same URL twice is one candidate, not a retry of a failure"
+  );
+
+  assertEqual(
+    normalize(
+      "connections",
+      item({
+        name: "Hostile",
+        spec: { icon: "javascript:alert(1)", icon_url: "cdn.test/x.png" },
+      })
+    ).identity.sources,
+    [],
+    "icons: only app-relative paths and http(s) URLs reach an <img src>"
+  );
+
+  assertEqual(
+    normalize(
+      "skills",
+      item({
+        name: "pdf--anthropics-skills--abc",
+        spec: { provenance: { repo: "anthropics/skills" } },
+      })
+    ).identity.sources,
+    ["https://github.com/anthropics.png?size=128"],
+    "icons: a skill with no artwork borrows its publisher's avatar"
+  );
+
+  assertEqual(
+    normalize("agents", item({ name: "Plain", spec: {} })).identity.sources,
+    [],
+    "icons: nothing usable → no candidates (the card draws a monogram)"
   );
 
   // ── tolerant model matching (drives the "preferred models" suggestion) ──

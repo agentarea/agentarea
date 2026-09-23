@@ -47,7 +47,7 @@ class LazySecretReader:
                     task_orm = await session.get(TaskORM, UUID(parts[1]))
                     if task_orm:
                         user_context = UserContext(
-                            user_id=str(getattr(task_orm, "created_by", "") or ""),
+                            user_id=str(task_orm.created_by),
                             workspace_id=str(task_orm.workspace_id),
                         )
                 except (ValueError, Exception):

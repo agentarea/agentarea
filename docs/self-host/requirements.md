@@ -1,7 +1,7 @@
 ---
 title: Requirements
 type: reference
-summary: Host, cluster, and dependency versions required to run AgentArea, per deployment target.
+description: "Host, cluster, and dependency versions required to run AgentArea, per deployment target."
 prerequisites: []
 related:
   - /self-host/docker-compose
@@ -10,8 +10,6 @@ related:
   - /self-host/networking
 last_updated: 2026-07-29
 ---
-
-# Requirements
 
 What a host or cluster must provide before AgentArea starts.
 
@@ -156,7 +154,18 @@ helm version --short                     # v3.x
 
 ## Related
 
-- [Deploy with Docker Compose](/self-host/docker-compose)
-- [Deploy on Kubernetes with Helm](/self-host/kubernetes)
-- [Configuration](/self-host/configuration)
-- [Configure networking and ingress](/self-host/networking)
+<Columns cols={2}>
+  <Card title="Deploy with Docker Compose" icon="server" href="/self-host/docker-compose">
+    Run the full AgentArea platform on one host with docker- compose.yaml
+  </Card>
+  <Card title="Deploy on Kubernetes with Helm" icon="server" href="/self-host/kubernetes">
+    Install the agentarea Helm chart, decide which bundled dependencies to keep
+  </Card>
+  <Card title="Configuration" icon="server" href="/self-host/configuration">
+    Every environment variable each AgentArea service reads, and the Helm value
+    that sets it
+  </Card>
+  <Card title="Configure networking and ingress" icon="server" href="/self-host/networking">
+    Expose AgentArea over ingress, set the public URLs the platform advertises
+  </Card>
+</Columns>

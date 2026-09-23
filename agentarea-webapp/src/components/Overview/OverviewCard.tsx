@@ -1,0 +1,332 @@
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { ArrowUpRight, ChevronRight } from "lucide-react";
+import { BoardCrossMark } from "@/components/board";
+import { Button } from "@/components/ui/button";
+import { InteractiveListRow } from "@/components/ui/interactive-list-row";
+import { cn } from "@/lib/utils";
+
+/**
+ * Overview building blocks shared by the detail pages (agent, trigger): a
+ * bordered section card with a compact icon+title head, the four-up stat strip
+ * whose cells are separated by dashed board lines, and the rail rows that
+ * summarise a linked resource.
+ */
+
+const OVERVIEW_SURFACE_CLASS =
+  "overflow-hidden rounded-md border border-border/80 bg-card shadow-sm";
+
+export function SectionCard({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn(OVERVIEW_SURFACE_CLASS, className)}>{children}</div>
+  );
+}
+
+export function SectionCardHead({
+  icon,
+  title,
+  link,
+}: {
+  icon: ReactNode;
+  title: string;
+  link?: { label: string; href: string };
+}) {
+  return (
+    <div className="flex items-center gap-[9px] border-b border-border/60 bg-muted/20 px-[15px] py-[11px]">
+      <span className="grid h-[23px] w-[23px] shrink-0 place-items-center rounded bg-muted/80 text-foreground/75 ring-1 ring-inset ring-border/50 [&>svg]:h-3.5 [&>svg]:w-3.5">
+        {icon}
+      </span>
+      <span className="flex-1 text-[13px] font-semibold">{title}</span>
+      {link && (
+        <Button
+          asChild
+          variant="ghost"
+          size="xs"
+          className="text-muted-foreground"
+        >
+          <Link href={link.href}>
+            {link.label}
+            <ArrowUpRight />
+          </Link>
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export function EmptyRow({
+  text,
+  action,
+}: {
+  text: string;
+  action?: { label: string; href: string };
+}) {
+  return (
+    <div className="px-[15px] py-7 text-center text-[12px] text-muted-foreground">
+      {text}
+      {action && (
+        <>
+          {" "}
+          <Link
+            href={action.href}
+            className="font-medium text-foreground underline-offset-2 hover:underline"
+          >
+            {action.label}
+          </Link>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------ hero / rail ----------------------------- */
+
+/** Dot-separated meta item for a detail page hero. */
+export function HeroMeta({
+  icon,
+  children,
+}: {
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap before:mx-3 before:h-1 before:w-1 before:shrink-0 before:rounded-full before:bg-muted-foreground/40 before:content-[''] first:before:hidden [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:text-muted-foreground/70">
+      {icon}
+      <span>{children}</span>
+    </span>
+  );
+}
+
+/** Muted 28px icon tile for the glance rail rows. */
+export function SoftTile({ icon }: { icon: ReactNode }) {
+  return (
+    <span className="grid h-7 w-7 shrink-0 place-items-center rounded bg-muted text-foreground/80 [&>svg]:h-[15px] [&>svg]:w-[15px]">
+      {icon}
+    </span>
+  );
+}
+
+/** Title + sub + optional count, as one tappable row of a rail card. */
+export function GlanceRow({
+  href,
+  tile,
+  title,
+  sub,
+  count,
+  trailing,
+  chevron = true,
+}: {
+  href: string;
+  tile: ReactNode;
+  title: ReactNode;
+  sub: ReactNode;
+  count?: number;
+  trailing?: ReactNode;
+  chevron?: boolean;
+}) {
+  return (
+    <Link href={href} className="block">
+      <InteractiveListRow
+        showIndicator={false}
+        className="px-[15px] py-[11px]"
+        dividerClassName="border-b border-border/60"
+        start={tile}
+        end={
+          <span className="flex items-center gap-[7px] text-[12px] text-muted-foreground">
+            {trailing}
+            {count != null && (
+              <b className="font-semibold text-foreground/80 tabular-nums">
+                {count}
+              </b>
+            )}
+            {chevron && (
+              <ChevronRight
+                className="h-3.5 w-3.5 text-muted-foreground/60"
+                strokeWidth={2}
+              />
+            )}
+          </span>
+        }
+      >
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[12.5px] font-medium">{title}</div>
+          <div className="mt-px truncate text-[11px] text-muted-foreground/80">
+            {sub}
+          </div>
+        </div>
+      </InteractiveListRow>
+    </Link>
+  );
+}
+
+/**
+ * Same shape as {@link GlanceRow} for facts that lead nowhere — a schedule, a
+ * webhook endpoint. Rendering those as links would promise a page that does
+ * not exist.
+ */
+export function FactRow({
+  tile,
+  title,
+  sub,
+  trailing,
+}: {
+  tile?: ReactNode;
+  title: ReactNode;
+  sub?: ReactNode;
+  trailing?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 border-b border-border/60 px-[15px] py-[11px] last:border-b-0">
+      {tile}
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[12.5px] font-medium">{title}</div>
+        {sub != null && (
+          <div className="mt-px truncate text-[11px] text-muted-foreground/80">
+            {sub}
+          </div>
+        )}
+      </div>
+      {trailing != null && (
+        <span className="shrink-0 text-[12px] text-muted-foreground">
+          {trailing}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------ stat strip ------------------------------ */
+
+const STAT_MARKER_COLOR = "hsl(var(--foreground) / 0.78)";
+
+export function StatStrip({ children }: { children: ReactNode }) {
+  return (
+    <div className="mb-4">
+      <div
+        className={cn(
+          OVERVIEW_SURFACE_CLASS,
+          "relative grid grid-cols-2 lg:grid-cols-4"
+        )}
+      >
+        {children}
+        {[25, 50, 75].map((left) => (
+          <BoardCrossMark
+            key={`top-${left}`}
+            className="top-0 -translate-x-1/2 -translate-y-1/2"
+            color={STAT_MARKER_COLOR}
+            style={{ left: `${left}%` }}
+          />
+        ))}
+        {[25, 50, 75].map((left) => (
+          <BoardCrossMark
+            key={`bottom-${left}`}
+            className="bottom-0 -translate-x-1/2 translate-y-1/2"
+            color={STAT_MARKER_COLOR}
+            style={{ left: `${left}%` }}
+          />
+        ))}
+        <BoardCrossMark
+          className="top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 lg:hidden"
+          color={STAT_MARKER_COLOR}
+          visibleFrom="base"
+        />
+        <BoardCrossMark
+          className="bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 lg:hidden"
+          color={STAT_MARKER_COLOR}
+          visibleFrom="base"
+        />
+        <BoardCrossMark
+          className="top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 lg:hidden"
+          color={STAT_MARKER_COLOR}
+          visibleFrom="base"
+        />
+        <BoardCrossMark
+          className="top-1/2 right-0 translate-x-1/2 -translate-y-1/2 lg:hidden"
+          color={STAT_MARKER_COLOR}
+          visibleFrom="base"
+        />
+        <BoardCrossMark
+          className="top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 lg:hidden"
+          color={STAT_MARKER_COLOR}
+          visibleFrom="base"
+        />
+      </div>
+    </div>
+  );
+}
+
+export function Stat({
+  icon,
+  label,
+  value,
+  unit,
+  bar,
+  sub,
+  subTone = "muted",
+}: {
+  icon: ReactNode;
+  label: string;
+  value: ReactNode;
+  unit?: ReactNode;
+  /** Progress fill percentage (0–100). Omit to leave the slot empty. */
+  bar?: { pct: number } | null;
+  sub: ReactNode;
+  subTone?: "muted" | "up" | "down";
+}) {
+  return (
+    <div
+      className={cn(
+        "min-w-0 border-dashed px-4 py-[13px] [border-color:var(--board-line)]",
+        // 2-up on small screens: dashed divider on even cells + a top divider on the second row
+        "even:border-l [&:nth-child(n+3)]:border-t",
+        // 4-up on large screens: dashed divider on every cell but the first
+        "lg:border-l lg:first:border-l-0 lg:[&:nth-child(n+3)]:border-t-0"
+      )}
+    >
+      <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground [&>svg]:h-[13px] [&>svg]:w-[13px] [&>svg]:text-muted-foreground/70">
+        {icon}
+        {label}
+      </div>
+      <div className="mt-[7px] flex items-baseline gap-1.5 leading-none">
+        <span className="font-mono text-[24px] font-medium tracking-[-0.03em] tabular-nums">
+          {value}
+        </span>
+        {unit != null && (
+          <span className="text-[12px] font-medium text-muted-foreground">
+            {unit}
+          </span>
+        )}
+      </div>
+      <div className="mt-2.5 h-[5px] overflow-hidden rounded-[2px]">
+        {bar && (
+          <div className="h-full w-full rounded-[2px] bg-muted">
+            <span
+              className="block h-full rounded-[2px] bg-foreground"
+              style={{
+                width: `${Math.max(0, Math.min(100, bar.pct))}%`,
+              }}
+            />
+          </div>
+        )}
+      </div>
+      <div
+        className={cn(
+          "mt-2 truncate text-[11px]",
+          subTone === "muted"
+            ? "text-muted-foreground/70"
+            : subTone === "down"
+              ? "font-medium text-[var(--status-danger)]"
+              : "font-medium text-foreground/70"
+        )}
+      >
+        {sub}
+      </div>
+    </div>
+  );
+}

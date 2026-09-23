@@ -1,10 +1,9 @@
-// Dashboard fetcher. Uses direct fetch with the auth token because the
-// generated openapi schema may not yet include /v1/workspace/dashboard.
-// Once the schema is regenerated, this can move into api-factory.ts.
+// Dashboard-specific fetcher for server-only callers.
 
 import "server-only";
 import { env } from "@/env";
 import { getAuthToken } from "./getAuthToken";
+import { workspaceSlugHeaders } from "./workspace-request";
 
 export type DashboardSpend = {
   today_usd: number;
@@ -95,10 +94,19 @@ export type WorkspaceSettings = {
 
 async function authedFetch(path: string, init?: RequestInit) {
   const token = await getAuthToken();
-  const headers = new Headers(init?.headers);
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
+  if (!token) {
+    throw new Error(`[Dashboard Client] ${path} - No auth token available`);
   }
+
+  const headers = new Headers(init?.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+
+  for (const [name, value] of Object.entries(await workspaceSlugHeaders())) {
+    if (!headers.has(name)) {
+      headers.set(name, value);
+    }
+  }
+
   if (init?.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }

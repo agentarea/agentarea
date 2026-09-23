@@ -1,4 +1,3 @@
-import { useTranslations } from "next-intl";
 import {
   Bot,
   Clock,
@@ -8,10 +7,8 @@ import {
   Share2,
 } from "lucide-react";
 import LiveEventIndicator from "@/components/TaskEvents/LiveEventIndicator";
+import { TaskStatus } from "@/components/TaskStatus";
 import { Button } from "@/components/ui/button";
-import { StatusIndicator } from "@/components/ui/status-indicator";
-import { TaskWithAgent } from "@/lib/api";
-import { getTaskStatusPresentation } from "@/lib/status";
 import type { DisplayEvent } from "@/types/events";
 
 interface TaskHeaderProps {
@@ -48,13 +45,6 @@ export default function TaskHeader({
   onRefresh,
   controlButtons,
 }: TaskHeaderProps) {
-  const tStatus = useTranslations("TasksPage.status");
-  const status = currentStatus as TaskWithAgent["status"];
-  const presentation = getTaskStatusPresentation(status);
-  const label = presentation.labelKey
-    ? tStatus(presentation.labelKey)
-    : presentation.label;
-
   return (
     <div className="rounded-lg border border-gray-200 bg-gradient-to-r from-white to-gray-50 p-4 shadow-sm dark:border-gray-700 dark:from-gray-900 dark:to-gray-800">
       <div className="flex items-start gap-4">
@@ -65,13 +55,7 @@ export default function TaskHeader({
               {task.description}
             </h1>
             <div className="flex items-center gap-1.5 ml-2">
-              <StatusIndicator
-                size="sm"
-                tone={presentation.tone}
-                pulse={presentation.pulse}
-              >
-                {label}
-              </StatusIndicator>
+              <TaskStatus status={currentStatus} />
             </div>
           </div>
 

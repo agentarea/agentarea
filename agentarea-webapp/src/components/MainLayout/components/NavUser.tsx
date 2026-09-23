@@ -1,9 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useBillingUrl } from "@/lib/use-billing-url";
 import Link from "next/link";
 import { CreditCard, LogOut, Settings } from "lucide-react";
 import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
+import { deterministicHue } from "@/lib/avatar-hue";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,8 +24,11 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { APP_VERSION } from "@/lib/app-version";
 
+
 export function NavUser() {
   const t = useTranslations("NavUser");
+  // Empty on any deployment that does not sell, which is the open default.
+  const billingUrl = useBillingUrl();
   const { isMobile } = useSidebar();
   const { user: authUser, isLoaded, signOut } = useAuth();
   const user = authUser
@@ -46,6 +51,9 @@ export function NavUser() {
     return null;
   }
 
+  // Email over name: two people called "User" would otherwise share a colour.
+  const hue = deterministicHue(user.email || user.name);
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -57,6 +65,8 @@ export function NavUser() {
             >
               <EntityAvatar
                 size={28}
+                variant="pigment"
+                hue={hue}
                 src={user.avatar || undefined}
                 alt={user.name}
                 text={nameInitials(user.name)}
@@ -82,6 +92,8 @@ export function NavUser() {
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <EntityAvatar
                   size={32}
+                  variant="pigment"
+                  hue={hue}
                   src={user.avatar || undefined}
                   alt={user.name}
                   text={nameInitials(user.name)}
@@ -107,15 +119,17 @@ export function NavUser() {
                   {t("settings")}
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild className="cursor-pointer">
-                <Link
-                  href="/settings/billing"
-                  className="flex w-full items-center"
-                >
-                  <CreditCard className="mr-2 size-4" />
-                  {t("billing")}
-                </Link>
-              </DropdownMenuItem>
+              {billingUrl ? (
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link
+                    href={billingUrl}
+                    className="flex w-full items-center"
+                  >
+                    <CreditCard className="mr-2 size-4" />
+                    {t("billing")}
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>

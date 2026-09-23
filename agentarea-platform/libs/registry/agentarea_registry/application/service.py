@@ -15,6 +15,7 @@ Source format auto-detected (JSON or YAML).
 Entity-specific details (connection_type, source_type) live in spec JSONB.
 """
 
+import asyncio
 import json
 import logging
 import urllib.request
@@ -27,7 +28,11 @@ from agentarea_common.utils.slug import generate_slug
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
 
 from agentarea_registry.application.catalog_facets import apply_facets, derive_facets
-from agentarea_registry.domain.models import Registry, RegistryItem
+from agentarea_registry.domain.models import (
+    DEFAULT_REGISTRY_PRIORITY,
+    Registry,
+    RegistryItem,
+)
 from agentarea_registry.infrastructure.repository import (
     DEFAULT_CATALOG_SORT,
     RegistryItemRepository,
@@ -35,6 +40,13 @@ from agentarea_registry.infrastructure.repository import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Per-socket-operation timeout for fetching a catalog over HTTP. urllib applies
+# it to each connect and read rather than to the transfer as a whole, so this
+# bounds a stalled host, not a large catalog. The previous 120s bound outlived
+# both the readiness and the liveness probe, so a hung source took the pod down
+# with it before the fetch ever gave up.
+SOURCE_FETCH_TIMEOUT_SECONDS = 30
 
 VALID_REGISTRY_TYPES = (
     "mcp_servers",
@@ -44,7 +56,7 @@ VALID_REGISTRY_TYPES = (
     "agents",
     "bundles",
 )
-VALID_SOURCE_TYPES = ("url", "github", "api")
+VALID_SOURCE_TYPES = ("url", "github", "api", "managed")
 
 # Top-level catalog key -> registry type. Each catalog document carries exactly
 # one of these keys, so the registry type can be inferred from the payload shape
@@ -57,6 +69,60 @@ TYPE_BY_TOPLEVEL_KEY = {
     "agents": "agents",
     "bundles": "bundles",
 }
+
+
+class RegistryNotFoundError(ValueError):
+    """A requested catalog registry does not exist."""
+
+
+class CatalogItemNotFoundError(ValueError):
+    """A requested catalog item does not exist."""
+
+
+class CatalogItemAlreadyExistsError(ValueError):
+    """A registry already contains the requested external identifier."""
+
+
+# Where a curator can declare an item's rank explicitly, instead of relying on
+# its position in the published document. The namespaced spelling is what an
+# AgentArea-curated entry uses inside an upstream MCP server's `metadata`,
+# which is shared with the official registry schema.
+RANK_KEYS = ("recommendation_rank", "agentarea:recommendation_rank")
+
+
+def validated_registry_priority(value: Any) -> int:
+    """A usable registry ordering weight, or a rejection.
+
+    ``None`` is "unspecified" and takes the default. Anything else must be a
+    non-negative int: a stray string or a negative number would silently
+    reorder an entire source ahead of the curated catalog, which is worse than
+    a reconcile that stops and says so.
+    """
+    if value is None:
+        return DEFAULT_REGISTRY_PRIORITY
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"recommendation_priority must be a non-negative integer, got {value!r}")
+    return value
+
+
+def rank_fields(*mappings: Any) -> dict[str, int]:
+    """``{"recommendation_rank": n}`` when a curator declared one, else ``{}``.
+
+    Empty is meaningful: the parser's fallback is the entry's position in the
+    source document, so a missing or malformed rank keeps publication order
+    rather than collapsing a whole source onto one rank.
+    """
+    for mapping in mappings:
+        if not isinstance(mapping, dict):
+            continue
+        for key in RANK_KEYS:
+            value = mapping.get(key)
+            # `isinstance(True, int)` is True, and a negative rank would outrank
+            # every curated entry.
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                continue
+            return {"recommendation_rank": value}
+    return {}
 
 
 class RegistryService:
@@ -87,14 +153,19 @@ class RegistryService:
         name: str,
         registry_type: str,
         source_type: str,
-        source_url: str,
+        source_url: str | None,
         description: str | None = None,
         sync_mode: str = "manual",
+        recommendation_priority: int | None = None,
     ) -> Registry:
         if registry_type not in VALID_REGISTRY_TYPES:
             raise ValueError(f"registry_type must be one of {VALID_REGISTRY_TYPES}")
         if source_type not in VALID_SOURCE_TYPES:
             raise ValueError(f"source_type must be one of {VALID_SOURCE_TYPES}")
+        if source_type == "managed":
+            source_url = source_url or "managed://catalog"
+        elif not source_url:
+            raise ValueError("source_url is required for synchronized registries")
         return await self.registry_repo.create(
             name=name,
             registry_type=registry_type,
@@ -102,6 +173,7 @@ class RegistryService:
             source_url=source_url,
             description=description,
             sync_mode=sync_mode,
+            recommendation_priority=validated_registry_priority(recommendation_priority),
         )
 
     async def get_registry(self, registry_id: UUID) -> Registry | None:
@@ -117,6 +189,10 @@ class RegistryService:
         return await self.registry_repo.list_all()
 
     async def update_registry(self, registry_id: UUID, **fields) -> Registry | None:
+        if "recommendation_priority" in fields:
+            fields["recommendation_priority"] = validated_registry_priority(
+                fields["recommendation_priority"]
+            )
         return await self.registry_repo.update(registry_id, **fields)
 
     async def delete_registry(self, registry_id: UUID) -> bool:
@@ -134,13 +210,14 @@ class RegistryService:
         registry_type: str,
         query: str | None = None,
         category: str | None = None,
+        protocol: str | None = None,
         sort: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> tuple[list[RegistryItem], int, list[tuple[str, int]]]:
-        """One page of a type's catalog, its total, and the category facets.
+    ) -> tuple[list[RegistryItem], int, list[tuple[str, int]], list[tuple[str, int]]]:
+        """One page of a type's catalog, its total, and its facets.
 
-        Backs the /explore gallery. All three come from the same filter so the
+        Backs the /explore gallery. All of them come from the same filter so the
         page, the "is there more" signal and the sidebar counts can never
         disagree with each other.
         """
@@ -148,12 +225,14 @@ class RegistryService:
             registry_type=registry_type,
             q=query,
             category=category,
+            protocol=protocol,
             sort=sort or DEFAULT_CATALOG_SORT,
             limit=limit,
             offset=offset,
         )
-        categories = await self.item_repo.category_counts(registry_type, q=query)
-        return items, total, categories
+        categories = await self.item_repo.category_counts(registry_type, q=query, protocol=protocol)
+        protocols = await self.item_repo.protocol_counts(registry_type, q=query, category=category)
+        return items, total, categories, protocols
 
     async def search_catalog(
         self,
@@ -174,84 +253,250 @@ class RegistryService:
     async def get_item(self, item_id: UUID) -> RegistryItem | None:
         return await self.item_repo.get_by_id(item_id)
 
-    # ── Sync ──
+    async def create_catalog_item(
+        self,
+        registry_id: UUID,
+        *,
+        external_id: str,
+        name: str,
+        description: str | None = None,
+        version: str | None = None,
+        spec: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+        recommendation_rank: int | None = None,
+    ) -> RegistryItem:
+        """Create one platform-managed catalog definition.
 
-    async def sync_registry(self, registry_id: UUID) -> dict[str, Any]:
-        """Sync: fetch source, upsert catalog, auto-create entities for new items."""
+        Directly managed items stay as catalog projections. Workspace entities
+        are materialized only when a user installs or connects them; publishing
+        a connector must not create a tenant-shaped global entity.
+        """
         registry = await self.registry_repo.get_by_id(registry_id)
         if not registry:
-            raise ValueError(f"Registry {registry_id} not found")
+            raise RegistryNotFoundError(f"Registry {registry_id} not found")
+        if registry.source_type != "managed":
+            raise ValueError("Catalog items can only be written to a managed registry")
+
+        existing = await self.item_repo.get_by_external_id(registry_id, external_id)
+        if existing:
+            raise CatalogItemAlreadyExistsError(
+                f"Catalog item {external_id!r} already exists in registry {registry_id}"
+            )
+
+        item_spec = spec or {}
+        item_tags = tags or []
+        facets = derive_facets(registry.registry_type, name, item_spec, item_tags)
+        item = await self.item_repo.create(
+            registry_id=registry_id,
+            external_id=external_id,
+            name=name,
+            description=description,
+            version=version,
+            spec=item_spec,
+            tags=item_tags,
+            category=facets.category,
+            sort_key=facets.sort_key,
+            featured=facets.featured,
+            # A managed registry has no source order to take a position from,
+            # so an unranked publication goes to the end rather than tying with
+            # the existing catalog and jumping it on the alphabetical tiebreak.
+            recommendation_rank=(
+                await self.item_repo.next_recommendation_rank(registry_id)
+                if recommendation_rank is None
+                else recommendation_rank
+            ),
+        )
+        await self.registry_repo.update(
+            registry_id,
+            item_count=await self.item_repo.count_by_registry(registry_id),
+        )
+        return item
+
+    async def update_catalog_item(
+        self,
+        item_id: UUID,
+        **fields: Any,
+    ) -> RegistryItem:
+        """Update one item in a managed registry and recompute browse facets."""
+        item = await self.item_repo.get_by_id(item_id)
+        if not item:
+            raise CatalogItemNotFoundError(f"Catalog item {item_id} not found")
+        registry = await self.registry_repo.get_by_id(item.registry_id)
+        if not registry:
+            raise RegistryNotFoundError(f"Registry {item.registry_id} not found")
+        if registry.source_type != "managed":
+            raise ValueError("Catalog items can only be written in a managed registry")
+
+        external_id = fields.get("external_id", item.external_id)
+        if external_id != item.external_id:
+            existing = await self.item_repo.get_by_external_id(item.registry_id, external_id)
+            if existing:
+                raise CatalogItemAlreadyExistsError(
+                    f"Catalog item {external_id!r} already exists in registry {item.registry_id}"
+                )
+
+        name = fields.get("name", item.name)
+        spec = fields.get("spec", item.spec)
+        tags = fields.get("tags", item.tags)
+        facets = derive_facets(registry.registry_type, name, spec, tags)
+        fields.update(
+            category=facets.category,
+            sort_key=facets.sort_key,
+            featured=facets.featured,
+        )
+        updated = await self.item_repo.update(item_id, **fields)
+        if updated is None:  # Defensive against a concurrent delete.
+            raise CatalogItemNotFoundError(f"Catalog item {item_id} not found")
+        return updated
+
+    async def delete_catalog_item(self, item_id: UUID) -> None:
+        """Remove one item from a managed registry."""
+        item = await self.item_repo.get_by_id(item_id)
+        if not item:
+            raise CatalogItemNotFoundError(f"Catalog item {item_id} not found")
+        registry = await self.registry_repo.get_by_id(item.registry_id)
+        if not registry:
+            raise RegistryNotFoundError(f"Registry {item.registry_id} not found")
+        if registry.source_type != "managed":
+            raise ValueError("Catalog items can only be written in a managed registry")
+
+        if not await self.item_repo.delete(item_id):
+            raise CatalogItemNotFoundError(f"Catalog item {item_id} not found")
+        await self.registry_repo.update(
+            registry.id,
+            item_count=await self.item_repo.count_by_registry(registry.id),
+        )
+
+    # ── Sync ──
+
+    # Cap on how many skip reasons ride along in the returned stats dict. A
+    # catalog can fail validation on hundreds of items (e.g. a whole class of
+    # priceless reserved-capacity SKUs); the full count is still reported via
+    # `skipped`, this just bounds the payload. The WARNING log carries every
+    # skip regardless of the cap.
+    MAX_SKIPPED_DETAILS = 50
+
+    async def sync_registry(self, registry_id: UUID) -> dict[str, Any]:
+        """Sync: fetch source, upsert catalog, auto-create entities for new items.
+
+        A single item failing validation (e.g. an LLM model published with no
+        price) must not cost the rest of the batch: such items are skipped and
+        reported back in `skipped`/`skipped_items`, not silently dropped and
+        not allowed to abort the sync.
+        """
+        registry = await self.registry_repo.get_by_id(registry_id)
+        if not registry:
+            raise RegistryNotFoundError(f"Registry {registry_id} not found")
+        if registry.source_type == "managed":
+            raise ValueError("Managed registry items are changed through the catalog item API")
 
         try:
-            raw_data = self._fetch_source(registry.source_url)
+            # In a worker thread, not on the loop: _fetch_source is a blocking
+            # urlopen, and the API serves every request from one event loop, so
+            # calling it here directly froze the whole process -- /health with
+            # it, which is what the probes poll.
+            raw_data = await asyncio.to_thread(self._fetch_source, registry.source_url)
             parsed_items = self._parse_source(registry.registry_type, raw_data)
 
             new_specs = 0
             updates_flagged = 0
             unchanged = 0
+            skipped = 0
+            skipped_items: list[dict[str, str]] = []
 
             for item_data in parsed_items:
-                existing = await self.item_repo.get_by_external_id(
-                    registry_id=registry_id,
-                    external_id=item_data["external_id"],
-                )
-
-                if existing:
-                    for field in ("name", "description", "spec", "tags"):
-                        if field in item_data:
-                            setattr(existing, field, item_data[field])
-                    # Browse facets are derived from the fields just overwritten,
-                    # so they have to be recomputed or the catalog keeps sorting
-                    # and faceting this item by what it used to be.
-                    apply_facets(existing, registry.registry_type)
-
-                    new_version = item_data.get("version") or "latest"
-                    existing.version = new_version
-
-                    if existing.installed_version and existing.installed_version != new_version:
-                        existing.update_available = True
-                        updates_flagged += 1
-                    else:
-                        unchanged += 1
-
-                    await self.item_repo.session.commit()
-                    await self.item_repo.session.refresh(existing)
-
-                    # Backfill json_spec on linked entity if missing
-                    if existing.installed_entity_id:
-                        raw_spec = (existing.spec or {}).get("raw_spec")
-                        if raw_spec:
-                            await self._backfill_entity(
-                                registry.registry_type, existing, registry_url=registry.source_url
-                            )
-                else:
-                    facets = derive_facets(
-                        registry.registry_type,
-                        item_data["name"],
-                        item_data.get("spec", {}),
-                        item_data.get("tags", []),
-                    )
-                    item = await self.item_repo.create(
+                external_id = item_data["external_id"]
+                try:
+                    existing = await self.item_repo.get_by_external_id(
                         registry_id=registry_id,
-                        external_id=item_data["external_id"],
-                        name=item_data["name"],
-                        description=item_data.get("description"),
-                        version=item_data.get("version"),
-                        spec=item_data.get("spec", {}),
-                        tags=item_data.get("tags", []),
-                        category=facets.category,
-                        sort_key=facets.sort_key,
-                        featured=facets.featured,
+                        external_id=external_id,
                     )
-                    entity_id = await self._create_entity(
-                        registry.registry_type, item, registry_url=registry.source_url
+
+                    if existing:
+                        for field in (
+                            "name",
+                            "description",
+                            "spec",
+                            "tags",
+                            # Re-published in a different position means the
+                            # curator moved it; keeping the old rank would pin
+                            # the catalog to the order of the first ever sync.
+                            "recommendation_rank",
+                        ):
+                            if field in item_data:
+                                setattr(existing, field, item_data[field])
+                        # Browse facets are derived from the fields just overwritten,
+                        # so they have to be recomputed or the catalog keeps sorting
+                        # and faceting this item by what it used to be.
+                        apply_facets(existing, registry.registry_type)
+
+                        new_version = item_data.get("version") or "latest"
+                        existing.version = new_version
+
+                        if existing.installed_version and existing.installed_version != new_version:
+                            existing.update_available = True
+                            updates_flagged += 1
+                        else:
+                            unchanged += 1
+
+                        await self.item_repo.session.commit()
+                        await self.item_repo.session.refresh(existing)
+
+                        # Backfill json_spec on linked entity if missing
+                        if existing.installed_entity_id:
+                            raw_spec = (existing.spec or {}).get("raw_spec")
+                            if raw_spec:
+                                await self._backfill_entity(
+                                    registry.registry_type,
+                                    existing,
+                                    registry_url=registry.source_url,
+                                )
+                    else:
+                        facets = derive_facets(
+                            registry.registry_type,
+                            item_data["name"],
+                            item_data.get("spec", {}),
+                            item_data.get("tags", []),
+                        )
+                        item = await self.item_repo.create(
+                            registry_id=registry_id,
+                            external_id=external_id,
+                            name=item_data["name"],
+                            description=item_data.get("description"),
+                            version=item_data.get("version"),
+                            spec=item_data.get("spec", {}),
+                            tags=item_data.get("tags", []),
+                            category=facets.category,
+                            sort_key=facets.sort_key,
+                            recommendation_rank=item_data.get("recommendation_rank", 0),
+                            featured=facets.featured,
+                        )
+                        try:
+                            entity_id = await self._create_entity(
+                                registry.registry_type, item, registry_url=registry.source_url
+                            )
+                        except Exception:
+                            # Don't leave a catalog row with no backing entity
+                            # behind -- a rejected item must not appear browsable.
+                            await self.item_repo.delete(item.id)
+                            raise
+                        await self.item_repo.update(
+                            item.id,
+                            installed_entity_id=entity_id,
+                            installed_version=item.version or "latest",
+                        )
+                        new_specs += 1
+                except Exception as e:
+                    logger.warning(
+                        "Skipping catalog item %r in registry %s: %s",
+                        external_id,
+                        registry_id,
+                        e,
+                        exc_info=True,
                     )
-                    await self.item_repo.update(
-                        item.id,
-                        installed_entity_id=entity_id,
-                        installed_version=item.version or "latest",
-                    )
-                    new_specs += 1
+                    skipped += 1
+                    if len(skipped_items) < self.MAX_SKIPPED_DETAILS:
+                        skipped_items.append({"external_id": external_id, "reason": str(e)})
 
             total = new_specs + updates_flagged + unchanged
             await self.registry_repo.update(
@@ -266,6 +511,8 @@ class RegistryService:
                 "updates_flagged": updates_flagged,
                 "unchanged": unchanged,
                 "total": len(parsed_items),
+                "skipped": skipped,
+                "skipped_items": skipped_items,
             }
 
         except Exception as e:
@@ -321,6 +568,10 @@ class RegistryService:
         self, registry_type: str, item: RegistryItem, registry_url: str | None = None
     ) -> str | None:
         if registry_type == "mcp_servers":
+            # API connectors share the user-facing Connections catalog but are
+            # workspace materializations, not global MCPServer specifications.
+            if (item.spec or {}).get("connection_type") == "openapi":
+                return None
             return await self._create_mcp_server(item, registry_url=registry_url)
         elif registry_type == "skills":
             return await self._create_skill(item)
@@ -344,6 +595,8 @@ class RegistryService:
         self, registry_type: str, item: RegistryItem, registry_url: str | None = None
     ) -> Any:
         if registry_type == "mcp_servers":
+            if (item.spec or {}).get("connection_type") == "openapi":
+                return None
             return await self._update_mcp_server(item, registry_url=registry_url)
         elif registry_type == "skills":
             return await self._update_skill(item)
@@ -434,6 +687,8 @@ class RegistryService:
         if registry_type != "mcp_servers":
             return
         spec = item.spec or {}
+        if spec.get("connection_type") == "openapi":
+            return
         raw_spec = spec.get("raw_spec")
         if not raw_spec or not item.installed_entity_id:
             return
@@ -581,7 +836,7 @@ class RegistryService:
                     "User-Agent": "agentarea-registry-sync",
                 },
             )
-            with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
+            with urllib.request.urlopen(req, timeout=SOURCE_FETCH_TIMEOUT_SECONDS) as resp:  # noqa: S310
                 raw = resp.read().decode("utf-8")
                 content_type = resp.headers.get("Content-Type", "")
         else:
@@ -622,6 +877,20 @@ class RegistryService:
 
     @staticmethod
     def _parse_source(registry_type: str, data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Catalog entries in publication order, each carrying its rank.
+
+        Position *is* the curation signal -- the curated skills artifact is
+        published in GitHub-star order, the connection artifact leads with the
+        official integrations most workspaces want -- and nothing else in the
+        payload expresses it. A parser that read an explicit rank keeps it.
+        """
+        items = RegistryService._parse_entries(registry_type, data)
+        for position, item in enumerate(items):
+            item.setdefault("recommendation_rank", position)
+        return items
+
+    @staticmethod
+    def _parse_entries(registry_type: str, data: dict[str, Any]) -> list[dict[str, Any]]:
         if registry_type == "mcp_servers":
             return RegistryService._parse_mcp_servers(data)
         elif registry_type == "skills":
@@ -699,6 +968,9 @@ class RegistryService:
             title = server.get("title") or _humanize_identifier(identifier)
             description = (server.get("description") or "")[:500]
             version = server.get("version", "latest")
+            # One server can publish a remote, an OCI package and a command;
+            # they share the server's curated rank and break the tie on name.
+            rank = rank_fields(server, server.get("metadata"))
 
             # Remote endpoints → connection_type: "url"
             for remote in server.get("remotes", []):
@@ -736,6 +1008,7 @@ class RegistryService:
                             "raw_spec": server,
                         },
                         "tags": tags,
+                        **rank,
                     }
                 )
 
@@ -767,6 +1040,7 @@ class RegistryService:
                             "raw_spec": server,
                         },
                         "tags": ["docker", "oci"],
+                        **rank,
                     }
                 )
 
@@ -819,6 +1093,7 @@ class RegistryService:
                             "raw_spec": server,
                         },
                         "tags": ["command", reg_type],
+                        **rank,
                     }
                 )
 
@@ -858,6 +1133,7 @@ class RegistryService:
                     "version": entry.get("version") or "latest",
                     "spec": spec,
                     "tags": tags,
+                    **rank_fields(entry),
                 }
             )
         return items
@@ -870,18 +1146,42 @@ class RegistryService:
             name = entry.get("name", "")
             if not name:
                 continue
+            spec = {
+                "source_type": entry.get("source_type", "content"),
+                "content": entry.get("content"),
+                "source_url": entry.get("source_url"),
+            }
+            original_name = entry.get("original_name")
+            if isinstance(original_name, str) and original_name:
+                spec["original_name"] = original_name
+
+            raw_provenance = entry.get("provenance")
+            if isinstance(raw_provenance, dict):
+                provenance = {
+                    key: raw_provenance[key]
+                    for key in (
+                        "repo",
+                        "path",
+                        "branch",
+                        "stars",
+                        "license",
+                        "distribution",
+                        "source",
+                        "duplicate_count",
+                    )
+                    if key in raw_provenance
+                }
+                if provenance:
+                    spec["provenance"] = provenance
             items.append(
                 {
                     "external_id": name,
                     "name": name,
                     "description": entry.get("description"),
                     "version": entry.get("version") or "1.0.0",
-                    "spec": {
-                        "source_type": entry.get("source_type", "content"),
-                        "content": entry.get("content"),
-                        "source_url": entry.get("source_url"),
-                    },
+                    "spec": spec,
                     "tags": entry.get("tags", []),
+                    **rank_fields(entry),
                 }
             )
         return items
@@ -974,6 +1274,7 @@ class RegistryService:
                         "events_config": entry.get("events_config"),
                     },
                     "tags": entry.get("tags", []),
+                    **rank_fields(entry),
                 }
             )
         return items
@@ -1004,6 +1305,7 @@ class RegistryService:
                     "version": entry.get("schema_version") or entry.get("version") or "0.1.0",
                     "spec": entry,
                     "tags": tags,
+                    **rank_fields(entry, metadata),
                 }
             )
         return items

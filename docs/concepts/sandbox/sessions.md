@@ -1,7 +1,7 @@
 ---
 title: Sandbox sessions
 type: concept
-summary: A sandbox belongs to a task rather than to a command, so successive commands see the same filesystem and processes; this page covers how a session is assigned, kept alive, and retired.
+description: "A sandbox belongs to a task rather than to a command, so successive commands see the same filesystem and processes."
 prerequisites:
   - /concepts/sandbox/why-a-sandbox
   - /concepts/execution/tasks
@@ -12,8 +12,6 @@ related:
   - /concepts/execution/durable-execution
 last_updated: 2026-07-29
 ---
-
-# Sandbox sessions
 
 A sandbox session is one execution environment bound to one task. Every command
 that task runs lands in the same place, against the same filesystem, until the
@@ -184,9 +182,20 @@ expire.
 
 ## Related
 
-- [Lifecycle](/concepts/sandbox/lifecycle) — warm pool, activation, and idle reclaim
-- [The file model](/concepts/sandbox/the-file-model) — what persists and where
-- [Isolation](/concepts/sandbox/isolation) — the boundary around a session
-- [Tasks](/concepts/execution/tasks) — the unit a session is bound to
-- [Durable execution](/concepts/execution/durable-execution) — how workflows wait
-  on sandbox work
+<Columns cols={2}>
+  <Card title="Lifecycle" icon="box" href="/concepts/sandbox/lifecycle">
+    Warm pool, activation, and idle reclaim
+  </Card>
+  <Card title="The file model" icon="box" href="/concepts/sandbox/the-file-model">
+    What persists and where
+  </Card>
+  <Card title="Isolation" icon="box" href="/concepts/sandbox/isolation">
+    The boundary around a session
+  </Card>
+  <Card title="Tasks" icon="diagram-project" href="/concepts/execution/tasks">
+    The unit a session is bound to
+  </Card>
+  <Card title="Durable execution" icon="diagram-project" href="/concepts/execution/durable-execution">
+    How workflows wait on sandbox work
+  </Card>
+</Columns>

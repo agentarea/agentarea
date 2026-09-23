@@ -15,8 +15,7 @@ import {
   getTriggerColor,
   getTriggerDisplayName,
   getTriggerHealth,
-  getTriggerIconComponent,
-  TriggerTile,
+  TriggerSourceMark,
   type EnrichedTrigger,
   type TriggerCatalogEntry,
 } from "./triggerDisplay";
@@ -41,7 +40,6 @@ export default function TriggersTable({
     <div>
       {triggers.map((trigger) => {
         const entry = findTriggerCatalogEntry(trigger, catalog);
-        const Icon = getTriggerIconComponent(entry, trigger);
         const color = getTriggerColor(entry, trigger);
         const typeLabel = getTriggerDisplayName(trigger, entry);
         const schedule = describeTriggerSchedule(trigger);
@@ -53,7 +51,9 @@ export default function TriggersTable({
           <InteractiveListRow
             key={trigger.id}
             onClick={() => router.push(`/triggers/${trigger.id}`)}
-            start={<TriggerTile color={color} icon={Icon} variant="row" />}
+            start={
+              <TriggerSourceMark entry={entry} trigger={trigger} size={22} />
+            }
             contentClassName="gap-3"
             endClassName="gap-4"
             end={

@@ -2,6 +2,7 @@ from importlib import import_module
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -11,6 +12,22 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 # otherwise leave the target table unknown, which surfaces as
 # NoReferencedTableError the first time any mapper is configured.
 import_module("agentarea_secrets.models")
+
+# Re-exported so callers reading about ``ProviderConfig.managed_by`` find its one
+# legal value next to the column. Defined in agentarea_common because the execution
+# library needs the same constant and does not depend on this one.
+#
+# A named constant rather than a literal at each site because three unrelated
+# decisions read it — cross-workspace visibility, write refusal, and whose budget a
+# run spends — and a typo in any one of them fails silently in the permissive
+# direction.
+__all__ = [
+    "MANAGED_BY_PLATFORM",
+    "ModelInstance",
+    "ModelSpec",
+    "ProviderConfig",
+    "ProviderSpec",
+]
 
 
 class ProviderSpec(BaseModel, WorkspaceScopedMixin):
@@ -26,6 +43,11 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
     provider_type: Mapped[str] = mapped_column(String, nullable=False)  # for LiteLLM compatibility
     icon: Mapped[str | None] = mapped_column(String, nullable=True)
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Whether this provider type authenticates at all. False for the local ones
+    # (Ollama and friends), which listen on an unauthenticated endpoint — asking
+    # for a key there leaves the user with a required field they can only satisfy
+    # by inventing a value.
+    requires_api_key: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Relationships (lazy="selectin" for async compatibility)
     provider_configs = relationship(
@@ -67,6 +89,23 @@ class ProviderConfig(BaseModel, WorkspaceScopedMixin):
     endpoint_url: Mapped[str | None] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Who owns this configuration's credentials.
+    #
+    #   NULL        -- the tenant's own. They supplied the key, they may change or
+    #                  delete it, and it is visible only inside their workspace.
+    #   "platform"  -- the deployment operator's. The key is theirs, the
+    #                  configuration is readable from every workspace, and the API
+    #                  refuses every tenant write to it (see ProviderService).
+    #
+    # The second case is what lets an operator offer models nobody has to bring a
+    # key for: our hosted service, and equally a company handing one corporate key
+    # to all of its internal workspaces.
+    #
+    # It is deliberately one column rather than a flag plus a workspace convention.
+    # "Whose credentials are these" and "who may see it" and "who may edit it" are
+    # the same question, and answering it in three places is how they come to
+    # disagree.
+    managed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     # Relationships (lazy="selectin" for async compatibility)
     provider_spec = relationship("ProviderSpec", back_populates="provider_configs", lazy="selectin")

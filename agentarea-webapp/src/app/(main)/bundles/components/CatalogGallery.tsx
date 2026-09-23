@@ -11,7 +11,6 @@ import React, {
   useState,
   useTransition,
 } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -24,6 +23,7 @@ import {
   Compass,
   ExternalLink,
   FileText,
+  Globe,
   Loader2,
   Plug,
   Puzzle,
@@ -34,6 +34,16 @@ import {
   Star,
   Telescope,
 } from "lucide-react";
+import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
+import { Streamdown } from "streamdown";
+import type {
+  CatalogConnectionRequest,
+  SecretResponse,
+} from "@/api/client/types.gen";
+import { AgentAvatar } from "@/components/AgentAvatar";
+import EntityMark from "@/components/EntityMark";
+import EmptyState from "@/components/EmptyState";
+import HeaderTabs from "@/components/HeaderTabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,19 +54,15 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import { HoverLink } from "@/components/ui/hover-link";
 import { Input } from "@/components/ui/input";
+import ModelBadge from "@/components/ui/model-badge";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { StartAgentButton } from "@/components/ui/start-agent-button";
-import { Streamdown } from "streamdown";
-import { AgentAvatar } from "@/components/AgentAvatar";
-import ModelBadge from "@/components/ui/model-badge";
-import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
-import { HoverLink } from "@/components/ui/hover-link";
-import HeaderTabs from "@/components/HeaderTabs";
 import {
   Select,
   SelectContent,
@@ -64,24 +70,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import EmptyState from "@/components/EmptyState";
-import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
+import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { cn } from "@/lib/utils";
 import { getCookie, setCookie } from "@/utils/cookies";
 import {
+  addCatalogSkillToAgentAction,
+  connectCatalogConnectionAction,
+  fetchCatalogItemAction,
+  fetchCatalogPageAction,
+  getSkillFileUrlAction,
+  getSkillMarkdownAction,
+  installCatalogAgentAction,
+  installCatalogSkillAction,
+  listActiveModelInstancesAction,
+  listSkillFilesAction,
+  listWorkspaceAgentsAction,
+  listWorkspaceSecretsAction,
+  type AgentLite,
+  type WorkspaceModel,
+} from "./actions";
+import { BundleInstallWizard } from "./BundleInstallWizard";
+import {
   ALL,
+  arr,
   DEFAULT_SORT,
   EXPLORE_VIEW_COOKIE,
   FEATURED_TAG,
-  SORT_KEYS,
-  SORT_LABELS,
-  TYPE_KEYS,
-  arr,
+  isCatalogProtocol,
+  PROTOCOL_LABELS,
   modelNameMatchesPreferred,
   normalize,
+  SORT_KEYS,
+  SORT_LABELS,
   str,
   strArr,
+  TYPE_KEYS,
   type CatalogEntry,
+  type CatalogProtocol,
   type CatalogType,
   type RawSpec,
   type RegistryItem,
@@ -94,21 +119,6 @@ import {
   initialPaging,
   type CategoryFacet,
 } from "./catalog-paging";
-import {
-  addCatalogSkillToAgentAction,
-  fetchCatalogItemAction,
-  fetchCatalogPageAction,
-  installCatalogAgentAction,
-  installCatalogSkillAction,
-  getSkillFileUrlAction,
-  getSkillMarkdownAction,
-  listSkillFilesAction,
-  listActiveModelInstancesAction,
-  listWorkspaceAgentsAction,
-  type AgentLite,
-  type WorkspaceModel,
-} from "./actions";
-import { BundleInstallWizard } from "./BundleInstallWizard";
 
 // ── Registry types ──────────────────────────────────────────────────────────
 // One gallery for every catalog type. The look-and-feel is shared; the type is
@@ -122,7 +132,7 @@ const TYPES: { key: CatalogType; label: string; icon: LucideIcon }[] = [
   { key: "bundles", label: "Bundles", icon: Blocks },
   { key: "agents", label: "Agents", icon: Bot },
   { key: "skills", label: "Skills", icon: Puzzle },
-  { key: "mcp_servers", label: "Connections", icon: Plug },
+  { key: "connections", label: "Connections", icon: Plug },
 ];
 
 const VIEW_KEYS = ["grid", "table"] as const;
@@ -139,6 +149,8 @@ type BrowseParams = {
   offset: number;
   q: string;
   category: string;
+  /** The nuqs value, so ALL or anything a hand-edited URL carries. */
+  protocol: string;
   sort: SortMode;
 };
 
@@ -148,16 +160,12 @@ async function fetchPage(params: BrowseParams) {
     offset: params.offset,
     q: params.q || undefined,
     category: params.category === ALL ? undefined : params.category,
+    // ALL, or junk from a hand-edited URL, means "don't filter" rather than a
+    // request the server would reject.
+    protocol: isCatalogProtocol(params.protocol) ? params.protocol : undefined,
     sort: params.sort,
   });
 }
-
-const TYPE_ICON: Record<CatalogType, LucideIcon> = {
-  bundles: Blocks,
-  agents: Bot,
-  skills: Puzzle,
-  mcp_servers: Plug,
-};
 
 // ── Shared "type switch in flight" signal ──
 // The type tabs live in the ContentBlock subheader while the gallery lives in
@@ -207,7 +215,12 @@ export function ExplorePendingProvider({
   );
 
   const value = useMemo(
-    () => ({ isPending, pendingKind, startTypeTransition, startFilterTransition }),
+    () => ({
+      isPending,
+      pendingKind,
+      startTypeTransition,
+      startFilterTransition,
+    }),
     [isPending, pendingKind, startTypeTransition, startFilterTransition]
   );
   return (
@@ -238,7 +251,10 @@ export function ExploreTypeTabs({ initialType }: { initialType: CatalogType }) {
       startTransition: pending?.startTypeTransition,
     })
   );
-  const [, setCategory] = useQueryState("category", parseAsString.withDefault(ALL));
+  const [, setCategory] = useQueryState(
+    "category",
+    parseAsString.withDefault(ALL)
+  );
   const [, setItemId] = useQueryState("item", parseAsString);
 
   return (
@@ -361,6 +377,8 @@ type CatalogGalleryProps = {
   /** Items matching the active filters across the whole catalog. */
   initialTotal: number;
   initialCategories: CategoryFacet[];
+  /** MCP/API split; empty for every type but connections. */
+  initialProtocols: CategoryFacet[];
   initialError?: string | null;
   /** Persisted grid/table choice (cookie), seeds the view nuqs default. */
   initialView?: ViewMode;
@@ -371,6 +389,7 @@ export default function CatalogGallery({
   initialEntries,
   initialTotal,
   initialCategories,
+  initialProtocols,
   initialError = null,
   initialView = "grid",
 }: CatalogGalleryProps) {
@@ -414,6 +433,13 @@ export default function CatalogGallery({
       startTransition: explorePending?.startFilterTransition,
     })
   );
+  const [protocol, setProtocol] = useQueryState(
+    "protocol",
+    parseAsString.withDefault(ALL).withOptions({
+      shallow: false,
+      startTransition: explorePending?.startFilterTransition,
+    })
+  );
   const [view] = useQueryState(
     "view",
     parseAsStringLiteral(VIEW_KEYS).withDefault(initialView)
@@ -423,13 +449,18 @@ export default function CatalogGallery({
   // Paging bookkeeping, seeded from the server-rendered first page (no initial
   // client fetch / flash). Kept in a reducer so the append/retry/exhaustion
   // rules are testable apart from the component — see catalog-paging.ts.
-  const [paging, dispatch] = useReducer(catalogPagingReducer, undefined, () => ({
-    ...initialPaging(),
-    entries: initialEntries,
-    total: initialTotal,
-    categories: initialCategories,
-    error: initialError,
-  }));
+  const [paging, dispatch] = useReducer(
+    catalogPagingReducer,
+    undefined,
+    () => ({
+      ...initialPaging(),
+      entries: initialEntries,
+      total: initialTotal,
+      categories: initialCategories,
+      protocols: initialProtocols,
+      error: initialError,
+    })
+  );
 
   // Typing shouldn't round-trip the server on every keystroke, so the input is
   // local and the URL follows it on a short debounce.
@@ -459,9 +490,16 @@ export default function CatalogGallery({
       entries: initialEntries,
       total: initialTotal,
       categories: initialCategories,
+      protocols: initialProtocols,
       error: initialError,
     });
-  }, [initialEntries, initialTotal, initialCategories, initialError]);
+  }, [
+    initialEntries,
+    initialTotal,
+    initialCategories,
+    initialProtocols,
+    initialError,
+  ]);
 
   const loadMore = useCallback(async () => {
     dispatch({ type: "appendStart" });
@@ -473,6 +511,7 @@ export default function CatalogGallery({
         offset: paging.entries.length,
         q: query,
         category,
+        protocol,
         sort,
       });
       dispatch({
@@ -480,11 +519,15 @@ export default function CatalogGallery({
         entries: page.items.map((it) => normalize(type, it as RegistryItem)),
         total: page.total,
         categories: page.categories,
+        protocols: page.protocols,
       });
     } catch (e) {
-      dispatch({ type: "fail", error: e instanceof Error ? e.message : "Failed to load" });
+      dispatch({
+        type: "fail",
+        error: e instanceof Error ? e.message : "Failed to load",
+      });
     }
-  }, [type, query, category, sort, paging.entries]);
+  }, [type, query, category, protocol, sort, paging.entries]);
 
   // Infinite scroll: auto-load the next page when the sentinel nears the
   // viewport. `canFetchMore` is the in-flight guard — a short page leaves the
@@ -542,7 +585,8 @@ export default function CatalogGallery({
     (itemId ? (paging.entries.find((e) => e.id === itemId) ?? null) : null) ??
     (deepItem?.id === itemId ? deepItem : null);
   // Drives the empty-state copy + "Clear filters" affordance.
-  const hasFilters = query.trim() !== "" || category !== ALL;
+  const hasFilters =
+    query.trim() !== "" || category !== ALL || protocol !== ALL;
 
   // A type switch invalidates the current results, so they're skeletoned. A
   // filter change only narrows them: the list stays and dims, which is what
@@ -555,152 +599,188 @@ export default function CatalogGallery({
     () => paging.categories.map((c) => [c.value, c.count] as [string, number]),
     [paging.categories]
   );
+  const protocols = useMemo(
+    () => paging.protocols.map((p) => [p.value, p.count] as [string, number]),
+    [paging.protocols]
+  );
   const moreAvailable = hasMoreItems(paging);
 
   return (
     <div className="flex gap-6">
-        {/* Facet sidebar — reserved (fixed width) while a type switch is in
-            flight or when the type has categories, so the layout doesn't shift
-            as they arrive. Omitted entirely for category-less types so the grid
-            isn't left with an empty left gutter. Counts come from the server and
-            cover the whole catalog, so they don't drift as more pages load. */}
-        {(busy || categories.length > 0) && (
-          <aside className="hidden w-52 shrink-0 lg:block">
-            {busy ? (
-              <FacetSkeleton />
-            ) : (
+      {/* Facet sidebar — always reserved on desktop so every catalog type keeps
+          the same content width. Types without category facets still render the
+          Category group with its All option. Counts come from the server and cover
+          the whole catalog, so they do not drift as more pages load. */}
+      <aside className="hidden w-52 shrink-0 lg:block">
+        {busy ? (
+          <FacetSkeleton />
+        ) : (
+          <>
+            {/* Connections are not all MCP — an entry may be a plain HTTP API —
+                so the split leads the sidebar when there is one to make. */}
+            {protocols.length > 1 && (
               <FacetGroup
-                label="Category"
-                options={categories}
-                selected={category}
+                label="Protocol"
+                options={protocols}
+                labels={PROTOCOL_LABELS}
+                selected={protocol}
                 onSelect={(v) => {
-                  void setCategory(v === ALL ? null : v);
+                  void setProtocol(v === ALL ? null : v);
                   void setItemId(null);
                 }}
               />
             )}
-          </aside>
+            <FacetGroup
+              label="Category"
+              options={categories}
+              selected={category}
+              onSelect={(v) => {
+                void setCategory(v === ALL ? null : v);
+                void setItemId(null);
+              }}
+            />
+          </>
         )}
+      </aside>
 
-        {/* Main */}
-        <div className="min-w-0 flex-1 space-y-4">
-          {active ? (
-            <DetailView entry={active} onBack={() => void setItemId(null)} />
-          ) : itemId ? (
-            <DeepItemStatus onBack={() => void setItemId(null)}>
-              {deepLoading ? (
-                <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading…
+      {/* Main */}
+      <div className="min-w-0 flex-1 space-y-4">
+        {active ? (
+          <DetailView entry={active} onBack={() => void setItemId(null)} />
+        ) : itemId ? (
+          <DeepItemStatus onBack={() => void setItemId(null)}>
+            {deepLoading ? (
+              <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading…
+              </span>
+            ) : (
+              <EmptyState
+                title="Item not found"
+                description={
+                  deepError ??
+                  "This item may have been removed or isn't available."
+                }
+                iconsType="404"
+                action={{
+                  label: "Back to catalog",
+                  onClick: () => void setItemId(null),
+                }}
+              />
+            )}
+          </DeepItemStatus>
+        ) : (
+          <>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={draftQuery}
+                onChange={(e) => setDraftQuery(e.target.value)}
+                placeholder={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}…`}
+                aria-label={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}`}
+                className="pl-9"
+              />
+            </div>
+
+            {paging.error && (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  {paging.error}
                 </span>
-              ) : (
+                {/* A failed page used to end infinite scroll for good. It's a
+                  retry, not the end of the catalog. */}
+                {moreAvailable && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void loadMore()}
+                  >
+                    Retry
+                  </Button>
+                )}
+              </div>
+            )}
+            {busy && <ContentSkeleton view={view} />}
+            {!busy &&
+              !refreshing &&
+              paging.entries.length === 0 &&
+              !paging.error && (
                 <EmptyState
-                  title="Item not found"
+                  title={hasFilters ? "No matches" : "Nothing here"}
                   description={
-                    deepError ??
-                    "This item may have been removed or isn't available."
+                    hasFilters
+                      ? "Nothing matches your search and filters."
+                      : "Nothing to show for this type yet."
                   }
-                  iconsType="404"
+                  icons={hasFilters ? [Telescope, Compass, Search] : undefined}
+                  action={
+                    hasFilters
+                      ? {
+                          label: "Clear filters",
+                          onClick: () => {
+                            setDraftQuery("");
+                            void setQuery(null);
+                            void setCategory(null);
+                            void setProtocol(null);
+                          },
+                        }
+                      : undefined
+                  }
                 />
               )}
-            </DeepItemStatus>
-          ) : (
-          <>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={draftQuery}
-              onChange={(e) => setDraftQuery(e.target.value)}
-              placeholder={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}…`}
-              aria-label={`Search ${TYPES.find((t) => t.key === type)?.label.toLowerCase()}`}
-              className="pl-9"
-            />
-          </div>
 
-          {paging.error && (
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30">
-              <span className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                {paging.error}
-              </span>
-              {/* A failed page used to end infinite scroll for good. It's a
-                  retry, not the end of the catalog. */}
-              {moreAvailable && (
-                <Button variant="outline" size="sm" onClick={() => void loadMore()}>
-                  Retry
-                </Button>
-              )}
-            </div>
-          )}
-          {busy && <ContentSkeleton view={view} />}
-          {!busy && !refreshing && paging.entries.length === 0 && !paging.error && (
-            <EmptyState
-              title={hasFilters ? "No matches" : "Nothing here"}
-              description={
-                hasFilters
-                  ? "Nothing matches your search and filters."
-                  : "Nothing to show for this type yet."
-              }
-              icons={hasFilters ? [Telescope, Compass, Search] : undefined}
-              action={
-                hasFilters
-                  ? {
-                      label: "Clear filters",
-                      onClick: () => {
-                        setDraftQuery("");
-                        void setQuery(null);
-                        void setCategory(null);
-                      },
-                    }
-                  : undefined
-              }
-            />
-          )}
+            {!busy && paging.entries.length > 0 && (
+              <div
+                className={cn(
+                  "transition-opacity",
+                  refreshing && "pointer-events-none opacity-50"
+                )}
+                aria-busy={refreshing}
+              >
+                {view === "grid" ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                    {paging.entries.map((e) => (
+                      <CatalogCard
+                        key={e.id}
+                        entry={e}
+                        onOpen={() => void setItemId(e.id)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <CatalogTable
+                    entries={paging.entries}
+                    onOpen={(e) => void setItemId(e.id)}
+                  />
+                )}
+              </div>
+            )}
 
-          {!busy && paging.entries.length > 0 && (
-            <div
-              className={cn(
-                "transition-opacity",
-                refreshing && "pointer-events-none opacity-50"
-              )}
-              aria-busy={refreshing}
-            >
-              {view === "grid" ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                  {paging.entries.map((e) => (
-                    <CatalogCard key={e.id} entry={e} onOpen={() => void setItemId(e.id)} />
-                  ))}
-                </div>
-              ) : (
-                <CatalogTable entries={paging.entries} onOpen={(e) => void setItemId(e.id)} />
-              )}
-            </div>
-          )}
-
-          {/* Infinite-scroll sentinel + manual fallback. Mounted whenever the
+            {/* Infinite-scroll sentinel + manual fallback. Mounted whenever the
               catalog has more, including when this page rendered nothing — a
               filter whose matches all sit further in used to render "No matches"
               here and strand the rest of the catalog. */}
-          {!busy && !refreshing && moreAvailable && (
-            <>
-              <div ref={sentinelRef} className="h-px" aria-hidden />
-              <div className="flex justify-center pt-2">
-                {paging.status === "appending" ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                ) : (
-                  !paging.error && (
-                    <Button variant="outline" onClick={() => void loadMore()}>
-                      Load more
-                    </Button>
-                  )
-                )}
-              </div>
-            </>
-          )}
+            {!busy && !refreshing && moreAvailable && (
+              <>
+                <div ref={sentinelRef} className="h-px" aria-hidden />
+                <div className="flex justify-center pt-2">
+                  {paging.status === "appending" ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  ) : (
+                    !paging.error && (
+                      <Button variant="outline" onClick={() => void loadMore()}>
+                        Load more
+                      </Button>
+                    )
+                  )}
+                </div>
+              </>
+            )}
           </>
-          )}
-        </div>
+        )}
       </div>
+    </div>
   );
 }
 
@@ -722,66 +802,57 @@ function CatalogTable({
           <col className="hidden md:table-column" />
         </colgroup>
         <tbody>
-          {entries.map((e) => {
-            const TypeIcon = TYPE_ICON[e.type];
-            return (
-              <tr
-                key={e.id}
-                onClick={() => onOpen(e)}
-                className="cursor-pointer border-b border-border/40 last:border-0 hover:bg-muted/40"
-              >
-                <td className="w-10 py-2 pl-3 pr-0">
-                  {e.iconUrl ? (
-                    <BrandLogo
-                      src={e.iconUrl}
-                      alt={e.title}
-                      fallback={TypeIcon}
-                      small
-                      cover={e.type === "mcp_servers"}
-                    />
-                  ) : (
-                    <span className="flex h-6 w-6 items-center justify-center rounded border border-border/60 bg-white dark:bg-zinc-800">
-                      <TypeIcon className="h-3.5 w-3.5 text-zinc-400" />
-                    </span>
-                  )}
-                </td>
-                {/* Title column is capped (responsive) so a long name
+          {entries.map((e) => (
+            <tr
+              key={e.id}
+              onClick={() => onOpen(e)}
+              className="cursor-pointer border-b border-border/40 last:border-0 hover:bg-muted/40"
+            >
+              <td className="w-10 py-2 pl-3 pr-0">
+                <EntityMark
+                  identity={e.identity}
+                  brandFallback={false}
+                  className="h-7 w-7 rounded-md border border-border/60 bg-white p-[3px] text-[10px] dark:bg-zinc-800"
+                />
+              </td>
+              {/* Title column is capped (responsive) so a long name
                     truncates with an ellipsis instead of wrapping to multiple
                     lines and blowing up the row height. `min-w-0` on the flex
                     row + the name lets the name shrink; the badges stay
                     `shrink-0` so they're never clipped. */}
-                <td className="max-w-[160px] py-2 pl-2 pr-3 align-middle sm:max-w-[240px] lg:max-w-[340px]">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 truncate font-medium">{e.title}</span>
-                    {e.verified && (
-                      <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
-                    )}
-                    {e.category && (
-                      <Badge
-                        variant="light"
-                        size="sm"
-                        className="shrink-0 whitespace-nowrap capitalize"
-                      >
-                        {e.category}
-                      </Badge>
-                    )}
-                  </div>
-                </td>
-                {/* Description absorbs the remaining row width and truncates
+              <td className="max-w-[160px] py-2 pl-2 pr-3 align-middle sm:max-w-[240px] lg:max-w-[340px]">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="min-w-0 truncate font-medium">
+                    {e.title}
+                  </span>
+                  {e.verified && (
+                    <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+                  )}
+                  {e.category && (
+                    <Badge
+                      variant="light"
+                      size="sm"
+                      className="shrink-0 whitespace-nowrap capitalize"
+                    >
+                      {e.category}
+                    </Badge>
+                  )}
+                </div>
+              </td>
+              {/* Description absorbs the remaining row width and truncates
                     with an ellipsis. `w-full` grabs the leftover space (pinning
                     the title column to its content, no dead gap); `max-w-0` is
                     what makes truncation actually work — without it auto table
                     layout grows the column to fit the nowrap text and it spills
                     past the edge with no ellipsis. Together they give the inner
                     block a definite width to clip against. Hidden below md. */}
-                <td className="hidden w-full max-w-0 py-2 pr-4 md:table-cell">
-                  <div className="table-description truncate">
-                    {e.description}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
+              <td className="hidden w-full max-w-0 py-2 pr-4 md:table-cell">
+                <div className="table-description truncate">
+                  {e.description}
+                </div>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -806,11 +877,14 @@ function FacetSkeleton() {
 function FacetGroup({
   label,
   options,
+  labels,
   selected,
   onSelect,
 }: {
   label: string;
   options: [string, number][];
+  /** Display names for machine values ("mcp" reads as "Mcp" otherwise). */
+  labels?: Record<string, string>;
   selected: string;
   onSelect: (v: string) => void;
 }) {
@@ -833,10 +907,12 @@ function FacetGroup({
             )}
           >
             <span className="min-w-0 flex-1 truncate text-left capitalize">
-              {value === ALL ? "All" : value}
+              {value === ALL ? "All" : (labels?.[value] ?? value)}
             </span>
             {count !== null && (
-              <span className="text-[10px] tabular-nums text-muted-foreground">{count}</span>
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                {count}
+              </span>
             )}
           </button>
         ))}
@@ -847,66 +923,36 @@ function FacetGroup({
 
 // ── Card (uniform across every type) ──
 
-// Upstream logo with a graceful fallback to the type glyph if the image 404s
-// or the host blocks hotlinking.
-function BrandLogo({
-  src,
-  alt,
-  fallback: Fallback,
-  small = false,
-  bare = false,
-  cover = false,
-}: {
-  src: string;
-  alt: string;
-  fallback: LucideIcon;
-  small?: boolean;
-  // `bare` drops the framed tile (no bg/border/shadow).
-  bare?: boolean;
-  // `cover` fills the icon edge-to-edge (object-cover, no padding).
-  cover?: boolean;
-}) {
-  const [failed, setFailed] = useState(false);
-  const frame = bare
-    ? ""
-    : "border border-border/60 bg-white shadow-sm dark:bg-zinc-800";
-  if (failed) {
-    return (
-      <span
-        className={cn(
-          "flex items-center justify-center rounded-lg",
-          frame,
-          small ? "h-6 w-6" : "h-9 w-9"
-        )}
-      >
-        <Fallback className={cn("text-zinc-400", small ? "h-3.5 w-3.5" : "h-4 w-4")} />
-      </span>
-    );
-  }
+/**
+ * What a connection speaks. The catalog tile shows the vendor's own logo, so
+ * without this an MCP server and an HTTP API to the same vendor are
+ * indistinguishable — and "Connections" no longer implies MCP.
+ */
+function ProtocolBadge({ protocol }: { protocol: CatalogProtocol }) {
   return (
-    <span
-      className={cn(
-        "flex items-center justify-center overflow-hidden rounded-lg",
-        frame,
-        small ? "h-6 w-6" : "h-10 w-10",
-        !cover && (small ? "p-0.5" : "p-1.5")
+    <Badge variant="secondary" size="sm" className="gap-1 font-normal">
+      {protocol === "mcp" ? (
+        // mcp.svg is fill="currentColor"; as a mask it inherits the badge's
+        // text colour instead of fighting the theme.
+        <span
+          aria-hidden
+          className="h-3 w-3 bg-current [mask-image:url(/mcp.svg)] [mask-position:center] [mask-repeat:no-repeat] [mask-size:contain] [-webkit-mask-image:url(/mcp.svg)] [-webkit-mask-position:center] [-webkit-mask-repeat:no-repeat] [-webkit-mask-size:contain]"
+        />
+      ) : (
+        <Globe className="h-3 w-3" />
       )}
-    >
-      <Image
-        src={src}
-        alt={alt}
-        width={40}
-        height={40}
-        loading="lazy"
-        className={cn("h-full w-full", cover ? "object-cover" : "object-contain")}
-        onError={() => setFailed(true)}
-      />
-    </span>
+      {PROTOCOL_LABELS[protocol]}
+    </Badge>
   );
 }
 
-function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => void }) {
-  const TypeIcon = TYPE_ICON[entry.type];
+function CatalogCard({
+  entry,
+  onOpen,
+}: {
+  entry: CatalogEntry;
+  onOpen: () => void;
+}) {
   return (
     <button
       onClick={onOpen}
@@ -928,14 +974,10 @@ function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => voi
             </Badge>
           </span>
         ) : null}
-        {entry.iconUrl ? (
-          <BrandLogo
-            src={entry.iconUrl}
-            alt={entry.title}
-            fallback={TypeIcon}
-            cover={entry.type === "mcp_servers"}
-          />
-        ) : entry.integrations.length > 0 ? (
+        {/* A bundle's value is the integrations it wires up, so when it has
+            no artwork of its own they say more than a monogram would. */}
+        {entry.identity.sources.length === 0 &&
+        entry.integrations.length > 0 ? (
           entry.integrations.slice(0, 4).map((name) => (
             <span
               key={name}
@@ -946,9 +988,11 @@ function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => voi
             </span>
           ))
         ) : (
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-white shadow-sm dark:bg-zinc-800">
-            <TypeIcon className="h-4 w-4 text-zinc-400" />
-          </span>
+          <EntityMark
+            identity={entry.identity}
+            brandFallback={false}
+            className="h-[52px] w-[52px] rounded-xl border border-border/60 bg-white p-1.5 text-xs shadow-sm dark:bg-zinc-800"
+          />
         )}
         <span className="absolute right-2 top-2">
           <HoverLink text="View" />
@@ -965,10 +1009,16 @@ function CatalogCard({ entry, onOpen }: { entry: CatalogEntry; onOpen: () => voi
           )}
         </div>
         <p className="table-description line-clamp-2">{entry.description}</p>
-        {entry.meta.length > 0 && (
-          <div className="mt-auto flex flex-wrap gap-1 pt-1.5">
+        {(entry.protocol || entry.meta.length > 0) && (
+          <div className="mt-auto flex flex-wrap items-center gap-1 pt-1.5">
+            {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
             {entry.meta.map((m) => (
-              <Badge key={m} variant="secondary" size="sm" className="font-normal">
+              <Badge
+                key={m}
+                variant="secondary"
+                size="sm"
+                className="font-normal"
+              >
                 {m}
               </Badge>
             ))}
@@ -998,16 +1048,33 @@ type SetupTier =
   | "needs_tenant_config"
   | "unverified";
 
-function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void }) {
+type CustomOAuthAppInput = Pick<
+  CatalogConnectionRequest,
+  | "client_id"
+  | "client_secret"
+  | "client_id_secret_id"
+  | "client_secret_secret_id"
+>;
+
+function DetailView({
+  entry,
+  onBack,
+}: {
+  entry: CatalogEntry;
+  onBack: () => void;
+}) {
   const [state, setState] = useState<InstallState>({ phase: "idle" });
   // Bundles open an inline configure-then-install step rather than installing on
   // the first click (pick model, skip connections, tune policies, then commit).
   const [configuring, setConfiguring] = useState(false);
 
   const spec = entry.spec;
-  const rawMeta = (spec.raw_spec as RawSpec | undefined)?.metadata as RawSpec | undefined;
-  const tier = (str(rawMeta?.["agentarea:setup_tier"]) ?? "unverified") as SetupTier;
-  const TypeIcon = TYPE_ICON[entry.type];
+  const rawMeta = (spec.raw_spec as RawSpec | undefined)?.metadata as
+    | RawSpec
+    | undefined;
+  const tier = (str(rawMeta?.["agentarea:setup_tier"]) ??
+    "unverified") as SetupTier;
+  const isCatalogApi = entry.protocol === "api";
 
   // Machine tags ("category:x", "repo:y", "featured"…) are provenance, not
   // topical labels — keep them out of the chip row (surfaced elsewhere instead).
@@ -1037,11 +1104,36 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
       await installCatalogAgentAction(entry.id);
       setState({ phase: "done", created: 1 });
     } catch (e) {
-      setState({ phase: "error", message: e instanceof Error ? e.message : "Install failed" });
+      setState({
+        phase: "error",
+        message: e instanceof Error ? e.message : "Install failed",
+      });
+    }
+  }
+
+  async function connectCatalogApi(
+    credentialMode: "managed" | "custom",
+    custom?: CustomOAuthAppInput
+  ) {
+    setState({ phase: "connecting" });
+    try {
+      const result = await connectCatalogConnectionAction(entry.id, {
+        credential_mode: credentialMode,
+        ...custom,
+        return_to: window.location.origin,
+      });
+      window.location.assign(result.authorize_url);
+    } catch (e) {
+      setState({
+        phase: "error",
+        message:
+          e instanceof Error ? e.message : "Could not connect this account",
+      });
     }
   }
 
   const installing = state.phase === "loading";
+  const connecting = state.phase === "connecting";
 
   // Bundles route through the configure-then-install wizard in place of the
   // detail view; everything else keeps the look-first detail layout.
@@ -1050,7 +1142,7 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
       <BundleInstallWizard
         source={JSON.stringify(spec)}
         title={entry.title}
-        iconUrl={entry.iconUrl}
+        identity={entry.identity}
         onBack={() => setConfiguring(false)}
       />
     );
@@ -1069,28 +1161,23 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
       {/* header — icon, title/badges, description, primary action */}
       <div className="flex flex-col gap-4 md:flex-row md:items-start">
         <div className="flex min-w-0 flex-1 items-start gap-4">
-          {entry.iconUrl ? (
-            <BrandLogo
-              src={entry.iconUrl}
-              alt={entry.title}
-              fallback={TypeIcon}
-              bare={entry.type === "mcp_servers"}
-              cover={entry.type === "mcp_servers"}
-            />
-          ) : (
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-white shadow-sm dark:bg-zinc-800">
-              <TypeIcon className="h-5 w-5 text-zinc-400" />
-            </span>
-          )}
+          <EntityMark
+            identity={entry.identity}
+            brandFallback={false}
+            className="h-12 w-12 shrink-0 rounded-lg border border-border/60 bg-white p-1.5 text-sm shadow-sm dark:bg-zinc-800"
+          />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-semibold tracking-tight">{entry.title}</h2>
+              <h2 className="text-xl font-semibold tracking-tight">
+                {entry.title}
+              </h2>
               {entry.verified && (
                 <Badge variant="blue" size="sm" className="gap-1">
                   <BadgeCheck className="h-3 w-3" />
                   Verified
                 </Badge>
               )}
+              {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
               {entry.category && (
                 <Badge variant="light" size="sm" className="capitalize">
                   {entry.category}
@@ -1111,19 +1198,31 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
             <Button asChild variant="outline">
               <Link href="/agents">Go to Agents</Link>
             </Button>
-          ) : entry.type === "mcp_servers" ? (
-            <StartAgentButton asChild size="xs">
-              <Link href={connectHref}>
+          ) : entry.type === "connections" ? (
+            isCatalogApi ? (
+              <StartAgentButton
+                size="xs"
+                isLoading={connecting}
+                onClick={() => void connectCatalogApi("managed")}
+              >
                 Connect
-              </Link>
-            </StartAgentButton>
+              </StartAgentButton>
+            ) : (
+              <StartAgentButton asChild size="xs">
+                <Link href={connectHref}>Connect</Link>
+              </StartAgentButton>
+            )
           ) : (
             <StartAgentButton
               size="xs"
-              onClick={() => (entry.type === "bundles" ? setConfiguring(true) : installAgent())}
+              onClick={() =>
+                entry.type === "bundles" ? setConfiguring(true) : installAgent()
+              }
               isLoading={installing}
             >
-              {entry.type === "bundles" ? "Use this bundle" : "Add to workspace"}
+              {entry.type === "bundles"
+                ? "Use this bundle"
+                : "Add to workspace"}
             </StartAgentButton>
           )}
         </CatalogActionSlot>
@@ -1159,7 +1258,19 @@ function DetailView({ entry, onBack }: { entry: CatalogEntry; onBack: () => void
       <div className="space-y-5 border-t border-border/60 pt-6">
         {entry.type === "bundles" && <BundleContents spec={spec} />}
         {entry.type === "agents" && <PreferredModels models={entry.meta} />}
-        {entry.type === "mcp_servers" && <ConnectionSetup tier={tier} />}
+        {entry.type === "connections" && (
+          <>
+            <ConnectionSetup tier={tier} />
+            {isCatalogApi && (
+              <CustomOAuthApp
+                connecting={connecting}
+                onConnect={(credentials) =>
+                  void connectCatalogApi("custom", credentials)
+                }
+              />
+            )}
+          </>
+        )}
         {entry.type === "skills" && (
           <>
             <SkillContent
@@ -1199,7 +1310,8 @@ function PreferredModels({ models }: { models: string[] }) {
     (instances ?? []).filter((mi) =>
       modelNameMatchesPreferred(str(mi.model_name) ?? "", slug)
     );
-  const anyMatch = instances != null && models.some((s) => matchFor(s).length > 0);
+  const anyMatch =
+    instances != null && models.some((s) => matchFor(s).length > 0);
 
   return (
     <div>
@@ -1234,7 +1346,11 @@ function PreferredModels({ models }: { models: string[] }) {
                   </Badge>
                 </span>
               ) : (
-                <Badge variant="light" size="sm" className="shrink-0 text-muted-foreground">
+                <Badge
+                  variant="light"
+                  size="sm"
+                  className="shrink-0 text-muted-foreground"
+                >
                   Not configured
                 </Badge>
               )}
@@ -1254,7 +1370,10 @@ function PreferredModels({ models }: { models: string[] }) {
 }
 
 function ConnectionSetup({ tier }: { tier: SetupTier }) {
-  const COPY: Record<SetupTier, { icon: LucideIcon; title: string; detail: string }> = {
+  const COPY: Record<
+    SetupTier,
+    { icon: LucideIcon; title: string; detail: string }
+  > = {
     one_click: {
       icon: BadgeCheck,
       title: "One-click connect",
@@ -1262,8 +1381,8 @@ function ConnectionSetup({ tier }: { tier: SetupTier }) {
     },
     oauth: {
       icon: BadgeCheck,
-      title: "Connect with OAuth",
-      detail: "You'll authorize access in the next step.",
+      title: "Ready to connect",
+      detail: "Click Connect, then sign in and approve access.",
     },
     needs_oauth_app: {
       icon: AlertTriangle,
@@ -1274,7 +1393,8 @@ function ConnectionSetup({ tier }: { tier: SetupTier }) {
     needs_tenant_config: {
       icon: Plug,
       title: "Enter your workspace URL",
-      detail: "This connection is hosted in your own tenant — paste your full MCP URL.",
+      detail:
+        "This connection is hosted in your own tenant — paste your full MCP URL.",
     },
     unverified: {
       icon: AlertTriangle,
@@ -1294,6 +1414,141 @@ function ConnectionSetup({ tier }: { tier: SetupTier }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function CustomOAuthApp({
+  connecting,
+  onConnect,
+}: {
+  connecting: boolean;
+  onConnect: (credentials: CustomOAuthAppInput) => void;
+}) {
+  const manual = "manual";
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [clientIdSource, setClientIdSource] = useState(manual);
+  const [clientSecretSource, setClientSecretSource] = useState(manual);
+  const [secrets, setSecrets] = useState<SecretResponse[] | null>(null);
+  const [secretsError, setSecretsError] = useState<string | null>(null);
+  const loadingSecrets = useRef(false);
+  const reusableSecrets = (secrets ?? []).filter((secret) => !secret.owner);
+  const ready =
+    (clientIdSource !== manual || clientId.trim().length > 0) &&
+    (clientSecretSource !== manual || clientSecret.length > 0);
+
+  async function loadSecrets() {
+    if (secrets !== null || loadingSecrets.current) return;
+    loadingSecrets.current = true;
+    setSecretsError(null);
+    try {
+      setSecrets(await listWorkspaceSecretsAction());
+    } catch (error) {
+      setSecretsError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load workspace secrets"
+      );
+    } finally {
+      loadingSecrets.current = false;
+    }
+  }
+
+  function connect() {
+    onConnect({
+      client_id: clientIdSource === manual ? clientId.trim() : undefined,
+      client_secret: clientSecretSource === manual ? clientSecret : undefined,
+      client_id_secret_id:
+        clientIdSource === manual ? undefined : clientIdSource,
+      client_secret_secret_id:
+        clientSecretSource === manual ? undefined : clientSecretSource,
+    });
+  }
+
+  return (
+    <details
+      className="group rounded-lg border border-border/60"
+      onToggle={(event) => {
+        if (event.currentTarget.open) void loadSecrets();
+      }}
+    >
+      <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground">
+        Advanced
+      </summary>
+      <div className="space-y-3 border-t border-border/60 px-3 py-3">
+        <p className="text-xs text-muted-foreground">
+          Use your own OAuth app credentials instead of the AgentArea app.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Select value={clientIdSource} onValueChange={setClientIdSource}>
+              <SelectTrigger aria-label="OAuth client ID source">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={manual}>Enter client ID</SelectItem>
+                {reusableSecrets.map((secret) => (
+                  <SelectItem key={secret.id} value={secret.id}>
+                    {secret.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {clientIdSource === manual && (
+              <Input
+                value={clientId}
+                onChange={(event) => setClientId(event.target.value)}
+                aria-label="OAuth client ID"
+                placeholder="Client ID"
+                autoComplete="off"
+              />
+            )}
+          </div>
+          <div className="space-y-2">
+            <Select
+              value={clientSecretSource}
+              onValueChange={setClientSecretSource}
+            >
+              <SelectTrigger aria-label="OAuth client secret source">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={manual}>Enter client secret</SelectItem>
+                {reusableSecrets.map((secret) => (
+                  <SelectItem key={secret.id} value={secret.id}>
+                    {secret.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {clientSecretSource === manual && (
+              <Input
+                value={clientSecret}
+                onChange={(event) => setClientSecret(event.target.value)}
+                aria-label="OAuth client secret"
+                placeholder="Client secret"
+                type="password"
+                autoComplete="new-password"
+              />
+            )}
+          </div>
+        </div>
+        {secretsError && <p className="text-xs text-red-600">{secretsError}</p>}
+        {secrets !== null && reusableSecrets.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            No reusable workspace secrets yet. You can enter both values here.
+          </p>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!ready || connecting}
+          onClick={connect}
+        >
+          Connect with custom app
+        </Button>
+      </div>
+    </details>
   );
 }
 
@@ -1318,7 +1573,10 @@ function Inside({
       </div>
       <ul className="space-y-1">
         {rows.map((r) => (
-          <li key={r} className="truncate rounded bg-muted/50 px-2 py-1 text-sm">
+          <li
+            key={r}
+            className="truncate rounded bg-muted/50 px-2 py-1 text-sm"
+          >
             {r}
           </li>
         ))}
@@ -1397,7 +1655,9 @@ function BundleSection({
         <span className="tabular-nums">({count})</span>
       </div>
       <div className="space-y-2">{children}</div>
-      {hint && <p className="mt-1.5 text-[11px] text-muted-foreground">{hint}</p>}
+      {hint && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">{hint}</p>
+      )}
     </div>
   );
 }
@@ -1449,7 +1709,12 @@ function BundleContents({ spec }: { spec: RawSpec }) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {capabilities.map((c) => (
-              <Badge key={c} variant="light" size="sm" className="gap-1 capitalize">
+              <Badge
+                key={c}
+                variant="light"
+                size="sm"
+                className="gap-1 capitalize"
+              >
                 <Sparkles className="h-3 w-3" />
                 {c.replace(/[-_]+/g, " ")}
               </Badge>
@@ -1460,7 +1725,9 @@ function BundleContents({ spec }: { spec: RawSpec }) {
 
       <BundleSection icon={Bot} label="Agents" count={agents.length}>
         {agents.map((a, i) => {
-          const usesSkills = strArr(a.skills).map((k) => bundleRefName(skills, k));
+          const usesSkills = strArr(a.skills).map((k) =>
+            bundleRefName(skills, k)
+          );
           const usesMcps = strArr(a.mcps).map((k) => bundleRefName(mcps, k));
           const model = resolveBundleModel(str(a.model), setup);
           const instruction = str(a.instruction);
@@ -1471,14 +1738,21 @@ function BundleContents({ spec }: { spec: RawSpec }) {
             >
               <div className="flex items-center gap-2">
                 <AgentAvatar
-                  agent={{ id: String(a.key ?? a.name ?? i), name: str(a.name) }}
+                  agent={{
+                    id: String(a.key ?? a.name ?? i),
+                    name: str(a.name),
+                  }}
                   size="sm"
                 />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">
                   {String(a.name ?? a.key)}
                 </span>
                 {model && (
-                  <ModelBadge modelDisplayName={model} size="sm" className="shrink-0" />
+                  <ModelBadge
+                    modelDisplayName={model}
+                    size="sm"
+                    className="shrink-0"
+                  />
                 )}
               </div>
               {instruction && (
@@ -1502,7 +1776,8 @@ function BundleContents({ spec }: { spec: RawSpec }) {
                 return (
                   <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
                     <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-                    Tools locked to <span className="font-medium">{allowed.join(", ")}</span>
+                    Tools locked to{" "}
+                    <span className="font-medium">{allowed.join(", ")}</span>
                   </p>
                 );
               })()}
@@ -1515,7 +1790,9 @@ function BundleContents({ spec }: { spec: RawSpec }) {
         {skills.map((s, i) => {
           const source = str(s.source_type) ?? "content";
           const preview =
-            source === "github" ? str(s.source_url) : skillPreview(str(s.content));
+            source === "github"
+              ? str(s.source_url)
+              : skillPreview(str(s.content));
           return (
             <div
               key={str(s.key) ?? i}
@@ -1530,7 +1807,9 @@ function BundleContents({ spec }: { spec: RawSpec }) {
                 </Badge>
               </div>
               {preview && (
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{preview}</p>
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                  {preview}
+                </p>
               )}
             </div>
           );
@@ -1590,7 +1869,8 @@ function BundleContents({ spec }: { spec: RawSpec }) {
         icon={Clock}
         label="Automations"
         rows={automations.map((a) => {
-          const kind = str(a.type) ?? str(a.trigger) ?? str(a.kind) ?? str(a.cron);
+          const kind =
+            str(a.type) ?? str(a.trigger) ?? str(a.kind) ?? str(a.cron);
           const name = String(a.name ?? a.key ?? "automation");
           return kind ? `${name} · ${kind}` : name;
         })}
@@ -1604,7 +1884,9 @@ function BundleContents({ spec }: { spec: RawSpec }) {
           if (msg) return msg;
           const effect = str(p.effect);
           const target = str(p.target);
-          return effect && target ? `${effect} · ${target}` : String(p.key ?? "policy");
+          return effect && target
+            ? `${effect} · ${target}`
+            : String(p.key ?? "policy");
         })}
         hint="Govern this bundle at runtime"
       />
@@ -1620,9 +1902,13 @@ function BundleContents({ spec }: { spec: RawSpec }) {
 function AddSkillToAgent({ skillId }: { skillId: string }) {
   const [open, setOpen] = useState(false);
   const [agents, setAgents] = useState<AgentLite[] | null>(null);
-  const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">(
+    "idle"
+  );
   const [message, setMessage] = useState("");
-  const [result, setResult] = useState<{ label: string; href: string } | null>(null);
+  const [result, setResult] = useState<{ label: string; href: string } | null>(
+    null
+  );
 
   // Lazy-load the workspace agents the first time the picker opens.
   useEffect(() => {
@@ -1710,7 +1996,11 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
                   </CommandEmpty>
                   <CommandGroup>
                     {agents.map((a) => (
-                      <CommandItem key={a.id} value={a.name} onSelect={() => addToAgent(a)}>
+                      <CommandItem
+                        key={a.id}
+                        value={a.name}
+                        onSelect={() => addToAgent(a)}
+                      >
                         <Bot className="mr-2 h-4 w-4 text-muted-foreground" />
                         <span className="truncate">{a.name}</span>
                       </CommandItem>
@@ -1758,9 +2048,28 @@ type FileBody =
 // Extensions we can safely preview inline as text. Anything else gets an
 // "open" link to its presigned URL instead of a garbled inline dump.
 const TEXT_EXT = new Set([
-  "md", "markdown", "txt", "py", "js", "ts", "tsx", "jsx", "json", "yaml",
-  "yml", "sh", "bash", "toml", "ini", "cfg", "csv", "html", "css", "xml",
-  "sql", "env",
+  "md",
+  "markdown",
+  "txt",
+  "py",
+  "js",
+  "ts",
+  "tsx",
+  "jsx",
+  "json",
+  "yaml",
+  "yml",
+  "sh",
+  "bash",
+  "toml",
+  "ini",
+  "cfg",
+  "csv",
+  "html",
+  "css",
+  "xml",
+  "sql",
+  "env",
 ]);
 
 function isTextFile(path: string): boolean {
@@ -1821,7 +2130,12 @@ function SkillSourceLink({ sourceUrl }: { sourceUrl: string | null }) {
         <p className="text-xs text-muted-foreground">
           The skill files are fetched from{" "}
           {sourceUrl ? (
-            <a href={sourceUrl} target="_blank" rel="noreferrer" className="break-all underline">
+            <a
+              href={sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="break-all underline"
+            >
               {sourceUrl}
             </a>
           ) : (
@@ -1868,7 +2182,8 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
         if (!active) return;
         const fs = Array.isArray(skillFiles) ? skillFiles : [];
         setFiles(fs);
-        const def = fs.find((f) => f.path.toLowerCase() === "skill.md") ?? fs[0] ?? null;
+        const def =
+          fs.find((f) => f.path.toLowerCase() === "skill.md") ?? fs[0] ?? null;
         setSelected(def?.path ?? null);
       })
       .catch((e) => {
@@ -1885,7 +2200,8 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
   // Lazily load the selected file's body. SKILL.md comes from /content; other
   // files resolve to a presigned URL we then fetch (text) or link to.
   useEffect(() => {
-    if (!selected || bodies[selected] || requested.current.has(selected)) return;
+    if (!selected || bodies[selected] || requested.current.has(selected))
+      return;
     requested.current.add(selected);
     let active = true;
     void (async () => {
@@ -1905,15 +2221,24 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
             const res = await fetch(url);
             if (!res.ok) throw new Error();
             const text = await res.text();
-            if (active) setBodies((b) => ({ ...b, [selected]: { kind: "text", value: text } }));
+            if (active)
+              setBodies((b) => ({
+                ...b,
+                [selected]: { kind: "text", value: text },
+              }));
             return;
           } catch {
             // Cross-origin / unreadable — fall through to a plain open link.
           }
         }
-        if (active) setBodies((b) => ({ ...b, [selected]: { kind: "link", value: url } }));
+        if (active)
+          setBodies((b) => ({
+            ...b,
+            [selected]: { kind: "link", value: url },
+          }));
       } catch {
-        if (active) setBodies((b) => ({ ...b, [selected]: { kind: "link", value: "" } }));
+        if (active)
+          setBodies((b) => ({ ...b, [selected]: { kind: "link", value: "" } }));
       }
     })();
     return () => {
@@ -1930,10 +2255,13 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
     );
   }
   if (files.length === 0) {
-    return error ? <p className="text-sm text-muted-foreground">{error}</p> : null;
+    return error ? (
+      <p className="text-sm text-muted-foreground">{error}</p>
+    ) : null;
   }
 
-  const single = files.length === 1 && files[0].path.toLowerCase() === "skill.md";
+  const single =
+    files.length === 1 && files[0].path.toLowerCase() === "skill.md";
   const body = selected ? bodies[selected] : undefined;
 
   const pane = (
@@ -1948,7 +2276,9 @@ function SkillPackageFiles({ skillId }: { skillId: string }) {
           {body.value}
         </Streamdown>
       ) : body.kind === "text" ? (
-        <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed">{body.value}</pre>
+        <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed">
+          {body.value}
+        </pre>
       ) : body.value ? (
         <a
           href={body.value}
@@ -2121,7 +2451,10 @@ function CatalogCardSkeleton() {
 // Mirrors CatalogTable rows: icon + title + (md) description.
 function CatalogTableSkeleton() {
   return (
-    <div className="overflow-hidden rounded-lg border border-border/60" aria-hidden="true">
+    <div
+      className="overflow-hidden rounded-lg border border-border/60"
+      aria-hidden="true"
+    >
       <table className="w-full text-sm">
         <tbody>
           {Array.from({ length: 8 }).map((_, i) => (

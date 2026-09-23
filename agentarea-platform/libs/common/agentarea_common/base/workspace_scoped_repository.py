@@ -9,7 +9,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth.context import UserContext
+from ..auth.context import ServicePrincipal, UserContext
 
 
 class WorkspaceScopedRepository[T]:
@@ -26,31 +26,40 @@ class WorkspaceScopedRepository[T]:
             session: SQLAlchemy async session
             model_class: The model class this repository manages
             user_context: Current user and workspace context
+
+        Raises:
+            TypeError: If given a ServicePrincipal. It has no workspace, so it
+                cannot scope anything; callers that genuinely need to read
+                across tenants must use an explicit unscoped query instead.
         """
+        if isinstance(user_context, ServicePrincipal):
+            raise TypeError(
+                f"ServicePrincipal({user_context.service!r}) cannot scope "
+                f"{model_class.__name__}: it has no workspace. Use an explicit "
+                "unscoped query for cross-tenant reads, or resolve a real "
+                "UserContext first."
+            )
         self.session = session
         self.model_class = model_class
         self.user_context = user_context
         self.resource_type = model_class.__name__.lower().replace("orm", "").replace("model", "")
 
     def _get_workspace_filter(self):
-        """Get the read filter for queries: pure workspace scoping.
+        """Get the read/write filter for the active workspace.
 
-        A row is readable when it belongs to one of the user's accessible
-        workspaces (own workspace + real memberships, resolved by the
-        AuthorizationService during request authentication). A row from another
-        workspace stays hidden.
+        ``accessible_workspaces`` authorizes the request-boundary workspace
+        selection; it must not widen repository queries after that selection.
+        Using every accessible workspace here mixes tenant data for users who
+        belong to multiple organizations and also lets an update issued in one
+        workspace target an object in another workspace by ID.
 
         Built-in/official content is no longer surfaced by a ``source`` column
         OR-branch here (ADR-003): built-in agents/skills and the reference specs
         mcp_servers/model_specs live in the registry catalog and are read
         globally by their catalog repositories, not by this filter.
         """
-        workspaces = self.user_context.accessible_workspaces
         model = cast(Any, self.model_class)
         workspace_col = model.workspace_id
-
-        if workspaces and len(workspaces) > 1:
-            return workspace_col.in_(workspaces)
         return workspace_col == self.user_context.workspace_id
 
     def _get_creator_workspace_filter(self):

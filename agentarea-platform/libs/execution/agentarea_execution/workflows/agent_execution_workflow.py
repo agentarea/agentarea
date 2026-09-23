@@ -573,6 +573,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_GOVERNANCE_SNAPSHOT,
             args=[
                 UpdateTaskGovernanceSnapshotRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     workspace_id=self.state.workspace_id,
                     governance_snapshot=info.governance_snapshot,
@@ -693,6 +694,7 @@ class AgentExecutionWorkflow:
             task_id=self.state.task_id,
             agent_id=self.state.agent_id,
             execution_id=self.state.execution_id,
+            workspace_id=self.state.workspace_id,
         )
         self.budget_tracker = BudgetTracker(self.state.budget_usd)
 
@@ -729,6 +731,7 @@ class AgentExecutionWorkflow:
             user_context_data=self.state.user_context_data,
             execution_context=self._workflow_metadata,
             task_id=UUID(self.state.task_id),
+            task_parameters=self.state.goal.context if self.state.goal else {},
         )
         agent_config_result: AgentConfigResult = await workflow.execute_activity(
             Activities.BUILD_AGENT_CONFIG,
@@ -742,6 +745,9 @@ class AgentExecutionWorkflow:
             self.state.agent_config = agent_config_result.model_dump()
         except AttributeError:
             self.state.agent_config = dict(agent_config_result)
+
+        if self.state.agent_config.get("execution_context") is not None:
+            self._workflow_metadata = dict(self.state.agent_config["execution_context"])
 
         self._events.add_event(
             EventTypes.RUNTIME_DISCOVERED,
@@ -769,6 +775,7 @@ class AgentExecutionWorkflow:
         if model_id:
             try:
                 resolve_model_request = ResolveModelRequest(
+                    user_context_data=self.state.user_context_data,
                     model_id=model_id,
                     workspace_id=self.state.workspace_id,
                     user_id=self.state.user_id,
@@ -801,7 +808,9 @@ class AgentExecutionWorkflow:
         self.state.context_strategy = strategy.value
 
         tools_request = ToolDiscoveryRequest(
-            agent_id=UUID(self.state.agent_id), user_context_data=self.state.user_context_data
+            agent_id=UUID(self.state.agent_id),
+            user_context_data=self.state.user_context_data,
+            tools=self.state.agent_config.get("tools"),
         )
 
         if allows_tool_progressive_disclosure(strategy):
@@ -1310,6 +1319,7 @@ class AgentExecutionWorkflow:
             task_id=self.state.task_id,
             agent_id=self.state.agent_id,
             execution_id=self.state.execution_id,
+            workspace_id=self.state.workspace_id,
         )
         self.budget_tracker = BudgetTracker(self.state.budget_usd)
         self.budget_tracker.add_cost(state.total_cost)
@@ -1553,6 +1563,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status=ExecutionStatus.WAITING_FOR_CONTINUATION,
                     workspace_id=self.state.workspace_id,
@@ -1601,6 +1612,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status="running",
                     workspace_id=self.state.workspace_id,
@@ -1641,6 +1653,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status="running",
                     workspace_id=self.state.workspace_id,
@@ -2032,6 +2045,22 @@ class AgentExecutionWorkflow:
                 EventTypes.LLM_CALL_COMPLETED,
                 {
                     "iteration": self.state.current_iteration,
+                    # Which model produced this. Token counts are meaningless without
+                    # it — the same 1000 tokens cost very different amounts depending
+                    # on the model, so no consumer can interpret `usage` without it.
+                    "model_id": self.state.agent_config.get("model_id"),
+                    # The provider's own name for the model, alongside the instance id
+                    # above. The id identifies a row; this identifies what was actually
+                    # bought, and it survives the row being deleted or recreated —
+                    # which a metered fact has to, because it is priced and invoiced
+                    # long after the run.
+                    "model_name": (self.state.resolved_model or {}).get("model_name"),
+                    # Whose credentials paid the provider. Without it there is no way
+                    # to tell a run on the operator's key — real money out of our
+                    # account, and the only kind that must be recovered from the
+                    # customer — from a run on the customer's own, which costs us
+                    # nothing and must not be charged for twice.
+                    "managed_by": (self.state.resolved_model or {}).get("managed_by"),
                     "cost": usage_info["cost"],
                     "total_cost": serialize_money(self._budget.cost),
                     "usage": usage_info,
@@ -2418,6 +2447,36 @@ class AgentExecutionWorkflow:
             self._append_validation_feedback(completion_call, validation)
             return
 
+        # An explicit completion function call is already present in the
+        # conversation as an assistant message. Pair it before the workflow
+        # waits for another chat turn; otherwise OpenAI-compatible providers
+        # reject the next follow-up because its history contains an unresolved
+        # function call. Implicit text completion synthesizes a ToolCall only
+        # for local control flow, so it must not gain an orphan tool message.
+        call_is_in_history = any(
+            call.get("id") == completion_call.id
+            for message in self.state.messages
+            for call in (message.tool_calls or [])
+            if isinstance(call, dict)
+        )
+        if call_is_in_history:
+            self.state.messages.append(
+                Message(
+                    role="tool",
+                    name="completion",
+                    tool_call_id=completion_call.id,
+                    content=json.dumps(
+                        {
+                            "status": "completed",
+                            "result": result_text,
+                            "artifacts": declared_paths,
+                        },
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                )
+            )
+
         self.state.success = True
         self.state.final_response = result_text
         self.state.status = ExecutionStatus.COMPLETED
@@ -2439,6 +2498,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status="completed",
                     result=json.dumps(
@@ -2531,6 +2591,7 @@ class AgentExecutionWorkflow:
                 Activities.VALIDATE_ARTIFACTS,
                 args=[
                     ArtifactValidationRequest(
+                        user_context_data=self.state.user_context_data,
                         workspace_id=self.state.workspace_id,
                         task_id=self.state.task_id,
                         workflow_id=self.state.execution_id,
@@ -2652,6 +2713,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status="waiting_for_input",
                     workspace_id=self.state.workspace_id,
@@ -2711,6 +2773,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status="running",
                     workspace_id=self.state.workspace_id,
@@ -2837,6 +2900,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status="waiting_for_approval",
                     workspace_id=self.state.workspace_id,
@@ -2905,6 +2969,7 @@ class AgentExecutionWorkflow:
                 Activities.UPDATE_TASK_STATUS,
                 args=[
                     UpdateTaskStatusRequest(
+                        user_context_data=self.state.user_context_data,
                         task_id=self.state.task_id,
                         status="running",
                         workspace_id=self.state.workspace_id,
@@ -3545,6 +3610,7 @@ class AgentExecutionWorkflow:
                 Activities.MATERIALIZE_SKILL_FILES,
                 args=[
                     MaterializeSkillFilesRequest(
+                        user_context_data=self.state.user_context_data,
                         skill_id=UUID(skill_id),
                         skill_name=skill_name,
                         workflow_id=workflow.info().workflow_id,
@@ -4091,6 +4157,7 @@ class AgentExecutionWorkflow:
             Activities.UPDATE_TASK_STATUS,
             args=[
                 UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status=final_status,
                     result=json.dumps(
@@ -4165,6 +4232,7 @@ class AgentExecutionWorkflow:
                 Activities.UPDATE_TASK_STATUS,
                 args=[
                     UpdateTaskStatusRequest(
+                        user_context_data=self.state.user_context_data,
                         task_id=self.state.task_id,
                         status=status,
                         error_message=self.state.blocked_reason or error_details,

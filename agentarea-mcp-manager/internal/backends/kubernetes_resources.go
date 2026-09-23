@@ -140,6 +140,12 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 	// Operator labels first, platform labels (incl. the managed-by label the
 	// egress NetworkPolicy selects on) applied on top so they can't be clobbered.
 	labels := mergeStringMaps(k.k8sConfig.InstancePod.Labels, k.getCommonLabels(instanceName))
+	// Data-plane ownership is stamped by the authenticated server, not inherited
+	// from operator pod defaults or an instance name.
+	delete(labels, usageOwnerLabel)
+	if owner := spec.Labels[usageOwnerLabel]; owner != "" {
+		labels[usageOwnerLabel] = owner
+	}
 
 	// Convert ResourceList to config.ResourceRequirements
 	var configRequests, configLimits *config.ResourceRequirements

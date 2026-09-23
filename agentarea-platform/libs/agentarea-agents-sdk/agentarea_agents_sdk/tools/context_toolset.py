@@ -42,7 +42,12 @@ class ContextToolset(Toolset):
     ) -> None:
         super().__init__()
         self.storage: StorageClient = storage or InMemoryStorage()
-        self.workspace_id: str = workspace_id or "_standalone"
+        if not workspace_id:
+            raise ValueError(
+                "workspace_id is required: storage is scoped by it, and a shared "
+                "placeholder mixes one tenant's files into another's"
+            )
+        self.workspace_id: str = workspace_id
 
     @tool_method
     async def list_org_files(self, prefix: str = "") -> str:

@@ -273,6 +273,12 @@
       rgba(161, 161, 170, 0.08) 58%,
       rgba(161, 161, 170, 0.14) 100%
     );
+    --row-tint-brand: linear-gradient(
+      90deg,
+      transparent,
+      rgba(34, 82, 179, 0.07) 58%,
+      rgba(34, 82, 179, 0.14) 100%
+    );
     /* softer hatch for table group headers */
     --hatch-soft: repeating-linear-gradient(
       135deg,
@@ -386,6 +392,12 @@
       rgba(161, 161, 170, 0.05) 58%,
       rgba(161, 161, 170, 0.1) 100%
     );
+    --row-tint-brand: linear-gradient(
+      90deg,
+      transparent,
+      rgba(120, 150, 235, 0.06) 58%,
+      rgba(120, 150, 235, 0.12) 100%
+    );
     /* softer hatch for table group headers */
     --hatch-soft: repeating-linear-gradient(
       135deg,
@@ -471,6 +483,153 @@
       hsl(var(--border) / 0.6) 9px,
       hsl(var(--border) / 0.6) 10px
     );
+  }
+
+  /* ---- Generated avatars ------------------------------------------------
+     Depth comes from simulated light, not from saturation: a 180° gradient,
+     a lit top edge, a hairline inset border and one tight shadow. Colour sits
+     on top of that as a signal — `graphite` tints only the glyph (agents and
+     other things), `pigment` fills the tile and keeps the mark white (people).
+
+     `--avatar-hue` is the only thing that varies between two avatars; it is set
+     per element by `avatarHueStyle()`. Lightness and chroma are pinned here so
+     that no tile is louder than its neighbour and an agent keeps its colour
+     when the theme flips. */
+  .avatar-tile {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    isolation: isolate;
+  }
+
+  /* Continuous-curvature corners where the browser can draw them. Deliberately
+     not a mask or clip-path: those cut the outer shadow and leave the inset
+     hairline following a rectangle the corners no longer have, and that
+     hairline does more for the look than the curve does. */
+  @supports (corner-shape: squircle) {
+    .avatar-squircle {
+      corner-shape: squircle;
+    }
+  }
+
+  .avatar-graphite {
+    background-color: #f4f4f7;
+    background-image: var(--avatar-hatch, none),
+      linear-gradient(180deg, #ffffff 0%, #f0f0f3 100%);
+    box-shadow:
+      inset 0 1px 0 #ffffff,
+      inset 0 0 0 0.5px rgba(9, 9, 11, 0.115),
+      0 1px 1.5px rgba(9, 9, 11, 0.07),
+      0 3px 8px -3px rgba(9, 9, 11, 0.1);
+    color: oklch(0.525 0.135 var(--avatar-hue, 252));
+  }
+
+  .dark .avatar-graphite {
+    background-color: #232327;
+    background-image: var(--avatar-hatch, none),
+      linear-gradient(180deg, #2b2b30 0%, #202024 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.075),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.1),
+      0 1px 2px rgba(0, 0, 0, 0.45),
+      0 4px 10px -4px rgba(0, 0, 0, 0.5);
+    color: oklch(0.79 0.125 var(--avatar-hue, 252));
+  }
+
+  .avatar-pigment {
+    background-color: oklch(0.6 0.148 var(--avatar-hue, 252));
+    background-image: var(--avatar-hatch, none),
+      linear-gradient(
+        180deg,
+        oklch(0.645 0.145 var(--avatar-hue, 252)) 0%,
+        oklch(0.555 0.15 var(--avatar-hue, 252)) 100%
+      );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      inset 0 0 0 0.5px oklch(0.4 0.12 var(--avatar-hue, 252) / 0.55),
+      0 1px 2px rgba(9, 9, 11, 0.16),
+      0 4px 10px -4px oklch(0.52 0.14 var(--avatar-hue, 252) / 0.5);
+    color: #ffffff;
+  }
+
+  .dark .avatar-pigment {
+    background-color: oklch(0.615 0.143 var(--avatar-hue, 252));
+    background-image: var(--avatar-hatch, none),
+      linear-gradient(
+        180deg,
+        oklch(0.66 0.14 var(--avatar-hue, 252)) 0%,
+        oklch(0.575 0.145 var(--avatar-hue, 252)) 100%
+      );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 0 0 0.5px oklch(0.38 0.1 var(--avatar-hue, 252) / 0.7),
+      0 1px 2px rgba(0, 0, 0, 0.4),
+      0 4px 12px -4px oklch(0.55 0.14 var(--avatar-hue, 252) / 0.45);
+  }
+
+  /* The house 135°/9px hatch (see --hatch), laid over the tile as an extra
+     background layer so it follows the corners for free. Applied from ~28px
+     up — below that the 1px stripe is sub-pixel noise. */
+  .avatar-hatch {
+    --avatar-hatch: repeating-linear-gradient(
+      135deg,
+      transparent 0 9px,
+      rgba(9, 9, 11, 0.05) 9px 10px
+    );
+  }
+
+  .dark .avatar-hatch {
+    --avatar-hatch: repeating-linear-gradient(
+      135deg,
+      transparent 0 9px,
+      rgba(255, 255, 255, 0.045) 9px 10px
+    );
+  }
+
+  .avatar-pigment.avatar-hatch,
+  .dark .avatar-pigment.avatar-hatch {
+    --avatar-hatch: repeating-linear-gradient(
+      135deg,
+      transparent 0 9px,
+      rgba(255, 255, 255, 0.2) 9px 10px
+    );
+  }
+
+  /* Plate for a real brand logo (LLM providers, MCP channels). Deliberately
+     light in BOTH themes: vendor marks are drawn for light grounds, so a dark
+     plate swallows the black ones. The alternative the codebase used to reach
+     for — `dark:invert` — inverts the whole bitmap, which is right for a
+     monochrome mark and turns every colour logo (Google, Mistral, Meta) into a
+     photographic negative. A plate fixes the contrast without touching the
+     brand. No hue here: the logo is the identity. */
+  .avatar-plate {
+    background-image: linear-gradient(180deg, #ffffff 0%, #f3f3f6 100%);
+    box-shadow:
+      inset 0 1px 0 #ffffff,
+      inset 0 0 0 0.5px rgba(9, 9, 11, 0.13),
+      0 1px 1.5px rgba(9, 9, 11, 0.07),
+      0 3px 8px -3px rgba(9, 9, 11, 0.1);
+  }
+
+  .dark .avatar-plate {
+    /* Toned a touch off white so it does not glare on a near-black surface, and
+       seated with a ring instead of a drop shadow, which a dark ground eats. */
+    background-image: linear-gradient(180deg, #f7f7f8 0%, #e8e8ec 100%);
+    box-shadow:
+      inset 0 0 0 0.5px rgba(9, 9, 11, 0.22),
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  /* The ramp hue on its own, for marks that are not a tile — the colour rail
+     down the side of an agent row. */
+  .avatar-hue-fill {
+    background-color: oklch(0.6 0.148 var(--avatar-hue, 252));
+  }
+
+  .dark .avatar-hue-fill {
+    background-color: oklch(0.7 0.14 var(--avatar-hue, 252));
   }
 
   .label {

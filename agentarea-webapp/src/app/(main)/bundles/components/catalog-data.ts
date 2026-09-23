@@ -3,14 +3,50 @@
 // (CatalogGallery, infinite-scroll appends). No React/JSX here so it stays
 // importable from a Server Component.
 
-export type CatalogType = "bundles" | "agents" | "skills" | "mcp_servers";
+import type { EntityKind } from "@/lib/entity-icons";
+import {
+  domainInitials,
+  faviconSources,
+  type EntityIdentity,
+} from "@/lib/entity-identity";
+
+export type CatalogType = "bundles" | "agents" | "skills" | "connections";
 
 export const TYPE_KEYS = [
   "bundles",
   "agents",
   "skills",
-  "mcp_servers",
+  "connections",
 ] as const satisfies readonly CatalogType[];
+
+// The backend files every connection under the `mcp_servers` registry type.
+// The tab is "connections" because that is what the entry is to a user: an
+// account or service you wire up. How it is reached — the Model Context
+// Protocol, or a plain HTTP API described by OpenAPI — is the `protocol`
+// facet below, not the identity of the tab.
+export const REGISTRY_TYPE: Record<CatalogType, string> = {
+  bundles: "bundles",
+  agents: "agents",
+  skills: "skills",
+  connections: "mcp_servers",
+};
+
+// What the connections tab used to be called. Links to it exist in docs, in
+// the app itself and in bookmarks, so the old value still resolves.
+const LEGACY_TYPES: Record<string, CatalogType> = { mcp_servers: "connections" };
+
+// How a connection is reached. Mirrors CATALOG_PROTOCOLS on the backend, which
+// derives it from `spec.connection_type` and rejects anything else.
+export type CatalogProtocol = "mcp" | "api";
+export const PROTOCOL_KEYS = [
+  "mcp",
+  "api",
+] as const satisfies readonly CatalogProtocol[];
+export const PROTOCOL_LABELS: Record<CatalogProtocol, string> = {
+  mcp: "MCP",
+  api: "HTTP API",
+};
+const OPENAPI_CONNECTION_TYPE = "openapi";
 
 // Page size for a single registry fetch. A short page means "no more".
 export const PAGE = 96;
@@ -18,16 +54,18 @@ export const PAGE = 96;
 export const ALL = "__all__";
 export const FEATURED_TAG = "featured";
 
-// Catalog orderings, applied server-side. `featured` floats hand-curated
-// entries and alphabetises the rest; `name` is a plain A→Z. Kept in sync with
-// RegistryItemRepository._SORTS on the backend -- an unknown value is rejected
-// there rather than silently ignored.
-export const SORT_KEYS = ["featured", "name"] as const;
+// Catalog orderings, applied server-side. `recommended` is the catalog's own
+// curation — hand-featured entries, then whole sources by weight, then each
+// source's published order (the skills artifact is published in GitHub-star
+// order, the connection artifact leads with the official integrations) — and
+// `name` is a plain A→Z. Kept in sync with CATALOG_SORTS on the backend; an
+// unknown value is rejected there rather than silently ignored.
+export const SORT_KEYS = ["recommended", "name"] as const;
 export type SortMode = (typeof SORT_KEYS)[number];
-export const DEFAULT_SORT: SortMode = "featured";
+export const DEFAULT_SORT: SortMode = "recommended";
 
 export const SORT_LABELS: Record<SortMode, string> = {
-  featured: "Featured first",
+  recommended: "Recommended",
   name: "Name A–Z",
 };
 
@@ -70,7 +108,11 @@ export type CatalogEntry = {
   category: string | null;
   integrations: string[]; // brand monograms on the card (bundles: their MCPs)
   meta: string[]; // small type-specific facts ("gpt-4o", "url", "3 agents")
-  iconUrl: string | null; // brand logo when the source provides one
+  // Connections only: MCP server or plain HTTP API. Null for every other type,
+  // which holds one kind of thing.
+  protocol: CatalogProtocol | null;
+  // Logo chain + initials, resolved by <EntityMark> at render time.
+  identity: EntityIdentity;
   featured: boolean; // hand-curated well-known entry (sorts first server-side)
   verified: boolean; // official vendor connection with confirmed OAuth
   installEntityId: string | null; // linked MCP spec id → existing create-from-spec page
@@ -79,6 +121,16 @@ export type CatalogEntry = {
 
 export function isCatalogType(v: unknown): v is CatalogType {
   return typeof v === "string" && (TYPE_KEYS as readonly string[]).includes(v);
+}
+
+/** A catalog tab from a URL value, accepting the tab's former name. */
+export function toCatalogType(v: unknown): CatalogType | null {
+  if (isCatalogType(v)) return v;
+  return typeof v === "string" ? (LEGACY_TYPES[v] ?? null) : null;
+}
+
+export function isCatalogProtocol(v: unknown): v is CatalogProtocol {
+  return typeof v === "string" && (PROTOCOL_KEYS as readonly string[]).includes(v);
 }
 
 export function str(v: unknown): string | null {
@@ -104,25 +156,96 @@ export function normalizeModelSlug(s: string): string {
 // Tolerant (substring either way) because catalog slugs are bare ("gpt-4o")
 // while real instances are provider-prefixed/variant ("openai/gpt-4o-mini").
 // Non-binding — it only drives a UI suggestion, never a backend choice.
-export function modelNameMatchesPreferred(modelName: string, preferred: string): boolean {
+export function modelNameMatchesPreferred(
+  modelName: string,
+  preferred: string
+): boolean {
   const m = normalizeModelSlug(modelName);
   const p = normalizeModelSlug(preferred);
   if (!m || !p) return false;
   return m.includes(p) || p.includes(m);
 }
 
-// Best-effort logo URL from whatever the source preserved. MCP registry items
-// keep the full upstream server object under spec.raw_spec, whose `icons` is a
-// list of {src, mimeType}. Other types may carry a flat icon/metadata.icon.
-export function extractIcon(spec: RawSpec): string | null {
+// Only what can safely become an `<img src>`: an app-relative path or an
+// http(s) URL. Catalog sources are external, and a `javascript:`/`data:` src
+// is not something the gallery should hand to the browser.
+function iconSrc(value: unknown): string | null {
+  const s = str(value);
+  if (!s) return null;
+  if (s.startsWith("/")) return s;
+  return /^https?:\/\//i.test(s) ? s : null;
+}
+
+// GitHub renders an owner's avatar at `github.com/<owner>.png`. Skills are
+// published per repo and carry no artwork of their own, so the publisher's
+// avatar is the only thing that tells two of them apart at a glance.
+function githubOwnerAvatar(spec: RawSpec): string | null {
+  const provenance = spec.provenance as RawSpec | undefined;
+  const repo = provenance ? str(provenance.repo) : null;
+  const owner =
+    repo?.split("/")[0] ??
+    str(spec.source_url)?.match(
+      /^https?:\/\/(?:www\.)?github\.com\/([^/?#]+)/i
+    )?.[1];
+  return owner ? `https://github.com/${owner}.png?size=128` : null;
+}
+
+// Every logo the sources gave us, best first and deduplicated. MCP registry
+// items keep the full upstream server object under spec.raw_spec, whose
+// `icons` is a list of {src, mimeType}, and our curation adds a hosted
+// fallback alongside it; other types may carry a flat icon/metadata.icon.
+// A connection with no artwork at all still has an endpoint, and the service
+// behind it serves a favicon.
+function iconSources(
+  type: CatalogType,
+  spec: RawSpec,
+  endpoint: string | null
+): string[] {
   const raw = (spec.raw_spec as RawSpec | undefined) ?? spec;
-  const icons = arr(raw.icons);
-  if (icons.length > 0) {
-    const src = str(icons[0].src);
-    if (src) return src;
-  }
   const meta = spec.metadata as RawSpec | undefined;
-  return str(spec.icon) ?? str(spec.icon_url) ?? (meta ? str(meta.icon) : null);
+  const rawMeta = raw.metadata as RawSpec | undefined;
+
+  const candidates = [
+    spec.icon,
+    spec.icon_url,
+    meta?.icon,
+    ...arr(raw.icons).map((icon) => icon.src),
+    rawMeta?.["agentarea:logo_source_url"],
+    type === "skills" ? githubOwnerAvatar(spec) : null,
+    ...faviconSources(endpoint),
+  ];
+
+  const seen: string[] = [];
+  for (const candidate of candidates) {
+    const src = iconSrc(candidate);
+    if (src && !seen.includes(src)) seen.push(src);
+  }
+  return seen;
+}
+
+// A catalog entry looks like whatever it is a catalog entry *of*: an MCP
+// server, an HTTP API, an agent, a skill, a bundle. <EntityMark> walks the
+// sources and drops to the initials, so no tile is ever a row of identical
+// glyphs.
+const ENTITY_KIND: Record<CatalogType, EntityKind> = {
+  bundles: "project",
+  agents: "agent",
+  skills: "skill",
+  connections: "mcp",
+};
+
+export function catalogIdentity(
+  entry: Pick<CatalogEntry, "type" | "title" | "protocol" | "spec">
+): EntityIdentity {
+  // Where an MCP connection is reached, when it is reached over the network at
+  // all (a command/docker server has no URL, and falls back to its name).
+  const endpoint = entry.type === "connections" ? str(entry.spec.url) : null;
+  return {
+    kind:
+      entry.protocol === "api" ? "client" : ENTITY_KIND[entry.type],
+    sources: iconSources(entry.type, entry.spec, endpoint),
+    initials: domainInitials(endpoint, entry.title),
+  };
 }
 
 // Registry skill ids look like "action-creator--owner-repo--<hash>": the part
@@ -139,12 +262,53 @@ function prettifySkillName(name: string, repo?: string | null): string {
     }
   }
   head = head.replace(/[-_]+/g, " ").trim();
-  return head.replace(/\b\w/g, (c) => c.toUpperCase()) || name;
+  const acronyms = new Set([
+    "api",
+    "csv",
+    "docx",
+    "html",
+    "json",
+    "mcp",
+    "pdf",
+    "pptx",
+    "seo",
+    "sql",
+    "ui",
+    "ux",
+    "xlsx",
+  ]);
+  return (
+    head
+      .split(" ")
+      .map((word) =>
+        acronyms.has(word.toLowerCase())
+          ? word.toUpperCase()
+          : word.charAt(0).toUpperCase() + word.slice(1)
+      )
+      .join(" ") || name
+  );
 }
 
 export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
+  const entry = describe(type, item);
+  return { ...entry, identity: catalogIdentity(entry) };
+}
+
+// Everything about an entry except how it is depicted, which is derived from
+// the rest (the title seeds the initials, the protocol picks the glyph).
+function describe(
+  type: CatalogType,
+  item: RegistryItem
+): Omit<CatalogEntry, "identity"> {
   const spec = item.spec || {};
   const tags = item.tags || [];
+  // Only connections have a protocol; the backend's split is the same test.
+  const protocol: CatalogProtocol | null =
+    type !== "connections"
+      ? null
+      : str(spec.connection_type) === OPENAPI_CONNECTION_TYPE
+        ? "api"
+        : "mcp";
   // The server derives `category`/`featured` and browses by those exact values.
   // Re-deriving them here would risk a card sitting under a facet whose filter
   // never returns it, so the stored values win; the local derivation is only a
@@ -154,7 +318,7 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
     type,
     description: item.description || "",
     tags,
-    iconUrl: extractIcon(spec),
+    protocol,
     featured: item.featured ?? tags.includes(FEATURED_TAG),
     verified: false,
     installEntityId: item.installed_entity_id ?? null,
@@ -178,7 +342,9 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
       ...base,
       title: str(spec.display_name) || str(spec.name) || item.name,
       category: serverCategory ?? str(meta?.category),
-      integrations: arr(spec.mcps).map((m) => String(m.name ?? "")).filter(Boolean),
+      integrations: arr(spec.mcps)
+        .map((m) => String(m.name ?? ""))
+        .filter(Boolean),
       meta: counts,
     };
   }
@@ -202,27 +368,39 @@ export function normalize(type: CatalogType, item: RegistryItem): CatalogEntry {
     // tags. Show the repo as the card fact (the "content" source_type is noise);
     // use it to strip the repo from the generated title too.
     const tagVal = (prefix: string) =>
-      (item.tags ?? []).find((t) => t.startsWith(prefix))?.slice(prefix.length) ?? null;
+      (item.tags ?? [])
+        .find((t) => t.startsWith(prefix))
+        ?.slice(prefix.length) ?? null;
     const repo = tagVal("repo:");
+    const originalName = str(spec.original_name);
     return {
       ...base,
-      title: str(spec.display_name) ?? prettifySkillName(item.name, repo),
+      title:
+        str(spec.display_name) ??
+        prettifySkillName(
+          originalName ?? item.name,
+          originalName ? null : repo
+        ),
       category: serverCategory ?? tagVal("category:"),
       integrations: [],
       meta: repo ? [repo] : [],
     };
   }
-  // mcp_servers (connections). Category comes from curated metadata when the
-  // source provides it (agentarea:category); transport (streamable-http,
-  // command, sse…) is "how it connects", not a category, so we don't facet on it.
-  const conn = str(spec.connection_type) ?? str(spec.transport) ?? "url";
-  const rawMeta = (spec.raw_spec as RawSpec | undefined)?.metadata as RawSpec | undefined;
+  // Connections. Category comes from curated metadata when the source provides
+  // it (agentarea:category); the transport (streamable-http, command, sse…) is
+  // "how it connects", not a category, so we don't facet on it.
+  const rawMeta = (spec.raw_spec as RawSpec | undefined)?.metadata as
+    | RawSpec
+    | undefined;
+  const transport = str(spec.connection_type) ?? str(spec.transport) ?? "url";
   return {
     ...base,
     title: item.name,
     category: serverCategory ?? str(rawMeta?.["agentarea:category"]),
     verified: rawMeta?.["agentarea:oauth_status"] === "verified",
     integrations: [],
-    meta: [conn],
+    // The protocol badge already says "HTTP API"; for an MCP server the
+    // transport is the one fact the badge doesn't carry.
+    meta: base.protocol === "api" ? [] : [transport],
   };
 }

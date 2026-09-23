@@ -47,6 +47,25 @@ def test_a_non_empty_allowlist_still_restricts():
     assert decide_tool_policy(policy, "shell_exec").action is ToolAuthorizationAction.DENY
 
 
+def test_an_absent_allowlist_restricts_nothing():
+    """``to_json_dict`` drops ``allowed=None``, so the key is simply missing."""
+    policy = {"tools": {"denied": []}}
+
+    assert decide_tool_policy(policy, "shell_exec").action is ToolAuthorizationAction.ALLOW
+
+
+def test_an_empty_allowlist_permits_no_tool():
+    """``[]`` is the strictest allowlist, not the absence of one.
+
+    Testing truthiness here made the empty allowlist permit every tool, which
+    silently undid the one setting a policy author can use to say "no tools".
+    """
+    policy = {"tools": {"allowed": [], "denied": []}}
+
+    assert decide_tool_policy(policy, "web_search").action is ToolAuthorizationAction.DENY
+    assert decide_tool_policy(policy, "shell_exec").action is ToolAuthorizationAction.DENY
+
+
 # --- authorize_tool_invocation: the request-shaped policy verdict ---------------
 
 

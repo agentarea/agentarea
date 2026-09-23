@@ -262,10 +262,16 @@ class DefaultWebhookManager(WebhookManager):
                             if hasattr(repo, "user_context") and hasattr(
                                 repo.user_context, "workspace_id"
                             ):
+                                # Re-point the repository at the trigger's owner. Keeping
+                                # the previous principal when the trigger has none would
+                                # run someone else's trigger under this caller's authority.
+                                if not db_trigger.created_by:
+                                    raise ValueError(
+                                        f"trigger for webhook {webhook_id} has no creator; "
+                                        "refusing to run it under the calling principal"
+                                    )
                                 repo.user_context.workspace_id = db_trigger.workspace_id
-                                repo.user_context.user_id = (
-                                    db_trigger.created_by or repo.user_context.user_id
-                                )
+                                repo.user_context.user_id = db_trigger.created_by
                         logger.info(f"Loaded trigger from DB for webhook {webhook_id}")
                 except Exception as db_err:
                     logger.warning(f"DB lookup failed for webhook {webhook_id}: {db_err}")
@@ -660,6 +666,8 @@ class DefaultWebhookManager(WebhookManager):
             return await self._parse_linear_webhook(request_data, base_data)
         elif webhook_type == WebhookType.GMAIL:
             return await self._parse_gmail_webhook(request_data, base_data)
+        elif webhook_type == WebhookType.EMAIL:
+            return await self._parse_email_webhook(request_data, base_data, trigger.webhook_config)
         elif webhook_type == WebhookType.TEAMS:
             return await self._parse_teams_webhook(request_data, base_data)
         else:
@@ -1140,6 +1148,40 @@ class DefaultWebhookManager(WebhookManager):
         except Exception as e:
             logger.error(f"Error parsing Gmail webhook: {e}")
             return {**base_data, "body": request_data.body, "parse_error": str(e)}
+
+    async def _parse_email_webhook(
+        self,
+        request_data: WebhookRequestData,
+        base_data: dict[str, Any],
+        webhook_config: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Parse a message posted by an inbound-parse mail provider.
+
+        Every provider names these JSON keys differently, so the mapping lives
+        in ``webhook_config["field_map"]`` rather than in a branch per vendor.
+        """
+        from .channels.email_message import normalize_email
+
+        body = request_data.body
+        if isinstance(body, str):
+            try:
+                body = json.loads(body)
+            except json.JSONDecodeError:
+                pass
+
+        field_map = (webhook_config or {}).get("field_map") or {}
+        try:
+            message = normalize_email(body, field_map)
+        except ValueError as exc:
+            logger.error(f"Unparseable inbound email on webhook {request_data.webhook_id}: {exc}")
+            return {**base_data, "body": request_data.body, "parse_error": str(exc)}
+
+        return {
+            **base_data,
+            "event_type": "message_received",
+            **message,
+            "raw_data": body,
+        }
 
     async def _parse_teams_webhook(
         self, request_data: WebhookRequestData, base_data: dict[str, Any]

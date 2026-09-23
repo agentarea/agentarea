@@ -17,7 +17,8 @@ const entry = (id: string): CatalogEntry => ({
   category: null,
   integrations: [],
   meta: [],
-  iconUrl: null,
+  protocol: null,
+  identity: { kind: "skill", sources: [] },
   featured: false,
   verified: false,
   installEntityId: null,
@@ -30,6 +31,7 @@ const seeded = (ids: string[], total: number): CatalogPaging =>
     entries: ids.map(entry),
     total,
     categories: [],
+    protocols: [],
   });
 
 describe("hasMore", () => {
@@ -83,6 +85,7 @@ describe("canFetchMore", () => {
       entries: [entry("b")],
       total: 10,
       categories: [],
+      protocols: [],
     });
     expect(canFetchMore(retried)).toBe(true);
   });
@@ -97,6 +100,7 @@ describe("append", () => {
       entries: [entry("z"), entry("b")],
       total: 4,
       categories: [],
+      protocols: [],
     });
     expect(state.entries.map((e) => e.id)).toEqual(["m", "a", "z", "b"]);
   });
@@ -107,6 +111,7 @@ describe("append", () => {
       entries: [entry("b"), entry("c")],
       total: 4,
       categories: [],
+      protocols: [],
     });
     expect(state.entries.map((e) => e.id)).toEqual(["a", "b", "c"]);
   });
@@ -117,6 +122,7 @@ describe("append", () => {
       entries: [entry("b")],
       total: 2,
       categories: [],
+      protocols: [],
     });
     expect(state.total).toBe(2);
     expect(hasMore(state)).toBe(false);
@@ -129,6 +135,7 @@ describe("append", () => {
       entries: [entry("b")],
       total: 10,
       categories: [],
+      protocols: [],
     });
     expect(ok.error).toBeNull();
   });
@@ -140,6 +147,7 @@ describe("append", () => {
       entries: [],
       total: 99,
       categories: [],
+      protocols: [],
     });
     expect(hasMore(state)).toBe(false);
   });
@@ -181,6 +189,7 @@ describe("reload", () => {
       entries: [entry("a")],
       total: 1,
       categories: [{ value: "data", count: 3 }],
+      protocols: [],
     });
     expect(catalogPagingReducer(withFacets, { type: "reload" }).categories).toEqual([
       { value: "data", count: 3 },
@@ -195,6 +204,7 @@ describe("seed", () => {
       entries: [entry("x")],
       total: 1,
       categories: [{ value: "other", count: 1 }],
+      protocols: [],
     });
     expect(state.entries.map((e) => e.id)).toEqual(["x"]);
     expect(state.total).toBe(1);
@@ -208,6 +218,7 @@ describe("seed", () => {
       entries: [],
       total: 0,
       categories: [],
+      protocols: [],
       error: "Failed to load catalog.",
     });
     expect(state.error).toBe("Failed to load catalog.");

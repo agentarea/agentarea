@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { env } from "@/env";
 import { formatApiError } from "@/lib/api-errors";
 import { getAuthToken } from "@/lib/getAuthToken";
+import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
 
 export async function GET(
   request: NextRequest,
@@ -10,7 +11,6 @@ export async function GET(
   const { agentId, taskId } = await params;
 
   try {
-    // Use session-based token retrieval only; do not handle workspace
     const token = await getAuthToken();
 
     // Forward native SSE stream from backend.
@@ -27,6 +27,14 @@ export async function GET(
 
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    // Same workspace selection /api/proxy sends. Without it the backend scopes
+    // the stream to the token's personal workspace, so a task viewed in any
+    // other workspace resolves to 404 and the stream never opens.
+    const workspaceSlug = await resolveRequestWorkspaceSlug(request);
+    if (workspaceSlug) {
+      headers["X-Workspace-Slug"] = workspaceSlug;
     }
 
     const response = await fetch(eventsUrl, {

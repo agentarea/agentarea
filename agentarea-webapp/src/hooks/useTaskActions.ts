@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { createFollowupAgentTask } from "@/components/Chat/utils/createFollowupAgentTask";
 import {
   cancelAgentTaskAction,
   resolveEscalationAction,
@@ -28,7 +29,7 @@ export function useTaskActions(agentId: string | null, taskId: string | null) {
     async (
       inputRequestId: string,
       answers: Record<string, unknown>,
-      secrets: TaskInputSecrets = {},
+      secrets: TaskInputSecrets = {}
     ): Promise<ActionResult> => {
       if (!agentId || !taskId) return NO_TARGET;
       return submitTaskInputAction(agentId, taskId, {
@@ -37,14 +38,14 @@ export function useTaskActions(agentId: string | null, taskId: string | null) {
         secrets,
       });
     },
-    [agentId, taskId],
+    [agentId, taskId]
   );
 
   const resolveEscalation = useCallback(
     async (
       escalationId: string,
       approved: boolean,
-      comment = "",
+      comment = ""
     ): Promise<ActionResult> => {
       if (!agentId || !taskId) return NO_TARGET;
       return resolveEscalationAction(
@@ -52,10 +53,10 @@ export function useTaskActions(agentId: string | null, taskId: string | null) {
         taskId,
         escalationId,
         approved,
-        comment,
+        comment
       );
     },
-    [agentId, taskId],
+    [agentId, taskId]
   );
 
   const queueMessage = useCallback(
@@ -66,7 +67,7 @@ export function useTaskActions(agentId: string | null, taskId: string | null) {
         message,
       });
     },
-    [agentId, taskId],
+    [agentId, taskId]
   );
 
   const cancel = useCallback(async (): Promise<ActionResult> => {
@@ -80,42 +81,14 @@ export function useTaskActions(agentId: string | null, taskId: string | null) {
    * scan the stream for it and stop.
    */
   const createFollowupTask = useCallback(
-    async (description: string): Promise<string | null> => {
+    async (
+      description: string,
+      files: readonly File[] = []
+    ): Promise<string | null> => {
       if (!agentId) return null;
-      const response = await fetch(`/api/agents/${agentId}/tasks/create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description,
-          parameters: {
-            context: {},
-            task_type: "chat",
-            session_id: `chat-${Date.now()}`,
-          },
-          enable_agent_communication: true,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const reader = response.body?.getReader();
-      if (!reader) return null;
-
-      const decoder = new TextDecoder();
-      let newTaskId: string | null = null;
-      let done = false;
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          const text = decoder.decode(value, { stream: true });
-          const match = text.match(/"task_id"\s*:\s*"([^"]+)"/);
-          if (match && !newTaskId) newTaskId = match[1];
-        }
-      }
-      return newTaskId;
+      return createFollowupAgentTask(agentId, description, files);
     },
-    [agentId],
+    [agentId]
   );
 
   return {

@@ -26,6 +26,9 @@ from .providers.factory import AuthProviderFactory
 logger = logging.getLogger(__name__)
 
 _API_KEY_PREFIX = "aat_"
+WORKSPACE_REFERENCE_HEADER = "X-AgentArea-Workspace"
+_LEGACY_WORKSPACE_ID_HEADER = "X-Workspace-ID"
+_LEGACY_WORKSPACE_SLUG_HEADER = "X-Workspace-Slug"
 
 
 def _www_authenticate_bearer() -> str:
@@ -43,12 +46,11 @@ def _www_authenticate_bearer() -> str:
 async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
     """Populate accessible_workspaces on UserContext.
 
-    Combines the policy-level static list from ``AuthorizationService``
-    (own workspace + system workspace, plus enterprise overrides) with
-    the dynamic list of workspaces the user has joined. Membership resolution
-    lives at the request boundary, not inside ``AuthorizationService``, so the
-    auth domain service has no infrastructure dependencies and stays
-    singleton-safe.
+    Combines the policy-level static list from ``AuthorizationService`` with
+    workspaces the user owns and the dynamic list of workspaces the user has
+    joined. Ownership is authoritative even when an older workspace predates
+    relationship-graph provisioning, while explicit memberships continue to
+    come from the graph.
     """
     from agentarea_common.di.container import resolve
     from agentarea_common.workspaces.memberships import (
@@ -80,21 +82,41 @@ async def _resolve_accessible_workspaces(user_context: UserContext) -> None:
             exc_info=True,
         )
 
+    try:
+        from agentarea_common.config.database import get_database
+        from agentarea_common.workspaces.repository import WorkspaceRepository
+
+        database = get_database()
+        async with database.async_session_factory() as session:
+            owned_workspaces = await WorkspaceRepository(session).list_owned_by_user(
+                user_context.user_id
+            )
+        for workspace in owned_workspaces:
+            if workspace.id not in accessible:
+                accessible.append(workspace.id)
+    except Exception as exc:
+        logger.warning(
+            "Could not resolve owned workspaces for user %s: %s",
+            user_context.user_id,
+            exc,
+            exc_info=True,
+        )
+
     user_context.accessible_workspaces = accessible
 
 
 def _apply_workspace_override(user_context: UserContext, requested: str | None) -> None:
-    """Validate and apply an optional X-Workspace-ID header override.
+    """Validate and apply an optional canonical workspace id.
 
     Without this guard, any authenticated user could read/write another
-    workspace by setting X-Workspace-ID to that workspace's id.
+    workspace by supplying its id or slug.
     """
     if not requested or requested == user_context.workspace_id:
         return
     accessible = user_context.accessible_workspaces or [user_context.workspace_id]
     if requested not in accessible:
         logger.warning(
-            "Rejected X-Workspace-ID override: user=%s requested=%s accessible=%s",
+            "Rejected workspace override: user=%s requested=%s accessible=%s",
             user_context.user_id,
             requested,
             accessible,
@@ -125,27 +147,50 @@ async def _resolve_workspace_id_from_slug(slug: str) -> str | None:
         return None
 
 
-async def _apply_workspace_selection(user_context: UserContext, request: Request) -> None:
-    """Select the active workspace from request headers, then authorize it.
+def _workspace_reference_from_request(request: Request) -> str | None:
+    """Return the caller's explicit workspace reference, if any.
 
-    Accepts either ``X-Workspace-ID`` (used by API clients that know the
-    id) or ``X-Workspace-Slug`` (used by the web app, which carries the
-    slug from the ``/w/{slug}`` URL). The slug is resolved to an id and
-    then validated against ``accessible_workspaces`` exactly like the id
-    path — the membership check is the security boundary, not the
-    transport. An unknown slug is rejected as forbidden so we don't leak
-    which workspaces exist.
+    ``X-AgentArea-Workspace`` is the canonical transport and accepts either a
+    workspace id or slug. The two older headers remain aliases while clients
+    migrate; they feed the same resolver and authorization gate.
     """
-    requested = request.headers.get("X-Workspace-ID")
-    if not requested:
-        slug = request.headers.get("X-Workspace-Slug")
-        if slug:
-            requested = await _resolve_workspace_id_from_slug(slug)
-            if requested is None:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="User is not a member of the requested workspace",
-                )
+    return (
+        request.headers.get(WORKSPACE_REFERENCE_HEADER)
+        or request.headers.get(_LEGACY_WORKSPACE_ID_HEADER)
+        or request.headers.get(_LEGACY_WORKSPACE_SLUG_HEADER)
+    )
+
+
+async def _resolve_workspace_reference(
+    user_context: UserContext,
+    reference: str,
+) -> str | None:
+    """Resolve an id-or-slug reference to a canonical workspace id.
+
+    Known accessible ids need no database lookup. Any other value is treated
+    as a slug and resolved before the membership gate is applied.
+    """
+    accessible = user_context.accessible_workspaces or [user_context.workspace_id]
+    if reference in accessible:
+        return reference
+    return await _resolve_workspace_id_from_slug(reference)
+
+
+async def _apply_workspace_selection(user_context: UserContext, request: Request) -> None:
+    """Select the active workspace from one workspace reference, then authorize it.
+
+    ``X-AgentArea-Workspace`` accepts either id or slug. Legacy id/slug headers
+    are aliases. Every form resolves to an id and passes through the same
+    membership check; an unknown reference is rejected as forbidden so we do
+    not leak which workspaces exist.
+    """
+    reference = _workspace_reference_from_request(request)
+    requested = await _resolve_workspace_reference(user_context, reference) if reference else None
+    if reference and requested is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not a member of the requested workspace",
+        )
     _apply_workspace_override(user_context, requested)
 
 
@@ -192,8 +237,8 @@ async def _validate_api_key(token: str, request: Request) -> UserContext | None:
         except Exception:
             logger.debug("Failed to increment API key access count", exc_info=True)
 
-        # Default to the workspace the API key was issued for. Any X-Workspace-ID
-        # override is applied in get_user_context/get_optional_user AFTER
+        # Default to the workspace the API key was issued for. Any explicit
+        # workspace reference is applied in get_user_context/get_optional_user AFTER
         # accessible_workspaces has been resolved, so it cannot escape the key
         # owner's membership.
         return UserContext(
@@ -289,15 +334,12 @@ async def _try_hydra_token(token: str, request: Request) -> UserContext | None:
         if not subject:
             return None
 
-        # Default workspace from ext claims (set during consent) or subject.
-        # Any X-Workspace-ID override is validated in the outer dispatcher
-        # against accessible_workspaces.
-        ext = payload.get("ext", {})
-        workspace_id = ext.get("workspace_id") or subject
-
         return UserContext(
             user_id=subject,
-            workspace_id=workspace_id,
+            # OAuth identifies the principal, never its active tenant. The
+            # request's workspace is resolved server-side from a resource or
+            # an authorized workspace reference.
+            workspace_id=subject,
         )
 
     except Exception as e:
@@ -311,8 +353,8 @@ async def get_user_context(
 ) -> UserContext:
     """FastAPI dependency to extract user context from JWT token (REQUIRED authentication).
 
-    This dependency authenticates the user via JWT token and determines workspace
-    from X-Workspace-ID header (falls back to user_id if not provided).
+    This dependency authenticates the user and resolves an optional workspace
+    reference server-side (falling back to the user's personal workspace).
 
     Raises 401 if authentication fails.
 
@@ -369,6 +411,7 @@ async def get_user_context(
             hydra_context = await _try_hydra_token(token, request)
             if hydra_context is not None:
                 await _resolve_accessible_workspaces(hydra_context)
+                await _apply_workspace_selection(hydra_context, request)
                 ContextManager.set_context(hydra_context)
                 return hydra_context
 
@@ -380,7 +423,7 @@ async def get_user_context(
             )
 
         # Default workspace is the user's personal workspace (= user_id).
-        # Any X-Workspace-ID override is validated against accessible_workspaces
+        # Any explicit workspace reference is validated against accessible_workspaces
         # below — setting a header alone must NEVER grant access.
         user_context = UserContext(
             user_id=auth_result.token.user_id,
@@ -408,6 +451,7 @@ async def get_user_context(
         hydra_context = await _try_hydra_token(token, request)
         if hydra_context is not None:
             await _resolve_accessible_workspaces(hydra_context)
+            await _apply_workspace_selection(hydra_context, request)
             ContextManager.set_context(hydra_context)
             return hydra_context
 
@@ -465,7 +509,7 @@ async def resolve_user_context_from_token(
             return None
 
         # Default workspace is the user's personal workspace (= user_id).
-        # Any X-Workspace-ID override is validated against accessible_workspaces.
+        # Any explicit workspace reference is validated against accessible_workspaces.
         user_context = UserContext(
             user_id=auth_result.token.user_id,
             workspace_id=auth_result.token.user_id,
@@ -483,6 +527,10 @@ async def resolve_user_context_from_token(
         hydra_context = await _try_hydra_token(token, request)
         if hydra_context is not None:
             await _resolve_accessible_workspaces(hydra_context)
+            try:
+                await _apply_workspace_selection(hydra_context, request)
+            except HTTPException:
+                return None
             ContextManager.set_context(hydra_context)
             return hydra_context
         logger.warning(f"Error during token resolution: {e}")

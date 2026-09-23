@@ -1,7 +1,7 @@
 ---
 title: Combine several MCP servers behind one endpoint
 type: guide
-summary: Aggregate the tools of several MCP instances into a single namespaced endpoint by attaching them to a registered client, then point a harness at it.
+description: "Aggregate the tools of several MCP instances into a single namespaced endpoint by attaching them to a registered client, then point a harness at it."
 prerequisites:
   - /guides/mcp/add-a-hosted-server
 related:
@@ -10,8 +10,6 @@ related:
   - /concepts/integration/mcp
 last_updated: 2026-07-29
 ---
-
-# Combine several MCP servers behind one endpoint
 
 Do this when a client — a Codex or Claude harness, an IDE, another agent — should
 see one MCP endpoint that exposes tools drawn from several servers. Do not do
@@ -26,6 +24,7 @@ the shipped surface.
 
 ## Prerequisites
 
+<Info>
 - Two or more MCP server instances that verified successfully. An instance whose
   URL cannot be resolved is skipped from the bundle silently, so verify first
   with [Add a hosted MCP server](/guides/mcp/add-a-hosted-server).
@@ -34,73 +33,76 @@ the shipped surface.
 A client's bundle is exactly what is attached to it. Several harnesses that
 should share one set each get their own attachments; there is no inheritance
 from another entity.
+</Info>
 
 ## Steps
 
-### 1. Create the client
+<Steps titleSize="h3">
+  <Step title="Create the client">
+    ```bash
+    curl -s -X POST "$AGENTAREA_URL/v1/clients/" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"name": "codex-laptop", "kind": "harness", "description": "Local Codex harness"}'
+    ```
 
-```bash
-curl -s -X POST "$AGENTAREA_URL/v1/clients/" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "codex-laptop", "kind": "harness", "description": "Local Codex harness"}'
-```
+    ```json
+    {
+      "id": "b4c8f210-...",
+      "workspace_id": "ws-1",
+      "created_by": "user-1",
+      "name": "codex-laptop",
+      "description": "Local Codex harness",
+      "kind": "harness",
+      "skills": [],
+      "mcp_instances": [],
+      "mcp_endpoint_url": "https://api.example.com/client-mcp/b4c8f210-..."
+    }
+    ```
 
-```json
-{
-  "id": "b4c8f210-...",
-  "workspace_id": "ws-1",
-  "created_by": "user-1",
-  "name": "codex-laptop",
-  "description": "Local Codex harness",
-  "kind": "harness",
-  "skills": [],
-  "mcp_instances": [],
-  "mcp_endpoint_url": "https://api.example.com/client-mcp/b4c8f210-..."
-}
-```
+    `mcp_endpoint_url` is the aggregate. Note it is served at `/client-mcp/{client_id}`
+    — outside `/v1`, because it is a mounted MCP application rather than a REST route.
+  </Step>
 
-`mcp_endpoint_url` is the aggregate. Note it is served at `/client-mcp/{client_id}`
-— outside `/v1`, because it is a mounted MCP application rather than a REST route.
+  <Step title="Attach instances, with a namespace each">
+    ```bash
+    curl -s -o /dev/null -w '%{http_code}\n' \
+      -X POST "$AGENTAREA_URL/v1/clients/$CLIENT_ID/mcp-instances" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"id\": \"$GITHUB_INSTANCE_ID\", \"namespace_prefix\": \"gh\"}"
+    ```
 
-### 2. Attach instances, with a namespace each
+    ```text
+    204
+    ```
 
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' \
-  -X POST "$AGENTAREA_URL/v1/clients/$CLIENT_ID/mcp-instances" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"id\": \"$GITHUB_INSTANCE_ID\", \"namespace_prefix\": \"gh\"}"
-```
+    Repeat per member. `namespace_prefix` decides the tool prefix: a `search` tool on
+    the instance namespaced `gh` is exposed as `gh__search`. Two members that both
+    expose `search` stay distinguishable only if their namespaces differ, so set the
+    prefix deliberately rather than leaving it null.
+  </Step>
 
-```
-204
-```
+  <Step title="Attach skills, if the client should have them">
+    ```bash
+    curl -s -o /dev/null -w '%{http_code}\n' \
+      -X POST "$AGENTAREA_URL/v1/clients/$CLIENT_ID/skills" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"id\": \"$SKILL_ID\"}"
+    ```
 
-Repeat per member. `namespace_prefix` decides the tool prefix: a `search` tool on
-the instance namespaced `gh` is exposed as `gh__search`. Two members that both
-expose `search` stay distinguishable only if their namespaces differ, so set the
-prefix deliberately rather than leaving it null.
+    When a client has skills, the aggregate exposes an extra `activate_skill` tool
+    whose enum lists them, alongside the namespaced member tools.
+  </Step>
 
-### 3. Attach skills, if the client should have them
-
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' \
-  -X POST "$AGENTAREA_URL/v1/clients/$CLIENT_ID/skills" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"id\": \"$SKILL_ID\"}"
-```
-
-When a client has skills, the aggregate exposes an extra `activate_skill` tool
-whose enum lists them, alongside the namespaced member tools.
-
-### 4. Point the harness at the endpoint
-
-Give the harness `mcp_endpoint_url` and a token. Access is checked on every
-request: the token's subject must be the client itself, or a principal holding
-the `use` relation on that client. See [Issue MCP access
-tokens](/guides/mcp/issue-access-tokens).
+  <Step title="Point the harness at the endpoint">
+    Give the harness `mcp_endpoint_url` and a token. Access is checked on every
+    request: the token's subject must be the client itself, or a principal holding
+    the `use` relation on that client. See [Issue MCP access
+    tokens](/guides/mcp/issue-access-tokens).
+  </Step>
+</Steps>
 
 ## Verify
 
@@ -115,7 +117,7 @@ curl -s -X POST "$AGENTAREA_URL/client-mcp/$CLIENT_ID" \
   | jq '.result.tools[].name'
 ```
 
-```
+```text
 "gh__search"
 "gh__create_issue"
 "fs__read_file"
@@ -135,36 +137,52 @@ curl -s -X POST "$AGENTAREA_URL/client-mcp/$CLIENT_ID" \
 
 ## Troubleshooting
 
-**`tools/list` returns an empty array.** Either the client id in the path does
-not exist, or no member resolved. A member whose URL cannot be resolved is
-skipped and logged rather than failing the whole bundle, so one broken instance
-looks like a missing tool rather than an error. Check each member's
-`verification.status` individually.
-
-**"Not authorized for this client".** The token's subject is neither the client
-nor a principal with `use` on it. A workspace API key is not automatically
-authorized for a client bundle.
-
-**Tool names collide.** Two members exposing the same tool name with the same or
-null namespace produce ambiguous entries. Set a distinct `namespace_prefix` on
-each member.
-
-**A tool that exists on the server is missing from the aggregate.** Member tools
-come from each instance's stored snapshot, discovered at its last verification.
-Run `POST /v1/mcp-server-instances/{instance_id}/discover-tools` on the member,
-then list again.
-
-**A member is still exposed after you removed it elsewhere.** Members are only
-ever the client's own attachments. Remove one with
-`DELETE /v1/clients/{client_id}/mcp-instances/{mcp_instance_id}`.
-
-**The endpoint 404s.** `/client-mcp/{client_id}` is a mounted application, not a
-`/v1` route, and it is absent from the OpenAPI spec for that reason. Use the
-`mcp_endpoint_url` from the client response rather than assembling the path from
-the API base by hand.
+<AccordionGroup>
+  <Accordion title="`tools/list` returns an empty array">
+    Either the client id in the path does not exist, or no member resolved. A
+    member whose URL cannot be resolved is skipped and logged rather than
+    failing the whole bundle, so one broken instance looks like a missing tool
+    rather than an error. Check each member's `verification.status`
+    individually.
+  </Accordion>
+  <Accordion title='"Not authorized for this client"'>
+    The token's subject is neither the client nor a principal with `use` on it.
+    A workspace API key is not automatically authorized for a client bundle.
+  </Accordion>
+  <Accordion title="Tool names collide">
+    Two members exposing the same tool name with the same or null namespace
+    produce ambiguous entries. Set a distinct `namespace_prefix` on each member.
+  </Accordion>
+  <Accordion title="A tool that exists on the server is missing from the aggregate">
+    Member tools come from each instance's stored snapshot, discovered at its
+    last verification. Run
+    `POST /v1/mcp-server- instances/{instance_id}/discover-tools` on the member,
+    then list again.
+  </Accordion>
+  <Accordion title="A member is still exposed after you removed it elsewhere">
+    Members are only ever the client's own attachments. Remove one with
+    `DELETE /v1/clients/{client_id}/mcp-instances/{mcp_instance_id}` .
+  </Accordion>
+  <Accordion title="The endpoint 404s">
+    `/client-mcp/{client_id}` is a mounted application, not a `/v1` route, and
+    it is absent from the OpenAPI spec for that reason. Use the
+    `mcp_endpoint_url` from the client response rather than assembling the path
+    from the API base by hand.
+  </Accordion>
+</AccordionGroup>
 
 ## Related
 
-- [Add a hosted MCP server](/guides/mcp/add-a-hosted-server)
-- [Issue MCP access tokens](/guides/mcp/issue-access-tokens)
-- [MCP](/concepts/integration/mcp)
+<Columns cols={2}>
+  <Card title="Add a hosted MCP server" icon="plug" href="/guides/mcp/add-a-hosted-server">
+    Run an MCP server as a managed workload
+  </Card>
+  <Card title="Issue MCP access tokens" icon="plug" href="/guides/mcp/issue-access-tokens">
+    Create, scope, rotate, and revoke the API keys that authenticate calls to
+    MCP endpoints and the
+  </Card>
+  <Card title="MCP" icon="plug" href="/concepts/integration/mcp">
+    What the Model Context Protocol gives an agent, and how AgentArea hosts MCP
+    servers
+  </Card>
+</Columns>

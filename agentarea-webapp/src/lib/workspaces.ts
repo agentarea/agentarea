@@ -1,4 +1,6 @@
 export const WORKSPACE_SLUG_COOKIE = "workspace_slug";
+export const WORKSPACE_REFERENCE_HEADER = "x-agentarea-workspace";
+// Accepted on incoming requests while older callers migrate.
 export const WORKSPACE_SLUG_HEADER = "x-workspace-slug";
 
 export type Workspace = {

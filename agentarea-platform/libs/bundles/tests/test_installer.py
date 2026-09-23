@@ -117,6 +117,35 @@ policies:
 """
 
 
+async def test_an_automation_prompt_becomes_the_task_text():
+    """The bundle schema calls it "task query passed to the agent on each run".
+
+    It used to be written into the trigger's description, which the execution
+    path then picked up because description stood in for a missing task text.
+    With that stand-in gone the prompt has to land where the agent reads it.
+    """
+    inst, deps = _installer()
+    await inst.install(parse_bundle(FULL), {"token": "t"})
+
+    trigger = deps["trigger_service"].created[0]
+    assert trigger.task_parameters["text"] == "go"
+
+
+async def test_a_channel_prompt_becomes_the_task_text():
+    """Same field, same mistake: it was stored under a key nothing reads."""
+    pkg = parse_bundle(
+        'schema_version: "0.1.0"\nname: c\n'
+        "agents: [{key: lead, name: Lead, model: gpt-4o}]\n"
+        "channels:\n"
+        "  - {key: tg, name: TG, type: telegram, agent: lead, prompt: Answer it}\n"
+    )
+    inst, deps = _installer()
+    await inst.install(pkg, {})
+
+    trigger = deps["trigger_service"].created[0]
+    assert trigger.task_parameters["text"] == "Answer it"
+
+
 async def test_policies_install_on_workspace_and_agent():
     inst, deps = _installer()
     res = await inst.install(parse_bundle(POLICIES), {})
@@ -128,9 +157,44 @@ async def test_policies_install_on_workspace_and_agent():
     # workspace cap bound to workspace id; agent deny bound to the created agent id
     subjects = {str(r.subject_type): sid for r, sid in gov.created}
     assert subjects["workspace"] == "w"
-    # message folded into params
+    # The human-readable reason is reported back, never written into params: the
+    # typed param models forbid extras, so folding it in makes the rule fail the
+    # enforceability check that guards this path.
     deny_rule = next(r for r, _ in gov.created if r.effect.value == "deny")
-    assert deny_rule.params.get("message") == "no email"
+    assert "message" not in deny_rule.params
+    deny_entity = next(e for e in res.entities if e.key == "deny")
+    assert "no email" in deny_entity.detail
+
+
+async def test_unenforceable_policy_is_skipped_not_created():
+    # A spend cap the compiler cannot read (`period: day` — it knows month/run
+    # only) would install as a row that silently never enforces, leaving the UI
+    # advertising a cap that does not exist.
+    pkg = parse_bundle(
+        'schema_version: "0.1.0"\nname: p\npolicies:\n'
+        "  - {key: daily, subject: workspace, target: spend, effect: cap, "
+        "params: {amount_usd: 10, period: day}}\n"
+    )
+    inst, deps = _installer()
+    res = await inst.install(pkg, {})
+    entity = next(e for e in res.entities if e.key == "daily")
+    assert entity.action == InstallAction.SKIPPED
+    assert "period" in entity.detail
+    assert deps["governance_service"].created == []
+
+
+async def test_unenforceable_policy_does_not_block_the_rest_of_the_install():
+    pkg = parse_bundle(
+        'schema_version: "0.1.0"\nname: p\n'
+        "agents: [{key: lead, name: Lead, model: gpt-4o}]\npolicies:\n"
+        "  - {key: dead, subject: workspace, target: spend, effect: cap, params: {}}\n"
+        '  - {key: live, subject: lead, target: "tool:send_email", effect: deny}\n'
+    )
+    inst, deps = _installer()
+    res = await inst.install(pkg, {})
+    actions = {e.key: e.action for e in res.entities if e.kind.value == "policy"}
+    assert actions == {"dead": InstallAction.SKIPPED, "live": InstallAction.CREATED}
+    assert len(deps["governance_service"].created) == 1
 
 
 async def test_policy_idempotent_when_rule_exists():

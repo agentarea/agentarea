@@ -5,7 +5,12 @@ import {
   installBrowserSession,
   type AuthedUser,
 } from "./helpers/real-stack";
-import { deleteAgent, gotoCommitted, runRealStack, seedAgent } from "./helpers/scenarios";
+import {
+  deleteAgent,
+  gotoCommitted,
+  runRealStack,
+  seedAgent,
+} from "./helpers/scenarios";
 
 test.describe("Scenario 13 MP - inspect audit and dashboard activity", () => {
   test.skip(!runRealStack, "Set PLAYWRIGHT_REAL_STACK=1");
@@ -34,13 +39,24 @@ test.describe("Scenario 13 MP - inspect audit and dashboard activity", () => {
     // the agent -> an `agent.create` event), and it is DURABLE: still present
     // after a reload (not stream-only). This is the actual FR being verified.
     await gotoCommitted(page, "/settings/audit");
-    await expect(page.getByText("agent.create").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("agent.create").first()).toBeVisible({
+      timeout: 15_000,
+    });
     await page.reload({ waitUntil: "commit" });
-    await expect(page.getByText("agent.create").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("agent.create").first()).toBeVisible({
+      timeout: 15_000,
+    });
 
     await gotoCommitted(page, "/dashboard");
-    await expect(page.getByText("Dashboard").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Dashboard").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(/^\$[\d,.]+$/).first()).toBeVisible({
+      timeout: 15_000,
+    });
     await gotoCommitted(page, "/settings/audit");
-    await expect(page.getByText("agent.create").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("agent.create").first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 });

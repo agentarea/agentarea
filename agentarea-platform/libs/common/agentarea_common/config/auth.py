@@ -20,6 +20,9 @@ class AuthSettings(BaseAppSettings):
     KRATOS_JWKS_B64: str = ""
     KRATOS_ISSUER: str = "http://localhost:4433"
     KRATOS_AUDIENCE: str = "agentarea-api"
+    # Admin API, used to resolve member ids into names/emails. Blanking it
+    # leaves members rendered as raw ids.
+    KRATOS_ADMIN_URL: str = "http://kratos:4434"
 
 
 @lru_cache

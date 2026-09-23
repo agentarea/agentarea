@@ -9,6 +9,7 @@ import type {
   SandboxSummary,
 } from "@/api/client/types.gen";
 import EmptyState from "@/components/EmptyState";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews";
 import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
@@ -84,7 +85,7 @@ export default function SandboxesClient({
   if (error && !inventory) {
     return (
       <div className="p-6">
-        <EmptyState
+        <RetryEmptyState
           title={t("unavailableTitle")}
           description={t("unavailableDescription")}
           icons={[Boxes, ShieldCheck, HardDrive]}
@@ -164,6 +165,7 @@ export default function SandboxesClient({
             title={t("emptyTitle")}
             description={t("emptyDescription")}
             icons={[Boxes, Cpu, ShieldCheck]}
+            action={{ label: t("emptyAction"), href: "/agents" }}
           />
         }
         cardContent={(sandbox) => (

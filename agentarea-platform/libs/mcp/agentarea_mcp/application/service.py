@@ -623,6 +623,7 @@ class MCPServerInstanceService:
         patch = payload.model_dump(exclude_unset=True)
 
         update_kwargs: dict[str, Any] = {}
+        instance: MCPServerInstance | None = None
         if "name" in patch:
             update_kwargs["name"] = patch["name"]
         if "description" in patch:
@@ -635,10 +636,35 @@ class MCPServerInstanceService:
                 cleaned_spec, secret_env_vars = await self._extract_secrets_from_spec(
                     json_spec, instance.server_spec_id
                 )
+                # Transport belongs to the original connection and is immutable
+                # through this DTO. Preserve it while replacing the editable
+                # instance configuration; otherwise every legitimate PATCH drops
+                # ``type`` (and URL endpoints) merely because callers are forbidden
+                # from sending those fields back.
+                for field in INSTANCE_TRANSPORT_FIELDS:
+                    if field in (instance.json_spec or {}):
+                        cleaned_spec.setdefault(field, instance.json_spec[field])
                 masked_placeholders = {SECRET_MASKED_VALUE, "\u2022" * 6}
                 real_secrets = {
                     k: v for k, v in secret_env_vars.items() if v not in masked_placeholders
                 }
+                runtime_config_changed = cleaned_spec != (instance.json_spec or {}) or bool(
+                    real_secrets
+                )
+                if runtime_config_changed:
+                    transport_spec = await self._get_transport_spec_for_instance(instance)
+                    if transport_spec.get("type", "docker") in (
+                        "docker",
+                        "command",
+                        "kubernetes",
+                    ):
+                        # A running MCP process cannot observe changed environment,
+                        # command, or rotated secrets. Retire it before persisting
+                        # the new desired state; the next demand then cold-starts
+                        # from that state. If retirement fails, no configuration or
+                        # secret mutation has happened and the old runtime remains
+                        # an honest representation of the stored configuration.
+                        await self._retire_runtime_before_mutation(instance.id)
                 if real_secrets:
                     await self.env_service.set_instance_environment(id, real_secrets)
                     logger.info(
@@ -747,6 +773,13 @@ class MCPServerInstanceService:
         """
         verification_payload = await self.verify_instance(instance_id)
         instance = await self.repository.get_by_id(instance_id)
+        if instance is not None:
+            # verify() persists discovered tools in its own short-lived session.
+            # get_by_id() may therefore return the already-loaded identity from
+            # this service's session with its pre-verification tools collection.
+            # Refresh only that column so this response reflects the discovery
+            # which just completed, rather than requiring a second HTTP request.
+            await self.repository.session.refresh(instance, attribute_names=["tools"])
         tools = (instance.tools if instance else None) or []
         return {"tools": tools, "verification": verification_payload}
 
@@ -805,7 +838,7 @@ class MCPServerInstanceService:
 
         transport_spec = await self._get_transport_spec_for_instance(instance)
         if transport_spec.get("type", "docker") in ("docker", "command", "kubernetes"):
-            await self._retire_runtime_before_delete(instance.id)
+            await self._retire_runtime_before_mutation(instance.id)
 
         deleted = await self.repository.delete(id)
         if deleted:
@@ -814,7 +847,7 @@ class MCPServerInstanceService:
             await self.event_broker.publish(MCPServerInstanceDeleted(instance_id=instance.id))
         return deleted
 
-    async def _retire_runtime_before_delete(self, instance_id: UUID) -> None:
+    async def _retire_runtime_before_mutation(self, instance_id: UUID) -> None:
         settings = get_settings().mcp
         url = settings.manager_retire_url(instance_id)
         headers = settings.manager_gateway_headers()

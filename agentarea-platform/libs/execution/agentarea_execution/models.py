@@ -3,6 +3,7 @@
 Integrates with existing AgentArea domain models and uses proper UUID types.
 """
 
+from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Any, Literal
 from uuid import UUID
@@ -22,6 +23,15 @@ class ResolvedModelInfo(BaseModel):
     provider_type: str
     model_name: str
     api_key_secret: str | None = None  # secret manager key name, not the actual key
+    # Whose credentials this call spends. None = the tenant's own key; "platform" =
+    # the deployment operator's, in which case api_key_secret names a platform
+    # credential reference rather than a workspace secret.
+    #
+    # It rides with the resolved model rather than being looked up again later
+    # because two very different decisions depend on it — which credential store to
+    # read, and whether an unmetered run is spending someone else's money — and
+    # resolving it twice is how those two come to disagree.
+    managed_by: str | None = None
     endpoint_url: str | None = None
     context_window: int = Field(gt=0)
     max_output_tokens: int | None = Field(
@@ -41,6 +51,10 @@ class ResolveModelRequest(BaseModel):
     model_id: str
     workspace_id: str
     user_id: str | None = None
+    # Principal the activity runs as. Optional only so Temporal can still
+    # deserialize payloads recorded before this field existed; the activity
+    # raises when it is absent rather than inventing a principal.
+    user_context_data: dict[str, Any] | None = None
 
 
 class WorkflowCommand(BaseModel):
@@ -57,6 +71,11 @@ class ChangeModelPayload(BaseModel):
     provider_type: str
     model_name: str
     api_key_secret: str | None = None
+    # Carried for the same reason as on ResolvedModelInfo: switching model mid-run
+    # can switch whose credentials the rest of the run spends, and a payload that
+    # omitted this would silently leave the new model resolving against the old
+    # model's credential store.
+    managed_by: str | None = None
     endpoint_url: str | None = None
     context_window: int = Field(gt=0)
     max_output_tokens: int | None = Field(default=None, gt=0)
@@ -224,6 +243,8 @@ class AgentConfigRequest(BaseModel):
     override_model: str | None = None
     # Set so the resolved config hash can be recorded against the run.
     task_id: UUID | None = None
+    # Resource selections apply to this run without changing the saved agent.
+    task_parameters: dict[str, Any] = Field(default_factory=dict)
 
 
 class SkillInfo(BaseModel):
@@ -326,6 +347,7 @@ class ArtifactValidationRequest(BaseModel):
     task_id: str
     workflow_id: str
     declared_paths: list[str] = Field(default_factory=list, max_length=1000)
+    user_context_data: dict[str, Any] | None = None
 
 
 class ArtifactValidationResult(BaseModel):
@@ -367,6 +389,8 @@ class ToolDiscoveryRequest(BaseModel):
 
     agent_id: UUID
     user_context_data: dict[str, Any]
+    # None preserves legacy discovery; [] is an explicitly empty run config.
+    tools: list[dict[str, Any]] | None = None
 
 
 class ToolDefinition(BaseModel):
@@ -471,6 +495,7 @@ class MCPToolRequest(BaseModel):
     cost_used: float | None = None
     tokens_used: int | None = None
     service_cost_used: float | None = None
+    user_context_data: dict[str, Any] | None = None
 
 
 class MCPToolResult(BaseModel):
@@ -555,6 +580,7 @@ class UpdateTaskStatusRequest(BaseModel):
     workspace_id: str
     total_cost: Money | None = None
     own_cost: Money | None = None
+    user_context_data: dict[str, Any] | None = None
 
 
 class UpdateTaskStatusResult(BaseModel):
@@ -570,6 +596,7 @@ class UpdateTaskGovernanceSnapshotRequest(BaseModel):
     task_id: str
     workspace_id: str
     governance_snapshot: dict[str, Any]
+    user_context_data: dict[str, Any] | None = None
 
 
 class UpdateTaskGovernanceSnapshotResult(BaseModel):
@@ -610,15 +637,36 @@ class ExecuteTriggerRequest(BaseModel):
     execution_data: dict[str, Any] = Field(default_factory=dict)
 
 
+class TriggerOutcome(StrEnum):
+    """Outcome of a trigger execution activity.
+
+    SUCCESS means the trigger produced a task. A trigger that fired but created
+    nothing is FAILED, not SUCCESS — see ExecuteTriggerResult.error.
+    """
+
+    SUCCESS = "success"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+class TriggerSkipReason(StrEnum):
+    """Why a trigger fired but was intentionally not executed."""
+
+    TRIGGER_INACTIVE = "trigger_inactive"
+    CONDITIONS_NOT_MET = "conditions_not_met"
+    NO_NEW_DATA = "no_new_data"
+
+
 class ExecuteTriggerResult(BaseModel):
     """Trigger execution result."""
 
     trigger_id: UUID
-    status: str
+    status: TriggerOutcome
     task_id: UUID | None = None
     execution_id: UUID | None = None
     execution_time_ms: int = 0
-    reason: str | None = None
+    reason: TriggerSkipReason | None = None
+    error: str | None = None
     trigger_data: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -685,12 +733,19 @@ class CreateTaskFromTriggerRequest(BaseModel):
     execution_data: dict[str, Any] = Field(default_factory=dict)
 
 
+class TaskCreationOutcome(StrEnum):
+    """Outcome of creating a task from a trigger."""
+
+    CREATED = "created"
+    FAILED = "failed"
+
+
 class CreateTaskFromTriggerResult(BaseModel):
     """Create task from trigger result."""
 
     task_id: UUID | None = None
     trigger_id: UUID
-    status: str
+    status: TaskCreationOutcome
     task_parameters: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
 
@@ -743,6 +798,7 @@ class MaterializeSkillFilesRequest(BaseModel):
     workflow_id: str | None = None
     workspace_id: str | None = None
     task_id: str | None = None
+    user_context_data: dict[str, Any] | None = None
 
 
 class MaterializeSkillFilesResult(BaseModel):

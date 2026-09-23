@@ -325,6 +325,23 @@ backend:
   enabled: true
   replicaCount: 1
 
+  # -- Uvicorn worker processes per pod. One process is one event loop, so one
+  # pod serves about one CPU core's worth of Python however large its CPU limit
+  # is. Prefer replicas over workers -- a pool inside the pod hides a stuck
+  # worker from the probes, which poll the pod, not the process. Raise this only
+  # when a deliberately larger CPU limit would otherwise go unused.
+  workers: 1
+
+  # -- Seconds the pod keeps serving after it is marked for deletion, covering
+  # the gap before its removal from the Service endpoints has propagated.
+  preStopDelay: 5
+  # -- Seconds uvicorn then waits for open connections to finish. Must be
+  # finite: the API serves SSE, and those connections never close on their own.
+  shutdownTimeout: 20
+  # -- Total budget the kubelet allows for the two above before SIGKILL. Keep it
+  # above preStopDelay + shutdownTimeout, or draining is cut short.
+  terminationGracePeriodSeconds: 30
+
   image:
     repository: agentarea/agentarea-api
     tag: "latest"
@@ -1070,9 +1087,12 @@ jobs:
 registryReconcile:
   enabled: true
   # Each entry needs `name` + `source_url`; the catalog type is auto-detected
-  # from the fetched payload. Skills are intentionally NOT seeded by default
-  # (the public skill catalog is ~123k entries across 25 shards); add skill
-  # shards explicitly if you want them.
+  # from the fetched payload. Optional `recommendation_priority` (default 100,
+  # lower first) weights a whole source in the /explore "Recommended" order --
+  # raise it for a bulk/community mirror so its entries land after the curated
+  # catalog instead of interleaving with it. Seed the small official/known-good
+  # skills catalog; the ~123k community mirror remains opt-in and must not
+  # drive first-run picks.
   registries:
     - name: system-llm-providers
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json
@@ -1080,6 +1100,8 @@ registryReconcile:
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json
     - name: system-mcp-servers
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json
+    - name: system-skills-curated
+      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json
 
 # Ory Kratos Identity Server
 # Ory Keto (ReBAC) — powers Govern -> Policies -> Access (the relationship graph).

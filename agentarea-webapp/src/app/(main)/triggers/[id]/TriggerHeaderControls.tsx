@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Pencil, Power, PowerOff } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { usePathname, useRouter } from "next/navigation";
+import { Play, Power, PowerOff } from "lucide-react";
 import { toast } from "sonner";
+import { useFormSubmittingState } from "@/app/(main)/agents/shared/useFormSubmittingState";
 import DeleteButton from "@/components/DeleteButton/DeleteButton";
 import { Button } from "@/components/ui/button";
 import {
   deleteTriggerAction,
   disableTriggerAction,
   enableTriggerAction,
+  runTriggerNowAction,
 } from "./actions";
 
 export default function TriggerHeaderControls({
@@ -22,8 +25,19 @@ export default function TriggerHeaderControls({
   isActive: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const tCreate = useTranslations("TriggersPage.create");
+  const t = useTranslations("TriggersPage.detail");
+  // The form only lives on the edit route; the overview, executions and
+  // metrics tabs share this header and have nothing to submit.
+  const isEditing = pathname === `/triggers/${triggerId}/edit`;
+  const isSaving = useFormSubmittingState("create-trigger-form");
   const [isToggling, setIsToggling] = useState(false);
   const [active, setActive] = useState(isActive);
+  const [isRunning, setIsRunning] = useState(false);
+  // Why a run produced no task. Shown next to the button rather than in a toast:
+  // it is the answer to what was just asked, and it is worth re-reading.
+  const [skipped, setSkipped] = useState<string | null>(null);
   const handleDelete = async (id: string) => {
     const result = await deleteTriggerAction(id);
     return result.error
@@ -50,8 +64,49 @@ export default function TriggerHeaderControls({
     }
   };
 
+  const handleRunNow = async () => {
+    setIsRunning(true);
+    setSkipped(null);
+    try {
+      const result = await runTriggerNowAction(triggerId);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.taskId) {
+        // The point of the button is watching the run, so go to it.
+        router.push(`/tasks/${result.taskId}`);
+        return;
+      }
+      setSkipped(result.reason ?? t("runSkipped"));
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-2 py-1 sm:flex-nowrap">
+      {skipped && (
+        <span className="text-xs text-muted-foreground" role="status">
+          {skipped}
+        </span>
+      )}
+      {/* Primary action of the page, in the same slot and shape as the agent
+          header's "New task" — except on the edit form, where saving is. */}
+      <Button
+        size={isEditing ? "xs" : "sm"}
+        variant={isEditing ? "outline" : "default"}
+        className={
+          isEditing ? undefined : "h-7 gap-1.5 px-3 text-[12.5px] font-semibold"
+        }
+        type="button"
+        onClick={handleRunNow}
+        disabled={isRunning}
+        isLoading={isRunning}
+      >
+        <Play strokeWidth={2} />
+        {t("runNow")}
+      </Button>
       <Button
         size="xs"
         variant="outline"
@@ -72,15 +127,17 @@ export default function TriggerHeaderControls({
           </>
         )}
       </Button>
-      <Button
-        size="xs"
-        variant="outline"
-        type="button"
-        onClick={() => router.push(`/triggers/${triggerId}/edit`)}
-      >
-        <Pencil />
-        Edit
-      </Button>
+      {isEditing && (
+        <Button
+          size="xs"
+          type="submit"
+          form="create-trigger-form"
+          isLoading={isSaving}
+          disabled={isSaving}
+        >
+          {tCreate("updateButton")}
+        </Button>
+      )}
       <DeleteButton
         size="xs"
         itemId={triggerId}

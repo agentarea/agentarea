@@ -1,4 +1,7 @@
-# AgentArea Public Roadmap
+---
+title: Roadmap
+description: "What is shipped, what is in progress, and what is planned next."
+---
 
 <Info>
 This roadmap outlines the planned features and improvements for AgentArea. We welcome community feedback and contributions to help shape the future of the platform.
@@ -8,11 +11,13 @@ This roadmap outlines the planned features and improvements for AgentArea. We we
 
 <CardGroup cols={2}>
   <Card title="Agentic Networks & Governance" icon="shield">
-    Building governed agentic networks with VPC-inspired architecture, advanced agent-to-agent communication, and enterprise-grade orchestration
+    Building governed agentic networks with VPC-inspired architecture, advanced
+    agent-to-agent communication, and enterprise-grade orchestration
   </Card>
 
   <Card title="MCP OAuth & Ecosystem" icon="code">
-    MCP OAuth authorization flows, compound MCP servers, access token management, and expanded third-party integrations
+    MCP OAuth authorization flows, compound MCP servers, access token
+    management, and expanded third-party integrations
   </Card>
 </CardGroup>
 
@@ -268,18 +273,15 @@ What other approaches were considered?
 
 <CardGroup cols={3}>
   <Card title="Major Releases" icon="rocket">
-    **Quarterly**
-    New features and capabilities
+    **Quarterly** New features and capabilities
   </Card>
 
   <Card title="Minor Releases" icon="zap">
-    **Monthly**
-    Enhancements and improvements
+    **Monthly** Enhancements and improvements
   </Card>
 
   <Card title="Patch Releases" icon="wrench">
-    **As Needed**
-    Bug fixes and security updates
+    **As Needed** Bug fixes and security updates
   </Card>
 </CardGroup>
 

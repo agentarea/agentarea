@@ -1,7 +1,7 @@
 ---
 title: The file model
 type: concept
-summary: An agent sees three file surfaces — the organization's context store, its own task workspace, and the ephemeral sandbox disk — each with different scope and different write rights.
+description: "An agent sees three file surfaces — the organization's context store, its own task workspace."
 prerequisites:
   - /concepts/sandbox/sessions
 related:
@@ -11,8 +11,6 @@ related:
   - /concepts/governance/authorization-basics
 last_updated: 2026-07-29
 ---
-
-# The file model
 
 An agent reads and writes files across three surfaces, and they are not
 interchangeable. One holds the organization's durable knowledge and the agent may
@@ -67,7 +65,7 @@ separate, explicit capability, so the sandbox never mutates it as a side effect.
 **The task workspace is content-addressed and scoped by both workspace and
 task.** Objects live under a key built from the workspace ID and task ID:
 
-```
+```text
 <prefix>/workspaces/<workspace_id>/tasks/<task_id>/objects/<sha256>
 <prefix>/workspaces/<workspace_id>/tasks/<task_id>/manifests/<generation>-<sha256>.json
 <prefix>/workspaces/<workspace_id>/tasks/<task_id>/current.json
@@ -192,8 +190,17 @@ enforcement point.
 
 ## Related
 
-- [Sessions](/concepts/sandbox/sessions) — when the sandbox disk disappears
-- [Artifacts](/concepts/execution/artifacts) — how task output is collected and served
-- [Isolation](/concepts/sandbox/isolation) — the boundary around the filesystem
-- [Authorization basics](/concepts/governance/authorization-basics) — how workspace
-  scoping is enforced elsewhere
+<Columns cols={2}>
+  <Card title="Sessions" icon="box" href="/concepts/sandbox/sessions">
+    When the sandbox disk disappears
+  </Card>
+  <Card title="Artifacts" icon="diagram-project" href="/concepts/execution/artifacts">
+    How task output is collected and served
+  </Card>
+  <Card title="Isolation" icon="box" href="/concepts/sandbox/isolation">
+    The boundary around the filesystem
+  </Card>
+  <Card title="Authorization basics" icon="scale-balanced" href="/concepts/governance/authorization-basics">
+    How workspace scoping is enforced elsewhere
+  </Card>
+</Columns>

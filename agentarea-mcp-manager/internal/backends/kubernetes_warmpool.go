@@ -9,6 +9,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
+	"github.com/agentarea/mcp-manager/internal/usage"
 	"github.com/agentarea/mcp-manager/internal/warmpool"
 	"github.com/agentarea/mcp-manager/internal/workspace"
 	corev1 "k8s.io/api/core/v1"
@@ -26,9 +27,16 @@ func (k *KubernetesBackend) RuntimeManifest(ctx context.Context) (*runtimeinfo.M
 	return client.RuntimeManifestInPod(ctx, pod)
 }
 
+// SetUsageRecorder configures lifecycle facts for all task-pod clients.
+func (k *KubernetesBackend) SetUsageRecorder(recorder usage.Recorder) {
+	k.usageRecorder = recorder
+}
+
 // GetWarmPoolClient returns a warm pool client for the current namespace.
 func (k *KubernetesBackend) GetWarmPoolClient() *warmpool.Client {
-	return warmpool.NewClient(k.clientset, k.k8sConfig.Namespace, k.taskLeaseTTL)
+	client := warmpool.NewClient(k.clientset, k.k8sConfig.Namespace, k.taskLeaseTTL)
+	client.SetUsageRecorder(k.usageRecorder)
+	return client
 }
 
 // ExecuteSandbox runs a sandbox script on the warm-pool data plane. TaskID

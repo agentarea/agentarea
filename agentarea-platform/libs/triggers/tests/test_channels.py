@@ -1,6 +1,7 @@
 """Tests for channel adapters."""
 
 import json
+import logging
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -88,17 +89,27 @@ class TestTelegramAdapter:
             assert kwargs["json"]["text"] == "Hello"
 
     @pytest.mark.asyncio
-    async def test_send_no_secret_key_logs_error(self):
-        """Without secret_key, send logs error and returns."""
+    async def test_send_no_secret_key_logs_error(self, caplog):
+        """Without a resolvable bot token, send logs and delivers nothing."""
         adapter = TelegramAdapter()
         channel_config = {"chat_id": "12345"}
-        # Should not raise, just log
-        await adapter.send(channel_config, "Hello")
+
+        with patch("httpx.AsyncClient") as mock_client, caplog.at_level(logging.ERROR):
+            await adapter.send(channel_config, "Hello")
+
+        assert "No Telegram bot token" in caplog.text
+        mock_client.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_send_no_chat_id_logs_error(self, adapter):
+    async def test_send_no_chat_id_logs_error(self, adapter, caplog):
+        """A config with no chat_id has nowhere to deliver; say so, send nothing."""
         channel_config = {"type": "telegram", "trigger_id": "test-trigger"}
-        await adapter.send(channel_config, "Hello")
+
+        with patch("httpx.AsyncClient") as mock_client, caplog.at_level(logging.ERROR):
+            await adapter.send(channel_config, "Hello")
+
+        assert "No chat_id" in caplog.text
+        mock_client.assert_not_called()
 
     def test_escape_md(self):
         assert _escape_md("hello_world") == "hello\\_world"
@@ -340,6 +351,56 @@ class TestEmailAdapter:
         ):
             with pytest.raises(FatalError, match="authentication"):
                 await adapter.send({"trigger_id": "t1", "reply_to": "u@x.io"}, "<p>hi</p>")
+
+    # --- threading: the reply belongs in the conversation it answers ----------
+
+    async def _sent_message(self, creds, channel_config):
+        sm = AsyncMock()
+        sm.get_secret = AsyncMock(return_value=creds)
+        adapter = EmailAdapter(secret_manager=sm)
+        with patch("agentarea_triggers.channels.email.aiosmtplib.send", new=AsyncMock()) as send:
+            await adapter.send(channel_config, "<p>hi</p>")
+        return send.await_args.args[0], sm
+
+    @pytest.mark.asyncio
+    async def test_reply_references_the_whole_chain(self, creds):
+        """Mail clients thread on References; sending only the parent breaks it."""
+        message, _ = await self._sent_message(
+            creds,
+            {
+                "trigger_id": "t1",
+                "reply_to": "u@x.io",
+                "message_id": "<second@x>",
+                "references": ["<root@x>", "<second@x>"],
+            },
+        )
+
+        assert message["In-Reply-To"] == "<second@x>"
+        assert message["References"] == "<root@x> <second@x>"
+
+    @pytest.mark.asyncio
+    async def test_a_first_reply_still_threads_on_the_message_id(self, creds):
+        message, _ = await self._sent_message(
+            creds,
+            {"trigger_id": "t1", "reply_to": "u@x.io", "message_id": "<root@x>"},
+        )
+
+        assert message["References"] == "<root@x>"
+
+    @pytest.mark.asyncio
+    async def test_credentials_follow_the_channel_that_received_the_mail(self, creds):
+        """A polled mailbox keeps one credential blob for both IMAP and SMTP."""
+        _, sm = await self._sent_message(
+            creds,
+            {
+                "trigger_id": "t1",
+                "reply_to": "u@x.io",
+                "type": "email",
+                "credential_type": "imap",
+            },
+        )
+
+        sm.get_secret.assert_awaited_once_with("channel_cred:imap:t1")
 
 
 class TestAdapterRegistry:

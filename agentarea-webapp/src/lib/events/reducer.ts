@@ -22,9 +22,19 @@ import {
   TERMINAL_TYPES,
 } from "./contract";
 
+const RUN_BOUNDARY_TYPES = new Set(["task.started", TASK_CONTINUED]);
+
 export interface TimelineItem {
   eventType: string;
   data: EventData;
+}
+
+export interface CompletedRun {
+  id: string;
+  partIds: string[];
+  terminalType: string;
+  terminalMessage: string | null;
+  terminalAnswer: string | null;
 }
 
 export type TaskStatus =
@@ -47,6 +57,8 @@ export interface EventState {
   status: TaskStatus;
   /** User-facing message from the last terminal event, else null. */
   terminalMessage: string | null;
+  /** Snapshots of work completed by authoritative task.* terminal events. */
+  completedRuns: CompletedRun[];
 }
 
 export function initialState(): EventState {
@@ -57,6 +69,7 @@ export function initialState(): EventState {
     timeline: [],
     status: "running",
     terminalMessage: null,
+    completedRuns: [],
   };
 }
 
@@ -148,11 +161,46 @@ export function applyEvent(state: EventState, event: EventInput): EventState {
     { eventType: canonical, data: event.data },
   ];
   if (TERMINAL_TYPES.has(canonical)) {
+    const completedIds = new Set(
+      state.completedRuns.flatMap((run) => run.partIds)
+    );
+    const runParts = state.parts.filter(
+      (part) => !completedIds.has(part.partId)
+    );
+    const hasNewParts = runParts.length > 0;
+    let lastTerminalIndex = -1;
+    for (let index = state.timeline.length - 1; index >= 0; index -= 1) {
+      if (TERMINAL_TYPES.has(state.timeline[index].eventType)) {
+        lastTerminalIndex = index;
+        break;
+      }
+    }
+    const hasNewRunBoundary = state.timeline
+      .slice(lastTerminalIndex + 1)
+      .some((item) => RUN_BOUNDARY_TYPES.has(item.eventType));
+    const completedRun: CompletedRun = {
+      id: `run-${state.completedRuns.length + 1}`,
+      partIds: runParts.map((part) => part.partId),
+      terminalType: canonical,
+      terminalMessage: terminalMessageFrom(canonical, event.data),
+      terminalAnswer:
+        typeof event.data.final_response === "string"
+          ? event.data.final_response
+          : typeof event.data.result === "string"
+            ? event.data.result
+            : null,
+    };
     return {
       ...state,
       timeline,
       status: statusForTerminal(canonical),
       terminalMessage: terminalMessageFrom(canonical, event.data),
+      completedRuns:
+        hasNewParts ||
+        (Boolean(completedRun.terminalAnswer) &&
+          (state.completedRuns.length === 0 || hasNewRunBoundary))
+          ? [...state.completedRuns, completedRun]
+          : state.completedRuns,
     };
   }
   if (canonical === TASK_AWAITING_CONTINUATION) {

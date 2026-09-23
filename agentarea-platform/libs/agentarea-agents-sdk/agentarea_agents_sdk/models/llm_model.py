@@ -271,20 +271,20 @@ class LLMModel:
         return None
 
     def _supports_direct_streaming(self) -> bool:
-        """Check if this provider supports direct OpenAI-compatible streaming.
+        """Whether we can stream from the endpoint ourselves instead of via LiteLLM.
 
-        We use direct streaming (bypassing LiteLLM) for providers with
-        OpenAI-compatible APIs to properly capture reasoning/thinking content
-        that LiteLLM drops during streaming.
+        The only requirement is an explicit endpoint: a provider that gave us
+        a base URL is one we can speak OpenAI-compatible HTTP to directly,
+        which is how reasoning/thinking deltas survive — LiteLLM drops them
+        while streaming.
+
+        The provider's *name* says nothing about this. There used to be a
+        branch matching one vendor by substring, but ``_get_base_url()``
+        returns a URL only when ``endpoint_url`` is set, so reaching that
+        branch already implied the answer was yes; it could never change the
+        result.
         """
-        if not self._get_base_url():
-            return False
-        # Ollama and any provider with a custom endpoint (OpenAI-compatible)
-        if self.provider_type and "ollama" in self.provider_type:
-            return True
-        if self.endpoint_url:
-            return True
-        return False
+        return self._get_base_url() is not None
 
     async def _stream_openai_compatible(self, request: LLMRequest) -> AsyncIterator[LLMResponse]:
         """Stream from an OpenAI-compatible API directly via httpx.
@@ -435,6 +435,16 @@ class LLMModel:
         # Handle tool calls
         tool_calls = None
         if hasattr(message, "tool_calls") and message.tool_calls:
+            # Narrowed on `type`: openai's union gained
+            # ChatCompletionMessageCustomToolCall, which carries no `function`.
+            # We never advertise custom tools, so one arriving means the provider
+            # invented it — say so rather than dropping it from the transcript,
+            # where it would look like the model simply never called anything.
+            for tool_call in message.tool_calls:
+                if tool_call.type != "function":
+                    logger.warning(
+                        "Ignoring unsupported tool call type %r from the model", tool_call.type
+                    )
             tool_calls = [
                 {
                     "id": tool_call.id,
@@ -445,6 +455,7 @@ class LLMModel:
                     },
                 }
                 for tool_call in message.tool_calls
+                if tool_call.type == "function"
             ]
         elif hasattr(message, "function_call") and getattr(message, "function_call"):
             # Fallback for providers that use function_call instead of tool_calls
@@ -490,6 +501,12 @@ class LLMModel:
             tool_calls=tool_calls,
             cost=cost,
             usage=usage,
+            reasoning_content=(
+                getattr(message, "reasoning_content", None)
+                or getattr(message, "reasoning", None)
+                or getattr(message, "thinking", None)
+                or ""
+            ),
         )
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
@@ -804,6 +821,11 @@ class LLMModel:
             # Build parameters for streaming
             params = self._build_litellm_params(request)
             params["stream"] = True
+            # OpenAI-compatible providers emit token usage in a trailing,
+            # choices-less chunk only when explicitly requested. Without it,
+            # governed workflows must fail closed because neither token nor
+            # cost limits can be enforced.
+            params["stream_options"] = {"include_usage": True}
 
             logger.info(f"Starting streaming LLM call for model {params['model']}")
 

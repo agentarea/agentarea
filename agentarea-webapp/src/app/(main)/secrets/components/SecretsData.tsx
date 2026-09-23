@@ -1,6 +1,7 @@
-import EmptyState from "@/components/EmptyState";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { listSecrets } from "@/lib/api";
 import { CreateSecretDialog } from "./CreateSecretDialog";
+import { SecretsEmptyState } from "./SecretsEmptyState";
 import { SecretsTable, type Secret } from "./SecretsTable";
 
 export async function SecretsData() {
@@ -22,7 +23,7 @@ export async function SecretsData() {
 
   if (error) {
     return (
-      <EmptyState
+      <RetryEmptyState
         title="Couldn't load secrets"
         description={error}
         iconsType="mcp"
@@ -38,11 +39,7 @@ export async function SecretsData() {
       </div>
 
       {secrets.length === 0 ? (
-        <EmptyState
-          title="No secrets yet"
-          description="Nothing here holds a credential. Create a secret to reuse it across LLM providers and API connections, instead of pasting the same key into each one."
-          iconsType="mcp"
-        />
+        <SecretsEmptyState />
       ) : (
         <SecretsTable secrets={secrets} />
       )}

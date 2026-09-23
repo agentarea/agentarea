@@ -1,19 +1,22 @@
 "use client";
 
 import * as React from "react";
-import { Github, SquarePen } from "lucide-react";
+import { useTranslations } from "next-intl";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Github, Inbox, SquarePen } from "lucide-react";
 import {
   SidebarFooter,
   SidebarHeader,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { QUICK_TASK_OPEN_EVENT } from "@/components/QuickTask/QuickTaskDialog";
 import { APP_VERSION } from "@/lib/app-version";
 import { cn } from "@/lib/utils";
 import type { Workspace } from "@/lib/workspaces";
@@ -70,11 +73,10 @@ export function AppSidebarContent({
   activeWorkspaceSlug: string | null;
 }) {
   const { open } = useSidebar();
-
-  const openQuickTask = React.useCallback(() => {
-    if (typeof window === "undefined") return;
-    window.dispatchEvent(new CustomEvent(QUICK_TASK_OPEN_EVENT));
-  }, []);
+  const t = useTranslations("Sidebar");
+  const pathname = usePathname();
+  const inboxActive = pathname === "/inbox" || pathname.startsWith("/inbox/");
+  const homeActive = pathname === "/workplace";
 
   return (
     <>
@@ -83,34 +85,60 @@ export function AppSidebarContent({
           workspaces={workspaces}
           activeSlug={activeWorkspaceSlug}
         />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn(
-                "group h-8 w-full justify-start gap-2 rounded-md px-2 text-[13px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                !open && "justify-center px-0"
-              )}
-              onClick={openQuickTask}
-            >
-              <SquarePen className="shrink-0 text-muted-foreground/80 group-hover:text-foreground" />
-              {open && (
-                <>
-                  <span className="flex-1 truncate text-left">New task</span>
-                  <kbd className="pointer-events-none ml-auto hidden h-[18px] select-none items-center gap-0.5 rounded border border-border/60 bg-muted/40 px-1 font-mono text-[10px] font-medium text-muted-foreground/70 sm:flex">
-                    <span className="text-[11px] leading-none">&#8984;</span>J
-                  </kbd>
-                </>
-              )}
-            </Button>
-          </TooltipTrigger>
-          {!open && (
-            <TooltipContent side="right">
-              New task <kbd className="ml-1 text-[10px]">&#8984;J</kbd>
+        <div className={cn("flex items-center gap-1", !open && "flex-col")}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "group h-8 min-w-0 flex-1 justify-start gap-2 rounded-md px-2 text-[13px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  !open && "w-full justify-center px-0",
+                  homeActive && "bg-muted/60 text-foreground"
+                )}
+              >
+                <Link
+                  href="/workplace"
+                  aria-current={homeActive ? "page" : undefined}
+                >
+                  <SquarePen className="shrink-0 text-muted-foreground/80 group-hover:text-foreground" />
+                  {open && (
+                    <span className="flex-1 truncate text-left">New task</span>
+                  )}
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            {/* The shortcut lives here rather than inline: on the button it
+                reads as a second control competing with the label. */}
+            <TooltipContent side="right" className="flex items-center gap-1.5">
+              New task
+              <Kbd keys={["⌘", "J"]} />
             </TooltipContent>
-          )}
-        </Tooltip>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "group h-8 w-8 shrink-0 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  inboxActive && "bg-muted/60 text-foreground"
+                )}
+              >
+                <Link
+                  href="/inbox"
+                  aria-label={t("inbox")}
+                  aria-current={inboxActive ? "page" : undefined}
+                >
+                  <Inbox className="shrink-0 text-muted-foreground/80 group-hover:text-foreground" />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{t("inbox")}</TooltipContent>
+          </Tooltip>
+        </div>
       </SidebarHeader>
       <SidebarNavScroll>
         <NavMain sections={data.navSections} />

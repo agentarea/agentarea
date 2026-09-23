@@ -323,6 +323,9 @@ class TaskResponse(BaseModel):
     total_cost: float | None = None  # LLM token cost in USD
     # Set only on one-shot deferred runs; null means the task ran on creation.
     scheduled_at: UtcDatetime | None = None
+    # Who started the task. Distinct from `parameters`-derived source: a
+    # trigger-fired task is still owned by whoever created the trigger.
+    created_by: str | None = None
 
     @classmethod
     def create_new(
@@ -360,6 +363,7 @@ class TaskResponse(BaseModel):
             created_at=task.created_at,
             execution_id=task.execution_id,
             scheduled_at=task.scheduled_at,
+            created_by=task.user_id,
         )
 
 
@@ -386,9 +390,17 @@ class TaskWithAgent(BaseModel):
     # approve/reject the pending escalation inline without re-fetching task events.
     escalation_id: str | None = None
     escalation_tool_name: str | None = None
+    # The principal that started the task. Only the id: resolving it to a name
+    # is GET /v1/principals' job, so a task never fails to load because the
+    # identity provider is slow.
+    created_by: str | None = None
 
     @classmethod
-    def from_task_response(cls, task: TaskResponse, agent_name: str | None) -> "TaskWithAgent":
+    def from_task_response(
+        cls,
+        task: TaskResponse,
+        agent_name: str | None,
+    ) -> "TaskWithAgent":
         """Create TaskWithAgent from TaskResponse and agent name."""
         return cls(
             id=task.id,
@@ -404,6 +416,7 @@ class TaskWithAgent(BaseModel):
             execution_id=task.execution_id,
             total_cost=task.total_cost,
             scheduled_at=task.scheduled_at,
+            created_by=task.created_by,
         )
 
 
@@ -453,6 +466,7 @@ async def get_all_tasks(
                     scheduled_at=task.scheduled_at,
                     execution_id=task.execution_id,
                     total_cost=total_cost,
+                    created_by=task.user_id,
                 )
             )
 
@@ -492,7 +506,6 @@ async def get_task_by_id(
         agent = await agent_service.get_with_catalog(task.agent_id)
         result_dict = task.result if isinstance(task.result, dict) else None
         total_cost = result_dict.get("total_cost") if result_dict else None
-
         return TaskWithAgent(
             id=task.id,
             agent_id=task.agent_id,
@@ -507,6 +520,7 @@ async def get_task_by_id(
             scheduled_at=task.scheduled_at,
             execution_id=task.execution_id,
             total_cost=total_cost,
+            created_by=task.user_id,
         )
     except HTTPException:
         raise
@@ -560,6 +574,7 @@ async def _tail_task_events_sse(
     agent_id: UUID,
     execution_id: str | None,
     *,
+    workspace_id: str,
     emit_connected: bool = True,
     include_chunks: bool = True,
 ) -> AsyncGenerator[str, None]:
@@ -591,6 +606,7 @@ async def _tail_task_events_sse(
     # llm.call.chunk events.
     async for env in open_task_event_feed(
         task_id,
+        workspace_id=workspace_id,
         terminal_types=frozenset(_TERMINAL_EVENT_TYPES),
         include_chunks=include_chunks,
     ):
@@ -723,7 +739,11 @@ async def create_task_for_agent_with_stream(
             # attach, but they are durably logged, so replay is lossless.
             if task.execution_id and task.status in ["running", "pending"]:
                 async for chunk in _tail_task_events_sse(
-                    task.id, agent_id, task.execution_id, emit_connected=False
+                    task.id,
+                    agent_id,
+                    task.execution_id,
+                    workspace_id=user_context.workspace_id,
+                    emit_connected=False,
                 ):
                     yield chunk
             else:
@@ -1813,6 +1833,11 @@ async def _resolve_model_info(
         "provider_type": provider_spec.provider_type,
         "model_name": model_spec.model_name,
         "api_key_secret": provider_config.api_key,
+        # Whose credentials the rest of the run will spend. Switching model switches
+        # this too, and omitting it here would have defaulted every switched-to model
+        # to "the customer's own key" — including a platform one, whose calls we pay
+        # for and whose entitlement check would then quietly go back to failing open.
+        "managed_by": provider_config.managed_by,
         "endpoint_url": provider_config.endpoint_url,
         "context_window": model_spec.context_window,
         "max_output_tokens": model_spec.max_output_tokens,
@@ -2034,7 +2059,11 @@ async def stream_task_events(
         async def event_stream() -> AsyncGenerator[str, None]:
             try:
                 async for chunk in _tail_task_events_sse(
-                    task_id, agent_id, task.execution_id, include_chunks=include_chunks
+                    task_id,
+                    agent_id,
+                    task.execution_id,
+                    workspace_id=user_context.workspace_id,
+                    include_chunks=include_chunks,
                 ):
                     yield chunk
 

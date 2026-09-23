@@ -3,6 +3,7 @@ import { env } from "@/env";
 import { formatApiError } from "@/lib/api-errors";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { resolveRequestWorkspaceSlug } from "@/lib/workspace-request";
+import { WORKSPACE_REFERENCE_HEADER } from "@/lib/workspaces";
 
 export async function POST(
   request: NextRequest,
@@ -26,7 +27,7 @@ export async function POST(
 
     const workspaceSlug = await resolveRequestWorkspaceSlug(request);
     if (workspaceSlug) {
-      backendHeaders["X-Workspace-Slug"] = workspaceSlug;
+      backendHeaders[WORKSPACE_REFERENCE_HEADER] = workspaceSlug;
     }
 
     // Task creation is JSON. Files are pre-staged via POST /v1/files/upload-url
@@ -51,31 +52,40 @@ export async function POST(
     }
 
     // Create a readable stream that forwards the SSE data
-    const stream = new ReadableStream({
+    let upstreamReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let downstreamCancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         const reader = response.body?.getReader();
         if (!reader) {
           controller.close();
           return;
         }
+        upstreamReader = reader;
 
         const pump = async () => {
           try {
             while (true) {
               const { done, value } = await reader.read();
               if (done) {
-                controller.close();
+                if (!downstreamCancelled) controller.close();
                 break;
               }
               controller.enqueue(value);
             }
           } catch (error) {
-            console.error("Task creation SSE stream error:", error);
-            controller.error(error);
+            if (!downstreamCancelled) {
+              console.error("Task creation SSE stream error:", error);
+              controller.error(error);
+            }
           }
         };
 
         pump();
+      },
+      async cancel(reason) {
+        downstreamCancelled = true;
+        await upstreamReader?.cancel(reason).catch(() => undefined);
       },
     });
 

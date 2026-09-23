@@ -3,45 +3,17 @@
 import type { MouseEventHandler } from "react";
 import { Check, X } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { TaskStatus } from "@/components/TaskStatus";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
-import { StatusIndicator } from "@/components/ui/status-indicator";
-import { getInboxStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { InboxEmptyState } from "@/app/(main)/inbox/components/InboxEmptyState";
 import {
-  fmtCost,
   formatRelative,
   type InboxCounts,
   type InboxTask,
   isPending,
   type FilterValue,
 } from "@/app/(main)/inbox/components/inboxShared";
-
-function InboxStatusMark({ status }: { status: string }) {
-  const presentation = getInboxStatusPresentation(status);
-
-  return (
-    <StatusIndicator
-      tone={presentation.tone}
-      pulse={presentation.pulse}
-      size="default"
-      aria-label={presentation.label}
-      title={presentation.label}
-      className="mt-1 shrink-0"
-    />
-  );
-}
-
-function AgentChip({ id, name }: { id?: string | null; name: string }) {
-  return (
-    <span className="inline-flex min-w-0 items-center gap-1.5">
-      <AgentAvatar agent={{ id: id || name, name }} size="xs" />
-      <span className="truncate font-mono text-[11px] text-foreground/80">
-        {name}
-      </span>
-    </span>
-  );
-}
 
 interface InboxTaskListProps {
   visible: InboxTask[];
@@ -77,45 +49,64 @@ export function InboxTaskList({
       {visible.map((task) => {
         const id = String(task.id);
         const status = effectiveStatus(task);
-        const presentation = getInboxStatusPresentation(status);
         const pending = isPending(status);
         const isSelected = id === selectedId;
         const isChecked = checked.has(id);
+        const actionPreview = task.escalation_tool_name
+          ? `Request ${task.escalation_tool_name}`
+          : pending
+            ? "Waiting for approval"
+            : resultPreview(task);
 
         return (
           <InteractiveListRow
             key={id}
             onClick={() => onSelect(id)}
             selected={isSelected}
-            className="items-start"
-            decorationTone={presentation.tone}
-            decorationVisible={isSelected}
+            className="mx-1 my-px items-start rounded-lg px-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:px-4 [&>span[aria-hidden]]:hidden"
+            dividerClassName=""
+            selectedClassName="bg-muted/75 dark:bg-zinc-800/80"
+            showIndicator={false}
             start={
-              <>
+              <span className="relative h-9 w-9 shrink-0">
+                <AgentAvatar
+                  agent={{
+                    id: task.agent_id || task.agent_name || id,
+                    name: task.agent_name || "Unknown agent",
+                  }}
+                  size="md"
+                />
                 {pending && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onToggleCheck(id);
                     }}
+                    onKeyDown={(e) => e.stopPropagation()}
                     className={cn(
-                      "mt-1 grid h-4 w-4 shrink-0 place-items-center rounded-[4px] border transition",
+                      "absolute -left-1 -top-1 z-10 grid h-4 w-4 place-items-center rounded-[4px] border bg-background/95 transition",
                       isChecked
                         ? "border-primary bg-primary text-white opacity-100"
                         : "border-muted-foreground/50 text-transparent",
-                      !isChecked && !anyChecked && "opacity-0 group-hover:opacity-100"
+                      !isChecked && !anyChecked &&
+                        "opacity-0 group-hover:opacity-100",
+                      "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                     )}
                     aria-label="Select task"
+                    aria-checked={isChecked}
+                    role="checkbox"
                   >
                     <Check size={11} strokeWidth={3} />
                   </button>
                 )}
-                <InboxStatusMark status={status} />
-              </>
+              </span>
             }
             end={
-              <span className="w-[62px] text-right font-mono text-[11.5px] text-muted-foreground">
-                {fmtCost(task.total_cost)}
+              <span className="flex shrink-0 flex-col items-end gap-1 text-right">
+                <TaskStatus status={status} caption="never" />
+                <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+                  {formatRelative(task.created_at)}
+                </span>
               </span>
             }
             hoverActions={
@@ -141,19 +132,19 @@ export function InboxTaskList({
               ) : null
             }
           >
-            <div className="min-w-0 flex-1 pt-0">
-              <p className="truncate text-[13px] font-semibold">
+            <div className="min-w-0 flex-1 pt-px">
+              <p className="truncate text-[13px] font-semibold leading-5">
                 {task.description || "Untitled task"}
               </p>
-              <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-muted-foreground">
-                <AgentChip
-                  id={task.agent_id}
-                  name={task.agent_name || "Unknown agent"}
-                />
-                <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-muted-foreground/50" />
-                <span className="whitespace-nowrap">
-                  {formatRelative(task.created_at)}
+              <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11.5px] text-muted-foreground">
+                <span className="truncate font-medium text-foreground/75">
+                  {task.agent_name || "Unknown agent"}
                 </span>
+                <span
+                  aria-hidden
+                  className="h-[3px] w-[3px] shrink-0 rounded-full bg-muted-foreground/50"
+                />
+                <span className="truncate">{actionPreview}</span>
               </div>
             </div>
           </InteractiveListRow>
@@ -178,6 +169,7 @@ function ActionIcon({
     <button
       onClick={onClick}
       title={title}
+      aria-label={title}
       className={cn(
         "grid h-7 w-7 place-items-center rounded-md border border-border bg-background",
         tone === "approve"
@@ -188,4 +180,10 @@ function ActionIcon({
       <Icon size={15} strokeWidth={2} />
     </button>
   );
+}
+
+function resultPreview(task: InboxTask): string {
+  if (task.result) return "Result available";
+  if (task.error || task.failure_reason) return "Task failed";
+  return "Task activity";
 }

@@ -3,7 +3,7 @@
 #
 # Mirrors:
 #   .github/workflows/ci.yml             (Python lint+tests, Go lint+tests, webapp lint+build)
-#   .github/workflows/schema-check.yml   (OpenAPI -> schema.d.ts drift)
+#   .github/workflows/schema-check.yml   (backend -> openapi.json -> docs drift)
 #   .github/workflows/frontend-integration.yml (elements-react build + webapp build)
 #   .github/workflows/check-helm-docs.yml (Helm chart README)
 #   .github/workflows/validate-env-templates.yml (Helm env tpl drift)
@@ -66,24 +66,28 @@ if ! should_skip go; then
   ok "Go tests"
 fi
 
-# ── 3. Schema drift (FastAPI -> schema.d.ts) ────────────────────────────────
+# ── 3. Schema drift (FastAPI -> openapi.json -> docs copy) ──────────────────
 if ! should_skip schema; then
   step "OpenAPI schema drift"
   TMP=$(mktemp -d)
   trap 'rm -rf "$TMP"' EXIT
   ( cd agentarea-platform && uv run python ../scripts/export-openapi.py -o "$TMP/openapi.json" ) \
     || fail "OpenAPI export failed"
-  if have npx; then
-    npx --yes openapi-typescript "$TMP/openapi.json" -o "$TMP/schema.d.ts" >/dev/null \
-      || fail "openapi-typescript failed"
-    if ! diff -q agentarea-webapp/src/api/schema.d.ts "$TMP/schema.d.ts" >/dev/null 2>&1; then
-      diff -u agentarea-webapp/src/api/schema.d.ts "$TMP/schema.d.ts" | head -50
-      fail "schema.d.ts is out of date — run: cd agentarea-webapp && pnpm generate:schema"
-    fi
-    ok "Schema drift"
-  else
-    printf '\033[33m⚠ npx not installed — skipping schema check\033[0m\n'
+  jq -S . agentarea-webapp/src/api/openapi.json > "$TMP/committed.json" \
+    || fail "could not normalize committed openapi.json"
+  jq -S . "$TMP/openapi.json" > "$TMP/exported.json" \
+    || fail "could not normalize exported OpenAPI schema"
+  if ! diff -q "$TMP/committed.json" "$TMP/exported.json" >/dev/null 2>&1; then
+    diff -u "$TMP/committed.json" "$TMP/exported.json" | head -100
+    fail "openapi.json is out of date — run: cd agentarea-webapp && pnpm generate:api"
   fi
+  jq -S . docs/api-reference/openapi.json > "$TMP/docs.json" \
+    || fail "could not normalize docs OpenAPI schema"
+  if ! diff -q "$TMP/committed.json" "$TMP/docs.json" >/dev/null 2>&1; then
+    diff -u "$TMP/committed.json" "$TMP/docs.json" | head -50
+    fail "docs OpenAPI copy is out of date — run: cd docs && npm run sync:openapi"
+  fi
+  ok "Schema drift"
 fi
 
 # ── 3b. Webapp lint + build (mirrors webapp-lint, webapp-build, frontend-integration) ──

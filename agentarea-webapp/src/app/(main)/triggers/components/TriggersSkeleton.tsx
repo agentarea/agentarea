@@ -40,7 +40,9 @@ interface TriggersSkeletonProps {
   viewMode?: "grid" | "table";
 }
 
-export default function TriggersSkeleton({ viewMode = "table" }: TriggersSkeletonProps) {
+export default function TriggersSkeleton({
+  viewMode = "table",
+}: TriggersSkeletonProps) {
   if (viewMode === "table") return <TriggersTableSkeleton />;
   return (
     <div className={`p-4 ${CARD_GRID_DENSE}`} aria-hidden="true">

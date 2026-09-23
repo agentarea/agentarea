@@ -42,11 +42,15 @@ agentarea-webapp/
 - **API access**: server-only via `src/lib/api.ts` (typed SDK over the generated `@hey-api` client). Client components reach the backend through **server actions** that call `@/lib/api` — never `fetch()` the backend from the browser.
 - **API types & schemas**: generated from the OpenAPI spec into `@/api/client` (`types.gen.ts`, `zod.gen.ts`). Never hand-write a type or Zod schema that mirrors a backend contract. Regenerate with `pnpm generate:api` (refreshes `src/api/openapi.json` from the backend, then the client).
 - **Forms**: react-hook-form holding a typed object + `zodResolver` on the generated `z*`; the server action validates the same `z*` and maps form→contract via a thin pure adapter (reference: `agents/create/actions.ts` + `agents/shared/agentContract.ts`). A native `<form action>` is fine for simple forms. Use `FormData` only for file/multipart uploads.
-- **Auth**: `useAuth()` hook for user state, `src/lib/auth.ts` for server auth. The server SDK injects the token + `X-Workspace-Slug` automatically (`src/api/client-runtime.ts`) — never handle tokens manually.
+- **Auth**: `useAuth()` hook for user state, `src/lib/auth.ts` for server auth. The server SDK injects the token + `X-AgentArea-Workspace` automatically (`src/api/client-runtime.ts`) — never handle tokens manually.
 - **Real-time**: `useSSE()` or `useTaskEvents()` hooks for streaming
 - **Styling**: Tailwind + shadcn/ui components
 - **List pages (grid+table)**: use `@/components/GridAndTableViews` — pass `data`, `columns`, `cardContent`, `itemLink`, `routeChange`, `searchParams`. Do NOT hand-roll a `<ul>`/`<div className="grid">` list or a bespoke card per page. Reference: `mcp-servers/ServerList.tsx`, `admin/providers/page.tsx`, `clients/page.tsx`, `projects/components/ProjectsContent.tsx`.
 - **Entity icons**: single source of truth in `@/lib/entity-icons` (`ENTITY_ICONS[kind]` / `<EntityIcon kind="agent" />`). Kinds: agent→Bot, mcp→Server, skill→Sparkles, project→FolderTree, client→Plug, tool→Wrench, trigger→Zap. Do NOT inline `Bot`/`Server`/`Sparkles`/`Plug` from lucide for an entity — add the kind to the map instead.
+- **Entity logos**: a *specific* connection is drawn by `<EntityMark identity={...} />` (`@/components/EntityMark`) over an identity from `@/lib/entity-identity` — registry logo → favicon of the host it points at → domain initials → the kind's glyph. Do NOT hand-roll an `<img onError>` fallback chain or a local initials mark; add the case to `entity-identity` instead.
+- **Tests**: only where there is logic to state as a rule — URL/string derivation, layout geometry, reducers, data shaping. Do not write tests that assert a component rendered or a label is on screen. Fixtures use our own domains (`agentarea.ai`), not third-party brands.
+- **Shared components first**: before writing UI, look for the existing component in `src/components/` (and `src/components/ui/` for shadcn atoms). A visual pattern that appears twice lives in one component used twice — never a second local copy. Extract into `src/components/` in the same change that creates the second usage.
+- **Status rendering**: task status on *any* surface (list, table cell, page header, inbox, filter, sheet, card) goes through `@/components/TaskStatus` — `<TaskStatus status={...} />`, `caption="auto" | "never"` for dense rows, `useTaskStatusLabel(status)` for prose. Every other entity status (agent, trigger, MCP, API key, payment, policy, invitation, sandbox) uses a `get<Entity>StatusPresentation()` from `@/lib/status` fed into `<StatusIndicator>`. New status values get a case in `@/lib/status`, not a call-site map. Details in `Design.md` §"Status / banners".
 
 ## KEY HOOKS
 
@@ -76,6 +80,7 @@ secrets, inbox, workplace, admin, settings, ...).
 - Never `as any` a backend response — use the generated types/zod.
 - Never skip loading states during SSE
 - Never store sensitive data in localStorage
+- Never hand-roll a status badge/dot (`bg-green-500`, a bare `<Badge>`, a local tone map) or re-derive a task's label/tone next to `<StatusIndicator>` — render `<TaskStatus>`; the divergence only shows up on the one page nobody re-checked.
 
 ## COMMANDS
 

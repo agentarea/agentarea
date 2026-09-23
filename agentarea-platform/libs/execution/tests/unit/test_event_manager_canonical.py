@@ -184,3 +184,44 @@ def test_timeline_constants_stay_bare():
     assert EventTypes.ITERATION_STARTED == "IterationStarted"
     assert EventTypes.MODEL_CHANGED == "ModelChanged"
     assert EventTypes.WORKFLOW_CONTINUED_AS_NEW == "WorkflowContinuedAsNew"
+
+
+def test_workspace_id_is_carried_when_known():
+    """Every event names the tenant it belongs to.
+
+    Without it an event is only interpretable by joining task_id back to the
+    database, which forces any consumer of the stream to hold a connection to the
+    platform's schema just to know who it is looking at.
+    """
+    mgr = EventManager(task_id="t-1", agent_id="a-1", execution_id="e-1", workspace_id="ws-42")
+    mgr.add_event(EventTypes.LLM_CALL_COMPLETED, {"iteration": 1})
+    assert _only_event(mgr)["data"]["workspace_id"] == "ws-42"
+
+
+def test_workspace_id_is_omitted_rather_than_null():
+    """An unknown workspace leaves the key out entirely.
+
+    A present-but-null field reads as "this event has no tenant", which is a
+    different and wrong claim; absence says "not recorded here".
+    """
+    mgr = EventManager(task_id="t-1", agent_id="a-1", execution_id="e-1")
+    mgr.add_event(EventTypes.LLM_CALL_COMPLETED, {"iteration": 1})
+    assert "workspace_id" not in _only_event(mgr)["data"]
+
+
+def test_event_data_cannot_override_identity():
+    """Caller-supplied data must not be able to reattribute an event.
+
+    Identity is a fact about the execution, not something an event's own payload
+    may restate. Anything acting on attribution — billing, audit, per-tenant
+    dashboards — is only as trustworthy as this ordering.
+    """
+    mgr = EventManager(task_id="t-1", agent_id="a-1", execution_id="e-1", workspace_id="ws-real")
+    mgr.add_event(
+        EventTypes.LLM_CALL_COMPLETED,
+        {"workspace_id": "ws-spoofed", "task_id": "t-spoofed", "agent_id": "a-spoofed"},
+    )
+    data = _only_event(mgr)["data"]
+    assert data["workspace_id"] == "ws-real"
+    assert data["task_id"] == "t-1"
+    assert data["agent_id"] == "a-1"

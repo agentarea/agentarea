@@ -4,13 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Link as LinkIcon, Loader2, Pencil, Terminal } from "lucide-react";
 import { toast } from "sonner";
-import type {
-  ClientResponse,
-  McpServerInstanceResponse,
-  McpServerResponse,
-  SkillResponse,
-} from "@/api/client";
-import { getMCPConnectionIconSrc } from "@/app/(main)/connections/utils";
+import type { ClientResponse } from "@/api/client";
+import { useAttachableResources } from "@/hooks/use-attachable-resources";
+import { resolveMcpRef } from "@/lib/mcp/resolveMcpRef";
 import {
   AttachmentSection,
   hydrateAttachments,
@@ -39,9 +35,6 @@ import {
   addSkillToClientAction,
   deleteClientAction,
   getClientAction,
-  listMCPServerInstancesAction,
-  listMCPServersAction,
-  listSkillsAction,
   removeMcpInstanceFromClientAction,
   removeSkillFromClientAction,
   updateClientAction,
@@ -57,9 +50,12 @@ export default function ClientDetailPage() {
 
   const [client, setClient] = useState<ClientResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [allSkills, setAllSkills] = useState<SkillResponse[]>([]);
-  const [allMcp, setAllMcp] = useState<McpServerInstanceResponse[]>([]);
-  const [mcpServers, setMcpServers] = useState<McpServerResponse[]>([]);
+  const resources = useAttachableResources();
+  const {
+    skills: allSkills,
+    mcpInstances: allMcp,
+    mcpServers,
+  } = resources;
 
   const [showEdit, setShowEdit] = useState(false);
   const [editName, setEditName] = useState("");
@@ -75,22 +71,8 @@ export default function ClientDetailPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [clientRes, skillsRes, mcpRes, serversRes] = await Promise.all([
-          getClientAction(clientId),
-          listSkillsAction(),
-          listMCPServerInstancesAction(),
-          listMCPServersAction({ page_size: 100 }),
-        ]);
-        if (clientRes.data) setClient(clientRes.data);
-        setAllSkills((skillsRes.data as SkillResponse[]) || []);
-        setAllMcp(mcpRes.data || []);
-        const serversData = serversRes.data as
-          | { items?: McpServerResponse[] }
-          | McpServerResponse[]
-          | undefined;
-        setMcpServers(
-          Array.isArray(serversData) ? serversData : serversData?.items || []
-        );
+        const { data } = await getClientAction(clientId);
+        if (data) setClient(data);
       } finally {
         setLoading(false);
       }
@@ -105,10 +87,8 @@ export default function ClientDetailPage() {
   const HarnessGlyph = harness.icon;
 
   const instanceIconSrc = (instance: AttachmentItem) => {
-    const full = allMcp.find((i) => String(i.id) === instance.id);
-    if (!full) return undefined;
-    const spec = mcpServers.find((s) => s.id === full.server_spec_id);
-    return getMCPConnectionIconSrc(full, spec);
+    const resolved = resolveMcpRef(instance.id, allMcp, mcpServers);
+    return resolved.status === "unresolved" ? undefined : resolved.iconSrc;
   };
 
   const handleSave = async () => {

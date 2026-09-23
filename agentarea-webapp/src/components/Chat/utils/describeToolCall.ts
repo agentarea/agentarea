@@ -1,3 +1,5 @@
+import { isUnavailableToolValue } from "./toolDetails";
+
 /**
  * Turn a raw tool call into a human-readable action phrase, the way Codex does
  * ("Ran build.sh", "Read config.yaml", "Searched the web for ...") instead of
@@ -12,7 +14,7 @@ function pick(args: Record<string, unknown> | undefined, keys: string[]): string
   if (!args) return undefined;
   for (const k of keys) {
     const v = asString(args[k]);
-    if (v) return v;
+    if (v && !isUnavailableToolValue(v)) return v;
   }
   return undefined;
 }
@@ -66,14 +68,20 @@ export function describeToolCall(
 
   // Skills
   if (n === "activate_skill" || n.includes("skill")) {
-    const skill = pick(a, ["skill", "name", "skill_name", "skill_id"]);
+    const skill =
+      pick(a, ["skill", "name", "skill_name", "skill_id"]) ||
+      (meta?.skill_name && !isUnavailableToolValue(meta.skill_name)
+        ? meta.skill_name
+        : undefined);
     return { text: skill ? `Activated skill ${skill}` : "Activated a skill" };
   }
 
   // Shell / command execution
   if (/(shell|bash|terminal|command|cmd|execute|exec|run_)/.test(n)) {
     const cmd = pick(a, ["command", "cmd", "script", "code"]);
-    return cmd ? { text: "Ran", code: truncate(cmd) } : { text: "Ran a command" };
+    return cmd
+      ? { text: "Ran", code: truncate(cmd) }
+      : { text: titleize(toolName) };
   }
 
   // Agent delegation: delegate_to_<agent>

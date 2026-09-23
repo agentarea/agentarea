@@ -1,7 +1,7 @@
 ---
 title: What is an agent
 type: concept
-summary: An agent is a workspace-scoped definition — an instruction, a model, a tool list and attached skills — and this page separates what it configures from what governs it.
+description: "An agent is a workspace-scoped definition."
 prerequisites:
   - /agentic-networks
 related:
@@ -12,8 +12,6 @@ related:
   - /concepts/governance/tool-authorization
 last_updated: 2026-07-29
 ---
-
-# What is an agent
 
 An agent is a named, workspace-scoped definition of how to answer a request: an
 instruction, a model to run it on, a set of tools it may reach for, and a set of
@@ -185,11 +183,20 @@ it is a property of the sandbox runtime, not of the agent.
 
 ## Related
 
-- [Skills](/concepts/agents/skills) — how a skill is discovered, loaded and run.
-- [Agent-to-agent communication](/concepts/agents/a2a) — how one agent invokes
-  another, and when that goes over A2A.
-- [Context strategies](/concepts/agents/context-strategies) — what the agent's
-  model sees, and what gets offloaded.
-- [Tool authorization](/concepts/governance/tool-authorization) — the layers a
-  tool call clears once the agent is composed.
-- [Tasks](/concepts/execution/tasks) — the unit that actually runs.
+<Columns cols={2}>
+  <Card title="Skills" icon="robot" href="/concepts/agents/skills">
+    How a skill is discovered, loaded and run
+  </Card>
+  <Card title="Agent-to-agent communication" icon="robot" href="/concepts/agents/a2a">
+    How one agent invokes another, and when that goes over A2A
+  </Card>
+  <Card title="Context strategies" icon="robot" href="/concepts/agents/context-strategies">
+    What the agent's model sees, and what gets offloaded
+  </Card>
+  <Card title="Tool authorization" icon="scale-balanced" href="/concepts/governance/tool-authorization">
+    The layers a tool call clears once the agent is composed
+  </Card>
+  <Card title="Tasks" icon="diagram-project" href="/concepts/execution/tasks">
+    The unit that actually runs
+  </Card>
+</Columns>

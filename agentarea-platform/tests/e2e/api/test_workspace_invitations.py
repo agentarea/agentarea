@@ -62,16 +62,35 @@ def test_invitation_happy_path(
     assert payload["invitation_id"] == invitation["id"]
 
     # Now Bob can list members of Alice's workspace (he's a member).
-    # A member's email/display_name come from their *identity* (resolved from the
-    # caller's own auth context), NOT from the invitation — the invitation email
-    # ("bob@example.com" above) is only a delivery hint. So Bob, viewing himself,
-    # sees his real identity email.
+    # A member's email/display_name come from their *identity*, resolved through
+    # the identity provider, NOT from the invitation — the invitation email
+    # ("bob@example.com" above) is only a delivery hint, and the link can be
+    # redeemed by whoever holds it.
     members = _members(bob_client, workspace)
     user_ids = {m["user_id"] for m in members}
     assert bob.identity_id in user_ids
     bob_member = next(m for m in members if m["user_id"] == bob.identity_id)
     assert bob_member["email"] == bob.email
     assert bob_member["display_name"] == bob.email
+
+    # The invitation email was a delivery hint and must not become the identity.
+    assert bob_member["email"] != "bob@example.com"
+
+    # Alice sees the same identity for Bob — resolution is not limited to the
+    # caller looking at themselves, which is what made this list read as a
+    # column of raw uuids.
+    as_alice = _members(alice_client, workspace)
+    bob_as_alice_sees_him = next(m for m in as_alice if m["user_id"] == bob.identity_id)
+    assert bob_as_alice_sees_him["email"] == bob.email
+
+    # Alice provisioned the workspace, so she owns it and Bob does not.
+    alice_member = next(m for m in as_alice if m["user_id"] == alice.identity_id)
+    assert alice_member["is_owner"] is True
+    assert bob_as_alice_sees_him["is_owner"] is False
+
+    # joined_at is a recorded fact, not a stamp applied at read time.
+    assert bob_as_alice_sees_him["joined_at"] is not None
+    assert _members(alice_client, workspace) == as_alice
 
     # Invitation has flipped to accepted
     pending = alice_client.get(
@@ -169,6 +188,80 @@ def test_invalid_token_404(bob_client: httpx.Client) -> None:
         "/v1/invitations/accept", json={"token": "not-a-real-token-xxx"}
     )
     assert accept.status_code == 404, accept.text
+
+
+def _join(alice_client: httpx.Client, workspace: str, client: httpx.Client) -> None:
+    token = _create_invitation(alice_client, workspace)["token"]
+    client.post("/v1/invitations/accept", json={"token": token}).raise_for_status()
+
+
+@pytest.mark.integration
+def test_owner_cannot_be_removed(alice, alice_client: httpx.Client) -> None:
+    """The owner keeps access until ownership moves; otherwise the workspace strands."""
+    workspace = alice.identity_id
+    _members(alice_client, workspace)  # provisions the owner's membership
+
+    removed = alice_client.delete(
+        f"/v1/workspaces/{workspace}/members/{alice.identity_id}"
+    )
+    assert removed.status_code == 409, removed.text
+
+    user_ids = {m["user_id"] for m in _members(alice_client, workspace)}
+    assert alice.identity_id in user_ids
+
+
+@pytest.mark.integration
+def test_non_owner_cannot_remove_another_member(
+    alice, alice_client: httpx.Client, bob, bob_client: httpx.Client, user_factory
+) -> None:
+    workspace = alice.identity_id
+    _join(alice_client, workspace, bob_client)
+
+    carol = user_factory("carol")
+    with httpx.Client(
+        base_url=bob_client.base_url,
+        headers={"Authorization": f"Bearer {carol.jwt}"},
+        timeout=10.0,
+    ) as carol_client:
+        _join(alice_client, workspace, carol_client)
+
+        refused = bob_client.delete(
+            f"/v1/workspaces/{workspace}/members/{carol.identity_id}"
+        )
+        assert refused.status_code == 403, refused.text
+
+        still_there = {m["user_id"] for m in _members(carol_client, workspace)}
+        assert carol.identity_id in still_there
+
+
+@pytest.mark.integration
+def test_member_can_leave_and_the_owner_can_remove(
+    alice, alice_client: httpx.Client, bob, bob_client: httpx.Client, user_factory
+) -> None:
+    workspace = alice.identity_id
+    _join(alice_client, workspace, bob_client)
+
+    left = bob_client.delete(f"/v1/workspaces/{workspace}/members/{bob.identity_id}")
+    assert left.status_code == 204, left.text
+    assert bob.identity_id not in {
+        m["user_id"] for m in _members(alice_client, workspace)
+    }
+
+    carol = user_factory("carol")
+    with httpx.Client(
+        base_url=bob_client.base_url,
+        headers={"Authorization": f"Bearer {carol.jwt}"},
+        timeout=10.0,
+    ) as carol_client:
+        _join(alice_client, workspace, carol_client)
+
+        removed = alice_client.delete(
+            f"/v1/workspaces/{workspace}/members/{carol.identity_id}"
+        )
+        assert removed.status_code == 204, removed.text
+        assert carol.identity_id not in {
+            m["user_id"] for m in _members(alice_client, workspace)
+        }
 
 
 @pytest.mark.integration

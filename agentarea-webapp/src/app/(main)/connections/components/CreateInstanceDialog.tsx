@@ -19,7 +19,8 @@ import {
 import { checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration } from "@/lib/server-actions";
 import { createMCPServerInstance } from "../actions";
 import { MCPServer } from "../types";
-import { getMCPConnectionIconSrc, MCP_CONSTANTS } from "../utils";
+import { getMCPConnectionIconSrc } from "@/lib/entity-identity";
+import { MCP_CONSTANTS } from "../utils";
 import { VerifyingModal } from "./VerifyingModal";
 
 interface CreateInstanceDialogProps {

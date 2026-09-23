@@ -1,0 +1,328 @@
+.root {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: hsl(var(--foreground) / 0.85);
+  font-size: 15px;
+  line-height: 24px;
+}
+
+.root > :first-child {
+  margin-top: 0;
+}
+
+.root > :last-child {
+  margin-bottom: 0;
+}
+
+.root p {
+  margin: 8px 0;
+}
+
+.root :global([data-streamdown="heading-1"]),
+.root :global([data-streamdown="heading-2"]),
+.root :global([data-streamdown="heading-3"]),
+.root :global([data-streamdown="heading-4"]) {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+.root :global([data-streamdown="heading-1"]) {
+  margin: 20px 0 8px;
+  font-size: 18px;
+  line-height: 24px;
+}
+
+.root :global([data-streamdown="heading-2"]) {
+  margin: 16px 0 8px;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.root :global([data-streamdown="heading-3"]) {
+  margin: 12px 0 6px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.root :global([data-streamdown="heading-4"]) {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.root :global([data-streamdown="unordered-list"]),
+.root :global([data-streamdown="ordered-list"]) {
+  margin: 8px 0;
+  padding-left: 20px;
+  list-style-position: outside;
+}
+
+.root :global([data-streamdown="unordered-list"]) {
+  list-style-type: disc;
+}
+
+.root :global([data-streamdown="ordered-list"]) {
+  list-style-type: decimal;
+}
+
+.root :global([data-streamdown="list-item"]) {
+  padding: 2px 0;
+}
+
+.root :global(.task-list-item) {
+  list-style-type: none;
+}
+
+.root :global(.task-list-item) input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0 6px 0 0;
+  vertical-align: -2px;
+}
+
+.root :global([data-streamdown="strong"]) {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+.root :global([data-streamdown="blockquote"]) {
+  margin: 12px 0;
+  padding-left: 12px;
+  border-left: 2px solid hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+  font-style: normal;
+}
+
+.root :global([data-streamdown="blockquote"]) p {
+  margin: 0;
+}
+
+.root :global([data-streamdown="table-wrapper"]) {
+  display: flex;
+  max-width: 100%;
+  margin: 14px 0;
+  padding: 0;
+  overflow: visible;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--background));
+}
+
+.root :global([data-streamdown="table-wrapper"]) > div:first-child {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 2px 6px;
+  gap: 2px;
+  border-bottom: 1px solid hsl(var(--border) / 0.7);
+  background: hsl(var(--muted) / 0.32);
+}
+
+.root :global([data-streamdown="table-wrapper"]) > div:last-child {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 0;
+  border-radius: 0 0 9px 9px;
+}
+
+.root table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 21px;
+}
+
+.root th,
+.root td {
+  padding: 8px 12px;
+  border-bottom: 1px solid hsl(var(--border) / 0.75);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.root th {
+  background: hsl(var(--muted) / 0.42);
+  color: hsl(var(--foreground));
+  font-weight: 500;
+}
+
+.root tr:last-child td {
+  border-bottom: 0;
+}
+
+.root :global([data-streamdown="code-block"]) {
+  position: relative;
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  margin: 14px 0;
+  padding: 0;
+  overflow: hidden;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--muted) / 0.42);
+}
+
+.root :global([data-streamdown="code-block-header"]) {
+  display: flex;
+  height: 30px;
+  align-items: center;
+  padding: 0 72px 0 10px;
+  color: hsl(var(--muted-foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  border-bottom: 1px solid hsl(var(--border) / 0.65);
+}
+
+.root
+  :global([data-streamdown="code-block"])
+  > div:nth-child(2):not([data-streamdown]) {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  z-index: 1;
+  display: flex;
+  height: 30px;
+  margin: 0;
+  align-items: center;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.root :global([data-streamdown="code-block-actions"]) {
+  display: flex;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  backdrop-filter: none;
+}
+
+.root :global([data-streamdown="code-block-body"]) {
+  max-width: 100%;
+  padding: 0;
+  overflow-x: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.root :global([data-streamdown="code-block-body"]) pre {
+  min-width: max-content;
+  margin: 0;
+  padding: 12px 14px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 21px;
+  white-space: pre;
+}
+
+.root :global([data-streamdown="table-wrapper"]) > div:first-child > button,
+.root
+  :global([data-streamdown="table-wrapper"])
+  > div:first-child
+  > div
+  > button,
+.root :global([data-streamdown="code-block-actions"]) > button {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 5px;
+  color: hsl(var(--muted-foreground));
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.root :global([data-streamdown="table-wrapper"]):hover > div:first-child > button,
+.root
+  :global([data-streamdown="table-wrapper"]):hover
+  > div:first-child
+  > div
+  > button,
+.root :global([data-streamdown="table-wrapper"]):focus-within > div:first-child > button,
+.root
+  :global([data-streamdown="table-wrapper"]):focus-within
+  > div:first-child
+  > div
+  > button,
+.root :global([data-streamdown="code-block"]):hover
+  :global([data-streamdown="code-block-actions"])
+  > button,
+.root :global([data-streamdown="code-block"]):focus-within
+  :global([data-streamdown="code-block-actions"])
+  > button {
+  opacity: 1;
+}
+
+.root
+  :global([data-streamdown="table-wrapper"])
+  > div:first-child
+  > button:hover,
+.root
+  :global([data-streamdown="table-wrapper"])
+  > div:first-child
+  > div
+  > button:hover,
+.root :global([data-streamdown="code-block-actions"]) > button:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.root a:focus-visible,
+.root
+  :global([data-streamdown="table-wrapper"])
+  > div:first-child
+  > button:focus-visible,
+.root
+  :global([data-streamdown="table-wrapper"])
+  > div:first-child
+  > div
+  > button:focus-visible,
+.root :global([data-streamdown="code-block-actions"]) > button:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.root hr {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid hsl(var(--border));
+}
+
+@media (min-width: 640px) {
+  .root {
+    font-size: 13px;
+    line-height: 21px;
+  }
+}
+
+@media (max-width: 639px), (pointer: coarse) {
+  .root :global([data-streamdown="table-wrapper"]) > div:first-child > button,
+  .root
+    :global([data-streamdown="table-wrapper"])
+    > div:first-child
+    > div
+    > button,
+  .root :global([data-streamdown="code-block-actions"]) > button {
+    opacity: 0.8;
+  }
+}

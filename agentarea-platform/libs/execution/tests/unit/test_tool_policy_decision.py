@@ -22,10 +22,13 @@ def test_absent_allowlist_allows():
     assert decide_tool_action({"tools": {"allowed": None}}, "shell") is ToolAction.ALLOW
 
 
-def test_empty_allowlist_allows():
-    # An empty allowlist is "no allowlist in use", not "deny everything" —
-    # restriction is expressed by composing fewer tools or by DENY rules.
-    assert decide_tool_action({"tools": {"allowed": []}}, "anything") is ToolAction.ALLOW
+def test_empty_allowlist_denies():
+    # `[]` is the strictest allowlist, not the absence of one. Reading it as
+    # "no allowlist in use" was an escalation: the resolver merges `allowed`
+    # with `is not None`, so an agent scope setting `[]` REPLACES a workspace
+    # allowlist — and an allow-all reading then turned that replacement into
+    # "every tool", widening the very list it was supposed to narrow.
+    assert decide_tool_action({"tools": {"allowed": []}}, "anything") is ToolAction.DENY
 
 
 def test_denied_tool_is_denied_others_allowed():

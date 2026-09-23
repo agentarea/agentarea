@@ -134,6 +134,67 @@ async def test_explicit_empty_artifacts_is_a_valid_completion_contract() -> None
 
 
 @pytest.mark.asyncio
+async def test_successful_explicit_completion_is_paired_for_follow_up_history() -> None:
+    instance = _workflow()
+    completion = _completion_with({"result": "done", "artifacts": []})
+    instance.state.messages.append(
+        Message(
+            role="assistant",
+            content="",
+            tool_calls=[{"id": completion.id, "type": "function", "function": completion.function}],
+        )
+    )
+    instance._validate_completion_artifacts = AsyncMock(
+        return_value=ArtifactValidationResult(state="passed", generation=1)
+    )
+
+    with (
+        patch(
+            "agentarea_execution.workflows.agent_execution_workflow.workflow.execute_activity",
+            new=AsyncMock(),
+        ),
+        patch(
+            "agentarea_execution.workflows.agent_execution_workflow.workflow.logger",
+            new=Mock(),
+        ),
+    ):
+        await instance._handle_task_completion(completion)
+
+    paired_result = instance.state.messages[-1]
+    assert paired_result.role == "tool"
+    assert paired_result.name == "completion"
+    assert paired_result.tool_call_id == completion.id
+    assert json.loads(paired_result.content) == {
+        "status": "completed",
+        "result": "done",
+        "artifacts": [],
+    }
+
+
+@pytest.mark.asyncio
+async def test_implicit_completion_does_not_append_orphan_tool_result() -> None:
+    instance = _workflow()
+    completion = _completion_with({"result": "done", "artifacts": []})
+    instance._validate_completion_artifacts = AsyncMock(
+        return_value=ArtifactValidationResult(state="passed", generation=1)
+    )
+
+    with (
+        patch(
+            "agentarea_execution.workflows.agent_execution_workflow.workflow.execute_activity",
+            new=AsyncMock(),
+        ),
+        patch(
+            "agentarea_execution.workflows.agent_execution_workflow.workflow.logger",
+            new=Mock(),
+        ),
+    ):
+        await instance._handle_task_completion(completion)
+
+    assert instance.state.messages == []
+
+
+@pytest.mark.asyncio
 async def test_failed_validation_returns_tool_feedback_for_two_repairs() -> None:
     instance = _workflow()
     completion = _completion()

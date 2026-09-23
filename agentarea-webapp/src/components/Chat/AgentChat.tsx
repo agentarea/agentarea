@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
-import { ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import type { HumanInputSecretValue } from "@/components/Chat/types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,14 +14,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { cn } from "@/lib/utils";
-import { useTaskEvents } from "@/lib/events/useTaskEvents";
-import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import { useTaskActions } from "@/hooks/useTaskActions";
-import type { HumanInputSecretValue } from "@/components/Chat/types";
+import { PartRenderer } from "@/lib/events/parts/PartRenderer";
+import { useTaskEvents } from "@/lib/events/useTaskEvents";
+import { cn } from "@/lib/utils";
+import ActivityGroup from "./ActivityGroup";
+import { buildActivitySegments } from "./activityView";
 import { ChatInputArea } from "./componets/ChatInputArea";
-import { useScrollManagement } from "./hooks/useScrollManagement";
 import { useFileUpload } from "./hooks/useFileUpload";
+import { useScrollManagement } from "./hooks/useScrollManagement";
+import { deliverTaskMessage } from "./utils/deliverTaskMessage";
 
 interface AgentChatProps {
   agent: {
@@ -47,11 +50,16 @@ export default function AgentChat({
 }: AgentChatProps) {
   const router = useRouter();
 
-  const { parts, pendingForm, terminalMessage, status: streamStatus } =
-    useTaskEvents(agent.id, taskId, {
-      includeHistory: true,
-      autoConnect: true,
-    });
+  const {
+    parts,
+    pendingForm,
+    terminalMessage,
+    status: streamStatus,
+    completedRuns,
+  } = useTaskEvents(agent.id, taskId, {
+    includeHistory: true,
+    autoConnect: true,
+  });
 
   const actions = useTaskActions(agent.id, taskId);
 
@@ -64,8 +72,14 @@ export default function AgentChat({
     checkIfAtBottom,
   } = useScrollManagement({ messagesCount: parts.length });
 
-  const { selectedFiles, fileInputRef, removeFile, openFileDialog } =
-    useFileUpload();
+  const {
+    selectedFiles,
+    fileInputRef,
+    handleFileSelect,
+    removeFile,
+    openFileDialog,
+    clearFiles,
+  } = useFileUpload();
 
   const [input, setInput] = React.useState("");
   const [sending, setSending] = React.useState(false);
@@ -87,45 +101,53 @@ export default function AgentChat({
     async (
       inputRequestId: string,
       answers: Record<string, unknown>,
-      secrets: Record<string, HumanInputSecretValue>,
+      secrets: Record<string, HumanInputSecretValue>
     ) => {
       const { error } = await actions.submitInput(
         inputRequestId,
         answers,
-        secrets,
+        secrets
       );
       if (error) toast.error("Failed to submit response");
     },
-    [actions],
+    [actions]
   );
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const message = input.trim();
-    if (!message || sending) return;
-    setInput("");
-    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    if ((!message && selectedFiles.length === 0) || sending) return;
     setSending(true);
     try {
-      if (pendingForm && pendingForm.eventType === "input.request") {
-        const { error } = await actions.submitInput(
-          pendingForm.partId,
-          { answer: message },
-          {},
-        );
-        if (error) toast.error("Failed to submit response");
+      const delivery = await deliverTaskMessage({
+        actions,
+        files: selectedFiles,
+        message,
+        pendingInputId:
+          pendingForm?.eventType === "input.request"
+            ? pendingForm.partId
+            : undefined,
+        queueOnCurrentTask: QUEUEABLE_STATUSES.includes(status),
+      });
+      if (delivery.route === "followup" && !delivery.taskId) {
+        toast.error("Failed to create new task");
+        return;
+      }
+      if (delivery.route === "input" && delivery.error) {
+        toast.error("Failed to submit response");
+        return;
+      }
+      if (delivery.route === "queue" && delivery.error) {
+        toast.error("Failed to send message");
         return;
       }
 
-      if (QUEUEABLE_STATUSES.includes(status)) {
-        const { error } = await actions.queueMessage(message);
-        if (error) toast.error("Failed to send message");
-        return;
+      setInput("");
+      clearFiles();
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      if (delivery.route === "followup" && delivery.taskId) {
+        router.push(`/tasks/${delivery.taskId}`);
       }
-
-      const newTaskId = await actions.createFollowupTask(message);
-      if (newTaskId) router.push(`/tasks/${newTaskId}`);
-      else toast.error("Failed to create new task");
     } catch (err) {
       toast.error("Failed to send message", {
         description: err instanceof Error ? err.message : String(err),
@@ -146,7 +168,7 @@ export default function AgentChat({
     <Card
       className={cn(
         "flex h-full max-h-full cursor-auto flex-col justify-between overflow-hidden p-0 shadow-none hover:shadow-none",
-        className,
+        className
       )}
     >
       <CardHeader className="border-b p-4">
@@ -159,16 +181,24 @@ export default function AgentChat({
         <div
           ref={messagesContainerRef}
           onScroll={handleScroll}
-          className="flex-1 space-y-3 overflow-y-auto px-3 py-3"
+          className="mx-auto flex w-full max-w-3xl flex-1 flex-col space-y-4 overflow-y-auto px-4 py-4 md:px-6"
         >
-          {parts.map((part) => (
-            <PartRenderer
-              key={part.partId}
-              part={part}
-              onFormSubmit={handleFormSubmit}
-            />
-          ))}
-          {terminalMessage && (
+          {buildActivitySegments(parts, completedRuns).map((segment) =>
+            segment.kind === "work" ? (
+              <ActivityGroup
+                key={segment.run.id}
+                run={segment.run}
+                onFormSubmit={handleFormSubmit}
+              />
+            ) : (
+              <PartRenderer
+                key={segment.part.partId}
+                part={segment.part}
+                onFormSubmit={handleFormSubmit}
+              />
+            )
+          )}
+          {terminalMessage && streamStatus !== "completed" && (
             <StatusIndicator tone={terminalTone}>
               {terminalMessage}
             </StatusIndicator>
@@ -195,32 +225,36 @@ export default function AgentChat({
       </CardContent>
 
       <CardFooter className="p-0">
-        <div className="w-full border-t p-4">
-          <ChatInputArea
-            input={input}
-            onInputChange={handleInputChange}
-            onSubmit={handleSend}
-            isLoading={sending}
-            placeholder={
-              isActive
-                ? `Message ${agent.name}...`
-                : `Send a follow-up to ${agent.name}...`
-            }
-            selectedFiles={selectedFiles}
-            onRemoveFile={removeFile}
-            onOpenFileDialog={openFileDialog}
-            fileInputRef={fileInputRef}
-            textareaRef={textareaRef}
-            variant="default"
-            sendButtonIcon="send"
-            rows={1}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend(e);
+        <div className="w-full bg-background">
+          <div className="mx-auto w-full max-w-3xl px-4 py-3 md:px-6">
+            <ChatInputArea
+              input={input}
+              onInputChange={handleInputChange}
+              onSubmit={handleSend}
+              isLoading={sending}
+              placeholder={
+                isActive
+                  ? `Message ${agent.name}...`
+                  : `Send a follow-up to ${agent.name}...`
               }
-            }}
-          />
+              selectedFiles={selectedFiles}
+              onRemoveFile={removeFile}
+              onOpenFileDialog={openFileDialog}
+              onFileSelect={handleFileSelect}
+              attachmentNotice={`Files will be sent in a new task with ${agent.name}.`}
+              fileInputRef={fileInputRef}
+              textareaRef={textareaRef}
+              variant="default"
+              sendButtonIcon="send"
+              rows={1}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend(e);
+                }
+              }}
+            />
+          </div>
         </div>
       </CardFooter>
     </Card>

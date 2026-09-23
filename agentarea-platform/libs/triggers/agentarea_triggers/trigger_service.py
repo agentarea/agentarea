@@ -47,6 +47,46 @@ logger = TriggerLogger(__name__)
 
 # Error classes moved to logging_utils.py for consistency
 
+# The task query is resolved here rather than at each execution path because
+# there are two of them -- the service, for webhooks and manual runs, and the
+# Temporal activity, for schedules and pollers -- and they had drifted apart.
+NO_TASK_TEXT = (
+    "Trigger has no task text: nothing arrived with the event and none is set on the trigger"
+)
+
+
+def resolve_task_query(trigger: Trigger, trigger_data: dict[str, Any]) -> str | None:
+    """What the agent is being asked to do, or None when nothing says.
+
+    What actually arrived outranks the standing instruction: text carried by the
+    events that fired the trigger, then a top-level text, then the task text set
+    on the trigger itself. Events arrive under ``events`` or ``extracted_events``
+    depending on which path fired.
+
+    Returns None rather than inventing an ask. The trigger's description used to
+    stand in, but it explains the automation to whoever reads the list -- running
+    an agent against "every weekday at 06:45 it scores the inbound queue"
+    produces a task about the schedule instead of the work.
+    """
+    events = trigger_data.get("events") or trigger_data.get("extracted_events") or []
+    texts = [
+        event["text"]
+        for event in events
+        if isinstance(event, dict) and isinstance(event.get("text"), str) and event["text"].strip()
+    ]
+
+    if not texts:
+        top_level_text = trigger_data.get("text")
+        if isinstance(top_level_text, str) and top_level_text.strip():
+            texts = [top_level_text]
+
+    if not texts:
+        task_text = trigger.task_parameters.get("text")
+        if isinstance(task_text, str) and task_text.strip():
+            texts = [task_text.strip()]
+
+    return "\n".join(texts) if texts else None
+
 
 class TriggerService:
     """High-level service for trigger management that orchestrates persistence and lifecycle."""
@@ -243,9 +283,10 @@ class TriggerService:
                 updated_trigger, CronTrigger
             ):
                 try:
-                    # Check if cron expression or active status changed
+                    # Check if schedule settings or active status changed
                     cron_changed = (
                         trigger_update.cron_expression is not None
+                        or trigger_update.timezone is not None
                         or trigger_update.is_active is not None
                     )
 
@@ -435,6 +476,7 @@ class TriggerService:
         trigger_data: dict[str, Any] | None = None,
         workflow_id: str | None = None,
         run_id: str | None = None,
+        fired_by: str | None = None,
     ) -> TriggerExecution:
         """Record a trigger execution.
 
@@ -447,6 +489,7 @@ class TriggerService:
             trigger_data: Optional trigger data that was processed
             workflow_id: Optional Temporal workflow ID
             run_id: Optional Temporal run ID
+            fired_by: Principal who asked for this run, when a person did
 
         Returns:
             The created trigger execution record
@@ -474,6 +517,7 @@ class TriggerService:
                 trigger_data=trigger_data or {},
                 workflow_id=workflow_id,
                 run_id=run_id,
+                fired_by=fired_by,
             )
 
             # Record the execution
@@ -892,6 +936,16 @@ class TriggerService:
         if not trigger_data.timezone or not trigger_data.timezone.strip():
             raise TriggerValidationError("Timezone is required for CRON triggers")
 
+        # A schedule coming due carries nothing with it, so the task text is the
+        # only thing that can tell the agent what to do. Two exemptions, both
+        # because something else supplies the text: webhooks get it from the
+        # call, and a schedule with a data extractor polls a mailbox or a feed
+        # and works on what it finds.
+        if not trigger_data.data_extractor:
+            task_text = (trigger_data.task_parameters or {}).get("text")
+            if not isinstance(task_text, str) or not task_text.strip():
+                raise TriggerValidationError("Task text is required for CRON triggers")
+
     async def _validate_webhook_configuration(self, trigger_data: TriggerCreate) -> None:
         """Validate webhook trigger configuration.
 
@@ -929,12 +983,23 @@ class TriggerService:
         if trigger_update.name is not None and not trigger_update.name.strip():
             raise TriggerValidationError("Trigger name cannot be empty")
 
+        if trigger_update.agent_id is not None:
+            await self._validate_agent_exists(trigger_update.agent_id)
+
         # Type-specific validation
         if isinstance(existing_trigger, CronTrigger):
             if trigger_update.cron_expression is not None:
                 parts = trigger_update.cron_expression.strip().split()
                 if len(parts) not in [5, 6]:
                     raise TriggerValidationError("Cron expression must have 5 or 6 parts")
+
+            # Editing a schedule into the state create_trigger refuses is the
+            # same mistake, made later. An update that leaves task_parameters
+            # alone leaves the existing text alone with it.
+            if trigger_update.task_parameters is not None and not existing_trigger.data_extractor:
+                task_text = trigger_update.task_parameters.get("text")
+                if not isinstance(task_text, str) or not task_text.strip():
+                    raise TriggerValidationError("Task text is required for CRON triggers")
 
         elif isinstance(existing_trigger, WebhookTrigger):
             if trigger_update.allowed_methods is not None:
@@ -1013,13 +1078,15 @@ class TriggerService:
         )
 
     async def execute_trigger(
-        self, trigger_id: UUID, trigger_data: dict[str, Any]
+        self, trigger_id: UUID, trigger_data: dict[str, Any], fired_by: str | None = None
     ) -> TriggerExecution | None:
         """Execute a trigger.
 
         Args:
             trigger_id: The ID of the trigger to execute
             trigger_data: Additional data for trigger execution
+            fired_by: Principal who asked for this one run. Set only when a person
+                pressed "run now"; the schedule and inbound webhooks leave it empty.
 
         Returns:
             Execution record
@@ -1032,8 +1099,11 @@ class TriggerService:
         if not trigger:
             raise TriggerNotFoundError(f"Trigger {trigger_id} not found")
 
-        # Check if trigger is active
-        if not trigger.is_active:
+        # is_active governs the trigger's own mechanism -- whether the schedule
+        # comes due, whether the webhook is accepted. It does not govern a person
+        # asking for one run, and testing a trigger that is switched off (or not
+        # switched on yet) is most of why they would ask.
+        if not trigger.is_active and fired_by is None:
             logger.warning(f"Attempted to execute inactive trigger {trigger_id}")
             return await self._record_execution_failure(
                 trigger_id, "Trigger is inactive", trigger_data
@@ -1051,34 +1121,26 @@ class TriggerService:
                 if not conditions_met:
                     logger.info(f"Trigger {trigger_id} conditions not met, skipping execution")
                     return await self._record_execution_failure(
-                        trigger_id, "Trigger conditions not met", trigger_data
+                        trigger_id, "Trigger conditions not met", trigger_data, fired_by=fired_by
                     )
 
             # Create task from trigger
             task_id = None
             if self.task_service:
-                # Extract message text for the task query.
-                # Priority: events (poll-based) > top-level text (webhook-parsed) > fallback
-                events = trigger_data.get("events", [])
-                message_texts = [e.get("text") for e in events if e.get("text")]
-                if not message_texts:
-                    top_level_text = trigger_data.get("text")
-                    if top_level_text:
-                        message_texts = [top_level_text]
-                if not message_texts:
-                    task_text = trigger.task_parameters.get("text")
-                    if isinstance(task_text, str) and task_text.strip():
-                        message_texts = [task_text.strip()]
-                query = (
-                    "\n".join(message_texts)
-                    if message_texts
-                    else (trigger.description or f"Execute trigger {trigger.name}")
-                )
+                query = resolve_task_query(trigger, trigger_data)
+                if query is None:
+                    return await self._record_execution_failure(
+                        trigger_id,
+                        NO_TASK_TEXT,
+                        trigger_data,
+                        int((time.time() - start_time) * 1000),
+                        fired_by=fired_by,
+                    )
 
                 channel_origin = trigger_data.get("channel_origin")
 
                 # Build task parameters
-                task_params = await self._build_task_parameters(trigger, trigger_data)
+                task_params = await self._build_task_parameters(trigger, trigger_data, fired_by)
                 if channel_origin:
                     task_params["channel_origin"] = channel_origin
 
@@ -1089,7 +1151,9 @@ class TriggerService:
                     title=f"Trigger: {trigger.name}",
                     description=query,
                     query=query,
-                    user_id=str(trigger.created_by),
+                    # A manual run belongs to whoever pressed the button, not to
+                    # whoever created the trigger months ago.
+                    user_id=fired_by if fired_by is not None else str(trigger.created_by),
                     workspace_id=str(trigger.workspace_id),
                     agent_id=trigger.agent_id,
                     task_parameters=task_params,
@@ -1114,7 +1178,7 @@ class TriggerService:
             execution = None
             try:
                 execution = await self._record_execution_success(
-                    trigger_id, execution_time_ms, task_id, trigger_data
+                    trigger_id, execution_time_ms, task_id, trigger_data, fired_by=fired_by
                 )
                 trigger.record_execution_success()
                 await self.trigger_repository.update_execution_tracking(
@@ -1140,7 +1204,7 @@ class TriggerService:
             execution = None
             try:
                 execution = await self._record_execution_failure(
-                    trigger_id, str(e), trigger_data, execution_time_ms
+                    trigger_id, str(e), trigger_data, execution_time_ms, fired_by=fired_by
                 )
                 trigger.record_execution_failure()
                 await self.trigger_repository.update_execution_tracking(
@@ -1163,6 +1227,7 @@ class TriggerService:
         execution_time_ms: int,
         task_id: UUID | None = None,
         trigger_data: dict[str, Any] | None = None,
+        fired_by: str | None = None,
     ) -> TriggerExecution:
         """Record successful trigger execution.
 
@@ -1171,6 +1236,7 @@ class TriggerService:
             execution_time_ms: Execution time in milliseconds
             task_id: Optional task ID if a task was created
             trigger_data: Optional trigger data
+            fired_by: Principal who asked for this run, when a person did
 
         Returns:
             Execution record
@@ -1181,6 +1247,7 @@ class TriggerService:
             execution_time_ms=execution_time_ms,
             task_id=task_id,
             trigger_data=trigger_data or {},
+            fired_by=fired_by,
         )
 
     async def _record_execution_failure(
@@ -1189,6 +1256,7 @@ class TriggerService:
         error_message: str,
         trigger_data: dict[str, Any] | None = None,
         execution_time_ms: int = 0,
+        fired_by: str | None = None,
     ) -> TriggerExecution:
         """Record failed trigger execution.
 
@@ -1197,6 +1265,7 @@ class TriggerService:
             error_message: Error message
             trigger_data: Optional trigger data
             execution_time_ms: Execution time in milliseconds
+            fired_by: Principal who asked for this run, when a person did
 
         Returns:
             Execution record
@@ -1207,16 +1276,18 @@ class TriggerService:
             execution_time_ms=execution_time_ms,
             error_message=error_message,
             trigger_data=trigger_data or {},
+            fired_by=fired_by,
         )
 
     async def _build_task_parameters(
-        self, trigger: Trigger, trigger_data: dict[str, Any]
+        self, trigger: Trigger, trigger_data: dict[str, Any], fired_by: str | None = None
     ) -> dict[str, Any]:
         """Build task parameters from trigger and execution data using LLM extraction.
 
         Args:
             trigger: The trigger
             trigger_data: Trigger execution data
+            fired_by: Principal who asked for this run, when a person did
 
         Returns:
             Task parameters
@@ -1233,6 +1304,17 @@ class TriggerService:
                 "execution_time": datetime.utcnow().isoformat(),
             }
         )
+
+        # Present only on a manual run, so the task listing can say a person asked
+        # for this one rather than reporting it as the schedule coming due.
+        if fired_by is not None:
+            params["fired_by"] = fired_by
+
+        # Which channel the webhook came from. channel_origin carries this only
+        # for the channels that need outbound routing, so without it a GitHub or
+        # Stripe webhook reaches the task listing as an anonymous "webhook".
+        if isinstance(trigger, WebhookTrigger) and trigger.webhook_type:
+            params["webhook_type"] = str(trigger.webhook_type)
 
         # Add trigger data
         if trigger_data:
@@ -1260,9 +1342,10 @@ class TriggerService:
                     trigger_context=trigger_context,
                 )
 
-                # Merge LLM-extracted parameters (don't override existing ones)
+                # Event-derived data cannot grant new capabilities or file access.
+                resource_keys = {"mcps", "mcp", "mcp_servers", "skills", "files"}
                 for key, value in llm_params.items():
-                    if key not in params:
+                    if key not in params and key not in resource_keys:
                         params[key] = value
 
                 logger.info(
@@ -1323,6 +1406,11 @@ class TriggerService:
                         "user_display_name": trigger_data.get("user_name", ""),
                         "presentation": "concise",
                     }
+
+            elif webhook_type == "email":
+                from .channels.email_message import build_email_channel_origin
+
+                return build_email_channel_origin(trigger_data, trigger_id=trigger_id)
 
             elif webhook_type == "discord":
                 channel_id = trigger_data.get("channel_id")
@@ -1505,12 +1593,14 @@ class TriggerService:
 
         return executions, total
 
-    async def get_execution_metrics(self, trigger_id: UUID, hours: int = 24) -> dict[str, Any]:
+    async def get_execution_metrics(
+        self, trigger_id: UUID, hours: int | None = 24
+    ) -> dict[str, Any]:
         """Get execution metrics for a trigger.
 
         Args:
             trigger_id: The trigger ID
-            hours: Time period in hours
+            hours: Time period in hours; ``None`` covers the trigger's whole history
 
         Returns:
             Dictionary with execution metrics

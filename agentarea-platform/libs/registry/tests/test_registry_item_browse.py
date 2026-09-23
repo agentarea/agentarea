@@ -14,13 +14,20 @@ from agentarea_registry.domain.models import Registry
 from agentarea_registry.infrastructure.repository import RegistryItemRepository
 
 
-async def _registry(session, name: str, registry_type: str = "skills", is_active: bool = True):
+async def _registry(
+    session,
+    name: str,
+    registry_type: str = "skills",
+    is_active: bool = True,
+    priority: int | None = None,
+):
     reg = Registry(
         name=name,
         registry_type=registry_type,
         source_type="url",
         source_url=f"https://example.test/{name}.json",
         is_active=is_active,
+        **({} if priority is None else {"recommendation_priority": priority}),
     )
     session.add(reg)
     await session.commit()
@@ -28,7 +35,17 @@ async def _registry(session, name: str, registry_type: str = "skills", is_active
     return reg
 
 
-async def _item(repo, registry, external_id, name, *, spec=None, tags=None, registry_type=None):
+async def _item(
+    repo,
+    registry,
+    external_id,
+    name,
+    *,
+    spec=None,
+    tags=None,
+    registry_type=None,
+    rank=0,
+):
     facets = derive_facets(registry_type or registry.registry_type, name, spec or {}, tags or [])
     return await repo.create(
         registry_id=registry.id,
@@ -39,6 +56,7 @@ async def _item(repo, registry, external_id, name, *, spec=None, tags=None, regi
         category=facets.category,
         sort_key=facets.sort_key,
         featured=facets.featured,
+        recommendation_rank=rank,
     )
 
 
@@ -102,17 +120,49 @@ class TestOrdering:
         await _item(item_repo, reg, "4", "banana", tags=["featured"])
         return reg
 
-    async def test_featured_sort_floats_curated_entries_then_alphabetises(self, item_repo, mixed):
-        items, _ = await item_repo.browse("skills", sort="featured", limit=10, offset=0)
+    async def test_recommended_floats_curated_entries_then_alphabetises(self, item_repo, mixed):
+        items, _ = await item_repo.browse("skills", sort="recommended", limit=10, offset=0)
         assert [i.name for i in items] == ["banana", "mango", "Apple", "zebra"]
+
+    async def test_recommended_keeps_the_order_the_source_published(self, db_session, item_repo):
+        # The whole point: sources are authored best-first (GitHub-star order
+        # for skills, official integrations first for connections). Ordering by
+        # name here would bury the entry the curator put at the top.
+        reg = await _registry(db_session, "curated")
+        await _item(item_repo, reg, "1", "zulu", rank=0)
+        await _item(item_repo, reg, "2", "alpha", rank=1)
+
+        items, _ = await item_repo.browse("skills", limit=10, offset=0)
+        assert [i.name for i in items] == ["zulu", "alpha"]
+
+    async def test_a_bulk_source_cannot_interleave_with_the_curated_one(
+        self, db_session, item_repo
+    ):
+        # Both sources publish a rank-0 item. Without a per-registry weight the
+        # community mirror's first entry lands on the curated front page.
+        curated = await _registry(db_session, "curated", priority=10)
+        mirror = await _registry(db_session, "mirror", priority=900)
+        await _item(item_repo, curated, "c1", "zulu", rank=0)
+        await _item(item_repo, mirror, "m1", "alpha", rank=0)
+
+        items, _ = await item_repo.browse("skills", limit=10, offset=0)
+        assert [i.name for i in items] == ["zulu", "alpha"]
+
+    async def test_name_sort_ignores_curation_entirely(self, db_session, item_repo):
+        reg = await _registry(db_session, "curated", priority=10)
+        await _item(item_repo, reg, "1", "zulu", rank=0, tags=["featured"])
+        await _item(item_repo, reg, "2", "alpha", rank=1)
+
+        items, _ = await item_repo.browse("skills", sort="name", limit=10, offset=0)
+        assert [i.name for i in items] == ["alpha", "zulu"]
 
     async def test_name_sort_is_case_insensitive(self, item_repo, mixed):
         items, _ = await item_repo.browse("skills", sort="name", limit=10, offset=0)
         assert [i.name for i in items] == ["Apple", "banana", "mango", "zebra"]
 
-    async def test_featured_is_the_default_sort(self, item_repo, mixed):
+    async def test_recommended_is_the_default_sort(self, item_repo, mixed):
         default, _ = await item_repo.browse("skills", limit=10, offset=0)
-        explicit, _ = await item_repo.browse("skills", sort="featured", limit=10, offset=0)
+        explicit, _ = await item_repo.browse("skills", sort="recommended", limit=10, offset=0)
         assert [i.id for i in default] == [i.id for i in explicit]
 
     async def test_ties_break_deterministically_so_pages_do_not_overlap(self, db_session, item_repo):
@@ -131,6 +181,73 @@ class TestOrdering:
     async def test_unknown_sort_falls_back_to_the_default(self, item_repo, mixed):
         items, _ = await item_repo.browse("skills", sort="nonsense", limit=10, offset=0)
         assert [i.name for i in items] == ["banana", "mango", "Apple", "zebra"]
+
+
+class TestProtocolFacet:
+    """Connections are MCP servers *or* plain HTTP APIs, and you can say which.
+
+    The tab used to be called "MCP servers" and behave as if that were the only
+    possibility. It never was: an OpenAPI connection is published into the same
+    catalog with ``connection_type='openapi'``.
+    """
+
+    @pytest_asyncio.fixture
+    async def connections(self, db_session, item_repo):
+        reg = await _registry(db_session, "conns", registry_type="mcp_servers")
+        await _item(item_repo, reg, "1", "GitHub", spec={"connection_type": "url"})
+        await _item(item_repo, reg, "2", "Local tool", spec={"connection_type": "command"})
+        await _item(item_repo, reg, "3", "Metrica", spec={"connection_type": "openapi"})
+        # Managed publications predate connection_type; they are MCP servers.
+        await _item(item_repo, reg, "4", "Legacy", spec={})
+        return reg
+
+    async def test_api_filter_keeps_only_openapi_connections(self, item_repo, connections):
+        items, total = await item_repo.browse("mcp_servers", protocol="api", limit=10)
+        assert [i.name for i in items] == ["Metrica"]
+        assert total == 1
+
+    async def test_mcp_filter_keeps_everything_that_is_not_an_http_api(
+        self, item_repo, connections
+    ):
+        items, total = await item_repo.browse("mcp_servers", protocol="mcp", sort="name", limit=10)
+        assert [i.name for i in items] == ["GitHub", "Legacy", "Local tool"]
+        assert total == 3
+
+    async def test_counts_cover_the_whole_catalog_not_the_page(self, item_repo, connections):
+        counts = await item_repo.protocol_counts("mcp_servers")
+        assert counts == [("mcp", 3), ("api", 1)]
+
+    async def test_counts_follow_the_search_and_category_filters(self, item_repo, connections):
+        assert await item_repo.protocol_counts("mcp_servers", q="Metrica") == [("api", 1)]
+
+    async def test_other_types_have_no_protocol_dimension(self, item_repo, connections):
+        assert await item_repo.protocol_counts("skills") == []
+
+    async def test_category_counts_narrow_to_the_selected_protocol(
+        self, db_session, item_repo
+    ):
+        reg = await _registry(db_session, "conns", registry_type="mcp_servers")
+        await _item(
+            item_repo,
+            reg,
+            "1",
+            "GitHub",
+            spec={"connection_type": "url", "raw_spec": {"metadata": {"agentarea:category": "eng"}}},
+            registry_type="mcp_servers",
+        )
+        await _item(
+            item_repo,
+            reg,
+            "2",
+            "Metrica",
+            spec={
+                "connection_type": "openapi",
+                "raw_spec": {"metadata": {"agentarea:category": "analytics"}},
+            },
+            registry_type="mcp_servers",
+        )
+
+        assert await item_repo.category_counts("mcp_servers", protocol="api") == [("analytics", 1)]
 
 
 class TestFiltering:

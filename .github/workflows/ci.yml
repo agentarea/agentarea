@@ -101,6 +101,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
+          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+          version: "0.8.22"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 
@@ -143,6 +146,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
+          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+          version: "0.8.22"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 
@@ -182,6 +188,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
+          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+          version: "0.8.22"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 
@@ -325,10 +334,17 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        with:
+          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+          version: "0.8.22"
 
+      # Runs unconditionally, so on real GitHub Actions it reinstalls uv over the
+      # version setup-uv just pinned. Pinned to the same version so both paths agree
+      # rather than this one silently winning with whatever is latest.
       - name: Install uv (act fallback)
         run: |
-          curl -Ls https://astral.sh/uv/install.sh | sh
+          curl -Ls https://astral.sh/uv/0.8.22/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Set up Python
@@ -708,17 +724,19 @@ jobs:
   migrations-gate:
     runs-on: ubuntu-latest
     needs: changes
-    # Also runs on mcp_manager changes: this job owns the only database carrying
-    # the real migrated schema, and the manager's SQL is checked against it
-    # below. Both sides can break that pairing — a migration dropping a column,
-    # or Go starting to reference one — so both must trigger the gate.
+    # Also runs on mcp_manager and operator changes: this job owns the only
+    # database carrying the real migrated schema, and both write hand-written SQL
+    # against it that is checked below. Either side can break the pairing — a
+    # migration dropping a column, or the SQL starting to reference one — so all
+    # of them must trigger the gate.
     if: |
       always() && !cancelled() && (
         github.event_name == 'workflow_call' ||
         github.ref == 'refs/heads/main' ||
         (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
         needs.changes.outputs.platform == 'true' ||
-        needs.changes.outputs.mcp_manager == 'true'
+        needs.changes.outputs.mcp_manager == 'true' ||
+        needs.changes.outputs.operator == 'true'
       )
     services:
       postgres:
@@ -746,6 +764,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
+          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+          version: "0.8.22"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 
@@ -788,14 +809,22 @@ jobs:
         working-directory: agentarea-platform
         env:
           SECRETS_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/agentarea_test
+          AUDIT_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/agentarea_test
         # The provider-config suite belongs here for the same reason: it checks
         # an ordering constraint that only real RESTRICT foreign keys can
         # enforce, and the mocked-session unit tests next to it passed while
         # deleting a provider config returned 500.
+        #
+        # The audit suite likewise: `audit_events` is append-only because a
+        # trigger refuses UPDATE and DELETE, and nothing outside a migrated
+        # database can observe that. Note this job connects as `postgres`, a
+        # superuser, so a grant-based version of the same rule would pass here
+        # while enforcing nothing — the trigger is what is actually checked.
         run: |
           uv run python -m pytest -v \
             libs/secrets/tests/test_catalog_service.py \
-            libs/llm/tests/test_provider_secret_lifecycle_db.py
+            libs/llm/tests/test_provider_secret_lifecycle_db.py \
+            libs/common/tests/test_audit_append_only_db.py
 
       # The MCP demand gateway's lifecycle rules run against this schema in
       # production, but they live in Go SQL and no other job has a migrated
@@ -823,6 +852,22 @@ jobs:
         # keep one workspace's secrets out of another's containers — a rule that
         # only a real schema can check.
         run: go test -v -count=1 ./internal/mcpgateway/... ./internal/secrets/...
+
+      # The operator is the third writer of hand-written SQL against this schema,
+      # and the only one whose statements nothing else exercises: it runs in a
+      # cluster, against a database it reaches at runtime, so its unit tests mock
+      # the connection away entirely. That is how its INSERT came to name a
+      # `source` column on provider_configs that no migration has ever created —
+      # every platform-supplied model silently failed to exist in production
+      # while CI was green.
+      - name: Check operator provider-config SQL against the migrated schema
+        working-directory: agentarea-operator
+        env:
+          OPERATOR_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentarea_test
+          # Same reason as MCP_GATEWAY_REQUIRE_DB above: without it, a DSN that
+          # never arrives turns the whole check into a skip that logs like a pass.
+          OPERATOR_REQUIRE_DB: "1"
+        run: uv run --group dev python -m pytest -v tests/test_provider_config_sql_db.py
 
   # Single required status check for branch protection. Monorepo path filters
   # skip irrelevant jobs (they report "skipped", not "failure"), so a per-job

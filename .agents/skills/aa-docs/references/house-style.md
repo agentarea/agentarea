@@ -25,7 +25,8 @@ deployed things like this before and have been burned by docs that oversold.
 ## Formatting
 
 - Sentence case in headings. "Run a command in a sandbox".
-- One H1 per page, matching `title` in frontmatter.
+- One H1 per page. Mintlify renders `title` as that H1 — do not write another
+  one in the body.
 - Code blocks are complete and runnable. No `...`, no invented placeholders
   where a real value would do. Tag the language.
 - Long output goes in a collapsible block, not inline.
@@ -34,6 +35,40 @@ deployed things like this before and have been burned by docs that oversold.
 - Diagrams: Mermaid, and only when the relationship is genuinely hard to state
   in a sentence. Three of the current pages open with the same architecture
   diagram, which means none of them needed it.
+
+## Components
+
+Mintlify renders MDX. Plain markdown works, but the site reads as undifferentiated
+prose without the components below. Use them where the shape of the content
+matches; do not decorate.
+
+| Content shape | Component |
+|---|---|
+| An ordered procedure the reader follows | `<Steps titleSize="h3">` with one `<Step title="…">` each |
+| Prerequisites before a procedure | `<Info>` wrapping the list |
+| A symptom-and-cause list (Troubleshooting) | `<AccordionGroup>`, one `<Accordion title="<symptom>">` per item |
+| A closing list of links (Related, See also) | `<Columns cols={2}>` of `<Card title icon href>` |
+| Two ways to do the same thing | `<Tabs>`, or `<CodeGroup>` when they differ only by language or shell |
+| A caveat the reader must not miss | `<Warning>`; `<Note>` for an aside, `<Check>` for a success criterion |
+
+Rules:
+
+- Card descriptions are one short phrase, under ~96 characters. A card is a
+  signpost, not a summary.
+- Never wrap a **Limits** section in accordions. Limits are the part a reader
+  most needs to see; collapsing them hides the honest caveats the page exists to
+  make.
+- Component bodies are indented four spaces. Never let a line wrap inside an
+  inline-code span or a link.
+- Icons come from Font Awesome. Keep them consistent per destination area:
+  `robot` agents, `list-check` tasks, `box` sandboxes, `plug` integrations,
+  `scale-balanced` governance, `server` self-host, `book` reference,
+  `lightbulb` concepts.
+
+Check the result with `mintlify validate`, `mintlify broken-links`, and
+`mintlify a11y` before calling a page done. Mintlify publishes an agent skill
+with the full component reference; fetch it into `.claude/skills/mintlify/` from
+`github.com/mintlify/docs`, under `agent-context/context/skills/mintlify/`.
 
 ## Emoji
 

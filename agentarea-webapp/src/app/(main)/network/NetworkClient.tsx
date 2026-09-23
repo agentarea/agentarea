@@ -16,11 +16,14 @@ import {
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import NodeDetailDrawer from "./components/NodeDetailDrawer";
+import {
+  getNetworkPeopleAccessAction,
+  previewNetworkPolicyAction,
+} from "./actions";
 import { useNetwork } from "./NetworkProvider";
 import type { NetworkNodeData, TopologyResponse } from "./types";
 import AccessGraphView from "./views/AccessGraphView";
-import CytoscapeTopologyView from "./views/CytoscapeTopologyView";
+import NetworkMapView from "./views/NetworkMapView";
 import OrgChartView from "./views/OrgChartView";
 
 export function NetworkHeaderTabs() {
@@ -75,14 +78,15 @@ export function NetworkHeaderControls() {
         className="h-7 w-7 text-muted-foreground"
         aria-label="Refresh topology"
       >
-        <RefreshCw className={loading ? "animate-spin" : ""} />
+        <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
       </Button>
     </div>
   );
 }
 
 export default function NetworkClient() {
-  const { topology, loading, view } = useNetwork();
+  const { topology, loading, error, fetchTopology, view } = useNetwork();
+  const t = useTranslations("NetworkPage.integration");
   const [selectedNode, setSelectedNode] = useState<NetworkNodeData | null>(
     null
   );
@@ -95,18 +99,36 @@ export default function NetworkClient() {
     return <NetworkGraphSkeleton />;
   }
 
-  if (!topology || topology.nodes.length === 0) {
+  if (error && !topology) {
+    return (
+      <div
+        className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center"
+        role="alert"
+      >
+        <p className="text-sm font-medium">{t("loadError")}</p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={fetchTopology}
+          disabled={loading}
+        >
+          {t("retry")}
+        </Button>
+      </div>
+    );
+  }
+
+  if (!topology) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-[#f4f7fb] px-6 text-center dark:bg-zinc-950">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-dashed border-blue-300 bg-white text-blue-600 shadow-sm dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-300">
           <Route className="h-6 w-6" />
         </div>
         <p className="mt-4 text-sm font-semibold text-foreground">
-          Your topology starts with an agent
+          {t("emptyTitle")}
         </p>
         <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
-          Add an agent, trigger, or external connection. Relationships will
-          appear here automatically as a live network map.
+          {t("emptyDescription")}
         </p>
       </div>
     );
@@ -116,10 +138,28 @@ export default function NetworkClient() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-[#f4f7fb] dark:bg-zinc-950">
+      {error && (
+        <div
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 py-2 text-xs"
+          role="alert"
+        >
+          <span>{t("refreshError")}</span>
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={fetchTopology}
+            disabled={loading}
+          >
+            {t("retry")}
+          </Button>
+        </div>
+      )}
       <div className="relative min-h-0 flex-1">
         {view === "access" ? (
           <AccessGraphView
             topology={topology}
+            loadPeopleAccess={getNetworkPeopleAccessAction}
+            loadPolicy={previewNetworkPolicyAction}
             onNodeClick={handleSelect}
             highlightId={highlightId}
             onPaneClick={() => handleSelect(null)}
@@ -127,28 +167,24 @@ export default function NetworkClient() {
         ) : view === "org" ? (
           <OrgChartView
             topology={topology}
+            loadPeopleAccess={getNetworkPeopleAccessAction}
+            loadPolicy={previewNetworkPolicyAction}
             onNodeClick={handleSelect}
             highlightId={highlightId}
             onPaneClick={() => handleSelect(null)}
           />
         ) : (
-          <CytoscapeTopologyView
+          <NetworkMapView
             topology={topology}
+            loadPeopleAccess={getNetworkPeopleAccessAction}
+            loadPolicy={previewNetworkPolicyAction}
             onNodeClick={handleSelect}
             highlightId={highlightId}
             onPaneClick={() => handleSelect(null)}
           />
         )}
-
-        {selectedNode && (
-          <NodeDetailDrawer
-            node={selectedNode}
-            topology={topology}
-            onClose={() => handleSelect(null)}
-          />
-        )}
       </div>
-      <TopologyStatusBar topology={topology} />
+      {view === "access" && <TopologyStatusBar topology={topology} />}
     </div>
   );
 }

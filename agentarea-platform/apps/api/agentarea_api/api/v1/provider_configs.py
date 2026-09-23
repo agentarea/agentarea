@@ -14,7 +14,7 @@ from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.model_discovery_service import DiscoveredModel, ModelDiscoveryService
 from agentarea_llm.application.provider_service import ProviderService  # type: ignore
-from agentarea_llm.domain.models import ProviderConfig  # type: ignore
+from agentarea_llm.domain.models import MANAGED_BY_PLATFORM, ProviderConfig  # type: ignore
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,6 +28,19 @@ router = APIRouter(prefix="/provider-configs", tags=["provider-configs"])
 __all__ = ["ProviderConfigCreate", "ProviderConfigUpdate", "router"]
 
 
+def _requires_api_key(provider_config: ProviderConfig) -> bool:
+    """Whether the client should ask for a key for this configuration.
+
+    Defaults to True when the spec is not loaded: an unnecessary key field is a
+    small annoyance, a missing one for a provider that needs it is a configuration
+    that silently never works.
+    """
+    spec = getattr(provider_config, "provider_spec", None)
+    if spec is None:
+        return True
+    return bool(getattr(spec, "requires_api_key", True))
+
+
 class ProviderConfigResponse(BaseModel):
     id: str
     provider_spec_id: str
@@ -39,6 +52,18 @@ class ProviderConfigResponse(BaseModel):
     is_public: bool
     created_at: UtcDatetime
     updated_at: UtcDatetime
+    # "platform" when the deployment supplies this configuration's credentials.
+    # Read-only: there is no request field that sets it, because a tenant able to
+    # declare their own configuration platform-managed could make it unwritable by
+    # anyone and visible to every other workspace.
+    #
+    # The client needs it to stop offering an API-key field and a Delete button for
+    # a configuration whose key is not the user's and whose deletion will be
+    # refused.
+    managed_by: str | None = None
+    # Whether this provider type authenticates at all, copied from the spec so the
+    # client can decide about the key field from the configuration alone.
+    requires_api_key: bool = True
 
     # Related data
     provider_spec_name: str | None = None
@@ -69,6 +94,8 @@ class ProviderConfigResponse(BaseModel):
             is_public=provider_config.is_public,
             created_at=provider_config.created_at,
             updated_at=provider_config.updated_at,
+            managed_by=getattr(provider_config, "managed_by", None),
+            requires_api_key=_requires_api_key(provider_config),
             provider_spec_name=provider_config.provider_spec.name
             if hasattr(provider_config, "provider_spec") and provider_config.provider_spec
             else None,
@@ -247,10 +274,16 @@ class DiscoverPreviewResponse(BaseModel):
     discovered: int
     new_models: int
     models: list[DiscoverPreviewModelResponse]
+    skipped: list["SkippedModelResponse"] = []
 
 
-def _require_discovered_runtime_metadata(model: DiscoveredModel) -> int:
-    """Return the required context window or reject an incomplete catalog entry."""
+class SkippedModelResponse(BaseModel):
+    model_name: str
+    missing: list[str]
+
+
+def _missing_runtime_metadata(model: DiscoveredModel) -> list[str]:
+    """Names of the runtime fields a model must carry before it can be run."""
     missing = []
     if (
         isinstance(model.context_window, bool)
@@ -262,16 +295,57 @@ def _require_discovered_runtime_metadata(model: DiscoveredModel) -> int:
         missing.append("input_cost_per_token")
     if model.output_cost_per_token is None:
         missing.append("output_cost_per_token")
-    if missing:
+    return missing
+
+
+def _partition_discovered(
+    models: list[DiscoveredModel],
+) -> tuple[list[DiscoveredModel], list[SkippedModelResponse]]:
+    """Split a discovery batch into runnable models and reported rejects.
+
+    An entry without pricing or a context window still must not become a spec —
+    it would fail at execution time. But it must not take the rest of the
+    provider down with it either: OpenRouter publishes router meta-models
+    (``openrouter/auto-beta``) that carry no pricing by design, and failing the
+    whole batch on the first of them made discovery impossible for the provider.
+
+    Rejects are returned rather than dropped, so the caller reports what it
+    refused instead of silently returning a shorter list.
+    """
+    usable: list[DiscoveredModel] = []
+    skipped: list[SkippedModelResponse] = []
+    for model in models:
+        missing = _missing_runtime_metadata(model)
+        if missing:
+            skipped.append(SkippedModelResponse(model_name=model.model_name, missing=missing))
+        else:
+            usable.append(model)
+    return usable, skipped
+
+
+def _log_skipped_models(provider_key: str, skipped: list[SkippedModelResponse]) -> None:
+    if skipped:
+        logger.warning(
+            "Discovery for provider %s skipped %d model(s) missing runtime metadata: %s",
+            provider_key,
+            len(skipped),
+            ", ".join(f"{s.model_name} ({', '.join(s.missing)})" for s in skipped),
+        )
+
+
+def _require_any_usable_model(
+    provider_key: str, usable: list[DiscoveredModel], skipped: list[SkippedModelResponse]
+) -> None:
+    """Refuse a batch in which nothing is runnable rather than report success."""
+    if not usable:
         raise HTTPException(
             status_code=422,
             detail=(
-                f"Discovered model '{model.model_name}' is missing required runtime metadata: "
-                + ", ".join(missing)
-                + ". Configure the model spec explicitly before execution."
+                f"No model discovered for provider '{provider_key}' carries the runtime metadata "
+                f"required to execute it ({len(skipped)} skipped). "
+                "Configure the model specs explicitly."
             ),
         )
-    return cast(int, model.context_window)
 
 
 @router.post("/discover-preview", response_model=DiscoverPreviewResponse)
@@ -304,10 +378,14 @@ async def discover_models_preview(
             "The provider may not support model listing or the API key may be invalid.",
         )
 
+    usable, skipped = _partition_discovered(discovered)
+    _log_skipped_models(data.provider_key, skipped)
+    _require_any_usable_model(data.provider_key, usable, skipped)
+
     results = []
     new_count = 0
-    for model in discovered:
-        context_window = _require_discovered_runtime_metadata(model)
+    for model in usable:
+        context_window = cast(int, model.context_window)
         existing = await model_spec_repo.get_by_provider_and_model(
             UUID(str(provider_spec_id)), model.model_name
         )
@@ -358,6 +436,7 @@ async def discover_models_preview(
         discovered=len(results),
         new_models=new_count,
         models=results,
+        skipped=skipped,
     )
 
 
@@ -440,6 +519,7 @@ class DiscoveryResponse(BaseModel):
     discovered: int
     new_models: int
     models: list[DiscoveredModelResponse]
+    skipped: list[SkippedModelResponse] = []
 
 
 @router.post("/{config_id}/discover", response_model=DiscoveryResponse)
@@ -453,6 +533,20 @@ async def discover_models(
     config = await provider_service.get_provider_config(config_id)
     if not config:
         raise HTTPException(status_code=404, detail="Provider configuration not found")
+
+    # Discovery spends the configuration's credential on a provider call and writes
+    # what comes back into model specs. On a platform-managed configuration that is
+    # the operator's credential and the operator's catalogue, reached by a tenant
+    # who happens to be able to see the row — which they can, deliberately, so they
+    # can use its models. Refused here rather than left to fail further down: the
+    # key would not resolve in this process anyway (it is not in any workspace's
+    # secret store), so the call would go out unauthenticated and the 400 below
+    # would blame the provider.
+    if getattr(config, "managed_by", None) == MANAGED_BY_PLATFORM:
+        raise HTTPException(
+            status_code=403,
+            detail="Model discovery is not available for platform-supplied providers.",
+        )
 
     api_key = None
     if config.api_key:
@@ -475,11 +569,15 @@ async def discover_models(
             "The provider may not support model listing or the API key may be invalid.",
         )
 
+    usable, skipped = _partition_discovered(discovered)
+    _log_skipped_models(provider_key, skipped)
+    _require_any_usable_model(provider_key, usable, skipped)
+
     # Upsert discovered models as ModelSpec entries
     results = []
     new_count = 0
-    for model in discovered:
-        context_window = _require_discovered_runtime_metadata(model)
+    for model in usable:
+        context_window = cast(int, model.context_window)
         # Check if model already exists
         existing = await model_spec_repo.get_by_provider_and_model(
             UUID(str(provider_spec_id)), model.model_name
@@ -530,6 +628,7 @@ async def discover_models(
         discovered=len(results),
         new_models=new_count,
         models=results,
+        skipped=skipped,
     )
 
 

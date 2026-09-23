@@ -45,6 +45,9 @@ class WebhookType(StrEnum):
     STRIPE = "stripe"
     GMAIL = "gmail"
     TEAMS = "teams"
+    # Mail delivered by an inbound-parse provider. Distinct from GMAIL, which is
+    # a Pub/Sub ping carrying no message — this one carries the mail itself.
+    EMAIL = "email"
 
     @classmethod
     def _missing_(cls, value):

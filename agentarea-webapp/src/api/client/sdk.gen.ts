@@ -49,6 +49,12 @@ import type {
   CheckPermissionV1AccessControlCheckPostData,
   CheckPermissionV1AccessControlCheckPostErrors,
   CheckPermissionV1AccessControlCheckPostResponses,
+  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutData,
+  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors,
+  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses,
+  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostData,
+  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors,
+  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses,
   ContinueTaskExecutionV1TasksTaskIdContinuePostData,
   ContinueTaskExecutionV1TasksTaskIdContinuePostErrors,
   ContinueTaskExecutionV1TasksTaskIdContinuePostResponses,
@@ -61,6 +67,9 @@ import type {
   CreateAttachmentUploadUrlV1FilesUploadUrlPostData,
   CreateAttachmentUploadUrlV1FilesUploadUrlPostErrors,
   CreateAttachmentUploadUrlV1FilesUploadUrlPostResponses,
+  CreateCatalogItemV1RegistriesRegistryIdItemsPostData,
+  CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors,
+  CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses,
   CreateClientV1ClientsPostData,
   CreateClientV1ClientsPostErrors,
   CreateClientV1ClientsPostResponses,
@@ -133,12 +142,18 @@ import type {
   CreateWalletV1AgentsAgentIdWalletPostData,
   CreateWalletV1AgentsAgentIdWalletPostErrors,
   CreateWalletV1AgentsAgentIdWalletPostResponses,
+  CreateWorkspaceDirectoryV1FilesDirectoriesPostData,
+  CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors,
+  CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses,
   CreateWorkspaceV1WorkspacesPostData,
   CreateWorkspaceV1WorkspacesPostErrors,
   CreateWorkspaceV1WorkspacesPostResponses,
   DeleteAgentV1AgentsAgentIdDeleteData,
   DeleteAgentV1AgentsAgentIdDeleteErrors,
   DeleteAgentV1AgentsAgentIdDeleteResponses,
+  DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteData,
+  DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors,
+  DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses,
   DeleteClientV1ClientsClientIdDeleteData,
   DeleteClientV1ClientsClientIdDeleteErrors,
   DeleteClientV1ClientsClientIdDeleteResponses,
@@ -328,6 +343,8 @@ import type {
   GetModelSpecV1ModelSpecsModelSpecIdGetData,
   GetModelSpecV1ModelSpecsModelSpecIdGetErrors,
   GetModelSpecV1ModelSpecsModelSpecIdGetResponses,
+  GetNetworkPeopleAccessV1NetworkPeopleAccessGetData,
+  GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponses,
   GetNetworkTopologyV1NetworkTopologyGetData,
   GetNetworkTopologyV1NetworkTopologyGetResponses,
   GetOauthLinkV1McpOauthLinksLinkIdGetData,
@@ -442,12 +459,6 @@ import type {
   HydraOauth2ProxyOauth2PathPutData,
   HydraOauth2ProxyOauth2PathPutErrors,
   HydraOauth2ProxyOauth2PathPutResponses,
-  ImportWorkspaceConfigFileV1WorkspaceImportFilePostData,
-  ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors,
-  ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses,
-  ImportWorkspaceConfigV1WorkspaceImportPostData,
-  ImportWorkspaceConfigV1WorkspaceImportPostErrors,
-  ImportWorkspaceConfigV1WorkspaceImportPostResponses,
   InstallAgentV1AgentsAgentIdInstallPostData,
   InstallAgentV1AgentsAgentIdInstallPostErrors,
   InstallAgentV1AgentsAgentIdInstallPostResponses,
@@ -560,15 +571,24 @@ import type {
   ListTriggersV1TriggersGetData,
   ListTriggersV1TriggersGetErrors,
   ListTriggersV1TriggersGetResponses,
+  ListUsageEventsV1UsageEventsGetData,
+  ListUsageEventsV1UsageEventsGetErrors,
+  ListUsageEventsV1UsageEventsGetResponses,
   ListWorkspaceFilesV1FilesGetData,
   ListWorkspaceFilesV1FilesGetResponses,
   ListWorkspacesV1WorkspacesGetData,
   ListWorkspacesV1WorkspacesGetResponses,
+  MoveWorkspaceFileV1FilesMovePostData,
+  MoveWorkspaceFileV1FilesMovePostErrors,
+  MoveWorkspaceFileV1FilesMovePostResponses,
   OauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGetData,
   OauthAuthorizationServerMetadataWellKnownOauthAuthorizationServerGetResponses,
   OauthAuthorizeV1McpOauthAuthorizeGetData,
   OauthAuthorizeV1McpOauthAuthorizeGetErrors,
   OauthAuthorizeV1McpOauthAuthorizeGetResponses,
+  OauthCallbackV1ConnectionsOauthCallbackGetData,
+  OauthCallbackV1ConnectionsOauthCallbackGetErrors,
+  OauthCallbackV1ConnectionsOauthCallbackGetResponses,
   OauthCallbackV1McpOauthCallbackGetData,
   OauthCallbackV1McpOauthCallbackGetErrors,
   OauthCallbackV1McpOauthCallbackGetResponses,
@@ -631,6 +651,9 @@ import type {
   ResolveAccessV1AccessControlResolvePostData,
   ResolveAccessV1AccessControlResolvePostErrors,
   ResolveAccessV1AccessControlResolvePostResponses,
+  ResolvePrincipalsV1PrincipalsGetData,
+  ResolvePrincipalsV1PrincipalsGetErrors,
+  ResolvePrincipalsV1PrincipalsGetResponses,
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostData,
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors,
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostResponses,
@@ -655,6 +678,9 @@ import type {
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
+  RunTriggerNowV1TriggersTriggerIdRunPostData,
+  RunTriggerNowV1TriggersTriggerIdRunPostErrors,
+  RunTriggerNowV1TriggersTriggerIdRunPostResponses,
   ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostData,
   ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostErrors,
   ScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostResponses,
@@ -692,6 +718,9 @@ import type {
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostData,
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors,
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses,
+  UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchData,
+  UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors,
+  UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses,
   UpdateClientV1ClientsClientIdPatchData,
   UpdateClientV1ClientsClientIdPatchErrors,
   UpdateClientV1ClientsClientIdPatchResponses,
@@ -3306,7 +3335,120 @@ export const removeSkillFromClientV1ClientsClientIdSkillsSkillIdDelete = <
   });
 
 /**
+ * Connect Catalog Item
+ *
+ * Materialize a trusted OpenAPI template and start its OAuth flow.
+ */
+export const connectCatalogItemV1ConnectionsCatalogItemIdConnectPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses,
+  ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses,
+    ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/connections/catalog/{item_id}/connect",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Configure Managed Oauth App
+ *
+ * Configure one platform-wide OAuth app without exposing it to tenants.
+ */
+export const configureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutData,
+    ThrowOnError
+  >
+): RequestResult<
+  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses,
+  ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses,
+    ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/connections/oauth/apps/{provider_key}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Oauth Callback
+ *
+ * Exchange an authorization code and attach tokens to the connection.
+ */
+export const oauthCallbackV1ConnectionsOauthCallbackGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    OauthCallbackV1ConnectionsOauthCallbackGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  OauthCallbackV1ConnectionsOauthCallbackGetResponses,
+  OauthCallbackV1ConnectionsOauthCallbackGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    OauthCallbackV1ConnectionsOauthCallbackGetResponses,
+    OauthCallbackV1ConnectionsOauthCallbackGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "bearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/connections/oauth/callback",
+    ...options,
+  });
+
+/**
  * List Workspace Files
+ *
+ * List the files a person put in the workspace.
+ *
+ * What a task produced is not among them: a task's files belong to that run
+ * and are browsed on the task itself, so they stay out of the workspace view
+ * even though ``tasks/{id}/workspace/{path}`` remains readable by that name.
  */
 export const listWorkspaceFilesV1FilesGet = <
   ThrowOnError extends boolean = false,
@@ -3373,6 +3515,43 @@ export const uploadFileV1FilesPost = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Create Workspace Directory
+ *
+ * Persist an empty workspace folder as a trailing-slash object marker.
+ */
+export const createWorkspaceDirectoryV1FilesDirectoriesPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    CreateWorkspaceDirectoryV1FilesDirectoriesPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses,
+  CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses,
+    CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/files/directories",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
  * Stream Workspace File
  *
  * Stream a workspace file through the AgentArea API.
@@ -3433,6 +3612,46 @@ export const workspaceFileHistoryV1FilesHistoryGet = <
     ],
     url: "/v1/files/history",
     ...options,
+  });
+
+/**
+ * Move Workspace File
+ *
+ * Relocate a workspace file or folder to another path.
+ *
+ * A folder is a key prefix rather than an object, so moving one walks every
+ * key beneath it — including the trailing-slash marker that keeps an empty
+ * folder visible in the listing. Reserved prefixes are refused at both ends:
+ * ``tasks/`` belongs to a task's committed manifest, and ``.trash/`` is the
+ * restore endpoint's alone.
+ */
+export const moveWorkspaceFileV1FilesMovePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<MoveWorkspaceFileV1FilesMovePostData, ThrowOnError>
+): RequestResult<
+  MoveWorkspaceFileV1FilesMovePostResponses,
+  MoveWorkspaceFileV1FilesMovePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    MoveWorkspaceFileV1FilesMovePostResponses,
+    MoveWorkspaceFileV1FilesMovePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/files/move",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
@@ -5443,6 +5662,49 @@ export const updateModelSpecV1ModelSpecsModelSpecIdPatch = <
   });
 
 /**
+ * Get Network People Access
+ *
+ * Inspect current-workspace people's ``agent:execute`` admission.
+ *
+ * Uses the existing workspace-management authorization gate. Membership and
+ * ownership establish evaluation subjects; this never acts as those users.
+ * At most 100 people and 100 agents are evaluated, with ``complete=False``
+ * when either list is truncated. Results assume an authenticated participant
+ * and do not represent the restrictions of a particular token or task.
+ *
+ * An intentionally disabled membership directory exposes only the persisted
+ * workspace owner, with ``directory_status=disabled``, ``total_people=None``
+ * and ``complete=False``. An enabled directory that fails still returns 503.
+ */
+export const getNetworkPeopleAccessV1NetworkPeopleAccessGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    GetNetworkPeopleAccessV1NetworkPeopleAccessGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/network/people-access",
+    ...options,
+  });
+
+/**
  * Get Network Topology
  *
  * Get the full network topology for the current workspace.
@@ -5862,6 +6124,36 @@ export const updatePolicyRuleV1PoliciesRuleIdPatch = <
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * Resolve Principals
+ *
+ * Resolve the given ids. Unresolvable ids are absent from the response.
+ */
+export const resolvePrincipalsV1PrincipalsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ResolvePrincipalsV1PrincipalsGetData, ThrowOnError>
+): RequestResult<
+  ResolvePrincipalsV1PrincipalsGetResponses,
+  ResolvePrincipalsV1PrincipalsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ResolvePrincipalsV1PrincipalsGetResponses,
+    ResolvePrincipalsV1PrincipalsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/principals",
+    ...options,
   });
 
 /**
@@ -6962,6 +7254,39 @@ export const browseCatalogV1RegistriesCatalogBrowseGet = <
   });
 
 /**
+ * Delete Catalog Item
+ *
+ * Remove a directly managed catalog definition.
+ */
+export const deleteCatalogItemV1RegistriesCatalogItemsItemIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses,
+  DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses,
+    DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/catalog/items/{item_id}",
+    ...options,
+  });
+
+/**
  * Get Catalog Item
  */
 export const getCatalogItemV1RegistriesCatalogItemsItemIdGet = <
@@ -6990,6 +7315,43 @@ export const getCatalogItemV1RegistriesCatalogItemsItemIdGet = <
     ],
     url: "/v1/registries/catalog/items/{item_id}",
     ...options,
+  });
+
+/**
+ * Update Catalog Item
+ *
+ * Change a directly managed definition in place.
+ */
+export const updateCatalogItemV1RegistriesCatalogItemsItemIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses,
+  UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses,
+    UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/catalog/items/{item_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
@@ -7172,6 +7534,43 @@ export const listRegistryItemsV1RegistriesRegistryIdItemsGet = <
     ],
     url: "/v1/registries/{registry_id}/items",
     ...options,
+  });
+
+/**
+ * Create Catalog Item
+ *
+ * Publish one definition without putting catalog data in the OSS image.
+ */
+export const createCatalogItemV1RegistriesRegistryIdItemsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    CreateCatalogItemV1RegistriesRegistryIdItemsPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses,
+  CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses,
+    CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/registries/{registry_id}/items",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**
@@ -8297,6 +8696,7 @@ export const listTriggersV1TriggersGet = <ThrowOnError extends boolean = false>(
  * user_context: Authentication context.
  * trigger_service: Injected trigger service.
  * secret_manager: Injected secret manager for credential storage.
+ * secret_catalog: Workspace-scoped catalog for selected credential references.
  * webhook_service: Injected service that registers the channel webhook.
  *
  * Returns:
@@ -8338,6 +8738,10 @@ export const createTriggerV1TriggersPost = <
  * Get Catalog
  *
  * Get the trigger catalog — available trigger types with metadata and events.
+ *
+ * ``icon`` is stored as data (an asset id or a full URL); it is resolved here
+ * into ``icon_url`` so the frontend renders whatever it is handed and never
+ * carries a table of which channels exist.
  */
 export const getCatalogV1TriggersCatalogGet = <
   ThrowOnError extends boolean = false,
@@ -8528,8 +8932,8 @@ export const getTriggerV1TriggersTriggerIdGet = <
  * Update an existing trigger.
  *
  * Updates the specified trigger with the provided data. Only non-null fields
- * in the request will be updated. If channel_credentials are provided,
- * they replace the existing credentials in the secret store.
+ * in the request will be updated. Secret selections preserve unselected
+ * credential fields; legacy raw credentials replace the stored bundle.
  *
  * Args:
  * trigger_id: The unique identifier of the trigger.
@@ -8537,6 +8941,7 @@ export const getTriggerV1TriggersTriggerIdGet = <
  * user_context: Authentication context.
  * trigger_service: Injected trigger service.
  * secret_manager: Injected secret manager for credential storage.
+ * secret_catalog: Workspace-scoped catalog for selected credential references.
  * webhook_service: Injected service that registers the channel webhook.
  *
  * Returns:
@@ -8719,14 +9124,18 @@ export const enableTriggerV1TriggersTriggerIdEnablePost = <
  *
  * Execute a trigger with the provided event data.
  *
- * Called by the Go event service when a polling channel receives new messages.
  * Builds trigger data from the events and channel origin, then creates and
  * submits a task for agent execution.
+ *
+ * Authorization is the caller's session plus the workspace-scoped trigger
+ * lookup: a trigger in another workspace is simply not found. This used to sit
+ * on the public router behind an ``X-Internal-Token`` check that skipped
+ * itself whenever the secret was unset — which was every deployment, since
+ * nothing ever sent that header.
  *
  * Args:
  * trigger_id: The unique identifier of the trigger
  * request: Events and channel origin data
- * http_request: Raw request, used to verify the internal service token
  * trigger_service: Injected trigger service
  *
  * Returns:
@@ -8785,6 +9194,7 @@ export const executeTriggerV1TriggersTriggerIdExecutePost = <
  * end_time: Optional end time filter
  * user_context: Authentication context
  * trigger_service: Injected trigger service
+ * db_session: Session used to resolve what each run's task cost
  *
  * Returns:
  * Paginated execution history
@@ -8825,14 +9235,16 @@ export const getExecutionHistoryV1TriggersTriggerIdExecutionsGet = <
  *
  * Get execution metrics for a trigger.
  *
- * Returns aggregated metrics including success rate, average execution time,
- * and failure counts for the specified time period.
+ * Returns aggregated counts, success rate, execution time and spend. Spend is
+ * the cost of the tasks those runs created, joined at read time — a run is
+ * recorded when its task starts, the bill accrues afterwards.
  *
  * Args:
  * trigger_id: The unique identifier of the trigger
- * hours: Time period in hours to analyze (default 24, max 168)
+ * hours: Time period in hours to analyze; omitted means the whole history
  * user_context: Authentication context
  * trigger_service: Injected trigger service
+ * db_session: Session used for the spend join
  *
  * Returns:
  * Execution metrics for the trigger
@@ -8865,6 +9277,49 @@ export const getExecutionMetricsV1TriggersTriggerIdMetricsGet = <
       },
     ],
     url: "/v1/triggers/{trigger_id}/metrics",
+    ...options,
+  });
+
+/**
+ * Run Trigger Now
+ *
+ * Fire a trigger once, now, because a person asked for it.
+ *
+ * Distinct from ``/execute``, which replays a real event: this carries no event
+ * data and records the caller in ``fired_by``, so the run is visibly a manual
+ * one and the task it creates belongs to the caller rather than to whoever
+ * created the trigger.
+ *
+ * The run is otherwise faithful to a real one -- the trigger's conditions are
+ * still evaluated, and a run they reject comes back ``skipped`` with the reason
+ * rather than being forced through. A trigger that is switched off still runs:
+ * ``is_active`` governs the schedule, not a person asking for one run.
+ *
+ * Returns:
+ * The execution, and the task id to watch when one was created.
+ */
+export const runTriggerNowV1TriggersTriggerIdRunPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<RunTriggerNowV1TriggersTriggerIdRunPostData, ThrowOnError>
+): RequestResult<
+  RunTriggerNowV1TriggersTriggerIdRunPostResponses,
+  RunTriggerNowV1TriggersTriggerIdRunPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RunTriggerNowV1TriggersTriggerIdRunPostResponses,
+    RunTriggerNowV1TriggersTriggerIdRunPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/triggers/{trigger_id}/run",
     ...options,
   });
 
@@ -8965,6 +9420,36 @@ export const getExecutionTimelineV1TriggersTriggerIdTimelineGet = <
   });
 
 /**
+ * List Usage Events
+ *
+ * Return newest persisted facts first, scoped to the current workspace.
+ */
+export const listUsageEventsV1UsageEventsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListUsageEventsV1UsageEventsGetData, ThrowOnError>
+): RequestResult<
+  ListUsageEventsV1UsageEventsGetResponses,
+  ListUsageEventsV1UsageEventsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListUsageEventsV1UsageEventsGetResponses,
+    ListUsageEventsV1UsageEventsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/usage/events",
+    ...options,
+  });
+
+/**
  * Get Dashboard
  *
  * Aggregate workspace state for the operator dashboard.
@@ -9010,8 +9495,14 @@ export const getDashboardV1WorkspaceDashboardGet = <
  * - Only resources in the current workspace are exported
  * - References to specs are included (server_spec_id, provider_spec_id)
  *
+ * There is no matching import endpoint. Recreating a workspace goes through
+ * the platform toolsets (``agentarea/agents``, ``agentarea/mcp_servers``,
+ * ``agentarea/providers``, ``agentarea/skills``, ...) or bundle install,
+ * both of which handle secrets as first-class inputs instead of smuggling
+ * placeholders through a YAML file.
+ *
  * **Returns:**
- * YAML file content that can be saved and later imported
+ * YAML file content describing the workspace
  */
 export const exportWorkspaceConfigV1WorkspaceExportGet = <
   ThrowOnError extends boolean = false,
@@ -9036,117 +9527,6 @@ export const exportWorkspaceConfigV1WorkspaceExportGet = <
     ],
     url: "/v1/workspace/export",
     ...options,
-  });
-
-/**
- * Import Workspace Config
- *
- * Import workspace configuration from YAML.
- *
- * This endpoint creates agents, MCP instances, and provider configs
- * in the current workspace based on the provided YAML configuration.
- *
- * **Important Notes:**
- * - All resources are created in the current workspace
- * - Secrets (API keys, passwords) must be provided as they cannot be exported
- * - References to MCP servers and provider specs must exist in the system
- * - Import is atomic - if any resource fails, all changes are rolled back
- *
- * **Example YAML:**
- * ```yaml
- * agents:
- * - name: "My Assistant"
- * description: "Helpful assistant"
- * instruction: "You are a helpful AI assistant"
- * tools:
- * - type: code
- * name: agentarea/math
- * - type: mcp
- * name: my-filesystem
- * settings:
- * allowed_tools: [read_file, write_file]
- * planning: false
- *
- * mcp_instances:
- * - name: "My Filesystem"
- * description: "Local file access"
- * server_spec_id: "a1b2c3d4-..."
- * env_vars:
- * FILESYSTEM_ROOT: "/workspace"
- *
- * provider_configs:
- * - name: "My OpenAI"
- * provider_spec_id: "932f3839-..."
- * api_key_placeholder: "sk-..."
- * ```
- */
-export const importWorkspaceConfigV1WorkspaceImportPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<ImportWorkspaceConfigV1WorkspaceImportPostData, ThrowOnError>
-): RequestResult<
-  ImportWorkspaceConfigV1WorkspaceImportPostResponses,
-  ImportWorkspaceConfigV1WorkspaceImportPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ImportWorkspaceConfigV1WorkspaceImportPostResponses,
-    ImportWorkspaceConfigV1WorkspaceImportPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspace/import",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Import Workspace Config File
- *
- * Import workspace configuration from uploaded YAML file.
- *
- * Same as /import but accepts a file upload instead of raw YAML content.
- */
-export const importWorkspaceConfigFileV1WorkspaceImportFilePost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    ImportWorkspaceConfigFileV1WorkspaceImportFilePostData,
-    ThrowOnError
-  >
-): RequestResult<
-  ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses,
-  ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses,
-    ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors,
-    ThrowOnError
-  >({
-    ...formDataBodySerializer,
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspace/import/file",
-    ...options,
-    headers: {
-      "Content-Type": null,
-      ...options.headers,
-    },
   });
 
 /**
@@ -9432,6 +9812,9 @@ export const listMembersV1WorkspacesWorkspaceIdMembersGet = <
  * Remove Member
  *
  * Remove a member from the workspace.
+ *
+ * The owner keeps their access until ownership moves, and the last member
+ * cannot leave — either would strand the workspace and everything in it.
  */
 export const removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete = <
   ThrowOnError extends boolean = false,

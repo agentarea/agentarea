@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.context import ServicePrincipal
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .base_events import EventEnvelope
@@ -29,8 +29,11 @@ from .outbox_repository import OutboxRepository
 logger = logging.getLogger(__name__)
 
 # The relay is infrastructure and reads across all workspaces; the repository
-# only needs a context object for its constructor, never for scoping the fetch.
-_RELAY_CONTEXT = UserContext(user_id="outbox-relay", workspace_id="outbox-relay")
+# only needs a principal for its constructor, never for scoping the fetch.
+_RELAY_CONTEXT = ServicePrincipal(
+    service="outbox-relay",
+    reason="publishes queued events across every workspace; the fetch is deliberately unscoped",
+)
 
 
 class OutboxRelay:

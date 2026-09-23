@@ -49,7 +49,7 @@ class _Settings:
         HYDRA_PUBLIC_URL = HYDRA
         HYDRA_ADMIN_URL = HYDRA_ADMIN
         HYDRA_BROWSER_URL = HYDRA
-        MCP_OAUTH_SCOPES = "openid offline_access"
+        MCP_OAUTH_SCOPES = "openid offline_access offline"
 
 
 class _FakeResponse:
@@ -165,6 +165,28 @@ class TestProtectedResourceMetadata:
         self._patch(monkeypatch, None)
 
         assert (await self._metadata())["authorization_servers"] == [API_BASE]
+
+    async def test_advertises_offline_access_so_clients_can_refresh(self, monkeypatch):
+        # The scope an MCP client asks for comes from this document. Without
+        # offline_access in it the client requested no scope at all, Hydra
+        # granted none, and no refresh token came back — so every harness went
+        # dead at the access token's TTL and had to be re-authorized by hand.
+        self._patch(monkeypatch, None)
+
+        scopes = (await self._metadata())["scopes_supported"]
+
+        assert "offline_access" in scopes
+
+    async def test_advertised_scopes_match_what_registration_grants(self, monkeypatch):
+        # Two places decide scope: this document tells the client what to ask
+        # for, and the DCR proxy caps what the registration may hold. A client
+        # that asks for something registration refuses gets a failed
+        # authorization, so both read the same setting.
+        self._patch(monkeypatch, None)
+
+        scopes = (await self._metadata())["scopes_supported"]
+
+        assert set(scopes) == set(_Settings.mcp.MCP_OAUTH_SCOPES.split())
 
 
 class TestProtectedResourceMetadataLocations:
@@ -294,6 +316,14 @@ class TestDynamicClientRegistration:
         assert "refresh_token" in sent["grant_types"]
         assert "authorization_code" in sent["grant_types"]
         assert "offline_access" in sent["scope"].split()
+        assert "offline" in sent["scope"].split()
+
+    def test_default_scope_covers_every_advertised_hydra_scope(self, hydra):
+        """Codex requests the advertised set, which Hydra validates per client."""
+        hydra.post("/oauth2/register", json={"client_name": "Codex"})
+
+        registered = set(_FakeAsyncClient.sent[-1]["scope"].split())
+        assert set(HYDRA_DOC["scopes_supported"]) <= registered
 
     def test_respects_grant_types_the_client_asked_for(self, hydra):
         hydra.post(

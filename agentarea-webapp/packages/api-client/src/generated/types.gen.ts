@@ -867,18 +867,6 @@ export type Blockers = {
 };
 
 /**
- * Body_import_workspace_config_file_v1_workspace_import_file_post
- */
-export type BodyImportWorkspaceConfigFileV1WorkspaceImportFilePost = {
-    /**
-     * File
-     *
-     * YAML configuration file
-     */
-    file: Blob | File;
-};
-
-/**
  * Body_upload_file_v1_files_post
  */
 export type BodyUploadFileV1FilesPost = {
@@ -1379,10 +1367,14 @@ export type BundleSkill = {
  *
  * One page of a type's catalog plus the context needed to browse it.
  *
- * ``total`` and ``categories`` cover the whole filtered catalog, not the page:
+ * ``total`` and the facets cover the whole filtered catalog, not the page:
  * without them a page that happens to contain no visible matches is
  * indistinguishable from the end of the catalog, and facet counts drift as
  * more pages load.
+ *
+ * ``protocols`` is populated for the connections catalog only, where an entry
+ * is either an MCP server or a plain HTTP API; every other type holds one
+ * kind of thing and gets an empty list.
  */
 export type CatalogBrowseResponse = {
     /**
@@ -1394,9 +1386,135 @@ export type CatalogBrowseResponse = {
      */
     items: Array<RegistryItemResponse>;
     /**
+     * Protocols
+     */
+    protocols: Array<CategoryFacet>;
+    /**
      * Total
      */
     total: number;
+};
+
+/**
+ * CatalogConnectionRequest
+ *
+ * Connect with AgentArea credentials, or override them from Advanced.
+ */
+export type CatalogConnectionRequest = {
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Client Id Secret Id
+     *
+     * Existing user-owned workspace secret containing the OAuth client ID.
+     */
+    client_id_secret_id?: string | null;
+    /**
+     * Client Secret
+     */
+    client_secret?: string | null;
+    /**
+     * Client Secret Secret Id
+     *
+     * Existing user-owned workspace secret containing the OAuth client secret.
+     */
+    client_secret_secret_id?: string | null;
+    /**
+     * Credential Mode
+     */
+    credential_mode?: 'managed' | 'custom';
+    /**
+     * Return To
+     */
+    return_to?: string;
+};
+
+/**
+ * CatalogConnectionResponse
+ */
+export type CatalogConnectionResponse = {
+    /**
+     * Authorize Url
+     */
+    authorize_url: string;
+    /**
+     * Connection Id
+     */
+    connection_id: string;
+};
+
+/**
+ * CatalogItemCreate
+ *
+ * Definition published directly into a platform-managed catalog.
+ */
+export type CatalogItemCreate = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Recommendation Rank
+     *
+     * Curation position within this registry; lower comes first. Omit to publish after the registry's existing items.
+     */
+    recommendation_rank?: number | null;
+    /**
+     * Spec
+     */
+    spec?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Tags
+     */
+    tags?: Array<string>;
+    /**
+     * Version
+     */
+    version?: string | null;
+};
+
+/**
+ * CatalogItemUpdate
+ */
+export type CatalogItemUpdate = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * External Id
+     */
+    external_id?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Spec
+     */
+    spec?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Tags
+     */
+    tags?: Array<string> | null;
+    /**
+     * Version
+     */
+    version?: string | null;
 };
 
 /**
@@ -1720,6 +1838,16 @@ export type CreateWorkspaceBody = {
 };
 
 /**
+ * CreateWorkspaceDirectoryRequest
+ */
+export type CreateWorkspaceDirectoryRequest = {
+    /**
+     * Path
+     */
+    path: string;
+};
+
+/**
  * DailySpendPoint
  */
 export type DailySpendPoint = {
@@ -1863,6 +1991,10 @@ export type DiscoverPreviewResponse = {
      * New Models
      */
     new_models: number;
+    /**
+     * Skipped
+     */
+    skipped?: Array<SkippedModelResponse>;
 };
 
 /**
@@ -1931,6 +2063,10 @@ export type DiscoveryResponse = {
      * New Models
      */
     new_models: number;
+    /**
+     * Skipped
+     */
+    skipped?: Array<SkippedModelResponse>;
 };
 
 /**
@@ -2128,15 +2264,29 @@ export type ExecutionLimitsPolicy = {
  */
 export type ExecutionMetricsResponse = {
     /**
+     * Avg Cost Usd
+     *
+     * Spend per run that produced a costed task.
+     */
+    avg_cost_usd?: number;
+    /**
      * Avg Execution Time Ms
      */
     avg_execution_time_ms: number;
+    /**
+     * Costed Executions
+     *
+     * Runs whose task reported a cost; the divisor behind avg_cost_usd.
+     */
+    costed_executions?: number;
     /**
      * Failed Executions
      */
     failed_executions: number;
     /**
      * Failure Rate
+     *
+     * Percentage, 0-100.
      */
     failure_rate: number;
     /**
@@ -2149,10 +2299,14 @@ export type ExecutionMetricsResponse = {
     min_execution_time_ms: number;
     /**
      * Period Hours
+     *
+     * Window these metrics cover. Null means the whole history.
      */
-    period_hours: number;
+    period_hours?: number | null;
     /**
      * Success Rate
+     *
+     * Percentage, 0-100.
      */
     success_rate: number;
     /**
@@ -2163,6 +2317,12 @@ export type ExecutionMetricsResponse = {
      * Timeout Executions
      */
     timeout_executions: number;
+    /**
+     * Total Cost Usd
+     *
+     * Spend of the tasks these runs created.
+     */
+    total_cost_usd?: number;
     /**
      * Total Executions
      */
@@ -2425,68 +2585,6 @@ export type ImportPreview = {
 };
 
 /**
- * ImportRequest
- *
- * Request body for importing workspace configuration.
- */
-export type ImportRequest = {
-    /**
-     * Override Existing
-     *
-     * Override existing resources with same name
-     */
-    override_existing?: boolean;
-    /**
-     * Skip Missing Dependencies
-     *
-     * Skip resources with missing dependencies
-     */
-    skip_missing_dependencies?: boolean;
-    /**
-     * Yaml Content
-     *
-     * YAML configuration content
-     */
-    yaml_content: string;
-};
-
-/**
- * ImportResult
- *
- * Result of an import operation.
- */
-export type ImportResult = {
-    /**
-     * Created Agents
-     */
-    created_agents?: number;
-    /**
-     * Created Mcp Instances
-     */
-    created_mcp_instances?: number;
-    /**
-     * Created Provider Configs
-     */
-    created_provider_configs?: number;
-    /**
-     * Created Skills
-     */
-    created_skills?: number;
-    /**
-     * Errors
-     */
-    errors?: Array<string>;
-    /**
-     * Success
-     */
-    success: boolean;
-    /**
-     * Warnings
-     */
-    warnings?: Array<string>;
-};
-
-/**
  * InboxResponse
  */
 export type InboxResponse = {
@@ -2612,6 +2710,7 @@ export type InvitationCreatedResponse = {
      * Email
      */
     email: string | null;
+    email_delivery: InvitationEmailDelivery;
     /**
      * Expires At
      */
@@ -2625,6 +2724,10 @@ export type InvitationCreatedResponse = {
      */
     invited_by: string;
     /**
+     * Invited By Display Name
+     */
+    invited_by_display_name: string | null;
+    /**
      * Status
      */
     status: string;
@@ -2637,6 +2740,11 @@ export type InvitationCreatedResponse = {
      */
     workspace_id: string;
 };
+
+/**
+ * InvitationEmailDelivery
+ */
+export type InvitationEmailDelivery = 'sent' | 'not_requested' | 'not_configured' | 'failed';
 
 /**
  * InvitationResponse
@@ -2670,6 +2778,10 @@ export type InvitationResponse = {
      * Invited By
      */
     invited_by: string;
+    /**
+     * Invited By Display Name
+     */
+    invited_by_display_name: string | null;
     /**
      * Status
      */
@@ -3280,6 +3392,34 @@ export type MppConfigSchema = {
 };
 
 /**
+ * ManagedOAuthAppRequest
+ */
+export type ManagedOAuthAppRequest = {
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Client Secret
+     */
+    client_secret: string;
+};
+
+/**
+ * ManagedOAuthAppResponse
+ */
+export type ManagedOAuthAppResponse = {
+    /**
+     * Configured
+     */
+    configured: boolean;
+    /**
+     * Provider Key
+     */
+    provider_key: string;
+};
+
+/**
  * McpInstanceAssociationBody
  */
 export type McpInstanceAssociationBody = {
@@ -3367,11 +3507,11 @@ export type MemberResponse = {
     /**
      * Display Name
      */
-    display_name?: string | null;
+    display_name: string | null;
     /**
      * Email
      */
-    email?: string | null;
+    email: string | null;
     /**
      * Id
      */
@@ -3381,9 +3521,13 @@ export type MemberResponse = {
      */
     invitation_id: string | null;
     /**
+     * Is Owner
+     */
+    is_owner: boolean;
+    /**
      * Joined At
      */
-    joined_at: string;
+    joined_at: string | null;
     /**
      * User Id
      */
@@ -3677,6 +3821,38 @@ export type ModelSpecUpdate = {
 };
 
 /**
+ * MoveWorkspaceFileRequest
+ */
+export type MoveWorkspaceFileRequest = {
+    /**
+     * Destination
+     */
+    destination: string;
+    /**
+     * Source
+     */
+    source: string;
+};
+
+/**
+ * MovedFileResponse
+ */
+export type MovedFileResponse = {
+    /**
+     * Destination
+     */
+    destination: string;
+    /**
+     * Moved
+     */
+    moved: number;
+    /**
+     * Source
+     */
+    source: string;
+};
+
+/**
  * NetworkEdge
  */
 export type NetworkEdge = {
@@ -3724,6 +3900,84 @@ export type NetworkNode = {
      * Type
      */
     type: 'agent' | 'mcp_instance' | 'openapi_connection' | 'skill' | 'trigger';
+};
+
+/**
+ * NetworkPeopleAccessResponse
+ */
+export type NetworkPeopleAccessResponse = {
+    /**
+     * Access
+     */
+    access: Array<NetworkPersonAgentAccess>;
+    /**
+     * Complete
+     */
+    complete: boolean;
+    /**
+     * Decision Source
+     */
+    decision_source?: 'agent_edge_admission';
+    /**
+     * Directory Status
+     */
+    directory_status?: 'available' | 'disabled';
+    /**
+     * People
+     */
+    people: Array<NetworkPerson>;
+    /**
+     * Total Agents
+     */
+    total_agents: number;
+    /**
+     * Total People
+     */
+    total_people: number | null;
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
+};
+
+/**
+ * NetworkPerson
+ */
+export type NetworkPerson = {
+    /**
+     * Display Name
+     */
+    display_name?: string | null;
+    /**
+     * Email
+     */
+    email?: string | null;
+    /**
+     * User Id
+     */
+    user_id: string;
+};
+
+/**
+ * NetworkPersonAgentAccess
+ */
+export type NetworkPersonAgentAccess = {
+    /**
+     * Agent Id
+     */
+    agent_id: string;
+    /**
+     * Allowed
+     */
+    allowed: boolean;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * User Id
+     */
+    user_id: string;
 };
 
 /**
@@ -3887,9 +4141,7 @@ export type OpenApiConnectionResponse = {
     /**
      * Available Tools
      */
-    available_tools?: Array<{
-        [key: string]: unknown;
-    }>;
+    available_tools: Array<OpenApiToolResponse>;
     /**
      * Base Url
      */
@@ -3897,7 +4149,7 @@ export type OpenApiConnectionResponse = {
     /**
      * Created At
      */
-    created_at: unknown;
+    created_at: string;
     /**
      * Custom Headers
      */
@@ -3915,6 +4167,10 @@ export type OpenApiConnectionResponse = {
      */
     name: string;
     /**
+     * Registry Item Id
+     */
+    registry_item_id?: string | null;
+    /**
      * Spec Url
      */
     spec_url?: string | null;
@@ -3925,7 +4181,7 @@ export type OpenApiConnectionResponse = {
     /**
      * Updated At
      */
-    updated_at: unknown;
+    updated_at: string;
 };
 
 /**
@@ -3968,6 +4224,26 @@ export type OpenApiConnectionUpdate = {
      * Spec Url
      */
     spec_url?: string | null;
+};
+
+/**
+ * OpenAPIToolResponse
+ */
+export type OpenApiToolResponse = {
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Inputschema
+     */
+    inputSchema: {
+        [key: string]: unknown;
+    };
+    /**
+     * Name
+     */
+    name: string;
 };
 
 /**
@@ -4368,6 +4644,32 @@ export type PreviewIssue = {
 };
 
 /**
+ * PrincipalResponse
+ */
+export type PrincipalResponse = {
+    /**
+     * Display Name
+     */
+    display_name?: string | null;
+    /**
+     * Email
+     */
+    email?: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    type: PrincipalType;
+};
+
+/**
+ * PrincipalType
+ *
+ * What kind of thing an id refers to.
+ */
+export type PrincipalType = 'user' | 'agent' | 'platform';
+
+/**
  * ProjectAgentRef
  */
 export type ProjectAgentRef = {
@@ -4644,6 +4946,10 @@ export type ProviderConfigResponse = {
      */
     is_public: boolean;
     /**
+     * Managed By
+     */
+    managed_by?: string | null;
+    /**
      * Model Instance Ids
      */
     model_instance_ids?: Array<string>;
@@ -4663,6 +4969,10 @@ export type ProviderConfigResponse = {
      * Provider Spec Name
      */
     provider_spec_name?: string | null;
+    /**
+     * Requires Api Key
+     */
+    requires_api_key?: boolean;
     /**
      * Updated At
      */
@@ -4834,23 +5144,29 @@ export type RegistryCreate = {
      */
     name: string;
     /**
+     * Recommendation Priority
+     *
+     * Ordering weight for the 'recommended' catalog sort; lower comes first. Keeps a curated system catalog ahead of a bulk/community mirror. Omit to take the platform default.
+     */
+    recommendation_priority?: number | null;
+    /**
      * Registry Type
      *
-     * Entity type: 'mcp_servers' or 'skills'
+     * Catalog entity type: one of ('mcp_servers', 'skills', 'llm_providers', 'llm_models', 'agents', 'bundles')
      */
     registry_type: string;
     /**
      * Source Type
      *
-     * Fetch method: 'url', 'github', or 'api'
+     * Source mode: 'url', 'github', 'api', or platform-managed 'managed'
      */
     source_type: string;
     /**
      * Source Url
      *
-     * URL to the registry source (JSON or YAML)
+     * Registry source URL; omitted when source_type is 'managed'
      */
-    source_url: string;
+    source_url?: string | null;
     /**
      * Sync Mode
      *
@@ -4964,6 +5280,10 @@ export type RegistryResponse = {
      */
     name: string;
     /**
+     * Recommendation Priority
+     */
+    recommendation_priority: number;
+    /**
      * Registry Type
      */
     registry_type: string;
@@ -5001,6 +5321,10 @@ export type RegistryUpdate = {
      * Name
      */
     name?: string | null;
+    /**
+     * Recommendation Priority
+     */
+    recommendation_priority?: number | null;
     /**
      * Source Url
      */
@@ -5771,6 +6095,34 @@ export type SkillUpdateRequest = {
 };
 
 /**
+ * SkippedItem
+ */
+export type SkippedItem = {
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Reason
+     */
+    reason: string;
+};
+
+/**
+ * SkippedModelResponse
+ */
+export type SkippedModelResponse = {
+    /**
+     * Missing
+     */
+    missing: Array<string>;
+    /**
+     * Model Name
+     */
+    model_name: string;
+};
+
+/**
  * SpecPreviewRequest
  */
 export type SpecPreviewRequest = {
@@ -6065,6 +6417,10 @@ export type TaskResponse = {
      */
     created_at: string;
     /**
+     * Created By
+     */
+    created_by?: string | null;
+    /**
      * Description
      */
     description: string;
@@ -6214,6 +6570,10 @@ export type TaskWithAgent = {
      * Created At
      */
     created_at: string;
+    /**
+     * Created By
+     */
+    created_by?: string | null;
     /**
      * Description
      */
@@ -6500,6 +6860,12 @@ export type TriggerExecuteRequest = {
  */
 export type TriggerExecutionResponse = {
     /**
+     * Cost Usd
+     *
+     * What the task this run created has spent so far. Null when the run created no task, or the task has not reported a cost yet.
+     */
+    cost_usd?: number | null;
+    /**
      * Error Message
      */
     error_message?: string | null;
@@ -6511,6 +6877,12 @@ export type TriggerExecutionResponse = {
      * Execution Time Ms
      */
     execution_time_ms: number;
+    /**
+     * Fired By
+     *
+     * Principal who asked for this run, when a person did. Null means the trigger fired itself. Resolve the name through GET /v1/principals.
+     */
+    fired_by?: string | null;
     /**
      * Id
      */
@@ -6660,6 +7032,40 @@ export type TriggerResponse = {
 };
 
 /**
+ * TriggerRunResponse
+ *
+ * Result of firing a trigger once by hand.
+ */
+export type TriggerRunResponse = {
+    /**
+     * Execution Id
+     */
+    execution_id: string;
+    /**
+     * Reason
+     *
+     * Why the run was skipped, when it was.
+     */
+    reason?: string | null;
+    /**
+     * Status
+     *
+     * 'started' when a task was created and is now running. 'skipped' when the trigger's own conditions rejected the run -- a real answer about the trigger, not an error.
+     */
+    status: 'started' | 'skipped';
+    /**
+     * Task Id
+     *
+     * The task to watch. Absent when the run was skipped.
+     */
+    task_id?: string | null;
+    /**
+     * Trigger Id
+     */
+    trigger_id: string;
+};
+
+/**
  * TriggerStatusResponse
  *
  * Response model for trigger status information.
@@ -6700,6 +7106,10 @@ export type TriggerStatusResponse = {
  */
 export type TriggerUpdate = {
     /**
+     * Agent Id
+     */
+    agent_id?: string | null;
+    /**
      * Allowed Methods
      */
     allowed_methods?: Array<string> | null;
@@ -6731,6 +7141,10 @@ export type TriggerUpdate = {
      * Toggle the trigger active state. Maps to ``is_active`` server-side. REST clients may pass either ``enabled`` (canonical) or ``is_active`` (alias).
      */
     enabled?: boolean | null;
+    /**
+     * Event Types
+     */
+    event_types?: Array<string> | null;
     /**
      * Failure Threshold
      */
@@ -6834,6 +7248,78 @@ export type UpdateWalletRequest = {
      */
     wallet_type?: string | null;
     x402_config?: X402ConfigSchema | null;
+};
+
+/**
+ * UsageEventListResponse
+ */
+export type UsageEventListResponse = {
+    /**
+     * Events
+     */
+    events: Array<UsageEventResponse>;
+    /**
+     * Next Cursor
+     */
+    next_cursor: string | null;
+};
+
+/**
+ * UsageEventResponse
+ */
+export type UsageEventResponse = {
+    /**
+     * Data Json
+     */
+    data_json: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Incarnation Id
+     */
+    incarnation_id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
+    /**
+     * Received At
+     */
+    received_at: string;
+    /**
+     * Resource Id
+     */
+    resource_id: string;
+    /**
+     * Resource Kind
+     */
+    resource_kind: string;
+    /**
+     * Schema Version
+     */
+    schema_version: number;
+    /**
+     * Sequence
+     */
+    sequence: string;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
 };
 
 /**
@@ -7002,6 +7488,16 @@ export type WalletResponse = {
     x402_config?: {
         [key: string]: unknown;
     } | null;
+};
+
+/**
+ * WorkspaceDirectoryResponse
+ */
+export type WorkspaceDirectoryResponse = {
+    /**
+     * Path
+     */
+    path: string;
 };
 
 /**
@@ -7284,6 +7780,14 @@ export type AgentareaApiApiV1RegistriesSyncResponse = {
      * New Specs
      */
     new_specs: number;
+    /**
+     * Skipped
+     */
+    skipped?: number;
+    /**
+     * Skipped Items
+     */
+    skipped_items?: Array<SkippedItem>;
     /**
      * Total
      */
@@ -9577,6 +10081,106 @@ export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses =
 
 export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponse = RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses[keyof RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses];
 
+export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostData = {
+    body: CatalogConnectionRequest;
+    path: {
+        /**
+         * Item Id
+         */
+        item_id: string;
+    };
+    query?: never;
+    url: '/v1/connections/catalog/{item_id}/connect';
+};
+
+export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostError = ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors[keyof ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors];
+
+export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: CatalogConnectionResponse;
+};
+
+export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponse = ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses[keyof ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses];
+
+export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutData = {
+    body: ManagedOAuthAppRequest;
+    path: {
+        /**
+         * Provider Key
+         */
+        provider_key: string;
+    };
+    query?: never;
+    url: '/v1/connections/oauth/apps/{provider_key}';
+};
+
+export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutError = ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors[keyof ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutErrors];
+
+export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: ManagedOAuthAppResponse;
+};
+
+export type ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponse = ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses[keyof ConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponses];
+
+export type OauthCallbackV1ConnectionsOauthCallbackGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Code
+         */
+        code?: string | null;
+        /**
+         * State
+         */
+        state?: string | null;
+        /**
+         * Error
+         */
+        error?: string | null;
+        /**
+         * Error Description
+         */
+        error_description?: string | null;
+    };
+    url: '/v1/connections/oauth/callback';
+};
+
+export type OauthCallbackV1ConnectionsOauthCallbackGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthCallbackV1ConnectionsOauthCallbackGetError = OauthCallbackV1ConnectionsOauthCallbackGetErrors[keyof OauthCallbackV1ConnectionsOauthCallbackGetErrors];
+
+export type OauthCallbackV1ConnectionsOauthCallbackGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
 export type ListWorkspaceFilesV1FilesGetData = {
     body?: never;
     path?: never;
@@ -9615,6 +10219,31 @@ export type UploadFileV1FilesPostResponses = {
      */
     200: unknown;
 };
+
+export type CreateWorkspaceDirectoryV1FilesDirectoriesPostData = {
+    body: CreateWorkspaceDirectoryRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/files/directories';
+};
+
+export type CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateWorkspaceDirectoryV1FilesDirectoriesPostError = CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors[keyof CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors];
+
+export type CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: WorkspaceDirectoryResponse;
+};
+
+export type CreateWorkspaceDirectoryV1FilesDirectoriesPostResponse = CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses[keyof CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses];
 
 export type StreamWorkspaceFileV1FilesDownloadFilePathGetData = {
     body?: never;
@@ -9673,6 +10302,31 @@ export type WorkspaceFileHistoryV1FilesHistoryGetResponses = {
 };
 
 export type WorkspaceFileHistoryV1FilesHistoryGetResponse = WorkspaceFileHistoryV1FilesHistoryGetResponses[keyof WorkspaceFileHistoryV1FilesHistoryGetResponses];
+
+export type MoveWorkspaceFileV1FilesMovePostData = {
+    body: MoveWorkspaceFileRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/files/move';
+};
+
+export type MoveWorkspaceFileV1FilesMovePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MoveWorkspaceFileV1FilesMovePostError = MoveWorkspaceFileV1FilesMovePostErrors[keyof MoveWorkspaceFileV1FilesMovePostErrors];
+
+export type MoveWorkspaceFileV1FilesMovePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: MovedFileResponse;
+};
+
+export type MoveWorkspaceFileV1FilesMovePostResponse = MoveWorkspaceFileV1FilesMovePostResponses[keyof MoveWorkspaceFileV1FilesMovePostResponses];
 
 export type RestoreWorkspaceFileV1FilesRestoreFilePathPostData = {
     body?: never;
@@ -11418,6 +12072,22 @@ export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses = {
 
 export type UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponse = UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses[keyof UpdateModelSpecV1ModelSpecsModelSpecIdPatchResponses];
 
+export type GetNetworkPeopleAccessV1NetworkPeopleAccessGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/network/people-access';
+};
+
+export type GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: NetworkPeopleAccessResponse;
+};
+
+export type GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponse = GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponses[keyof GetNetworkPeopleAccessV1NetworkPeopleAccessGetResponses];
+
 export type GetNetworkTopologyV1NetworkTopologyGetData = {
     body?: never;
     path?: never;
@@ -11808,6 +12478,40 @@ export type UpdatePolicyRuleV1PoliciesRuleIdPatchResponses = {
 };
 
 export type UpdatePolicyRuleV1PoliciesRuleIdPatchResponse = UpdatePolicyRuleV1PoliciesRuleIdPatchResponses[keyof UpdatePolicyRuleV1PoliciesRuleIdPatchResponses];
+
+export type ResolvePrincipalsV1PrincipalsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Ids
+         *
+         * Principal ids to resolve
+         */
+        ids?: Array<string>;
+    };
+    url: '/v1/principals';
+};
+
+export type ResolvePrincipalsV1PrincipalsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ResolvePrincipalsV1PrincipalsGetError = ResolvePrincipalsV1PrincipalsGetErrors[keyof ResolvePrincipalsV1PrincipalsGetErrors];
+
+export type ResolvePrincipalsV1PrincipalsGetResponses = {
+    /**
+     * Response Resolve Principals V1 Principals Get
+     *
+     * Successful Response
+     */
+    200: Array<PrincipalResponse>;
+};
+
+export type ResolvePrincipalsV1PrincipalsGetResponse = ResolvePrincipalsV1PrincipalsGetResponses[keyof ResolvePrincipalsV1PrincipalsGetResponses];
 
 export type ListProjectsV1ProjectsGetData = {
     body?: never;
@@ -12818,9 +13522,15 @@ export type BrowseCatalogV1RegistriesCatalogBrowseGetData = {
          */
         category?: string | null;
         /**
+         * Protocol
+         *
+         * Restrict connections to one protocol. Only valid for registry_type='mcp_servers'.
+         */
+        protocol?: 'mcp' | 'api' | null;
+        /**
          * Sort
          *
-         * 'featured' (default) or 'name'
+         * 'recommended' (default) or 'name'
          */
         sort?: string | null;
         /**
@@ -12853,6 +13563,36 @@ export type BrowseCatalogV1RegistriesCatalogBrowseGetResponses = {
 
 export type BrowseCatalogV1RegistriesCatalogBrowseGetResponse = BrowseCatalogV1RegistriesCatalogBrowseGetResponses[keyof BrowseCatalogV1RegistriesCatalogBrowseGetResponses];
 
+export type DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Item Id
+         */
+        item_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/catalog/items/{item_id}';
+};
+
+export type DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteError = DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors[keyof DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteErrors];
+
+export type DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponse = DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses[keyof DeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponses];
+
 export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetData = {
     body?: never;
     path: {
@@ -12882,6 +13622,36 @@ export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses = {
 };
 
 export type GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse = GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses[keyof GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses];
+
+export type UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchData = {
+    body: CatalogItemUpdate;
+    path: {
+        /**
+         * Item Id
+         */
+        item_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/catalog/items/{item_id}';
+};
+
+export type UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchError = UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors[keyof UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchErrors];
+
+export type UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: RegistryItemResponse;
+};
+
+export type UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponse = UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses[keyof UpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponses];
 
 export type UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostData = {
     body?: never;
@@ -13089,6 +13859,36 @@ export type ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses = {
 };
 
 export type ListRegistryItemsV1RegistriesRegistryIdItemsGetResponse = ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses[keyof ListRegistryItemsV1RegistriesRegistryIdItemsGetResponses];
+
+export type CreateCatalogItemV1RegistriesRegistryIdItemsPostData = {
+    body: CatalogItemCreate;
+    path: {
+        /**
+         * Registry Id
+         */
+        registry_id: string;
+    };
+    query?: never;
+    url: '/v1/registries/{registry_id}/items';
+};
+
+export type CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateCatalogItemV1RegistriesRegistryIdItemsPostError = CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors[keyof CreateCatalogItemV1RegistriesRegistryIdItemsPostErrors];
+
+export type CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: RegistryItemResponse;
+};
+
+export type CreateCatalogItemV1RegistriesRegistryIdItemsPostResponse = CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses[keyof CreateCatalogItemV1RegistriesRegistryIdItemsPostResponses];
 
 export type SyncRegistryV1RegistriesRegistryIdSyncPostData = {
     body?: never;
@@ -14536,9 +15336,9 @@ export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetData = {
         /**
          * Hours
          *
-         * Time period in hours (max 7 days)
+         * Time period in hours (max 1 year). Omit for the trigger's whole history.
          */
-        hours?: number;
+        hours?: number | null;
     };
     url: '/v1/triggers/{trigger_id}/metrics';
 };
@@ -14560,6 +15360,36 @@ export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses = {
 };
 
 export type GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponse = GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses[keyof GetExecutionMetricsV1TriggersTriggerIdMetricsGetResponses];
+
+export type RunTriggerNowV1TriggersTriggerIdRunPostData = {
+    body?: never;
+    path: {
+        /**
+         * Trigger Id
+         */
+        trigger_id: string;
+    };
+    query?: never;
+    url: '/v1/triggers/{trigger_id}/run';
+};
+
+export type RunTriggerNowV1TriggersTriggerIdRunPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RunTriggerNowV1TriggersTriggerIdRunPostError = RunTriggerNowV1TriggersTriggerIdRunPostErrors[keyof RunTriggerNowV1TriggersTriggerIdRunPostErrors];
+
+export type RunTriggerNowV1TriggersTriggerIdRunPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: TriggerRunResponse;
+};
+
+export type RunTriggerNowV1TriggersTriggerIdRunPostResponse = RunTriggerNowV1TriggersTriggerIdRunPostResponses[keyof RunTriggerNowV1TriggersTriggerIdRunPostResponses];
 
 export type GetTriggerStatusV1TriggersTriggerIdStatusGetData = {
     body?: never;
@@ -14634,6 +15464,68 @@ export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses = {
 
 export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponse = GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses[keyof GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses];
 
+export type ListUsageEventsV1UsageEventsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Source
+         */
+        source?: string | null;
+        /**
+         * Kind
+         */
+        kind?: string | null;
+        /**
+         * Resource Kind
+         */
+        resource_kind?: string | null;
+        /**
+         * Resource Id
+         */
+        resource_id?: string | null;
+        /**
+         * Task Id
+         */
+        task_id?: string | null;
+        /**
+         * From
+         */
+        from?: string | null;
+        /**
+         * Until
+         */
+        until?: string | null;
+        /**
+         * Cursor
+         */
+        cursor?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/v1/usage/events';
+};
+
+export type ListUsageEventsV1UsageEventsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListUsageEventsV1UsageEventsGetError = ListUsageEventsV1UsageEventsGetErrors[keyof ListUsageEventsV1UsageEventsGetErrors];
+
+export type ListUsageEventsV1UsageEventsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: UsageEventListResponse;
+};
+
+export type ListUsageEventsV1UsageEventsGetResponse = ListUsageEventsV1UsageEventsGetResponses[keyof ListUsageEventsV1UsageEventsGetResponses];
+
 export type GetDashboardV1WorkspaceDashboardGetData = {
     body?: never;
     path?: never;
@@ -14665,69 +15557,6 @@ export type ExportWorkspaceConfigV1WorkspaceExportGetResponses = {
 };
 
 export type ExportWorkspaceConfigV1WorkspaceExportGetResponse = ExportWorkspaceConfigV1WorkspaceExportGetResponses[keyof ExportWorkspaceConfigV1WorkspaceExportGetResponses];
-
-export type ImportWorkspaceConfigV1WorkspaceImportPostData = {
-    body: ImportRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/workspace/import';
-};
-
-export type ImportWorkspaceConfigV1WorkspaceImportPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ImportWorkspaceConfigV1WorkspaceImportPostError = ImportWorkspaceConfigV1WorkspaceImportPostErrors[keyof ImportWorkspaceConfigV1WorkspaceImportPostErrors];
-
-export type ImportWorkspaceConfigV1WorkspaceImportPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ImportResult;
-};
-
-export type ImportWorkspaceConfigV1WorkspaceImportPostResponse = ImportWorkspaceConfigV1WorkspaceImportPostResponses[keyof ImportWorkspaceConfigV1WorkspaceImportPostResponses];
-
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostData = {
-    body: BodyImportWorkspaceConfigFileV1WorkspaceImportFilePost;
-    path?: never;
-    query?: {
-        /**
-         * Skip Missing Dependencies
-         *
-         * Skip resources with missing dependencies
-         */
-        skip_missing_dependencies?: boolean;
-        /**
-         * Override Existing
-         *
-         * Override existing resources with same name
-         */
-        override_existing?: boolean;
-    };
-    url: '/v1/workspace/import/file';
-};
-
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostError = ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors[keyof ImportWorkspaceConfigFileV1WorkspaceImportFilePostErrors];
-
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ImportResult;
-};
-
-export type ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponse = ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses[keyof ImportWorkspaceConfigFileV1WorkspaceImportFilePostResponses];
 
 export type GetWorkspaceSettingsV1WorkspaceSettingsGetData = {
     body?: never;

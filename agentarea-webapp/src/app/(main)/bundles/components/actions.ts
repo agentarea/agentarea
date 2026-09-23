@@ -1,21 +1,27 @@
 "use server";
 
+import { z } from "zod";
 import type {
   AgentResponse,
   AnalyzeRequest,
+  CatalogConnectionRequest,
+  CatalogConnectionResponse,
   ImportPreview,
   InstallRequest,
   InstallResult,
   ModelInstanceResponse,
   RegistryItemResponse,
+  SecretResponse,
   SkillFileResponse,
 } from "@/api/client/types.gen";
 import {
   zAgentUpdate,
   zAnalyzeBundleV1BundlesAnalyzePostBody,
   zAnalyzeBundleV1BundlesAnalyzePostResponse,
-  zGetAgentV1AgentsAgentIdGetResponse,
   zBrowseCatalogV1RegistriesCatalogBrowseGetResponse,
+  zCatalogConnectionRequest,
+  zCatalogConnectionResponse,
+  zGetAgentV1AgentsAgentIdGetResponse,
   zGetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse,
   zGetSkillContentV1SkillsSkillIdContentGetResponse,
   zInstallAgentV1AgentsAgentIdInstallPostResponse,
@@ -24,12 +30,14 @@ import {
   zInstallSkillV1SkillsSkillIdInstallPostResponse,
   zListAgentsV1AgentsGetResponse,
   zListModelInstancesV1ModelInstancesGetResponse,
+  zListSecretsV1SecretsGetResponse,
   zListSkillFilesV1SkillsSkillIdFilesGetResponse,
   zUpdateAgentV1AgentsAgentIdPatchResponse,
 } from "@/api/client/zod.gen";
 import {
   analyzeBundle,
   browseCatalog,
+  connectCatalogItem,
   getAgent,
   getCatalogItem,
   getSkillContent,
@@ -40,16 +48,34 @@ import {
   installSkill,
   listAgents,
   listModelInstances,
+  listSecrets,
   updateAgent,
 } from "@/lib/api";
-import { z } from "zod";
-import { PAGE, TYPE_KEYS, type CatalogType } from "./catalog-data";
+import {
+  PAGE,
+  REGISTRY_TYPE,
+  TYPE_KEYS,
+  type CatalogProtocol,
+  type CatalogType,
+} from "./catalog-data";
 
 export type AgentLite = { id: string; name: string };
 export type WorkspaceModel = Pick<
   ModelInstanceResponse,
-  "id" | "model_name" | "model_display_name" | "provider_name" | "provider_icon_url"
+  | "id"
+  | "model_name"
+  | "model_display_name"
+  | "provider_name"
+  | "provider_icon_url"
 >;
+
+export async function listWorkspaceSecretsAction(): Promise<SecretResponse[]> {
+  const { data, error } = await listSecrets();
+  if (error || !data) {
+    throw new Error(errorMessage(error, "Failed to load workspace secrets"));
+  }
+  return zListSecretsV1SecretsGetResponse.parse(data);
+}
 
 function errorMessage(error: unknown, fallback: string): string {
   if (!error) return fallback;
@@ -91,6 +117,7 @@ export type CatalogPageResult = {
   /** Items matching the filters across the whole catalog, not just this page. */
   total: number;
   categories: { value: string; count: number }[];
+  protocols: { value: string; count: number }[];
 };
 
 /**
@@ -104,13 +131,14 @@ export async function fetchCatalogPageAction(params: {
   offset: number;
   q?: string;
   category?: string;
+  protocol?: CatalogProtocol;
   sort?: string;
 }): Promise<CatalogPageResult> {
-  const registryType = assertCatalogType(params.type);
-  const { items, total, categories, error } = await browseCatalog({
-    registryType,
+  const { items, total, categories, protocols, error } = await browseCatalog({
+    registryType: REGISTRY_TYPE[assertCatalogType(params.type)],
     q: params.q,
     category: params.category,
+    protocol: params.protocol,
     sort: params.sort,
     limit: PAGE,
     offset: params.offset,
@@ -122,11 +150,13 @@ export async function fetchCatalogPageAction(params: {
     items,
     total,
     categories,
+    protocols,
   });
   return {
     items: parsed.items,
     total: parsed.total,
     categories: parsed.categories,
+    protocols: parsed.protocols ?? [],
   };
 }
 
@@ -138,6 +168,18 @@ export async function fetchCatalogItemAction(
     throw new Error(errorMessage(error, "Failed to load catalog item"));
   }
   return zGetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse.parse(data);
+}
+
+export async function connectCatalogConnectionAction(
+  itemId: string,
+  input: CatalogConnectionRequest
+): Promise<CatalogConnectionResponse> {
+  const body = zCatalogConnectionRequest.parse(input);
+  const { data, error } = await connectCatalogItem(itemId, body);
+  if (error || !data) {
+    throw new Error(errorMessage(error, "Could not connect this account"));
+  }
+  return zCatalogConnectionResponse.parse(data);
 }
 
 export async function analyzeBundleAction(
@@ -181,21 +223,27 @@ export async function listWorkspaceAgentsAction(): Promise<AgentLite[]> {
   return agents.map((agent) => ({ id: agent.id, name: agent.name }));
 }
 
-export async function listActiveModelInstancesAction(): Promise<WorkspaceModel[]> {
+export async function listActiveModelInstancesAction(): Promise<
+  WorkspaceModel[]
+> {
   const { data, error } = await listModelInstances({ is_active: true });
   if (error || !data) {
     throw new Error(errorMessage(error, "Failed to load models"));
   }
-  return zListModelInstancesV1ModelInstancesGetResponse.parse(data).map((model) => ({
-    id: model.id,
-    model_name: model.model_name,
-    model_display_name: model.model_display_name,
-    provider_name: model.provider_name,
-    provider_icon_url: model.provider_icon_url,
-  }));
+  return zListModelInstancesV1ModelInstancesGetResponse
+    .parse(data)
+    .map((model) => ({
+      id: model.id,
+      model_name: model.model_name,
+      model_display_name: model.model_display_name,
+      provider_name: model.provider_name,
+      provider_icon_url: model.provider_icon_url,
+    }));
 }
 
-export async function installCatalogSkillAction(skillId: string): Promise<string> {
+export async function installCatalogSkillAction(
+  skillId: string
+): Promise<string> {
   const { data, error } = await installSkill(skillId);
   if (error || !data) {
     throw new Error(errorMessage(error, "Install failed"));
@@ -220,7 +268,10 @@ export async function addCatalogSkillToAgentAction(
   const body = zAgentUpdate.parse({
     skill_ids: Array.from(new Set([...currentSkillIds, tenantSkillId])),
   });
-  const { data: updatedData, error: updateError } = await updateAgent(agentId, body);
+  const { data: updatedData, error: updateError } = await updateAgent(
+    agentId,
+    body
+  );
   if (updateError || !updatedData) {
     throw new Error(errorMessage(updateError, "Could not attach skill"));
   }
@@ -251,7 +302,9 @@ export async function getSkillFileUrlAction(
   skillId: string,
   path: string
 ): Promise<string> {
-  const { data, error } = await getSkillFile(skillId, path, { redirect: false });
+  const { data, error } = await getSkillFile(skillId, path, {
+    redirect: false,
+  });
   if (error || !data) {
     throw new Error(errorMessage(error, "Could not load skill file"));
   }

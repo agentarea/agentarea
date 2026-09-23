@@ -19,6 +19,7 @@ from . import (
     audit,
     bundles,
     clients,
+    connection_oauth,
     dashboard,
     files,
     governance,
@@ -34,6 +35,7 @@ from . import (
     network,
     openapi_connections,
     policies,
+    principals,
     projects,
     provider_configs,
     provider_specs,
@@ -42,6 +44,7 @@ from . import (
     skill_collections,
     skills,
     triggers,
+    usage,
     wallet,
     workspace_config,
     workspace_invitations,
@@ -56,9 +59,7 @@ public_v1_router = APIRouter(prefix="/v1", tags=["public"])
 
 # MCP OAuth callback (public — user is mid-redirect from external AS)
 public_v1_router.include_router(mcp_oauth_connect.public_router)
-
-# Trigger execute endpoint (public — called by internal Go event-service)
-public_v1_router.include_router(triggers.public_router)
+public_v1_router.include_router(connection_oauth.public_router)
 
 # A2A Agent Card discovery is public by protocol; execution RPC remains protected below.
 public_v1_router.include_router(agents_well_known.router, prefix="/agents/{agent_id}")
@@ -107,6 +108,9 @@ protected_v1_router.include_router(workspace_config.router)
 protected_v1_router.include_router(workspace_invitations.router)
 protected_v1_router.include_router(workspaces.router)
 
+# Principal (id -> who it is) resolution - PROTECTED
+protected_v1_router.include_router(principals.router)
+
 # Skills management - PROTECTED
 protected_v1_router.include_router(skills.router)
 
@@ -126,6 +130,7 @@ protected_v1_router.include_router(mcp_oauth_links.router)
 
 # MCP OAuth Connect (client-side) - PROTECTED for /authorize, callback is public
 protected_v1_router.include_router(mcp_oauth_connect.router)
+protected_v1_router.include_router(connection_oauth.router)
 
 # MCP API Keys management - PROTECTED
 protected_v1_router.include_router(api_keys.router)
@@ -154,6 +159,7 @@ protected_v1_router.include_router(clients.router)
 
 # Audit logs - PROTECTED
 protected_v1_router.include_router(audit.router)
+protected_v1_router.include_router(usage.router)
 
 # Dashboard + workspace settings - PROTECTED
 protected_v1_router.include_router(dashboard.router)

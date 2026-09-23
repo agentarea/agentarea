@@ -180,6 +180,10 @@ export default function ClientsPage() {
                 title="No clients yet"
                 description="Create one to give an external harness a governed, scoped tool bundle."
                 iconsType="mcp"
+                action={{
+                  label: "Create client",
+                  onClick: () => setShowCreate(true),
+                }}
               />
             }
             cardContent={(client: ClientResponse) => (

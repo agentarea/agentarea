@@ -179,16 +179,18 @@ export function ProviderModelSelector({
   ) => {
     if (iconUrl) {
       return (
-        <Image
-          src={iconUrl}
-          alt={providerName}
-          width={16}
-          height={16}
-          className="h-4 w-4 rounded dark:invert"
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-        />
+        <span className="avatar-plate grid h-5 w-5 flex-shrink-0 place-items-center rounded-[5px]">
+          <Image
+            src={iconUrl}
+            alt={providerName}
+            width={16}
+            height={16}
+            className="h-[13px] w-[13px] object-contain"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
+        </span>
       );
     }
 

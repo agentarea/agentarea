@@ -2,7 +2,10 @@ import type { CreateClientConfig } from "./client/client";
 import { env } from "@/env";
 import { getAuthToken } from "@/lib/getAuthToken";
 import { SERVER_API_TIMEOUT_MS } from "@/lib/server-timeouts";
-import { WORKSPACE_SLUG_HEADER } from "@/lib/workspaces";
+import {
+  WORKSPACE_REFERENCE_HEADER,
+  WORKSPACE_SLUG_HEADER,
+} from "@/lib/workspaces";
 
 async function addWorkspaceSlug(request: Request) {
   try {
@@ -16,10 +19,11 @@ async function addWorkspaceSlug(request: Request) {
     // otherwise the switcher decides, via a slug validated against the user's
     // memberships rather than read straight off the cookie.
     const workspaceSlug =
+      requestHeaders.get(WORKSPACE_REFERENCE_HEADER) ??
       requestHeaders.get(WORKSPACE_SLUG_HEADER) ??
       (await getActiveWorkspaceSlug());
     if (workspaceSlug) {
-      request.headers.set("X-Workspace-Slug", workspaceSlug);
+      request.headers.set(WORKSPACE_REFERENCE_HEADER, workspaceSlug);
     }
   } catch {
     // headers() is unavailable outside a request scope (for example build-time

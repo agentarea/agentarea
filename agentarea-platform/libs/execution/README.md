@@ -11,6 +11,29 @@ The execution library follows a clean architecture pattern with clear separation
 - **Services**: Application layer services
 - **Infrastructure**: External system integrations
 
+### Single LLM call boundary
+
+[`LLMExecutionService`](agentarea_execution/llm_execution_service.py) owns model
+and credential resolution, output-token limits, provider invocation, response
+aggregation, and final usage/cost conversion. It accepts an explicit `UserContext`
+and a scoped model-service loader; the database scope closes before generation.
+It can run outside Temporal.
+
+The service streams by default. Constructing it with `stream=False` selects the
+SDK's nonstreamed completion method and emits no progress callbacks. Omitting a
+chunk callback does not change provider mode. Both modes require configured
+pricing and positive token usage before returning a successful `LLMCallResult`.
+
+[`call_llm_activity`](agentarea_execution/activities/agent_execution_activities.py)
+binds task event callbacks, constructs the principal, and maps ordinary errors to
+Temporal failures. Its heartbeat and cancellation behavior remain in the activity
+adapter. The workflow still awaits one final activity result and owns retries,
+checkpoints, and run-budget accounting.
+
+Stream chunks are provisional progress, not workflow history or durable task
+events. Retried activities can repeat progress; this boundary does not provide
+exactly-once delivery. Final events use the existing workflow publication path.
+
 ## Package Structure
 
 ```

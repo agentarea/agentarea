@@ -9,12 +9,14 @@ import {
   type ReactNode,
 } from "react";
 import { useSearchParams } from "next/navigation";
+import { zGetNetworkTopologyV1NetworkTopologyGetResponse } from "@/api/client/zod.gen";
 import { getNetworkTopologyAction as getNetworkTopology } from "@/lib/server-actions";
 import type { TopologyResponse } from "./types";
 
 interface NetworkContextValue {
   topology: TopologyResponse | null;
   loading: boolean;
+  error: boolean;
   fetchTopology: () => Promise<void>;
   view: string;
 }
@@ -37,16 +39,28 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
 
   const [topology, setTopology] = useState<TopologyResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const fetchTopology = useCallback(async () => {
     setLoading(true);
+    setError(false);
     try {
       const { data, error } = await getNetworkTopology();
       if (error || !data) {
-        console.error("Failed to fetch topology:", error);
+        setError(true);
         return;
       }
-      setTopology(data as TopologyResponse);
+      const parsed =
+        zGetNetworkTopologyV1NetworkTopologyGetResponse.parse(data);
+      setTopology({
+        ...parsed,
+        nodes: parsed.nodes.map((node) => ({
+          ...node,
+          metadata: node.metadata ?? {},
+        })),
+      });
+    } catch {
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -57,7 +71,9 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
   }, [fetchTopology]);
 
   return (
-    <NetworkContext.Provider value={{ topology, loading, fetchTopology, view }}>
+    <NetworkContext.Provider
+      value={{ topology, loading, error, fetchTopology, view }}
+    >
       {children}
     </NetworkContext.Provider>
   );

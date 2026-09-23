@@ -2,6 +2,7 @@ package mcpgateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	"github.com/agentarea/mcp-manager/internal/mcpspec"
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/providers"
+	"github.com/agentarea/mcp-manager/internal/usage"
+	"github.com/google/uuid"
 )
 
 // ProviderSelector resolves the data plane that owns one instance. The demand
@@ -45,6 +48,7 @@ type ProviderRuntime struct {
 	imagePolicy    ImagePolicy
 	startupTimeout time.Duration
 	remote         *RemoteUpstream
+	usage          usage.Recorder
 }
 
 func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backend, cfg *config.Config, imagePolicy ImagePolicy, startupTimeout time.Duration, remote *RemoteUpstream) (*ProviderRuntime, error) {
@@ -63,6 +67,9 @@ func NewProviderRuntime(providerManager ProviderSelector, backend backends.Backe
 		remote:         remote,
 	}, nil
 }
+
+// SetUsageRecorder must be called before the runtime serves requests.
+func (r *ProviderRuntime) SetUsageRecorder(recorder usage.Recorder) { r.usage = recorder }
 
 func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPServerInstance) (string, error) {
 	provider, err := r.providers.GetProvider(instance)
@@ -84,12 +91,25 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 	if statusErr != nil && !errors.Is(statusErr, backends.ErrInstanceNotFound) {
 		return "", fmt.Errorf("inspect MCP runtime status: %w", statusErr)
 	}
+	operationID := ""
 	if errors.Is(statusErr, backends.ErrInstanceNotFound) {
-		if err := provider.CreateInstance(ctx, instance); err != nil {
+		operationID = uuid.NewString()
+		if err := r.recordUsage(ctx, instance, operationID, "mcp.runtime.creation.started"); err != nil {
 			return "", err
+		}
+		if err := provider.CreateInstance(ctx, instance); err != nil {
+			recordErr := r.recordUsage(context.WithoutCancel(ctx), instance, operationID, "mcp.runtime.creation.failed")
+			sampleErr := r.recordBoundaryUsage(context.WithoutCancel(ctx), instance, operationID, "creation_failed")
+			return "", errors.Join(err, recordErr, sampleErr)
+		}
+		if err := r.recordUsage(ctx, instance, operationID, "mcp.runtime.creation.completed"); err != nil {
+			return "", r.cleanupFailedStart(instance, err)
 		}
 	}
 	if statusErr != nil || !runtimeStatusReady(status.Status) {
+		if operationID == "" {
+			operationID = uuid.NewString()
+		}
 		deadline := time.NewTimer(r.startupTimeout)
 		defer deadline.Stop()
 		ticker := time.NewTicker(500 * time.Millisecond)
@@ -123,6 +143,11 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 				return "", r.cleanupFailedStart(instance, fmt.Errorf("MCP instance did not become ready; last state %q", status.Status))
 			case <-ticker.C:
 			}
+		}
+	}
+	if operationID != "" {
+		if err := r.recordBoundaryUsage(context.WithoutCancel(ctx), instance, operationID, "activation"); err != nil {
+			return "", r.cleanupFailedStart(instance, err)
 		}
 	}
 
@@ -244,23 +269,120 @@ func instanceEnvironment(jsonSpec map[string]any) map[string]string {
 func (r *ProviderRuntime) cleanupFailedStart(instance *models.MCPServerInstance, cause error) error {
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	provider, err := r.providers.GetProvider(instance)
-	if err != nil {
-		return errors.Join(cause, err)
-	}
-	if err := provider.DeleteInstance(cleanupCtx, instance.InstanceID, instance.Name); err != nil && !errors.Is(err, backends.ErrInstanceNotFound) {
+	if err := r.delete(cleanupCtx, instance, "failed_start_cleanup"); err != nil {
 		return errors.Join(cause, fmt.Errorf("cleanup failed MCP activation: %w", err))
 	}
 	return cause
 }
 
 func (r *ProviderRuntime) Delete(ctx context.Context, instance *models.MCPServerInstance) error {
+	return r.delete(ctx, instance, "deletion")
+}
+
+func (r *ProviderRuntime) delete(ctx context.Context, instance *models.MCPServerInstance, boundary string) error {
 	provider, err := r.providers.GetProvider(instance)
 	if err != nil {
 		return err
 	}
-	if err := provider.DeleteInstance(ctx, instance.InstanceID, instance.Name); err != nil && !errors.Is(err, backends.ErrInstanceNotFound) {
+	operationID := uuid.NewString()
+	if err := r.recordBoundaryUsage(ctx, instance, operationID, boundary); err != nil {
 		return err
+	}
+	if err := provider.DeleteInstance(ctx, instance.InstanceID, instance.Name); err != nil && !errors.Is(err, backends.ErrInstanceNotFound) {
+		recordErr := r.recordUsage(context.WithoutCancel(ctx), instance, operationID, "mcp.runtime.deletion.failed")
+		return errors.Join(err, recordErr)
+	}
+	return r.recordUsage(context.WithoutCancel(ctx), instance, operationID, "mcp.runtime.deletion.completed")
+}
+
+// recordBoundaryUsage retains the physical observation before a short-lived
+// workload can disappear between periodic samples. Repository attribution is
+// authoritative; a mismatched inventory entry cannot become tenant usage.
+func (r *ProviderRuntime) recordBoundaryUsage(ctx context.Context, instance *models.MCPServerInstance, operationID, boundary string) error {
+	if r.usage == nil {
+		return nil
+	}
+	var samples []usage.Sample
+	reason := "resource_sampler_unavailable"
+	if sampler, ok := r.backend.(usage.ResourceSampler); ok {
+		sampleCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		var err error
+		samples, err = sampler.SampleResourceUsage(sampleCtx, instance.InstanceID)
+		cancel()
+		switch {
+		case err != nil:
+			// Provider errors may contain sensitive runtime configuration.
+			reason = "resource_inventory_unavailable"
+		case len(samples) == 0:
+			reason = "resource_not_observed"
+		default:
+			reason = ""
+		}
+		for _, sample := range samples {
+			if sample.ResourceID != instance.InstanceID || sample.WorkspaceID != instance.WorkspaceID || sample.ResourceKind != "mcp_instance" {
+				samples = nil
+				reason = "resource_identity_mismatch"
+				break
+			}
+		}
+	}
+	if len(samples) == 0 || reason != "" {
+		samples = append(samples, usage.Sample{
+			ResourceKind: "mcp_instance", ResourceID: instance.InstanceID, WorkspaceID: instance.WorkspaceID,
+			ObservedAt: time.Now().UTC(), MeasurementStatus: "unavailable", MeasurementReason: reason,
+		})
+	}
+	recordCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var recordErr error
+	for index, sample := range samples {
+		if sample.ObservedAt.IsZero() {
+			sample.ObservedAt = time.Now().UTC()
+		}
+		if sample.IncarnationID == "" {
+			sample.MeasurementStatus = "unavailable"
+			if sample.MeasurementReason == "" {
+				sample.MeasurementReason = "physical_incarnation_unavailable"
+			}
+		}
+		data, err := json.Marshal(struct {
+			usage.Sample
+			Boundary    string `json:"boundary"`
+			OperationID string `json:"operation_id"`
+		}{Sample: sample, Boundary: boundary, OperationID: operationID})
+		if err == nil {
+			err = r.usage.Record(recordCtx, usage.Event{
+				SchemaVersion: usage.SchemaVersion,
+				ID:            fmt.Sprintf("%s:runtime.sample:%s:%d", operationID, boundary, index),
+				Source:        "mcp-gateway", Kind: "runtime.sample",
+				WorkspaceID: instance.WorkspaceID, ResourceKind: "mcp_instance",
+				ResourceID: instance.InstanceID, IncarnationID: sample.IncarnationID,
+				OccurredAt: sample.ObservedAt, Data: data,
+			})
+		}
+		if err != nil {
+			recordErr = errors.Join(recordErr, fmt.Errorf("record %s runtime sample for instance %s operation %s: %w", boundary, instance.InstanceID, operationID, err))
+		}
+	}
+	return recordErr
+}
+
+func (r *ProviderRuntime) recordUsage(ctx context.Context, instance *models.MCPServerInstance, operationID, kind string) error {
+	if r.usage == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	data, _ := json.Marshal(map[string]any{
+		"operation_id": operationID, "measurement": "provider_operation",
+	})
+	if err := r.usage.Record(ctx, usage.Event{
+		SchemaVersion: usage.SchemaVersion,
+		ID:            operationID + ":" + kind, Source: "mcp-gateway", Kind: kind,
+		WorkspaceID: instance.WorkspaceID, ResourceKind: "mcp_instance",
+		ResourceID: instance.InstanceID, OccurredAt: time.Now().UTC(), Data: data,
+	}); err != nil {
+		return fmt.Errorf("record %s usage for instance %s event %s: %w", kind, instance.InstanceID, operationID, err)
 	}
 	return nil
 }

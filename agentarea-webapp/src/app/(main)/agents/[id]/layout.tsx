@@ -1,8 +1,9 @@
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { getAgent } from "@/lib/api";
+import { getAgent, listAgentTasks, type TaskResponse } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
 import { ChatProvider } from "../shared/ChatContext";
+import { isRunningTask } from "../shared/taskStatus";
 import AgentHeaderControls from "./components/AgentHeaderControls";
 import AgentHeaderTabs from "./components/AgentHeaderTabs";
 
@@ -23,6 +24,15 @@ export default async function AgentLayout({ params, children }: Props) {
   // operate on — only the read-only preview. Hide the operational tabs.
   const isCatalog = Boolean((agent as { is_catalog?: boolean }).is_catalog);
 
+  // In-progress count for the Tasks tab pill. Best-effort: a failed lookup
+  // just hides the number.
+  let runningCount = 0;
+  if (!isCatalog) {
+    const tasksRes = await listAgentTasks(agent.id).catch(() => null);
+    const tasks = (tasksRes?.data as TaskResponse[] | null | undefined) ?? [];
+    runningCount = tasks.filter(isRunningTask).length;
+  }
+
   return (
     <ChatProvider>
       <ContentBlock
@@ -31,11 +41,15 @@ export default async function AgentLayout({ params, children }: Props) {
             { label: t("browseAgents"), href: "/agents" },
             { label: agent.name, href: `/agents/${agentRef}` },
           ],
-          controls: <AgentHeaderControls />,
+          controls: (
+            <AgentHeaderControls agentRef={agentRef} isCatalog={isCatalog} />
+          ),
         }}
         className="p-0 h-full"
         subheader={
-          isCatalog ? undefined : <AgentHeaderTabs agentId={agentRef} />
+          isCatalog ? undefined : (
+            <AgentHeaderTabs agentId={agentRef} runningCount={runningCount} />
+          )
         }
       >
         {children}

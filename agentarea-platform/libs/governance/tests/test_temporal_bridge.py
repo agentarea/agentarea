@@ -1,6 +1,6 @@
 """Tests for the Temporal bridge adapter."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
@@ -84,7 +84,9 @@ class _FakeLLMCallRequest:
     model_id: str
     workspace_id: str = "ws-1"
     agent_id: str = ""
-    user_context_data: dict[str, Any] | None = None
+    user_context_data: dict[str, Any] | None = field(
+        default_factory=lambda: {"user_id": "user-1", "workspace_id": "ws-1"}
+    )
     effective_policy: dict[str, Any] | None = None
     cost_used: float | None = None
     tokens_used: int | None = None
@@ -99,7 +101,9 @@ class _FakeMCPToolRequest:
     tool_name: str
     tool_args: dict[str, Any]
     workspace_id: str = "ws-1"
-    user_context_data: dict[str, Any] | None = None
+    user_context_data: dict[str, Any] | None = field(
+        default_factory=lambda: {"user_id": "user-1", "workspace_id": "ws-1"}
+    )
     effective_policy: dict[str, Any] | None = None
     cost_used: float | None = None
     tokens_used: int | None = None
@@ -193,6 +197,33 @@ class TestContextExtraction:
         input = _FakeActivityInput(fn=fn, args=[])
         context = _extract_context_from_input(input, Phase.PRE_LLM_CALL)
         assert context is None
+
+    def test_request_without_a_principal_is_refused(self):
+        """A blank principal used to become ``user_id=""`` and evaluate as allow."""
+        request = _FakeLLMCallRequest(
+            messages=[{"role": "user", "content": "hi"}],
+            model_id="gpt-4",
+            user_context_data=None,
+        )
+        fn = _make_fn("call_llm_activity")
+        input = _FakeActivityInput(fn=fn, args=[request])
+
+        with pytest.raises(ValueError, match="no principal"):
+            _extract_context_from_input(input, Phase.PRE_LLM_CALL)
+
+    def test_request_without_a_workspace_is_refused(self):
+        """A blank tenant used to become ``workspace_id=""`` and match no policy."""
+        request = _FakeLLMCallRequest(
+            messages=[{"role": "user", "content": "hi"}],
+            model_id="gpt-4",
+            workspace_id="",
+            user_context_data={"user_id": "user-1"},
+        )
+        fn = _make_fn("call_llm_activity")
+        input = _FakeActivityInput(fn=fn, args=[request])
+
+        with pytest.raises(ValueError, match="no workspace"):
+            _extract_context_from_input(input, Phase.PRE_LLM_CALL)
 
 
 class TestExecutionStateFromPolicy:

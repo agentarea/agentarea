@@ -335,6 +335,51 @@ def create_app() -> FastAPI:
     app.include_router(public_v1_router, tags=["v1"])
     app.include_router(protected_v1_router, tags=["v1"])
 
+    # Routes contributed by installed extensions.
+    #
+    # The registry already lets a distribution replace a service implementation; this lets
+    # one add endpoints, which is the other half of the same seam. It exists so a
+    # deployment can serve routes this repository does not ship without forking the app
+    # factory — the alternative being a fork whose only diff is one include_router call,
+    # which then has to be rebased forever.
+    #
+    # Mounted last so an extension cannot shadow a core route by registering the same
+    # path: FastAPI matches in insertion order, and the routes above are the contract this
+    # project is responsible for.
+    #
+    # A failing extension must not take the API down with it. The registry is populated by
+    # scanning installed packages, so a broken one is a deployment problem, and refusing
+    # to start turns "one feature is unavailable" into "nothing is".
+    from agentarea_common.extensions import discover_extensions
+    from agentarea_common.extensions.registry import ExtensionRegistry
+
+    # Discover here, not only in initialize_services().
+    #
+    # Routes have to exist on the app object before it starts serving, but
+    # initialize_services() runs from the lifespan — after this function has
+    # returned. So the registry was guaranteed empty at this line, get_factory
+    # returned None, and the block below was skipped without logging anything:
+    # an installed, working extension contributed nothing and said nothing.
+    # (The `permissions` and `authorization` lookups are fine precisely because
+    # they read the registry inside initialize_services, after discovery.)
+    #
+    # Calling it twice is harmless — ExtensionRegistry.register is a dict
+    # assignment, so the later call re-registers the same factories.
+    discover_extensions()
+
+    extension_router_factory = ExtensionRegistry.get_factory("api_router")
+    if extension_router_factory is not None:
+        try:
+            app.include_router(extension_router_factory())
+            logger.info("Mounted routes from the api_router extension")
+        except Exception:
+            logger.exception("api_router extension failed to mount; continuing without it")
+    else:
+        # Say so. The silence here is what let this ship broken: with no
+        # extension installed this is the normal OSS path, but it is also what
+        # a discovery-ordering bug looks like, and the two were indistinguishable.
+        logger.info("No api_router extension registered; serving core routes only")
+
     # Mount native MCP server at /mcp — exposes platform tools via MCP protocol.
     # Auth: Hydra OAuth tokens (Cursor/Claude Desktop), API keys, Kratos JWT.
     # Session manager lifespan is run in _lifespan (above) so the task group
@@ -360,6 +405,7 @@ def create_app() -> FastAPI:
     # show "you've spent $X of $Y, raise the cap or wait".
     from agentarea_agents.application.agent_service import InvalidModelIdError
     from agentarea_common.exceptions import problem_response
+    from agentarea_llm.application.provider_service import PlatformManagedConfigError
     from agentarea_tasks.domain.exceptions import BudgetCapExceededError
     from fastapi import Request
 
@@ -371,6 +417,18 @@ def create_app() -> FastAPI:
         return problem_response(
             status_code=400,
             code="invalid_model_id",
+            detail=str(exc),
+        )
+
+    # A configuration the deployment supplies is readable from every workspace so
+    # its models can be used without a key. 403 rather than 404: the caller can see
+    # the row in their own listing, and answering "no such configuration" about
+    # something they are looking at reads as a bug in us rather than a rule.
+    @app.exception_handler(PlatformManagedConfigError)
+    async def _platform_managed_config_handler(_request: Request, exc: PlatformManagedConfigError):
+        return problem_response(
+            status_code=403,
+            code="platform_managed_config",
             detail=str(exc),
         )
 

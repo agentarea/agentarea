@@ -10,41 +10,47 @@
 
 import { KRATOS_WHOAMI_TIMEOUT_MS } from "./server-timeouts";
 
-/**
- * Route prefixes that require an authenticated session.
- *
- * This is the single source of truth shared by the middleware gate
- * (src/proxy.ts) and the client shell (ConditionalLayout.tsx).
- */
-export const PROTECTED_ROUTE_PREFIXES: string[] = [
-  "/workplace",
-  "/agents",
-  "/tasks",
-  "/connections",
-  "/settings",
-  "/admin",
-  "/skills",
-  "/triggers",
-  "/inbox",
-  "/projects",
-  "/network",
-];
+const PUBLIC_ROUTE_PREFIXES = ["/auth", "/error", "/404", "/500"];
 
 /**
  * True when the pathname falls under a protected route prefix.
  *
- * Semantics are identical to the original
- * `PROTECTED_ROUTES.some(r => pathname.startsWith(r))`: a prefix match.
- * Note this means "/agentsfoo" matches "/agents" (startsWith), which preserves
- * the prior behavior exactly.
+ * Every page except the landing and auth/error surfaces belongs to the
+ * authenticated app shell. Keeping a public allowlist prevents new `(main)`
+ * routes from silently bypassing the tokenization gate.
  */
 export function isProtectedRoute(pathname: string): boolean {
-  return PROTECTED_ROUTE_PREFIXES.some(
-    (prefix) =>
-      pathname === prefix ||
-      pathname.startsWith(`${prefix}/`) ||
-      pathname.startsWith(prefix)
+  return (
+    pathname !== "/" &&
+    !PUBLIC_ROUTE_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+    )
   );
+}
+
+const LOGIN_PATH = "/auth/login";
+
+/**
+ * Where to send an unauthenticated request for `pathname`.
+ *
+ * The requested page travels along as `return_to` so a link opened from
+ * outside the app — an emailed workspace invitation, which by definition
+ * lands on someone with no session — comes back to its target after sign-in
+ * instead of dropping its one-time token at the dashboard.
+ *
+ * The target stays relative: Kratos fills in the scheme and host from
+ * `default_browser_return_url` before matching `allowed_return_urls`, so this
+ * works on any public host without the middleware having to know it.
+ */
+export function loginRedirectPath(pathname: string, search: string): string {
+  // "//host" and "/\host" are protocol-relative — a browser reads them as
+  // another origin, so they must never become a return target.
+  const escapesOrigin = /^\/[/\\]/.test(pathname);
+  if (pathname === "/" || escapesOrigin || !isProtectedRoute(pathname)) {
+    return LOGIN_PATH;
+  }
+  const params = new URLSearchParams({ return_to: `${pathname}${search}` });
+  return `${LOGIN_PATH}?${params}`;
 }
 
 /**
@@ -81,17 +87,17 @@ export async function hasLiveSession(
 
     if (!response.ok) {
       // A dead/expired session is an expected outcome, not an error.
-      console.warn(
-        "[auth-session] whoami non-ok response:",
-        response.status
-      );
+      console.warn("[auth-session] whoami non-ok response:", response.status);
       return false;
     }
 
     const data = await response.json();
     return Boolean(data?.tokenized);
   } catch (error) {
-    console.error("[auth-session] whoami request failed:", (error as Error)?.name ?? "unknown");
+    console.error(
+      "[auth-session] whoami request failed:",
+      (error as Error)?.name ?? "unknown"
+    );
     return false;
   }
 }

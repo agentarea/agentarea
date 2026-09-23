@@ -11,6 +11,7 @@ const DECORATION_TINT_STYLES = {
   danger: "[background-image:var(--row-tint-danger)]",
   info: "[background-image:var(--row-tint-info)]",
   neutral: "[background-image:var(--row-tint-neutral)]",
+  brand: "[background-image:var(--row-tint-brand)]",
 } satisfies Record<StatusTone, string>;
 
 interface InteractiveListRowProps {

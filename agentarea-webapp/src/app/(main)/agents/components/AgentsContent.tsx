@@ -6,11 +6,15 @@ import {
   listModelInstances,
   listMCPServerInstances,
   listMCPServers,
+  listOpenAPIConnections,
   getAllTasks,
 } from "@/lib/api";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
 import type { Agent } from "@/types";
-import { resolveAgentToolIcons } from "@/utils/agentToolIcons";
+import {
+  type OpenApiConnectionRef,
+  resolveAgentToolIcons,
+} from "@/utils/agentToolIcons";
 import AgentsList from "./AgentsList";
 
 interface AgentsContentProps {
@@ -23,18 +27,21 @@ export default async function AgentsContent({
   viewMode = "grid",
 }: AgentsContentProps) {
   const t = await getTranslations("AgentsPage");
+  const tCommon = await getTranslations("Common");
 
   const [
     { data: agents = [] },
     { data: modelInstances = [] },
     { data: mcpInstances = [] },
     { data: mcpServersData },
+    { data: openApiConnections = [] },
     { data: tasks = [] },
   ] = await Promise.all([
     listAgents(),
     listModelInstances(),
     listMCPServerInstances(),
     listMCPServers({ page_size: 100 }),
+    listOpenAPIConnections(),
     getAllTasks(),
   ]);
 
@@ -43,6 +50,8 @@ export default async function AgentsContent({
     : ((mcpServersData as { items?: McpServer[] } | null | undefined)?.items ??
       []);
   const mcpInstanceList = (mcpInstances as McpInstance[]) ?? [];
+  const openApiConnectionList =
+    (openApiConnections as OpenApiConnectionRef[]) ?? [];
 
   // Count active (running) tasks per agent
   const taskList = (tasks ?? []) as Array<{ status?: string; agent_id?: string }>;
@@ -76,7 +85,11 @@ export default async function AgentsContent({
         }
       : undefined;
     const active_task_count = activeTaskCountByAgent[String(agent.id)] ?? 0;
-    const tool_icons = resolveAgentToolIcons(agent, mcpInstanceList, mcpServers);
+    const tool_icons = resolveAgentToolIcons(agent, {
+      mcpInstances: mcpInstanceList,
+      mcpServers,
+      openApiConnections: openApiConnectionList,
+    });
     return { ...agent, model_info, active_task_count, tool_icons };
   });
 
@@ -102,6 +115,7 @@ export default async function AgentsContent({
           title={t("noAgentsTitle")}
           description={t("noAgentsDescription")}
           iconsType="agent"
+          action={{ label: t("createAgent"), href: "/agents/create" }}
         />
         <CatalogSuggestions type="agents" />
       </div>
@@ -114,6 +128,7 @@ export default async function AgentsContent({
         title={t("noMatchingAgents")}
         description={`${t("noMatchingAgentsDescription")}: "${searchQuery}"`}
         iconsType="agent"
+        action={{ label: tCommon("clearSearch"), href: "/agents" }}
       />
     );
   }

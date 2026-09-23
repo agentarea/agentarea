@@ -165,7 +165,16 @@ class WebToolset(Toolset):
         super().__init__()
         self.storage = storage
         self.workspace_repository = workspace_repository
-        self.workspace_id = workspace_id or "_standalone"
+        # Only fetches that persist need a tenant. Unlike the file toolsets this
+        # one runs storage-less (search only), so requiring a workspace there
+        # would be theatre — but writing under a shared placeholder would put one
+        # tenant's fetched bytes where another can read them.
+        if (storage is not None or workspace_repository is not None) and not workspace_id:
+            raise ValueError(
+                "workspace_id is required when a store is configured: fetched content "
+                "is scoped by it, and a shared placeholder mixes tenants"
+            )
+        self.workspace_id = workspace_id or ""
         self.task_id = task_id or ""
         self.lease_owner = lease_owner or ""
         self.base_prefix = base_prefix.strip("/")

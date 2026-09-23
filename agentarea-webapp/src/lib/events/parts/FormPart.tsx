@@ -39,19 +39,39 @@ export const FormPart: React.FC<FormPartProps> = ({ part, onSubmit }) => {
     part.eventType === "approval.response";
 
   if (isApproval) {
+    if (resolved) {
+      const approved = part.data.approved;
+      const decision =
+        approved === true ? "Approved" : approved === false ? "Rejected" : "Resolved";
+      const reason = asString(part.data.reason, "Approval request");
+      const comment = asString(part.data.deny_comment ?? part.data.comment);
+      return (
+        <details className="group text-[13px] leading-5">
+          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-1 py-0.5 text-foreground/80 outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <StatusIndicator tone={approved === false ? "warning" : "success"}>
+              {decision}
+            </StatusIndicator>
+            <span className="min-w-0 truncate text-muted-foreground">
+              {reason}
+            </span>
+          </summary>
+          <div className="space-y-1 pb-1 pl-3 pt-1 text-muted-foreground">
+            <p>{reason}</p>
+            {comment && <p>{comment}</p>}
+          </div>
+        </details>
+      );
+    }
+
     return (
       <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium text-foreground">
             {asString(part.data.reason, "Approval required")}
           </span>
-          {resolved ? (
-            <StatusIndicator tone="success">Resolved</StatusIndicator>
-          ) : (
-            <StatusIndicator tone="warning" pulse>
-              Approval required
-            </StatusIndicator>
-          )}
+          <StatusIndicator tone="warning" pulse>
+            Approval required
+          </StatusIndicator>
         </div>
       </div>
     );

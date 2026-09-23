@@ -16,6 +16,7 @@ import {
   type TriggerCatalogEntry,
 } from "./triggerDisplay";
 import TriggersTable from "./TriggersTable";
+import TriggersEmptyState from "./TriggersEmptyState";
 
 export type TriggersGroupBy = "channel" | "none";
 
@@ -43,6 +44,7 @@ export default function TriggersList({
   groupBy,
 }: TriggersListProps) {
   const t = useTranslations("TriggersPage");
+  const tCommon = useTranslations("Common");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   // Groups that actually have triggers come first (largest first); empty
@@ -75,13 +77,7 @@ export default function TriggersList({
   const hasTriggers = triggers.length > 0;
 
   if (!hasTriggers && !searchQuery) {
-    return (
-      <EmptyState
-        title={t("noTriggers")}
-        description={t("noTriggersDescription")}
-        iconsType="triggers"
-      />
-    );
+    return <TriggersEmptyState />;
   }
 
   if (!hasTriggers && searchQuery) {
@@ -90,6 +86,7 @@ export default function TriggersList({
         title={t("noMatchingTriggers")}
         description={t("noMatchingTriggersDescription", { query: searchQuery })}
         iconsType="triggers"
+        action={{ label: tCommon("clearSearch"), href: "/triggers" }}
       />
     );
   }

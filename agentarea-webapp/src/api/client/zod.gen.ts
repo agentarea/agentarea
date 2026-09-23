@@ -284,15 +284,6 @@ export const zAuditLogListResponse = z.object({
 });
 
 /**
- * Body_import_workspace_config_file_v1_workspace_import_file_post
- */
-export const zBodyImportWorkspaceConfigFileV1WorkspaceImportFilePost = z.object(
-  {
-    file: z.string(),
-  }
-);
-
-/**
  * Body_upload_file_v1_files_post
  */
 export const zBodyUploadFileV1FilesPost = z.object({
@@ -463,6 +454,55 @@ export const zBundleSkill = z.object({
 });
 
 /**
+ * CatalogConnectionRequest
+ *
+ * Connect with AgentArea credentials, or override them from Advanced.
+ */
+export const zCatalogConnectionRequest = z.object({
+  client_id: z.string().min(1).max(512).nullish(),
+  client_id_secret_id: z.string().uuid().nullish(),
+  client_secret: z.string().min(1).max(4096).nullish(),
+  client_secret_secret_id: z.string().uuid().nullish(),
+  credential_mode: z.enum(["managed", "custom"]).optional().default("managed"),
+  return_to: z.string().max(2048).optional().default(""),
+});
+
+/**
+ * CatalogConnectionResponse
+ */
+export const zCatalogConnectionResponse = z.object({
+  authorize_url: z.string(),
+  connection_id: z.string().uuid(),
+});
+
+/**
+ * CatalogItemCreate
+ *
+ * Definition published directly into a platform-managed catalog.
+ */
+export const zCatalogItemCreate = z.object({
+  description: z.string().nullish(),
+  external_id: z.string().min(1).max(500),
+  name: z.string().min(1).max(255),
+  recommendation_rank: z.number().int().gte(0).nullish(),
+  spec: z.record(z.unknown()).optional(),
+  tags: z.array(z.string()).optional(),
+  version: z.string().max(100).nullish(),
+});
+
+/**
+ * CatalogItemUpdate
+ */
+export const zCatalogItemUpdate = z.object({
+  description: z.string().nullish(),
+  external_id: z.string().min(1).max(500).nullish(),
+  name: z.string().min(1).max(255).nullish(),
+  spec: z.record(z.unknown()).nullish(),
+  tags: z.array(z.string()).nullish(),
+  version: z.string().max(100).nullish(),
+});
+
+/**
  * CategoryFacet
  */
 export const zCategoryFacet = z.object({
@@ -619,6 +659,13 @@ export const zCreateWorkspaceBody = z.object({
 });
 
 /**
+ * CreateWorkspaceDirectoryRequest
+ */
+export const zCreateWorkspaceDirectoryRequest = z.object({
+  path: z.string().min(1),
+});
+
+/**
  * DailySpendPoint
  */
 export const zDailySpendPoint = z.object({
@@ -664,15 +711,6 @@ export const zDiscoverPreviewRequest = z.object({
 });
 
 /**
- * DiscoverPreviewResponse
- */
-export const zDiscoverPreviewResponse = z.object({
-  discovered: z.number().int(),
-  models: z.array(zDiscoverPreviewModelResponse),
-  new_models: z.number().int(),
-});
-
-/**
  * DiscoveredModelResponse
  */
 export const zDiscoveredModelResponse = z.object({
@@ -687,15 +725,6 @@ export const zDiscoveredModelResponse = z.object({
   supports_function_calling: z.boolean().optional().default(false),
   supports_reasoning: z.boolean().optional().default(false),
   supports_vision: z.boolean().optional().default(false),
-});
-
-/**
- * DiscoveryResponse
- */
-export const zDiscoveryResponse = z.object({
-  discovered: z.number().int(),
-  models: z.array(zDiscoveredModelResponse),
-  new_models: z.number().int(),
 });
 
 /**
@@ -778,15 +807,18 @@ export const zExecutionLimitsPolicy = z.object({
  * Response model for execution metrics.
  */
 export const zExecutionMetricsResponse = z.object({
+  avg_cost_usd: z.number().optional().default(0),
   avg_execution_time_ms: z.number(),
+  costed_executions: z.number().int().optional().default(0),
   failed_executions: z.number().int(),
   failure_rate: z.number(),
   max_execution_time_ms: z.number().int(),
   min_execution_time_ms: z.number().int(),
-  period_hours: z.number().int(),
+  period_hours: z.number().int().nullish(),
   success_rate: z.number(),
   successful_executions: z.number().int(),
   timeout_executions: z.number().int(),
+  total_cost_usd: z.number().optional().default(0),
   total_executions: z.number().int(),
   trigger_id: z.string().uuid(),
 });
@@ -896,32 +928,6 @@ export const zHitlBlocker = z.object({
 });
 
 /**
- * ImportRequest
- *
- * Request body for importing workspace configuration.
- */
-export const zImportRequest = z.object({
-  override_existing: z.boolean().optional().default(false),
-  skip_missing_dependencies: z.boolean().optional().default(false),
-  yaml_content: z.string(),
-});
-
-/**
- * ImportResult
- *
- * Result of an import operation.
- */
-export const zImportResult = z.object({
-  created_agents: z.number().int().optional().default(0),
-  created_mcp_instances: z.number().int().optional().default(0),
-  created_provider_configs: z.number().int().optional().default(0),
-  created_skills: z.number().int().optional().default(0),
-  errors: z.array(z.string()).optional(),
-  success: z.boolean(),
-  warnings: z.array(z.string()).optional(),
-});
-
-/**
  * InputSecretValue
  *
  * Secret value submitted through the protected input endpoint.
@@ -958,6 +964,16 @@ export const zInstallResult = z.object({
 });
 
 /**
+ * InvitationEmailDelivery
+ */
+export const zInvitationEmailDelivery = z.enum([
+  "sent",
+  "not_requested",
+  "not_configured",
+  "failed",
+]);
+
+/**
  * InvitationCreatedResponse
  *
  * Same as InvitationResponse plus the plaintext token, returned ONCE.
@@ -967,9 +983,11 @@ export const zInvitationCreatedResponse = z.object({
   accepted_by_user_id: z.string().nullable(),
   created_at: z.string(),
   email: z.string().nullable(),
+  email_delivery: zInvitationEmailDelivery,
   expires_at: z.string(),
   id: z.string().uuid(),
   invited_by: z.string(),
+  invited_by_display_name: z.string().nullable(),
   status: z.string(),
   token: z.string(),
   workspace_id: z.string(),
@@ -986,6 +1004,7 @@ export const zInvitationResponse = z.object({
   expires_at: z.string(),
   id: z.string().uuid(),
   invited_by: z.string(),
+  invited_by_display_name: z.string().nullable(),
   status: z.string(),
   workspace_id: z.string(),
 });
@@ -1218,6 +1237,22 @@ export const zMppConfigSchema = z.object({
 });
 
 /**
+ * ManagedOAuthAppRequest
+ */
+export const zManagedOAuthAppRequest = z.object({
+  client_id: z.string().min(1).max(512),
+  client_secret: z.string().min(1).max(4096),
+});
+
+/**
+ * ManagedOAuthAppResponse
+ */
+export const zManagedOAuthAppResponse = z.object({
+  configured: z.boolean(),
+  provider_key: z.string(),
+});
+
+/**
  * McpInstanceAssociationBody
  */
 export const zMcpInstanceAssociationBody = z.object({
@@ -1272,11 +1307,12 @@ export const zMcpToolConfigOutput = z.object({
  * MemberResponse
  */
 export const zMemberResponse = z.object({
-  display_name: z.string().nullish(),
-  email: z.string().nullish(),
+  display_name: z.string().nullable(),
+  email: z.string().nullable(),
   id: z.string().uuid(),
   invitation_id: z.string().uuid().nullable(),
-  joined_at: z.string(),
+  is_owner: z.boolean(),
+  joined_at: z.string().nullable(),
   user_id: z.string(),
   workspace_id: z.string(),
 });
@@ -1393,6 +1429,23 @@ export const zModelSpecUpdate = z.object({
 });
 
 /**
+ * MoveWorkspaceFileRequest
+ */
+export const zMoveWorkspaceFileRequest = z.object({
+  destination: z.string().min(1),
+  source: z.string().min(1),
+});
+
+/**
+ * MovedFileResponse
+ */
+export const zMovedFileResponse = z.object({
+  destination: z.string(),
+  moved: z.number().int(),
+  source: z.string(),
+});
+
+/**
  * NetworkEdge
  */
 export const zNetworkEdge = z.object({
@@ -1417,6 +1470,45 @@ export const zNetworkNode = z.object({
     "skill",
     "trigger",
   ]),
+});
+
+/**
+ * NetworkPerson
+ */
+export const zNetworkPerson = z.object({
+  display_name: z.string().nullish(),
+  email: z.string().nullish(),
+  user_id: z.string(),
+});
+
+/**
+ * NetworkPersonAgentAccess
+ */
+export const zNetworkPersonAgentAccess = z.object({
+  agent_id: z.string(),
+  allowed: z.boolean(),
+  reason: z.string(),
+  user_id: z.string(),
+});
+
+/**
+ * NetworkPeopleAccessResponse
+ */
+export const zNetworkPeopleAccessResponse = z.object({
+  access: z.array(zNetworkPersonAgentAccess),
+  complete: z.boolean(),
+  decision_source: z
+    .literal("agent_edge_admission")
+    .optional()
+    .default("agent_edge_admission"),
+  directory_status: z
+    .enum(["available", "disabled"])
+    .optional()
+    .default("available"),
+  people: z.array(zNetworkPerson),
+  total_agents: z.number().int().gte(0),
+  total_people: z.number().int().gte(0).nullable(),
+  workspace_id: z.string(),
 });
 
 /**
@@ -1474,23 +1566,6 @@ export const zOpenApiConnectionCreate = z.object({
 });
 
 /**
- * OpenAPIConnectionResponse
- */
-export const zOpenApiConnectionResponse = z.object({
-  auth_config_id: z.string().uuid().nullish(),
-  available_tools: z.array(z.record(z.unknown())).optional().default([]),
-  base_url: z.string(),
-  created_at: z.unknown(),
-  custom_headers: z.array(zHeaderOutput).nullish(),
-  description: z.string().nullish(),
-  id: z.string().uuid(),
-  name: z.string(),
-  spec_url: z.string().nullish(),
-  status: z.string(),
-  updated_at: z.unknown(),
-});
-
-/**
  * OpenAPIConnectionUpdate
  *
  * Patch payload for an OpenAPI connection. All fields optional — unset = unchanged.
@@ -1503,6 +1578,33 @@ export const zOpenApiConnectionUpdate = z.object({
   name: z.string().min(1).max(255).nullish(),
   spec_content: z.record(z.unknown()).nullish(),
   spec_url: z.string().nullish(),
+});
+
+/**
+ * OpenAPIToolResponse
+ */
+export const zOpenApiToolResponse = z.object({
+  description: z.string(),
+  inputSchema: z.record(z.unknown()),
+  name: z.string(),
+});
+
+/**
+ * OpenAPIConnectionResponse
+ */
+export const zOpenApiConnectionResponse = z.object({
+  auth_config_id: z.string().uuid().nullish(),
+  available_tools: z.array(zOpenApiToolResponse),
+  base_url: z.string(),
+  created_at: z.string(),
+  custom_headers: z.array(zHeaderOutput).nullish(),
+  description: z.string().nullish(),
+  id: z.string().uuid(),
+  name: z.string(),
+  registry_item_id: z.string().uuid().nullish(),
+  spec_url: z.string().nullish(),
+  status: z.string(),
+  updated_at: z.string(),
 });
 
 /**
@@ -1781,6 +1883,23 @@ export const zPreviewIssue = z.object({
 });
 
 /**
+ * PrincipalType
+ *
+ * What kind of thing an id refers to.
+ */
+export const zPrincipalType = z.enum(["user", "agent", "platform"]);
+
+/**
+ * PrincipalResponse
+ */
+export const zPrincipalResponse = z.object({
+  display_name: z.string().nullish(),
+  email: z.string().nullish(),
+  id: z.string(),
+  type: zPrincipalType,
+});
+
+/**
  * ProjectAgentRef
  */
 export const zProjectAgentRef = z.object({
@@ -1897,11 +2016,13 @@ export const zProviderConfigResponse = z.object({
   id: z.string(),
   is_active: z.boolean(),
   is_public: z.boolean(),
+  managed_by: z.string().nullish(),
   model_instance_ids: z.array(z.string()).optional().default([]),
   name: z.string(),
   provider_spec_id: z.string(),
   provider_spec_key: z.string().nullish(),
   provider_spec_name: z.string().nullish(),
+  requires_api_key: z.boolean().optional().default(true),
   updated_at: z.string(),
   workspace_id: z.string(),
 });
@@ -1943,9 +2064,10 @@ export const zProviderSpecResponse = z.object({
 export const zRegistryCreate = z.object({
   description: z.string().nullish(),
   name: z.string(),
+  recommendation_priority: z.number().int().gte(0).nullish(),
   registry_type: z.string(),
   source_type: z.string(),
-  source_url: z.string(),
+  source_url: z.string().nullish(),
   sync_mode: z.string().optional().default("manual"),
 });
 
@@ -1975,14 +2097,19 @@ export const zRegistryItemResponse = z.object({
  *
  * One page of a type's catalog plus the context needed to browse it.
  *
- * ``total`` and ``categories`` cover the whole filtered catalog, not the page:
+ * ``total`` and the facets cover the whole filtered catalog, not the page:
  * without them a page that happens to contain no visible matches is
  * indistinguishable from the end of the catalog, and facet counts drift as
  * more pages load.
+ *
+ * ``protocols`` is populated for the connections catalog only, where an entry
+ * is either an MCP server or a plain HTTP API; every other type holds one
+ * kind of thing and gets an empty list.
  */
 export const zCatalogBrowseResponse = z.object({
   categories: z.array(zCategoryFacet),
   items: z.array(zRegistryItemResponse),
+  protocols: z.array(zCategoryFacet),
   total: z.number().int(),
 });
 
@@ -1998,6 +2125,7 @@ export const zRegistryResponse = z.object({
   last_sync_error: z.string().nullable(),
   last_synced_at: z.string().nullable(),
   name: z.string(),
+  recommendation_priority: z.number().int(),
   registry_type: z.string(),
   source_type: z.string(),
   source_url: z.string(),
@@ -2012,6 +2140,7 @@ export const zRegistryUpdate = z.object({
   description: z.string().nullish(),
   is_active: z.boolean().nullish(),
   name: z.string().nullish(),
+  recommendation_priority: z.number().int().gte(0).nullish(),
   source_url: z.string().nullish(),
   sync_mode: z.string().nullish(),
 });
@@ -2425,6 +2554,42 @@ export const zSkillUpdateRequest = z.object({
 });
 
 /**
+ * SkippedItem
+ */
+export const zSkippedItem = z.object({
+  external_id: z.string(),
+  reason: z.string(),
+});
+
+/**
+ * SkippedModelResponse
+ */
+export const zSkippedModelResponse = z.object({
+  missing: z.array(z.string()),
+  model_name: z.string(),
+});
+
+/**
+ * DiscoverPreviewResponse
+ */
+export const zDiscoverPreviewResponse = z.object({
+  discovered: z.number().int(),
+  models: z.array(zDiscoverPreviewModelResponse),
+  new_models: z.number().int(),
+  skipped: z.array(zSkippedModelResponse).optional().default([]),
+});
+
+/**
+ * DiscoveryResponse
+ */
+export const zDiscoveryResponse = z.object({
+  discovered: z.number().int(),
+  models: z.array(zDiscoveredModelResponse),
+  new_models: z.number().int(),
+  skipped: z.array(zSkippedModelResponse).optional().default([]),
+});
+
+/**
  * SpecPreviewRequest
  */
 export const zSpecPreviewRequest = z.object({
@@ -2550,6 +2715,7 @@ export const zTaskInputSubmission = z.object({
 export const zTaskResponse = z.object({
   agent_id: z.string().uuid(),
   created_at: z.string(),
+  created_by: z.string().nullish(),
   description: z.string(),
   error: z.string().nullish(),
   execution_id: z.string().nullish(),
@@ -2603,6 +2769,7 @@ export const zTaskWithAgent = z.object({
   agent_id: z.string().uuid(),
   agent_name: z.string().nullish(),
   created_at: z.string(),
+  created_by: z.string().nullish(),
   description: z.string(),
   error: z.string().nullish(),
   escalation_id: z.string().nullish(),
@@ -2785,9 +2952,11 @@ export const zTriggerExecuteRequest = z.object({
  * Response model for trigger execution data.
  */
 export const zTriggerExecutionResponse = z.object({
+  cost_usd: z.number().nullish(),
   error_message: z.string().nullish(),
   executed_at: z.string(),
   execution_time_ms: z.number().int(),
+  fired_by: z.string().nullish(),
   id: z.string().uuid(),
   run_id: z.string().nullish(),
   status: z.string(),
@@ -2844,6 +3013,19 @@ export const zTriggerResponse = z.object({
 });
 
 /**
+ * TriggerRunResponse
+ *
+ * Result of firing a trigger once by hand.
+ */
+export const zTriggerRunResponse = z.object({
+  execution_id: z.string().uuid(),
+  reason: z.string().nullish(),
+  status: z.enum(["started", "skipped"]),
+  task_id: z.string().uuid().nullish(),
+  trigger_id: z.string().uuid(),
+});
+
+/**
  * TriggerStatusResponse
  *
  * Response model for trigger status information.
@@ -2863,12 +3045,14 @@ export const zTriggerStatusResponse = z.object({
  * Patch payload for a trigger. All fields optional — unset = unchanged.
  */
 export const zTriggerUpdate = z.object({
+  agent_id: z.string().uuid().nullish(),
   allowed_methods: z.array(z.string()).nullish(),
   channel_credentials: z.record(z.unknown()).nullish(),
   conditions: z.record(z.unknown()).nullish(),
   cron_expression: z.string().nullish(),
   description: z.string().max(1000).nullish(),
   enabled: z.boolean().nullish(),
+  event_types: z.array(z.string()).nullish(),
   failure_threshold: z.number().int().gte(1).lte(100).nullish(),
   name: z.string().min(1).max(255).nullish(),
   task_parameters: z.record(z.unknown()).nullish(),
@@ -2910,6 +3094,33 @@ export const zAgentOverviewResponse = z.object({
 export const zUpdateAllResponse = z.object({
   errors: z.number().int(),
   updated: z.number().int(),
+});
+
+/**
+ * UsageEventResponse
+ */
+export const zUsageEventResponse = z.object({
+  data_json: z.string(),
+  id: z.string(),
+  incarnation_id: z.string(),
+  kind: z.string(),
+  occurred_at: z.string(),
+  received_at: z.string(),
+  resource_id: z.string(),
+  resource_kind: z.string(),
+  schema_version: z.number().int(),
+  sequence: z.string(),
+  source: z.string(),
+  task_id: z.string(),
+  workspace_id: z.string(),
+});
+
+/**
+ * UsageEventListResponse
+ */
+export const zUsageEventListResponse = z.object({
+  events: z.array(zUsageEventResponse),
+  next_cursor: z.string().nullable(),
 });
 
 /**
@@ -3006,6 +3217,13 @@ export const zWalletResponse = z.object({
 });
 
 /**
+ * WorkspaceDirectoryResponse
+ */
+export const zWorkspaceDirectoryResponse = z.object({
+  path: z.string(),
+});
+
+/**
  * WorkspaceFileDownloadResponse
  */
 export const zWorkspaceFileDownloadResponse = z.object({
@@ -3027,7 +3245,7 @@ export const zWorkspaceFileInfo = z.object({
  * WorkspaceFileListResponse
  */
 export const zWorkspaceFileListResponse = z.object({
-  directories: z.array(z.string()).optional().default([]),
+  directories: z.array(z.string()).optional(),
   files: z.array(zWorkspaceFileInfo),
 });
 
@@ -3168,6 +3386,8 @@ export const zProviderSpecWithModelsResponse = z.object({
  */
 export const zAgentareaApiApiV1RegistriesSyncResponse = z.object({
   new_specs: z.number().int(),
+  skipped: z.number().int().optional().default(0),
+  skipped_items: z.array(zSkippedItem).optional(),
   total: z.number().int(),
   unchanged: z.number().int(),
   updates_flagged: z.number().int(),
@@ -3837,12 +4057,56 @@ export const zRemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeletePath =
 export const zRemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponse =
   z.void();
 
+export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostBody =
+  zCatalogConnectionRequest;
+
+export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostPath =
+  z.object({
+    item_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponse =
+  zCatalogConnectionResponse;
+
+export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutBody =
+  zManagedOAuthAppRequest;
+
+export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutPath =
+  z.object({
+    provider_key: z.string(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zConfigureManagedOauthAppV1ConnectionsOauthAppsProviderKeyPutResponse =
+  zManagedOAuthAppResponse;
+
+export const zOauthCallbackV1ConnectionsOauthCallbackGetQuery = z.object({
+  code: z.string().nullish(),
+  state: z.string().nullish(),
+  error: z.string().nullish(),
+  error_description: z.string().nullish(),
+});
+
 /**
  * Successful Response
  */
 export const zListWorkspaceFilesV1FilesGetResponse = zWorkspaceFileListResponse;
 
 export const zUploadFileV1FilesPostBody = zBodyUploadFileV1FilesPost;
+
+export const zCreateWorkspaceDirectoryV1FilesDirectoriesPostBody =
+  zCreateWorkspaceDirectoryRequest;
+
+/**
+ * Successful Response
+ */
+export const zCreateWorkspaceDirectoryV1FilesDirectoriesPostResponse =
+  zWorkspaceDirectoryResponse;
 
 export const zStreamWorkspaceFileV1FilesDownloadFilePathGetPath = z.object({
   file_path: z.string(),
@@ -3857,6 +4121,13 @@ export const zWorkspaceFileHistoryV1FilesHistoryGetQuery = z.object({
  */
 export const zWorkspaceFileHistoryV1FilesHistoryGetResponse =
   zArtifactHistoryResponse;
+
+export const zMoveWorkspaceFileV1FilesMovePostBody = zMoveWorkspaceFileRequest;
+
+/**
+ * Successful Response
+ */
+export const zMoveWorkspaceFileV1FilesMovePostResponse = zMovedFileResponse;
 
 export const zRestoreWorkspaceFileV1FilesRestoreFilePathPostPath = z.object({
   file_path: z.string(),
@@ -4381,6 +4652,12 @@ export const zUpdateModelSpecV1ModelSpecsModelSpecIdPatchResponse =
 /**
  * Successful Response
  */
+export const zGetNetworkPeopleAccessV1NetworkPeopleAccessGetResponse =
+  zNetworkPeopleAccessResponse;
+
+/**
+ * Successful Response
+ */
 export const zGetNetworkTopologyV1NetworkTopologyGetResponse =
   zNetworkTopologyResponse;
 
@@ -4511,6 +4788,18 @@ export const zUpdatePolicyRuleV1PoliciesRuleIdPatchPath = z.object({
  */
 export const zUpdatePolicyRuleV1PoliciesRuleIdPatchResponse =
   zPolicyRuleResponse;
+
+export const zResolvePrincipalsV1PrincipalsGetQuery = z.object({
+  ids: z.array(z.string()).optional(),
+});
+
+/**
+ * Response Resolve Principals V1 Principals Get
+ *
+ * Successful Response
+ */
+export const zResolvePrincipalsV1PrincipalsGetResponse =
+  z.array(zPrincipalResponse);
 
 export const zListProjectsV1ProjectsGetQuery = z.object({
   limit: z.number().int().optional().default(100),
@@ -4860,6 +5149,7 @@ export const zBrowseCatalogV1RegistriesCatalogBrowseGetQuery = z.object({
   registry_type: z.string(),
   q: z.string().nullish(),
   category: z.string().nullish(),
+  protocol: z.enum(["mcp", "api"]).nullish(),
   sort: z.string().nullish(),
   limit: z.number().int().gte(1).lte(500).optional().default(50),
   offset: z.number().int().gte(0).optional().default(0),
@@ -4871,6 +5161,17 @@ export const zBrowseCatalogV1RegistriesCatalogBrowseGetQuery = z.object({
 export const zBrowseCatalogV1RegistriesCatalogBrowseGetResponse =
   zCatalogBrowseResponse;
 
+export const zDeleteCatalogItemV1RegistriesCatalogItemsItemIdDeletePath =
+  z.object({
+    item_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zDeleteCatalogItemV1RegistriesCatalogItemsItemIdDeleteResponse =
+  z.void();
+
 export const zGetCatalogItemV1RegistriesCatalogItemsItemIdGetPath = z.object({
   item_id: z.string().uuid(),
 });
@@ -4879,6 +5180,20 @@ export const zGetCatalogItemV1RegistriesCatalogItemsItemIdGetPath = z.object({
  * Successful Response
  */
 export const zGetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse =
+  zRegistryItemResponse;
+
+export const zUpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchBody =
+  zCatalogItemUpdate;
+
+export const zUpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchPath =
+  z.object({
+    item_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zUpdateCatalogItemV1RegistriesCatalogItemsItemIdPatchResponse =
   zRegistryItemResponse;
 
 export const zUpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostPath =
@@ -4945,6 +5260,19 @@ export const zListRegistryItemsV1RegistriesRegistryIdItemsGetQuery = z.object({
 export const zListRegistryItemsV1RegistriesRegistryIdItemsGetResponse = z.array(
   zRegistryItemResponse
 );
+
+export const zCreateCatalogItemV1RegistriesRegistryIdItemsPostBody =
+  zCatalogItemCreate;
+
+export const zCreateCatalogItemV1RegistriesRegistryIdItemsPostPath = z.object({
+  registry_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zCreateCatalogItemV1RegistriesRegistryIdItemsPostResponse =
+  zRegistryItemResponse;
 
 export const zSyncRegistryV1RegistriesRegistryIdSyncPostPath = z.object({
   registry_id: z.string().uuid(),
@@ -5439,7 +5767,7 @@ export const zGetExecutionMetricsV1TriggersTriggerIdMetricsGetPath = z.object({
 });
 
 export const zGetExecutionMetricsV1TriggersTriggerIdMetricsGetQuery = z.object({
-  hours: z.number().int().gte(1).lte(168).optional().default(24),
+  hours: z.number().int().gte(1).lte(8760).nullish(),
 });
 
 /**
@@ -5447,6 +5775,16 @@ export const zGetExecutionMetricsV1TriggersTriggerIdMetricsGetQuery = z.object({
  */
 export const zGetExecutionMetricsV1TriggersTriggerIdMetricsGetResponse =
   zExecutionMetricsResponse;
+
+export const zRunTriggerNowV1TriggersTriggerIdRunPostPath = z.object({
+  trigger_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zRunTriggerNowV1TriggersTriggerIdRunPostResponse =
+  zTriggerRunResponse;
 
 export const zGetTriggerStatusV1TriggersTriggerIdStatusGetPath = z.object({
   trigger_id: z.string().uuid(),
@@ -5482,6 +5820,26 @@ export const zGetExecutionTimelineV1TriggersTriggerIdTimelineGetQuery =
 export const zGetExecutionTimelineV1TriggersTriggerIdTimelineGetResponse =
   zExecutionTimelineResponse;
 
+export const zListUsageEventsV1UsageEventsGetQuery = z.object({
+  source: z.string().nullish(),
+  kind: z.string().nullish(),
+  resource_kind: z.string().nullish(),
+  resource_id: z.string().nullish(),
+  task_id: z.string().nullish(),
+  from: z.string().nullish(),
+  until: z.string().nullish(),
+  cursor: z
+    .string()
+    .regex(/^[1-9]\d{0,18}$/)
+    .nullish(),
+  limit: z.number().int().gte(1).lte(100).optional().default(50),
+});
+
+/**
+ * Successful Response
+ */
+export const zListUsageEventsV1UsageEventsGetResponse = zUsageEventListResponse;
+
 /**
  * Successful Response
  */
@@ -5491,29 +5849,6 @@ export const zGetDashboardV1WorkspaceDashboardGetResponse = zDashboardResponse;
  * Successful Response
  */
 export const zExportWorkspaceConfigV1WorkspaceExportGetResponse = z.string();
-
-export const zImportWorkspaceConfigV1WorkspaceImportPostBody = zImportRequest;
-
-/**
- * Successful Response
- */
-export const zImportWorkspaceConfigV1WorkspaceImportPostResponse =
-  zImportResult;
-
-export const zImportWorkspaceConfigFileV1WorkspaceImportFilePostBody =
-  zBodyImportWorkspaceConfigFileV1WorkspaceImportFilePost;
-
-export const zImportWorkspaceConfigFileV1WorkspaceImportFilePostQuery =
-  z.object({
-    skip_missing_dependencies: z.boolean().optional().default(false),
-    override_existing: z.boolean().optional().default(false),
-  });
-
-/**
- * Successful Response
- */
-export const zImportWorkspaceConfigFileV1WorkspaceImportFilePostResponse =
-  zImportResult;
 
 /**
  * Successful Response

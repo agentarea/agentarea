@@ -2,13 +2,11 @@ package container
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
 	"net"
-	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -17,11 +15,9 @@ import (
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/config"
-	"github.com/agentarea/mcp-manager/internal/database"
 	"github.com/agentarea/mcp-manager/internal/events"
 	"github.com/agentarea/mcp-manager/internal/mcpspec"
 	"github.com/agentarea/mcp-manager/internal/models"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // SecretResolverInterface allows the manager to resolve secrets without importing the secrets package directly
@@ -131,19 +127,13 @@ func (m *Manager) Initialize(ctx context.Context) error {
 	}
 	m.logger.Info("Container discovery completed")
 
-	// Skip Core API sync if SKIP_INSTANCE_SYNC is set (useful for dev)
-	if os.Getenv("SKIP_INSTANCE_SYNC") != "true" {
-		// Synchronize with Core API to handle pending instances
-		m.logger.Info("Starting Core API synchronization...")
-		if err := m.syncWithCoreAPI(ctx); err != nil {
-			m.logger.Error("Failed to sync with Core API", slog.String("error", err.Error()))
-			// Don't fail initialization - log warning and continue
-			m.logger.Warn("Continuing without full sync - some instances may need manual intervention")
-		}
-		m.logger.Info("Core API synchronization completed")
-	} else {
-		m.logger.Info("Skipping Core API synchronization (SKIP_INSTANCE_SYNC=true)")
-	}
+	// A boot-time reconcile of "instances that should be running" used to live
+	// here, behind SKIP_INSTANCE_SYNC. internal/mcpgateway owns that now:
+	// EnsureReady creates a workload whose container is gone on the next request
+	// and holds it until it answers, so instances are dormant until called
+	// rather than started because the manager restarted. The old path also
+	// created containers straight from json_spec, without the admission lists
+	// the gateway applies on every request.
 
 	// Auto-restart containers that should be running
 	m.logger.Info("Starting auto-restart check...")
@@ -1155,7 +1145,7 @@ func mergeEnvironment(template, request map[string]string) map[string]string {
 }
 
 // HandleMCPInstanceCreated handles the creation of an MCP server instance from domain events
-func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name string, jsonSpec map[string]interface{}) error {
+func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name, workspaceID string, jsonSpec map[string]interface{}) error {
 	// Publish validating status
 	if err := m.eventPublisher.PublishValidating(ctx, instanceID, name); err != nil {
 		m.logger.Warn("Failed to publish validating status",
@@ -1165,10 +1155,11 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 
 	// Create MCP server instance model for validation (NO MUTEX LOCK YET)
 	instance := &models.MCPServerInstance{
-		InstanceID: instanceID,
-		Name:       name,
-		JSONSpec:   jsonSpec,
-		Status:     "validating",
+		InstanceID:  instanceID,
+		WorkspaceID: workspaceID,
+		Name:        name,
+		JSONSpec:    jsonSpec,
+		Status:      "validating",
 	}
 
 	// Get current running count before validation (while unlocked)
@@ -1259,7 +1250,10 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		Host:        containerName,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
-		Labels:      make(map[string]string),
+		Labels: map[string]string{
+			"agentarea.io/instance-id":  instanceID,
+			"agentarea.io/workspace-id": workspaceID,
+		},
 		Environment: environment,
 		Command:     command,
 		Isolation:   isolation,
@@ -1315,7 +1309,7 @@ func (m *Manager) HandleMCPInstanceCreated(ctx context.Context, instanceID, name
 		m.logger.Error("Failed to create container",
 			slog.String("container", containerName),
 			slog.String("error", err.Error()),
-			slog.String("output", runtimeRefusal(output)))
+			slog.String("output", string(output)))
 		delete(m.containers, name)
 		return fmt.Errorf("failed to create container: %w", err)
 	}
@@ -1886,124 +1880,6 @@ func (m *Manager) restartContainer(ctx context.Context, container *models.Contai
 				slog.String("error", err.Error()))
 		}
 	}
-
-	return nil
-}
-
-// syncWithCoreAPI synchronizes with the database to handle instances that need containers.
-// Queries the DB directly to avoid HTTP auth complexity.
-func (m *Manager) syncWithCoreAPI(ctx context.Context) error {
-	m.logger.Info("Starting database synchronization for pending instances")
-
-	connStr := database.BuildConnStr(m.logger)
-	if connStr == "" {
-		m.logger.Warn("Database credentials not configured, skipping instance sync")
-		return nil
-	}
-
-	db, err := sql.Open("pgx", connStr)
-	if err != nil {
-		return fmt.Errorf("failed to open database connection: %w", err)
-	}
-	defer db.Close()
-
-	if err := db.PingContext(ctx); err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	// Fetch all instances that should have a running container
-	// Includes 'pending', 'starting', and 'running' because start_instance
-	// may update DB status without actually creating the container
-	rows, err := db.QueryContext(ctx,
-		`SELECT id::text, name, json_spec FROM mcp_server_instances WHERE status IN ('pending', 'starting', 'running')`)
-	if err != nil {
-		return fmt.Errorf("failed to query mcp_server_instances: %w", err)
-	}
-	defer rows.Close()
-
-	var instances []models.MCPServerInstance
-	for rows.Next() {
-		var inst models.MCPServerInstance
-		var jsonSpecRaw []byte
-		if err := rows.Scan(&inst.InstanceID, &inst.Name, &jsonSpecRaw); err != nil {
-			m.logger.Warn("Failed to scan instance row", slog.String("error", err.Error()))
-			continue
-		}
-		if err := json.Unmarshal(jsonSpecRaw, &inst.JSONSpec); err != nil {
-			m.logger.Warn("Failed to parse json_spec",
-				slog.String("instance_id", inst.InstanceID),
-				slog.String("error", err.Error()))
-			continue
-		}
-		instances = append(instances, inst)
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating instance rows: %w", err)
-	}
-
-	m.logger.Info("Fetched instances from database", slog.Int("total", len(instances)))
-
-	pendingCount := 0
-	for _, instance := range instances {
-		m.logger.Info("Processing instance",
-			slog.String("instance_id", instance.InstanceID),
-			slog.String("name", instance.Name))
-
-		// Skip if container already tracked in memory
-		if _, exists := m.containers[instance.Name]; exists {
-			m.logger.Debug("Container already exists, skipping", slog.String("name", instance.Name))
-			continue
-		}
-
-		image, port, command, environment := ResolveContainerSpec(instance.JSONSpec)
-		if image == "" {
-			m.logger.Error("Invalid json_spec for instance (missing image or command)",
-				slog.String("instance_id", instance.InstanceID))
-			continue
-		}
-
-		// Resolve secret env vars from encrypted_secrets table (shared with the
-		// HTTP create path via Manager.ResolveSecretEnvVars). Skip the instance
-		// rather than start it with its credentials missing — the next sweep
-		// retries once the cause is gone.
-		secretEnvVars, err := m.ResolveSecretEnvVars(instance.InstanceID, instance.JSONSpec)
-		if err != nil {
-			m.logger.Error("Failed to resolve secret env vars for instance",
-				slog.String("instance_id", instance.InstanceID),
-				slog.String("name", instance.Name),
-				slog.String("error", err.Error()))
-			continue
-		}
-		for k, v := range secretEnvVars {
-			environment[k] = v
-		}
-
-		environment["MCP_INSTANCE_ID"] = instance.InstanceID
-
-		req := models.CreateContainerRequest{
-			ServiceName: instance.Name,
-			Image:       image,
-			Port:        port,
-			Environment: environment,
-			Command:     command,
-		}
-
-		if _, err := m.CreateContainer(ctx, req); err != nil {
-			m.logger.Error("Failed to create container for instance",
-				slog.String("instance_id", instance.InstanceID),
-				slog.String("name", instance.Name),
-				slog.String("error", err.Error()))
-		} else {
-			m.logger.Info("Successfully created container for instance",
-				slog.String("instance_id", instance.InstanceID),
-				slog.String("name", instance.Name))
-			pendingCount++
-		}
-	}
-
-	m.logger.Info("Database synchronization completed",
-		slog.Int("total_instances", len(instances)),
-		slog.Int("containers_created", pendingCount))
 
 	return nil
 }

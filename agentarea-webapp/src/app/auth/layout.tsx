@@ -10,8 +10,8 @@ export default function AuthLayout({
         background: `
           radial-gradient(circle, rgba(156, 163, 175, 0.3) 1px, transparent 1px)
         `,
-        backgroundSize: '24px 24px',
-        backgroundPosition: '0 0',
+        backgroundSize: "24px 24px",
+        backgroundPosition: "0 0",
       }}
     >
       {children}

@@ -41,8 +41,28 @@ def cli():
 )
 @click.option("--reload/--no-reload", default=False, help="Enable/disable auto-reload")
 @click.option("--log-level", default="info", help="Logging level")
-@click.option("--workers", default=1, help="Number of worker processes")
-def serve(host: str, port: int, reload: bool, log_level: str, workers: int):
+@click.option(
+    "--workers",
+    default=1,
+    envvar="AGENTAREA_API_WORKERS",
+    show_envvar=True,
+    help=(
+        "Worker processes. One process is one event loop, so roughly one CPU "
+        "core however many the pod is allowed; raise this only to match a "
+        "larger CPU limit, otherwise add replicas."
+    ),
+)
+@click.option(
+    "--shutdown-timeout",
+    default=20,
+    envvar="AGENTAREA_API_SHUTDOWN_TIMEOUT",
+    show_envvar=True,
+    help=(
+        "Seconds to wait on SIGTERM for open connections to finish. Must stay "
+        "below the pod's terminationGracePeriodSeconds, minus any preStop wait."
+    ),
+)
+def serve(host: str, port: int, reload: bool, log_level: str, workers: int, shutdown_timeout: int):
     """Start the API server."""
     click.echo(f"Starting AgentArea API server on {host}:{port}")
     click.echo(f"Reload: {reload}, Log Level: {log_level}, Workers: {workers}")
@@ -54,7 +74,11 @@ def serve(host: str, port: int, reload: bool, log_level: str, workers: int):
         reload=reload,
         workers=workers if not reload else 1,  # Workers > 1 incompatible with reload
         log_level=log_level,
-        timeout_graceful_shutdown=3 if reload else None,  # Don't hang on reload
+        # Bounded, always. The API serves SSE, and those connections never end
+        # on their own: waiting for every connection to close meant the process
+        # sat until the pod's grace period expired and was killed, dropping
+        # whatever else was still in flight on each rollout.
+        timeout_graceful_shutdown=3 if reload else shutdown_timeout,
     )
 
 
@@ -339,9 +363,21 @@ async def _reconcile(
 
                 registries = await registry_repo.list_all()
                 existing = next((r for r in registries if r.name == registry_name), None)
+                configured_priority = config.get("recommendation_priority")
                 if existing:
                     registry_id = existing.id
                     click.echo(f"Found existing registry: {registry_id}")
+                    # Reconcile is the only way a manifest edit reaches an
+                    # installed platform: without this, changing a source's
+                    # weight would only ever affect brand-new installs.
+                    if (
+                        configured_priority is not None
+                        and configured_priority != existing.recommendation_priority
+                    ):
+                        await service.update_registry(
+                            registry_id, recommendation_priority=configured_priority
+                        )
+                        click.echo(f"Updated recommendation priority: {configured_priority}")
                 else:
                     registry_type = config.get("type")
                     if not registry_type:
@@ -358,6 +394,7 @@ async def _reconcile(
                         source_url=config["source_url"],
                         description=config.get("description"),
                         sync_mode=config.get("sync_mode", "manual"),
+                        recommendation_priority=configured_priority,
                     )
                     registry_id = registry.id
                     click.echo(f"Created registry: {registry_id}")
@@ -365,6 +402,12 @@ async def _reconcile(
                 stats = await service.sync_registry(registry_id)
                 await session.commit()
                 click.echo(f"Synced: {stats}")
+                if stats.get("skipped"):
+                    click.echo(
+                        f"  WARNING: skipped {stats['skipped']} item(s) "
+                        "that failed validation (see logs for reasons)",
+                        err=True,
+                    )
                 succeeded.append(registry_name)
         except Exception as e:
             logger.exception("Reconcile failed for registry %s", registry_name)

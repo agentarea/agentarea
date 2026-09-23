@@ -308,6 +308,7 @@ async def list_project_files(
             last_modified=obj.last_modified,
         )
         for obj in objects
+        if not obj.path.endswith("/")
     ]
     return ProjectFileListResponse(files=files)
 

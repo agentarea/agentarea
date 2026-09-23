@@ -274,8 +274,11 @@ class EffectivePolicy(PolicyDocument):
             state["execution_limits"] = self.execution.model_dump(exclude_none=True)
 
         if self.tools:
+            # `None` (no allowlist) and `[]` (no tool permitted) are opposite
+            # settings; collapsing them here would republish the conflation the
+            # resolver and the tool PDP both avoid.
             state["tools_config"] = {
-                "allowed": self.tools.allowed or [],
+                "allowed": self.tools.allowed,
                 "denied": self.tools.denied,
             }
 
@@ -387,7 +390,10 @@ class PolicyResolver:
     def _validate_tools(self, higher: ToolsPolicy | None, lower: ToolsPolicy | None) -> None:
         if not higher or not lower:
             return
-        if higher.allowed and lower.allowed:
+        # `None` means the scope declares no allowlist; `[]` means it permits no
+        # tool at all. Testing truthiness conflated the two and let the strictest
+        # setting be the one a lower scope could override.
+        if higher.allowed is not None and lower.allowed is not None:
             for pattern in lower.allowed:
                 if not any(_pattern_is_within(pattern, parent) for parent in higher.allowed):
                     raise PolicyValidationError("tools.allowed cannot widen higher-scope allowlist")

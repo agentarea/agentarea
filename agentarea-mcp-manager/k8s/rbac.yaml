@@ -53,3 +53,27 @@ subjects:
 - kind: ServiceAccount
   name: mcp-manager
   namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mcp-manager-runtime-metrics
+  namespace: default
+rules:
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mcp-manager-runtime-metrics
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mcp-manager-runtime-metrics
+subjects:
+- kind: ServiceAccount
+  name: mcp-manager
+  namespace: default

@@ -9,11 +9,12 @@ import type {
   AnalyzeRequest,
   AgentCard as ApiAgentCard,
   TaskResponse as ApiTaskResponse,
+  CatalogConnectionRequest,
   CreateInvitationBody,
   CreateWalletRequest,
+  CreateWorkspaceDirectoryRequest,
   FundWalletRequest,
   HttpValidationError,
-  ImportWorkspaceConfigV1WorkspaceImportPostData,
   InstallRequest,
   InvitationCreatedResponse,
   InvitationResponse,
@@ -37,6 +38,7 @@ import type {
   PaginatedResponseSkillResponse,
   PolicyRuleCreateRequest,
   PolicyRuleUpdateRequest,
+  PrincipalResponse,
   ProjectCreate,
   ProjectResponse,
   ProjectUpdate,
@@ -55,6 +57,7 @@ import type {
   SkillUpdateRequest,
   TaskCreate,
   TriggerCreate,
+  TriggerUpdate,
   UpdateWalletRequest,
   ValidateRequest,
 } from "@/api/client/types.gen";
@@ -186,6 +189,19 @@ export const getCatalogItem = async (itemId: string) => {
       path: { item_id: itemId },
     });
   return { data, error };
+};
+
+export const connectCatalogItem = async (
+  itemId: string,
+  body: CatalogConnectionRequest
+) => {
+  const result =
+    await sdk.connectCatalogItemV1ConnectionsCatalogItemIdConnectPost({
+      client: serverClient,
+      path: { item_id: itemId },
+      body,
+    });
+  return withStatus(result);
 };
 
 export const analyzeBundle = async (body: AnalyzeRequest) => {
@@ -631,12 +647,12 @@ export const listProviderSpecs = async (params?: { is_builtin?: boolean }) => {
 export const listProviderSpecsWithModels = async (params?: {
   is_builtin?: boolean;
 }) => {
-  const { data, error } =
+  const response =
     await sdk.listProviderSpecsWithModelsV1ProviderSpecsWithModelsGet({
       client: serverClient,
       query: params,
     });
-  return { data, error };
+  return withStatus(response);
 };
 
 export const getProviderSpec = async (providerSpecId: string) => {
@@ -661,11 +677,11 @@ export const listProviderConfigs = async (params?: {
   provider_spec_id?: string;
   is_active?: boolean;
 }) => {
-  const { data, error } = await sdk.listProviderConfigsV1ProviderConfigsGet({
+  const response = await sdk.listProviderConfigsV1ProviderConfigsGet({
     client: serverClient,
     query: params,
   });
-  return { data, error };
+  return withStatus(response);
 };
 
 export const createProviderConfig = async (config: ProviderConfigCreate) => {
@@ -1166,6 +1182,25 @@ export const revokeAPIKey = async (tokenId: string) => {
   return { data, error };
 };
 
+/**
+ * Resolve principal ids (a row's `created_by`) into who they are.
+ *
+ * Deliberately a separate call rather than a field on each resource: names
+ * change far more slowly than the rows referencing them, and a task list must
+ * not fail because the identity provider is slow. Ids the backend cannot
+ * resolve are simply absent from the response.
+ */
+export const resolvePrincipals = async (ids: string[]) => {
+  if (ids.length === 0) {
+    return { data: [] as Principal[], error: undefined };
+  }
+  const { data, error } = await sdk.resolvePrincipalsV1PrincipalsGet({
+    client: serverClient,
+    query: { ids },
+  });
+  return { data, error };
+};
+
 export const listTriggerCatalog = async () => {
   const { data, error } = await sdk.getCatalogV1TriggersCatalogGet({
     client: serverClient,
@@ -1211,19 +1246,7 @@ export const getTrigger = async (triggerId: string) => {
   return withStatus(result);
 };
 
-export const updateTrigger = async (
-  triggerId: string,
-  body: {
-    name?: string;
-    cron_expression?: string;
-    timezone?: string;
-    task_parameters?: Record<string, unknown>;
-    failure_threshold?: number;
-    description?: string;
-    is_active?: boolean;
-    conditions?: Record<string, unknown>;
-  }
-) => {
+export const updateTrigger = async (triggerId: string, body: TriggerUpdate) => {
   const { data, error } = await sdk.updateTriggerV1TriggersTriggerIdPut({
     client: serverClient,
     path: { trigger_id: triggerId },
@@ -1257,6 +1280,14 @@ export const disableTrigger = async (triggerId: string) => {
   return { data, error };
 };
 
+export const runTriggerNow = async (triggerId: string) => {
+  const { data, error } = await sdk.runTriggerNowV1TriggersTriggerIdRunPost({
+    client: serverClient,
+    path: { trigger_id: triggerId },
+  });
+  return { data, error };
+};
+
 export const getTriggerStatus = async (triggerId: string) => {
   const { data, error } =
     await sdk.getTriggerStatusV1TriggersTriggerIdStatusGet({
@@ -1282,11 +1313,18 @@ export const getTriggerExecutions = async (
   return { data, error };
 };
 
-export const getTriggerMetrics = async (triggerId: string) => {
+export const getTriggerMetrics = async (
+  triggerId: string,
+  params?: {
+    /** Window in hours. Omit for the trigger's whole history. */
+    hours?: number;
+  }
+) => {
   const { data, error } =
     await sdk.getExecutionMetricsV1TriggersTriggerIdMetricsGet({
       client: serverClient,
       path: { trigger_id: triggerId },
+      query: params,
     });
   return { data, error };
 };
@@ -1309,32 +1347,8 @@ export const getTriggerCorrelations = async (triggerId: string) => {
   return { data, error };
 };
 
-export const exportWorkspace = async () => {
-  const { data, error } = await sdk.exportWorkspaceConfigV1WorkspaceExportGet({
-    client: serverClient,
-  });
-  return { data, error };
-};
-
-export const importWorkspace = async (body: {
-  config: string;
-  skip_missing_dependencies?: boolean;
-  override_existing?: boolean;
-}) => {
-  const payload: ImportWorkspaceConfigV1WorkspaceImportPostData["body"] = {
-    yaml_content: body.config,
-    skip_missing_dependencies: body.skip_missing_dependencies,
-    override_existing: body.override_existing,
-  };
-  const { data, error } = await sdk.importWorkspaceConfigV1WorkspaceImportPost({
-    client: serverClient,
-    body: payload,
-  });
-  return { data, error };
-};
-
 // Listing workspaces deliberately lives outside this client — see
-// getWorkspaceContext(), which must not send X-Workspace-Slug.
+// getWorkspaceContext(), which must not send X-AgentArea-Workspace.
 export const createWorkspace = async (name: string) => {
   const { data, error } = await sdk.createWorkspaceV1WorkspacesPost({
     client: serverClient,
@@ -1356,12 +1370,11 @@ export const removeWorkspaceMember = async (
   workspaceId: string,
   userId: string
 ) => {
-  const result = await sdk.removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete(
-    {
+  const result =
+    await sdk.removeMemberV1WorkspacesWorkspaceIdMembersUserIdDelete({
       client: serverClient,
       path: { workspace_id: workspaceId, user_id: userId },
-    }
-  );
+    });
   return withStatus(result);
 };
 
@@ -1378,13 +1391,12 @@ export const createWorkspaceInvitation = async (
   workspaceId: string,
   body: CreateInvitationBody
 ) => {
-  const result = await sdk.createInvitationV1WorkspacesWorkspaceIdInvitationsPost(
-    {
+  const result =
+    await sdk.createInvitationV1WorkspacesWorkspaceIdInvitationsPost({
       client: serverClient,
       path: { workspace_id: workspaceId },
       body,
-    }
-  );
+    });
   return withStatus(result);
 };
 
@@ -1920,6 +1932,17 @@ export const listWorkspaceFiles = async () => {
   return { data, error };
 };
 
+export const createWorkspaceDirectory = async (
+  body: CreateWorkspaceDirectoryRequest
+) => {
+  const { data, error } =
+    await sdk.createWorkspaceDirectoryV1FilesDirectoriesPost({
+      client: serverClient,
+      body,
+    });
+  return { data, error };
+};
+
 export const downloadWorkspaceFile = async (filePath: string) => {
   const { data, error } = await sdk.downloadWorkspaceFileV1FilesFilePathGet({
     client: serverClient,
@@ -2174,15 +2197,6 @@ export const listAuditLogs = async (params?: {
   return { data, error };
 };
 
-export const getBillingOverview = async () => {
-  const result = await requestJson("GET", "/v1/billing/overview", {});
-  return {
-    data: result.data,
-    error: result.error,
-    status: result.response?.status,
-  };
-};
-
 // Convenience helpers built on top of the generated API
 interface TaskEventRecord {
   id: string;
@@ -2259,12 +2273,14 @@ export const listProviderConfigsWithModelInstances = async (params?: {
 // the concatenation, so every page past the first skipped a slice of each
 // registry, and "is there more" was guessed from the merged page length.
 //
-// `total` and `categories` describe the whole filtered catalog, not this page,
+// `total` and the facets describe the whole filtered catalog, not this page,
 // so the caller can tell "nothing matched here yet" apart from "that's all".
 export const browseCatalog = async (params: {
   registryType: string;
   q?: string;
   category?: string;
+  /** Connections only; mirrors CatalogProtocol on the backend. */
+  protocol?: "mcp" | "api";
   sort?: string;
   limit: number;
   offset: number;
@@ -2275,18 +2291,26 @@ export const browseCatalog = async (params: {
       registry_type: params.registryType,
       q: params.q || undefined,
       category: params.category || undefined,
+      protocol: params.protocol || undefined,
       sort: params.sort || undefined,
       limit: params.limit,
       offset: params.offset,
     },
   });
   if (error || !data) {
-    return { items: [], total: 0, categories: [], error: error ?? "Failed to load catalog" };
+    return {
+      items: [],
+      total: 0,
+      categories: [],
+      protocols: [],
+      error: error ?? "Failed to load catalog",
+    };
   }
   return {
     items: data.items,
     total: data.total,
     categories: data.categories,
+    protocols: data.protocols,
     error: null,
   };
 };
@@ -2314,6 +2338,7 @@ export type ModelInstance = ModelInstanceResponse;
 export type ChatAgent = AgentResponse;
 export type ChatResponse = { task_id: string; status: string };
 export type ConversationResponse = unknown;
+export type Principal = PrincipalResponse;
 export type TaskResponse = ApiTaskResponse;
 export type AgentCard = ApiAgentCard;
 export type TaskWithAgent = ApiTaskResponse & {
@@ -2375,5 +2400,13 @@ export const deleteSecret = async (secretId: string) => {
     client: serverClient,
     path: { secret_id: secretId },
   });
+  return { data, error };
+};
+
+export const getNetworkPeopleAccess = async () => {
+  const { data, error } =
+    await sdk.getNetworkPeopleAccessV1NetworkPeopleAccessGet({
+      client: serverClient,
+    });
   return { data, error };
 };

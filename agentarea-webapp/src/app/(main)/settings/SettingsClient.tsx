@@ -1,9 +1,10 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Globe, LogOut, Moon, Shield, User as UserIcon } from "lucide-react";
+import type { SettingsFlow } from "@ory/client-fetch";
+import type { OryClientConfiguration } from "@ory/elements-react";
+import { Globe, LogOut, Moon } from "lucide-react";
 import ContentBlock from "@/components/ContentBlock";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,22 +12,15 @@ import { cn } from "@/lib/utils";
 import LanguageSelect from "./components/LanguageSelect";
 import ProfileForm from "./components/ProfileForm";
 
-export default function SettingsClient() {
+export default function SettingsClient({
+  flow,
+  config,
+}: {
+  flow: SettingsFlow;
+  config: OryClientConfiguration;
+}) {
   const t = useTranslations("SettingsPage");
-  const { user, isLoaded, signOut } = useAuth();
-
-  // Compact Loading state
-  if (!isLoaded) {
-    return <LoadingSpinner fullScreen={true} />;
-  }
-
-  // Transform user data for ProfileForm component
-  const userForProfile = user
-    ? {
-        name: user.name || user.email || "User",
-        email: user.email || "",
-      }
-    : null;
+  const { signOut } = useAuth();
 
   const handleLogout = async () => {
     await signOut();
@@ -55,27 +49,7 @@ export default function SettingsClient() {
         <div className="space-y-4">
           {/* Compact Profile Section */}
           <section id="profile" className="border-0 p-0">
-            <div className="px-4">
-              <div className="flex items-center justify-between">
-                <div></div>
-                <div className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
-                  <Shield className="h-2.5 w-2.5" />
-                  {t("authProviderManaged")}
-                </div>
-              </div>
-            </div>
-            <div className="px-4 pb-4">
-              {userForProfile ? (
-                <ProfileForm {...userForProfile} />
-              ) : (
-                <div className="py-6 text-center">
-                  <UserIcon className="mx-auto mb-2 h-8 w-8 text-gray-400" />
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {t("noUserData")}
-                  </p>
-                </div>
-              )}
-            </div>
+            <ProfileForm key={flow.id} flow={flow} config={config} />
           </section>
 
           {/* Compact Preferences Section */}

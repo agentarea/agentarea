@@ -19,6 +19,11 @@ HEALTH_CHECK_ENABLED: "{{ .Values.global.monitoring.health.enabled }}"
 HEALTH_CHECK_PORT: "{{ .Values.global.monitoring.health.port }}"
 KRATOS_ISSUER: "{{ .Values.kratos.jwt.issuer }}"
 KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
+KRATOS_ADMIN_URL: "{{ include "agentarea.kratosAdminUrl" . }}"
+FRONTEND_BASE_URL: "{{ include "agentarea.frontendUrl" . }}"
+SMTP_CONNECTION_URI: "{{ .Values.kratos.smtp.connection_uri }}"
+SMTP_FROM_EMAIL: "{{ .Values.kratos.smtp.from_address }}"
+SMTP_FROM_NAME: "{{ .Values.kratos.smtp.from_name }}"
 {{- end }}
 
 {{- define "agentarea.backend.envs" }}
@@ -97,6 +102,31 @@ KRATOS_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-backend
       key: KRATOS_AUDIENCE
+- name: KRATOS_ADMIN_URL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-backend
+      key: KRATOS_ADMIN_URL
+- name: FRONTEND_BASE_URL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-backend
+      key: FRONTEND_BASE_URL
+- name: SMTP_CONNECTION_URI
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-backend
+      key: SMTP_CONNECTION_URI
+- name: SMTP_FROM_EMAIL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-backend
+      key: SMTP_FROM_EMAIL
+- name: SMTP_FROM_NAME
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-backend
+      key: SMTP_FROM_NAME
 {{- end }}
 
 {{- define "agentarea.backend.secrets.envs" }}

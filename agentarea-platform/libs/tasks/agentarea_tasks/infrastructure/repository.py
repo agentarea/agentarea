@@ -110,7 +110,18 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
     # Additional methods for task-specific operations
     async def create_from_data(self, task_data: TaskCreate) -> Task:
-        """Create a new task from TaskCreate data."""
+        """Create a new task from TaskCreate data.
+
+        Raises:
+            ValueError: If the task carries no owner. Silently attributing it to
+                whoever happened to make the call hides the caller's bug and
+                hands the run an authority it was never given.
+        """
+        if not task_data.user_id:
+            raise ValueError("TaskCreate.user_id is required; a task must name its owner")
+        if not task_data.workspace_id:
+            raise ValueError("TaskCreate.workspace_id is required; a task must name its tenant")
+
         # Handle metadata field - ensure it's JSON serializable
         metadata = task_data.metadata
         if metadata is not None and not isinstance(metadata, dict):
@@ -123,8 +134,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             description=task_data.description,
             parameters=task_data.parameters,
             status="pending",
-            created_by=task_data.user_id or self.user_context.user_id,
-            workspace_id=task_data.workspace_id or self.user_context.workspace_id,
+            created_by=task_data.user_id,
+            workspace_id=task_data.workspace_id,
             task_metadata=metadata,
         )
 
@@ -361,40 +372,6 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
                 "workspace_id": task_orm.workspace_id,
                 "metadata": task_metadata,
             }
-        )
-
-    def _domain_to_orm(self, task) -> TaskORM:
-        """Convert domain model to ORM model.
-
-        Handles both Task and AgentTask domain models.
-        """
-        # Handle different domain model types
-        if hasattr(task, "task_parameters"):
-            # AgentTask model
-            parameters = task.task_parameters
-            error = task.error_message
-        else:
-            # Task model
-            parameters = task.parameters
-            error = task.error
-
-        return TaskORM(
-            id=task.id,
-            agent_id=task.agent_id,
-            description=task.description,
-            parameters=parameters,
-            status=task.status,
-            result=task.result,
-            error=error,
-            created_at=task.created_at,
-            updated_at=task.updated_at,
-            started_at=task.started_at,
-            completed_at=task.completed_at,
-            scheduled_at=task.scheduled_at,
-            execution_id=task.execution_id,
-            user_id=task.user_id,
-            workspace_id=task.workspace_id,
-            task_metadata=task.metadata,
         )
 
 

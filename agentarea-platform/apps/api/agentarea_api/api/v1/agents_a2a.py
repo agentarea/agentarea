@@ -1005,7 +1005,9 @@ async def handle_message_stream_sse(
                 # 2. Stream task events (catch-up + live), mapping each to A2A
                 # SSE frames. Chunks are included so A2A streams live tokens.
                 async for env in open_task_event_feed(
-                    created_task.id, terminal_types=_A2A_TERMINAL_TYPES
+                    created_task.id,
+                    workspace_id=str(auth_context.workspace_id),
+                    terminal_types=_A2A_TERMINAL_TYPES,
                 ):
                     event_count += 1
                     frames, is_terminal = map_workflow_event_to_sse(
@@ -1367,7 +1369,10 @@ async def handle_task_resubscribe(
         set_user_context_from_a2a_auth(auth_context)
 
         task = await task_service.get_task_with_workflow_status(task_id)
-        if not task:
+        # The agent in the URL must own the task, matching the REST event
+        # endpoints. Without it this route streams any task in the workspace
+        # through whichever agent path the caller happens to address.
+        if not task or str(task.agent_id) != str(agent_id):
             return create_error_response(request_id, -32001, f"Task not found: {task_id}")
 
         context_id = a2a_context_id_for_task(task)
@@ -1414,7 +1419,11 @@ async def handle_task_resubscribe(
 
         # Stream task events (catch-up + live) for active task
         async def event_stream():
-            async for env in open_task_event_feed(task_id, terminal_types=_A2A_TERMINAL_TYPES):
+            async for env in open_task_event_feed(
+                task_id,
+                workspace_id=str(auth_context.workspace_id),
+                terminal_types=_A2A_TERMINAL_TYPES,
+            ):
                 frames, is_terminal = map_workflow_event_to_sse(
                     {"event_type": env.event_type, "event_data": env.data},
                     request_id,

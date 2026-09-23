@@ -11,7 +11,6 @@
 // The backend already supports this: /analyze returns an editable canonical
 // bundle, and /install takes a (possibly edited) bundle + setup values. We edit
 // the analyzed bundle in place and send the result.
-
 import React, { useEffect, useMemo, useReducer, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -29,6 +28,19 @@ import {
   Send,
   ShieldCheck,
 } from "lucide-react";
+import type {
+  BundleAgent,
+  BundleAutomation,
+  BundleChannel,
+  BundleMcp,
+  BundlePolicy,
+  ImportPreview,
+  InstallResult,
+  SetupField,
+} from "@/api/client/types.gen";
+import { AgentAvatar } from "@/components/AgentAvatar";
+import ConfigSheet from "@/components/ConfigSheet";
+import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -47,22 +59,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Switch } from "@/components/ui/switch";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
-import { AgentAvatar } from "@/components/AgentAvatar";
-import ConfigSheet from "@/components/ConfigSheet";
-import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type {
-  BundleAgent,
-  BundleAutomation,
-  BundleChannel,
-  BundleMcp,
-  BundlePolicy,
-  ImportPreview,
-  InstallResult,
-  SetupField,
-} from "@/api/client/types.gen";
 import {
   analyzeBundleAction,
   installBundleAction,
@@ -70,6 +69,8 @@ import {
   type WorkspaceModel,
 } from "./actions";
 import { str } from "./catalog-data";
+import EntityMark from "@/components/EntityMark";
+import type { EntityIdentity } from "@/lib/entity-identity";
 
 // ${setup.<key>} reference used by an agent's model / a connection binding.
 const SETUP_REF = /^\$\{setup\.([a-zA-Z0-9_]+)\}$/;
@@ -143,28 +144,52 @@ function editReducer(state: EditState, action: EditAction): EditState {
         policyEnabled: action.policyEnabled,
       };
     case "setSetup":
-      return { ...state, setupValues: { ...state.setupValues, [action.key]: action.value } };
+      return {
+        ...state,
+        setupValues: { ...state.setupValues, [action.key]: action.value },
+      };
     // `on` = included → the key is ABSENT from the "off" set.
     case "toggleAgent":
-      return { ...state, agentOff: withKey(state.agentOff, action.key, !action.on) };
+      return {
+        ...state,
+        agentOff: withKey(state.agentOff, action.key, !action.on),
+      };
     case "toggleGlobalMcp":
-      return { ...state, mcpOff: withKey(state.mcpOff, action.key, !action.on) };
+      return {
+        ...state,
+        mcpOff: withKey(state.mcpOff, action.key, !action.on),
+      };
     case "toggleAgentMcp": {
       const set = withKey(
         state.agentMcpOff[action.agentKey] ?? new Set(),
         action.mcpKey,
         !action.on
       );
-      return { ...state, agentMcpOff: { ...state.agentMcpOff, [action.agentKey]: set } };
+      return {
+        ...state,
+        agentMcpOff: { ...state.agentMcpOff, [action.agentKey]: set },
+      };
     }
     case "toggleChannel":
-      return { ...state, channelEnabled: { ...state.channelEnabled, [action.key]: action.on } };
+      return {
+        ...state,
+        channelEnabled: { ...state.channelEnabled, [action.key]: action.on },
+      };
     case "toggleAuto":
-      return { ...state, autoEnabled: { ...state.autoEnabled, [action.key]: action.on } };
+      return {
+        ...state,
+        autoEnabled: { ...state.autoEnabled, [action.key]: action.on },
+      };
     case "togglePolicyInclude":
-      return { ...state, policyOff: withKey(state.policyOff, action.key, !action.on) };
+      return {
+        ...state,
+        policyOff: withKey(state.policyOff, action.key, !action.on),
+      };
     case "togglePolicyEnabled":
-      return { ...state, policyEnabled: { ...state.policyEnabled, [action.key]: action.on } };
+      return {
+        ...state,
+        policyEnabled: { ...state.policyEnabled, [action.key]: action.on },
+      };
     default:
       return state;
   }
@@ -180,12 +205,12 @@ type Phase =
 export function BundleInstallWizard({
   source,
   title,
-  iconUrl,
+  identity,
   onBack,
 }: {
   source: string;
   title: string;
-  iconUrl: string | null;
+  identity: EntityIdentity;
   onBack: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>({ kind: "analyzing" });
@@ -221,7 +246,8 @@ export function BundleInstallWizard({
         const bundle = pv.bundle;
         const sv: Record<string, unknown> = {};
         for (const f of pv.setup ?? []) {
-          if (f.default !== undefined && f.default !== null) sv[f.key] = f.default;
+          if (f.default !== undefined && f.default !== null)
+            sv[f.key] = f.default;
         }
         dispatch({
           type: "init",
@@ -240,7 +266,10 @@ export function BundleInstallWizard({
       })
       .catch((e: unknown) => {
         if (!active) return;
-        setPhase({ kind: "error", message: e instanceof Error ? e.message : "Analyze failed" });
+        setPhase({
+          kind: "error",
+          message: e instanceof Error ? e.message : "Analyze failed",
+        });
       });
     return () => {
       active = false;
@@ -261,7 +290,10 @@ export function BundleInstallWizard({
   const agents = useMemo(() => preview?.bundle.agents ?? [], [preview]);
   const mcps = useMemo(() => preview?.bundle.mcps ?? [], [preview]);
   const channels = useMemo(() => preview?.bundle.channels ?? [], [preview]);
-  const automations = useMemo(() => preview?.bundle.automations ?? [], [preview]);
+  const automations = useMemo(
+    () => preview?.bundle.automations ?? [],
+    [preview]
+  );
   const policies = useMemo(() => preview?.bundle.policies ?? [], [preview]);
   const setup = useMemo(() => preview?.setup ?? [], [preview]);
 
@@ -296,7 +328,8 @@ export function BundleInstallWizard({
     const used = new Set<string>();
     for (const a of agents) {
       if (agentOff.has(a.key)) continue; // an excluded agent provisions nothing
-      for (const ref of a.mcps ?? []) if (isAgentMcpOn(a.key, ref)) used.add(ref);
+      for (const ref of a.mcps ?? [])
+        if (isAgentMcpOn(a.key, ref)) used.add(ref);
     }
     return used;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -312,15 +345,18 @@ export function BundleInstallWizard({
     });
   }, [setup, setupValues]);
 
-  const setSetup = (key: string, value: unknown) => dispatch({ type: "setSetup", key, value });
-  const toggleAgent = (key: string, on: boolean) => dispatch({ type: "toggleAgent", key, on });
+  const setSetup = (key: string, value: unknown) =>
+    dispatch({ type: "setSetup", key, value });
+  const toggleAgent = (key: string, on: boolean) =>
+    dispatch({ type: "toggleAgent", key, on });
   const toggleGlobalMcp = (key: string, on: boolean) =>
     dispatch({ type: "toggleGlobalMcp", key, on });
   const toggleAgentMcp = (agentKey: string, mcpKey: string, on: boolean) =>
     dispatch({ type: "toggleAgentMcp", agentKey, mcpKey, on });
   const toggleChannel = (key: string, on: boolean) =>
     dispatch({ type: "toggleChannel", key, on });
-  const toggleAuto = (key: string, on: boolean) => dispatch({ type: "toggleAuto", key, on });
+  const toggleAuto = (key: string, on: boolean) =>
+    dispatch({ type: "toggleAuto", key, on });
   const togglePolicyInclude = (key: string, on: boolean) =>
     dispatch({ type: "togglePolicyInclude", key, on });
   const togglePolicyEnabled = (key: string, on: boolean) =>
@@ -347,7 +383,9 @@ export function BundleInstallWizard({
           mcps: (a.mcps ?? []).filter((ref) => isAgentMcpOn(a.key, ref)),
         }));
       const keptAgentKeys = new Set(finalAgents.map((a) => a.key));
-      const finalMcps: BundleMcp[] = mcps.filter((m) => installedMcpKeys.has(m.key));
+      const finalMcps: BundleMcp[] = mcps.filter((m) =>
+        installedMcpKeys.has(m.key)
+      );
       // Drop channels/automations whose target agent is no longer being installed.
       const finalChannels: BundleChannel[] = channels
         .filter((c) => keptAgentKeys.has(c.agent))
@@ -374,12 +412,19 @@ export function BundleInstallWizard({
       });
       setPhase({ kind: "done", result });
     } catch (e) {
-      setPhase({ kind: "error", message: e instanceof Error ? e.message : "Install failed" });
+      setPhase({
+        kind: "error",
+        message: e instanceof Error ? e.message : "Install failed",
+      });
     }
   }
 
-  const blockIssues = (preview?.issues ?? []).filter((i) => i.severity === "block");
-  const warnIssues = (preview?.issues ?? []).filter((i) => i.severity === "warn");
+  const blockIssues = (preview?.issues ?? []).filter(
+    (i) => i.severity === "block"
+  );
+  const warnIssues = (preview?.issues ?? []).filter(
+    (i) => i.severity === "warn"
+  );
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -392,13 +437,15 @@ export function BundleInstallWizard({
       </button>
 
       <div className="flex items-center gap-3">
-        {iconUrl ? (
-          <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-white p-1.5 dark:bg-zinc-800">
-            <Image src={iconUrl} alt={title} width={40} height={40} className="h-full w-full object-contain" />
-          </span>
-        ) : null}
+        <EntityMark
+          identity={identity}
+          brandFallback={false}
+          className="h-12 w-12 shrink-0 rounded-lg border border-border/60 bg-white p-1.5 text-sm dark:bg-zinc-800"
+        />
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Set up {title}</h2>
+          <h2 className="text-xl font-semibold tracking-tight">
+            Set up {title}
+          </h2>
           <p className="text-sm text-muted-foreground">
             Review and adjust what this bundle adds before installing.
           </p>
@@ -419,7 +466,9 @@ export function BundleInstallWizard({
         </div>
       )}
 
-      {phase.kind === "done" && <InstallSummary result={phase.result} onBack={onBack} />}
+      {phase.kind === "done" && (
+        <InstallSummary result={phase.result} onBack={onBack} />
+      )}
 
       {(phase.kind === "form" || phase.kind === "installing") && preview && (
         <div className="space-y-7">
@@ -464,7 +513,8 @@ export function BundleInstallWizard({
           {agents.length > 0 && (
             <Section title="Agents" count={agents.length}>
               <p className="mb-2 text-xs text-muted-foreground">
-                Choose which agents to install and which connections each one gets.
+                Choose which agents to install and which connections each one
+                gets.
               </p>
               <div className="space-y-2">
                 {agents.map((a) => {
@@ -478,7 +528,10 @@ export function BundleInstallWizard({
                       )}
                     >
                       <div className="flex items-center gap-2">
-                        <AgentAvatar agent={{ id: a.key, name: a.name }} size="sm" />
+                        <AgentAvatar
+                          agent={{ id: a.key, name: a.name }}
+                          size="sm"
+                        />
                         <span className="min-w-0 flex-1 truncate text-sm font-medium">
                           {a.name}
                         </span>
@@ -502,7 +555,10 @@ export function BundleInstallWizard({
                             const on = isAgentMcpOn(a.key, ref);
                             const globallyOff = mcpOff.has(ref);
                             return (
-                              <label key={ref} className="flex items-center gap-2 text-sm">
+                              <label
+                                key={ref}
+                                className="flex items-center gap-2 text-sm"
+                              >
                                 <Checkbox
                                   checked={on}
                                   disabled={globallyOff}
@@ -527,20 +583,25 @@ export function BundleInstallWizard({
                       {included &&
                         (() => {
                           const { allowed, denied } = toolScope(a.key);
-                          if (allowed.length === 0 && denied.length === 0) return null;
+                          if (allowed.length === 0 && denied.length === 0)
+                            return null;
                           return (
                             <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 dark:border-amber-900/40 dark:bg-amber-950/20">
                               <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
                               {allowed.length > 0 ? (
                                 <span className="text-[11px] text-amber-700 dark:text-amber-300">
                                   Tools locked to:{" "}
-                                  <span className="font-medium">{allowed.join(", ")}</span> — all
-                                  others blocked
+                                  <span className="font-medium">
+                                    {allowed.join(", ")}
+                                  </span>{" "}
+                                  — all others blocked
                                 </span>
                               ) : (
                                 <span className="text-[11px] text-amber-700 dark:text-amber-300">
                                   Blocked tools:{" "}
-                                  <span className="font-medium">{denied.join(", ")}</span>
+                                  <span className="font-medium">
+                                    {denied.join(", ")}
+                                  </span>
                                 </span>
                               )}
                             </div>
@@ -557,8 +618,9 @@ export function BundleInstallWizard({
           {channels.length > 0 && (
             <Section title="Channels" count={channels.length}>
               <p className="mb-2 text-xs text-muted-foreground">
-                The agent receives and replies to messages here. Off by default — enable once
-                the bot token is set and the bot points at the webhook URL shown after install.
+                The agent receives and replies to messages here. Off by default
+                — enable once the bot token is set and the bot points at the
+                webhook URL shown after install.
               </p>
               <div className="space-y-2">
                 {channels.map((c) => {
@@ -600,8 +662,8 @@ export function BundleInstallWizard({
           {mcps.length > 0 && (
             <Section title="Connections" count={mcps.length}>
               <p className="mb-2 text-xs text-muted-foreground">
-                Turn a connection off to skip provisioning it. Connections are authorized
-                after install.
+                Turn a connection off to skip provisioning it. Connections are
+                authorized after install.
               </p>
               <div className="space-y-2">
                 {mcps.map((m) => {
@@ -626,7 +688,10 @@ export function BundleInstallWizard({
                           </p>
                         )}
                       </div>
-                      <Switch checked={on} onCheckedChange={(c) => toggleGlobalMcp(m.key, c)} />
+                      <Switch
+                        checked={on}
+                        onCheckedChange={(c) => toggleGlobalMcp(m.key, c)}
+                      />
                     </div>
                   );
                 })}
@@ -667,7 +732,8 @@ export function BundleInstallWizard({
           {policies.length > 0 && (
             <Section title="Policies" count={policies.length}>
               <p className="mb-2 text-xs text-muted-foreground">
-                Governance rules applied at runtime. Uncheck to skip, or toggle enabled.
+                Governance rules applied at runtime. Uncheck to skip, or toggle
+                enabled.
               </p>
               <div className="space-y-2">
                 {policies.map((p) => {
@@ -680,7 +746,9 @@ export function BundleInstallWizard({
                       <Checkbox
                         className="mt-0.5"
                         checked={included}
-                        onCheckedChange={(c) => togglePolicyInclude(p.key, Boolean(c))}
+                        onCheckedChange={(c) =>
+                          togglePolicyInclude(p.key, Boolean(c))
+                        }
                       />
                       <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <div className="min-w-0 flex-1">
@@ -688,8 +756,11 @@ export function BundleInstallWizard({
                           {p.message || `${p.effect} · ${p.target}`}
                         </p>
                         <p className="text-[11px] text-muted-foreground">
-                          <span className="capitalize">{p.effect}</span> · {p.target}
-                          {p.subject && p.subject !== "workspace" ? ` · ${p.subject}` : ""}
+                          <span className="capitalize">{p.effect}</span> ·{" "}
+                          {p.target}
+                          {p.subject && p.subject !== "workspace"
+                            ? ` · ${p.subject}`
+                            : ""}
                         </p>
                       </div>
                       <Switch
@@ -708,7 +779,8 @@ export function BundleInstallWizard({
           <div className="flex flex-col gap-2 border-t border-border/60 pt-5">
             {missingRequired.length > 0 && (
               <p className="text-xs text-amber-600 dark:text-amber-400">
-                Fill required fields: {missingRequired.map((f) => f.label).join(", ")}
+                Fill required fields:{" "}
+                {missingRequired.map((f) => f.label).join(", ")}
               </p>
             )}
             <div className="flex items-center gap-2">
@@ -806,7 +878,10 @@ function SetupFieldInput({
         />
       ) : type === "boolean" ? (
         <div className="flex items-center gap-2">
-          <Switch checked={Boolean(value)} onCheckedChange={(c) => onChange(c)} />
+          <Switch
+            checked={Boolean(value)}
+            onCheckedChange={(c) => onChange(c)}
+          />
           <span className="text-sm text-muted-foreground">{field.help}</span>
         </div>
       ) : type === "select" ? (
@@ -828,11 +903,21 @@ function SetupFieldInput({
       ) : (
         <Input
           id={id}
-          type={type === "secret" ? "password" : type === "number" ? "number" : "text"}
+          type={
+            type === "secret"
+              ? "password"
+              : type === "number"
+                ? "number"
+                : "text"
+          }
           value={value === undefined || value === null ? "" : String(value)}
           placeholder={field.help ?? ""}
           onChange={(e) =>
-            onChange(type === "number" ? e.target.valueAsNumber || e.target.value : e.target.value)
+            onChange(
+              type === "number"
+                ? e.target.valueAsNumber || e.target.value
+                : e.target.value
+            )
           }
         />
       )}
@@ -884,7 +969,9 @@ function ModelPicker({
                 </span>
               </span>
             ) : (
-              <span className="truncate text-muted-foreground">Select a model</span>
+              <span className="truncate text-muted-foreground">
+                Select a model
+              </span>
             )}
             <ChevronsUpDown className="shrink-0 opacity-50" />
           </Button>
@@ -922,7 +1009,13 @@ function ModelPicker({
                     }}
                   >
                     {m.provider_icon_url && (
-                      <Image src={m.provider_icon_url} alt="" width={16} height={16} className="mr-2 h-4 w-4 rounded-sm" />
+                      <Image
+                        src={m.provider_icon_url}
+                        alt=""
+                        width={16}
+                        height={16}
+                        className="mr-2 h-4 w-4 rounded-sm"
+                      />
                     )}
                     <span className="min-w-0 flex-1 truncate">
                       {m.model_display_name || m.model_name}
@@ -930,7 +1023,9 @@ function ModelPicker({
                     <span className="ml-2 shrink-0 text-xs text-muted-foreground">
                       {m.provider_name}
                     </span>
-                    {value === m.id && <Check className="ml-2 h-4 w-4 shrink-0" />}
+                    {value === m.id && (
+                      <Check className="ml-2 h-4 w-4 shrink-0" />
+                    )}
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -955,14 +1050,21 @@ function ModelPicker({
       </Popover>
       {!selected && suggested && (
         <p className="text-[11px] text-muted-foreground">
-          Defaults to <span className="font-medium">{suggested}</span> if not changed.
+          Defaults to <span className="font-medium">{suggested}</span> if not
+          changed.
         </p>
       )}
     </>
   );
 }
 
-function InstallSummary({ result, onBack }: { result: InstallResult; onBack: () => void }) {
+function InstallSummary({
+  result,
+  onBack,
+}: {
+  result: InstallResult;
+  onBack: () => void;
+}) {
   const entities = result.entities ?? [];
   const created = entities.filter((e) => e.action === "created");
   const reused = entities.filter((e) => e.action === "reused");
@@ -979,7 +1081,10 @@ function InstallSummary({ result, onBack }: { result: InstallResult; onBack: () 
 
       <ul className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border/60 text-sm">
         {entities.map((e) => (
-          <li key={`${e.kind}-${e.key}`} className="flex items-center gap-2 px-3 py-2">
+          <li
+            key={`${e.kind}-${e.key}`}
+            className="flex items-center gap-2 px-3 py-2"
+          >
             <Puzzle className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="min-w-0 flex-1 truncate">{e.name}</span>
             <Badge variant="light" size="sm" className="capitalize">

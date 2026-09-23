@@ -1,24 +1,17 @@
 import { createElement } from "react";
-import {
-  Clock,
-  CreditCard,
-  Github,
-  Hash,
-  ListTodo,
-  Mail,
-  MessageSquare,
-  Send,
-  Users,
-  Webhook,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
+import { Clock, Zap } from "lucide-react";
 import type { TriggerResponse } from "@/api/client/types.gen";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
+import { AVATAR_HUES, deterministicHue } from "@/lib/avatar-hue";
+import { cn } from "@/lib/utils";
 
 export interface TriggerCatalogEntry {
   id?: string;
   name?: string;
+  /** Asset id kept for reference; render `icon_url`, not this. */
   icon?: string;
+  /** Resolved by the API — the only thing the UI needs to draw a channel. */
+  icon_url?: string | null;
   description?: string;
   kind?: string;
   webhook_type?: string;
@@ -93,123 +86,76 @@ export function getTriggerSourceKey(
   ).toLowerCase();
 }
 
-const TRIGGER_ICON_BY_KEY: Record<string, LucideIcon> = {
-  cron: Clock,
-  schedule: Clock,
-  telegram: Send,
-  slack: Hash,
-  discord: MessageSquare,
-  email: Mail,
-  gmail: Mail,
-  github: Github,
-  stripe: CreditCard,
-  linear: ListTodo,
-  teams: Users,
-  webhook: Webhook,
-  generic: Webhook,
-  event: Zap,
-};
-
 /**
- * Solid accent colour per trigger kind — feeds the tinted tile and the type
- * pill (mirrors the Skills page, where each source gets its own colour dot).
- * Cron is the brand blue; webhooks default to violet, with brand colours for
- * the providers we recognise.
+ * The catalog owns both the artwork and the name of a channel — which channels
+ * exist grows by configuration, so nothing here may switch on the channel. The
+ * API hands us a resolved `icon_url`; we draw it and ask no questions, and only
+ * when it has none do we fall back to a glyph for the trigger's kind.
  */
-const TRIGGER_COLOR_BY_KEY: Record<string, string> = {
-  cron: "#2252b3",
-  schedule: "#2252b3",
-  telegram: "#229ed9",
-  slack: "#611f69",
-  discord: "#5865f2",
-  email: "#d99a00",
-  gmail: "#ea4335",
-  github: "#6e7681",
-  webhook: "#8a5cf6",
-  generic: "#8a5cf6",
-  event: "#d99a00",
-};
-
-export function getTriggerIconComponent(
-  entry?: TriggerCatalogEntry | null,
-  trigger?: TriggerLike
-): LucideIcon {
-  return TRIGGER_ICON_BY_KEY[getTriggerSourceKey(entry, trigger)] ?? Webhook;
-}
-
-export function getTriggerColor(
-  entry?: TriggerCatalogEntry | null,
-  trigger?: TriggerLike
-): string {
-  return TRIGGER_COLOR_BY_KEY[getTriggerSourceKey(entry, trigger)] ?? "#8a5cf6";
-}
-
-/**
- * Trigger glyph tile — the direct analogue of the Skills page `SkillTile`:
- * a softly kind-tinted square (13% colour over the surface) with a matching
- * 26% border and the trigger glyph in full colour.
- */
-export function TriggerTile({
-  color,
-  icon: Icon,
-  variant = "row",
-}: {
-  color: string;
-  icon: LucideIcon;
-  variant?: "row" | "card";
-}) {
-  const isCard = variant === "card";
-  const box = isCard ? 30 : 22;
-  const radius = isCard ? 8 : 6;
-  const glyph = isCard ? 17 : 13;
-  return (
-    <span
-      className="relative flex shrink-0 items-center justify-center border"
-      style={{
-        width: box,
-        height: box,
-        borderRadius: radius,
-        color,
-        background: `color-mix(in srgb, ${color} 13%, var(--tile-base))`,
-        borderColor: `color-mix(in srgb, ${color} 26%, var(--tile-base))`,
-      }}
-    >
-      <Icon style={{ width: glyph, height: glyph }} strokeWidth={1.9} />
-    </span>
-  );
-}
-
 export function renderTriggerIcon(
   entry?: TriggerCatalogEntry | null,
   trigger?: TriggerLike,
   className = "h-5 w-5"
 ) {
-  return createElement(getTriggerIconComponent(entry, trigger), { className });
+  if (entry?.icon_url) {
+    return createElement("img", {
+      src: entry.icon_url,
+      alt: "",
+      "aria-hidden": true,
+      className: cn("shrink-0 object-contain", className),
+    });
+  }
+  // A channel the catalog ships no artwork for still has to show *something* —
+  // returning nothing left an empty tinted tile with no mark in it at all. The
+  // split is on `trigger_type`, a column on the model, not on which channel it
+  // is: that stays catalog-driven.
+  return createElement(trigger?.trigger_type === "cron" ? Clock : Zap, {
+    "aria-hidden": true,
+    strokeWidth: 1.85,
+    className: cn("shrink-0", className),
+  });
 }
 
-const WEBHOOK_TYPE_LABELS: Record<string, string> = {
-  github: "GitHub",
-  gmail: "Gmail",
-  teams: "Microsoft Teams",
-};
+/**
+ * The event source a trigger listens to, as a tile: the channel's own logo when
+ * the catalog has one, else the kind's glyph, on a graphite tile hued by the
+ * source key. Every non-cron trigger used to share one violet tint, so a list
+ * of GitHub, Slack and Stripe hooks read as one repeated mark.
+ */
+export function TriggerSourceMark({
+  entry,
+  trigger,
+  size = 28,
+}: {
+  entry?: TriggerCatalogEntry | null;
+  trigger?: TriggerLike;
+  size?: number;
+}) {
+  return (
+    <EntityAvatar
+      size={size}
+      hue={deterministicHue(getTriggerSourceKey(entry, trigger))}
+      icon={renderTriggerIcon(entry, trigger, "h-full w-full")}
+      iconScale={entry?.icon_url ? 0.68 : 0.5}
+      aria-hidden
+    />
+  );
+}
+
+/** Stable accent used by compact channel markers outside the avatar tile. */
+export function getTriggerColor(
+  entry?: TriggerCatalogEntry | null,
+  trigger?: TriggerLike
+): string {
+  const hue = deterministicHue(getTriggerSourceKey(entry, trigger));
+  return `hsl(${AVATAR_HUES[hue]} 62% 48%)`;
+}
 
 export function getTriggerDisplayName(
   trigger: TriggerLike,
   entry?: TriggerCatalogEntry | null
 ) {
-  const webhookType = effectiveWebhookType(trigger);
-  const entryMatchesType =
-    !webhookType ||
-    entry?.webhook_type === webhookType ||
-    entry?.id === webhookType;
-  if (entry?.name && entryMatchesType) return entry.name;
-  if (webhookType && webhookType !== "generic") {
-    return (
-      WEBHOOK_TYPE_LABELS[webhookType] ??
-      webhookType.charAt(0).toUpperCase() + webhookType.slice(1)
-    );
-  }
-  return entry?.name ?? (trigger.trigger_type === "cron" ? "Cron" : "Webhook");
+  return entry?.name ?? trigger.trigger_type ?? "";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -264,19 +210,24 @@ export function describeCronExpression(expr?: string | null): string {
 
   // Hourly — M * * * *  or  M */N * * *
   if (hour === "*" && dom === "*" && dow === "*" && /^\d+$/.test(min)) {
-    return min === "0" ? "Every hour" : `Every hour at :${min.padStart(2, "0")}`;
+    return min === "0"
+      ? "Every hour"
+      : `Every hour at :${min.padStart(2, "0")}`;
   }
   if (hour.startsWith("*/") && dom === "*" && dow === "*") {
     return `Every ${hour.slice(2)} hours`;
   }
 
   const timeValid = /^\d+$/.test(min) && /^\d+$/.test(hour);
-  const time = timeValid ? formatClock(parseInt(hour, 10), parseInt(min, 10)) : null;
+  const time = timeValid
+    ? formatClock(parseInt(hour, 10), parseInt(min, 10))
+    : null;
 
   if (timeValid && dom === "*") {
     // Weekday / weekend ranges
     if (dow === "1-5") return `Weekdays at ${time}`;
-    if (dow === "0,6" || dow === "6,0" || dow === "0,6,") return `Weekends at ${time}`;
+    if (dow === "0,6" || dow === "6,0" || dow === "0,6,")
+      return `Weekends at ${time}`;
     // A single day of the week
     if (/^[0-6]$/.test(dow)) {
       return `Every ${CRON_DAY_NAMES[parseInt(dow, 10)]} at ${time}`;
@@ -338,6 +289,21 @@ export function getTriggerHealth(trigger: TriggerLike): TriggerHealth {
   return trigger?.is_active ? "active" : "paused";
 }
 
+/**
+ * Cost of one run, or of a trigger's history. Sub-dollar amounts keep four
+ * decimals: a run that costs $0.0071 must not read as "$0.01", which is what
+ * the two-decimal money format everywhere else would make of it.
+ */
+export function formatTriggerCost(value: number): string {
+  const fractionDigits = Math.abs(value) > 0 && Math.abs(value) < 1 ? 4 : 2;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(value);
+}
+
 /** Compact relative time like "in 14h" / "3m ago" (matches the design). */
 export function formatCompactDistance(value: Date | string | number): string {
   const target = new Date(value).getTime();
@@ -350,7 +316,8 @@ export function formatCompactDistance(value: Date | string | number): string {
   else if (seconds < 3600) label = `${Math.round(seconds / 60)}m`;
   else if (seconds < 86400) label = `${Math.round(seconds / 3600)}h`;
   else if (seconds < 86400 * 30) label = `${Math.round(seconds / 86400)}d`;
-  else if (seconds < 86400 * 365) label = `${Math.round(seconds / (86400 * 30))}mo`;
+  else if (seconds < 86400 * 365)
+    label = `${Math.round(seconds / (86400 * 30))}mo`;
   else label = `${Math.round(seconds / (86400 * 365))}y`;
 
   return diff >= 0 ? `in ${label}` : `${label} ago`;

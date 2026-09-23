@@ -1,10 +1,8 @@
 import React, { useState } from "react";
 import { ChevronRight, Lightbulb } from "lucide-react";
-import { Streamdown } from "streamdown";
-import type { Components } from "streamdown";
-import { cn } from "@/lib/utils";
+import { MessageMarkdown } from "@/components/Chat/MessageMarkdown";
 import { stripA2UIFromStreamingContent } from "@/lib/events/a2ui";
-import { fileAwareMarkdownComponents, preprocessFileLinks } from "../utils/markdownComponents";
+import { cn } from "@/lib/utils";
 import MessageWrapper from "./MessageWrapper";
 
 interface LLMChunkData {
@@ -28,10 +26,15 @@ const ThinkingBlock: React.FC<{ content: string; isStreaming?: boolean }> = ({
         className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-sky-600 dark:text-sky-300"
       >
         <ChevronRight
-          className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-90")}
+          className={cn(
+            "h-3 w-3 transition-transform",
+            isExpanded && "rotate-90"
+          )}
         />
         <Lightbulb className="h-3 w-3" />
-        <span className="font-medium">{isStreaming ? "Reasoning…" : "Reasoning"}</span>
+        <span className="font-medium">
+          {isStreaming ? "Reasoning…" : "Reasoning"}
+        </span>
       </button>
       {isExpanded && (
         <div className="whitespace-pre-wrap px-3 pb-2 text-xs text-sky-700/90 dark:text-sky-200/80">
@@ -62,7 +65,9 @@ const LLMChunkMessage: React.FC<{
             {agent_name || "Assistant"}
           </span>
           {status && (
-            <span className="animate-pulse text-muted-foreground">{status}</span>
+            <span className="animate-pulse text-muted-foreground">
+              {status}
+            </span>
           )}
         </div>
 
@@ -74,14 +79,11 @@ const LLMChunkMessage: React.FC<{
         )}
 
         {data.chunk && (
-          <Streamdown
-            parseIncompleteMarkdown
-            className="prose prose-sm mt-1 max-w-none text-zinc-700 dark:prose-invert dark:text-zinc-300"
-            components={fileAwareMarkdownComponents as Components}
-            linkSafety={{ enabled: false }}
-          >
-            {preprocessFileLinks(stripA2UIFromStreamingContent(data.chunk))}
-          </Streamdown>
+          <MessageMarkdown
+            className="mt-1"
+            content={stripA2UIFromStreamingContent(data.chunk)}
+            isStreaming={!data.is_final}
+          />
         )}
       </div>
     </MessageWrapper>

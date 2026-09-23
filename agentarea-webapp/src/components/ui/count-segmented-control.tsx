@@ -1,7 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
 import type { ReactNode } from "react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 export interface CountSegmentedControlItem<T extends string = string> {
@@ -67,7 +67,7 @@ export function CountSegmentedControl<T extends string = string>({
   return (
     <div
       className={cn(
-        "inline-flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-xl bg-transparent p-[3px] no-scrollbar",
+        "inline-flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-md bg-transparent p-[3px] no-scrollbar",
         className
       )}
     >
@@ -80,7 +80,7 @@ export function CountSegmentedControl<T extends string = string>({
             type="button"
             onClick={() => onChange(item.value)}
             className={cn(
-              "relative inline-flex h-7 shrink-0 items-center gap-2 rounded-[10px] px-3 text-[12.5px] font-normal tracking-normal transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "relative inline-flex h-7 shrink-0 items-center gap-2 rounded-md px-3 text-[12.5px] font-normal tracking-normal transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               isActive
                 ? styles.activeText
                 : "text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-zinc-100",
@@ -92,7 +92,7 @@ export function CountSegmentedControl<T extends string = string>({
               <motion.span
                 layoutId={`${layoutId}-active-pill`}
                 className={cn(
-                  "absolute inset-0 rounded-[8px] ring-0 shadow-none",
+                  "absolute inset-0 rounded-md ring-0 shadow-none",
                   styles.pill,
                   activePillClassName
                 )}

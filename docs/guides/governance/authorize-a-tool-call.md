@@ -1,7 +1,7 @@
 ---
 title: Authorize a tool call
 type: guide
-summary: Allow or deny a specific tool for a workspace, agent or user, and work out which enforcement layer rejected a call that failed.
+description: "Allow or deny a specific tool for a workspace, agent or user, and work out which enforcement layer rejected a call that failed."
 prerequisites:
   - /concepts/governance/tool-authorization
   - /concepts/governance/policy-engine
@@ -11,8 +11,6 @@ related:
   - /concepts/governance/tool-authorization
 last_updated: 2026-07-29
 ---
-
-# Authorize a tool call
 
 Do this when an agent must not call a particular tool, or must be restricted to a
 named set of tools. Do it as well when a tool call failed and you need to know
@@ -29,6 +27,7 @@ you add.
 
 ## Prerequisites
 
+<Info>
 - You can create policy rules through `/v1/policies`.
 - You know the tool's name exactly. Matching is `fnmatch` glob against the name,
   and two MCP instances exposing the same tool name are indistinguishable.
@@ -36,97 +35,100 @@ you add.
   layers this guide manipulates.
 
 Examples assume `API=http://localhost:8000` and a bearer token in `$TOKEN`.
+</Info>
 
 ## Steps
 
-### 1. Choose the scope
+<Steps titleSize="h3">
+  <Step title="Choose the scope">
+    A rule binds to one subject. The resolver merges the layers
+    workspace → agent → user → task, and a lower layer can only tighten.
 
-A rule binds to one subject. The resolver merges the layers
-workspace → agent → user → task, and a lower layer can only tighten.
+    | `subject_type` | `subject_id` | Pick when |
+    |---|---|---|
+    | `workspace` | the workspace id | the restriction applies to everything in the workspace |
+    | `agent` | the agent UUID | one agent must not use a tool other agents may |
+    | `user` | the user id | one person's tasks must be more restricted, whichever agent they run |
+    | `task` | — | not a rule; send `task_policy` on the task instead |
 
-| `subject_type` | `subject_id` | Pick when |
-|---|---|---|
-| `workspace` | the workspace id | the restriction applies to everything in the workspace |
-| `agent` | the agent UUID | one agent must not use a tool other agents may |
-| `user` | the user id | one person's tasks must be more restricted, whichever agent they run |
-| `task` | — | not a rule; send `task_policy` on the task instead |
+    The `user` layer resolves from whoever created the task, which is how the same
+    agent produces different verdicts for different callers.
+  </Step>
 
-The `user` layer resolves from whoever created the task, which is how the same
-agent produces different verdicts for different callers.
+  <Step title="Choose deny or allowlist">
+    **Deny a named tool** when the default set is right and one capability is not.
+    This is the option to reach for most of the time.
 
-### 2. Choose deny or allowlist
+    ```bash
+    curl -s -X POST "$API/v1/policies" \
+      -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+      -d '{
+            "subject_type": "agent",
+            "subject_id": "3f9c1e42-7b5a-4f3e-9a10-2c8d6b4e1f77",
+            "target": "tool:send_email",
+            "effect": "deny"
+          }'
+    ```
 
-**Deny a named tool** when the default set is right and one capability is not.
-This is the option to reach for most of the time.
+    **Use an allowlist** when the agent should be confined to a known set and you
+    want new tools to be excluded by default as they are added.
 
-```bash
-curl -s -X POST "$API/v1/policies" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{
-        "subject_type": "agent",
-        "subject_id": "3f9c1e42-7b5a-4f3e-9a10-2c8d6b4e1f77",
-        "target": "tool:send_email",
-        "effect": "deny"
-      }'
-```
+    ```bash
+    curl -s -X POST "$API/v1/policies" \
+      -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+      -d '{
+            "subject_type": "agent",
+            "subject_id": "3f9c1e42-7b5a-4f3e-9a10-2c8d6b4e1f77",
+            "target": "tool:web_search",
+            "effect": "allow"
+          }'
+    ```
 
-**Use an allowlist** when the agent should be confined to a known set and you
-want new tools to be excluded by default as they are added.
+    Every `allow` rule at a layer contributes one entry to that layer's allowlist.
+    Once an allowlist is non-empty, anything outside it is denied. An absent or empty
+    allowlist means "no allowlist in use", not "deny everything".
 
-```bash
-curl -s -X POST "$API/v1/policies" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{
-        "subject_type": "agent",
-        "subject_id": "3f9c1e42-7b5a-4f3e-9a10-2c8d6b4e1f77",
-        "target": "tool:web_search",
-        "effect": "allow"
-      }'
-```
+    Both effects require a **named** tool. `tool:*` is parsed as a valid target and
+    then skipped by the compiler, so a wildcard allow or deny rule is stored and does
+    nothing.
 
-Every `allow` rule at a layer contributes one entry to that layer's allowlist.
-Once an allowlist is non-empty, anything outside it is denied. An absent or empty
-allowlist means "no allowlist in use", not "deny everything".
+    Response is HTTP 201 with the created rule, including its `id`.
+  </Step>
 
-Both effects require a **named** tool. `tool:*` is parsed as a valid target and
-then skipped by the compiler, so a wildcard allow or deny rule is stored and does
-nothing.
+  <Step title="Preview the merged result">
+    Before running anything, resolve the layers without creating a task:
 
-Response is HTTP 201 with the created rule, including its `id`.
+    ```bash
+    curl -s -X POST "$API/v1/governance/effective-policy/preview" \
+      -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+      -d '{"agent_id": "3f9c1e42-7b5a-4f3e-9a10-2c8d6b4e1f77"}' \
+      | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["effective_policy"].get("tools"), indent=2))'
+    ```
 
-### 3. Preview the merged result
+    ```json
+    {
+      "allowed": null,
+      "denied": ["send_email"]
+    }
+    ```
 
-Before running anything, resolve the layers without creating a task:
+    The preview resolves the workspace, agent and calling user's layers. Pass
+    `task_policy` in the same body to see what a per-task document would do on top.
+  </Step>
 
-```bash
-curl -s -X POST "$API/v1/governance/effective-policy/preview" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"agent_id": "3f9c1e42-7b5a-4f3e-9a10-2c8d6b4e1f77"}' \
-  | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["effective_policy"].get("tools"), indent=2))'
-```
+  <Step title="Tighten one task only">
+    A per-task restriction rides on task creation rather than the rule table:
 
-```json
-{
-  "allowed": null,
-  "denied": ["send_email"]
-}
-```
-
-The preview resolves the workspace, agent and calling user's layers. Pass
-`task_policy` in the same body to see what a per-task document would do on top.
-
-### 4. Tighten one task only
-
-A per-task restriction rides on task creation rather than the rule table:
-
-```bash
-curl -s -X POST "$API/v1/agents/$AGENT_ID/tasks/" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{
-        "description": "Summarise the Q3 report",
-        "task_policy": {"tools": {"denied": ["shell_exec"]}}
-      }'
-```
+    ```bash
+    curl -s -X POST "$API/v1/agents/$AGENT_ID/tasks/" \
+      -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+      -d '{
+            "description": "Summarise the Q3 report",
+            "task_policy": {"tools": {"denied": ["shell_exec"]}}
+          }'
+    ```
+  </Step>
+</Steps>
 
 ## Verify
 
@@ -161,46 +163,59 @@ agent never attempting it rather than attempting and being refused.
 
 ## Troubleshooting
 
-**The rule exists and nothing changed.** Check the target kind. The compiler
-handles `allow` and `deny` only on a named `tool:` target. Rules targeting
-`mcp:<id>`, `model:<id>`, `skill:<id>`, `collection:<id>` or `tool:*` are
-accepted by the API, stored, returned by `GET /v1/policies`, and then skipped
-when the layer is compiled. They have no runtime effect. Confirm with the preview
-endpoint: if `tools` is absent or unchanged, the rule did not compile.
-
-**`422` when creating or previewing.** The resolver rejects a lower layer that
-would loosen a higher one. An agent-level allowlist has to be a subset of the
-workspace allowlist patterns; a task policy cannot re-enable a denied tool. The
-error names the field that tried to widen.
-
-**The task still calls the tool.** The snapshot is taken at task creation. A rule
-written after the task started does not reach it, and there is no revocation path
-into a running workflow. Cancel and restart the task.
-
-**It works over the API but not through the MCP proxy, or the reverse.** The
-proxy has no task snapshot, so it resolves only the workspace and calling user's
-layers at request time. An **agent-scoped** rule therefore does not apply to a
-proxy call. Move the rule to the workspace or user layer if it must cover both
-paths.
-
-**A tool the model should not see is still in its context.** Disclosure keeps
-tools that require approval, and always keeps the control-flow tools
-(`completion`, `task_complete`, `request_user_input`, `recall_history`,
-`read_tool_output`, `activate_tool_source`, `load_tools`) regardless of policy, so
-a restrictive rule cannot strand a run.
-
-**The call failed but not with a policy reason.** Several other layers can stop a
-tool call independently of your rules: the budget gates deny when the run or
-service budget is exhausted, and a pattern gate denies destructive shell and SQL
-strings such as `DROP TABLE`, `rm -rf /` or `TRUNCATE TABLE`. Those surface as an
-activity failure rather than a `denied_by_policy` event. Read the worker log for
-the interceptor name in the raised `GovernanceDenied`.
+<AccordionGroup>
+  <Accordion title="The rule exists and nothing changed">
+    Check the target kind. The compiler handles `allow` and `deny` only on a
+    named `tool:` target. Rules targeting `mcp:<id>` , `model:<id>` ,
+    `skill:<id>` , `collection:<id>` or `tool:*` are accepted by the API,
+    stored, returned by `GET /v1/policies` , and then skipped when the layer is
+    compiled. They have no runtime effect. Confirm with the preview endpoint: if
+    `tools` is absent or unchanged, the rule did not compile.
+  </Accordion>
+  <Accordion title="`422` when creating or previewing">
+    The resolver rejects a lower layer that would loosen a higher one. An
+    agent-level allowlist has to be a subset of the workspace allowlist
+    patterns; a task policy cannot re-enable a denied tool. The error names the
+    field that tried to widen.
+  </Accordion>
+  <Accordion title="The task still calls the tool">
+    The snapshot is taken at task creation. A rule written after the task
+    started does not reach it, and there is no revocation path into a running
+    workflow. Cancel and restart the task.
+  </Accordion>
+  <Accordion title="It works over the API but not through the MCP proxy, or the reverse">
+    The proxy has no task snapshot, so it resolves only the workspace and
+    calling user's layers at request time. An **agent-scoped** rule therefore
+    does not apply to a proxy call. Move the rule to the workspace or user layer
+    if it must cover both paths.
+  </Accordion>
+  <Accordion title="A tool the model should not see is still in its context">
+    Disclosure keeps tools that require approval, and always keeps the
+    control-flow tools (`completion`, `task_complete` , `request_user_input` ,
+    `recall_history` , `read_tool_output` , `activate_tool_source` ,
+    `load_tools` ) regardless of policy, so a restrictive rule cannot strand a
+    run.
+  </Accordion>
+  <Accordion title="The call failed but not with a policy reason">
+    Several other layers can stop a tool call independently of your rules: the
+    budget gates deny when the run or service budget is exhausted, and a pattern
+    gate denies destructive shell and SQL strings such as `DROP TABLE` ,
+    `rm -rf /` or `TRUNCATE TABLE` . Those surface as an activity failure rather
+    than a `denied_by_policy` event. Read the worker log for the interceptor
+    name in the raised `GovernanceDenied` .
+  </Accordion>
+</AccordionGroup>
 
 ## Related
 
-- [Tool authorization](/concepts/governance/tool-authorization) — every layer a
-  call clears and why they are separate.
-- [Require human approval](/guides/governance/require-human-approval) — the third
-  verdict a tool decision can return.
-- [Set a budget](/guides/governance/set-a-budget) — the other gates on the
-  pre-tool phase.
+<Columns cols={2}>
+  <Card title="Tool authorization" icon="scale-balanced" href="/concepts/governance/tool-authorization">
+    Every layer a call clears and why they are separate
+  </Card>
+  <Card title="Require human approval" icon="scale-balanced" href="/guides/governance/require-human-approval">
+    The third verdict a tool decision can return
+  </Card>
+  <Card title="Set a budget" icon="scale-balanced" href="/guides/governance/set-a-budget">
+    The other gates on the pre-tool phase
+  </Card>
+</Columns>

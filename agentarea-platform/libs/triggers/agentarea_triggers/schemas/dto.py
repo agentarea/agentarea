@@ -209,6 +209,7 @@ class TriggerUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=1000)
+    agent_id: UUID | None = None
     enabled: bool | None = Field(
         default=None,
         validation_alias=AliasChoices("enabled", "is_active"),
@@ -228,6 +229,7 @@ class TriggerUpdate(BaseModel):
     webhook_type: str | None = None
     validation_rules: dict[str, Any] | None = None
     webhook_config: dict[str, Any] | None = None
+    event_types: list[str] | None = None
 
     channel_credentials: dict[str, Any] | None = Field(
         default=None,
@@ -250,6 +252,7 @@ class TriggerUpdate(BaseModel):
         return _DomainTriggerUpdate(
             name=self.name,
             description=self.description,
+            agent_id=self.agent_id,
             is_active=self.enabled,
             task_parameters=self.task_parameters,
             conditions=self.conditions,
@@ -260,4 +263,5 @@ class TriggerUpdate(BaseModel):
             webhook_type=webhook_type,
             validation_rules=self.validation_rules,
             webhook_config=self.webhook_config,
+            event_types=self.event_types,
         )

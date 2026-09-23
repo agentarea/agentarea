@@ -72,10 +72,18 @@ class WorkspaceFileInfo(BaseModel):
 
 class WorkspaceFileListResponse(BaseModel):
     files: list[WorkspaceFileInfo]
-    # Trailing-slash paths for folders that should be visible even if empty
-    # (currently: every project, so newly-created projects show up before any
-    # file lands in their prefix).
-    directories: list[str] = []
+    # Trailing-slash paths keep user-created and project folders visible when empty.
+    directories: list[str] = Field(default_factory=list)
+
+
+class CreateWorkspaceDirectoryRequest(BaseModel):
+    path: str = Field(..., min_length=1)
+
+    model_config = {"extra": "forbid"}
+
+
+class WorkspaceDirectoryResponse(BaseModel):
+    path: str
 
 
 class WorkspaceFileDownloadResponse(BaseModel):
@@ -104,6 +112,19 @@ class PresignUploadResponse(BaseModel):
     ref: str
     upload_url: str
     expires_in: int
+
+
+class MoveWorkspaceFileRequest(BaseModel):
+    source: str = Field(..., min_length=1)
+    destination: str = Field(..., min_length=1)
+
+    model_config = {"extra": "forbid"}
+
+
+class MovedFileResponse(BaseModel):
+    source: str
+    destination: str
+    moved: int
 
 
 class ArchivedFileResponse(BaseModel):
@@ -158,10 +179,8 @@ def _is_hidden_storage_path(file_path: str) -> bool:
     holds archived files that only the restore endpoint may resurrect.
     """
     clean = file_path.lstrip("/")
-    if clean.startswith("staging/") or clean.startswith(TRASH_PREFIX):
-        return True
     parts = PurePosixPath(clean).parts
-    return bool(parts and parts[0] == "tasks")
+    return bool(parts and parts[0] in {"tasks", "staging", TRASH_PREFIX.rstrip("/")})
 
 
 def _resolve_upload_path(path: str, filename: str) -> str:
@@ -172,7 +191,7 @@ def _resolve_upload_path(path: str, filename: str) -> str:
     file lands at the workspace root under its own name.
     """
     if not path:
-        return PurePosixPath(filename or "unnamed").name or "unnamed"
+        path = PurePosixPath(filename or "unnamed").name or "unnamed"
     try:
         resolved = normalize_workspace_path(path)
     except WorkspaceValidationError as e:
@@ -183,6 +202,13 @@ def _resolve_upload_path(path: str, filename: str) -> str:
             detail=f"{resolved!r} is a reserved prefix and cannot be written directly",
         )
     return resolved
+
+
+async def _ensure_no_file_ancestors(service: ArtifactService, workspace_id: str, path: str) -> None:
+    """Prevent an existing file from also becoming a parent folder."""
+    for parent in PurePosixPath(path).parents:
+        if parent != PurePosixPath(".") and await service.exists(workspace_id, str(parent)):
+            raise HTTPException(status_code=409, detail=f"A file already exists at {str(parent)!r}")
 
 
 def _workspace_file_download_url(file_path: str) -> str:
@@ -206,6 +232,12 @@ async def list_workspace_files(
     user_context: UserContextDep,
     project_service: ProjectServiceDep,
 ) -> WorkspaceFileListResponse:
+    """List the files a person put in the workspace.
+
+    What a task produced is not among them: a task's files belong to that run
+    and are browsed on the task itself, so they stay out of the workspace view
+    even though ``tasks/{id}/workspace/{path}`` remains readable by that name.
+    """
     svc = _get_artifact_service()
     objects = await svc.list(user_context.workspace_id)
     visible_objects = [obj for obj in objects if not _is_hidden_storage_path(obj.path)]
@@ -217,21 +249,45 @@ async def list_workspace_files(
             last_modified=obj.last_modified,
         )
         for obj in visible_objects
+        if not obj.path.endswith("/")
     ]
-    workspace_repository = _get_workspace_repository()
-    task_ids = await workspace_repository.list_task_ids(user_context.workspace_id)
-    for task_id in task_ids:
-        for obj in await workspace_repository.list(user_context.workspace_id, task_id):
-            files.append(
-                WorkspaceFileInfo(
-                    path=f"tasks/{task_id}/workspace/{obj.path}",
-                    size=obj.size,
-                    content_type=obj.content_type,
-                )
-            )
     projects = await project_service.list()
-    directories = [f"projects/{p.id}/" for p in projects]
+    directories = sorted(
+        {obj.path for obj in visible_objects if obj.path.endswith("/")}
+        | {f"projects/{p.id}/" for p in projects}
+    )
     return WorkspaceFileListResponse(files=files, directories=directories)
+
+
+@router.post("/directories", status_code=201, response_model=WorkspaceDirectoryResponse)
+async def create_workspace_directory(
+    body: CreateWorkspaceDirectoryRequest,
+    user_context: UserContextDep,
+    project_service: ProjectServiceDep,
+) -> WorkspaceDirectoryResponse:
+    """Persist an empty workspace folder as a trailing-slash object marker."""
+    # Accept the same trailing-slash convention returned by the listing, but
+    # strip only one slash so repeated separators still fail validation.
+    requested_path = body.path.removesuffix("/")
+    if not requested_path:
+        raise HTTPException(status_code=422, detail="Folder path must not be empty")
+    path = _resolve_upload_path(requested_path, "")
+    directory_path = f"{path}/"
+    workspace_id = user_context.workspace_id
+    service = ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
+    await _ensure_no_file_ancestors(service, workspace_id, path)
+    if await service.exists(workspace_id, path):
+        raise HTTPException(status_code=409, detail=f"A file already exists at {path!r}")
+    projects = await project_service.list()
+    if any(f"projects/{project.id}/".startswith(directory_path) for project in projects):
+        raise HTTPException(status_code=409, detail="A folder already exists at this path")
+    if await service.list(workspace_id, prefix=directory_path, max_items=1):
+        raise HTTPException(status_code=409, detail="A folder already exists at this path")
+    await service.put(workspace_id, directory_path, b"", content_type="application/x-directory")
+    return WorkspaceDirectoryResponse(path=directory_path)
 
 
 @router.post("")
@@ -256,9 +312,13 @@ async def upload_file(
         actor=ArtifactActor(user_id=user_context.user_id),
     )
     if purpose == "workspace":
+        resolved_path = _resolve_upload_path(path, filename)
+        await _ensure_no_file_ancestors(svc, user_context.workspace_id, resolved_path)
+        if await svc.list(user_context.workspace_id, prefix=f"{resolved_path}/", max_items=1):
+            raise HTTPException(status_code=409, detail="A folder already exists at this path")
         await svc.put(
             user_context.workspace_id,
-            _resolve_upload_path(path, filename),
+            resolved_path,
             content,
             content_type=file.content_type,
         )
@@ -321,6 +381,49 @@ async def create_attachment_upload_url(
         expires_in=expires_in,
     )
     return PresignUploadResponse(ref=path, upload_url=upload_url, expires_in=expires_in)
+
+
+@router.post("/move", response_model=MovedFileResponse)
+async def move_workspace_file(
+    body: MoveWorkspaceFileRequest,
+    user_context: UserContextDep,
+) -> MovedFileResponse:
+    """Relocate a workspace file or folder to another path.
+
+    A folder is a key prefix rather than an object, so moving one walks every
+    key beneath it — including the trailing-slash marker that keeps an empty
+    folder visible in the listing. Reserved prefixes are refused at both ends:
+    ``tasks/`` belongs to a task's committed manifest, and ``.trash/`` is the
+    restore endpoint's alone.
+    """
+    source = _resolve_upload_path(body.source.removesuffix("/"), "")
+    destination = _resolve_upload_path(body.destination.removesuffix("/"), "")
+    if source == destination:
+        raise HTTPException(status_code=422, detail="Source and destination are the same")
+    if destination.startswith(f"{source}/"):
+        raise HTTPException(status_code=422, detail="Cannot move a folder into itself")
+
+    workspace_id = user_context.workspace_id
+    svc = ArtifactService(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
+    await _ensure_no_file_ancestors(svc, workspace_id, destination)
+    if await svc.exists(workspace_id, destination):
+        raise HTTPException(status_code=409, detail=f"A file already exists at {destination!r}")
+    if await svc.list(workspace_id, prefix=f"{destination}/", max_items=1):
+        raise HTTPException(status_code=409, detail="A folder already exists at this path")
+
+    if await svc.exists(workspace_id, source):
+        await svc.move(workspace_id, source, destination)
+        return MovedFileResponse(source=source, destination=destination, moved=1)
+
+    contents = await svc.list(workspace_id, prefix=f"{source}/")
+    if not contents:
+        raise HTTPException(status_code=404, detail="File not found")
+    for obj in contents:
+        await svc.move(workspace_id, obj.path, f"{destination}/{obj.path[len(source) + 1 :]}")
+    return MovedFileResponse(source=source, destination=destination, moved=len(contents))
 
 
 @router.delete("/{file_path:path}", response_model=ArchivedFileResponse)

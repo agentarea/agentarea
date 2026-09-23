@@ -1,19 +1,14 @@
 import { createElement } from "react";
 import {
-  agentColorVar,
-  agentColorVarSoft,
   getAgentIconComponent,
   resolveAgentIdentity,
-  type AgentColorToken,
+  type AgentIdentityInput,
 } from "@/lib/agent-identity";
+import { avatarHueStyle } from "@/lib/avatar-hue";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { cn } from "@/lib/utils";
 
-export type AgentAvatarAgent = {
-  id: string;
-  name?: string | null;
-  icon?: string | null;
-  color_token?: string | null;
-};
+export type AgentAvatarAgent = AgentIdentityInput;
 
 type AgentAvatarProps = {
   agent: AgentAvatarAgent;
@@ -22,11 +17,11 @@ type AgentAvatarProps = {
   status?: "idle" | "running" | "hitl" | "error" | "paused" | null;
 };
 
-const SIZE_CLASS: Record<NonNullable<AgentAvatarProps["size"]>, string> = {
-  xs: "h-5 w-5 [&>svg]:h-3 [&>svg]:w-3",
-  sm: "h-6 w-6 [&>svg]:h-3.5 [&>svg]:w-3.5",
-  md: "h-9 w-9 [&>svg]:h-[18px] [&>svg]:w-[18px]",
-  lg: "h-12 w-12 [&>svg]:h-6 [&>svg]:w-6",
+const SIZE_PX: Record<NonNullable<AgentAvatarProps["size"]>, number> = {
+  xs: 20,
+  sm: 24,
+  md: 36,
+  lg: 48,
 };
 
 const STATUS_CLASS: Record<
@@ -40,32 +35,29 @@ const STATUS_CLASS: Record<
   paused: { color: "bg-zinc-400", pulse: false },
 };
 
+/**
+ * An agent, wherever one is listed. Graphite rather than pigment on purpose:
+ * people are the coloured marks in a list, agents are the neutral ones, and the
+ * split is what makes a mixed feed readable at a glance.
+ */
 export function AgentAvatar({
   agent,
   size = "sm",
   className,
   status,
 }: AgentAvatarProps) {
-  const { colorToken, iconKey } = resolveAgentIdentity(agent);
-  const sizeCls = SIZE_CLASS[size];
+  const { hue, iconKey } = resolveAgentIdentity(agent);
+  const px = SIZE_PX[size];
 
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
-      <span
-        className={cn(
-          "inline-flex items-center justify-center rounded-md",
-          sizeCls
-        )}
-        style={
-          {
-            color: agentColorVar(colorToken as AgentColorToken),
-            background: agentColorVarSoft(colorToken as AgentColorToken, 0.14),
-          } as React.CSSProperties
-        }
-        aria-hidden="true"
-      >
-        {createElement(getAgentIconComponent(iconKey), { strokeWidth: 2 })}
-      </span>
+      <EntityAvatar
+        size={px}
+        hue={hue}
+        icon={createElement(getAgentIconComponent(iconKey), {
+          strokeWidth: 1.85,
+        })}
+      />
       {status && (
         <span
           className={cn(
@@ -83,14 +75,17 @@ export function AgentColorStripe({
   agent,
   className,
 }: {
-  agent: AgentAvatarProps["agent"];
+  agent: AgentAvatarAgent;
   className?: string;
 }) {
-  const { colorToken } = resolveAgentIdentity(agent);
+  const { hue } = resolveAgentIdentity(agent);
   return (
     <span
-      className={cn("inline-block w-1 self-stretch rounded-full", className)}
-      style={{ background: agentColorVar(colorToken as AgentColorToken) }}
+      className={cn(
+        "avatar-hue-fill inline-block w-1 self-stretch rounded-full",
+        className
+      )}
+      style={avatarHueStyle(hue)}
       aria-hidden="true"
     />
   );

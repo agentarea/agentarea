@@ -12,10 +12,14 @@ This module provides Temporal activities for agent execution:
 
 # Standard library imports
 import asyncio
+import hashlib
 import json
 import logging
 from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
+from copy import deepcopy
 from datetime import datetime
+from pathlib import PurePosixPath
 from typing import Any
 from uuid import UUID
 
@@ -42,7 +46,9 @@ from prometheus_client import Counter
 
 # Third-party imports
 from temporalio import activity
+from temporalio.exceptions import ApplicationError
 
+from .. import llm_execution_service
 from ..exceptions import AgentNotFoundError, ModelInstanceNotFoundError, NoModelBoundError
 from ..interfaces import ActivityDependencies
 
@@ -104,28 +110,6 @@ from .runtime_discovery import fetch_runtime_manifest, render_runtime_prompt, ru
 logger = logging.getLogger(__name__)
 
 
-def resolve_llm_max_tokens(
-    *,
-    requested: int | None,
-    model_cap: int | None,
-    effective_policy: dict[str, Any] | None,
-) -> int:
-    """Resolve the strictest output-token ceiling with no runtime fallback."""
-    policy_cap = ((effective_policy or {}).get("tokens") or {}).get("max_tokens_per_call")
-    if not isinstance(policy_cap, int) or policy_cap <= 0:
-        raise ValueError(
-            "effective policy is missing required runtime limit tokens.max_tokens_per_call"
-        )
-    candidates = [policy_cap]
-    for name, value in (("request.max_tokens", requested), ("model.max_output_tokens", model_cap)):
-        if value is None:
-            continue
-        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-            raise ValueError(f"{name} must be a positive integer")
-        candidates.append(value)
-    return min(candidates)
-
-
 def _make_counter(name: str, doc: str, labels: list[str] | None = None):
     return Counter(name, doc, labels or [])
 
@@ -134,6 +118,179 @@ def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _task_resource_ids(parameters: dict[str, Any], kind: str) -> list[UUID]:
+    value = parameters.get(kind)
+    if kind == "mcps" and value is None:
+        value = parameters.get("mcp")
+        if value is None:
+            value = parameters.get("mcp_servers")
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ApplicationError(f"Task {kind} must be a list", non_retryable=True)
+    ids: list[UUID] = []
+    for item in value:
+        ref = item
+        if isinstance(item, dict):
+            ref = item.get("id") or item.get("instance_id") or item.get("skill_id")
+        try:
+            resource_id = UUID(ref) if isinstance(ref, str) else None
+        except ValueError:
+            resource_id = None
+        if resource_id is None:
+            raise ApplicationError(f"Invalid task {kind} reference", non_retryable=True)
+        if resource_id not in ids:
+            ids.append(resource_id)
+    return ids
+
+
+async def _resolve_task_resources(
+    agent: Any, parameters: dict[str, Any], ctx: Any
+) -> tuple[list[dict[str, Any]], list[Any]]:
+    """Resolve additive run resources with the task's workspace-scoped services."""
+    tools = deepcopy(_as_tool_config_list(agent.tools))
+    skills = list(getattr(agent, "skills", None) or [])
+    mcp_ids = _task_resource_ids(parameters, "mcps")
+    if mcp_ids:
+        mcp_service = await ctx.get_mcp_server_instance_service()
+        for instance_id in mcp_ids:
+            instance = await mcp_service.get(instance_id)
+            if instance is None:
+                raise ApplicationError("Selected task MCP is unavailable", non_retryable=True)
+            # Match both storage conventions. An inherited restriction must never
+            # be replaced by a second, unrestricted entry for the same server.
+            inherited = False
+            for tool in tools:
+                if tool.get("type") != "mcp":
+                    continue
+                reference = str(tool.get("name") or "")
+                if reference == instance.name:
+                    inherited = True
+                    break
+                try:
+                    inherited = UUID(reference) == instance.id
+                except ValueError:
+                    pass
+                if inherited:
+                    break
+            if not inherited:
+                tools.append({"type": "mcp", "name": str(instance.id)})
+
+    skill_ids = _task_resource_ids(parameters, "skills")
+    if skill_ids:
+        skill_service = await ctx.get_skill_service()
+        for skill_id in skill_ids:
+            if any(str(skill.id) == str(skill_id) for skill in skills):
+                continue
+            skill = await skill_service.get_with_catalog(skill_id)
+            if skill is None:
+                raise ApplicationError("Selected task skill is unavailable", non_retryable=True)
+            if any(existing.name == skill.name for existing in skills):
+                raise ApplicationError(
+                    "Selected task skills must have distinct names", non_retryable=True
+                )
+            skills.append(skill)
+    return tools, skills
+
+
+async def _prepare_task_files(
+    request: AgentConfigRequest, user_context: UserContext
+) -> list[dict[str, Any]]:
+    """Snapshot explicitly selected workspace files into this run's inputs."""
+    from agentarea_common.artifacts import (
+        ArtifactActor,
+        ArtifactService,
+        DbArtifactEventRecorder,
+        WorkspaceRepository,
+        WorkspaceValidationError,
+    )
+    from agentarea_common.artifacts.workspace import normalize_workspace_path
+
+    paths = request.task_parameters.get("files")
+    if paths is None or paths == []:
+        return []
+    if not isinstance(paths, list) or len(paths) > 100 or request.task_id is None:
+        raise ApplicationError("Invalid task file selection", non_retryable=True)
+
+    sources: list[tuple[str, str | None, str]] = []
+    for path in paths:
+        try:
+            clean = normalize_workspace_path(path)
+            parts = PurePosixPath(clean).parts
+            if not parts:
+                raise ValueError("not a file path")
+            source_task_id = None
+            relative_path = clean
+            if parts[0] == "tasks":
+                if len(parts) < 4 or parts[2] != "workspace":
+                    raise ValueError("not a public task workspace path")
+                source_task_id = str(UUID(parts[1]))
+                relative_path = normalize_workspace_path("/".join(parts[3:]))
+            elif parts[0] in {"staging", ".trash"} or "://" in clean:
+                raise ValueError("not a visible workspace file")
+        except (ValueError, TypeError, WorkspaceValidationError) as exc:
+            raise ApplicationError("Invalid task file path", non_retryable=True) from exc
+        source = (clean, source_task_id, relative_path)
+        if source not in sources:
+            sources.append(source)
+
+    workspace_id = user_context.workspace_id
+    task_id = str(request.task_id)
+    repository = WorkspaceRepository(
+        recorder=DbArtifactEventRecorder(),
+        actor=ArtifactActor(user_id=user_context.user_id),
+    )
+    artifacts = ArtifactService()
+    descriptors: list[dict[str, Any]] = []
+    for source, source_task_id, source_path in sources:
+        # A stable name makes activity retries reuse the first committed snapshot
+        # even if the source has since changed or disappeared.
+        basename = PurePosixPath(source_path).name
+        prefix = hashlib.sha256(source.encode()).hexdigest()[:16]
+        filename = f"selected-{prefix}-{basename}"
+        target = f"inputs/attachments/{filename}"
+        try:
+            data, content_type = await repository.get(workspace_id, task_id, target)
+        except FileNotFoundError:
+            try:
+                if source_task_id is not None:
+                    data, content_type = await repository.get(
+                        workspace_id, source_task_id, source_path
+                    )
+                else:
+                    head = await artifacts.head(workspace_id, source_path)
+                    if head is None or not head.get("sha256"):
+                        raise FileNotFoundError(source_path)
+                    data, content_type = await artifacts.get(workspace_id, source_path)
+                    if (
+                        len(data) != head["size"]
+                        or hashlib.sha256(data).hexdigest() != head["sha256"]
+                    ):
+                        raise WorkspaceValidationError("selected file changed during snapshot")
+                await repository.put_files(
+                    workspace_id,
+                    task_id,
+                    {target: data},
+                    content_types={target: content_type or "application/octet-stream"},
+                    provenance={"source": "task_selection", "source_path": source},
+                    owner=f"task-inputs-{task_id}",
+                )
+            except (FileNotFoundError, WorkspaceValidationError) as exc:
+                raise ApplicationError(
+                    "Selected task file is unavailable", non_retryable=True
+                ) from exc
+        descriptors.append(
+            {
+                "relative_path": target,
+                "filename": filename,
+                "size": len(data),
+                "content_type": content_type or "application/octet-stream",
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+        )
+    return descriptors
 
 
 def _sandbox_file_auth_secret(dependencies: ActivityDependencies) -> str:
@@ -317,12 +474,22 @@ def make_agent_activities(dependencies: ActivityDependencies):
     from .dependencies import (
         ActivityContext,
         ActivityServiceContainer,
-        create_system_context,
         create_user_context,
     )
 
     # Create service container
     container = ActivityServiceContainer(dependencies)
+
+    @asynccontextmanager
+    async def model_service_scope(user_context: UserContext):
+        async with ActivityContext(container, user_context) as ctx:
+            yield await ctx.get_model_instance_service()
+
+    llm_service = llm_execution_service.LLMExecutionService(
+        model_service_scope=model_service_scope,
+        secret_manager_factory=dependencies.secret_manager_factory,
+        local_host=dependencies.settings.app.local_host,
+    )
 
     @activity.defn
     async def discover_runtime_manifest_activity() -> RuntimeDiscoveryResult:
@@ -362,12 +529,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
             if not agent:
                 raise AgentNotFoundError(f"Agent {request.agent_id} not found")
 
+            tools, skills = await _resolve_task_resources(agent, request.task_parameters, ctx)
             runtime = await discover_runtime_manifest_activity()
 
             # Build skill information
             skills_info = []
-            if hasattr(agent, "skills") and agent.skills:
-                for skill in agent.skills:
+            if skills:
+                for skill in skills:
                     # Get file list for multi-file skills
                     files = []
                     if skill.s3_path:
@@ -416,15 +584,24 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 {
                     "instruction": agent.instruction,
                     "model_id": model_id_str,
-                    "tools": agent.tools,
+                    "tools": tools,
                     "events_config": agent.events_config,
                     "planning": agent.planning,
                     "agent_type": getattr(agent, "agent_type", None),
                 },
-                skill_ids=[str(s.id) for s in getattr(agent, "skills", None) or []],
+                skill_ids=[str(s.id) for s in skills],
             )
             if request.task_id is not None:
                 await _record_task_config_hash(ctx, request.task_id, config_hash)
+
+            execution_context = deepcopy(request.execution_context)
+            attachments = await _prepare_task_files(request, user_context)
+            if attachments:
+                execution_context = execution_context or {}
+                execution_context["workspace_attachments"] = [
+                    *(execution_context.get("workspace_attachments") or []),
+                    *attachments,
+                ]
 
             # Build configuration using Pydantic model
             return AgentConfigResult(
@@ -434,21 +611,18 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 instruction=(agent.instruction or "")
                 + render_runtime_prompt(
                     runtime,
-                    has_org_context=any(
-                        t.get("name") == "agentarea/context"
-                        for t in _as_tool_config_list(agent.tools)
-                    ),
+                    has_org_context=any(t.get("name") == "agentarea/context" for t in tools),
                 ),
                 agent_type=getattr(agent, "agent_type", "stateless") or "stateless",
                 model_id=model_id_str,
                 config_hash=config_hash,
                 context_window=context_window,
                 default_context_strategy=default_context_strategy,
-                tools=_as_tool_config_list(agent.tools),
+                tools=tools,
                 events_config=agent.events_config or {},
                 planning=agent.planning if agent.planning is not None else False,
                 a2ui_enabled=agent.a2ui_enabled if agent.a2ui_enabled is not None else False,
-                execution_context=request.execution_context,
+                execution_context=execution_context,
                 step_type=request.step_type,
                 skills=skills_info,
                 runtime=runtime,
@@ -482,7 +656,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
             base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
             split = await tool_manager.discover_available_tools_split(
                 agent_id=request.agent_id,
-                tools_config=_as_tool_config_list(agent.tools),
+                tools_config=request.tools
+                if request.tools is not None
+                else _as_tool_config_list(agent.tools),
                 mcp_server_instance_service=mcp_server_instance_service,
                 agent_service=agent_service,
                 base_url=base_url,
@@ -523,7 +699,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
             base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
             providers = await tool_manager.discover_tool_providers(
                 agent_id=request.agent_id,
-                tools_config=_as_tool_config_list(agent.tools),
+                tools_config=request.tools
+                if request.tools is not None
+                else _as_tool_config_list(agent.tools),
                 mcp_server_instance_service=mcp_server_instance_service,
                 agent_service=agent_service,
                 base_url=base_url,
@@ -557,7 +735,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         from datetime import UTC
         from uuid import UUID as _UUID
 
-        user_context = create_system_context(request.workspace_id, request.user_id)
+        user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             model_instance_service = await ctx.get_model_instance_service()
             model_instance = await model_instance_service.get(_UUID(request.model_id))
@@ -583,6 +761,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 model_instance.model_spec, "output_cost_per_token", None
             )
             api_key_secret = getattr(model_instance.provider_config, "api_key", None)
+            managed_by = getattr(model_instance.provider_config, "managed_by", None)
             display_name = getattr(model_instance.model_spec, "display_name", None)
             provider_display_name = getattr(
                 model_instance.provider_config.provider_spec, "display_name", None
@@ -593,6 +772,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             provider_type=provider_type,
             model_name=model_name,
             api_key_secret=api_key_secret,
+            managed_by=managed_by,
             endpoint_url=endpoint_url,
             context_window=context_window,
             max_output_tokens=max_output_tokens,
@@ -609,226 +789,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
     async def call_llm_activity(
         request: LLMCallRequest,
     ) -> LLMCallResult:
-        """Call LLM with messages and optional tools using streaming."""
-        provider_type: Any | None = None
+        """Adapt one model call to Temporal and the task event transport."""
 
-        try:
-            # model_id must be a UUID representing a model instance ID
-            try:
-                model_uuid = UUID(request.model_id)
-            except ValueError as e:
-                raise ValueError(
-                    f"Invalid model_id: {request.model_id}. "
-                    "Must be a valid UUID representing a model instance."
-                ) from e
-
-            # Create context - prefer workspace_id, fallback to user_context_data
-            if request.workspace_id:
-                user_context = create_system_context(request.workspace_id)
-            elif request.user_context_data:
-                user_context = create_user_context(request.user_context_data)
-            else:
-                raise ValueError("Either workspace_id or user_context_data must be provided")
-
-            # Dual path: use cached resolved_model if provided, else fall back to DB lookup
-            provider_type = None
-            model_name = None
-            endpoint_url = None
-            api_key = None
-            max_output_tokens = None
-            input_cost_per_token = None
-            output_cost_per_token = None
-
-            if request.resolved_model:
-                cached = request.resolved_model
-                provider_type = cached.get("provider_type")
-                model_name = cached.get("model_name")
-                endpoint_url = cached.get("endpoint_url")
-                max_output_tokens = cached.get("max_output_tokens")
-                input_cost_per_token = cached.get("input_cost_per_token")
-                output_cost_per_token = cached.get("output_cost_per_token")
-                api_key_secret_name = cached.get("api_key_secret")
-                if api_key_secret_name:
-                    try:
-                        from agentarea_common.config import get_database
-
-                        secret_session = get_database().async_session_factory()
-                        try:
-                            secret_manager = dependencies.secret_manager_factory.create(
-                                session=secret_session, user_context=user_context
-                            )
-                            api_key = await secret_manager.get_secret(api_key_secret_name)
-                        finally:
-                            await secret_session.close()
-                    except Exception as decrypt_err:
-                        logger.warning(
-                            f"Failed to decrypt cached API key for model {request.model_id}, "
-                            f"falling back to DB lookup: {decrypt_err}",
-                            exc_info=True,
-                        )
-                        # Fall through to DB lookup below
-                        provider_type = None
-
-            if provider_type is None:
-                # Full DB lookup (initial path or fallback from failed cache decrypt)
-                async with ActivityContext(container, user_context) as ctx:
-                    model_instance_service = await ctx.get_model_instance_service()
-                    model_instance = await model_instance_service.get(model_uuid)
-                    if not model_instance:
-                        raise ModelInstanceNotFoundError(
-                            f"Model instance with ID {request.model_id} not found"
-                        )
-
-                    # Extract required parameters from model instance
-                    provider_type = model_instance.provider_config.provider_spec.provider_type
-                    model_name = model_instance.model_spec.model_name
-                    # endpoint_url lives on provider_config (ollama, self-hosted, etc.), not model_spec.
-                    endpoint_url = getattr(
-                        model_instance.provider_config, "endpoint_url", None
-                    ) or getattr(model_instance.model_spec, "endpoint_url", None)
-
-                    # Decode API key from secret manager
-                    # (provider_config.api_key is a secret name/placeholder)
-                    max_output_tokens = getattr(
-                        model_instance.model_spec, "max_output_tokens", None
-                    )
-                    input_cost_per_token = getattr(
-                        model_instance.model_spec, "input_cost_per_token", None
-                    )
-                    output_cost_per_token = getattr(
-                        model_instance.model_spec, "output_cost_per_token", None
-                    )
-                    api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
-                    if api_key_secret_name:
-                        from agentarea_common.config import get_database
-
-                        secret_session = get_database().async_session_factory()
-                        try:
-                            secret_manager = dependencies.secret_manager_factory.create(
-                                session=secret_session, user_context=user_context
-                            )
-                            api_key = await secret_manager.get_secret(api_key_secret_name)
-                        finally:
-                            await secret_session.close()
-                    else:
-                        logger.warning(f"No API key found for model instance {model_instance.id}")
-
-            if input_cost_per_token is None or output_cost_per_token is None:
-                raise ValueError("model pricing is not configured; run budget cannot be enforced")
-
-            if endpoint_url:
-                local_host = dependencies.settings.app.local_host
-                endpoint_url = endpoint_url.replace("localhost", local_host).replace(
-                    "127.0.0.1", local_host
-                )
-
-            llm_model = LLMModel(
-                provider_type=str(provider_type),
-                model_name=str(model_name),
-                api_key=api_key,
-                endpoint_url=endpoint_url,
-                input_cost_per_token=input_cost_per_token,
-                output_cost_per_token=output_cost_per_token,
-            )
-
-            # Create structured request
-            effective_max_tokens = resolve_llm_max_tokens(
-                requested=request.max_tokens,
-                model_cap=max_output_tokens,
-                effective_policy=request.effective_policy,
-            )
-
-            llm_request = LLMRequest(
-                messages=request.messages,
-                tools=request.tools,
-                temperature=request.temperature,
-                max_tokens=effective_max_tokens,
-            )
-
-            # Use streaming with ainvoke_stream and publish events
-            complete_content = ""
-            complete_thinking = ""
-            complete_tool_calls = None
-            final_usage = None
-            final_cost = 0.0
-            chunk_index = 0
-
-            # Create event publisher if we have task context
-            event_publisher = None
-            if request.task_id:
-                event_publisher = create_event_publisher(
-                    dependencies.event_broker,
-                    request.task_id,
-                    execution_id=request.execution_id,
-                    iteration=request.iteration,
-                    broker_client=dependencies.broker_client,
-                )
-
-            # Stream the response and collect chunks
-            async for chunk_response in llm_model.ainvoke_stream(llm_request):
-                # Accumulate and publish reasoning/thinking chunks
-                if chunk_response.reasoning_content:
-                    complete_thinking += chunk_response.reasoning_content
-                    if event_publisher:
-                        await event_publisher(
-                            chunk_response.reasoning_content,
-                            chunk_index,
-                            False,
-                            chunk_type="thinking",
-                        )
-                        chunk_index += 1
-
-                # Accumulate content
-                if chunk_response.content:
-                    complete_content += chunk_response.content
-
-                    # Publish chunk event
-                    if event_publisher:
-                        await event_publisher(chunk_response.content, chunk_index, False)
-                        chunk_index += 1
-
-                # Update tool calls (they come complete in each chunk)
-                if chunk_response.tool_calls:
-                    complete_tool_calls = chunk_response.tool_calls
-
-                # Update usage and cost information
-                if chunk_response.usage:
-                    final_usage = chunk_response.usage
-                if chunk_response.cost and chunk_response.cost > 0:
-                    final_cost = max(final_cost, chunk_response.cost)
-
-            if final_usage is None or getattr(final_usage, "total_tokens", 0) <= 0:
-                raise RuntimeError(
-                    "LLM usage accounting unavailable; token and cost policy cannot be enforced"
-                )
-
-            # Publish final chunk event
-            if event_publisher:
-                await event_publisher("", chunk_index, True)
-
-            # Create final response using Pydantic model
-            usage_model = None
-            if final_usage:
-                usage_model = LLMUsage(
-                    prompt_tokens=getattr(final_usage, "prompt_tokens", 0),
-                    completion_tokens=getattr(final_usage, "completion_tokens", 0),
-                    total_tokens=getattr(final_usage, "total_tokens", 0),
-                )
-
-            return LLMCallResult(
-                role="assistant",
-                content=complete_content,
-                thinking=complete_thinking,
-                tool_calls=complete_tool_calls,
-                cost=to_money(final_cost),
-                usage=usage_model,
-            )
-
-        except Exception as e:
-            # Enhanced error handling - create enriched error event if we have event context
+        async def on_error(error: Exception, provider_type: str | None) -> None:
             if request.task_id and request.agent_id and dependencies.event_broker:
                 await publish_enriched_llm_error_event(
-                    error=e,
+                    error=error,
                     task_id=request.task_id,
                     agent_id=request.agent_id,
                     execution_id=request.execution_id or "",
@@ -837,21 +803,44 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     event_broker=dependencies.event_broker,
                 )
 
-            error_type = type(e).__name__
-            error_message = str(e)
+        try:
+            try:
+                if not request.workspace_id and not request.user_context_data:
+                    raise ValueError("Either workspace_id or user_context_data must be provided")
+                user_context = create_user_context(request.user_context_data)
+            except Exception as error:
+                try:
+                    await on_error(error, None)
+                except Exception:
+                    logger.exception("Failed to publish LLM context error")
+                raise
 
-            # Simplified error raising - workflow will handle enriched events
-            logger.error(f"LLM call failed: {error_message}")
-            from temporalio.exceptions import ApplicationError
+            on_chunk = None
+            if request.task_id:
+                on_chunk = create_event_publisher(
+                    dependencies.event_broker,
+                    request.task_id,
+                    execution_id=request.execution_id,
+                    iteration=request.iteration,
+                    broker_client=dependencies.broker_client,
+                )
 
-            # Import error checking functions from event_publisher
+            return await llm_service.execute(
+                request,
+                user_context=user_context,
+                on_chunk=on_chunk,
+                on_error=on_error,
+            )
+        except Exception as error:
             from .event_publisher import _is_non_retryable_error
 
+            error_message = str(error)
+            logger.error(f"LLM call failed: {error_message}")
             raise ApplicationError(
                 f"LLM call failed: {error_message}",
-                type=error_type,
-                non_retryable=_is_non_retryable_error(e),
-            ) from e
+                type=type(error).__name__,
+                non_retryable=_is_non_retryable_error(error),
+            ) from error
 
     @activity.defn
     @auto_heartbeater
@@ -876,7 +865,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         if not decision.allowed:
             return _deny_tool_result(request.tool_name, decision.reason)
 
-        user_context = create_system_context(request.workspace_id)
+        user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
 
@@ -1673,7 +1662,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
         from agentarea_tasks.infrastructure.repository import TaskRepository
 
-        user_context = create_system_context(request.workspace_id)
+        user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             session = container._database.async_session_factory()
             ctx._sessions.append(session)
@@ -1723,7 +1712,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
         from agentarea_tasks.infrastructure.repository import TaskRepository
 
-        user_context = create_system_context(request.workspace_id)
+        user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             session = container._database.async_session_factory()
             ctx._sessions.append(session)
@@ -1762,7 +1751,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             model_uuid = UUID(request.model_id)
 
             if request.workspace_id:
-                user_context = create_system_context(request.workspace_id)
+                user_context = create_user_context(request.user_context_data)
             elif request.user_context_data:
                 user_context = create_user_context(request.user_context_data)
             else:
@@ -1788,16 +1777,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
                     try:
-                        from agentarea_common.config import get_database
-
-                        secret_session = get_database().async_session_factory()
-                        try:
-                            secret_manager = dependencies.secret_manager_factory.create(
-                                session=secret_session, user_context=user_context
-                            )
-                            api_key = await secret_manager.get_secret(api_key_secret_name)
-                        finally:
-                            await secret_session.close()
+                        api_key = await llm_execution_service.resolve_provider_api_key(
+                            reference=api_key_secret_name,
+                            managed_by=cached.get("managed_by"),
+                            user_context=user_context,
+                            secret_manager_factory=dependencies.secret_manager_factory,
+                        )
                     except Exception as decrypt_err:
                         logger.warning(
                             f"Failed to decrypt cached API key for model {request.model_id} "
@@ -1833,16 +1818,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                     if api_key_secret_name:
-                        from agentarea_common.config import get_database
-
-                        secret_session = get_database().async_session_factory()
-                        try:
-                            secret_manager = dependencies.secret_manager_factory.create(
-                                session=secret_session, user_context=user_context
-                            )
-                            api_key = await secret_manager.get_secret(api_key_secret_name)
-                        finally:
-                            await secret_session.close()
+                        api_key = await llm_execution_service.resolve_provider_api_key(
+                            reference=api_key_secret_name,
+                            managed_by=getattr(model_instance.provider_config, "managed_by", None),
+                            user_context=user_context,
+                            secret_manager_factory=dependencies.secret_manager_factory,
+                        )
 
             if input_cost_per_token is None or output_cost_per_token is None:
                 raise ValueError(
@@ -1903,7 +1884,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     },
                     {"role": "user", "content": compaction_prompt},
                 ],
-                max_tokens=resolve_llm_max_tokens(
+                max_tokens=llm_execution_service.resolve_llm_max_tokens(
                     requested=None,
                     model_cap=max_output_tokens,
                     effective_policy=request.effective_policy,
@@ -1960,7 +1941,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         request: ResolveAgentToolsRequest,
     ) -> ResolveAgentToolsResult:
         """Resolve agent names to their IDs for workflow-level delegation."""
-        user_context = create_system_context(request.workspace_id)
+        user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             agent_service = await ctx.get_agent_service()
             agent_map: dict[str, str] = {}
@@ -1986,7 +1967,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         Allows agents to recover context that was compacted out of the
         working set, or to review what happened in earlier executions.
         """
-        user_context = create_system_context(request.workspace_id)
+        user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             task_event_service = await ctx.get_task_event_service()
 
@@ -2071,10 +2052,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
         try:
             if not request.workspace_id:
                 raise ValueError("skill materialization requires a workspace_id")
-            user_context = create_system_context(request.workspace_id)
+            user_context = create_user_context(request.user_context_data)
             async with ActivityContext(container, user_context) as ctx:
                 skill_service = await ctx.get_skill_service()
-                skill = await skill_service.get(request.skill_id)
+                skill = await skill_service.get_with_catalog(request.skill_id)
                 if not skill:
                     return MaterializeSkillFilesResult(
                         success=False, error=f"Skill {request.skill_id} not found"

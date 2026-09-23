@@ -32,6 +32,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
+          # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
+          # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
+          version: "0.8.22"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 

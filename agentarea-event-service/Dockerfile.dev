@@ -1,7 +1,8 @@
 FROM golang:1.25-alpine
 
 RUN apk add --no-cache git ca-certificates dumb-init && rm -rf /var/cache/apk/*
-RUN go install github.com/air-verse/air@latest
+# Pinned: air >= v1.67.2 requires Go 1.26, which this base image does not ship.
+RUN go install github.com/air-verse/air@v1.67.1
 
 WORKDIR /app
 

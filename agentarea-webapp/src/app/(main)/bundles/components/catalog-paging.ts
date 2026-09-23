@@ -16,6 +16,8 @@ export type CatalogPaging = {
   /** How many items match the current filters across the whole catalog. */
   total: number;
   categories: CategoryFacet[];
+  /** Connections only: how many are MCP servers vs plain HTTP APIs. */
+  protocols: CategoryFacet[];
   status: "idle" | "loading" | "appending";
   error: string | null;
   /** Set when the server returns an empty page despite claiming more exist. */
@@ -28,11 +30,18 @@ export type CatalogPagingAction =
       entries: CatalogEntry[];
       total: number;
       categories: CategoryFacet[];
+      protocols: CategoryFacet[];
       error?: string | null;
     }
   | { type: "reload" }
   | { type: "appendStart" }
-  | { type: "append"; entries: CatalogEntry[]; total: number; categories: CategoryFacet[] }
+  | {
+      type: "append";
+      entries: CatalogEntry[];
+      total: number;
+      categories: CategoryFacet[];
+      protocols: CategoryFacet[];
+    }
   | { type: "fail"; error: string };
 
 export function initialPaging(): CatalogPaging {
@@ -40,6 +49,7 @@ export function initialPaging(): CatalogPaging {
     entries: [],
     total: 0,
     categories: [],
+    protocols: [],
     status: "idle",
     error: null,
     drained: false,
@@ -77,6 +87,7 @@ export function catalogPagingReducer(
         entries: action.entries,
         total: action.total,
         categories: action.categories,
+        protocols: action.protocols,
         status: "idle",
         error: action.error ?? null,
         drained: false,
@@ -99,6 +110,7 @@ export function catalogPagingReducer(
         entries: fresh.length > 0 ? [...state.entries, ...fresh] : state.entries,
         total: action.total,
         categories: action.categories,
+        protocols: action.protocols,
         status: "idle",
         error: null,
         // A page that adds nothing while the total still claims more means the

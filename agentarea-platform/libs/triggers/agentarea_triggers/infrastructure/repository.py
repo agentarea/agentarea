@@ -27,6 +27,22 @@ def _value(value: Any) -> Any:
     return value.value if isinstance(value, Enum) else value
 
 
+async def find_trigger_by_webhook_id(session: AsyncSession, webhook_id: str) -> TriggerORM | None:
+    """Find a trigger before any tenant is known.
+
+    Deliberately unscoped: an inbound webhook carries no session, and the
+    webhook id is itself the discriminator. The caller builds the real
+    workspace context from what this returns.
+
+    Lives outside ``TriggerRepository`` on purpose. Reaching this query through
+    the repository used to require inventing a ``UserContext(user_id="system",
+    workspace_id="system")`` just to satisfy the constructor, which then sat in
+    scope for the rest of the request.
+    """
+    result = await session.execute(select(TriggerORM).where(TriggerORM.webhook_id == webhook_id))
+    return result.scalar_one_or_none()
+
+
 class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
     """Repository for trigger persistence."""
 
@@ -171,6 +187,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             webhook_type=(_value(trigger_data.webhook_type)) if trigger_data.webhook_type else None,
             validation_rules=trigger_data.validation_rules,
             webhook_config=trigger_data.webhook_config,
+            event_types=trigger_data.event_types,
         )
 
         self.session.add(trigger_orm)
@@ -377,6 +394,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 else WebhookType.GENERIC,
                 validation_rules=trigger_orm.validation_rules or {},
                 webhook_config=trigger_orm.webhook_config,
+                event_types=trigger_orm.event_types or [],
             )
         else:
             # Fallback to base Trigger
@@ -462,6 +480,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             "trigger_data": entity.trigger_data,
             "workflow_id": entity.workflow_id,
             "run_id": entity.run_id,
+            "fired_by": entity.fired_by,
         }
 
         # Remove None values and system fields that will be auto-populated
@@ -485,6 +504,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             "trigger_data": entity.trigger_data,
             "workflow_id": entity.workflow_id,
             "run_id": entity.run_id,
+            "fired_by": entity.fired_by,
         }
 
         # Remove None values
@@ -644,13 +664,19 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         )
         return failed + timed_out
 
-    async def get_execution_metrics(self, trigger_id: UUID, hours: int = 24) -> dict[str, Any]:
-        """Get execution metrics for a trigger within specified hours."""
+    async def get_execution_metrics(
+        self, trigger_id: UUID, hours: int | None = 24
+    ) -> dict[str, Any]:
+        """Get execution metrics for a trigger. ``hours=None`` covers all history."""
         from datetime import timedelta
 
         from sqlalchemy import case, func
 
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        window = [TriggerExecutionORM.trigger_id == trigger_id]
+        if hours is not None:
+            window.append(
+                TriggerExecutionORM.executed_at >= datetime.utcnow() - timedelta(hours=hours)
+            )
 
         # Get aggregated metrics
         stmt = select(
@@ -667,12 +693,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             func.avg(TriggerExecutionORM.execution_time_ms).label("avg_execution_time_ms"),
             func.min(TriggerExecutionORM.execution_time_ms).label("min_execution_time_ms"),
             func.max(TriggerExecutionORM.execution_time_ms).label("max_execution_time_ms"),
-        ).where(
-            and_(
-                TriggerExecutionORM.trigger_id == trigger_id,
-                TriggerExecutionORM.executed_at >= cutoff_time,
-            )
-        )
+        ).where(and_(*window))
 
         result = await self.session.execute(stmt)
         row = result.first()
@@ -809,6 +830,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             trigger_data=execution_orm.trigger_data or {},
             workflow_id=execution_orm.workflow_id,
             run_id=execution_orm.run_id,
+            fired_by=execution_orm.fired_by,
         )
 
     def _domain_to_orm(self, execution: TriggerExecution) -> TriggerExecutionORM:
@@ -824,4 +846,5 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             trigger_data=execution.trigger_data,
             workflow_id=execution.workflow_id,
             run_id=execution.run_id,
+            fired_by=execution.fired_by,
         )

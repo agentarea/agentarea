@@ -5,6 +5,8 @@ DB-coupled entity creation is verified in operator handler tests and the
 end-to-end minikube smoke test.
 """
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 from agentarea_registry.application.service import (
     TYPE_BY_TOPLEVEL_KEY,
@@ -164,6 +166,22 @@ class TestParseMCPServers:
                 "tags": ["remote", "streamable-http"],
             }
         ]
+
+    @pytest.mark.asyncio
+    async def test_openapi_connector_stays_catalog_only(self):
+        service = RegistryService(
+            registry_repo=AsyncMock(),
+            item_repo=AsyncMock(),
+            server_repo=AsyncMock(),
+        )
+        service._create_mcp_server = AsyncMock()
+        item = MagicMock()
+        item.spec = {"connection_type": "openapi"}
+
+        result = await service._create_entity("mcp_servers", item)
+
+        assert result is None
+        service._create_mcp_server.assert_not_awaited()
 
     def test_unrecognized_format_raises(self):
         with pytest.raises(ValueError, match="AgentArea keys"):
@@ -386,6 +404,42 @@ class TestParseDefaultAgents:
         assert "model_id" not in spec
 
 
+class TestParseSkills:
+    def test_preserves_human_name_and_popularity_provenance(self):
+        provenance = {
+            "repo": "anthropics/skills",
+            "path": "skills/pdf/SKILL.md",
+            "stars": 42_500,
+            "license": "Apache-2.0",
+            "distribution": "compatible",
+        }
+
+        items = RegistryService._parse_skills(
+            {
+                "skills": [
+                    {
+                        "name": "pdf--anthropics-skills--abc123",
+                        "original_name": "pdf",
+                        "description": "Create and edit PDF documents.",
+                        "source_url": "https://github.com/anthropics/skills",
+                        "provenance": provenance,
+                        "tags": ["category:documents", "repo:anthropics-skills"],
+                    }
+                ]
+            }
+        )
+
+        assert items[0]["spec"]["original_name"] == "pdf"
+        assert items[0]["spec"]["provenance"] == provenance
+
+    def test_omits_invalid_provenance_instead_of_exposing_source_junk(self):
+        items = RegistryService._parse_skills(
+            {"skills": [{"name": "pdf", "provenance": "not-a-mapping"}]}
+        )
+
+        assert "provenance" not in items[0]["spec"]
+
+
 class TestParseBundles:
     def _bundle(self, **over):
         base = {
@@ -463,3 +517,84 @@ class TestParseSourceDispatch:
 
         with pytest.raises(ValueError, match="Unknown registry_type"):
             RegistryService._parse_source("bogus", {})
+
+
+class TestRecommendationRank:
+    """Publication order is the catalog's only usefulness signal — keep it.
+
+    Sources are authored best-first: the curated skills artifact is generated
+    in GitHub-star order and the connection artifact leads with the official
+    integrations. Dropping the position on the floor is what left /explore
+    sorted alphabetically.
+    """
+
+    def test_source_position_becomes_the_rank(self):
+        items = RegistryService._parse_source(
+            "skills",
+            {"skills": [{"name": "most-popular"}, {"name": "obscure"}]},
+        )
+        assert [i["recommendation_rank"] for i in items] == [0, 1]
+
+    def test_a_declared_rank_beats_the_position(self):
+        items = RegistryService._parse_source(
+            "skills",
+            {
+                "skills": [
+                    {"name": "demoted", "recommendation_rank": 5},
+                    {"name": "unranked"},
+                ]
+            },
+        )
+        assert {i["name"]: i["recommendation_rank"] for i in items} == {
+            "demoted": 5,
+            "unranked": 1,
+        }
+
+    @pytest.mark.parametrize("bad", [-1, True, "2", 1.5, None])
+    def test_a_malformed_rank_falls_back_to_the_position(self, bad):
+        # A negative or bool rank would outrank every curated entry; a source
+        # typo must not be able to reorder the catalog.
+        items = RegistryService._parse_source(
+            "skills",
+            {"skills": [{"name": "a"}, {"name": "b", "recommendation_rank": bad}]},
+        )
+        assert [i["recommendation_rank"] for i in items] == [0, 1]
+
+    def test_a_curated_mcp_server_can_declare_its_rank_in_metadata(self):
+        # AgentArea curation rides along inside the upstream server object,
+        # which is shared with the official registry schema.
+        items = RegistryService._parse_source(
+            "mcp_servers",
+            {
+                "servers": [
+                    {
+                        "server": {
+                            "name": "ai.agentarea.catalog/demoted",
+                            "metadata": {"agentarea:recommendation_rank": 5},
+                            "remotes": [{"type": "streamable-http", "url": "https://a.test"}],
+                        }
+                    },
+                    {
+                        "server": {
+                            "name": "ai.agentarea.catalog/unranked",
+                            "remotes": [{"type": "streamable-http", "url": "https://b.test"}],
+                        }
+                    },
+                ]
+            },
+        )
+        assert {i["external_id"]: i["recommendation_rank"] for i in items} == {
+            "ai.agentarea.catalog/demoted": 5,
+            "ai.agentarea.catalog/unranked": 1,
+        }
+
+    def test_every_emitted_item_carries_a_rank(self):
+        # sync_registry writes the column straight from this dict.
+        for registry_type, data in (
+            ("agents", {"agents": [{"name": "A"}]}),
+            ("bundles", {"bundles": [{"name": "b", "schema_version": "0.1.0"}]}),
+            ("llm_providers", {"providers": [{"provider_key": "p", "name": "P"}]}),
+            ("llm_models", {"models": [{"provider_key": "p", "model_name": "m"}]}),
+        ):
+            items = RegistryService._parse_source(registry_type, data)
+            assert items[0]["recommendation_rank"] == 0, registry_type

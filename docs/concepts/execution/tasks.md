@@ -1,7 +1,7 @@
 ---
 title: Tasks
 type: concept
-summary: A task is one persisted request to one agent; this page gives its identity, its status machine, and which states actually end it.
+description: "A task is one persisted request to one agent; this page gives its identity, its status machine, and which states actually end it."
 prerequisites:
   - /agentic-networks
 related:
@@ -11,8 +11,6 @@ related:
   - /concepts/integration/mcp
 last_updated: 2026-07-29
 ---
-
-# Tasks
 
 A task is one request to one agent, written to the database before any model is
 called. Everything else in the execution layer hangs off it: the Temporal
@@ -174,8 +172,14 @@ Temporal otherwise.
 
 ## Related
 
-- [Durable execution](/concepts/execution/durable-execution) — what Temporal
-  contributes to the states above, and what it costs.
-- [Events](/concepts/execution/events) — the feed those terminal types end.
-- [Artifacts](/concepts/execution/artifacts) — what the completion gate
-  validates.
+<Columns cols={2}>
+  <Card title="Durable execution" icon="diagram-project" href="/concepts/execution/durable-execution">
+    What Temporal contributes to the states above, and what it costs
+  </Card>
+  <Card title="Events" icon="diagram-project" href="/concepts/execution/events">
+    The feed those terminal types end
+  </Card>
+  <Card title="Artifacts" icon="diagram-project" href="/concepts/execution/artifacts">
+    What the completion gate validates
+  </Card>
+</Columns>

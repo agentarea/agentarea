@@ -19,38 +19,42 @@ Key endpoints:
 import asyncio
 import json
 import logging
-from datetime import datetime
-from typing import Any, cast
+from datetime import datetime, timedelta
+from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
 from agentarea_api.api.deps.services import (
     BaseSecretManagerDep,
+    SecretCatalogServiceDep,
     get_trigger_health_check,
     get_trigger_service,
 )
+from agentarea_api.api.v1._icons import CHANNEL_ICON_NAMESPACE, build_icon_url
 from agentarea_common.auth.dependencies import UserContext, get_user_context
 from agentarea_common.config.app import get_app_settings
+from agentarea_common.config.database import get_db_session
+from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.types import UtcDatetime
+from agentarea_secrets.catalog_service import SecretCatalogService, SecretNotFoundError
+from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS, get_trigger_catalog
+from agentarea_triggers.infrastructure.orm import TriggerExecutionORM
 from agentarea_triggers.schemas.dto import TriggerCreate, TriggerUpdate
 from agentarea_triggers.trigger_service import (
     TriggerNotFoundError,
     TriggerService,
     TriggerValidationError,
 )
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-
-TRIGGERS_AVAILABLE = True
+from sqlalchemy import Numeric, and_, func, select
+from sqlalchemy import cast as sa_cast
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/triggers", tags=["triggers"])
-
-# Public router for endpoints that don't require authentication
-# Used by internal services (e.g., Go event-service) for trigger execution
-public_router = APIRouter(prefix="/triggers", tags=["triggers"])
 
 
 # API Response Models
@@ -98,24 +102,6 @@ class TriggerResponse(BaseModel):
         cls, trigger: Any, has_channel_credentials: bool = False
     ) -> "TriggerResponse":
         """Create response from domain model."""
-        if not TRIGGERS_AVAILABLE:
-            # Return mock response when triggers not available
-            return cls(
-                id=UUID("00000000-0000-0000-0000-000000000000"),
-                name="Mock Trigger",
-                description="Triggers service not available",
-                agent_id=UUID("00000000-0000-0000-0000-000000000000"),
-                trigger_type="mock",
-                is_active=False,
-                task_parameters={},
-                conditions={},
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
-                created_by="system",
-                failure_threshold=5,
-                consecutive_failures=0,
-            )
-
         # Base fields
         response_data = {
             "id": trigger.id,
@@ -179,22 +165,24 @@ class TriggerExecutionResponse(BaseModel):
     trigger_data: dict[str, Any]
     workflow_id: str | None = None
     run_id: str | None = None
+    fired_by: str | None = Field(
+        default=None,
+        description=(
+            "Principal who asked for this run, when a person did. Null means the "
+            "trigger fired itself. Resolve the name through GET /v1/principals."
+        ),
+    )
+    cost_usd: float | None = Field(
+        default=None,
+        description=(
+            "What the task this run created has spent so far. Null when the run "
+            "created no task, or the task has not reported a cost yet."
+        ),
+    )
 
     @classmethod
     def from_domain_model(cls, execution: Any) -> "TriggerExecutionResponse":
         """Create response from domain model."""
-        if not TRIGGERS_AVAILABLE:
-            # Return mock response when triggers not available
-            return cls(
-                id=UUID("00000000-0000-0000-0000-000000000000"),
-                trigger_id=UUID("00000000-0000-0000-0000-000000000000"),
-                executed_at=datetime.utcnow(),
-                status="failed",
-                execution_time_ms=0,
-                error_message="Triggers service not available",
-                trigger_data={},
-            )
-
         return cls(
             id=execution.id,
             trigger_id=execution.trigger_id,
@@ -208,6 +196,7 @@ class TriggerExecutionResponse(BaseModel):
             trigger_data=execution.trigger_data,
             workflow_id=execution.workflow_id,
             run_id=execution.run_id,
+            fired_by=execution.fired_by,
         )
 
 
@@ -238,16 +227,25 @@ class ExecutionMetricsResponse(BaseModel):
     """Response model for execution metrics."""
 
     trigger_id: UUID
-    period_hours: int
+    period_hours: int | None = Field(
+        default=None, description="Window these metrics cover. Null means the whole history."
+    )
     total_executions: int
     successful_executions: int
     failed_executions: int
     timeout_executions: int
-    success_rate: float
-    failure_rate: float
+    success_rate: float = Field(description="Percentage, 0-100.")
+    failure_rate: float = Field(description="Percentage, 0-100.")
     avg_execution_time_ms: float
     min_execution_time_ms: int
     max_execution_time_ms: int
+    total_cost_usd: float = Field(default=0.0, description="Spend of the tasks these runs created.")
+    avg_cost_usd: float = Field(
+        default=0.0, description="Spend per run that produced a costed task."
+    )
+    costed_executions: int = Field(
+        default=0, description="Runs whose task reported a cost; the divisor behind avg_cost_usd."
+    )
 
 
 class ExecutionTimelineResponse(BaseModel):
@@ -275,16 +273,87 @@ class TriggerExecuteRequest(BaseModel):
     channel_origin: dict[str, Any] = Field(default_factory=dict)
 
 
+class TriggerRunResponse(BaseModel):
+    """Result of firing a trigger once by hand."""
+
+    status: Literal["started", "skipped"] = Field(
+        description=(
+            "'started' when a task was created and is now running. 'skipped' when "
+            "the trigger's own conditions rejected the run -- a real answer about "
+            "the trigger, not an error."
+        )
+    )
+    trigger_id: UUID
+    execution_id: UUID
+    task_id: UUID | None = Field(
+        default=None, description="The task to watch. Absent when the run was skipped."
+    )
+    reason: str | None = Field(default=None, description="Why the run was skipped, when it was.")
+
+
 # Utility Functions
 
 
-def _check_triggers_availability():
-    """Check if triggers service is available and raise appropriate error."""
-    if not TRIGGERS_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Triggers service is not available. Please check system configuration.",
+DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+
+
+def _task_cost_expr():
+    """Spend of a task, matching the task repository's own accounting.
+
+    ``own_cost`` excludes what delegated children spent — those are billed on
+    their own rows — and ``total_cost`` is the fallback for results written
+    before the two were split.
+    """
+    return func.coalesce(
+        sa_cast(TaskORM.result.op("->>")("own_cost"), Numeric),
+        sa_cast(TaskORM.result.op("->>")("total_cost"), Numeric),
+        0,
+    )
+
+
+async def _costs_by_task(
+    session: AsyncSession, workspace_id: str, task_ids: list[UUID]
+) -> dict[UUID, float]:
+    """Spend per task id, for the tasks a page of runs created."""
+    if not task_ids:
+        return {}
+    stmt = select(TaskORM.id, _task_cost_expr().label("cost")).where(
+        and_(TaskORM.workspace_id == workspace_id, TaskORM.id.in_(task_ids))
+    )
+    rows = (await session.execute(stmt)).all()
+    return {row.id: float(row.cost or 0) for row in rows}
+
+
+async def _trigger_spend(
+    session: AsyncSession, workspace_id: str, trigger_id: UUID, hours: int | None
+) -> tuple[float, int]:
+    """Total spend of one trigger and how many of its runs produced a task.
+
+    The cost of a run is not on the run: the execution row is written the
+    moment the task is handed off, while the bill accrues over the task's life.
+    So spend is always a join away, never a stored column.
+    """
+    conditions = [
+        TriggerExecutionORM.trigger_id == trigger_id,
+        TriggerExecutionORM.workspace_id == workspace_id,
+        TaskORM.workspace_id == workspace_id,
+    ]
+    if hours is not None:
+        conditions.append(
+            TriggerExecutionORM.executed_at >= datetime.utcnow() - timedelta(hours=hours)
         )
+
+    stmt = (
+        select(
+            func.coalesce(func.sum(_task_cost_expr()), 0).label("total"),
+            func.count(TaskORM.id).label("costed"),
+        )
+        .select_from(TriggerExecutionORM)
+        .join(TaskORM, TaskORM.id == TriggerExecutionORM.task_id)
+        .where(and_(*conditions))
+    )
+    row = (await session.execute(stmt)).one()
+    return float(row.total or 0), int(row.costed or 0)
 
 
 async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) -> bool:
@@ -315,8 +384,16 @@ async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) 
 async def get_catalog(
     user_context: UserContext = Depends(get_user_context),
 ) -> list[dict[str, Any]]:
-    """Get the trigger catalog — available trigger types with metadata and events."""
-    return get_trigger_catalog()
+    """Get the trigger catalog — available trigger types with metadata and events.
+
+    ``icon`` is stored as data (an asset id or a full URL); it is resolved here
+    into ``icon_url`` so the frontend renders whatever it is handed and never
+    carries a table of which channels exist.
+    """
+    return [
+        {**entry, "icon_url": build_icon_url(CHANNEL_ICON_NAMESPACE, entry.get("icon"))}
+        for entry in get_trigger_catalog()
+    ]
 
 
 @router.get("/channels/events")
@@ -350,9 +427,65 @@ def _channel_secret_name(trigger: Any, trigger_id: Any) -> str | None:
     return f"channel_cred:{name}:{trigger_id}" if name else None
 
 
+async def _resolve_channel_credentials(
+    credentials: dict[str, Any] | None,
+    secret_catalog: SecretCatalogService,
+    secret_manager: BaseSecretManager,
+) -> dict[str, Any] | None:
+    """Resolve workspace secret selections before persisting any trigger changes."""
+    if not credentials:
+        return credentials
+
+    resolved = {}
+    for field, credential in credentials.items():
+        if not isinstance(credential, dict):
+            # Existing clients provide credential values directly.
+            resolved[field] = credential
+            continue
+
+        if set(credential) != {"secret_id"} or not isinstance(credential["secret_id"], str):
+            raise HTTPException(
+                status_code=422, detail="Invalid channel credential secret reference."
+            )
+        try:
+            secret_id = UUID(credential["secret_id"])
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail="Invalid channel credential secret reference."
+            ) from exc
+
+        try:
+            secret = await secret_catalog.get(secret_id)
+        except SecretNotFoundError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="Selected channel credential secret is not available in this workspace.",
+            ) from exc
+        if secret.owner_type is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Selected channel credential must be a user-owned workspace secret.",
+            )
+        try:
+            value = await secret_manager.get_secret(secret.secret_name)
+        except Exception:
+            # Provider exceptions may include sensitive material; never forward or log them.
+            raise HTTPException(
+                status_code=422, detail="Selected channel credential secret could not be read."
+            ) from None
+        if not value:
+            raise HTTPException(
+                status_code=422, detail="Selected channel credential secret has no value."
+            )
+        resolved[field] = value
+
+    return resolved
+
+
 @router.post("/", response_model=TriggerResponse, status_code=201)
 async def create_trigger(
     secret_manager: BaseSecretManagerDep,
+    secret_catalog: SecretCatalogServiceDep,
     payload: TriggerCreate = Body(...),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
@@ -371,6 +504,7 @@ async def create_trigger(
         user_context: Authentication context.
         trigger_service: Injected trigger service.
         secret_manager: Injected secret manager for credential storage.
+        secret_catalog: Workspace-scoped catalog for selected credential references.
         webhook_service: Injected service that registers the channel webhook.
 
     Returns:
@@ -379,11 +513,13 @@ async def create_trigger(
     Raises:
         HTTPException: If validation fails or creation errors occur.
     """
-    _check_triggers_availability()
-
     try:
         if not user_context.user_id:
             raise HTTPException(status_code=400, detail="User ID is required to create a trigger")
+
+        credentials = await _resolve_channel_credentials(
+            payload.channel_credentials, secret_catalog, secret_manager
+        )
 
         # Convert DTO -> domain create. Done up-front so we can fold polling
         # channel credentials into ``data_extractor_config`` before persisting.
@@ -394,10 +530,18 @@ async def create_trigger(
 
         # For polling extractors, merge credentials into extractor config
         # so the Go polling service can read them (e.g. bot_token for Telegram).
-        if trigger_data.data_extractor and payload.channel_credentials:
+        # Extractors that read the secret store themselves are excluded: that
+        # column is plain JSON, and a mailbox password does not belong in it.
+        from agentarea_triggers.extractors import resolves_own_credentials
+
+        if (
+            trigger_data.data_extractor
+            and credentials
+            and not resolves_own_credentials(trigger_data.data_extractor)
+        ):
             trigger_data.data_extractor_config = {
                 **(trigger_data.data_extractor_config or {}),
-                **payload.channel_credentials,
+                **credentials,
             }
 
         # Create trigger
@@ -405,13 +549,13 @@ async def create_trigger(
 
         # Also store credentials encrypted in secret store for Python outbound delivery
         has_creds = False
-        if payload.channel_credentials and secret_manager:
+        if credentials and secret_manager:
             # Channel type for secret key: use webhook_type or derive from data_extractor.
             # Extractor names like "telegram_polling" map to channel type via suffix stripping.
             extractor = payload.data_extractor or ""
             channel_type = payload.webhook_type or extractor.removesuffix("_polling") or "generic"
             secret_name = f"channel_cred:{channel_type}:{trigger.id}"
-            await secret_manager.set_secret(secret_name, json.dumps(payload.channel_credentials))
+            await secret_manager.set_secret(secret_name, json.dumps(credentials))
             has_creds = True
             logger.info(f"Stored channel credentials for trigger {trigger.id}")
 
@@ -419,13 +563,15 @@ async def create_trigger(
             await webhook_service.register(
                 channel_type=getattr(trigger, "webhook_type", None),
                 webhook_id=getattr(trigger, "webhook_id", None),
-                credentials=payload.channel_credentials,
+                credentials=credentials,
             )
 
         logger.info(f"Created trigger {trigger.id} for agent {trigger.agent_id}")
 
         return TriggerResponse.from_domain_model(trigger, has_channel_credentials=has_creds)
 
+    except HTTPException:
+        raise
     except TriggerValidationError as e:
         logger.warning(f"Trigger validation failed: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -465,25 +611,18 @@ async def list_triggers(
     Returns:
         List of triggers matching the criteria
     """
-    _check_triggers_availability()
-
     try:
         # Convert string trigger type to domain enum if provided
         domain_trigger_type = None
         if trigger_type:
-            if not TRIGGERS_AVAILABLE:
-                domain_trigger_type = None
-            else:
-                from agentarea_triggers.domain.enums import TriggerType
+            from agentarea_triggers.domain.enums import TriggerType
 
-                if trigger_type.lower() == "cron":
-                    domain_trigger_type = TriggerType.CRON
-                elif trigger_type.lower() == "webhook":
-                    domain_trigger_type = TriggerType.WEBHOOK
-                else:
-                    raise HTTPException(
-                        status_code=400, detail=f"Invalid trigger type: {trigger_type}"
-                    )
+            if trigger_type.lower() == "cron":
+                domain_trigger_type = TriggerType.CRON
+            elif trigger_type.lower() == "webhook":
+                domain_trigger_type = TriggerType.WEBHOOK
+            else:
+                raise HTTPException(status_code=400, detail=f"Invalid trigger type: {trigger_type}")
 
         # List triggers
         triggers = await trigger_service.list_triggers(
@@ -530,15 +669,6 @@ async def triggers_health_check(
         Dictionary with detailed health status information
     """
     try:
-        if not TRIGGERS_AVAILABLE:
-            return {
-                "overall_status": "unavailable",
-                "service": "triggers",
-                "message": "Triggers service not available",
-                "timestamp": datetime.utcnow().isoformat(),
-                "components": {},
-            }
-
         # Run comprehensive health check
         health_status = await health_checker.check_all_components()
         health_status["service"] = "triggers"
@@ -577,8 +707,6 @@ async def get_trigger(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         trigger = await trigger_service.get_trigger(trigger_id)
 
@@ -599,6 +727,7 @@ async def get_trigger(
 async def update_trigger(
     trigger_id: UUID,
     secret_manager: BaseSecretManagerDep,
+    secret_catalog: SecretCatalogServiceDep,
     payload: TriggerUpdate = Body(...),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
@@ -607,8 +736,8 @@ async def update_trigger(
     """Update an existing trigger.
 
     Updates the specified trigger with the provided data. Only non-null fields
-    in the request will be updated. If channel_credentials are provided,
-    they replace the existing credentials in the secret store.
+    in the request will be updated. Secret selections preserve unselected
+    credential fields; legacy raw credentials replace the stored bundle.
 
     Args:
         trigger_id: The unique identifier of the trigger.
@@ -616,6 +745,7 @@ async def update_trigger(
         user_context: Authentication context.
         trigger_service: Injected trigger service.
         secret_manager: Injected secret manager for credential storage.
+        secret_catalog: Workspace-scoped catalog for selected credential references.
         webhook_service: Injected service that registers the channel webhook.
 
     Returns:
@@ -624,9 +754,32 @@ async def update_trigger(
     Raises:
         HTTPException: If trigger not found or validation fails.
     """
-    _check_triggers_availability()
-
     try:
+        credentials = await _resolve_channel_credentials(
+            payload.channel_credentials, secret_catalog, secret_manager
+        )
+        if credentials and any(
+            isinstance(value, dict) for value in (payload.channel_credentials or {}).values()
+        ):
+            current_trigger = await trigger_service.get_trigger(trigger_id)
+            if current_trigger is None:
+                raise HTTPException(status_code=404, detail=f"Trigger {trigger_id} not found")
+            secret_name = _channel_secret_name(current_trigger, trigger_id)
+            if secret_name is None:
+                extractor = getattr(current_trigger, "data_extractor", None) or ""
+                channel_type = extractor.removesuffix("_polling") or "generic"
+                secret_name = f"channel_cred:{channel_type}:{trigger_id}"
+            try:
+                stored = await secret_manager.get_secret(secret_name)
+                existing_credentials = json.loads(stored) if stored is not None else {}
+                if not isinstance(existing_credentials, dict):
+                    raise ValueError("Stored channel credentials must be an object")
+            except Exception:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Existing channel credentials could not be read. No changes were saved.",
+                ) from None
+            credentials = {**existing_credentials, **credentials}
         trigger_update = payload.to_domain()
 
         # Update trigger
@@ -634,7 +787,7 @@ async def update_trigger(
 
         # Update channel credentials if provided
         has_creds = False
-        if payload.channel_credentials and secret_manager:
+        if credentials and secret_manager:
             # Determine channel type from the updated trigger
             channel_type = "generic"
             updated_trigger_any = cast(Any, updated_trigger)
@@ -647,12 +800,12 @@ async def update_trigger(
             ):
                 channel_type = str(updated_trigger_any.data_extractor).removesuffix("_polling")
             secret_name = f"channel_cred:{channel_type}:{trigger_id}"
-            await secret_manager.set_secret(secret_name, json.dumps(payload.channel_credentials))
+            await secret_manager.set_secret(secret_name, json.dumps(credentials))
             has_creds = True
             await webhook_service.register(
                 channel_type=getattr(updated_trigger, "webhook_type", None),
                 webhook_id=getattr(updated_trigger, "webhook_id", None),
-                credentials=payload.channel_credentials,
+                credentials=credentials,
             )
             logger.info(f"Updated channel credentials for trigger {trigger_id}")
         elif secret_manager:
@@ -663,6 +816,8 @@ async def update_trigger(
 
         return TriggerResponse.from_domain_model(updated_trigger, has_channel_credentials=has_creds)
 
+    except HTTPException:
+        raise
     except TriggerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except TriggerValidationError as e:
@@ -696,8 +851,6 @@ async def delete_trigger(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         # Best-effort: clear this trigger's provider-side webhook before it goes
         # away. Channel-agnostic — resolve the channel from the trigger, read its
@@ -751,8 +904,6 @@ async def enable_trigger(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         success = await trigger_service.enable_trigger(trigger_id)
 
@@ -797,8 +948,6 @@ async def disable_trigger(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         success = await trigger_service.disable_trigger(trigger_id)
 
@@ -833,6 +982,7 @@ async def get_execution_history(
     end_time: datetime | None = Query(None, description="Filter executions before this time"),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
+    db_session: AsyncSession = Depends(get_db_session),
 ) -> ExecutionHistoryResponse:
     """Get execution history for a trigger with filtering and pagination.
 
@@ -849,6 +999,7 @@ async def get_execution_history(
         end_time: Optional end time filter
         user_context: Authentication context
         trigger_service: Injected trigger service
+        db_session: Session used to resolve what each run's task cost
 
     Returns:
         Paginated execution history
@@ -856,8 +1007,6 @@ async def get_execution_history(
     Raises:
         HTTPException: If trigger not found or invalid parameters
     """
-    _check_triggers_availability()
-
     try:
         # Check if trigger exists
         trigger = await trigger_service.get_trigger(trigger_id)
@@ -867,15 +1016,12 @@ async def get_execution_history(
         # Validate status filter
         status_enum = None
         if status:
-            if not TRIGGERS_AVAILABLE:
-                status_enum = None
-            else:
-                from agentarea_triggers.domain.enums import ExecutionStatus
+            from agentarea_triggers.domain.enums import ExecutionStatus
 
-                try:
-                    status_enum = ExecutionStatus(status.upper())
-                except ValueError as e:
-                    raise HTTPException(status_code=400, detail=f"Invalid status: {status}") from e
+            try:
+                status_enum = ExecutionStatus(status.upper())
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid status: {status}") from e
 
         # Calculate offset
         offset = (page - 1) * page_size
@@ -897,6 +1043,17 @@ async def get_execution_history(
         execution_responses = [
             TriggerExecutionResponse.from_domain_model(execution) for execution in executions
         ]
+
+        # What each run cost: the spend sits on the task it created, so it is
+        # resolved here rather than stored on the execution row.
+        costs = await _costs_by_task(
+            db_session,
+            user_context.workspace_id,
+            [response.task_id for response in execution_responses if response.task_id],
+        )
+        for response in execution_responses:
+            if response.task_id is not None:
+                response.cost_usd = costs.get(response.task_id)
 
         return ExecutionHistoryResponse(
             executions=execution_responses,
@@ -935,8 +1092,6 @@ async def get_trigger_status(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         # Get trigger
         trigger = await trigger_service.get_trigger(trigger_id)
@@ -967,20 +1122,28 @@ async def get_trigger_status(
 @router.get("/{trigger_id}/metrics", response_model=ExecutionMetricsResponse)
 async def get_execution_metrics(
     trigger_id: UUID,
-    hours: int = Query(24, ge=1, le=168, description="Time period in hours (max 7 days)"),
+    hours: int | None = Query(
+        None,
+        ge=1,
+        le=8760,
+        description="Time period in hours (max 1 year). Omit for the trigger's whole history.",
+    ),
     user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
+    db_session: AsyncSession = Depends(get_db_session),
 ) -> ExecutionMetricsResponse:
     """Get execution metrics for a trigger.
 
-    Returns aggregated metrics including success rate, average execution time,
-    and failure counts for the specified time period.
+    Returns aggregated counts, success rate, execution time and spend. Spend is
+    the cost of the tasks those runs created, joined at read time — a run is
+    recorded when its task starts, the bill accrues afterwards.
 
     Args:
         trigger_id: The unique identifier of the trigger
-        hours: Time period in hours to analyze (default 24, max 168)
+        hours: Time period in hours to analyze; omitted means the whole history
         user_context: Authentication context
         trigger_service: Injected trigger service
+        db_session: Session used for the spend join
 
     Returns:
         Execution metrics for the trigger
@@ -988,8 +1151,6 @@ async def get_execution_metrics(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         # Check if trigger exists
         trigger = await trigger_service.get_trigger(trigger_id)
@@ -998,8 +1159,17 @@ async def get_execution_metrics(
 
         # Get execution metrics
         metrics = await trigger_service.get_execution_metrics(trigger_id, hours)
+        total_cost, costed = await _trigger_spend(
+            db_session, user_context.workspace_id, trigger_id, hours
+        )
 
-        return ExecutionMetricsResponse(trigger_id=trigger_id, **metrics)
+        return ExecutionMetricsResponse(
+            trigger_id=trigger_id,
+            total_cost_usd=round(total_cost, 6),
+            avg_cost_usd=round(total_cost / costed, 6) if costed else 0.0,
+            costed_executions=costed,
+            **metrics,
+        )
 
     except HTTPException:
         raise
@@ -1034,8 +1204,6 @@ async def get_execution_timeline(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         # Check if trigger exists
         trigger = await trigger_service.get_trigger(trigger_id)
@@ -1084,8 +1252,6 @@ async def get_execution_correlations(
     Raises:
         HTTPException: If trigger not found
     """
-    _check_triggers_availability()
-
     try:
         # Check if trigger exists
         trigger = await trigger_service.get_trigger(trigger_id)
@@ -1114,42 +1280,26 @@ async def get_execution_correlations(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-def _verify_internal_token(http_request: Request) -> None:
-    """Gate an internal-only endpoint with a shared secret.
-
-    The Go event service must send ``X-Internal-Token`` matching
-    ``INTERNAL_API_TOKEN``. When the token is unset the check is skipped
-    (back-compat); set it to require authentication on this endpoint.
-    """
-    import hmac
-
-    from agentarea_common.config import get_settings
-
-    expected = get_settings().app.INTERNAL_API_TOKEN
-    if not expected:
-        return
-    provided = http_request.headers.get("x-internal-token", "")
-    if not hmac.compare_digest(provided, expected):
-        raise HTTPException(status_code=401, detail="Invalid or missing internal service token")
-
-
-@public_router.post("/{trigger_id}/execute", response_model=dict[str, Any])
+@router.post("/{trigger_id}/execute", response_model=dict[str, Any])
 async def execute_trigger(
     trigger_id: UUID,
     request: TriggerExecuteRequest,
-    http_request: Request,
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> dict[str, Any]:
     """Execute a trigger with the provided event data.
 
-    Called by the Go event service when a polling channel receives new messages.
     Builds trigger data from the events and channel origin, then creates and
     submits a task for agent execution.
+
+    Authorization is the caller's session plus the workspace-scoped trigger
+    lookup: a trigger in another workspace is simply not found. This used to sit
+    on the public router behind an ``X-Internal-Token`` check that skipped
+    itself whenever the secret was unset — which was every deployment, since
+    nothing ever sent that header.
 
     Args:
         trigger_id: The unique identifier of the trigger
         request: Events and channel origin data
-        http_request: Raw request, used to verify the internal service token
         trigger_service: Injected trigger service
 
     Returns:
@@ -1158,9 +1308,6 @@ async def execute_trigger(
     Raises:
         HTTPException: If trigger not found or execution fails
     """
-    _verify_internal_token(http_request)
-    _check_triggers_availability()
-
     try:
         trigger_data: dict[str, Any] = {
             "events": request.events,
@@ -1187,3 +1334,52 @@ async def execute_trigger(
     except Exception as e:
         logger.error(f"Failed to execute trigger {trigger_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post("/{trigger_id}/run", response_model=TriggerRunResponse)
+async def run_trigger_now(
+    trigger_id: UUID,
+    trigger_service: TriggerService = Depends(get_trigger_service),
+    user_context: UserContext = Depends(get_user_context),
+) -> TriggerRunResponse:
+    """Fire a trigger once, now, because a person asked for it.
+
+    Distinct from ``/execute``, which replays a real event: this carries no event
+    data and records the caller in ``fired_by``, so the run is visibly a manual
+    one and the task it creates belongs to the caller rather than to whoever
+    created the trigger.
+
+    The run is otherwise faithful to a real one -- the trigger's conditions are
+    still evaluated, and a run they reject comes back ``skipped`` with the reason
+    rather than being forced through. A trigger that is switched off still runs:
+    ``is_active`` governs the schedule, not a person asking for one run.
+
+    Returns:
+        The execution, and the task id to watch when one was created.
+    """
+    if not user_context.user_id:
+        raise HTTPException(status_code=401, detail="Authenticated user required")
+
+    try:
+        execution = await trigger_service.execute_trigger(
+            trigger_id, {"events": [], "channel_origin": {}}, fired_by=user_context.user_id
+        )
+    except TriggerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        logger.error(f"Failed to run trigger {trigger_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+    # No execution record at all means the run never happened and nothing said
+    # why. Reporting that as success would put a "started" toast over nothing.
+    if execution is None:
+        raise HTTPException(status_code=500, detail="Trigger run produced no execution")
+
+    task_id = getattr(execution, "task_id", None)
+    return TriggerRunResponse(
+        status="started" if task_id else "skipped",
+        trigger_id=trigger_id,
+        execution_id=execution.id,
+        task_id=task_id,
+        reason=getattr(execution, "error_message", None),
+    )

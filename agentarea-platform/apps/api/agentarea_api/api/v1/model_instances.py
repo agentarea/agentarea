@@ -11,6 +11,7 @@ from agentarea_common.auth.permission import require_permission
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance
+from agentarea_llm.domain.provider_profiles import profile_for
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -269,7 +270,10 @@ async def validate_model_instance(
             secret_manager = provider_service.secret_manager
             api_key = await secret_manager.get_secret(api_key_secret_name)
 
-        if not api_key and provider_type not in ["ollama_chat"]:  # Ollama doesn't need API key
+        # What a provider needs is provider data, not a branch per vendor.
+        profile = profile_for(provider_type)
+
+        if not api_key and profile.requires_api_key:
             return ModelInstanceTestResponse(
                 success=False,
                 message="No API key found for this provider configuration",
@@ -278,10 +282,13 @@ async def validate_model_instance(
                 model_name=model_name,
             )
 
-        if provider_type == "ollama_chat" and not endpoint_url:
+        if profile.requires_endpoint_url and not endpoint_url:
             return ModelInstanceTestResponse(
                 success=False,
-                message="An Ollama endpoint URL is required. Configure the endpoint explicitly.",
+                message=(
+                    f"{provider_type} is self-hosted and has no public API address; "
+                    "configure the endpoint URL explicitly."
+                ),
                 error_type="MissingEndpoint",
                 provider_type=provider_type,
                 model_name=model_name,

@@ -1,9 +1,19 @@
 """Tests for OpenAPIConnection domain model."""
 
 from agentarea_openapi.domain.models import OpenAPIConnection
+from sqlalchemy import UniqueConstraint
 
 
 class TestOpenAPIConnectionModel:
+    def test_catalog_item_can_have_multiple_workspace_connections(self):
+        unique_column_sets = {
+            tuple(column.name for column in constraint.columns)
+            for constraint in OpenAPIConnection.__table__.constraints
+            if isinstance(constraint, UniqueConstraint)
+        }
+
+        assert ("workspace_id", "registry_item_id") not in unique_column_sets
+
     def test_create_with_spec_url(self):
         conn = OpenAPIConnection(
             name="Stripe API",

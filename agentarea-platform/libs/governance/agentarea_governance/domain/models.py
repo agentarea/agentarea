@@ -16,7 +16,10 @@ from .enums import InterceptorAction, Phase
 class InterceptorContext:
     """Everything an interceptor needs to make a decision."""
 
-    agent_id: UUID
+    # Optional: not every governed action has a calling agent (a task-level LLM
+    # call may have none). It stays None rather than becoming a zero UUID, which
+    # policy matching cannot tell apart from a real agent.
+    agent_id: UUID | None
     workspace_id: str
     user_id: str
     phase: Phase

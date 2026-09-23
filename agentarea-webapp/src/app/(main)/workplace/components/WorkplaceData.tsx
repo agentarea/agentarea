@@ -54,14 +54,13 @@ export async function WorkplaceData() {
     );
   }
 
-  type AgentWithDisplay = AgentResponse & { icon?: string | null; color_token?: string | null };
+  type AgentWithDisplay = AgentResponse & { icon?: string | null };
   const agents =
     (agentsData as AgentWithDisplay[] | undefined)?.map((agent) => ({
       id: String(agent.id),
       name: agent.name,
       description: agent.description,
       icon: agent.icon ?? null,
-      color_token: agent.color_token ?? null,
     })) || [];
 
   const projects =

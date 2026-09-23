@@ -104,6 +104,7 @@ type ErrorResponse struct {
 // MCPServerInstance represents an MCP server instance from events
 type MCPServerInstance struct {
 	InstanceID   string                 `json:"instance_id"`
+	WorkspaceID  string                 `json:"workspace_id,omitempty"`
 	Name         string                 `json:"name"`
 	Description  string                 `json:"description,omitempty"`
 	ServerSpecID string                 `json:"server_spec_id,omitempty"`

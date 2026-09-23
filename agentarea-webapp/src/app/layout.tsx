@@ -5,11 +5,14 @@ import { getLocale } from "next-intl/server";
 import { Inter } from "next/font/google";
 import { cookies, headers } from "next/headers";
 import { SessionProvider } from "@ory/elements-react/client";
-import { getServerSession } from "@ory/nextjs/app";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import ConditionalLayout from "@/components/ConditionalLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+// @ory/nextjs is vendored under src/lib/ory rather than installed, so the
+// session helper comes from there. main still imported the package path; the
+// billing-URL fix below is main's and is kept.
+import { getServerSession } from "@/lib/ory";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 
 const sharedMetadata: Omit<Metadata, "metadataBase"> = {
@@ -91,6 +94,14 @@ function getRuntimeConfig() {
   return {
     CLIENT_ORY_SDK_URL: process.env.ORY_BROWSER_URL || process.env.ORY_SDK_URL || "",
     CLIENT_API_URL: process.env.API_BROWSER_URL || process.env.API_URL || "http://localhost:8000",
+    // Where this deployment's billing PAGE lives, if it has one. Empty on the open
+    // build, which has nothing to bill for and therefore no page and no link.
+    //
+    // Not BILLING_URL: that name is already the address of the billing SERVICE the
+    // backend calls. Both were set on this deployment and the service address won, so
+    // the link in the sidebar would have pointed at an internal cluster URL that no
+    // browser can reach.
+    CLIENT_BILLING_URL: process.env.BILLING_PAGE_URL || "",
   };
 }
 

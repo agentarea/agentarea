@@ -98,6 +98,11 @@ searches. Every title starts with a verb.
 | `guides/governance/model-a-custom-relation` | G |
 
 ### Triggers and channels
+
+The concept page is `concepts/integration/triggers`. Write it before any of
+these — a guide that tells a reader to set `webhook_type` without explaining
+that verification is opt-in teaches them to ship an open endpoint.
+
 | Page | Genre |
 |---|---|
 | `guides/triggers/schedule-an-agent` | G |
@@ -162,6 +167,7 @@ second. A reader who does not know what ReBAC is cannot evaluate your ReBAC.
 | Page | Genre |
 |---|---|
 | `concepts/integration/mcp` — what MCP is and how AgentArea hosts it | C |
+| `concepts/integration/triggers` — how a task starts with no one present | C |
 | `concepts/integration/registry-and-catalog` | C |
 | `concepts/integration/bundles` | C |
 

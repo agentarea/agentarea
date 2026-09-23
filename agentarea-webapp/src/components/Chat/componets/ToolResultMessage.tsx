@@ -1,11 +1,9 @@
 import React from "react";
-import { Streamdown } from "streamdown";
-import type { Components } from "streamdown";
+import { MessageMarkdown } from "@/components/Chat/MessageMarkdown";
+import { describeToolCall } from "../utils/describeToolCall";
+import { ToolIcon } from "../utils/toolIcon";
 import BaseMessage from "./BaseMessage";
 import MessageWrapper from "./MessageWrapper";
-import { ToolIcon } from "../utils/toolIcon";
-import { fileAwareMarkdownComponents, preprocessFileLinks } from "../utils/markdownComponents";
-import { describeToolCall } from "../utils/describeToolCall";
 
 interface ToolResultData {
   tool_name: string;
@@ -22,15 +20,7 @@ const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
 
   const formatResult = (result: unknown) => {
     if (typeof result === "string") {
-      return (
-        <Streamdown
-          className="prose prose-sm dark:prose-invert max-w-none"
-          components={fileAwareMarkdownComponents as Components}
-          linkSafety={{ enabled: false }}
-        >
-          {preprocessFileLinks(result)}
-        </Streamdown>
-      );
+      return <MessageMarkdown content={result} />;
     }
     return JSON.stringify(result, null, 2);
   };
@@ -40,7 +30,9 @@ const ToolResultMessage: React.FC<{ data: ToolResultData }> = ({ data }) => {
       type="tool-result"
       id={data.tool_call_id ? `tc-${data.tool_call_id}` : undefined}
       iconUrl={data.server_icon}
-      icon={<ToolIcon name={data.tool_name} className="text-muted-foreground" />}
+      icon={
+        <ToolIcon name={data.tool_name} className="text-muted-foreground" />
+      }
     >
       <BaseMessage
         headerLeft={

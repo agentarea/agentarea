@@ -1,7 +1,7 @@
 ---
 title: Start a task
 type: guide
-summary: Launch an agent run over REST, the CLI, or A2A, and choose the entry point that matches how you need the result delivered.
+description: "Launch an agent run over REST, the CLI, or A2A, and choose the entry point that matches how you need the result delivered."
 prerequisites:
   - /concepts/execution/tasks
 related:
@@ -11,8 +11,6 @@ related:
   - /concepts/execution/durable-execution
 last_updated: 2026-07-29
 ---
-
-# Start a task
 
 Do this when you want an agent to run once against a prompt you supply. Do not
 do this to send a follow-up message into a run that is already going — that is a
@@ -24,11 +22,13 @@ differ only in how the response reaches you.
 
 ## Prerequisites
 
+<Info>
 - An agent that exists and has a model configured. An agent with no `model_id`
   is rejected at creation with 422, not at run time.
 - An API key. Create one with `POST /v1/api-keys/` and read `token` from the
   201 response — it is returned once and never again.
 - The agent's id. `GET /v1/agents/` lists them.
+</Info>
 
 ## Choose an entry point
 
@@ -45,109 +45,111 @@ workflow is dispatched, with `status` set to `running`.
 
 ## Steps
 
-### Option A — REST, streaming
+<Steps titleSize="h3">
+  <Step title="Option A — REST, streaming">
+    The response is Server-Sent Events. Do not pipe it to `jq`.
 
-The response is Server-Sent Events. Do not pipe it to `jq`.
+    ```bash
+    curl -N -X POST \
+      "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"description": "Summarise the latest release notes and list breaking changes."}'
+    ```
 
-```bash
-curl -N -X POST \
-  "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"description": "Summarise the latest release notes and list breaking changes."}'
-```
+    The stream opens with a `connected` event, then `task_created` carrying the
+    `task_id`, then the execution events:
 
-The stream opens with a `connected` event, then `task_created` carrying the
-`task_id`, then the execution events:
+    ```text
+    event: connected
+    data: {"agent_id": "...", "agent_name": "Release Bot", "message": "Starting task creation", "timestamp": "2026-07-29T10:15:02.114820+00:00"}
 
-```
-event: connected
-data: {"agent_id": "...", "agent_name": "Release Bot", "message": "Starting task creation", "timestamp": "2026-07-29T10:15:02.114820+00:00"}
+    event: task_created
+    data: {"task_id": "3f2a...", "agent_id": "...", "description": "Summarise the latest release notes...", "status": "running", "execution_id": "task-3f2a...", "created_at": "2026-07-29T10:15:02.098431+00:00", "timestamp": "..."}
 
-event: task_created
-data: {"task_id": "3f2a...", "agent_id": "...", "description": "Summarise the latest release notes...", "status": "running", "execution_id": "task-3f2a...", "created_at": "2026-07-29T10:15:02.098431+00:00", "timestamp": "..."}
+    event: task.started
+    data: {"event_type": "task.started", "event_id": "...", "timestamp": "...", "data": {...}}
+    ```
+  </Step>
 
-event: task.started
-data: {"event_type": "task.started", "event_id": "...", "timestamp": "...", "data": {...}}
-```
+  <Step title="Option B — REST, JSON response">
+    ```bash
+    curl -X POST \
+      "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/sync" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"description": "Summarise the latest release notes and list breaking changes."}'
+    ```
 
-### Option B — REST, JSON response
-
-```bash
-curl -X POST \
-  "$AGENTAREA_URL/v1/agents/$AGENT_ID/tasks/sync" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"description": "Summarise the latest release notes and list breaking changes."}'
-```
-
-```json
-{
-  "id": "3f2a8c11-...",
-  "agent_id": "9b1d...",
-  "description": "Summarise the latest release notes and list breaking changes.",
-  "status": "running",
-  "execution_id": "task-3f2a8c11-...",
-  "parameters": {},
-  "result": null,
-  "error": null,
-  "failure_reason": null,
-  "total_cost": null,
-  "created_at": "2026-07-29T10:15:02.098431+00:00"
-}
-```
-
-Keep `id`. Every other task endpoint needs it alongside the agent id.
-
-### Option C — CLI
-
-```bash
-agentarea tasks submit "$AGENT_ID" \
-  --data '{"description": "Summarise the latest release notes and list breaking changes."}'
-```
-
-Use `agentarea tasks submit-sync` for the JSON form. Loose flags are folded into
-the request body, so `--description "..."` works in place of `--data`.
-
-### Option D — A2A JSON-RPC
-
-The endpoint is `POST /v1/agents/{agent_id}/a2a/rpc`. Method names are
-PascalCase — `SendMessage`, not `message/send`. A slash-style method returns
-"method not found".
-
-```bash
-curl -X POST \
-  "$AGENTAREA_URL/v1/agents/$AGENT_ID/a2a/rpc" \
-  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": "1",
-    "method": "SendMessage",
-    "params": {
-      "message": {
-        "role": "USER",
-        "parts": [{"text": "Summarise the latest release notes."}]
-      }
+    ```json
+    {
+      "id": "3f2a8c11-...",
+      "agent_id": "9b1d...",
+      "description": "Summarise the latest release notes and list breaking changes.",
+      "status": "running",
+      "execution_id": "task-3f2a8c11-...",
+      "parameters": {},
+      "result": null,
+      "error": null,
+      "failure_reason": null,
+      "total_cost": null,
+      "created_at": "2026-07-29T10:15:02.098431+00:00"
     }
-  }'
-```
+    ```
 
-`SendMessage` returns as soon as the task is submitted. Use
-`SendStreamingMessage` for a live SSE stream, or `GetTask` to poll.
+    Keep `id`. Every other task endpoint needs it alongside the agent id.
+  </Step>
 
-### Optional request fields
+  <Step title="Option C — CLI">
+    ```bash
+    agentarea tasks submit "$AGENT_ID" \
+      --data '{"description": "Summarise the latest release notes and list breaking changes."}'
+    ```
 
-`TaskCreate` accepts more than `description`:
+    Use `agentarea tasks submit-sync` for the JSON form. Loose flags are folded into
+    the request body, so `--description "..."` works in place of `--data`.
+  </Step>
 
-| Field | Use it to |
-|---|---|
-| `parameters` | Pass free-form caller or agent-specific input. The legacy `max_iterations` key remains accepted for compatibility, but is converted into persisted governance rather than used as a runtime default. |
-| `execution.max_model_turns` | Request a typed model-turn ceiling. Governance may tighten it, never widen it. |
-| `requires_human_approval` | Gate the run on an approval before tool calls proceed. |
-| `task_policy` | Tighten governance for this run only. It may only narrow the workspace and agent policy, never widen it. |
-| `project_id` | Stage a project's files into the task workspace as inputs. |
-| `attachments` | Staging refs from an upload. See [Attach files to a task](/guides/tasks/attach-files). |
+  <Step title="Option D — A2A JSON-RPC">
+    The endpoint is `POST /v1/agents/{agent_id}/a2a/rpc`. Method names are
+    PascalCase — `SendMessage`, not `message/send`. A slash-style method returns
+    "method not found".
+
+    ```bash
+    curl -X POST \
+      "$AGENTAREA_URL/v1/agents/$AGENT_ID/a2a/rpc" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "jsonrpc": "2.0",
+        "id": "1",
+        "method": "SendMessage",
+        "params": {
+          "message": {
+            "role": "USER",
+            "parts": [{"text": "Summarise the latest release notes."}]
+          }
+        }
+      }'
+    ```
+
+    `SendMessage` returns as soon as the task is submitted. Use
+    `SendStreamingMessage` for a live SSE stream, or `GetTask` to poll.
+  </Step>
+
+  <Step title="Optional request fields">
+    `TaskCreate` accepts more than `description`:
+
+    | Field | Use it to |
+    |---|---|
+    | `parameters` | Pass free-form caller or agent-specific input. The legacy `max_iterations` key remains accepted for compatibility, but is converted into persisted governance rather than used as a runtime default. |
+    | `execution.max_model_turns` | Request a typed model-turn ceiling. Governance may tighten it, never widen it. |
+    | `requires_human_approval` | Gate the run on an approval before tool calls proceed. |
+    | `task_policy` | Tighten governance for this run only. It may only narrow the workspace and agent policy, never widen it. |
+    | `project_id` | Stage a project's files into the task workspace as inputs. |
+    | `attachments` | Staging refs from an upload. See [Attach files to a task](/guides/tasks/attach-files). |
+  </Step>
+</Steps>
 
 ## Verify
 
@@ -172,33 +174,49 @@ never dispatched.
 
 ## Troubleshooting
 
-**The streaming endpoint returns nothing parseable.** `POST
-/v1/agents/{agent_id}/tasks/` responds with `text/event-stream`. `curl` without
-`-N` buffers it and `jq` cannot parse it. Use `-N`, or switch to `/sync`.
-
-**422 with "does not have a model configured".** The agent was installed from
-the catalog without a matching model instance in this workspace, so `model_id`
-was left unset. Assign a model to the agent, or pass
-`parameters.model_override` on the run.
-
-**422 from the policy layer.** A `task_policy` that widens any limit set at the
-workspace or agent scope is rejected — task policy may only tighten. Compare
-against `POST /v1/governance/effective-policy/preview` before retrying.
-
-**The task exists but nothing happens and `execution_id` is null.** The workflow
-dispatch failed, usually because no Temporal worker is running on the
-`agent-tasks` queue. The task row is written before dispatch, so a creation
-success does not prove a worker exists. Check the worker, then start a new task
-— a task that never dispatched cannot be resumed.
-
-**A creation call returns a task you did not expect.** If `parameters` carries
-`channel_origin.chat_id` matching a workflow already running for the same agent,
-the message is delivered into that workflow as a follow-up and the existing task
-comes back with `status: "routed"`. No new task is created.
+<AccordionGroup>
+  <Accordion title="The streaming endpoint returns nothing parseable">
+    `POST /v1/agents/{agent_id}/tasks/` responds with `text/event-stream` .
+    `curl` without `-N` buffers it and `jq` cannot parse it. Use `-N` , or
+    switch to `/sync` .
+  </Accordion>
+  <Accordion title='422 with "does not have a model configured"'>
+    The agent was installed from the catalog without a matching model instance
+    in this workspace, so `model_id` was left unset. Assign a model to the
+    agent, or pass `parameters.model_override` on the run.
+  </Accordion>
+  <Accordion title="422 from the policy layer">
+    A `task_policy` that widens any limit set at the workspace or agent scope is
+    rejected — task policy may only tighten. Compare against
+    `POST /v1/governance/effective-policy/preview` before retrying.
+  </Accordion>
+  <Accordion title="The task exists but nothing happens and `execution_id` is null">
+    The workflow dispatch failed, usually because no Temporal worker is running
+    on the `agent-tasks` queue. The task row is written before dispatch, so a
+    creation success does not prove a worker exists. Check the worker, then
+    start a new task — a task that never dispatched cannot be resumed.
+  </Accordion>
+  <Accordion title="A creation call returns a task you did not expect">
+    If `parameters` carries `channel_origin.chat_id` matching a workflow already
+    running for the same agent, the message is delivered into that workflow as a
+    follow-up and the existing task comes back with `status: "routed"` . No new
+    task is created.
+  </Accordion>
+</AccordionGroup>
 
 ## Related
 
-- [Stream task events](/guides/tasks/stream-events)
-- [Attach files to a task](/guides/tasks/attach-files)
-- [Debug a failed task](/guides/tasks/debug-a-failed-task)
-- [Tasks](/concepts/execution/tasks)
+<Columns cols={2}>
+  <Card title="Stream task events" icon="list-check" href="/guides/tasks/stream-events">
+    Consume a task's live event feed over SSE
+  </Card>
+  <Card title="Attach files to a task" icon="list-check" href="/guides/tasks/attach-files">
+    Upload a file with a checksum-bound presigned PUT
+  </Card>
+  <Card title="Debug a failed task" icon="list-check" href="/guides/tasks/debug-a-failed-task">
+    Read the failure code, narrow it with the task rollup
+  </Card>
+  <Card title="Tasks" icon="diagram-project" href="/concepts/execution/tasks">
+    A task is one persisted request to one agent
+  </Card>
+</Columns>

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import select, update
+from sqlalchemy import column, select, table, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_mcp.domain.auth_models import (
@@ -35,6 +35,23 @@ class MCPAuthConfigRepository(WorkspaceScopedRepository[MCPAuthConfig]):
             select(MCPServerInstance.id).where(
                 MCPServerInstance.auth_config_id == config_id,
                 MCPServerInstance.workspace_id == self.user_context.workspace_id,
+            )
+        )
+        return [str(row[0]) for row in result.fetchall()]
+
+    async def get_linked_openapi_connection_ids(self, config_id: UUID) -> list[str]:
+        """Return workspace OpenAPI connections that still use this auth config."""
+        openapi_connections = table(
+            "openapi_connections",
+            column("id"),
+            column("auth_config_id"),
+            column("workspace_id"),
+        )
+
+        result = await self.session.execute(
+            select(openapi_connections.c.id).where(
+                openapi_connections.c.auth_config_id == config_id,
+                openapi_connections.c.workspace_id == self.user_context.workspace_id,
             )
         )
         return [str(row[0]) for row in result.fetchall()]

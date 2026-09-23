@@ -4,6 +4,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Filter, Search, X } from "lucide-react";
+import { TaskStatus } from "@/components/TaskStatus";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 
 // Define all possible task statuses
 const TASK_STATUSES = [
@@ -94,35 +96,15 @@ export function TasksFilters({
                 <SelectValue placeholder={t("filterByStatus")} />
               </div>
             </SelectTrigger>
-            <SelectContent className="rounded-xl border-gray-200 shadow-lg dark:border-gray-700">
+            <SelectContent className="rounded-xl border-gray-200 dark:border-gray-700">
               <SelectItem value="all" className="rounded-lg">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-gray-400" />
-                  <span>{t("allStatuses")}</span>
-                </div>
+                <StatusIndicator tone="neutral">
+                  {t("allStatuses")}
+                </StatusIndicator>
               </SelectItem>
               {TASK_STATUSES.map((status) => (
                 <SelectItem key={status} value={status} className="rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`h-2 w-2 rounded-full ${
-                        status === "running"
-                          ? "bg-blue-500"
-                          : status === "completed" || status === "success"
-                            ? "bg-green-500"
-                            : status === "paused"
-                              ? "bg-yellow-500"
-                              : status === "blocked"
-                                ? "bg-orange-500"
-                              : status === "failed" || status === "error"
-                                ? "bg-red-500"
-                                : "bg-gray-400"
-                      }`}
-                    />
-                    <span>
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
-                    </span>
-                  </div>
+                  <TaskStatus status={status} />
                 </SelectItem>
               ))}
             </SelectContent>

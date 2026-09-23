@@ -1,7 +1,7 @@
 ---
 title: Back up and restore
 type: guide
-summary: Identify everything AgentArea stores, back each store up, and restore in the order that produces a working system.
+description: "Identify everything AgentArea stores, back each store up, and restore in the order that produces a working system."
 prerequisites:
   - /self-host/requirements
 related:
@@ -12,8 +12,6 @@ related:
 last_updated: 2026-07-29
 ---
 
-# Back up and restore
-
 AgentArea ships no backup tooling. There is no CronJob in the chart, no
 `pg_dump` script in the repository, and no snapshot command. Backup is entirely
 your responsibility, and a default install has none.
@@ -23,137 +21,141 @@ one item whose loss cannot be recovered from — the secret encryption key.
 
 ## Prerequisites
 
+<Info>
 - Administrative access to the PostgreSQL instance
 - Credentials for the object store
 - `kubectl` access to the namespace, or shell access to the Compose host
+</Info>
 
 ## Steps
 
-### 1. Inventory what holds state
+<Steps titleSize="h3">
+  <Step title="Inventory what holds state">
+    | Store | Contents | Loss means |
+    |---|---|---|
+    | PostgreSQL `agentarea` | Agents, tasks, MCP server records, audit events, encrypted secrets | Everything the product is |
+    | PostgreSQL `temporal` | Workflow history for in-flight and completed tasks | Running tasks cannot resume |
+    | PostgreSQL `kratos` | Identities and credentials | Every user must re-register |
+    | PostgreSQL `openfga` | Authorization tuples | All access grants; the platform fails closed |
+    | PostgreSQL `keto` | Authorization tuples, when `keto.enabled=true` | As above |
+    | Object store: documents bucket | Uploaded files | User content |
+    | Object store: artifacts bucket | Task artifacts, content-addressed | Task outputs |
+    | `SECRET_MANAGER_ENCRYPTION_KEY` | The Fernet key for `encrypted_secrets` | Every stored credential, unrecoverably |
+    | Kubernetes Secrets | Database and object-store credentials, the Kratos JWKS, sandbox HMAC secrets | Recoverable by regenerating, except the encryption key |
 
-| Store | Contents | Loss means |
-|---|---|---|
-| PostgreSQL `agentarea` | Agents, tasks, MCP server records, audit events, encrypted secrets | Everything the product is |
-| PostgreSQL `temporal` | Workflow history for in-flight and completed tasks | Running tasks cannot resume |
-| PostgreSQL `kratos` | Identities and credentials | Every user must re-register |
-| PostgreSQL `openfga` | Authorization tuples | All access grants; the platform fails closed |
-| PostgreSQL `keto` | Authorization tuples, when `keto.enabled=true` | As above |
-| Object store: documents bucket | Uploaded files | User content |
-| Object store: artifacts bucket | Task artifacts, content-addressed | Task outputs |
-| `SECRET_MANAGER_ENCRYPTION_KEY` | The Fernet key for `encrypted_secrets` | Every stored credential, unrecoverably |
-| Kubernetes Secrets | Database and object-store credentials, the Kratos JWKS, sandbox HMAC secrets | Recoverable by regenerating, except the encryption key |
+    Valkey holds Redis Streams for sandbox execution requests and channel inbound
+    traffic. It is working state, not a system of record. `valkey.dataStorage` is
+    disabled by default in the chart. Losing it drops in-flight stream entries; it
+    does not lose committed data.
+  </Step>
 
-Valkey holds Redis Streams for sandbox execution requests and channel inbound
-traffic. It is working state, not a system of record. `valkey.dataStorage` is
-disabled by default in the chart. Losing it drops in-flight stream entries; it
-does not lose committed data.
+  <Step title="Back up the encryption key first, and separately">
+    `SECRET_MANAGER_ENCRYPTION_KEY` decrypts the `encrypted_secrets` table. A
+    database backup without it restores ciphertext nobody can open, and there is no
+    recovery path and no re-encryption command in the platform.
 
-### 2. Back up the encryption key first, and separately
+    Store it somewhere that is not the database backup — otherwise one compromised
+    artifact yields both the ciphertext and the key.
 
-`SECRET_MANAGER_ENCRYPTION_KEY` decrypts the `encrypted_secrets` table. A
-database backup without it restores ciphertext nobody can open, and there is no
-recovery path and no re-encryption command in the platform.
+    ```bash
+    kubectl get secret -n agentarea agentarea-app-secrets \
+      -o jsonpath='{.data.encryption-key}' | base64 -d
+    ```
 
-Store it somewhere that is not the database backup — otherwise one compromised
-artifact yields both the ciphertext and the key.
+    Capture the other generated values at the same time, from
+    `agentarea-app-secrets` (`auth-secret`, `api-auth-header-value`,
+    `sandbox-activation-secret`), `<release>-agentarea-sandbox-cleanup-auth`
+    (`token`), and `<release>-kratos-jwks` (`jwks_b64`).
 
-```bash
-kubectl get secret -n agentarea agentarea-app-secrets \
-  -o jsonpath='{.data.encryption-key}' | base64 -d
-```
+    Losing the Kratos JWKS invalidates every issued session token — recoverable, but
+    every user is logged out. Losing the sandbox HMAC secrets is harmless as long as
+    you regenerate both sides together.
+  </Step>
 
-Capture the other generated values at the same time, from
-`agentarea-app-secrets` (`auth-secret`, `api-auth-header-value`,
-`sandbox-activation-secret`), `<release>-agentarea-sandbox-cleanup-auth`
-(`token`), and `<release>-kratos-jwks` (`jwks_b64`).
+  <Step title="Back up PostgreSQL">
+    Back up all databases on the instance, not just `agentarea`. A restore that
+    brings back the platform database while leaving `openfga` behind produces a
+    system where every authorization check fails closed.
 
-Losing the Kratos JWKS invalidates every issued session token — recoverable, but
-every user is logged out. Losing the sandbox HMAC secrets is harmless as long as
-you regenerate both sides together.
+    ```bash
+    pg_dumpall -h "$POSTGRES_HOST" -U "$POSTGRES_USER" \
+      | gzip > agentarea-$(date +%Y%m%d_%H%M%S).sql.gz
+    ```
 
-### 3. Back up PostgreSQL
+    Or per-database, if you prefer restoring them independently:
 
-Back up all databases on the instance, not just `agentarea`. A restore that
-brings back the platform database while leaving `openfga` behind produces a
-system where every authorization check fails closed.
+    ```bash
+    for db in agentarea temporal kratos openfga; do
+      pg_dump -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -Fc "$db" \
+        > "${db}-$(date +%Y%m%d).dump"
+    done
+    ```
 
-```bash
-pg_dumpall -h "$POSTGRES_HOST" -U "$POSTGRES_USER" \
-  | gzip > agentarea-$(date +%Y%m%d_%H%M%S).sql.gz
-```
+    On a managed instance, use the provider's automated backups and
+    point-in-time recovery instead. That is the main practical argument for setting
+    `postgresql.enabled=false` — the bundled StatefulSet has no replication, no
+    backup, and no PITR, which is why the chart's own values file marks it as not
+    for production.
 
-Or per-database, if you prefer restoring them independently:
+    Under Compose the database is a bind mount at `./data/postgres`. A filesystem
+    copy of a running PostgreSQL data directory is not a valid backup; stop the
+    container first, or use `pg_dump` against the running instance.
+  </Step>
 
-```bash
-for db in agentarea temporal kratos openfga; do
-  pg_dump -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -Fc "$db" \
-    > "${db}-$(date +%Y%m%d).dump"
-done
-```
+  <Step title="Back up the object store">
+    The artifacts bucket is content-addressed, so objects are immutable once
+    written — an incremental sync is sufficient and never needs to re-transfer.
 
-On a managed instance, use the provider's automated backups and
-point-in-time recovery instead. That is the main practical argument for setting
-`postgresql.enabled=false` — the bundled StatefulSet has no replication, no
-backup, and no PITR, which is why the chart's own values file marks it as not
-for production.
+    ```bash
+    rclone sync rustfs:agentarea-documents s3-backup:agentarea-documents
+    rclone sync rustfs:artifacts           s3-backup:artifacts
+    ```
 
-Under Compose the database is a bind mount at `./data/postgres`. A filesystem
-copy of a running PostgreSQL data directory is not a valid backup; stop the
-container first, or use `pg_dump` against the running instance.
+    Bucket names come from `global.storage.bucket` and, under Compose, from
+    `DOCUMENTS_BUCKET` and `ARTIFACTS_BUCKET` in `.env`. The Compose stack already
+    uses `rclone` for bucket creation, so the image and configuration pattern are
+    present in `docker-compose.yaml` to copy from.
 
-### 4. Back up the object store
+    Artifacts are referenced by checksum from rows in the `agentarea` database. Back
+    up the database and the artifacts bucket close together in time, or a restore
+    yields task records pointing at objects that are not there.
+  </Step>
 
-The artifacts bucket is content-addressed, so objects are immutable once
-written — an incremental sync is sufficient and never needs to re-transfer.
+  <Step title="Restore">
+    Order matters.
 
-```bash
-rclone sync rustfs:agentarea-documents s3-backup:agentarea-documents
-rclone sync rustfs:artifacts           s3-backup:artifacts
-```
+    1. **Provision infrastructure.** Empty PostgreSQL and object store, reachable at the same names.
+    2. **Restore the Secrets first**, with the original encryption key. Create them before installing so the chart's `lookup` finds them and does not generate replacements.
+       ```bash
+       kubectl create secret generic agentarea-app-secrets -n agentarea \
+         --from-literal=encryption-key='<original key>' \
+         --from-literal=auth-secret='<original>' \
+         --from-literal=api-auth-header-value='<original>' \
+         --from-literal=sandbox-activation-secret='<original>'
+       ```
+    3. **Restore PostgreSQL**, all databases.
+       ```bash
+       gunzip -c agentarea-20260729_020000.sql.gz | psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER"
+       ```
+    4. **Restore the object store.**
+       ```bash
+       rclone sync s3-backup:agentarea-documents rustfs:agentarea-documents
+       rclone sync s3-backup:artifacts           rustfs:artifacts
+       ```
+    5. **Install or start the platform.** The migration step runs `agentarea-api migrate`, which finds an existing revision and applies only what is outstanding — correct behaviour when restoring a backup taken from an older version. See [database and migrations](/self-host/database-and-migrations).
+    6. **Restore Kratos**, if it was not part of the dump. Identities live in the `kratos` database.
 
-Bucket names come from `global.storage.bucket` and, under Compose, from
-`DOCUMENTS_BUCKET` and `ARTIFACTS_BUCKET` in `.env`. The Compose stack already
-uses `rclone` for bucket creation, so the image and configuration pattern are
-present in `docker-compose.yaml` to copy from.
+    Restoring the database before the Secrets is the mistake that costs you the
+    data: the chart generates a fresh encryption key on install, and the restored
+    ciphertext then cannot be read with it.
+  </Step>
 
-Artifacts are referenced by checksum from rows in the `agentarea` database. Back
-up the database and the artifacts bucket close together in time, or a restore
-yields task records pointing at objects that are not there.
-
-### 5. Restore
-
-Order matters.
-
-1. **Provision infrastructure.** Empty PostgreSQL and object store, reachable at the same names.
-2. **Restore the Secrets first**, with the original encryption key. Create them before installing so the chart's `lookup` finds them and does not generate replacements.
-   ```bash
-   kubectl create secret generic agentarea-app-secrets -n agentarea \
-     --from-literal=encryption-key='<original key>' \
-     --from-literal=auth-secret='<original>' \
-     --from-literal=api-auth-header-value='<original>' \
-     --from-literal=sandbox-activation-secret='<original>'
-   ```
-3. **Restore PostgreSQL**, all databases.
-   ```bash
-   gunzip -c agentarea-20260729_020000.sql.gz | psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER"
-   ```
-4. **Restore the object store.**
-   ```bash
-   rclone sync s3-backup:agentarea-documents rustfs:agentarea-documents
-   rclone sync s3-backup:artifacts           rustfs:artifacts
-   ```
-5. **Install or start the platform.** The migration step runs `agentarea-api migrate`, which finds an existing revision and applies only what is outstanding — correct behaviour when restoring a backup taken from an older version. See [database and migrations](/self-host/database-and-migrations).
-6. **Restore Kratos**, if it was not part of the dump. Identities live in the `kratos` database.
-
-Restoring the database before the Secrets is the mistake that costs you the
-data: the chart generates a fresh encryption key on install, and the restored
-ciphertext then cannot be read with it.
-
-### 6. Understand what a restore does not bring back
-
-- **In-flight tasks.** Temporal workflow history restores, but the worker reconnects to a cluster whose view of time has jumped. Treat tasks that were running at backup time as lost and re-run them.
-- **Sandbox state.** Sandboxes are ephemeral; nothing about a live sandbox survives.
-- **Valkey stream entries** not yet consumed at backup time.
+  <Step title="Understand what a restore does not bring back">
+    - **In-flight tasks.** Temporal workflow history restores, but the worker reconnects to a cluster whose view of time has jumped. Treat tasks that were running at backup time as lost and re-run them.
+    - **Sandbox state.** Sandboxes are ephemeral; nothing about a live sandbox survives.
+    - **Valkey stream entries** not yet consumed at backup time.
+  </Step>
+</Steps>
 
 ## Verify
 
@@ -199,34 +201,50 @@ presigned URL path together.
 
 ## Troubleshooting
 
-**Everything restores, and every stored credential fails with `InvalidToken`.**
-The encryption key does not match the ciphertext. Restore the original key.
-There is no way to recover the plaintext without it; the secrets have to be
-re-entered by hand.
-
-**The API starts but every authorization check denies.** The `openfga` database
-was not restored, or OpenFGA bootstrapped a new store. The authorization reader
-fails closed, which presents as a working platform where nothing is permitted.
-
-**Users cannot log in after a restore.** The `kratos` database or the JWKS
-secret is missing. A regenerated JWKS invalidates all existing sessions; users
-must sign in again.
-
-**`helm install` against a restored database generates new credentials that do
-not match it.** The chart generates secrets only when `lookup` finds none.
-Create the Secrets before installing.
-
-**Task rows exist but artifacts 404.** The database backup is newer than the
-object-store copy. Restore the object store from a point at or after the
-database backup, and re-run affected tasks.
-
-**A filesystem copy of `./data/postgres` will not start.** A hot copy of a
-running data directory is not consistent. Use `pg_dump`, or stop the container
-before copying.
+<AccordionGroup>
+  <Accordion title="Everything restores, and every stored credential fails with `InvalidToken`">
+    The encryption key does not match the ciphertext. Restore the original key.
+    There is no way to recover the plaintext without it; the secrets have to be
+    re-entered by hand.
+  </Accordion>
+  <Accordion title="The API starts but every authorization check denies">
+    The `openfga` database was not restored, or OpenFGA bootstrapped a new
+    store. The authorization reader fails closed, which presents as a working
+    platform where nothing is permitted.
+  </Accordion>
+  <Accordion title="Users cannot log in after a restore">
+    The `kratos` database or the JWKS secret is missing. A regenerated JWKS
+    invalidates all existing sessions; users must sign in again.
+  </Accordion>
+  <Accordion title="`helm install` against a restored database generates new credentials that do not match it">
+    The chart generates secrets only when `lookup` finds none. Create the
+    Secrets before installing.
+  </Accordion>
+  <Accordion title="Task rows exist but artifacts 404">
+    The database backup is newer than the object-store copy. Restore the object
+    store from a point at or after the database backup, and re-run affected
+    tasks.
+  </Accordion>
+  <Accordion title="A filesystem copy of `./data/postgres` will not start">
+    A hot copy of a running data directory is not consistent. Use `pg_dump` , or
+    stop the container before copying.
+  </Accordion>
+</AccordionGroup>
 
 ## Related
 
-- [Choose a secrets backend](/self-host/secrets-backends)
-- [Run database migrations](/self-host/database-and-migrations)
-- [Upgrade a deployment](/self-host/upgrades)
-- [Deploy on Kubernetes with Helm](/self-host/kubernetes)
+<Columns cols={2}>
+  <Card title="Choose a secrets backend" icon="server" href="/self-host/secrets-backends">
+    Configure where AgentArea stores workspace secrets
+  </Card>
+  <Card title="Run database migrations" icon="server" href="/self-host/database-and-migrations">
+    Apply, inspect, and recover Alembic migrations for the AgentArea schema, on
+    Kubernetes and on
+  </Card>
+  <Card title="Upgrade a deployment" icon="server" href="/self-host/upgrades">
+    Move an AgentArea deployment to a new version safely
+  </Card>
+  <Card title="Deploy on Kubernetes with Helm" icon="server" href="/self-host/kubernetes">
+    Install the agentarea Helm chart, decide which bundled dependencies to keep
+  </Card>
+</Columns>

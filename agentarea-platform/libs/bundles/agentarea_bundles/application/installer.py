@@ -17,7 +17,11 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from agentarea_bundles.application.analyzer import mcp_is_unsupported, required_setup_errors
+from agentarea_bundles.application.analyzer import (
+    mcp_is_unsupported,
+    policy_as_rule,
+    required_setup_errors,
+)
 from agentarea_bundles.schemas.bundle import (
     Bundle,
     BundleMcp,
@@ -386,7 +390,10 @@ class BundleInstaller:
                 agent_id=agent_id,
                 trigger_type="webhook",
                 webhook_type=channel.type,
-                task_parameters={"prompt": channel.prompt},
+                # Under "text", not "prompt": this is the standing instruction
+                # used when an inbound message carries none of its own, and
+                # "text" is the key the execution path reads.
+                task_parameters={"text": channel.prompt},
                 enabled=channel.enabled,
             )
             domain = dto.to_domain(
@@ -449,11 +456,16 @@ class BundleInstaller:
 
             dto = TriggerCreate(
                 name=trigger_name,
-                description=auto.prompt,  # becomes the agent task query on each run
+                description=f"Runs {auto.cron} ({auto.timezone})",
                 agent_id=agent_id,
                 trigger_type="cron",
                 cron_expression=auto.cron,
                 timezone=auto.timezone,
+                # The prompt is the task query, so it goes where the execution
+                # path reads it. It used to be written into description, which
+                # worked only because description stood in for a missing task
+                # text -- and that stand-in is gone.
+                task_parameters={"text": auto.prompt},
                 enabled=auto.enabled,
             )
             domain = dto.to_domain(
@@ -486,8 +498,8 @@ class BundleInstaller:
     ) -> None:
         from agentarea_governance.domain.rules import (
             PolicyEffect,
-            PolicyRule,
             PolicySubjectType,
+            assert_enforceable,
         )
 
         for policy in package.policies:
@@ -512,6 +524,26 @@ class BundleInstaller:
                 subject_id = str(agent_id)
 
             effect = PolicyEffect(policy.effect)
+            rule = policy_as_rule(policy, subject_id)
+
+            # `install` is reachable without an analyze pass (the route accepts a
+            # bundle payload directly), so this is the only guard on that path.
+            # A rule the compiler cannot read installs as a row that silently
+            # never enforces — the UI would then advertise a cap or an approval
+            # gate that does not exist. Skip it with the reason instead.
+            try:
+                assert_enforceable(rule)
+            except ValueError as exc:
+                result.entities.append(
+                    InstalledEntity(
+                        kind=EntityKind.POLICY,
+                        key=policy.key,
+                        name=policy.key,
+                        action=InstallAction.SKIPPED,
+                        detail=f"would never enforce: {exc}",
+                    )
+                )
+                continue
 
             # Idempotent by (subject, target, effect): rules have no name.
             existing = await self._governance_service.list_rules(
@@ -532,20 +564,10 @@ class BundleInstaller:
                 )
                 continue
 
-            params = dict(policy.params)
-            if policy.message:
-                params.setdefault("message", policy.message)
-            rule = PolicyRule(
-                enabled=policy.enabled,
-                priority=policy.priority,
-                subject_type=subject_type,
-                subject_id=subject_id,
-                target=policy.target,
-                effect=effect,
-                params=params,
-                condition=policy.condition,
-            )
             created = await self._governance_service.create_rule(rule=rule, subject_id=subject_id)
+            detail = f"{policy.effect} {policy.target} on {policy.subject}"
+            if policy.message:
+                detail = f"{detail} — {policy.message}"
             result.entities.append(
                 InstalledEntity(
                     kind=EntityKind.POLICY,
@@ -553,6 +575,6 @@ class BundleInstaller:
                     name=policy.key,
                     action=InstallAction.CREATED,
                     id=str(created.id) if created.id else None,
-                    detail=f"{policy.effect} {policy.target} on {policy.subject}",
+                    detail=detail,
                 )
             )

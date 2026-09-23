@@ -48,22 +48,32 @@ def _extract_context_from_input(
         return None
 
     # Extract fields from request models (LLMCallRequest, MCPToolRequest, etc.)
+    ucd = getattr(request, "user_context_data", None) or {}
+    # No fallback from user_id: a principal parsed as an agent UUID is not the
+    # agent that acted, and policy matching cannot tell the difference.
     agent_id = _extract_uuid(request, "agent_id")
-    workspace_id = _extract_str(request, "workspace_id")
-    user_id = _extract_user_id(request)
+    workspace_id = _extract_str(request, "workspace_id") or str(ucd.get("workspace_id") or "")
+    user_id = _extract_user_id(request) or str(ucd.get("user_id") or "")
     action_name = _extract_action_name(request, activity_input.fn.__name__)
     action_type = _resolve_action_type(activity_input.fn.__name__)
 
+    # The gates decide against this principal. Substituting a blank tenant or a
+    # zero UUID hands the decision to whatever a policy match on empty strings
+    # happens to do — which in practice is allow.
     if not workspace_id:
-        # Try user_context_data as fallback
-        ucd = getattr(request, "user_context_data", None) or {}
-        workspace_id = ucd.get("workspace_id", "")
-        if not agent_id:
-            agent_id = _extract_uuid_from_str(ucd.get("user_id"))
+        raise ValueError(
+            f"governed activity {activity_input.fn.__name__} has no workspace; "
+            "refusing to evaluate policy against a blank tenant"
+        )
+    if not user_id:
+        raise ValueError(
+            f"governed activity {activity_input.fn.__name__} has no principal; "
+            "refusing to evaluate policy without one"
+        )
 
     return InterceptorContext(
-        agent_id=agent_id or UUID(int=0),
-        workspace_id=workspace_id or "",
+        agent_id=agent_id,
+        workspace_id=workspace_id,
         user_id=user_id,
         phase=phase,
         action_type=action_type,
@@ -121,10 +131,9 @@ def _extract_str(obj: Any, field: str) -> str:
 
 
 def _extract_user_id(request: Any) -> str:
-    if hasattr(request, "user_id"):
-        return str(request.user_id)
-    ucd = getattr(request, "user_context_data", None) or {}
-    return ucd.get("user_id", "")
+    # `str(None)` here used to yield the string "None", which reads downstream as
+    # a principal named None rather than as a missing one.
+    return _extract_str(request, "user_id")
 
 
 def _extract_action_name(request: Any, activity_name: str) -> str:

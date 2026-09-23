@@ -3,9 +3,12 @@ FROM python:3.12-slim as builder
 
 WORKDIR /app
 
-# Install uv via official installer
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && ln -sf /root/.local/bin/uv /usr/local/bin/uv
+# uv, pinned by digest. The previous `curl -LsSf https://astral.sh/uv/install.sh | sh`
+# installed whichever uv had shipped that morning, so a production image could not be
+# rebuilt to the same bytes and a bad uv release would land in prod unreviewed. The
+# digest also removes the network installer, and with it the reason this stage needed
+# curl at all. Bump together with required-version in pyproject.toml.
+COPY --from=ghcr.io/astral-sh/uv:0.8.22@sha256:9874eb7afe5ca16c363fe80b294fe700e460df29a55532bbfea234a0f12eddb1 /uv /uvx /bin/
 
 # Copy workspace configuration and source
 COPY pyproject.toml uv.lock ./

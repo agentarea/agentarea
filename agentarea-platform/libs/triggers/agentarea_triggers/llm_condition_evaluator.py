@@ -13,6 +13,7 @@ from uuid import UUID
 import litellm
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_llm.application.model_instance_service import ModelInstanceService
+from agentarea_llm.domain.provider_profiles import profile_for
 
 logger = logging.getLogger(__name__)
 
@@ -602,9 +603,12 @@ class LLMConditionEvaluator:
                 if not url.startswith("http"):
                     url = f"http://{url}"
                 litellm_params["base_url"] = url
-            elif "ollama" in provider_type:
+            elif profile_for(provider_type).requires_endpoint_url:
+                # Self-hosted provider: there is no public address to fall back
+                # to, so the call would go nowhere.
                 raise ValueError(
-                    f"Ollama model instance {effective_model_id} has no endpoint_url configured"
+                    f"model instance {effective_model_id} uses self-hosted provider "
+                    f"{provider_type!r} but has no endpoint_url configured"
                 )
 
             logger.debug(f"Calling LLM for condition evaluation with model {litellm_model}")

@@ -11,6 +11,7 @@ import {
   discoverModelsPreviewAction,
 } from "@/lib/server-actions";
 import { ModelSpec, ProviderSpec } from "@/types/provider";
+import type { SkippedModelResponse } from "@/api/client";
 import { filterModelsByDiscovery } from "./modelDiscovery";
 
 interface SelectedModel {
@@ -98,6 +99,7 @@ export default function ModelInstances({
       let totalCount = 0;
       let newCount = 0;
       let discoveredNames: string[] = [];
+      let skipped: SkippedModelResponse[] = [];
 
       if (providerConfigId) {
         const { data, error } = await discoverModelsAction(providerConfigId);
@@ -109,6 +111,7 @@ export default function ModelInstances({
         totalCount = data?.discovered ?? 0;
         newCount = data?.new_models ?? 0;
         discoveredNames = data?.models.map((model) => model.model_name) ?? [];
+        skipped = data?.skipped ?? [];
       } else {
         const { data, error } = await discoverModelsPreviewAction({
           provider_key: providerKey ?? "",
@@ -135,13 +138,27 @@ export default function ModelInstances({
         totalCount = data?.discovered ?? 0;
         newCount = data?.new_models ?? 0;
         discoveredNames = data?.models.map((model) => model.model_name) ?? [];
+        skipped = data?.skipped ?? [];
       }
 
-      if (newCount > 0) {
-        toast.success(t("discoveredCount", { totalCount, newCount }));
-      } else {
-        toast.success(t("discoveredCountNoNew", { totalCount }));
-      }
+      const summary =
+        newCount > 0
+          ? t("discoveredCount", { totalCount, newCount })
+          : t("discoveredCountNoNew", { totalCount });
+      // `discovered` counts only the models that were kept. Reporting it alone
+      // would present a partial discovery as a complete one, which is exactly
+      // what the backend returns `skipped` to prevent.
+      toast.success(
+        summary,
+        skipped.length > 0
+          ? {
+              description: t("discoveredSkipped", {
+                skippedCount: skipped.length,
+                names: skipped.map((model) => model.model_name).join(", "),
+              }),
+            }
+          : undefined,
+      );
       setDiscoveredModelNames(new Set(discoveredNames));
       setHasDiscovered(true);
       await onModelsDiscovered?.();

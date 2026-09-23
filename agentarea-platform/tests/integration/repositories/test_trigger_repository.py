@@ -296,45 +296,6 @@ class TestTriggerRepository:
         assert retrieved_trigger.webhook_id == "github-webhook-123"
         assert isinstance(retrieved_trigger, WebhookTrigger)
 
-    @pytest.mark.skip(reason="list_cron_triggers_due not implemented on TriggerRepository; next_run_time not a CronTrigger field")
-    async def test_list_cron_triggers_due(self, trigger_repository):
-        """Test listing cron triggers that are due for execution."""
-        # Arrange
-        past_time = datetime.utcnow() - timedelta(minutes=5)
-        future_time = datetime.utcnow() + timedelta(minutes=5)
-
-        due_trigger = CronTrigger(
-            id=uuid4(),
-            name="Due Trigger",
-            description="Should be due",
-            agent_id=uuid4(),
-            trigger_type=TriggerType.CRON,
-            created_by="test-user",
-            cron_expression="* * * * *",
-            next_run_time=past_time,
-        )
-
-        not_due_trigger = CronTrigger(
-            id=uuid4(),
-            name="Not Due Trigger",
-            description="Should not be due",
-            agent_id=uuid4(),
-            trigger_type=TriggerType.CRON,
-            created_by="test-user",
-            cron_expression="* * * * *",
-            next_run_time=future_time,
-        )
-
-        await trigger_repository.create_trigger(due_trigger)
-        await trigger_repository.create_trigger(not_due_trigger)
-
-        # Act
-        due_triggers = await trigger_repository.list_cron_triggers_due(datetime.utcnow())
-
-        # Assert
-        assert len(due_triggers) == 1
-        assert due_triggers[0].name == "Due Trigger"
-
     async def test_update_execution_tracking(self, trigger_repository, sample_cron_trigger):
         """Test updating trigger execution tracking fields."""
         # Arrange

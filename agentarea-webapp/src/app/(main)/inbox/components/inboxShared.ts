@@ -15,12 +15,6 @@ export const FILTERS: { key: FilterValue; label: string }[] = [
   { key: "failed", label: "Failed" },
 ];
 
-export const STATUS_LABEL: Record<string, string> = {
-  pending: "Needs approval",
-  completed: "Completed",
-  failed: "Failed",
-};
-
 export function isPending(status: string): boolean {
   return status === "waiting_for_approval" || status === "pending";
 }

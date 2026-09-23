@@ -1,9 +1,10 @@
 """Contract for the catalog browse endpoint that backs /explore.
 
-The gallery needs three things from one call, over one consistent filter: the
-page, how many items match in total, and the category facets. Splitting them
-across calls is what let the old client show "No matches" while the catalog
-still had pages left, and let the sidebar counts drift as scrolling appended.
+The gallery needs several things from one call, over one consistent filter: the
+page, how many items match in total, and the facets (categories, plus the
+MCP/API split for connections). Splitting them across calls is what let the old
+client show "No matches" while the catalog still had pages left, and let the
+sidebar counts drift as scrolling appended.
 
 Driven through the real ASGI app so query defaults and validation are covered
 rather than bypassed.
@@ -42,8 +43,8 @@ class _Item:
 
 
 class _Service:
-    def __init__(self, items=None, total=0, categories=None):
-        self._result = (items or [], total, categories or [])
+    def __init__(self, items=None, total=0, categories=None, protocols=None):
+        self._result = (items or [], total, categories or [], protocols or [])
         self.calls = []
 
     async def browse_catalog(self, **kwargs):
@@ -95,24 +96,40 @@ class TestResponseShape:
         assert body["items"][0]["category"] == "data"
         assert body["items"][0]["featured"] is True
 
+    async def test_connections_report_the_mcp_api_split(self):
+        # "Connections" is not a synonym for MCP: the sidebar has to say how
+        # many of each there are before you can filter to one.
+        service = _Service(items=[_Item("GitHub")], total=2, protocols=[("mcp", 4247), ("api", 12)])
+        body = (await _browse(service, registry_type="mcp_servers")).json()
+        assert body["protocols"] == [
+            {"value": "mcp", "count": 4247},
+            {"value": "api", "count": 12},
+        ]
+
+    async def test_types_without_a_protocol_dimension_report_none(self):
+        body = (await _browse(_Service(), registry_type="skills")).json()
+        assert body["protocols"] == []
+
 
 class TestParameterPassThrough:
     async def test_forwards_every_browse_dimension(self):
         service = _Service()
         await _browse(
             service,
-            registry_type="skills",
+            registry_type="mcp_servers",
             q="pdf",
             category="other",
+            protocol="api",
             sort="name",
             limit=24,
             offset=48,
         )
         assert service.calls == [
             {
-                "registry_type": "skills",
+                "registry_type": "mcp_servers",
                 "query": "pdf",
                 "category": "other",
+                "protocol": "api",
                 "sort": "name",
                 "limit": 24,
                 "offset": 48,
@@ -126,6 +143,7 @@ class TestParameterPassThrough:
         assert call["query"] is None
         assert call["category"] is None
         assert call["sort"] is None
+        assert call["protocol"] is None
         assert call["offset"] == 0
 
 
@@ -137,6 +155,18 @@ class TestValidation:
         # A silently-ignored bad sort would page the catalog in one order while
         # the UI claims another.
         resp = await _browse(_Service(), registry_type="skills", sort="by_vibes")
+        assert resp.status_code == 400
+
+    async def test_rejects_an_unknown_protocol(self):
+        # A closed vocabulary declared on the route, so FastAPI rejects it
+        # before the handler runs.
+        resp = await _browse(_Service(), registry_type="mcp_servers", protocol="carrier-pigeon")
+        assert resp.status_code == 422
+
+    async def test_rejects_a_protocol_filter_on_a_type_that_has_none(self):
+        # Answering 200 here would page the whole skills catalog while the
+        # caller believes it asked for HTTP APIs.
+        resp = await _browse(_Service(), registry_type="skills", protocol="api")
         assert resp.status_code == 400
 
     async def test_requires_a_registry_type(self):

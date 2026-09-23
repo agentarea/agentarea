@@ -23,7 +23,7 @@ import { SessionContext } from "./session-provider"
  *
  * :::note
  * This is a client-side hook and must be used within a React component.
- * On the server, you can use the getServerSession function from `@ory/nextjs`
+ * On the server, you can use the getServerSession helper from `@/lib/ory`
  * and hydrate SessionProvider with the session.
  * :::
  *

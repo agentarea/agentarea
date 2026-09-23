@@ -1,11 +1,12 @@
 """Tests for entity visibility WITHOUT a magic workspace (ADR-003).
 
 There is no longer a ``source`` provenance column on any table: the base
-WorkspaceScopedRepository read filter is pure workspace scoping
-(``workspace_id IN accessible``). Built-in content lives in the registry catalog
+WorkspaceScopedRepository read filter is pure active-workspace scoping.
+Built-in content lives in the registry catalog
 and is read globally by the catalog repositories, not by this filter. A row from
 another workspace always stays hidden.
 """
+
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -74,6 +75,22 @@ def test_no_filter_enumerates_foreign_or_official_rows():
     assert "ws-2" not in compiled
     assert "workspace_custom" not in compiled
     assert "official" not in compiled
+
+
+def test_access_to_multiple_workspaces_does_not_widen_the_active_scope():
+    """Membership authorizes workspace selection, not cross-workspace queries."""
+    session = MagicMock()
+    user_context = UserContext(
+        user_id="user-1",
+        workspace_id="ws-1",
+        accessible_workspaces=["ws-1", "ws-2"],
+    )
+    repo = ProviderConfigRepository(session, user_context)
+
+    compiled = str(repo._get_workspace_filter().compile(compile_kwargs={"literal_binds": True}))
+
+    assert "ws-1" in compiled
+    assert "ws-2" not in compiled
 
 
 @pytest.mark.asyncio

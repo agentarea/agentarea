@@ -1,7 +1,7 @@
 ---
 title: Skills
 type: concept
-summary: A skill is a folder of files an agent loads only when a task calls for it — this page covers the three tiers of disclosure, where the files land, and what the model is told at each stage.
+description: "A skill is a folder of files an agent loads only when a task calls for it — this page covers the three tiers of disclosure, where the files land."
 prerequisites:
   - /concepts/agents/what-is-an-agent
 related:
@@ -11,8 +11,6 @@ related:
   - /concepts/governance/tool-authorization
 last_updated: 2026-07-29
 ---
-
-# Skills
 
 A skill is a folder of files with a `SKILL.md` manifest at its root, attached to
 an agent, and loaded into the model's context only when a task appears to need
@@ -194,11 +192,17 @@ relevance score to inspect afterwards — only the presence or absence of an
 
 ## Related
 
-- [What is an agent](/concepts/agents/what-is-an-agent) — how skills attach, and
-  the configuration/policy line.
-- [Context strategies](/concepts/agents/context-strategies) — the other half of
-  what the model sees, and what gets offloaded.
-- [Sandbox sessions](/concepts/sandbox/sessions) — the workspace a skill's files
-  are copied into.
-- [Tool authorization](/concepts/governance/tool-authorization) — the gate
-  `activate_skill` clears like any other tool.
+<Columns cols={2}>
+  <Card title="What is an agent" icon="robot" href="/concepts/agents/what-is-an-agent">
+    How skills attach, and the configuration/policy line
+  </Card>
+  <Card title="Context strategies" icon="robot" href="/concepts/agents/context-strategies">
+    The other half of what the model sees, and what gets offloaded
+  </Card>
+  <Card title="Sandbox sessions" icon="box" href="/concepts/sandbox/sessions">
+    The workspace a skill's files are copied into
+  </Card>
+  <Card title="Tool authorization" icon="scale-balanced" href="/concepts/governance/tool-authorization">
+    The gate `activate_skill` clears like any other tool
+  </Card>
+</Columns>

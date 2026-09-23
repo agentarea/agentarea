@@ -12,10 +12,15 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 import yaml
-from agentarea_governance.domain.rules import parse_target
+from agentarea_governance.domain.rules import (
+    PolicyEffect,
+    PolicyRule,
+    PolicySubjectType,
+    assert_enforceable,
+)
 from pydantic import ValidationError
 
-from agentarea_bundles.schemas.bundle import Bundle, BundleMcp, setup_refs
+from agentarea_bundles.schemas.bundle import Bundle, BundleMcp, BundlePolicy, setup_refs
 from agentarea_bundles.schemas.preview import (
     EntityKind,
     EntityStatus,
@@ -77,6 +82,38 @@ def parse_bundle(text: str) -> Bundle:
         return Bundle.model_validate(data)
     except ValidationError as exc:
         raise BundleParseError(str(exc)) from exc
+
+
+# Subject ids are resolved at install time (an agent key becomes a real id), so
+# analysis validates the rule with a stand-in. assert_enforceable never inspects
+# the id — only the subject *type*, which the policy's own `subject` determines.
+_PLACEHOLDER_SUBJECT_ID = "00000000-0000-0000-0000-000000000000"
+
+
+def policy_as_rule(policy: BundlePolicy, subject_id: str) -> PolicyRule:
+    """Build the governance rule a bundle policy installs as.
+
+    Shared by the analyzer and the installer so the rule that gets validated at
+    preview time is the same object that gets written.
+
+    ``message`` is deliberately not folded into ``params``: nothing reads it
+    there, and the typed param models forbid extras, so carrying it would make
+    every cap/approval rule fail validation.
+    """
+    return PolicyRule(
+        enabled=policy.enabled,
+        priority=policy.priority,
+        subject_type=(
+            PolicySubjectType.WORKSPACE
+            if policy.subject == "workspace"
+            else PolicySubjectType.AGENT
+        ),
+        subject_id=subject_id,
+        target=policy.target,
+        effect=PolicyEffect(policy.effect),
+        params=dict(policy.params),
+        condition=policy.condition,
+    )
 
 
 def mcp_is_unsupported(mcp: BundleMcp) -> str | None:
@@ -382,12 +419,16 @@ class BundleAnalyzer:
                         entity_key=policy.key,
                     )
                 )
-            # Validate the target selector against the governance compiler. An
-            # unrecognized target compiles to nothing at runtime, so a deny/
-            # approval/cap would install yet silently never enforce. Block it at
-            # analyze-time instead of shipping a false sense of restriction.
+            # Validate the whole rule against the governance write contract, not
+            # just the target selector. The compiler skips anything it cannot
+            # read — an unknown target, but equally a cap whose params it cannot
+            # interpret — so such a rule installs yet silently never enforces.
+            # Block it at analyze-time instead of shipping a false sense of
+            # restriction. Bundles reference subjects by key, so the id here is a
+            # placeholder: assert_enforceable checks the effect/target/params
+            # triple, never the subject id.
             try:
-                parse_target(policy.target)
+                assert_enforceable(policy_as_rule(policy, _PLACEHOLDER_SUBJECT_ID))
             except ValueError as exc:
                 issues.append(
                     PreviewIssue(

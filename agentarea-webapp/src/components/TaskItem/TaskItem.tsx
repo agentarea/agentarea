@@ -1,11 +1,9 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import { Calendar, CalendarClock, Clock, GitFork } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
-import { StatusIndicator } from "@/components/ui/status-indicator";
-import { getTaskStatusPresentation } from "@/lib/status";
+import { TaskStatus } from "@/components/TaskStatus";
 
 export interface TaskItemData {
   id: string;
@@ -28,9 +26,6 @@ export default function TaskItem({
   task,
   showAgentName = true,
 }: TaskItemProps) {
-  const tStatus = useTranslations("TasksPage.status");
-  const status = getTaskStatusPresentation(task.status);
-  const statusLabel = status.labelKey ? tStatus(status.labelKey) : status.label;
   const isDelegation = task.parameters?.source === "agent_delegation";
 
   return (
@@ -39,14 +34,7 @@ export default function TaskItem({
       title={task.description}
       type="view"
       topRight={
-        <StatusIndicator
-          size="sm"
-          tone={status.tone}
-          pulse={status.pulse}
-          className="whitespace-nowrap"
-        >
-          {statusLabel}
-        </StatusIndicator>
+        <TaskStatus status={task.status} className="whitespace-nowrap" />
       }
     >
       <div className="flex flex-col gap-2 text-xs text-muted-foreground">

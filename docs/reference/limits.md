@@ -1,7 +1,7 @@
 ---
 title: Limits
 type: reference
-summary: Every ceiling, timeout, retry count and size bound on task execution and governance, with its persisted or deployment-owned source.
+description: "Every ceiling, timeout, retry count and size bound on task execution and governance, with its persisted or deployment-owned source."
 prerequisites: []
 related:
   - /reference/policy-syntax
@@ -10,8 +10,6 @@ related:
   - /guides/governance/set-a-budget
 last_updated: 2026-07-29
 ---
-
-# Limits
 
 The numeric bounds on task execution, governance and the authorization graph.
 Every value below is the value in source; overrides are listed per limit.
@@ -116,12 +114,15 @@ call rate limit.
 
 | Limit | Value |
 |---|---|
-| `DEFAULT_CONTEXT_WINDOW` | 128000 tokens, when the model does not declare one |
 | `CONTEXT_COMPACT_THRESHOLD` | 0.75 |
 | `CONTEXT_WARNING_THRESHOLD` | 0.60 |
 | `CONTEXT_RESERVE_FOR_OUTPUT` | 0.15 |
 | `MIN_RECENT_MESSAGES_TO_KEEP` | 6 |
 | `TOKENS_PER_MESSAGE_OVERHEAD` | 4 tokens |
+
+The context window itself has **no default**. It comes from the model spec, and a
+task whose model declares no positive `context_window` fails at startup with
+`InvalidExecutionSnapshot` rather than running against a guessed size.
 
 ### Output offloading
 
@@ -222,11 +223,19 @@ the minimum of the request value and every layer above it:
 }
 ```
 
-## See also
+## Related
 
-- [Policy rule syntax](/reference/policy-syntax) — how to write the ceilings.
-- [Authorization model](/reference/authorization-model) — the access-control
-  settings in full.
-- [Errors](/reference/errors) — what exceeding a limit returns.
-- [Budgets and quotas](/concepts/governance/budgets-and-quotas) — why the
-  monthly cap is admission-only.
+<Columns cols={2}>
+  <Card title="Policy rule syntax" icon="book" href="/reference/policy-syntax">
+    How to write the ceilings
+  </Card>
+  <Card title="Authorization model" icon="book" href="/reference/authorization-model">
+    The access-control settings in full
+  </Card>
+  <Card title="Errors" icon="book" href="/reference/errors">
+    What exceeding a limit returns
+  </Card>
+  <Card title="Budgets and quotas" icon="scale-balanced" href="/concepts/governance/budgets-and-quotas">
+    Why the monthly cap is admission-only
+  </Card>
+</Columns>

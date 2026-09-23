@@ -1,7 +1,7 @@
 ---
 title: Policy rule syntax
 type: reference
-summary: Every field, effect, subject type and target form of a governance policy rule, and which combinations compile into an enforced policy.
+description: "Every field, effect, subject type and target form of a governance policy rule, and which combinations compile into an enforced policy."
 prerequisites:
   - /concepts/governance/policy-engine
 related:
@@ -11,8 +11,6 @@ related:
   - /guides/governance/set-a-budget
 last_updated: 2026-07-29
 ---
-
-# Policy rule syntax
 
 One `PolicyRule` row expresses one governance intent for one subject. Rules are
 managed under `/v1/policies`; see the generated API reference for request and
@@ -227,11 +225,19 @@ Resolved:
 }
 ```
 
-## See also
+## Related
 
-- [Authorization model](/reference/authorization-model) — the separate resource
-  authorization surface.
-- [Limits](/reference/limits) — the numeric ceilings and their code defaults.
-- [Errors](/reference/errors) — the validation and permission responses these
-  rules produce.
-- [The policy engine](/concepts/governance/policy-engine) — how the layers merge.
+<Columns cols={2}>
+  <Card title="Authorization model" icon="book" href="/reference/authorization-model">
+    The separate resource authorization surface
+  </Card>
+  <Card title="Limits" icon="book" href="/reference/limits">
+    The numeric ceilings and their code defaults
+  </Card>
+  <Card title="Errors" icon="book" href="/reference/errors">
+    The validation and permission responses these rules produce
+  </Card>
+  <Card title="The policy engine" icon="scale-balanced" href="/concepts/governance/policy-engine">
+    How the layers merge
+  </Card>
+</Columns>

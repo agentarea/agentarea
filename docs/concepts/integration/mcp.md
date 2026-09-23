@@ -1,7 +1,7 @@
 ---
 title: MCP
 type: concept
-summary: What the Model Context Protocol gives an agent, and how AgentArea hosts MCP servers — managed containers versus remote endpoints — behind one governed proxy.
+description: "What the Model Context Protocol gives an agent."
 prerequisites:
   - /concepts/execution/tasks
 related:
@@ -11,8 +11,6 @@ related:
   - /concepts/execution/durable-execution
 last_updated: 2026-07-29
 ---
-
-# MCP
 
 The Model Context Protocol is an open standard for exposing tools to a language
 model. A server advertises tools with JSON schemas; a client discovers them and
@@ -115,20 +113,45 @@ Every instance is reachable at `/v1/mcp/{instance_id}/mcp`. The proxy:
   configured headers),
 - runs each JSON-RPC `tools/call` through the same policy decision point the
   agent loop uses, resolving the workspace and user policy at request time,
-- stamps `last_used_at` so the control plane can tell an idle instance from a
-  busy one.
+- opens a renewable request lease so the control plane can tell an idle instance
+  from a busy one.
 
 Downstream servers see only governed traffic, and the credential never leaves
 the platform.
 
-### Lazy provisioning
+### On-demand start and idle reclaim
 
-Instances can be started on demand. `needs_lazy_provisioning` is the single
-predicate — the feature flag `MCP_LAZY_PROVISIONING_ENABLED` is on, the instance
-declares `json_spec.lazy_provisioning`, and its verification is not `succeeded`.
-Both callers that dispatch to an instance, the agent tool path and the proxy,
-ask that one function, so they cannot disagree about when a server needs
-bringing back up.
+An instance row is desired state; the workload behind it is not. The two are
+tracked separately, and only the manager owns the second.
+
+Every container-backed call passes through the manager's **demand gateway**,
+which serializes cold starts, holds a renewable lease for the lifetime of each
+request, and reclaims workloads that have gone idle. Starting is therefore not
+conditional on a flag — a call to a dormant instance brings it up.
+
+Runtime state lives in two control-plane tables written only by the manager:
+
+| Table | Holds |
+|---|---|
+| `mcp_runtime_instances` | `state` (`dormant`, `starting`, `ready`, `reaping`, `failed`), `generation`, `last_used_at`, `last_error` |
+| `mcp_runtime_request_leases` | One row per in-flight request, with `expires_at` |
+
+Separating runtime state from the instance row is what makes reclaim safe:
+reaping a workload never invalidates discovered tools, never touches
+verification, and never asks the platform to re-provision anything. The next
+call starts a new generation behind the same instance id.
+
+Two behaviours in the gateway are deliberate and worth knowing. A cold start is
+**detached from the caller's request**, because a client that gives up on one
+request has not said it no longer wants the workload — when the start inherited
+the request context, an abandoned request tore down the deployment it had just
+created. And when another caller already holds the lifecycle, the gateway
+answers "retry", not "unavailable": nothing failed, and the start this caller
+wanted is already running.
+
+Idle reclaim is the one part an operator controls, through
+`mcpManager.serverless.enabled` and the durations documented in
+[configuration](/self-host/configuration).
 
 ### Aggregating several servers
 
@@ -195,7 +218,11 @@ limits.
 
 ## Related
 
-- [Registry and catalog](/concepts/integration/registry-and-catalog) — where MCP
-  server specs come from.
-- [Bundles](/concepts/integration/bundles) — installing servers, skills, and
-  agents together.
+<Columns cols={2}>
+  <Card title="Registry and catalog" icon="plug" href="/concepts/integration/registry-and-catalog">
+    Where MCP server specs come from
+  </Card>
+  <Card title="Bundles" icon="plug" href="/concepts/integration/bundles">
+    Installing servers, skills, and agents together
+  </Card>
+</Columns>

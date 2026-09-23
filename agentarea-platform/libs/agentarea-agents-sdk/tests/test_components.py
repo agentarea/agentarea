@@ -88,12 +88,18 @@ class TestLLMModel:
     """Test LLM model functionality."""
 
     @pytest.mark.asyncio
-    async def test_llm_model_basic_functionality(self):
+    async def test_llm_model_basic_functionality(
+        self, test_model, llm_endpoint_url, skip_if_no_llm
+    ):
         """Test basic LLM model functionality."""
+        skip_if_no_llm()
         try:
             from agentarea_agents_sdk.models.llm_model import LLMModel, LLMRequest
 
-            model = LLMModel(provider_type="ollama_chat", model_name="qwen2.5", endpoint_url=None)
+            provider, _, model_name = test_model.partition("/")
+            model = LLMModel(
+                provider_type=provider, model_name=model_name, endpoint_url=llm_endpoint_url
+            )
 
             request = LLMRequest(
                 messages=[{"role": "user", "content": "Hello, respond with just 'Hi!'"}],

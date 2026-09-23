@@ -1,7 +1,7 @@
 ---
 title: Why a sandbox
 type: concept
-summary: Agents run code that no human wrote or reviewed, so the platform treats every command an agent produces as hostile input and runs it somewhere it can do bounded damage.
+description: "Agents run code that no human wrote or reviewed."
 prerequisites:
   - /agentic-networks
 related:
@@ -11,8 +11,6 @@ related:
   - /concepts/governance/tool-authorization
 last_updated: 2026-07-29
 ---
-
-# Why a sandbox
 
 An agent decides at run time what code to run. The model reads a task, writes a
 shell command, and something executes it. Nobody reviewed that command, it did
@@ -183,10 +181,20 @@ when.
 
 ## Related
 
-- [Isolation](/concepts/sandbox/isolation) — the security boundary and what it
-  does not cover
-- [Sessions](/concepts/sandbox/sessions) — one sandbox per task, and its lifecycle
-- [The file model](/concepts/sandbox/the-file-model) — what an agent may read and write
-- [Lifecycle](/concepts/sandbox/lifecycle) — warm pool, activation, and reclaim
-- [Tool authorization](/concepts/governance/tool-authorization) — the layer that
-  runs before execution
+<Columns cols={2}>
+  <Card title="Isolation" icon="box" href="/concepts/sandbox/isolation">
+    The security boundary and what it does not cover
+  </Card>
+  <Card title="Sessions" icon="box" href="/concepts/sandbox/sessions">
+    One sandbox per task, and its lifecycle
+  </Card>
+  <Card title="The file model" icon="box" href="/concepts/sandbox/the-file-model">
+    What an agent may read and write
+  </Card>
+  <Card title="Lifecycle" icon="box" href="/concepts/sandbox/lifecycle">
+    Warm pool, activation, and reclaim
+  </Card>
+  <Card title="Tool authorization" icon="scale-balanced" href="/concepts/governance/tool-authorization">
+    The layer that runs before execution
+  </Card>
+</Columns>

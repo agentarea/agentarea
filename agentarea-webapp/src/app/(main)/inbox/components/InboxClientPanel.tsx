@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { formatDistanceToNowStrict } from "date-fns";
+import { useRouter } from "next/navigation";
 import {
-  Bot,
   Check,
+  ChevronRight,
   Clock,
   ExternalLink,
   Inbox as InboxIcon,
@@ -13,43 +13,21 @@ import {
   Zap,
 } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { TaskConversation } from "@/components/Chat/TaskConversation";
+import { TaskStatus } from "@/components/TaskStatus";
 import { Button } from "@/components/ui/button";
-import { StatusIndicator } from "@/components/ui/status-indicator";
-import type { TaskWithAgent } from "@/lib/api";
-import { getInboxStatusPresentation } from "@/lib/status";
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: "Needs approval",
-  completed: "Completed",
-  failed: "Failed",
-};
-
-function isPending(status: string): boolean {
-  return status === "waiting_for_approval" || status === "pending";
-}
-
-function normalizeStatus(status: string): "pending" | "completed" | "failed" {
-  if (isPending(status)) return "pending";
-  if (status === "completed" || status === "success") return "completed";
-  return "failed";
-}
-
-function formatRelative(dateStr?: string | null): string {
-  if (!dateStr) return "";
-  try {
-    return formatDistanceToNowStrict(new Date(dateStr), { addSuffix: true });
-  } catch {
-    return "";
-  }
-}
-
-function fmtCost(cost?: number | null): string {
-  return cost == null ? "—" : `$${Number(cost).toFixed(4)}`;
-}
+import {
+  fmtCost,
+  formatRelative,
+  isPending,
+  type InboxTask,
+} from "@/app/(main)/inbox/components/inboxShared";
+import { InboxResultMessage } from "./InboxResultMessage";
+import { extractInboxResult } from "./inboxResult";
 
 interface InboxClientPanelProps {
-  task: TaskWithAgent | null;
-  onResolve: (task: TaskWithAgent, approved: boolean) => void;
+  task: InboxTask | null;
+  onResolve: (task: InboxTask, approved: boolean) => void;
   onClose: () => void;
 }
 
@@ -58,9 +36,11 @@ export function InboxClientPanel({
   onResolve,
   onClose,
 }: InboxClientPanelProps) {
+  const router = useRouter();
+
   if (!task) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center px-10 text-center text-sm text-muted-foreground">
+      <div className="flex h-full flex-1 flex-col items-center justify-center px-10 text-center text-sm text-muted-foreground">
         <InboxIcon
           size={40}
           strokeWidth={1.4}
@@ -77,138 +57,155 @@ export function InboxClientPanel({
 
   const status = task.status;
   const pend = isPending(status);
-  const norm = normalizeStatus(status);
-  const presentation = getInboxStatusPresentation(status);
   const agentName = task.agent_name || "Unknown agent";
-  const result = task.result;
-  const resultText =
-    typeof result === "string"
-      ? result
-      : result && Object.keys(result).length
-        ? JSON.stringify(result, null, 2)
-        : null;
+  const hasResult = extractInboxResult(task.result).kind !== "empty";
+  const failureText = task.error || task.failure_reason;
+
+  // Shown only when the transcript carries no assistant answer of its own —
+  // an approval still waiting to run, or a task whose output lives in the
+  // record rather than the event stream.
+  const resultFallback = (
+    <>
+      <InboxResultMessage
+        id={String(task.id)}
+        agentId={task.agent_id}
+        result={task.result}
+        agentName={agentName}
+        timestamp={task.created_at}
+      />
+      {!hasResult && failureText && (
+        <p className="max-w-3xl whitespace-pre-wrap break-words text-sm leading-relaxed text-red-600 dark:text-red-400 [overflow-wrap:anywhere]">
+          {failureText}
+        </p>
+      )}
+      {!hasResult && !failureText && (
+        <p className="text-sm text-muted-foreground">
+          {pend
+            ? "Output will be available after the action runs."
+            : "No output was returned for this task."}
+        </p>
+      )}
+      {hasResult && failureText && (
+        <p className="mt-4 break-words text-sm leading-relaxed text-red-600 dark:text-red-400 [overflow-wrap:anywhere]">
+          {failureText}
+        </p>
+      )}
+    </>
+  );
 
   return (
-    <>
-      <div className="relative flex-1 px-5 pt-5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={onClose}
-          aria-label="Close details panel"
-          className="absolute right-3 top-3"
-        >
-          <X size={14} strokeWidth={2} />
-        </Button>
-
-        <StatusIndicator
-          size="sm"
-          tone={presentation.tone}
-          pulse={presentation.pulse}
-          className="mb-3 whitespace-nowrap pr-12"
-        >
-          {presentation.label}
-        </StatusIndicator>
-
-        <div className="mb-3.5 flex items-start justify-between gap-2">
-          <h2 className="pr-4 text-[19px] font-semibold leading-tight tracking-tight">
-            {task.description || "Untitled task"}
-          </h2>
-          <Link
-            href={`/tasks/${task.id}`}
-            className="mt-0.5 shrink-0 inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11.5px] font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
-          >
-            <ExternalLink size={12} /> Open
-          </Link>
-        </div>
-
-        <div className="mb-[18px] grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-2 text-[12.5px]">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Bot size={15} /> Agent
-          </div>
-          <div className="inline-flex items-center justify-end gap-1.5 text-right font-medium">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
+      <header className="shrink-0 border-b border-border px-5 py-3 sm:px-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
             <AgentAvatar
               agent={{ id: task.agent_id || agentName, name: agentName }}
               size="xs"
             />
-            {agentName}
+            <span className="truncate font-medium text-foreground/80">
+              {agentName}
+            </span>
+            <ChevronRight size={13} aria-hidden />
+            <span className="shrink-0">Inbox review</span>
           </div>
-
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Clock size={15} /> Requested
+          <div className="flex shrink-0 items-center gap-1">
+            <Link
+              href={`/tasks/${task.id}`}
+              className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ExternalLink size={12} aria-hidden />
+              <span className="hidden sm:inline">Open chat</span>
+              <span className="sr-only sm:hidden">Open chat</span>
+            </Link>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={onClose}
+              aria-label="Close details panel"
+              className="h-7 w-7 p-0"
+            >
+              <X size={14} strokeWidth={2} />
+            </Button>
           </div>
-          <div className="text-right font-medium">
-            {formatRelative(task.created_at)}
-          </div>
-
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Wallet size={15} /> Cost
-          </div>
-          <div className="text-right font-mono">{fmtCost(task.total_cost)}</div>
         </div>
 
-        {pend && (
-          <div className="mb-4 flex items-start gap-2.5 rounded-[9px] bg-amber-500/10 px-3 py-2.5 text-[12.5px] leading-relaxed text-foreground/80">
-            <Zap size={16} className="mt-px shrink-0 text-amber-500" />
-            <div>
-              On approval, the agent will run{" "}
+        {/* The request itself opens the transcript as a user message, exactly
+            as in the chat, so the header does not repeat it. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2.5 py-1">
+            <TaskStatus status={status} />
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-muted-foreground">
+            <Clock size={13} aria-hidden />
+            <span>{formatRelative(task.created_at) || "Requested recently"}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 font-mono text-muted-foreground">
+            <Wallet size={13} aria-hidden />
+            <span>{fmtCost(task.total_cost)}</span>
+          </span>
+        </div>
+      </header>
+
+      {pend && (
+        <div className="shrink-0 border-b border-amber-500/25 bg-amber-500/10 px-5 py-2.5 text-sm leading-relaxed text-foreground/85 sm:px-6">
+          <div className="flex items-start gap-2.5">
+            <Zap
+              size={17}
+              className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400"
+              aria-hidden
+            />
+            <p>
+              Approving will let the agent run{" "}
               <b className="font-semibold text-foreground">
                 {task.escalation_tool_name || "the requested action"}
               </b>
               .
-            </div>
-          </div>
-        )}
-
-        <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-          Output
-        </p>
-        <div className="mb-5 overflow-hidden rounded-[10px] border border-border bg-muted/30">
-          <div className="whitespace-pre-wrap px-3 py-3 font-mono text-[11.5px] leading-relaxed text-foreground/80">
-            {resultText ?? (
-              <span className="text-muted-foreground/60 italic">
-                {pend
-                  ? "Output will be available after the action runs."
-                  : "No output."}
-              </span>
-            )}
+            </p>
           </div>
         </div>
+      )}
+
+      {/* Same transcript and composer as /tasks/[id]: read what happened and
+          answer without leaving the inbox. Keyed so switching tasks resets the
+          event stream instead of folding two tasks into one conversation. */}
+      <div className="min-h-0 flex-1">
+        <TaskConversation
+          key={String(task.id)}
+          task={{
+            id: String(task.id),
+            agent_id: task.agent_id,
+            description: task.description,
+            agent_name: task.agent_name,
+            status,
+            created_at: task.created_at,
+          }}
+          currentStatus={status}
+          fallback={resultFallback}
+          onRefresh={() => router.refresh()}
+        />
       </div>
 
-      <div className="sticky bottom-0 border-t border-border bg-background px-5 py-3">
-        {pend ? (
-          <div className="flex gap-2.5">
+      {pend && (
+        <footer className="shrink-0 border-t border-border bg-background px-5 py-3.5 sm:px-6">
+          <div className="flex gap-2.5 sm:justify-end">
             <button
               onClick={() => onResolve(task, false)}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-background text-[13px] font-semibold text-red-500 transition hover:border-red-500 hover:bg-red-500/10"
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-4 text-[13px] font-semibold text-red-600 transition hover:border-red-500 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-none"
             >
-              <X size={16} strokeWidth={2} /> Reject
+              <X size={16} strokeWidth={2} aria-hidden />
+              Reject
             </button>
             <button
               onClick={() => onResolve(task, true)}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-[13px] font-semibold text-white shadow-sm transition hover:brightness-95"
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-[13px] font-semibold text-white shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-none"
             >
-              <Check size={16} strokeWidth={2.2} /> Approve
+              <Check size={16} strokeWidth={2.2} aria-hidden />
+              Approve
             </button>
           </div>
-        ) : (
-          <div className="flex items-center gap-2 py-1.5 text-[12.5px] text-muted-foreground">
-            <StatusIndicator
-              size="sm"
-              tone={presentation.tone}
-              pulse={presentation.pulse}
-              className="whitespace-nowrap"
-            >
-              {presentation.label}
-            </StatusIndicator>
-            <span>
-              This task is {STATUS_LABEL[norm].toLowerCase()} — no action needed.
-            </span>
-          </div>
-        )}
-      </div>
-    </>
+        </footer>
+      )}
+    </div>
   );
 }

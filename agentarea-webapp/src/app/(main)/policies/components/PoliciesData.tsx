@@ -1,4 +1,4 @@
-import EmptyState from "@/components/EmptyState";
+import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { listAgents, listPolicies } from "@/lib/api";
 import type { Policy } from "@/types/policies";
 import PoliciesEditableView from "./PoliciesEditableView";
@@ -7,7 +7,7 @@ interface AgentLike {
   id: string;
   name: string;
   icon?: string | null;
-  color_token?: string | null;
+ 
 }
 
 export async function PoliciesData() {
@@ -34,7 +34,6 @@ export async function PoliciesData() {
       id: a.id,
       name: a.name,
       icon: a.icon,
-      color_token: a.color_token,
     }));
   }
 
@@ -42,7 +41,7 @@ export async function PoliciesData() {
   if (policiesError && policies.length === 0) {
     return (
       <div className="space-y-4">
-        <EmptyState
+        <RetryEmptyState
           title="Couldn't load policies"
           description={policiesError}
           iconsType="audit"

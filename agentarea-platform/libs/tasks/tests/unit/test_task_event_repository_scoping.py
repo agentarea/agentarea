@@ -65,7 +65,7 @@ class TestListForTaskIsWorkspaceScoped:
         assert "task_events.event_type" in sql
 
     @pytest.mark.asyncio
-    async def test_membership_widens_to_an_in_clause_not_to_everything(self):
+    async def test_membership_does_not_widen_active_workspace_scope(self):
         session = _capturing_session()
         context = UserContext(
             user_id="alice",
@@ -77,7 +77,8 @@ class TestListForTaskIsWorkspaceScoped:
         await repo.list_for_task(uuid4())
 
         sql = _sql(session.execute.await_args.args[0])
-        assert "task_events.workspace_id IN" in sql
+        assert "task_events.workspace_id =" in sql
+        assert "task_events.workspace_id IN" not in sql
 
     @pytest.mark.asyncio
     async def test_returns_events_and_total(self):

@@ -18,6 +18,7 @@ from agentarea_api.api.deps.services import (
 from agentarea_api.api.v1.a2a_auth import require_a2a_execute_auth
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.config.database import get_db_session
 from agentarea_common.testing.flows import MainFlow
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
@@ -141,8 +142,21 @@ def override_user_context(mock_auth_context):
     app.dependency_overrides.pop(get_user_context, None)
 
 
+@pytest.fixture
+def mock_db_session():
+    """Session for the spend join: no rows, so every run reads as uncosted."""
+    session = AsyncMock()
+    result = MagicMock()
+    result.all.return_value = []
+    result.one.return_value = MagicMock(total=0, costed=0)
+    session.execute = AsyncMock(return_value=result)
+    return session
+
+
 @pytest.fixture(autouse=True)
-def override_trigger_dependencies(mock_trigger_service, mock_auth_context, mock_health_checker):
+def override_trigger_dependencies(
+    mock_trigger_service, mock_auth_context, mock_health_checker, mock_db_session
+):
     async def _override_trigger_service():
         return mock_trigger_service
 
@@ -155,15 +169,20 @@ def override_trigger_dependencies(mock_trigger_service, mock_auth_context, mock_
     async def _override_secret_manager():
         return AsyncMock()
 
+    async def _override_db_session():
+        return mock_db_session
+
     app.dependency_overrides[get_trigger_service] = _override_trigger_service
     app.dependency_overrides[require_a2a_execute_auth] = _override_auth
     app.dependency_overrides[get_trigger_health_check] = _override_health_checker
     app.dependency_overrides[get_secret_manager] = _override_secret_manager
+    app.dependency_overrides[get_db_session] = _override_db_session
     yield
     app.dependency_overrides.pop(get_trigger_service, None)
     app.dependency_overrides.pop(require_a2a_execute_auth, None)
     app.dependency_overrides.pop(get_trigger_health_check, None)
     app.dependency_overrides.pop(get_secret_manager, None)
+    app.dependency_overrides.pop(get_db_session, None)
 
 
 @pytest.fixture
@@ -796,16 +815,6 @@ class TestTriggersAPI:
         # Should fail validation
         assert response.status_code == 422
 
-    @patch("agentarea_api.api.v1.triggers.TRIGGERS_AVAILABLE", False)
-    async def test_triggers_not_available(self, async_client):
-        """Test API behavior when triggers service is not available."""
-        response = await async_client.get("/v1/triggers/health")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["overall_status"] == "unavailable"
-        assert "not available" in data["message"]
-
 
 if __name__ == "__main__":
     pytest.main([__file__])
@@ -909,3 +918,57 @@ def _sample_webhook_trigger_data():
         "validation_rules": {},
         "webhook_config": None,
     }
+
+
+class TestRunTriggerNow:
+    """POST /v1/triggers/{id}/run -- firing a trigger once by hand."""
+
+    def test_it_reports_the_task_to_watch(self, client, mock_trigger_service):
+        trigger_id = uuid4()
+        task_id = uuid4()
+        mock_trigger_service.execute_trigger.return_value = MagicMock(
+            id=uuid4(), task_id=task_id, error_message=None
+        )
+
+        response = client.post(f"/v1/triggers/{trigger_id}/run")
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["status"] == "started"
+        assert body["task_id"] == str(task_id)
+
+    def test_it_records_the_caller_as_having_asked_for_the_run(self, client, mock_trigger_service):
+        """Without this the run is indistinguishable from the schedule firing."""
+        trigger_id = uuid4()
+        mock_trigger_service.execute_trigger.return_value = MagicMock(
+            id=uuid4(), task_id=uuid4(), error_message=None
+        )
+
+        client.post(f"/v1/triggers/{trigger_id}/run")
+
+        assert mock_trigger_service.execute_trigger.call_args.kwargs["fired_by"] == "test_user"
+
+    def test_a_run_the_conditions_rejected_is_skipped_not_failed(
+        self, client, mock_trigger_service
+    ):
+        """The trigger answering "not now" is a result, not an error."""
+        trigger_id = uuid4()
+        mock_trigger_service.execute_trigger.return_value = MagicMock(
+            id=uuid4(), task_id=None, error_message="Trigger conditions not met"
+        )
+
+        response = client.post(f"/v1/triggers/{trigger_id}/run")
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["status"] == "skipped"
+        assert body["task_id"] is None
+        assert body["reason"] == "Trigger conditions not met"
+
+    def test_a_trigger_this_workspace_cannot_see_is_404(self, client, mock_trigger_service):
+        trigger_id = uuid4()
+        mock_trigger_service.execute_trigger.side_effect = TriggerNotFoundError("nope")
+
+        response = client.post(f"/v1/triggers/{trigger_id}/run")
+
+        assert response.status_code == 404

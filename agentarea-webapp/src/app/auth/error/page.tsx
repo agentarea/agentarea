@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { AuthLayout } from "@/components/auth/auth-layout";
+import { Button } from "@/components/ui/button";
 
 export default function ErrorPage() {
   const router = useRouter();
@@ -15,17 +15,16 @@ export default function ErrorPage() {
       {/* We use a manual card here because it's not an Ory component, 
           but we want it to look similar to Ory cards styled via CSS */}
       <div className="ory-elements">
-        <div data-testid="ory/card" className="bg-background border border-border">
+        <div
+          data-testid="ory/card"
+          className="bg-background border border-border"
+        >
           <div className="text-center px-4 py-6">
-            <h2 className="mb-4 text-xl font-bold">
-              Authentication Error
-            </h2>
+            <h2 className="mb-4 text-xl font-bold">Authentication Error</h2>
 
             {error && (
               <div className="mb-4 rounded-md border p-4 bg-muted/50 text-left">
-                <p className="font-semibold text-sm">
-                  {error}
-                </p>
+                <p className="font-semibold text-sm">{error}</p>
                 {errorDescription && (
                   <p className="mt-2 text-xs text-muted-foreground">
                     {errorDescription}

@@ -18,6 +18,11 @@
 # skills). Skills are metadata stubs (catalog entries without full SKILL.md
 # bodies). agents.json and bundles.json are catalog-format documents published
 # under registry/system/ (see scripts/registry/ for how they are generated).
+#
+# recommendation_priority (optional, default 100) weights a whole source in the
+# /explore "Recommended" order: lower comes first. Within a source, items keep
+# their published position. Give a bulk/community mirror a higher number so its
+# first entry cannot interleave with the curated front page.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # TEMP: the full mirror is overwhelmingly community stdio/command/docker servers.
@@ -52,7 +57,9 @@
   description: Built-in bundle catalog — installable agentic setups (skills + agents + MCPs)
 
 # Extended skill catalog (full scrape, metadata stubs; large file, slow sync).
-# Uncomment to install everything:
+# Uncomment to install everything. It ranks below the curated sources so the
+# scraped stubs land after them rather than among them.
 # - name: skills-catalog-full
 #   source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-full.json
 #   description: Full skill catalog (metadata stubs from scraped public collections)
+#   recommendation_priority: 900

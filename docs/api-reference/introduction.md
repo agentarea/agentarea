@@ -1,0 +1,64 @@
+---
+title: API reference
+type: reference
+description: "Base URL, authentication, workspace scoping, and pagination for the AgentArea REST API."
+last_updated: 2026-09-10
+---
+
+Every endpoint below is generated from the OpenAPI specification the API serves
+at `/openapi.json`, so it matches the running build rather than a hand-written
+table. A local stack also exposes an interactive copy at
+`http://localhost:8000/docs`.
+
+## Base URL
+
+| Deployment | Base URL |
+|---|---|
+| Local development | `http://localhost:8000` |
+| Self-hosted | The public URL you configured for the API — see [networking](/self-host/networking) |
+
+All platform endpoints are under `/v1`.
+
+## Authentication
+
+Send a bearer token on every `/v1` request:
+
+```bash
+curl -s "$AGENTAREA_URL/v1/agents/" \
+  -H "Authorization: Bearer $AGENTAREA_TOKEN"
+```
+
+<Warning>
+Requests without a valid token are rejected with `401`. There is no anonymous
+read access to `/v1`, including on endpoints that look public.
+</Warning>
+
+## Workspace scoping
+
+A token resolves to a user *and* a workspace. Every list endpoint returns only
+what that workspace can see, and every write lands in it — there is no global
+scope and no cross-workspace query. See
+[workspaces, projects, and resources](/concepts/workspaces-projects-resources)
+for the model this enforces.
+
+## Errors
+
+Failures return a JSON body with a machine-readable code. The meanings, and
+which ones are safe to retry, are in [errors](/reference/errors).
+
+## Related
+
+<Columns cols={2}>
+  <Card title="Start a task" icon="list-check" href="/guides/tasks/start-a-task">
+    The most common first call, end to end.
+  </Card>
+  <Card title="Errors" icon="book" href="/reference/errors">
+    What each failure code means.
+  </Card>
+  <Card title="Limits" icon="book" href="/reference/limits">
+    Budgets, quotas, and the ceilings requests are checked against.
+  </Card>
+  <Card title="Authorization model" icon="book" href="/reference/authorization-model">
+    The relations behind every permission check.
+  </Card>
+</Columns>

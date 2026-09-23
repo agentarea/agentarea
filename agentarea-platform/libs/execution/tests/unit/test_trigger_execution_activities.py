@@ -12,6 +12,9 @@ from agentarea_execution.models import (
     EvaluateTriggerConditionsRequest,
     ExecuteTriggerRequest,
     RecordTriggerExecutionRequest,
+    TaskCreationOutcome,
+    TriggerOutcome,
+    TriggerSkipReason,
 )
 from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.domain.models import CronTrigger, TriggerExecution
@@ -48,7 +51,7 @@ class TestTriggerExecutionActivities:
             agent_id=uuid4(),
             cron_expression="0 9 * * 1-5",
             timezone="UTC",
-            task_parameters={"test_param": "test_value"},
+            task_parameters={"test_param": "test_value", "text": "Run the daily check"},
             created_by="test_user",
             is_active=True,
         )
@@ -85,9 +88,7 @@ class TestTriggerExecutionActivities:
             patch(
                 "agentarea_tasks.infrastructure.repository.TaskRepository"
             ) as mock_task_repo_class,
-            patch(
-                "agentarea_tasks.task_service.TaskService"
-            ) as mock_task_service_class,
+            patch("agentarea_tasks.task_service.TaskService") as mock_task_service_class,
         ):
             # Setup repository mocks
             mock_trigger_repo = AsyncMock()
@@ -142,7 +143,7 @@ class TestTriggerExecutionActivities:
             result = await execute_trigger_activity(request)
 
             # Verify results
-            assert result.status == "success"
+            assert result.status is TriggerOutcome.SUCCESS
             assert result.trigger_id == sample_trigger.id
             assert result.task_id == mock_task.id
             assert result.execution_time_ms >= 0
@@ -152,6 +153,82 @@ class TestTriggerExecutionActivities:
             mock_trigger_service.evaluate_trigger_conditions.assert_called_once()
             mock_task_service.route_or_submit_task.assert_called_once()
             mock_trigger_service.record_execution.assert_called_once()
+
+    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
+    async def test_execute_trigger_activity_records_failure_when_task_creation_fails(
+        self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
+    ):
+        """A trigger that could not create a task must not be recorded as a success.
+
+        Recording it as SUCCESS keeps consecutive_failures at zero, so the
+        auto-disable safety net in TriggerService never fires and a permanently
+        broken trigger keeps firing on schedule forever.
+        """
+        mock_database = MagicMock()
+        mock_database.async_session_factory.return_value = mock_database_session
+        mock_get_database.return_value = mock_database
+
+        with (
+            patch(
+                "agentarea_triggers.infrastructure.repository.TriggerRepository"
+            ) as mock_trigger_repo_class,
+            patch(
+                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
+            ) as mock_execution_repo_class,
+            patch(
+                "agentarea_triggers.trigger_service.TriggerService"
+            ) as mock_trigger_service_class,
+            patch(
+                "agentarea_tasks.infrastructure.repository.TaskRepository"
+            ) as mock_task_repo_class,
+            patch("agentarea_tasks.task_service.TaskService") as mock_task_service_class,
+        ):
+            mock_trigger_repo_class.return_value = AsyncMock()
+            mock_execution_repo_class.return_value = AsyncMock()
+            mock_task_repo_class.return_value = AsyncMock()
+
+            mock_trigger_service = AsyncMock()
+            mock_task_service = AsyncMock()
+            mock_trigger_service_class.return_value = mock_trigger_service
+            mock_task_service_class.return_value = mock_task_service
+
+            sample_trigger.conditions = {"type": "always"}
+            mock_trigger_service.get_trigger.return_value = sample_trigger
+            mock_trigger_service.evaluate_trigger_conditions.return_value = True
+            mock_trigger_service.llm_condition_evaluator = None
+            mock_trigger_service._build_task_parameters.return_value = {
+                "trigger_id": str(sample_trigger.id)
+            }
+
+            policy_error = "effective policy is missing required runtime limits: tokens.max_tokens"
+            mock_task_service.route_or_submit_task.side_effect = ValueError(policy_error)
+
+            mock_trigger_service.record_execution.return_value = TriggerExecution(
+                trigger_id=sample_trigger.id,
+                status=ExecutionStatus.FAILED,
+                execution_time_ms=100,
+                task_id=None,
+            )
+
+            execute_trigger_activity = trigger_activities[0]
+
+            request = ExecuteTriggerRequest(
+                trigger_id=sample_trigger.id,
+                execution_data={"execution_time": datetime.utcnow().isoformat()},
+            )
+            result = await execute_trigger_activity(request)
+
+            assert result.status is TriggerOutcome.FAILED
+            assert result.task_id is None
+            assert result.reason is None
+            assert result.error is not None
+            assert policy_error in result.error
+
+            recorded = mock_trigger_service.record_execution.call_args.kwargs
+            assert recorded["status"] == ExecutionStatus.FAILED
+            assert recorded["task_id"] is None
+            assert recorded["error_message"] is not None
+            assert policy_error in recorded["error_message"]
 
     @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
     async def test_execute_trigger_activity_trigger_not_found(
@@ -244,8 +321,8 @@ class TestTriggerExecutionActivities:
             result = await execute_trigger_activity(request)
 
             # Verify results
-            assert result.status == "skipped"
-            assert result.reason == "trigger_inactive"
+            assert result.status is TriggerOutcome.SKIPPED
+            assert result.reason is TriggerSkipReason.TRIGGER_INACTIVE
             assert result.trigger_id == sample_trigger.id
 
     @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
@@ -295,8 +372,8 @@ class TestTriggerExecutionActivities:
             result = await execute_trigger_activity(request)
 
             # Verify results
-            assert result.status == "skipped"
-            assert result.reason == "conditions_not_met"
+            assert result.status is TriggerOutcome.SKIPPED
+            assert result.reason is TriggerSkipReason.CONDITIONS_NOT_MET
             assert result.trigger_id == sample_trigger.id
 
     @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
@@ -357,7 +434,7 @@ class TestTriggerExecutionActivities:
             # Verify results
             assert result.execution_id == mock_execution.id
             assert result.trigger_id == sample_trigger.id
-            assert result.status == "success"
+            assert result.status == ExecutionStatus.SUCCESS
 
             # Verify service call
             mock_trigger_service.record_execution.assert_called_once()
@@ -439,9 +516,7 @@ class TestTriggerExecutionActivities:
             patch(
                 "agentarea_tasks.infrastructure.repository.TaskRepository"
             ) as mock_task_repo_class,
-            patch(
-                "agentarea_tasks.task_service.TaskService"
-            ) as mock_task_service_class,
+            patch("agentarea_tasks.task_service.TaskService") as mock_task_service_class,
         ):
             # Setup repository mocks
             mock_trigger_repo = AsyncMock()
@@ -483,7 +558,7 @@ class TestTriggerExecutionActivities:
             result = await create_task_activity(request)
 
             # Verify results
-            assert result.status == "created"
+            assert result.status is TaskCreationOutcome.CREATED
             assert result.task_id == mock_task.id
             assert result.trigger_id == sample_trigger.id
 
@@ -515,9 +590,7 @@ class TestTriggerExecutionActivities:
             patch(
                 "agentarea_tasks.infrastructure.repository.TaskRepository"
             ) as mock_task_repo_class,
-            patch(
-                "agentarea_tasks.task_service.TaskService"
-            ) as mock_task_service_class,
+            patch("agentarea_tasks.task_service.TaskService") as mock_task_service_class,
         ):
             # Setup repository mocks
             mock_trigger_repo = AsyncMock()
@@ -544,7 +617,7 @@ class TestTriggerExecutionActivities:
             result = await create_task_activity(request)
 
             # Verify results
-            assert result.status == "failed"
+            assert result.status is TaskCreationOutcome.FAILED
             assert result.task_id is None
             assert result.trigger_id == trigger_id
             assert result.error and "not found" in result.error

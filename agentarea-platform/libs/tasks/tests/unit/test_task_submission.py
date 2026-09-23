@@ -315,6 +315,76 @@ async def test_submit_task_routes_to_active_workflow_when_chat_id_present():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["mcps", "skills", "files"])
+@pytest.mark.parametrize("change", ["add", "remove", "replace"])
+async def test_changed_resource_selection_starts_a_new_channel_run(kind, change):
+    executor = MagicMock()
+    executor.send_workflow_command = AsyncMock(return_value=True)
+    service, mocks = _make_service(temporal_executor=executor)
+    old_ref = "old.txt" if kind == "files" else str(uuid4())
+    new_ref = "new.txt" if kind == "files" else str(uuid4())
+    old = {} if change == "add" else {kind: [old_ref]}
+    new = {} if change == "remove" else {kind: [new_ref]}
+    task = _build_task(task_parameters={"channel_origin": {"chat_id": "c-99"}, **new})
+    mocks["task_repo"].find_active_by_agent_and_chat.return_value = [
+        MagicMock(
+            id=uuid4(),
+            execution_id="task-existing",
+            parameters=old,
+        )
+    ]
+
+    result = await service.submit_task(task)
+
+    executor.send_workflow_command.assert_not_awaited()
+    mocks["task_manager"].submit_task.assert_awaited_once()
+    assert result.status == "running"
+    assert (
+        result.task_parameters[kind] == new[kind]
+        if kind in new
+        else kind not in result.task_parameters
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("alias", ["mcps", "mcp", "mcp_servers"])
+async def test_channel_routing_matches_canonical_resource_identity_not_display_text(alias):
+    executor = MagicMock()
+    executor.send_workflow_command = AsyncMock(return_value=True)
+    service, mocks = _make_service(temporal_executor=executor)
+    mcp_id, skill_id = uuid4(), uuid4()
+    task = _build_task(
+        task_parameters={
+            "channel_origin": {"chat_id": "c-99"},
+            "mcps": [{"id": str(mcp_id), "name": "Renamed", "description": "Untrusted display"}],
+            "skills": [str(skill_id)],
+            "files": ["two.txt", "one.txt", "two.txt"],
+        }
+    )
+    mocks["task_repo"].find_active_by_agent_and_chat.return_value = [
+        MagicMock(
+            id=uuid4(),
+            execution_id="task-existing",
+            description="Previous",
+            user_id="user-123",
+            workspace_id="ws-abc",
+            agent_id=task.agent_id,
+            parameters={
+                alias: [str(mcp_id).upper()],
+                "skills": [{"skill_id": str(skill_id)}],
+                "files": ["one.txt", "two.txt"],
+            },
+        )
+    ]
+
+    result = await service.submit_task(task)
+
+    assert result.status == "routed"
+    mocks["task_manager"].submit_task.assert_not_awaited()
+    executor.send_workflow_command.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_create_and_execute_routes_to_active_workflow_when_chat_id_present():
     """REST path also routes to active workflow when channel_origin.chat_id is set."""
     executor = MagicMock()
