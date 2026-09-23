@@ -34,6 +34,60 @@ Stream chunks are provisional progress, not workflow history or durable task
 events. Retried activities can repeat progress; this boundary does not provide
 exactly-once delivery. Final events use the existing workflow publication path.
 
+Live `llm.call.chunk` payloads are cumulative snapshots, not deltas: `chunk`
+holds accumulated text and `thinking` holds accumulated reasoning for one
+`execution_id`/`iteration`. The empty final callback preserves both. The UI
+replaces the corresponding part rather than appending the snapshot again.
+
+### Interaction and completion
+
+Task status is a business state, not the Temporal execution status. A task may
+be `completed` while its workflow is still waiting for a follow-up. The immediate
+`task.completed` event carries `execution_status: "waiting"`; `execution.finished`
+marks actual closure. The REST feed follows execution closure, while A2A keeps
+its turn-scoped completion boundary.
+
+[`interaction.py`](agentarea_execution/interaction.py) resolves the run's return
+channel. API task parameters can explicitly select a configured web return
+channel, independently of the trigger that started the run:
+
+```json
+{
+  "interaction": {
+    "channel": "web",
+    "allow_questions": true,
+    "allow_approvals": true,
+    "allow_a2ui": true
+  }
+}
+```
+
+`channel: "none"` disables interactive delivery. Background, scheduled, delegated,
+and external-channel runs default to noninteractive unless a supported return
+channel is explicitly configured. These flags describe available interaction;
+they do not grant tool access or approval authority. A2UI also requires the
+agent's A2UI setting.
+
+Without a question channel or permission, `request_user_input` is not offered to
+the model. The agent attempts the task autonomously with its available context
+and tools. It may report `completion.outcome: "blocked"` when an indispensable
+prerequisite remains missing; unavailable interaction alone does not block a
+run. Mandatory approval is never bypassed.
+
+Displaying A2UI alone does not create a required wait. To request a required
+nonsecret form response, emit its surface and call `request_user_input` with
+`surface_id` and typed `questions`. A declared action on that surface supplies
+the answer context; unrelated actions and invalid answers cannot resume it.
+Single-selection A2UI `ChoicePicker` lists are adapted to native `select`
+answers. Secret fields must use the native input/vault route, not A2UI context.
+
+A required request waits for its matching validated response. Its 30-minute
+timeout ends the run as `blocked` without another model call. Cancelling a pending
+task persists its cancelled state and closes the interaction feed; stopping a
+follow-up listener does not undo an already completed turn. New workflow behavior
+is guarded by the `channel-aware-interaction-v1` Temporal patch; continued runs
+preserve their resolved capabilities and pending identities.
+
 ## Package Structure
 
 ```

@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_common.auth import UserContext, UserContextDep, assert_workspace_admin
 from agentarea_common.auth.access import AGENT_EXECUTE, authorize_agent_action
+from agentarea_common.auth.route_authz import enforced_in_handler
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
 from agentarea_common.rebac import (
@@ -55,7 +56,11 @@ class NetworkPeopleAccessResponse(BaseModel):
     directory_status: Literal["available", "disabled"] = "available"
 
 
-@router.get("/people-access", response_model=NetworkPeopleAccessResponse)
+@router.get(
+    "/people-access",
+    response_model=NetworkPeopleAccessResponse,
+    dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
+)
 async def get_network_people_access(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,

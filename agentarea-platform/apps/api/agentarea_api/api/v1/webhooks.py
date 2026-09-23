@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 from agentarea_api.api.deps.services import get_public_webhook_manager
+from agentarea_common.auth.route_authz import unrestricted
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
@@ -37,24 +38,36 @@ async def webhook_health_check(
     operation_id="handle_webhook_webhooks__webhook_id__post",
     summary="Handle webhook requests",
     description="Process incoming webhook requests for registered triggers",
+    dependencies=[
+        unrestricted("public webhook sink; authenticity is the signed payload, not a session")
+    ],
 )
 @router.put(
     "/{webhook_id}",
     operation_id="handle_webhook_webhooks__webhook_id__put",
     summary="Handle webhook requests",
     description="Process incoming webhook requests for registered triggers",
+    dependencies=[
+        unrestricted("public webhook sink; authenticity is the signed payload, not a session")
+    ],
 )
 @router.patch(
     "/{webhook_id}",
     operation_id="handle_webhook_webhooks__webhook_id__patch",
     summary="Handle webhook requests",
     description="Process incoming webhook requests for registered triggers",
+    dependencies=[
+        unrestricted("public webhook sink; authenticity is the signed payload, not a session")
+    ],
 )
 @router.delete(
     "/{webhook_id}",
     operation_id="handle_webhook_webhooks__webhook_id__delete",
     summary="Handle webhook requests",
     description="Process incoming webhook requests for registered triggers",
+    dependencies=[
+        unrestricted("public webhook sink; authenticity is the signed payload, not a session")
+    ],
 )
 @router.head(
     "/{webhook_id}",

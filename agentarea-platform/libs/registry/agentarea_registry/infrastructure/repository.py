@@ -43,6 +43,10 @@ DEFAULT_CATALOG_SORT = "recommended"
 # The category sources fall back to when they can't classify an entry. It is a
 # bucket, not a peer category, so the facet list sorts it last rather than
 # letting it land mid-alphabet or -- as ordering by size did -- near the top.
+#
+# Matched case-insensitively because the sources disagree on spelling: skills
+# write "other", the MCP catalog title-cases its agentarea:category values and
+# writes "Other". Comparing exactly demoted only one of them.
 FALLBACK_CATEGORY = "other"
 
 # Connections are not all MCP: a catalog entry is either an MCP server (reached
@@ -327,7 +331,7 @@ class RegistryItemRepository:
             .where(*conditions, RegistryItem.category.is_not(None))
             .group_by(RegistryItem.category)
             .order_by(
-                case((RegistryItem.category == FALLBACK_CATEGORY, 1), else_=0),
+                case((func.lower(RegistryItem.category) == FALLBACK_CATEGORY, 1), else_=0),
                 RegistryItem.category.asc(),
             )
         )

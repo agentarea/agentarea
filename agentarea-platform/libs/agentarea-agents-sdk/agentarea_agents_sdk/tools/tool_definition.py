@@ -20,12 +20,18 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 # break" have different answers and must be filterable separately.
 #
 # ``plane`` — the surface a toolset belongs to:
+#   runtime   the agent's own body (shell, files, org context, web, math)
 #   build     design-time configuration (agents, skills, models, connections)
 #   operate   runtime intervention (runs, inbox, files)
 #   observe   read-only telemetry (audit, topology)
 #   govern    policy, access, membership, spend
 #   federate  outward-facing clients and catalogs (harnesses, bundles)
-ToolPlane = Literal["build", "operate", "observe", "govern", "federate"]
+#
+# ``runtime`` is the one plane that is not about operating AgentArea: equipping
+# it changes what the agent can do for its own task, not what it can reach in
+# the platform. The two belong in separate places in the UI, which is why the
+# distinction has to be declared rather than inferred from a namespace list.
+ToolPlane = Literal["runtime", "build", "operate", "observe", "govern", "federate"]
 
 # ``effect`` — per tool method. ``privileged`` is what changes someone's
 # rights, limits, or reach, which is not the same as merely writing data.

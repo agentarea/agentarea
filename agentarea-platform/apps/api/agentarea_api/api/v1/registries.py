@@ -8,6 +8,7 @@ from uuid import UUID
 
 from agentarea_api.api.deps.services import get_registry_service
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import AUTHZ_ATTR, unrestricted
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_registry.application.service import (
     VALID_REGISTRY_TYPES,
@@ -213,6 +214,15 @@ async def require_platform_catalog_write(user_context: UserContextDep) -> None:
         )
 
 
+# Declares this dependency as an authorization decision, so the route-level
+# guard is visible to the ratchet in ``test_authz_ratchet.py``.
+setattr(
+    require_platform_catalog_write,
+    AUTHZ_ATTR,
+    {"action": "write", "resource_type": "platform_catalog"},
+)
+
+
 # ── Registry CRUD ──
 
 
@@ -241,7 +251,11 @@ async def create_registry(
     return RegistryResponse.from_domain(registry)
 
 
-@router.get("/", response_model=list[RegistryResponse])
+@router.get(
+    "/",
+    response_model=list[RegistryResponse],
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def list_registries(
     user_context: UserContextDep,
     active_only: bool = Query(False),
@@ -276,7 +290,11 @@ class CatalogBrowseResponse(BaseModel):
     protocols: list[CategoryFacet]
 
 
-@router.get("/catalog/browse", response_model=CatalogBrowseResponse)
+@router.get(
+    "/catalog/browse",
+    response_model=CatalogBrowseResponse,
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def browse_catalog(
     user_context: UserContextDep,
     registry_type: str = Query(..., description="Catalog type to browse"),
@@ -331,7 +349,11 @@ async def browse_catalog(
     )
 
 
-@router.get("/catalog/search", response_model=list[RegistryItemResponse])
+@router.get(
+    "/catalog/search",
+    response_model=list[RegistryItemResponse],
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def search_catalog(
     user_context: UserContextDep,
     q: str | None = Query(None, description="Search query"),
@@ -352,7 +374,11 @@ async def search_catalog(
     return [RegistryItemResponse.from_domain(i) for i in items]
 
 
-@router.get("/{registry_id}", response_model=RegistryResponse)
+@router.get(
+    "/{registry_id}",
+    response_model=RegistryResponse,
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def get_registry(
     registry_id: UUID,
     user_context: UserContextDep,
@@ -427,7 +453,11 @@ async def sync_registry(
 # ── Catalog items ──
 
 
-@router.get("/{registry_id}/items", response_model=list[RegistryItemResponse])
+@router.get(
+    "/{registry_id}/items",
+    response_model=list[RegistryItemResponse],
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def list_registry_items(
     registry_id: UUID,
     user_context: UserContextDep,
@@ -466,7 +496,11 @@ async def create_catalog_item(
     return RegistryItemResponse.from_domain(item)
 
 
-@router.get("/catalog/items/{item_id}", response_model=RegistryItemResponse)
+@router.get(
+    "/catalog/items/{item_id}",
+    response_model=RegistryItemResponse,
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def get_catalog_item(
     item_id: UUID,
     user_context: UserContextDep,

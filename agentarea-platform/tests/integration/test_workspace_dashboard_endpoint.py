@@ -70,9 +70,7 @@ async def engine():
 
     async with _engine.begin() as conn:
         await conn.run_sync(
-            lambda sync_conn: BaseModel.metadata.create_all(
-                sync_conn, tables=target_tables
-            )
+            lambda sync_conn: BaseModel.metadata.create_all(sync_conn, tables=target_tables)
         )
     yield _engine
     await _engine.dispose()
@@ -85,13 +83,15 @@ def session_factory(engine):
 
 @pytest.fixture(scope="module")
 async def seeded(session_factory):
-    """Seed Agent + 5 Tasks + workspace cap governance policy.
+    """Seed Agent + 7 Tasks + workspace cap governance policy.
 
     t1 completed today      cost=10  → spend.today, mtd, tasks_done_today
     t2 completed yesterday  cost=5   → spend.mtd only
     t3 failed now-1h        cost=0   → blockers.failed_24h, tasks_failed_today
     t4 failed now-30h       cost=0   → outside 24h window
-    t5 input_required today          → blockers.hitl
+    t5 waiting_for_input today       → blockers.hitl
+    t6 waiting_for_approval today    → blockers.hitl
+    t7 waiting_for_input elsewhere   → excluded by workspace
     """
     agent_id = uuid.uuid4()
     other_workspace_agent_id = uuid.uuid4()
@@ -104,6 +104,7 @@ async def seeded(session_factory):
     t3_id = uuid.uuid4()
     t4_id = uuid.uuid4()
     t5_id = uuid.uuid4()
+    t6_id = uuid.uuid4()
 
     async with session_factory() as session:
         session.add(
@@ -198,10 +199,32 @@ async def seeded(session_factory):
                 workspace_id=WORKSPACE_ID,
                 created_by=USER_ID,
                 description="Waiting for human input",
-                status="input_required",
+                status="waiting_for_input",
                 started_at=today,
                 completed_at=None,
                 result=None,
+            )
+        )
+        session.add(
+            TaskORM(
+                id=t6_id,
+                agent_id=agent_id,
+                workspace_id=WORKSPACE_ID,
+                created_by=USER_ID,
+                description="Waiting for tool approval",
+                status="waiting_for_approval",
+                started_at=today,
+            )
+        )
+        session.add(
+            TaskORM(
+                id=uuid.uuid4(),
+                agent_id=other_workspace_agent_id,
+                workspace_id="other-workspace-999",
+                created_by="other-user",
+                description="Other workspace input",
+                status="waiting_for_input",
+                started_at=today,
             )
         )
 
@@ -227,6 +250,7 @@ async def seeded(session_factory):
         "t3_id": t3_id,
         "t4_id": t4_id,
         "t5_id": t5_id,
+        "t6_id": t6_id,
     }
 
 
@@ -378,12 +402,12 @@ class TestSpendCard:
 
 
 class TestBlockersHitl:
-    async def test_hitl_contains_the_input_required_task(
+    async def test_hitl_selects_input_and_approval_waiters_in_workspace(
         self, session_factory, user_context, seeded
     ):
         result = await _call_dashboard(session_factory, user_context)
         hitl_ids = {b.task_id for b in result.blockers.hitl}
-        assert seeded["t5_id"] in hitl_ids
+        assert hitl_ids == {seeded["t5_id"], seeded["t6_id"]}
 
     async def test_hitl_does_not_contain_completed_tasks(
         self, session_factory, user_context, seeded

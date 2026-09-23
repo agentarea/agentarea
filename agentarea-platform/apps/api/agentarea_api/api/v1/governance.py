@@ -9,6 +9,7 @@ from typing import Annotated
 from uuid import UUID
 
 from agentarea_common.auth import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
 from agentarea_governance.application import GovernancePolicyResolver
@@ -41,7 +42,11 @@ class EffectivePolicyPreviewRequest(BaseModel):
     task_policy: PolicyDocument | None = None
 
 
-@router.post("/effective-policy/preview", response_model=EffectivePolicyResponse)
+@router.post(
+    "/effective-policy/preview",
+    response_model=EffectivePolicyResponse,
+    dependencies=[unrestricted("read-only preview of the caller's own effective policy")],
+)
 async def preview_effective_policy(
     payload: EffectivePolicyPreviewRequest,
     user_context: UserContextDep,
@@ -64,7 +69,11 @@ async def preview_effective_policy(
     return EffectivePolicyResponse(effective_policy=effective)
 
 
-@router.get("/task-policy-snapshots/{task_id}", response_model=EffectivePolicyResponse)
+@router.get(
+    "/task-policy-snapshots/{task_id}",
+    response_model=EffectivePolicyResponse,
+    dependencies=[unrestricted("the snapshot belongs to a task in the caller's own workspace")],
+)
 async def get_task_policy_snapshot(
     task_id: UUID,
     user_context: UserContextDep,

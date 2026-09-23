@@ -7,6 +7,7 @@ from agentarea_agents.application.workspace_export_service import (
 )
 from agentarea_api.api.deps.services import get_workspace_export_service
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import requires_workspace_admin
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/workspace", tags=["workspace-config"])
 
 
-@router.get("/export", response_class=PlainTextResponse)
+@router.get("/export", response_class=PlainTextResponse, dependencies=[requires_workspace_admin()])
 async def export_workspace_config(
     user_context: UserContextDep,
     service: WorkspaceExportService = Depends(get_workspace_export_service),

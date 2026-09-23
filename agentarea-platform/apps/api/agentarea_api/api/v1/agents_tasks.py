@@ -25,9 +25,15 @@ from agentarea_api.api.deps.services import (
     get_temporal_workflow_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.base import ReadRepositoryFactoryDep
 from agentarea_common.config import get_settings
-from agentarea_common.events.contract import TASK_CANCELLED, TASK_COMPLETED, TASK_FAILED
+from agentarea_common.events.contract import (
+    EXECUTION_FINISHED,
+    TASK_CANCELLED,
+    TASK_COMPLETED,
+    TASK_FAILED,
+)
 from agentarea_common.money import ZERO, Money, serialize_money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
@@ -253,7 +259,12 @@ class ContinueTaskPayload(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-@global_tasks_router.post("/{task_id}/continue")
+@global_tasks_router.post(
+    "/{task_id}/continue",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def continue_task_execution(
     task_id: UUID,
     payload: ContinueTaskPayload,
@@ -420,7 +431,13 @@ class TaskWithAgent(BaseModel):
         )
 
 
-@global_tasks_router.get("/", response_model=list[TaskWithAgent])
+@global_tasks_router.get(
+    "/",
+    response_model=list[TaskWithAgent],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_all_tasks(
     user_context: UserContextDep,
     status: str | None = Query(None, description="Filter by task status"),
@@ -489,7 +506,13 @@ async def get_all_tasks(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@global_tasks_router.get("/{task_id}", response_model=TaskWithAgent)
+@global_tasks_router.get(
+    "/{task_id}",
+    response_model=TaskWithAgent,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_task_by_id(
     task_id: UUID,
     user_context: UserContextDep,
@@ -566,6 +589,7 @@ _TERMINAL_EVENT_TYPES = {
     TASK_COMPLETED,
     TASK_FAILED,
     TASK_CANCELLED,
+    EXECUTION_FINISHED,
 }
 
 
@@ -609,6 +633,7 @@ async def _tail_task_events_sse(
         workspace_id=workspace_id,
         terminal_types=frozenset(_TERMINAL_EVENT_TYPES),
         include_chunks=include_chunks,
+        follow_execution=True,
     ):
         sse_event = {
             "event_type": env.event_type,
@@ -619,7 +644,12 @@ async def _tail_task_events_sse(
         yield _format_sse_event(env.event_type, sse_event)
 
 
-@router.post("/")
+@router.post(
+    "/",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_task_for_agent_with_stream(
     agent_id: UUID,
     data: TaskCreate,
@@ -816,7 +846,13 @@ async def create_task_for_agent_with_stream(
     )
 
 
-@router.post("/sync", response_model=TaskResponse)
+@router.post(
+    "/sync",
+    response_model=TaskResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_task_for_agent_sync(
     agent_id: UUID,
     data: TaskCreate,
@@ -899,7 +935,14 @@ class ScheduleTaskCreate(TaskCreate):
     _validate_scheduled_at = field_validator("scheduled_at")(require_future_instant)
 
 
-@router.post("/schedule", response_model=TaskResponse, status_code=201)
+@router.post(
+    "/schedule",
+    response_model=TaskResponse,
+    status_code=201,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def schedule_task_for_agent(
     agent_id: UUID,
     data: ScheduleTaskCreate,
@@ -980,7 +1023,13 @@ async def schedule_task_for_agent(
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
-@router.get("/", response_model=list[TaskResponse])
+@router.get(
+    "/",
+    response_model=list[TaskResponse],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_agent_tasks(
     agent_id: UUID,
     user_context: UserContextDep,
@@ -1035,7 +1084,13 @@ async def list_agent_tasks(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{task_id}", response_model=TaskResponse)
+@router.get(
+    "/{task_id}",
+    response_model=TaskResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_agent_task(
     agent_id: UUID,
     task_id: UUID,
@@ -1066,7 +1121,12 @@ async def get_agent_task(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{task_id}/status")
+@router.get(
+    "/{task_id}/status",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_agent_task_status(
     agent_id: UUID,
     task_id: UUID,
@@ -1077,12 +1137,8 @@ async def get_agent_task_status(
     """Get the execution status of a specific task workflow."""
     # No agent-existence gate — see get_agent_task.
     try:
-        # DB is the source of truth for the task lifecycle; Temporal only
-        # upgrades to a terminal state. The workflow may stay alive in
-        # await_follow_up after writing "completed" to the DB, so reading the
-        # raw live workflow status here would report "running" for a finished
-        # task. get_task_with_workflow_status applies the same enrichment the
-        # plain task get uses, keeping the two endpoints consistent.
+        # Persisted business state is enriched only with closed execution outcomes.
+        # A live follow-up or human-input waiter must not make the task "running".
         task = await task_service.get_task_with_workflow_status(task_id)
         if not task or str(task.agent_id) != str(agent_id):
             raise HTTPException(status_code=404, detail="Task not found")
@@ -1317,7 +1373,13 @@ async def _verify_task_for_agent(task_service: TaskService, agent_id: UUID, task
     return task
 
 
-@router.get("/{task_id}/artifacts", response_model=list[TaskArtifactItem])
+@router.get(
+    "/{task_id}/artifacts",
+    response_model=list[TaskArtifactItem],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_task_artifacts(
     agent_id: UUID,
     task_id: UUID,
@@ -1342,7 +1404,12 @@ async def list_task_artifacts(
     )
 
 
-@router.get("/{task_id}/artifacts/files/{artifact_path:path}")
+@router.get(
+    "/{task_id}/artifacts/files/{artifact_path:path}",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def download_task_artifact(
     agent_id: UUID,
     task_id: UUID,
@@ -1378,7 +1445,13 @@ def _normalize_live_sandbox_path(value: str, *, allow_empty: bool = False) -> st
     return "/".join(parts)
 
 
-@router.get("/{task_id}/sandbox/files", response_model=SandboxFileListResponse)
+@router.get(
+    "/{task_id}/sandbox/files",
+    response_model=SandboxFileListResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_task_sandbox_files(
     agent_id: UUID,
     task_id: UUID,
@@ -1409,7 +1482,12 @@ async def list_task_sandbox_files(
     return SandboxFileListResponse(items=items, total=len(items))
 
 
-@router.get("/{task_id}/sandbox/files/{file_path:path}")
+@router.get(
+    "/{task_id}/sandbox/files/{file_path:path}",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def read_task_sandbox_file(
     agent_id: UUID,
     task_id: UUID,
@@ -1469,7 +1547,13 @@ class TaskSummary(BaseModel):
     last_error: str | None = None
 
 
-@router.get("/{task_id}/summary", response_model=TaskSummary)
+@router.get(
+    "/{task_id}/summary",
+    response_model=TaskSummary,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_task_summary(
     agent_id: UUID,
     task_id: UUID,
@@ -1508,7 +1592,12 @@ async def get_task_summary(
     return TaskSummary(**dict(row))
 
 
-@router.delete("/{task_id}")
+@router.delete(
+    "/{task_id}",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def cancel_agent_task(
     agent_id: UUID,
     task_id: UUID,
@@ -1543,7 +1632,12 @@ async def cancel_agent_task(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{task_id}/pause")
+@router.post(
+    "/{task_id}/pause",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def pause_agent_task(
     agent_id: UUID,
     task_id: UUID,
@@ -1599,7 +1693,12 @@ async def pause_agent_task(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{task_id}/resume")
+@router.post(
+    "/{task_id}/resume",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def resume_agent_task(
     agent_id: UUID,
     task_id: UUID,
@@ -1658,7 +1757,12 @@ async def resume_agent_task(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{task_id}/a2ui/action")
+@router.post(
+    "/{task_id}/a2ui/action",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def send_a2ui_action(
     agent_id: UUID,
     task_id: UUID,
@@ -1676,17 +1780,17 @@ async def send_a2ui_action(
     if not getattr(agent, "a2ui_enabled", False):
         raise HTTPException(status_code=400, detail="Agent does not have A2UI enabled")
 
-    await _verify_task_for_agent(task_service, agent_id, task_id)
+    task = await _verify_task_for_agent(task_service, agent_id, task_id)
 
     try:
-        execution_id = f"agent-task-{task_id}"
+        execution_id = task.execution_id or f"task-{task_id}"
         status = await workflow_task_service.get_workflow_status(execution_id)
+        current_status = status.get("execution_status", status.get("status", "")).lower()
 
-        if status.get("status") == "unknown":
+        if current_status == "unknown":
             raise HTTPException(status_code=404, detail="Task not found")
 
-        current_status = status.get("status", "").lower()
-        if current_status in ["completed", "failed", "cancelled"]:
+        if current_status != "running":
             raise HTTPException(
                 status_code=400, detail=f"Cannot send action to task in '{current_status}' state"
             )
@@ -1710,7 +1814,12 @@ async def send_a2ui_action(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{task_id}/input")
+@router.post(
+    "/{task_id}/input",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def submit_task_input(
     agent_id: UUID,
     task_id: UUID,
@@ -1849,7 +1958,12 @@ async def _resolve_model_info(
     }
 
 
-@router.post("/{task_id}/command")
+@router.post(
+    "/{task_id}/command",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def send_task_command(
     agent_id: UUID,
     task_id: UUID,
@@ -1933,7 +2047,12 @@ async def send_task_command(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{task_id}/resolve-escalation")
+@router.post(
+    "/{task_id}/resolve-escalation",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def resolve_task_escalation(
     agent_id: UUID,
     task_id: UUID,
@@ -1977,7 +2096,13 @@ async def resolve_task_escalation(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{task_id}/events", response_model=TaskEventResponse)
+@router.get(
+    "/{task_id}/events",
+    response_model=TaskEventResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_task_events(
     agent_id: UUID,
     task_id: UUID,
@@ -2034,7 +2159,12 @@ async def get_task_events(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{task_id}/events/stream")
+@router.get(
+    "/{task_id}/events/stream",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def stream_task_events(
     agent_id: UUID,
     task_id: UUID,

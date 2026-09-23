@@ -138,6 +138,7 @@ def _filename_from_url(url: str, content_type: str | None) -> str:
     display_name="Web Tools",
     description="Search the web and fetch URLs; binary responses become live workspace files.",
     category="information",
+    plane="runtime",
     requires_user_confirmation=True,
 )
 class WebToolset(Toolset):
@@ -196,7 +197,7 @@ class WebToolset(Toolset):
             return f"tasks/{self.task_id}/workspace/{relative_path}"
         return relative_path
 
-    @tool_method
+    @tool_method(effect="read")
     async def search_web(
         self,
         query: str,
@@ -255,7 +256,7 @@ class WebToolset(Toolset):
             ensure_ascii=False,
         )
 
-    @tool_method
+    @tool_method(effect="write")
     async def fetch_webpage(
         self,
         url: str,

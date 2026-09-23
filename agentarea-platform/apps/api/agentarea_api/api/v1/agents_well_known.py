@@ -13,6 +13,7 @@ import logging
 from uuid import UUID
 
 from agentarea_agents.domain.models import Agent
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config.database import get_read_db_session
 from agentarea_common.utils.types import (
     AgentCapabilities,
@@ -96,7 +97,12 @@ async def create_agent_card_for_agent(agent, base_url: str, agent_id: UUID) -> A
     )
 
 
-@router.get("/.well-known/agent-card.json")
+@router.get(
+    "/.well-known/agent-card.json",
+    dependencies=[
+        unrestricted("public agent discovery document, served unauthenticated by design")
+    ],
+)
 async def get_agent_well_known_card(
     agent_id: UUID,
     request: Request,
@@ -132,7 +138,12 @@ async def get_agent_well_known_card(
         raise HTTPException(status_code=500, detail="Agent discovery failed") from e
 
 
-@router.get("/.well-known/a2a-info.json")
+@router.get(
+    "/.well-known/a2a-info.json",
+    dependencies=[
+        unrestricted("public agent discovery document, served unauthenticated by design")
+    ],
+)
 async def get_agent_a2a_info(
     agent_id: UUID,
     request: Request,
@@ -205,7 +216,12 @@ async def get_agent_a2a_info(
         raise HTTPException(status_code=500, detail="A2A info failed") from e
 
 
-@router.get("/.well-known/")
+@router.get(
+    "/.well-known/",
+    dependencies=[
+        unrestricted("public agent discovery document, served unauthenticated by design")
+    ],
+)
 async def get_agent_well_known_index(
     agent_id: UUID,
     request: Request,

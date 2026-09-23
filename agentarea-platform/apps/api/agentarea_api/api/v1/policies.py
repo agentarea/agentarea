@@ -4,6 +4,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_common.auth import UserContextDep, assert_workspace_admin
+from agentarea_common.auth.route_authz import enforced_in_handler, requires_workspace_admin
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
 from agentarea_governance.application import GovernancePolicyService
@@ -80,7 +81,7 @@ def _rule_response(rule: PolicyRule) -> PolicyRuleResponse:
     )
 
 
-@router.get("", response_model=list[PolicyRuleResponse])
+@router.get("", response_model=list[PolicyRuleResponse], dependencies=[requires_workspace_admin()])
 async def list_policy_rules(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
@@ -102,7 +103,12 @@ async def list_policy_rules(
     return [_rule_response(rule) for rule in rules]
 
 
-@router.post("", response_model=PolicyRuleResponse, status_code=201)
+@router.post(
+    "",
+    response_model=PolicyRuleResponse,
+    status_code=201,
+    dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
+)
 async def create_policy_rule(
     payload: PolicyRuleCreateRequest,
     user_context: UserContextDep,
@@ -129,7 +135,9 @@ async def create_policy_rule(
     return _rule_response(created)
 
 
-@router.get("/{rule_id}", response_model=PolicyRuleResponse)
+@router.get(
+    "/{rule_id}", response_model=PolicyRuleResponse, dependencies=[requires_workspace_admin()]
+)
 async def get_policy_rule(
     rule_id: UUID,
     user_context: UserContextDep,
@@ -143,7 +151,11 @@ async def get_policy_rule(
     return _rule_response(rule)
 
 
-@router.patch("/{rule_id}", response_model=PolicyRuleResponse)
+@router.patch(
+    "/{rule_id}",
+    response_model=PolicyRuleResponse,
+    dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
+)
 async def update_policy_rule(
     rule_id: UUID,
     payload: PolicyRuleUpdateRequest,
@@ -167,7 +179,11 @@ async def update_policy_rule(
     return _rule_response(updated)
 
 
-@router.delete("/{rule_id}", status_code=204)
+@router.delete(
+    "/{rule_id}",
+    status_code=204,
+    dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
+)
 async def delete_policy_rule(
     rule_id: UUID,
     user_context: UserContextDep,

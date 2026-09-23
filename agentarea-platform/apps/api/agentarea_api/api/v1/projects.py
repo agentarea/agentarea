@@ -12,6 +12,7 @@ from agentarea_common.artifacts import (
     DbArtifactEventRecorder,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config.app import get_app_settings
 from agentarea_projects.application.service import ProjectService
@@ -112,7 +113,14 @@ class ProjectResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@router.post("/", response_model=ProjectResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=ProjectResponse,
+    status_code=201,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_project(
     data: ProjectCreate,
     user_context: UserContextDep,
@@ -123,7 +131,13 @@ async def create_project(
     return ProjectResponse.model_validate(project)
 
 
-@router.get("/", response_model=list[ProjectResponse])
+@router.get(
+    "/",
+    response_model=list[ProjectResponse],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_projects(
     user_context: UserContextDep,
     service: ProjectServiceDep,
@@ -135,7 +149,13 @@ async def list_projects(
     return [ProjectResponse.model_validate(p) for p in projects]
 
 
-@router.get("/{project_id}", response_model=ProjectResponse)
+@router.get(
+    "/{project_id}",
+    response_model=ProjectResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_project(
     project_id: UUID,
     user_context: UserContextDep,
@@ -148,7 +168,13 @@ async def get_project(
     return ProjectResponse.model_validate(project)
 
 
-@router.patch("/{project_id}", response_model=ProjectResponse)
+@router.patch(
+    "/{project_id}",
+    response_model=ProjectResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def update_project(
     project_id: UUID,
     data: ProjectUpdate,
@@ -162,7 +188,13 @@ async def update_project(
     return ProjectResponse.model_validate(project)
 
 
-@router.delete("/{project_id}", status_code=204)
+@router.delete(
+    "/{project_id}",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def delete_project(
     project_id: UUID,
     user_context: UserContextDep,
@@ -179,7 +211,13 @@ async def delete_project(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/{project_id}/skills", status_code=204)
+@router.post(
+    "/{project_id}/skills",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def add_skill_to_project(
     project_id: UUID,
     body: AssociationBody,
@@ -190,7 +228,13 @@ async def add_skill_to_project(
     await service.add_skill(project_id, body.id)
 
 
-@router.delete("/{project_id}/skills/{skill_id}", status_code=204)
+@router.delete(
+    "/{project_id}/skills/{skill_id}",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def remove_skill_from_project(
     project_id: UUID,
     skill_id: UUID,
@@ -201,7 +245,13 @@ async def remove_skill_from_project(
     await service.remove_skill(project_id, skill_id)
 
 
-@router.post("/{project_id}/mcp-instances", status_code=204)
+@router.post(
+    "/{project_id}/mcp-instances",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def add_mcp_instance_to_project(
     project_id: UUID,
     body: AssociationBody,
@@ -212,7 +262,13 @@ async def add_mcp_instance_to_project(
     await service.add_mcp_instance(project_id, body.id)
 
 
-@router.delete("/{project_id}/mcp-instances/{mcp_instance_id}", status_code=204)
+@router.delete(
+    "/{project_id}/mcp-instances/{mcp_instance_id}",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def remove_mcp_instance_from_project(
     project_id: UUID,
     mcp_instance_id: UUID,
@@ -223,7 +279,13 @@ async def remove_mcp_instance_from_project(
     await service.remove_mcp_instance(project_id, mcp_instance_id)
 
 
-@router.post("/{project_id}/agents", status_code=204)
+@router.post(
+    "/{project_id}/agents",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def add_agent_to_project(
     project_id: UUID,
     body: AssociationBody,
@@ -234,7 +296,13 @@ async def add_agent_to_project(
     await service.add_agent(project_id, body.id)
 
 
-@router.delete("/{project_id}/agents/{agent_id}", status_code=204)
+@router.delete(
+    "/{project_id}/agents/{agent_id}",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def remove_agent_from_project(
     project_id: UUID,
     agent_id: UUID,
@@ -262,7 +330,13 @@ def _project_file_download_url(project_id: UUID, file_path: str) -> str:
     return f"{base}/v1/projects/{project_id}/files/download/{encoded_path}"
 
 
-@router.post("/{project_id}/files", status_code=204)
+@router.post(
+    "/{project_id}/files",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def upload_project_file(
     project_id: UUID,
     file: UploadFile,
@@ -287,7 +361,13 @@ async def upload_project_file(
     )
 
 
-@router.get("/{project_id}/files", response_model=ProjectFileListResponse)
+@router.get(
+    "/{project_id}/files",
+    response_model=ProjectFileListResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_project_files(
     project_id: UUID,
     user_context: UserContextDep,
@@ -313,7 +393,12 @@ async def list_project_files(
     return ProjectFileListResponse(files=files)
 
 
-@router.get("/{project_id}/files/download/{file_path:path}")
+@router.get(
+    "/{project_id}/files/download/{file_path:path}",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def stream_project_file(
     project_id: UUID,
     file_path: str,
@@ -337,7 +422,13 @@ async def stream_project_file(
     return StreamingResponse(iter([data]), media_type=content_type, headers=headers)
 
 
-@router.get("/{project_id}/files/{file_path:path}", response_model=ProjectFileDownloadResponse)
+@router.get(
+    "/{project_id}/files/{file_path:path}",
+    response_model=ProjectFileDownloadResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def download_project_file(
     project_id: UUID,
     file_path: str,
@@ -357,7 +448,13 @@ async def download_project_file(
     return ProjectFileDownloadResponse(url=url, path=file_path)
 
 
-@router.delete("/{project_id}/files/{file_path:path}", status_code=204)
+@router.delete(
+    "/{project_id}/files/{file_path:path}",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def delete_project_file(
     project_id: UUID,
     file_path: str,

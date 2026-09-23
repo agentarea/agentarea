@@ -13,6 +13,7 @@ from agentarea_agents.application.collection_service import SkillCollectionServi
 from agentarea_agents.infrastructure.collection_repository import SkillCollectionRepository
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_common.auth import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
 from fastapi import APIRouter, Depends, HTTPException
@@ -59,7 +60,13 @@ class CollectionDetailResponse(BaseModel):
     skills: list[SkillRef]
 
 
-@router.get("/", response_model=list[CollectionSummaryResponse])
+@router.get(
+    "/",
+    response_model=list[CollectionSummaryResponse],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_collections(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
@@ -78,7 +85,14 @@ async def list_collections(
     ]
 
 
-@router.post("/", response_model=CollectionSummaryResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=CollectionSummaryResponse,
+    status_code=201,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_collection(
     payload: CollectionCreateRequest,
     user_context: UserContextDep,
@@ -95,7 +109,13 @@ async def create_collection(
     )
 
 
-@router.get("/{collection_id}", response_model=CollectionDetailResponse)
+@router.get(
+    "/{collection_id}",
+    response_model=CollectionDetailResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_collection(
     collection_id: UUID,
     user_context: UserContextDep,
@@ -114,7 +134,13 @@ async def get_collection(
     )
 
 
-@router.put("/{collection_id}", response_model=CollectionSummaryResponse)
+@router.put(
+    "/{collection_id}",
+    response_model=CollectionSummaryResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def update_collection(
     collection_id: UUID,
     payload: CollectionUpdateRequest,
@@ -140,7 +166,13 @@ async def update_collection(
     )
 
 
-@router.delete("/{collection_id}", status_code=204)
+@router.delete(
+    "/{collection_id}",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def delete_collection(
     collection_id: UUID,
     user_context: UserContextDep,
@@ -153,7 +185,13 @@ async def delete_collection(
         raise HTTPException(status_code=404, detail="Collection not found")
 
 
-@router.post("/{collection_id}/skills", status_code=204)
+@router.post(
+    "/{collection_id}/skills",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def add_skill_to_collection(
     collection_id: UUID,
     payload: AddSkillRequest,
@@ -175,7 +213,13 @@ async def add_skill_to_collection(
     await service.add_skill(collection_id, payload.skill_id)
 
 
-@router.delete("/{collection_id}/skills/{skill_id}", status_code=204)
+@router.delete(
+    "/{collection_id}/skills/{skill_id}",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def remove_skill_from_collection(
     collection_id: UUID,
     skill_id: UUID,

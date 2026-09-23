@@ -15,6 +15,7 @@ from uuid import UUID
 
 from agentarea_api.api.deps.services import DatabaseSessionDep
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import requires_workspace_admin
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.oauth_link_service import MCPOAuthLinkService
 from agentarea_mcp.infrastructure.auth_repository import (
@@ -82,7 +83,12 @@ async def get_oauth_link_service(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/", response_model=OAuthLinkResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=OAuthLinkResponse,
+    status_code=201,
+    dependencies=[requires_workspace_admin()],
+)
 async def create_oauth_link(
     data: OAuthLinkCreateRequest,
     user_context: UserContextDep,
@@ -103,7 +109,11 @@ async def create_oauth_link(
         raise HTTPException(status_code=500, detail=f"Failed to create OAuth link: {exc}") from exc
 
 
-@router.get("/instance/{instance_id}", response_model=list[OAuthLinkResponse])
+@router.get(
+    "/instance/{instance_id}",
+    response_model=list[OAuthLinkResponse],
+    dependencies=[requires_workspace_admin()],
+)
 async def list_oauth_links_for_instance(
     instance_id: UUID,
     user_context: UserContextDep,
@@ -114,7 +124,9 @@ async def list_oauth_links_for_instance(
     return [OAuthLinkResponse.model_validate(lnk) for lnk in links]
 
 
-@router.get("/{link_id}", response_model=OAuthLinkResponse)
+@router.get(
+    "/{link_id}", response_model=OAuthLinkResponse, dependencies=[requires_workspace_admin()]
+)
 async def get_oauth_link(
     link_id: UUID,
     user_context: UserContextDep,
@@ -126,7 +138,7 @@ async def get_oauth_link(
     return OAuthLinkResponse.model_validate(link)
 
 
-@router.delete("/{link_id}", status_code=204)
+@router.delete("/{link_id}", status_code=204, dependencies=[requires_workspace_admin()])
 async def revoke_oauth_link(
     link_id: UUID,
     user_context: UserContextDep,

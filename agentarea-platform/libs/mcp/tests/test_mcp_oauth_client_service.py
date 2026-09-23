@@ -46,9 +46,7 @@ def _patch_httpx(monkeypatch, handler) -> None:
         async def __aexit__(self, *exc) -> None:
             await self._client.aclose()
 
-    monkeypatch.setattr(
-        "agentarea_mcp.application.oauth_client_service.httpx.AsyncClient", _Client
-    )
+    monkeypatch.setattr("agentarea_mcp.application.oauth_client_service.httpx.AsyncClient", _Client)
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +193,7 @@ class TestDiscoverAuthServer:
                     401,
                     headers={
                         "WWW-Authenticate": (
-                            'Bearer resource_metadata='
+                            "Bearer resource_metadata="
                             '"https://mcp.example.com/.well-known/oauth-protected-resource"'
                         )
                     },
@@ -238,7 +236,7 @@ class TestDiscoverAuthServer:
                     403,
                     headers={
                         "WWW-Authenticate": (
-                            'Bearer resource_metadata='
+                            "Bearer resource_metadata="
                             '"https://mcp.vercel.com/.well-known/oauth-protected-resource"'
                         )
                     },
@@ -270,13 +268,142 @@ class TestDiscoverAuthServer:
         assert meta.token_endpoint == "https://as.vercel.com/token"
         assert meta.resource == "https://mcp.vercel.com"
 
-    async def test_raises_when_initial_response_is_not_an_auth_challenge(self, monkeypatch):
-        def handler(_request):
-            return httpx.Response(200)
+    async def test_discovers_when_endpoint_rejects_get_without_a_challenge(self, monkeypatch):
+        """Google's Gmail MCP is POST-only: an unauthenticated GET is 405, and the
+        tool list is served without auth, so there is no WWW-Authenticate to read.
+        The protected-resource metadata still exists at the path-specific
+        well-known, so discovery must not be gated on the probe's status code."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            if url == "https://gmailmcp.googleapis.com/mcp/v1":
+                return httpx.Response(405)
+            if url.endswith("/.well-known/oauth-protected-resource/mcp/v1"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "resource": "https://gmailmcp.googleapis.com/mcp",
+                        "authorization_servers": ["https://accounts.google.com/"],
+                        "scopes_supported": ["https://www.googleapis.com/auth/gmail.modify"],
+                    },
+                )
+            if url.endswith("/.well-known/oauth-authorization-server"):
+                return httpx.Response(404)
+            if url.endswith("/.well-known/openid-configuration"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "issuer": "https://accounts.google.com",
+                        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+                        "token_endpoint": "https://oauth2.googleapis.com/token",
+                    },
+                )
+            raise AssertionError(f"unexpected request: {url}")
 
         _patch_httpx(monkeypatch, handler)
         svc = MCPOAuthClientService()
-        with pytest.raises(MCPOAuthDiscoveryError):
+
+        meta = await svc.discover_auth_server("https://gmailmcp.googleapis.com/mcp/v1")
+
+        assert meta.authorization_endpoint == "https://accounts.google.com/o/oauth2/v2/auth"
+        assert meta.token_endpoint == "https://oauth2.googleapis.com/token"
+        assert meta.resource == "https://gmailmcp.googleapis.com/mcp"
+        # Google has no DCR — the caller needs this to ask for an OAuth app
+        # instead of offering a Connect button that cannot complete.
+        assert meta.registration_endpoint is None
+        # The resource's own scopes (RFC 9728) are the only place the Gmail scopes
+        # are published: accounts.google.com advertises no scopes_supported, so
+        # authorizing without these would consent to nothing usable.
+        assert meta.scopes_supported == ["https://www.googleapis.com/auth/gmail.modify"]
+
+    async def test_offline_access_support_is_read_from_the_authorization_server(
+        self, monkeypatch
+    ):
+        """The flag tracks the authorization server's own advertised scopes, not
+        the resource's — the resource list says what to ask for, the AS list says
+        what it understands. Vercel advertises offline_access; Google does not."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            if url == "https://mcp.vercel.com":
+                return httpx.Response(403)
+            if url.endswith("/.well-known/oauth-protected-resource"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "resource": "https://mcp.vercel.com/",
+                        "authorization_servers": ["https://vercel.com"],
+                        "scopes_supported": ["openid"],
+                    },
+                )
+            if url.endswith("/.well-known/oauth-authorization-server"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "issuer": "https://vercel.com",
+                        "authorization_endpoint": "https://vercel.com/oauth/authorize",
+                        "token_endpoint": "https://vercel.com/oauth/token",
+                        "scopes_supported": ["openid", "email", "profile", "offline_access"],
+                    },
+                )
+            raise AssertionError(f"unexpected request: {url}")
+
+        _patch_httpx(monkeypatch, handler)
+        svc = MCPOAuthClientService()
+
+        meta = await svc.discover_auth_server("https://mcp.vercel.com")
+
+        assert meta.scopes_supported == ["openid"]
+        assert meta.offline_access_supported is True
+
+    async def test_resource_scopes_win_over_authorization_server_scopes(self, monkeypatch):
+        """RFC 9728 scopes_supported describes the resource being accessed; the AS
+        list is generic (openid/email/profile). Requesting the AS list instead
+        yields a token that the MCP server rejects."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            if url == "https://mcp.example.com/mcp":
+                return httpx.Response(401)
+            if url.endswith("/.well-known/oauth-protected-resource/mcp"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "resource": "https://mcp.example.com/mcp",
+                        "authorization_servers": ["https://as.example.com"],
+                        "scopes_supported": ["resource.read", "resource.write"],
+                    },
+                )
+            if url.endswith("/.well-known/oauth-authorization-server"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "issuer": "https://as.example.com",
+                        "authorization_endpoint": "https://as.example.com/authorize",
+                        "token_endpoint": "https://as.example.com/token",
+                        "scopes_supported": ["openid", "email", "profile"],
+                    },
+                )
+            raise AssertionError(f"unexpected request: {url}")
+
+        _patch_httpx(monkeypatch, handler)
+        svc = MCPOAuthClientService()
+
+        meta = await svc.discover_auth_server("https://mcp.example.com/mcp")
+
+        assert meta.scopes_supported == ["resource.read", "resource.write"]
+
+    async def test_raises_when_no_protected_resource_metadata_anywhere(self, monkeypatch):
+        """A server that answers everything 200 with no RFC 9728 document does not
+        support automated OAuth discovery — that is a discovery error, not a
+        crash on parsing an empty body as JSON."""
+
+        def handler(_request):
+            return httpx.Response(200, text="not json")
+
+        _patch_httpx(monkeypatch, handler)
+        svc = MCPOAuthClientService()
+        with pytest.raises(MCPOAuthDiscoveryError, match="protected-resource metadata"):
             await svc.discover_auth_server("https://mcp.example.com/sse")
 
     async def test_metadata_403_raises_discovery_error_not_500(self, monkeypatch):
@@ -304,7 +431,7 @@ class TestDiscoverAuthServer:
                     401,
                     headers={
                         "WWW-Authenticate": (
-                            'Bearer resource_metadata='
+                            "Bearer resource_metadata="
                             '"https://mcp.example.com/.well-known/oauth-protected-resource"'
                         )
                     },
@@ -331,9 +458,7 @@ class TestRegisterClient:
 
         def handler(request: httpx.Request) -> httpx.Response:
             captured["body"] = request.content.decode()
-            return httpx.Response(
-                200, json={"client_id": "cid-123", "client_secret": "csecret"}
-            )
+            return httpx.Response(200, json={"client_id": "cid-123", "client_secret": "csecret"})
 
         _patch_httpx(monkeypatch, handler)
         svc = MCPOAuthClientService()
@@ -378,6 +503,7 @@ class TestBuildAuthorizeUrl:
             authorization_endpoint="https://as.example.com/authorize",
             token_endpoint="https://as.example.com/token",
             scopes_supported=["read", "write"],
+            offline_access_supported=True,
             resource="https://mcp.example.com/sse",
         )
         pkce = PKCEPair(verifier="v" * 64, challenge="ch", method="S256")
@@ -397,16 +523,18 @@ class TestBuildAuthorizeUrl:
         assert params["code_challenge"] == ["ch"]
         assert params["code_challenge_method"] == ["S256"]
         assert params["state"] == ["state-xyz"]
-        # offline_access is always appended so the AS issues a refresh_token.
+        # offline_access is appended when the AS advertises it, so it issues a
+        # refresh_token instead of a ~1h access token with nothing to renew.
         assert params["scope"] == ["read write offline_access"]
         assert params["resource"] == ["https://mcp.example.com/sse"]
 
-    def test_offline_access_always_requested(self):
+    def test_offline_access_requested_when_the_server_advertises_it(self):
         svc = MCPOAuthClientService()
         meta = AuthServerMetadata(
             issuer="https://as.example.com",
             authorization_endpoint="https://as.example.com/authorize",
             token_endpoint="https://as.example.com/token",
+            offline_access_supported=True,
         )
         pkce = PKCEPair(verifier="v", challenge="c")
         url = svc.build_authorize_url(
@@ -414,6 +542,28 @@ class TestBuildAuthorizeUrl:
         )
         params = parse_qs(urlparse(url).query)
         assert params["scope"] == ["offline_access"]
+
+    def test_offline_access_withheld_from_a_server_that_does_not_list_it(self):
+        """Google advertises openid/email/profile and nothing else; sending it a
+        scope it never claimed to support risks an invalid_scope consent error,
+        which costs the whole authorization rather than just its refresh token."""
+        svc = MCPOAuthClientService()
+        meta = AuthServerMetadata(
+            issuer="https://accounts.google.com",
+            authorization_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
+            token_endpoint="https://oauth2.googleapis.com/token",  # noqa: S106
+            scopes_supported=["https://www.googleapis.com/auth/gmail.modify"],
+            offline_access_supported=False,
+        )
+        pkce = PKCEPair(verifier="v", challenge="c")
+
+        url = svc.build_authorize_url(
+            meta, client_id="cid", redirect_uri="https://app/cb", pkce=pkce, state="s"
+        )
+
+        params = parse_qs(urlparse(url).query)
+        assert params["scope"] == ["https://www.googleapis.com/auth/gmail.modify"]
+
 
     def test_explicit_scopes_override_metadata_scopes(self):
         svc = MCPOAuthClientService()

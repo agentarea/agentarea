@@ -7,6 +7,7 @@ from typing import Any, Literal
 from urllib.parse import urlparse
 
 from agentarea_common.auth import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.di.container import get_container
 from agentarea_common.features.service import FeatureService
 from fastapi import APIRouter
@@ -136,7 +137,13 @@ def _endpoint_host(spec: dict[str, Any] | None) -> str | None:
 # --- Endpoint ---
 
 
-@router.get("/topology", response_model=NetworkTopologyResponse)
+@router.get(
+    "/topology",
+    response_model=NetworkTopologyResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_network_topology(
     user_context: UserContextDep,
 ) -> NetworkTopologyResponse:
