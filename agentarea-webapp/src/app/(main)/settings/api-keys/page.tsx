@@ -30,11 +30,32 @@ export default async function APIKeysPage() {
             rows={6}
             columns={[
               { header: t("table.name"), barClassName: "h-4 w-32" },
-              { header: t("table.tokenPrefix"), barClassName: "h-4 w-24" },
-              { header: t("table.status"), barClassName: "h-5 w-20 rounded-full" },
-              { header: t("table.created"), barClassName: "h-4 w-24" },
-              { header: t("table.expires"), barClassName: "h-4 w-24" },
-              { header: t("table.lastUsed"), barClassName: "h-4 w-24" },
+              {
+                header: t("table.tokenPrefix"),
+                headerClassName: "w-[140px]",
+                barClassName: "h-4 w-20",
+              },
+              {
+                header: t("table.status"),
+                headerClassName: "w-[120px]",
+                barClassName: "h-5 w-16 rounded-full",
+              },
+              {
+                header: t("table.created"),
+                headerClassName: "w-[120px]",
+                barClassName: "h-4 w-20",
+              },
+              {
+                header: t("table.expires"),
+                headerClassName: "w-[120px]",
+                barClassName: "h-4 w-20",
+              },
+              {
+                header: t("table.lastUsed"),
+                headerClassName: "w-[150px]",
+                barClassName: "h-4 w-20",
+              },
+              { header: "", headerClassName: "w-0", barClassName: "hidden" },
             ]}
           />
         }

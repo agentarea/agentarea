@@ -212,8 +212,6 @@
     "removeConfirm": "Remove this member from the workspace?",
     "noMembersTitle": "No members yet",
     "noMembersDescription": "Invite people to collaborate in this workspace.",
-    "invitationsTitle": "Invitations",
-    "invitationsDescription": "Invitation links you created. Each one can be used until it expires — create new links from “Invite people”.",
     "cancel": "Cancel",
     "removeConfirmTitle": "Remove member",
     "removeConfirmDescription": "{member} will lose access to this workspace and everything in it. Their agents, tasks and files stay in the workspace.",
@@ -254,8 +252,6 @@
     "ordering": "Ordering",
     "orderAccess": "Access",
     "orderUserId": "User ID",
-    "peopleTitle": "People",
-    "peopleDescription": "Everyone with access to this workspace.",
     "accessColumn": "Workspace access",
     "accessOwner": "Owner",
     "accessMember": "Member",
@@ -1360,8 +1356,7 @@
       "status": "Status",
       "created": "Created",
       "expires": "Expires",
-      "lastUsed": "Last Used",
-      "actions": "Actions"
+      "lastUsed": "Last Used"
     },
     "never": "Never",
     "status": {
@@ -1377,8 +1372,6 @@
       "expiresInDays": "Expires In (Days)",
       "expiresInDaysPlaceholder": "Leave empty for no expiration",
       "createButton": "Create Key",
-      "cancel": "Cancel",
-      "creating": "Creating...",
       "success": "API Key Created",
       "successDescription": "Your API key has been created successfully."
     },
