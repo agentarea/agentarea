@@ -441,3 +441,66 @@ async def test_callback_error_returns_to_the_frontend_with_the_reason_as_data(
         "/connections",
     )
     assert urllib.parse.parse_qs(location.query) == {"oauth": ["error"], "reason": [description]}
+
+
+class _DiscoveryHarness:
+    """Runs the post-OAuth discovery task with its collaborators faked, recording sessions."""
+
+    def __init__(self, monkeypatch, discover):
+        from contextlib import asynccontextmanager
+
+        import agentarea_mcp.application.service as mcp_service
+
+        self.background_session = SimpleNamespace(name="background_session")
+        self.service_sessions = []
+        self.secret_manager_sessions = []
+
+        @asynccontextmanager
+        async def background_session():
+            yield self.background_session
+
+        monkeypatch.setattr(
+            mcp_oauth_connect, "get_database", lambda: SimpleNamespace(session=background_session)
+        )
+
+        def secret_manager(*, session, user_context):
+            self.secret_manager_sessions.append(session)
+            return SimpleNamespace()
+
+        monkeypatch.setattr(mcp_oauth_connect, "get_real_secret_manager", secret_manager)
+
+        def service(*, repository_factory, event_broker, secret_manager):
+            self.service_sessions.append(repository_factory.session)
+            return SimpleNamespace(discover_and_store_tools=discover)
+
+        monkeypatch.setattr(mcp_service, "MCPServerInstanceService", service)
+
+
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+@pytest.mark.asyncio
+async def test_post_oauth_discovery_runs_on_its_own_session(monkeypatch):
+    discover = AsyncMock(return_value=True)
+    harness = _DiscoveryHarness(monkeypatch, discover)
+    instance_id = uuid4()
+
+    await mcp_oauth_connect._discover_after_oauth(
+        UserContext(user_id="user-1", workspace_id="ws-1"), instance_id
+    )
+
+    discover.assert_awaited_once_with(instance_id)
+    assert harness.service_sessions == [harness.background_session]
+    assert harness.secret_manager_sessions == [harness.background_session]
+
+
+@pytest.mark.asyncio
+async def test_post_oauth_discovery_failure_is_logged_with_traceback(monkeypatch, caplog):
+    import logging
+
+    _DiscoveryHarness(monkeypatch, AsyncMock(side_effect=RuntimeError("upstream down")))
+
+    with caplog.at_level(logging.ERROR, logger=mcp_oauth_connect.logger.name):
+        await mcp_oauth_connect._discover_after_oauth(
+            UserContext(user_id="user-1", workspace_id="ws-1"), uuid4()
+        )
+
+    assert [r for r in caplog.records if r.exc_info and "discovery" in r.getMessage()], caplog.text
