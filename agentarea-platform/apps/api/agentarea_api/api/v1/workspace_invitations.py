@@ -19,7 +19,6 @@ from agentarea_common.auth.identity_directory import (
 from agentarea_common.auth.route_authz import (
     enforced_in_handler,
     requires_workspace_admin,
-    unrestricted,
 )
 from agentarea_common.config import get_database
 from agentarea_common.rebac import (
@@ -376,6 +375,12 @@ async def revoke_invitation(
 @router.post(
     "/invitations/preview",
     response_model=InvitationPreviewResponse,
+    dependencies=[
+        enforced_in_handler(
+            "token bearer only; an emailed invitation must match the caller's email, "
+            "checked by InvitationService.preview before any state is revealed"
+        )
+    ],
 )
 async def preview_invitation(
     body: InvitationPreviewBody,
@@ -417,7 +422,10 @@ async def preview_invitation(
     "/invitations/accept",
     response_model=AcceptInvitationResponse,
     dependencies=[
-        unrestricted("bearer of the invitation token; there is no prior membership to check")
+        enforced_in_handler(
+            "token bearer only; an emailed invitation must match the caller's email, "
+            "checked by InvitationService.accept"
+        )
     ],
 )
 async def accept_invitation(
