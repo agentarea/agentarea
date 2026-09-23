@@ -2114,8 +2114,7 @@
       "submit": "Create secret"
     },
     "rowActions": {
-      "actionsFor": "Actions for {name}",
-      "replaceValue": "Replace value"
+      "replace": "Replace"
     },
     "replaceDialog": {
       "title": "Replace value",
@@ -2130,6 +2129,23 @@
       "irreversible": "This cannot be undone.",
       "failed": "Couldn't delete the secret",
       "deleted": "Secret {name} deleted"
+    },
+    "table": {
+      "name": "Name",
+      "description": "Description",
+      "belongsTo": "Belongs to",
+      "updated": "Updated",
+      "managed": "Managed",
+      "notUsed": "Not used yet",
+      "deletedOwner": "deleted"
+    },
+    "types": {
+      "provider_config": "LLM provider",
+      "mcp_instance": "MCP connection",
+      "mcp_auth_config": "MCP authentication",
+      "openapi_connection": "API connection",
+      "trigger": "Trigger",
+      "agent": "Agent wallet"
     }
   }
 }

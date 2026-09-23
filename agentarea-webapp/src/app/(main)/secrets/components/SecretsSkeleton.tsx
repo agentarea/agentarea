@@ -1,13 +1,24 @@
+import { useTranslations } from "next-intl";
 import { TableSkeleton } from "@/components/Skeleton";
 
-// Matches SecretsTable: Connection name · Auth type · Status · Created.
-const COLUMNS = [
-  { header: "Connection name", barClassName: "h-4 w-40" },
-  { header: "Auth type", barClassName: "h-4 w-20" },
-  { header: "Status", barClassName: "h-5 w-20 rounded-full" },
-  { header: "Created", barClassName: "h-4 w-24" },
-];
-
+// Matches SecretsTable: Name · Description · Belongs to · Updated · actions.
 export default function SecretsSkeleton() {
-  return <TableSkeleton columns={COLUMNS} rows={8} />;
+  const t = useTranslations("SecretsPage.table");
+
+  return (
+    <TableSkeleton
+      rows={8}
+      columns={[
+        { header: t("name"), barClassName: "h-4 w-32" },
+        { header: t("description"), barClassName: "h-4 w-40" },
+        { header: t("belongsTo"), barClassName: "h-4 w-36" },
+        {
+          header: t("updated"),
+          headerClassName: "w-[120px]",
+          barClassName: "h-3 w-20",
+        },
+        { header: "", headerClassName: "w-0", barClassName: "hidden" },
+      ]}
+    />
+  );
 }

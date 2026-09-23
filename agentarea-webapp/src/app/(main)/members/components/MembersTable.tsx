@@ -8,9 +8,9 @@ import { toast } from "sonner";
 import BaseModal from "@/components/BaseModal";
 import EmptyState from "@/components/EmptyState";
 import Table, { type Column } from "@/components/Table/Table";
+import { TableRowAction } from "@/components/Table/TableRowAction";
 import { Badge } from "@/components/ui/badge";
 import { BlueprintBadge } from "@/components/ui/blueprint-badge";
-import { Button } from "@/components/ui/button";
 import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { removeMemberAction } from "../actions";
@@ -154,14 +154,12 @@ function MemberRowActions({
       confirmLabel={isSelf ? t("leave") : t("remove")}
       onConfirm={remove}
     >
-      <Button
+      <TableRowAction
         variant="destructiveOutline"
-        size="xs"
-        className="px-2 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+        icon={isSelf ? <LogOut /> : <Trash2 />}
       >
-        {isSelf ? <LogOut /> : <Trash2 />}
         {isSelf ? t("leave") : t("remove")}
-      </Button>
+      </TableRowAction>
     </BaseModal>
   );
 }

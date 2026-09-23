@@ -2115,8 +2115,7 @@
       "submit": "Создать секрет"
     },
     "rowActions": {
-      "actionsFor": "Действия для {name}",
-      "replaceValue": "Заменить значение"
+      "replace": "Заменить"
     },
     "replaceDialog": {
       "title": "Заменить значение",
@@ -2131,6 +2130,23 @@
       "irreversible": "Это действие нельзя отменить.",
       "failed": "Не удалось удалить секрет",
       "deleted": "Секрет {name} удалён"
+    },
+    "table": {
+      "name": "Название",
+      "description": "Описание",
+      "belongsTo": "Принадлежит",
+      "updated": "Обновлён",
+      "managed": "Управляемый",
+      "notUsed": "Пока не используется",
+      "deletedOwner": "удалён"
+    },
+    "types": {
+      "provider_config": "LLM-провайдер",
+      "mcp_instance": "MCP-подключение",
+      "mcp_auth_config": "MCP-аутентификация",
+      "openapi_connection": "API-подключение",
+      "trigger": "Триггер",
+      "agent": "Кошелёк агента"
     }
   }
 }
