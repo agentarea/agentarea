@@ -4,8 +4,7 @@ Membership lives in the relationship graph, which knows ids and nothing else.
 Anything that renders a person — the members page, the members toolset — needs
 a name to put next to the id, and the identity provider is the only authority
 for that. An invitation's ``email`` is explicitly not that authority: it records
-where a link was sent, while the link itself is the security primitive and can
-be redeemed by whoever holds it.
+where a link was sent and who may redeem it, never what that person is called.
 
 When the directory cannot answer, the identity stays unresolved. Callers render
 that as an unknown user rather than substituting a plausible-looking value.

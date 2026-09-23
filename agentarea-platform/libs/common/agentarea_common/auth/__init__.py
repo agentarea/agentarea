@@ -12,7 +12,6 @@ from .jwt_handler import JWTTokenHandler, get_jwt_handler
 from .openfga_permission import OpenFGAPermissionService
 from .permission import PermissionService, require_permission
 from .workspace_authorization import WorkspaceScopedAuthorizationService
-from .workspace_permission import WorkspaceScopedPermissionService
 
 __all__ = [
     "AuthorizationService",
@@ -25,7 +24,6 @@ __all__ = [
     "UserContext",
     "UserContextDep",
     "WorkspaceScopedAuthorizationService",
-    "WorkspaceScopedPermissionService",
     "assert_workspace_admin",
     "get_jwt_handler",
     "get_user_context",

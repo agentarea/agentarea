@@ -96,7 +96,7 @@ export default function ClientsPage() {
         kind,
       });
       if (error) {
-        toast.error("Failed to create client");
+        toast.error("Failed to add harness");
         return;
       }
       setShowCreate(false);
@@ -111,7 +111,7 @@ export default function ClientsPage() {
 
   const columns = [
     {
-      header: "Client",
+      header: "Harness",
       accessor: "name",
       render: (name: string, client: ClientResponse) => (
         <div className="flex items-center gap-2">
@@ -131,7 +131,7 @@ export default function ClientsPage() {
       ),
     },
     {
-      header: "Harness",
+      header: "Type",
       accessor: "kind",
       render: (value: string) => <HarnessBadge kind={value} />,
     },
@@ -152,18 +152,18 @@ export default function ClientsPage() {
   return (
     <ContentBlock
       header={{
-        breadcrumb: [{ label: "Clients" }],
+        breadcrumb: [{ label: "Harnesses" }],
         description:
-          "Agent-proxies: scoped MCP + skill bundles for external harnesses (codex, claude-code)",
+          "Connect external agent harnesses to your workspace's tools and skills.",
         controls: (
           <Button className="shrink-0" size="xs" onClick={() => setShowCreate(true)}>
             <Plus />
-            New Client
+            Add harness
           </Button>
         ),
       }}
     >
-      <div className="p-6">
+      <div>
         {loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -177,44 +177,57 @@ export default function ClientsPage() {
             itemLink={(client: ClientResponse) => `/clients/${client.id}`}
             emptyState={
               <EmptyState
-                title="No clients yet"
-                description="Create one to give an external harness a governed, scoped tool bundle."
+                title="No harnesses yet"
+                description="A harness is a coding agent running outside this workspace — Claude Code, Codex — that you let reach in for tools."
+                hints={[
+                  { text: "Register the harness to get its connection command" },
+                  { text: "Pick the skills and connections it may use" },
+                  { text: "It gets that bundle and nothing else" },
+                ]}
                 iconsType="mcp"
                 action={{
-                  label: "Create client",
+                  label: "Add harness",
                   onClick: () => setShowCreate(true),
                 }}
               />
             }
-            cardContent={(client: ClientResponse) => (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-[16px] font-[500]">
-                  <HarnessIcon
-                    kind={client.kind}
-                    className="h-5 w-5 shrink-0 text-primary"
-                  />
-                  {client.name}
-                </div>
-                {client.description && (
-                  <div className="line-clamp-2 pt-[6px] text-[14px] opacity-50">
-                    {client.description}
-                  </div>
-                )}
-                <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <McpIcon className="h-3.5 w-3.5" />
-                    {client.mcp_instances?.length ?? 0}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <SkillIcon className="h-3.5 w-3.5" />
-                    {client.skills?.length ?? 0}
-                  </span>
-                  <span className="ml-auto">
+            cardContent={(client: ClientResponse) => {
+              const mcpCount = client.mcp_instances?.length ?? 0;
+              const skillCount = client.skills?.length ?? 0;
+              return (
+                <div className="flex h-full flex-col gap-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <HarnessIcon
+                        kind={client.kind}
+                        className="h-5 w-5 shrink-0 text-muted-foreground"
+                      />
+                      <h3 className="truncate text-[15px] font-medium leading-tight tracking-tight">
+                        {client.name}
+                      </h3>
+                    </div>
                     <HarnessBadge kind={client.kind} />
-                  </span>
+                  </div>
+                  {client.description && (
+                    <p className="line-clamp-2 text-sm text-muted-foreground">
+                      {client.description}
+                    </p>
+                  )}
+                  {/* Counts say what they count. A bare "0 / 2" beside two
+                      glyphs asked the reader to decode the icons first. */}
+                  <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <McpIcon className="h-3.5 w-3.5" />
+                      {mcpCount === 1 ? "1 connection" : `${mcpCount} connections`}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <SkillIcon className="h-3.5 w-3.5" />
+                      {skillCount === 1 ? "1 skill" : `${skillCount} skills`}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            }}
           />
         )}
       </div>
@@ -222,7 +235,7 @@ export default function ClientsPage() {
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Client</DialogTitle>
+            <DialogTitle>Add harness</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -248,7 +261,7 @@ export default function ClientsPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <FormLabel htmlFor="new-client-kind">Harness</FormLabel>
+              <FormLabel htmlFor="new-client-kind">Type</FormLabel>
               <Select value={kind} onValueChange={setKind}>
                 <SelectTrigger id="new-client-kind">
                   <SelectValue />
@@ -273,7 +286,7 @@ export default function ClientsPage() {
             </Button>
             <Button onClick={handleCreate} disabled={!name.trim() || creating}>
               {creating ? <Loader2 className="mr-2 animate-spin" /> : null}
-              Create
+              Add harness
             </Button>
           </DialogFooter>
         </DialogContent>

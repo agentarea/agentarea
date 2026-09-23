@@ -109,6 +109,15 @@ review the semantic gaps neither those nor CI can detect.
   test, prove nothing. For authorization and task-execution changes, a passing
   unit test is not sufficient evidence — those are done when a real task runs on
   a real agent.
+- **Frontend test scope.** Never ask a UI diff for more tests; `vitest` is not a
+  CI gate for the webapp, so tests added there are unenforced weight. A webapp
+  change is proved by the surface running, or by one `tests/e2e/*.real.spec.ts`
+  covering the flow — not by a jsdom assertion. Flag a new `*.test.tsx` that
+  scrapes rendered markup (`renderToStaticMarkup` + `toContain` on a class,
+  `id`, or `aria-label`), or that mocks the components and server actions the
+  subject is built from and then asserts what the mocks produced: the fix is
+  deleting it, or lifting the logic into a pure module that a `*.test.ts` can
+  state. The full rule is `agentarea-webapp/AGENTS.md` §"TESTS (THIS DIR)".
 - **Comment and doc density.** Flag comments that narrate what the code plainly
   does. Comments earn their place by stating a non-obvious contract or the reason
   behind a surprising choice. Documentation under `docs/` follows the

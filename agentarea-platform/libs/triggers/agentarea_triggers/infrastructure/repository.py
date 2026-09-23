@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.enums import ExecutionStatus, TriggerType
 from ..domain.models import (
+    RECONSTITUTING,
     CronTrigger,
     Trigger,
     TriggerCreate,
@@ -374,31 +375,37 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         }
 
         if trigger_orm.trigger_type == TriggerType.CRON.value:
-            return CronTrigger(
-                **base_data,
-                cron_expression=trigger_orm.cron_expression or "",
-                timezone=trigger_orm.timezone or "UTC",
-                data_extractor=trigger_orm.data_extractor,
-                data_extractor_config=trigger_orm.data_extractor_config,
-                data_extractor_state=trigger_orm.data_extractor_state,
+            return CronTrigger.model_validate(
+                {
+                    **base_data,
+                    "cron_expression": trigger_orm.cron_expression or "",
+                    "timezone": trigger_orm.timezone or "UTC",
+                    "data_extractor": trigger_orm.data_extractor,
+                    "data_extractor_config": trigger_orm.data_extractor_config,
+                    "data_extractor_state": trigger_orm.data_extractor_state,
+                },
+                context=RECONSTITUTING,
             )
         elif trigger_orm.trigger_type == TriggerType.WEBHOOK.value:
             from ..domain.enums import WebhookType
 
-            return WebhookTrigger(
-                **base_data,
-                webhook_id=trigger_orm.webhook_id or "",
-                allowed_methods=trigger_orm.allowed_methods or ["POST"],
-                webhook_type=WebhookType(trigger_orm.webhook_type)
-                if trigger_orm.webhook_type
-                else WebhookType.GENERIC,
-                validation_rules=trigger_orm.validation_rules or {},
-                webhook_config=trigger_orm.webhook_config,
-                event_types=trigger_orm.event_types or [],
+            return WebhookTrigger.model_validate(
+                {
+                    **base_data,
+                    "webhook_id": trigger_orm.webhook_id or "",
+                    "allowed_methods": trigger_orm.allowed_methods or ["POST"],
+                    "webhook_type": WebhookType(trigger_orm.webhook_type)
+                    if trigger_orm.webhook_type
+                    else WebhookType.GENERIC,
+                    "validation_rules": trigger_orm.validation_rules or {},
+                    "webhook_config": trigger_orm.webhook_config,
+                    "event_types": trigger_orm.event_types or [],
+                },
+                context=RECONSTITUTING,
             )
         else:
             # Fallback to base Trigger
-            return Trigger(**base_data)
+            return Trigger.model_validate(base_data, context=RECONSTITUTING)
 
     def _domain_to_orm(self, trigger: Trigger) -> TriggerORM:
         """Convert domain model to ORM model."""

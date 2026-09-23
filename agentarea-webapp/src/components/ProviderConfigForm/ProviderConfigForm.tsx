@@ -82,32 +82,33 @@ export default function ProviderConfigForm({
   // Load provider specs and model specs.
   // Pass { silent: true } to refresh without unmounting the form (used after
   // Discover Models so the child component keeps its local UI state).
-  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
-    try {
-      if (!opts?.silent) setIsLoading(true);
-      const [providerSpecsResponse, providerSpecsWithModelsResponse] =
-        await Promise.all([
-          listProviderSpecs(),
-          listProviderSpecsWithModels(),
-        ]);
+  const loadData = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      try {
+        if (!opts?.silent) setIsLoading(true);
+        const [providerSpecsResponse, providerSpecsWithModelsResponse] =
+          await Promise.all([
+            listProviderSpecs(),
+            listProviderSpecsWithModels(),
+          ]);
 
-      if (
-        providerSpecsResponse.error ||
-        providerSpecsWithModelsResponse.error
-      ) {
-        throw new Error(
-          providerSpecsResponse.error?.detail?.[0]?.msg ||
-            providerSpecsWithModelsResponse.error?.detail?.[0]?.msg ||
-            "Failed to load provider specifications"
-        );
-      }
+        if (
+          providerSpecsResponse.error ||
+          providerSpecsWithModelsResponse.error
+        ) {
+          throw new Error(
+            providerSpecsResponse.error?.detail?.[0]?.msg ||
+              providerSpecsWithModelsResponse.error?.detail?.[0]?.msg ||
+              "Failed to load provider specifications"
+          );
+        }
 
-      const specs = providerSpecsResponse.data || [];
-      const specsWithModels =
-        (providerSpecsWithModelsResponse.data || []) as ProviderSpecWithModelsResponse[];
+        const specs = providerSpecsResponse.data || [];
+        const specsWithModels = (providerSpecsWithModelsResponse.data ||
+          []) as ProviderSpecWithModelsResponse[];
 
-      // Extract and flatten model specs from the provider specs with models
-      const models = specsWithModels.flatMap((spec) =>
+        // Extract and flatten model specs from the provider specs with models
+        const models = specsWithModels.flatMap((spec) =>
           spec.models.map((model) => ({
             id: model.id,
             provider_spec_id: spec.id,
@@ -124,21 +125,25 @@ export default function ProviderConfigForm({
             is_active: model.is_active,
             created_at: model.created_at,
             updated_at: model.updated_at,
-            default_context_strategy: (model as { default_context_strategy?: string | null }).default_context_strategy ?? null,
+            default_context_strategy:
+              (model as { default_context_strategy?: string | null })
+                .default_context_strategy ?? null,
           }))
-      );
+        );
 
-      setProviderSpecs(specs);
-      setModelSpecs(models);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : t("error.failedToLoadData");
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [t]);
+        setProviderSpecs(specs);
+        setModelSpecs(models);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : t("error.failedToLoadData");
+        setError(errorMessage);
+        toast.error(errorMessage);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [t]
+  );
 
   useEffect(() => {
     loadData();
@@ -287,9 +292,15 @@ export default function ProviderConfigForm({
         }
         const parsedUpdate = zProviderConfigUpdate.safeParse(updateData);
         if (!parsedUpdate.success) {
-          throw new Error(parsedUpdate.error.issues[0]?.message || "Invalid provider configuration");
+          throw new Error(
+            parsedUpdate.error.issues[0]?.message ||
+              "Invalid provider configuration"
+          );
         }
-        const result = await updateProviderConfig(initialData.id, parsedUpdate.data);
+        const result = await updateProviderConfig(
+          initialData.id,
+          parsedUpdate.data
+        );
         providerConfig = result.data;
         providerError = result.error;
       } else {
@@ -302,7 +313,10 @@ export default function ProviderConfigForm({
         };
         const parsedCreate = zProviderConfigCreate.safeParse(createData);
         if (!parsedCreate.success) {
-          throw new Error(parsedCreate.error.issues[0]?.message || "Invalid provider configuration");
+          throw new Error(
+            parsedCreate.error.issues[0]?.message ||
+              "Invalid provider configuration"
+          );
         }
         const result = await createProviderConfig(parsedCreate.data);
         providerConfig = result.data;
@@ -326,7 +340,12 @@ export default function ProviderConfigForm({
       // round-trips when the user selects hundreds of models from a discovered
       // catalog. Deletes stay as individual calls (rare, small N).
       const bulkCreate = async (
-        rows: { modelSpecId: string; instanceName: string; description: string; isPublic: boolean }[]
+        rows: {
+          modelSpecId: string;
+          instanceName: string;
+          description: string;
+          isPublic: boolean;
+        }[]
       ) => {
         if (rows.length === 0) return { created: 0 };
         const { data, error } = await bulkCreateModelInstances({
@@ -340,7 +359,8 @@ export default function ProviderConfigForm({
         });
         if (error || !data) {
           const detail =
-            (error as { detail?: { msg?: string }[]; message?: string })?.detail?.[0]?.msg ||
+            (error as { detail?: { msg?: string }[]; message?: string })
+              ?.detail?.[0]?.msg ||
             (error as { message?: string })?.message ||
             "Unknown error";
           throw new Error(`Failed to create model instances: ${detail}`);
@@ -351,7 +371,10 @@ export default function ProviderConfigForm({
           failed: { index: number; model_spec_id: string; error: string }[];
         };
         if (result.failed_count > 0) {
-          const sample = result.failed.slice(0, 3).map((f) => f.error).join("; ");
+          const sample = result.failed
+            .slice(0, 3)
+            .map((f) => f.error)
+            .join("; ");
           toast.error(
             `Failed to create ${result.failed_count} of ${rows.length} model instances. ${sample}`
           );
@@ -361,14 +384,7 @@ export default function ProviderConfigForm({
 
       if (!isEdit && selectedModels.length > 0 && showModelSelection) {
         const { created } = await bulkCreate(selectedModels);
-        toast.success(
-          t(
-            isEdit
-              ? "toast.configurationUpdated"
-              : "toast.configurationCreated",
-            { modelCount: created }
-          )
-        );
+        toast.success(t("toast.configurationCreated", { modelCount: created }));
       } else if (isEdit && showModelSelection) {
         // Handle model instances for edit mode
         const existingModelSpecIds = existingModelInstances.map(
@@ -440,7 +456,7 @@ export default function ProviderConfigForm({
 
       // Redirect if autoRedirect is enabled and no custom handler
       if (autoRedirect && !onAfterSubmit) {
-        router.push("/admin/provider-configs");
+        router.push("/models");
         return;
       }
 
@@ -469,7 +485,7 @@ export default function ProviderConfigForm({
     if (onCancel) {
       onCancel();
     } else if (autoRedirect) {
-      router.push("/admin/provider-configs");
+      router.push("/models");
     }
   };
 
@@ -549,7 +565,9 @@ export default function ProviderConfigForm({
               selectedModels={selectedModels}
               setSelectedModels={setSelectedModels}
               isEdit={isEdit}
-              providerConfigId={isEdit && initialData ? initialData.id : undefined}
+              providerConfigId={
+                isEdit && initialData ? initialData.id : undefined
+              }
               apiKey={watchedApiKey ?? undefined}
               endpointUrl={watchedEndpointUrl ?? undefined}
               onModelsDiscovered={() => loadData({ silent: true })}

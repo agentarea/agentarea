@@ -32,6 +32,7 @@ from agentarea_api.api.deps.services import (
     MCPServerInstanceServiceDep,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.auth.tool_authorization import decide_tool_policy
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
@@ -249,14 +250,17 @@ def _guard_and_pin_upstream(
 @router.get(
     "/{instance_id}/mcp",
     operation_id="proxy_instance_v1_mcp__instance_id__mcp_get",
+    dependencies=[unrestricted("proxies to an MCP instance the caller's workspace already owns")],
 )
 @router.post(
     "/{instance_id}/mcp",
     operation_id="proxy_instance_v1_mcp__instance_id__mcp_post",
+    dependencies=[unrestricted("proxies to an MCP instance the caller's workspace already owns")],
 )
 @router.delete(
     "/{instance_id}/mcp",
     operation_id="proxy_instance_v1_mcp__instance_id__mcp_delete",
+    dependencies=[unrestricted("proxies to an MCP instance the caller's workspace already owns")],
 )
 async def proxy_instance(
     instance_id: UUID,

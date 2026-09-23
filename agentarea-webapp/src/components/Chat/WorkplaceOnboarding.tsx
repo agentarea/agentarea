@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -16,18 +16,18 @@ import { ChatWelcome } from "./componets/ChatWelcome";
 
 interface WorkplaceOnboardingProps {
   hasProviders: boolean;
-  badgeSuggestions?: BadgeSuggestion[];
+  badgeSuggestions?: BadgeSuggestion[] | Promise<BadgeSuggestion[]>;
 }
 
 export function WorkplaceOnboarding({
   hasProviders,
-  badgeSuggestions = [],
+  badgeSuggestions,
 }: WorkplaceOnboardingProps) {
   const t = useTranslations("WorkplacePage.onboarding");
   const tHero = useTranslations("Workplace.hero");
   const router = useRouter();
 
-  const primaryHref = hasProviders ? "/agents/create" : "/admin/provider-configs";
+  const primaryHref = hasProviders ? "/agents/create" : "/models";
   const primaryLabel = hasProviders
     ? t("createAgentAction")
     : t("connectLLMAction");
@@ -92,13 +92,19 @@ export function WorkplaceOnboarding({
         </div>
       </div>
 
-      <div className="flex-none w-full pb-4">
-        <BadgeSuggestions
-          suggestions={badgeSuggestions}
-          onBadgeClick={() => router.push(primaryHref)}
-          visible={badgeSuggestions.length > 0}
-        />
-      </div>
+      {badgeSuggestions && (
+        <div className="flex-none w-full pb-4">
+          {/* Their own boundary — the rest of the onboarding screen is static
+              and should not wait on the chips. */}
+          <Suspense fallback={null}>
+            <BadgeSuggestions
+              suggestions={badgeSuggestions}
+              onBadgeClick={() => router.push(primaryHref)}
+              visible
+            />
+          </Suspense>
+        </div>
+      )}
     </div>
   );
 }

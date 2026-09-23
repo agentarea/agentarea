@@ -29,7 +29,7 @@
     "folder": "Folder",
     "itemCount": "{count, plural, one {# item} other {# items}}",
     "emptyFolder": "This folder is empty",
-    "emptyDescription": "Upload files or create a folder to get started.",
+    "emptyDescription": "Agents read these during a task, so you don't paste content into prompts.",
     "noResults": "No matching files",
     "trySearch": "Try another file or folder name.",
     "loadFailed": "Could not load files. Try again.",
@@ -111,10 +111,6 @@
     "yesterday": "Yesterday",
     "at": "at",
     "deleteDescription": "Are you sure you want to delete \"{itemName}\"? This action cannot be undone.",
-    "emptyState": {
-      "title": "Empty data",
-      "description": "Sorry, we couldn't find any data"
-    },
     "retry": "Try again",
     "clearSearch": "Clear search"
   },
@@ -161,7 +157,6 @@
   },
   "Sidebar": {
     "dashboard": "Dashboard",
-    "sandboxes": "Sandboxes",
     "inbox": "Inbox",
     "admin": "Admin",
     "workplace": "Workplace",
@@ -179,8 +174,8 @@
     "build": "Build",
     "govern": "Govern",
     "connections": "Connections",
-    "clients": "Clients",
-    "explore": "Explore",
+    "clients": "Harnesses",
+    "explore": "Catalog",
     "providers": "Providers",
     "providerConfigs": "Models",
     "apiKeys": "API Keys",
@@ -251,13 +246,6 @@
     "createFailed": "Failed to create invitation.",
     "inviteLinkHint": "Share this link. It is shown only once.",
     "done": "Done",
-    "acceptTitle": "Accept invitation",
-    "acceptDescription": "You have been invited to join a workspace.",
-    "acceptButton": "Accept invitation",
-    "acceptNoToken": "This invitation link is missing its token.",
-    "acceptFailed": "Failed to accept invitation. The link may be expired or invalid.",
-    "acceptSuccess": "You have joined the workspace.",
-    "goToWorkspace": "Go to workspace",
     "tabMembers": "Members",
     "tabInvitations": "Invitations",
     "searchPlaceholder": "Search by user ID or email…",
@@ -270,8 +258,8 @@
     "accessColumn": "Workspace access",
     "accessOwner": "Owner",
     "accessMember": "Member",
-    "accessOwnerHint": "Workspace owner",
-    "accessMemberHint": "Workspace member",
+    "accessOwnerHint": "Can remove anyone from the workspace, and is the one member who cannot leave it.",
+    "accessMemberHint": "Full use of the workspace. Can leave it, but cannot remove anyone else.",
     "noProfileDetails": "No profile details available",
     "rowActions": "Actions for {member}",
     "copyUserId": "Copy user ID",
@@ -315,6 +303,27 @@
     "copyFailed": "Couldn’t copy to clipboard",
     "orderExpires": "Expiry",
     "orderRecipient": "Recipient"
+  },
+  "InvitationDialog": {
+    "title": "Workspace invitation",
+    "joinTitle": "Join {workspace}",
+    "invitedBy": "<b>{inviter}</b> invited you to join the <b>{workspace}</b> workspace.",
+    "invitedByUnknown": "You have been invited to join the <b>{workspace}</b> workspace.",
+    "expires": "The invitation expires on {date}.",
+    "loading": "Loading invitation…",
+    "accept": "Accept invitation",
+    "decline": "Not now",
+    "close": "Close",
+    "unavailableTitle": "Invitation unavailable",
+    "problem": {
+      "missing_token": "This invitation link is missing its token. Ask the person who invited you for a new link.",
+      "not_found": "This invitation link is not valid. It may be mistyped, or a newer link may have replaced it.",
+      "wrong_account": "This invitation was sent to a different email address. Sign in with that account to accept it.",
+      "expired": "This invitation has expired. Ask the person who invited you for a new link.",
+      "revoked": "This invitation was revoked. Ask the workspace for a new link if you still need access.",
+      "already_accepted": "This invitation has already been used by another account.",
+      "unknown": "The invitation could not be processed: {message}"
+    }
   },
   "NavUser": {
     "settings": "Settings",
@@ -369,7 +378,7 @@
     "description": "Manage AI provider specifications and their available models",
     "noProviders": "No providers found",
     "addProvider": "Add Provider",
-    "emptyDescription": "No AI providers are currently available.",
+    "emptyDescription": "Provider specs are supplied by the platform registry — this deployment has none synced yet. Connect a provider with your own key instead.",
     "table": {
       "provider": "Provider",
       "description": "Description",
@@ -470,8 +479,11 @@
     "noAgentsYet": "No agents yet",
     "getStartedByAddingYourFirstAgent": "Get started by adding your first agent.",
     "addYourFirstAgent": "Add your first agent",
-    "noAgentsTitle": "No agents available",
-    "noAgentsDescription": "Get started by creating your first agent",
+    "noAgentsTitle": "No agents yet",
+    "noAgentsDescription": "An agent is a model plus the skills, connections and policies it is allowed to use.",
+    "noAgentsHintBuild": "Build one from a model, then attach skills and connections",
+    "noAgentsHintInstall": "Install a ready-made agent from the catalog",
+    "noAgentsHintHarness": "Or register a harness like Claude Code or Codex",
     "noMatchingAgents": "No matching agents",
     "noMatchingAgentsDescription": "No agents match your search query",
     "descriptionPage": {
@@ -679,8 +691,26 @@
       },
       "actions": {
         "start": "Start",
-        "stop": "Stop",
-        "connectOAuth": "Connect"
+        "stop": "Stop"
+      },
+      "oauth": {
+        "connect": "Connect with OAuth",
+        "reconnect": "Reconnect with OAuth",
+        "connectSuccess": "Connection authorized",
+        "connectError": "Authorization failed: {reason}",
+        "startFailed": "Could not start the OAuth flow",
+        "preflightFailed": "Could not check how this server wants to be authorized",
+        "checkingTitle": "Checking authorization",
+        "checkingDetail": "Asking the server how it wants to be authorized.",
+        "unsupportedTitle": "Cannot be authorized from here",
+        "readyTitle": "Ready to connect",
+        "readyDetail": "Sign in and approve access — nothing to set up first.",
+        "authorizedTitle": "Authorized",
+        "authorizedDetail": "This connection holds an access token. Reconnect to re-authorize it.",
+        "needsAppTitle": "Needs an OAuth app",
+        "needsAppTitleConnected": "Re-authorizing needs your OAuth app",
+        "needsAppHint": "Enter a client ID and secret, or pick them from workspace secrets.",
+        "unauthorizedNote": "This server lists its tools without a token, so verification succeeds while nobody is authorized — tool calls stay unauthorized until you connect."
       },
       "status": {
         "stopped": "Stopped",
@@ -721,8 +751,41 @@
         "count": "{count} tools",
         "columns": {
           "name": "Name",
-          "description": "Description"
+          "description": "Description",
+          "equipped": "Equipped by"
+        },
+        "searchPlaceholder": "Search tools…",
+        "shown": "{shown} of {total}",
+        "truncated": "Showing the first {shown} of {total} — refine the search to narrow it down.",
+        "empty": "No tools match the current filter.",
+        "otherGroup": "Other",
+        "equippedBy": "Equipped by",
+        "equippedNone": "No agent has this tool enabled.",
+        "grantedCount": "{count} granted",
+        "equippedHint": "Agents that carry this tool in their configuration. Policy and approval rules are still evaluated when the tool is called.",
+        "allToolsGrant": "all tools",
+        "approval": "approval",
+        "facets": {
+          "all": "All",
+          "equipped": "Equipped",
+          "unequipped": "Not equipped",
+          "destructive": "Destructive",
+          "readOnly": "Read-only"
         }
+      },
+      "consumers": {
+        "title": "Used by ({count})",
+        "loading": "Loading consumers…",
+        "empty": "No agents attach this MCP server yet.",
+        "columns": {
+          "agent": "Agent",
+          "tools": "Enabled tools"
+        },
+        "allTools": "all tools",
+        "none": "none",
+        "confirmSuffix": " (confirm)",
+        "more": "+{count} more",
+        "collapse": "Show less"
       },
       "bundle": {
         "members": "Sources"
@@ -762,16 +825,42 @@
       "name": "Name",
       "description": "Description",
       "endpoint": "Endpoint",
-      "status": "Status",
+      "state": "State",
+      "usedBy": "Used by",
+      "agentCount": "{count, plural, one {# agent} other {# agents}}",
+      "unused": "unused",
+      "allTools": "all",
+      "toolsGranted": "{granted} tools",
+      "toolsTotal": "{total} tools",
       "version": "Version",
       "updated": "Updated"
     },
-    "status": {
-      "running": "Running",
-      "error": "Error",
-      "starting": "Starting",
-      "setup": "Setup",
-      "connected": "Connected"
+    "state": {
+      "verifying": "Verifying",
+      "working": "Working",
+      "failing": "Failing",
+      "broken": "Broken",
+      "ready": "Ready",
+      "unconfigured": "Not set up",
+      "neverCalled": "never called"
+    },
+    "sections": {
+      "attention": "Needs attention",
+      "active": "In use",
+      "idle": "Idle"
+    },
+    "listFilters": {
+      "all": "All",
+      "attention": "Needs attention",
+      "unused": "Unused",
+      "unrestricted": "Unrestricted",
+      "emptyDescription": "No connection matches this filter.",
+      "empty": {
+        "all": "No connections",
+        "attention": "Nothing needs attention",
+        "unused": "Every connection is in use",
+        "unrestricted": "No unrestricted grants"
+      }
     },
     "tools": {
       "title": "Tools",
@@ -803,6 +892,7 @@
     "availableProviders": "Available Providers",
     "providerConfigsSection": "Provider Configs",
     "providerSpecsSection": "Provider Specs",
+    "browseProviders": "{count, plural, one {# more provider you can add} other {# more providers you can add}}",
     "platformProviderConfigsSection": "Provided by the platform",
     "platformManagedBadge": "No setup needed",
     "deleteProviderConfiguration": "Delete Provider Configuration",
@@ -927,8 +1017,11 @@
     "statusLabel": "Status",
     "created": "Created",
     "cost": "Cost",
-    "noTasks": "No tasks found",
-    "noTasksDescription": "No tasks have been created yet",
+    "noTasks": "No tasks yet",
+    "noTasksDescription": "A task is one run of an agent — what you asked, every step it took, and what came out.",
+    "noTasksHintStart": "Give an agent something to do",
+    "noTasksHintTrigger": "Or let a trigger start one on a schedule",
+    "noTasksHintElsewhere": "Runs started from the CLI or API land here too",
     "noMatchingTasks": "No matching tasks",
     "noMatchingTasksDescription": "No tasks match your search \"{query}\"",
     "noTasksByCreatorDescription": "Nobody has started a task matching this filter",
@@ -985,7 +1078,10 @@
     "noMatchingSkills": "No skills match your search \"{query}\"",
     "noMatchingSkillsDescription": "Try a different keyword or clear the search to see all skills.",
     "clearSearch": "Clear search",
-    "noSkillsDescription": "Skills are reusable capabilities that can be assigned to agents. Create your first skill to get started.",
+    "noSkillsDescription": "A skill is a reusable instruction set an agent loads when it needs it. Write it once, attach it to any agent.",
+    "noSkillsHintWrite": "Write one in the editor",
+    "noSkillsHintImport": "Import from a GitHub repository or upload an archive",
+    "noSkillsHintInstall": "Install a ready-made skill from the catalog",
     "loading": "Loading...",
     "error": {
       "loadSkills": "Failed to load skills",
@@ -1254,7 +1350,10 @@
     "description": "Manage API keys for programmatic access to your workspace",
     "createKey": "Create API Key",
     "noKeys": "No API keys yet",
-    "noKeysDescription": "Create an API key to enable programmatic access to your workspace.",
+    "noKeysDescription": "An API key lets scripts, CI and the CLI reach this workspace without a browser login.",
+    "noKeysHintCreate": "Create a key — it is shown once, so copy it then",
+    "noKeysHintUse": "Use it to start tasks and read results over the API",
+    "noKeysHintRevoke": "Revoke it here the moment it leaks",
     "table": {
       "name": "Name",
       "tokenPrefix": "Token Prefix",
@@ -1312,15 +1411,19 @@
     "searchPlaceholder": "Search triggers & agents…",
     "filter": {
       "all": "All",
-      "cron": "Cron",
-      "webhook": "Webhook"
+      "channels": "Channels",
+      "events": "Events",
+      "schedules": "Schedules"
     },
     "group": {
       "byChannel": "Channels",
       "none": "No grouping"
     },
     "noTriggers": "No triggers yet",
-    "noTriggersDescription": "Create a trigger to automate your agent workflows.",
+    "noTriggersDescription": "A trigger starts a task without you — on a schedule, or when an external system calls in.",
+    "noTriggersHintCron": "Run an agent on a schedule, like a nightly report",
+    "noTriggersHintWebhook": "Start a task from an incoming webhook",
+    "noTriggersHintHistory": "Every fire is recorded, so you can see what ran and why",
     "noMatchingTriggers": "No triggers match your search",
     "noMatchingTriggersDescription": "No triggers match your search \"{query}\"",
     "table": {
@@ -1420,6 +1523,8 @@
         "toolListUnavailable": "Tool list unavailable",
         "skillsOnDemand": "Available for activation",
         "configureAgent": "Configure agent",
+        "carriedOver": "These came from an older version of this trigger. Move them onto the agent — triggers no longer carry their own.",
+        "viewInNetwork": "See this in the network",
         "disabledMethods": "Disabled methods",
         "builtin": "Built-in"
       },
@@ -1428,9 +1533,9 @@
       "taskFiles": "Additional files",
       "taskFilesPlaceholder": "Select files",
       "taskSkills": "Additional skills",
-      "taskSkillsPlaceholder": "Add a skill",
       "taskMcps": "Additional MCP",
-      "taskMcpsPlaceholder": "Add an MCP server",
+      "taskTextFromChannel": "The incoming message is the task. Text here is a fallback, used only when a message arrives carrying none.",
+      "taskTextFromCall": "The call supplies the task. Text here is a fallback, used only when a call arrives carrying none.",
       "taskFilesHint": "Select workspace files to include in every task.",
       "searchFiles": "Search files",
       "noFiles": "No more files to select.",
@@ -1869,7 +1974,12 @@
     "noMcps": "No MCP servers connected yet.",
     "manageMcps": "Connect an MCP server",
     "noSkills": "No skills available yet.",
-    "manageSkills": "Create a skill"
+    "manageSkills": "Create a skill",
+    "attachTitle": "Add to this task",
+    "attachDescription": "Give this run MCP servers and skills on top of what the agent already has. Applies to this task only.",
+    "mcpsHeading": "MCP servers",
+    "skillsHeading": "Skills",
+    "detach": "Remove {name}"
   },
   "QuickTask": {
     "title": "New task",
@@ -2017,25 +2127,6 @@
     "periodMonthToDate": "Month to date",
     "periodLast90": "Last 90 days"
   },
-  "SandboxesPage": {
-    "title": "Sandboxes",
-    "description": "Live isolated compute sessions used by agents in this workspace.",
-    "state": "State",
-    "sandbox": "Sandbox",
-    "task": "Task",
-    "provider": "Provider",
-    "age": "Age",
-    "expires": "Expires",
-    "resources": "Resources",
-    "isolation": "Isolation",
-    "activeCount": "{count} active",
-    "emptyTitle": "No active sandboxes",
-    "emptyDescription": "A sandbox appears here when an agent first runs a command or accesses its workspace.",
-    "unavailableTitle": "Sandbox inventory is unavailable",
-    "unavailableDescription": "The control plane could not read live state from the configured sandbox provider.",
-    "staleWarning": "Live refresh failed. Showing the last known inventory.",
-    "emptyAction": "Run a task"
-  },
   "BudgetsPage": {
     "couldntLoadTitle": "Couldn't load budget data",
     "monthOutlook": "Month outlook",
@@ -2120,7 +2211,10 @@
     "effectApproval": "{count} approval",
     "effectCap": "{count} cap",
     "effectAllow": "{count} allow",
-    "effectSafety": "{count} safety"
+    "effectSafety": "{count} safety",
+    "upcoming": "Upcoming",
+    "nothingUpcoming": "Nothing scheduled in the next 7 days.",
+    "inFmt": "in {time}"
   },
   "SecretsPage": {
     "newSecret": "New secret",
@@ -2157,7 +2251,6 @@
       "name": "Name",
       "description": "Description",
       "updated": "Updated",
-      "managed": "Managed",
       "notUsed": "Not used yet",
       "deletedOwner": "deleted",
       "usedBy": "Used by",

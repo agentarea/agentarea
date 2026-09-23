@@ -42,11 +42,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Terminal Temporal statuses that may upgrade a stale DB status.
-# In-flight Temporal statuses ("running", "unknown") never overwrite the DB
-# because the workflow may legitimately stay alive in await_follow_up
-# after the activity has already persisted "completed" to the DB.
-_TERMINAL_WORKFLOW_STATUSES = frozenset({"completed", "failed", "cancelled", "canceled"})
+# Execution closure permits reconciliation; its business outcome determines the task status.
+_CLOSED_EXECUTION_STATUSES = frozenset({"completed", "failed", "cancelled", "canceled"})
 _GOVERNANCE_SNAPSHOT_METADATA_KEY = "governance_snapshot"
 
 
@@ -887,29 +884,48 @@ class TaskService(BaseTaskService):
     async def _enrich_task_with_workflow_status(self, task: AgentTask) -> AgentTask:
         """Enrich a task with current workflow status.
 
-        Temporal is the recovery oracle for terminal states; the DB is the
-        source of truth otherwise. The workflow may stay alive in
-        await_follow_up after writing "completed" to the DB, so a live
-        Temporal "running" status must not overwrite a persisted DB status.
+        A running execution may be waiting for human input or follow-up after
+        completing a turn. A closed execution is reconciled using its business
+        outcome, never by treating Temporal completion as task success.
 
         Args:
             task: The task to enrich
 
         Returns:
-            Task with status upgraded to terminal if Temporal reports one
+            Task with a recovered business outcome when the execution has closed
         """
         if not task.execution_id or not self.workflow_service:
             return task
 
         try:
             workflow_status = await self.workflow_service.get_workflow_status(task.execution_id)
-            wf_state = workflow_status.get("status")
-            if wf_state in _TERMINAL_WORKFLOW_STATUSES:
-                task.status = wf_state
-                if workflow_status.get("result"):
-                    task.result = workflow_status.get("result")
-                if workflow_status.get("error"):
-                    task.error_message = str(workflow_status["error"])
+            execution_status = workflow_status.get(
+                "execution_status", workflow_status.get("status")
+            )
+            if execution_status in _CLOSED_EXECUTION_STATUSES:
+                result = workflow_status.get("result")
+                result_status = result.get("status") if isinstance(result, dict) else None
+                outcome = result_status or workflow_status.get("status")
+                if outcome == "canceled":
+                    outcome = "cancelled"
+                if outcome == "completed" and not (
+                    result_status == "completed" or workflow_status.get("success") is True
+                ):
+                    return task
+                if outcome in {
+                    "completed",
+                    "failed",
+                    "cancelled",
+                    "blocked",
+                    "waiting_for_input",
+                    "waiting_for_approval",
+                    "waiting_for_continuation",
+                }:
+                    task.status = outcome
+                    if result is not None:
+                        task.result = result
+                    if workflow_status.get("error"):
+                        task.error_message = str(workflow_status["error"])
         except Exception as e:
             logger.debug(f"Could not get workflow status for task {task.id}: {e}")
 

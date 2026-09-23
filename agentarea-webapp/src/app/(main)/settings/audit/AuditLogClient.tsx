@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { createElement, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
@@ -9,7 +9,12 @@ import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fetchAuditLogs, type AuditEvent } from "./actions";
-import { auditActionColor, formatAuditTime } from "./format";
+import {
+  auditActorIcon,
+  auditResourceIcon,
+  auditVerbIcon,
+} from "./auditIcons";
+import { auditActionColor, auditVerb, formatAuditTime } from "./format";
 
 function ChangesDetail({ changes }: { changes: AuditEvent["changes"] }) {
   if (!changes || changes.length === 0) return null;
@@ -37,10 +42,16 @@ function ResourceCell({ event }: { event: AuditEvent }) {
   const resource = event.resource;
   const label = resource?.label ?? event.resource_type;
   const typeLabel = resource?.type_label ?? event.resource_type;
+  const icon = auditResourceIcon(event.resource_type);
 
   return (
     <div className="min-w-0">
       <div className="flex min-w-0 items-center gap-2">
+        {icon &&
+          createElement(icon, {
+            "aria-hidden": true,
+            className: "h-4 w-4 shrink-0 text-muted-foreground",
+          })}
         {resource?.href ? (
           <Link
             href={resource.href ?? ""}
@@ -79,27 +90,34 @@ function ActorCell({ event }: { event: AuditEvent }) {
   const actor = event.actor;
   const label = actor?.label ?? event.actor_id;
   const description = actor?.description;
+  const icon = auditActorIcon(actor?.actor_type ?? event.actor_type);
 
   return (
-    <div className="min-w-0">
-      {actor?.href ? (
-        <Link
-          href={actor.href ?? ""}
-          className="block truncate text-sm font-medium text-zinc-800 underline-offset-2 hover:text-primary hover:underline dark:text-zinc-100"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {label}
-        </Link>
-      ) : (
-        <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
-          {label}
-        </span>
-      )}
-      {description && (
-        <span className="block truncate text-xs text-muted-foreground">
-          {description}
-        </span>
-      )}
+    <div className="flex min-w-0 items-start gap-2">
+      {createElement(icon, {
+        "aria-hidden": true,
+        className: "mt-0.5 h-4 w-4 shrink-0 text-muted-foreground",
+      })}
+      <div className="min-w-0">
+        {actor?.href ? (
+          <Link
+            href={actor.href ?? ""}
+            className="block truncate text-sm font-medium text-zinc-800 underline-offset-2 hover:text-primary hover:underline dark:text-zinc-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {label}
+          </Link>
+        ) : (
+          <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
+            {label}
+          </span>
+        )}
+        {description && (
+          <span className="block truncate text-xs text-muted-foreground">
+            {description}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -172,14 +190,24 @@ export default function AuditLogClient({
       accessor: "action",
       header: t("table.action"),
       cellClassName: "w-[140px]",
-      render: (value: string) => (
-        <Badge
-          variant="secondary"
-          className={`text-xs font-mono ${auditActionColor(value)}`}
-        >
-          {value}
-        </Badge>
-      ),
+      render: (value: string) => {
+        const verb = auditVerb(value);
+        const verbIcon = auditVerbIcon(verb);
+        return (
+          <Badge
+            variant="secondary"
+            className={`gap-1 text-xs font-mono ${auditActionColor(value)}`}
+            title={value}
+          >
+            {verbIcon &&
+              createElement(verbIcon, {
+                "aria-hidden": true,
+                className: "h-3 w-3",
+              })}
+            {verb || value}
+          </Badge>
+        );
+      },
     },
     {
       accessor: "resource",

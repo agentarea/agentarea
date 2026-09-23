@@ -35,6 +35,7 @@ from agentarea_common.artifacts import (
 )
 from agentarea_common.artifacts.workspace import DEFAULT_MAX_FILE_BYTES
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config.app import get_app_settings
 from agentarea_projects.application.service import ProjectService
@@ -227,7 +228,13 @@ async def get_project_service(
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
 
 
-@router.get("", response_model=WorkspaceFileListResponse)
+@router.get(
+    "",
+    response_model=WorkspaceFileListResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_workspace_files(
     user_context: UserContextDep,
     project_service: ProjectServiceDep,
@@ -259,7 +266,14 @@ async def list_workspace_files(
     return WorkspaceFileListResponse(files=files, directories=directories)
 
 
-@router.post("/directories", status_code=201, response_model=WorkspaceDirectoryResponse)
+@router.post(
+    "/directories",
+    status_code=201,
+    response_model=WorkspaceDirectoryResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_workspace_directory(
     body: CreateWorkspaceDirectoryRequest,
     user_context: UserContextDep,
@@ -290,7 +304,12 @@ async def create_workspace_directory(
     return WorkspaceDirectoryResponse(path=directory_path)
 
 
-@router.post("")
+@router.post(
+    "",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def upload_file(
     file: UploadFile,
     user_context: UserContextDep,
@@ -346,7 +365,13 @@ async def upload_file(
     raise HTTPException(status_code=422, detail=f"Unsupported upload purpose: {purpose!r}")
 
 
-@router.post("/upload-url", response_model=PresignUploadResponse)
+@router.post(
+    "/upload-url",
+    response_model=PresignUploadResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_attachment_upload_url(
     body: PresignUploadRequest,
     user_context: UserContextDep,
@@ -383,7 +408,13 @@ async def create_attachment_upload_url(
     return PresignUploadResponse(ref=path, upload_url=upload_url, expires_in=expires_in)
 
 
-@router.post("/move", response_model=MovedFileResponse)
+@router.post(
+    "/move",
+    response_model=MovedFileResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def move_workspace_file(
     body: MoveWorkspaceFileRequest,
     user_context: UserContextDep,
@@ -426,7 +457,13 @@ async def move_workspace_file(
     return MovedFileResponse(source=source, destination=destination, moved=len(contents))
 
 
-@router.delete("/{file_path:path}", response_model=ArchivedFileResponse)
+@router.delete(
+    "/{file_path:path}",
+    response_model=ArchivedFileResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def delete_workspace_file(
     file_path: str,
     user_context: UserContextDep,
@@ -455,7 +492,13 @@ async def delete_workspace_file(
     return ArchivedFileResponse(path=clean, archived_path=archived_path)
 
 
-@router.post("/restore/{file_path:path}", response_model=RestoredFileResponse)
+@router.post(
+    "/restore/{file_path:path}",
+    response_model=RestoredFileResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def restore_workspace_file(
     file_path: str,
     user_context: UserContextDep,
@@ -477,7 +520,13 @@ async def restore_workspace_file(
     return RestoredFileResponse(path=original, restored_from=clean)
 
 
-@router.get("/history", response_model=ArtifactHistoryResponse)
+@router.get(
+    "/history",
+    response_model=ArtifactHistoryResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def workspace_file_history(
     path: str,
     user_context: UserContextDep,
@@ -506,7 +555,12 @@ async def workspace_file_history(
     return ArtifactHistoryResponse(path=clean, events=events)
 
 
-@router.get("/download/{file_path:path}")
+@router.get(
+    "/download/{file_path:path}",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def stream_workspace_file(
     file_path: str,
     user_context: UserContextDep,
@@ -536,7 +590,13 @@ async def stream_workspace_file(
     return StreamingResponse(body, media_type=content_type, headers=headers)
 
 
-@router.get("/{file_path:path}", response_model=WorkspaceFileDownloadResponse)
+@router.get(
+    "/{file_path:path}",
+    response_model=WorkspaceFileDownloadResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def download_workspace_file(
     file_path: str,
     user_context: UserContextDep,

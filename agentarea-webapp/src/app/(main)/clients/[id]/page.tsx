@@ -100,7 +100,7 @@ export default function ClientDetailPage() {
         description: editDescription || null,
       });
       if (error) {
-        toast.error("Failed to update client");
+        toast.error("Failed to update harness");
         return;
       }
       setShowEdit(false);
@@ -118,7 +118,7 @@ export default function ClientDetailPage() {
     <ContentBlock
       header={{
         breadcrumb: [
-          { label: "Clients", href: "/clients" },
+          { label: "Harnesses", href: "/clients" },
           { label: client.name },
         ],
         controls: (
@@ -141,9 +141,9 @@ export default function ClientDetailPage() {
               itemName={client.name}
               onDelete={deleteClientAction}
               redirectPath="/clients"
-              title="Delete Client"
+              title="Delete harness"
               description={`Delete "${client.name}"? The scoped MCP endpoint stops working for any harness connected to it. This cannot be undone.`}
-              successMessage="Client deleted"
+              successMessage="Harness deleted"
             />
           </div>
         ),
@@ -191,13 +191,13 @@ export default function ClientDetailPage() {
           icon={McpIcon}
           note={
             <p>
-              Instances exposed through this client&apos;s endpoint. Tools keep
+              Instances exposed through this harness&apos;s endpoint. Tools keep
               the namespace prefix set on the instance.
             </p>
           }
           triggerText="MCP Server"
           sheetTitle="MCP Servers"
-          sheetDescription="Add MCP server instances to this client's bundle"
+          sheetDescription="Add MCP server instances to this harness's bundle"
           availableTitle="Active MCP Server Instances"
           attached={hydrateAttachments(client.mcp_instances, allMcp)}
           available={allMcp}
@@ -229,7 +229,7 @@ export default function ClientDetailPage() {
           }
           triggerText="Skill"
           sheetTitle="Skills"
-          sheetDescription="Add skills to this client's bundle"
+          sheetDescription="Add skills to this harness's bundle"
           availableTitle="Available Skills"
           attached={hydrateAttachments(client.skills, allSkills)}
           available={allSkills}
@@ -244,7 +244,7 @@ export default function ClientDetailPage() {
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Client</DialogTitle>
+            <DialogTitle>Edit harness</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">

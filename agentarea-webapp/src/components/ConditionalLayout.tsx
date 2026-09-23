@@ -1,8 +1,10 @@
 "use client";
 
+import { Suspense } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import AuthGuard from "@/components/auth/AuthGuard";
+import InvitationDialog from "@/components/InvitationDialog/InvitationDialog";
 import { AppSidebarContent } from "@/components/MainLayout/components/AppSidebar";
 import QuickTaskDialog from "@/components/QuickTask/QuickTaskDialog";
 import { SettingsSidebarContent } from "@/components/SettingsLayout/SettingsSidebar";
@@ -22,7 +24,9 @@ interface ConditionalLayoutProps {
 // therefore must not be wrapped in the app shell / sidebar.
 const NO_LAYOUT_ROUTES = ["/auth", "/error", "/404", "/500"];
 
-const SETTINGS_ROUTES = ["/settings", "/admin/api-keys", "/admin/workspace"];
+// Everything that used to live under /admin now sits beneath /settings, so the
+// one prefix covers it.
+const SETTINGS_ROUTES = ["/settings"];
 
 export default function ConditionalLayout({
   children,
@@ -91,6 +95,9 @@ export default function ConditionalLayout({
       </div>
       <ThemeToggle className="fixed bottom-2 right-2 z-50" />
       <QuickTaskDialog />
+      <Suspense fallback={null}>
+        <InvitationDialog />
+      </Suspense>
     </SidebarProvider>
   );
 }

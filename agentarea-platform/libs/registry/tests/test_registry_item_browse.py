@@ -82,7 +82,9 @@ class TestPagingAcrossRegistries:
         items, _ = await item_repo.browse("skills", sort="name", limit=10, offset=0)
         assert [i.name for i in items] == ["apple", "banana", "cherry", "date", "elder", "fig"]
 
-    async def test_pages_partition_the_catalog_without_gaps_or_repeats(self, item_repo, two_registries):
+    async def test_pages_partition_the_catalog_without_gaps_or_repeats(
+        self, item_repo, two_registries
+    ):
         page1, total = await item_repo.browse("skills", sort="name", limit=2, offset=0)
         page2, _ = await item_repo.browse("skills", sort="name", limit=2, offset=2)
         page3, _ = await item_repo.browse("skills", sort="name", limit=2, offset=4)
@@ -99,7 +101,9 @@ class TestPagingAcrossRegistries:
         assert len(items) == 2
         assert total == 6
 
-    async def test_ignores_other_types_and_inactive_registries(self, db_session, item_repo, two_registries):
+    async def test_ignores_other_types_and_inactive_registries(
+        self, db_session, item_repo, two_registries
+    ):
         agents = await _registry(db_session, "agent-reg", registry_type="agents")
         await _item(item_repo, agents, "ag-1", "aardvark")
         dormant = await _registry(db_session, "dormant", is_active=False)
@@ -165,7 +169,9 @@ class TestOrdering:
         explicit, _ = await item_repo.browse("skills", sort="recommended", limit=10, offset=0)
         assert [i.id for i in default] == [i.id for i in explicit]
 
-    async def test_ties_break_deterministically_so_pages_do_not_overlap(self, db_session, item_repo):
+    async def test_ties_break_deterministically_so_pages_do_not_overlap(
+        self, db_session, item_repo
+    ):
         # Same sort_key on every row: without a stable tiebreak, OFFSET paging is
         # free to return the same row twice and drop another.
         reg = await _registry(db_session, "dupes")
@@ -223,16 +229,17 @@ class TestProtocolFacet:
     async def test_other_types_have_no_protocol_dimension(self, item_repo, connections):
         assert await item_repo.protocol_counts("skills") == []
 
-    async def test_category_counts_narrow_to_the_selected_protocol(
-        self, db_session, item_repo
-    ):
+    async def test_category_counts_narrow_to_the_selected_protocol(self, db_session, item_repo):
         reg = await _registry(db_session, "conns", registry_type="mcp_servers")
         await _item(
             item_repo,
             reg,
             "1",
             "GitHub",
-            spec={"connection_type": "url", "raw_spec": {"metadata": {"agentarea:category": "eng"}}},
+            spec={
+                "connection_type": "url",
+                "raw_spec": {"metadata": {"agentarea:category": "eng"}},
+            },
             registry_type="mcp_servers",
         )
         await _item(
@@ -261,7 +268,9 @@ class TestFiltering:
         return reg
 
     async def test_category_filter_narrows_and_retotals(self, item_repo, catalog):
-        items, total = await item_repo.browse("skills", category="data", sort="name", limit=10, offset=0)
+        items, total = await item_repo.browse(
+            "skills", category="data", sort="name", limit=10, offset=0
+        )
         assert [i.name for i in items] == ["csv-clean", "xls-merge"]
         assert total == 2
 
@@ -270,7 +279,9 @@ class TestFiltering:
     ):
         # The bug behind ?category=other: a page whose matches were all beyond the
         # first slice used to render "No matches" and kill infinite scroll.
-        items, total = await item_repo.browse("skills", category="data", sort="name", limit=1, offset=1)
+        items, total = await item_repo.browse(
+            "skills", category="data", sort="name", limit=1, offset=1
+        )
         assert [i.name for i in items] == ["xls-merge"]
         assert total == 2
 
@@ -295,7 +306,9 @@ class TestFiltering:
         assert [i.name for i in items] == ["pdf-fill"]
 
     async def test_query_and_category_compose(self, item_repo, catalog):
-        items, total = await item_repo.browse("skills", q="e", category="data", sort="name", limit=10, offset=0)
+        items, total = await item_repo.browse(
+            "skills", q="e", category="data", sort="name", limit=10, offset=0
+        )
         assert [i.name for i in items] == ["csv-clean", "xls-merge"]
         assert total == 2
 
@@ -322,7 +335,9 @@ class TestCategoryCounts:
         counts = await item_repo.category_counts("skills")
         assert all(value is not None for value, _ in counts)
 
-    async def test_ordered_alphabetically_so_the_list_is_scannable(self, db_session, item_repo, catalog):
+    async def test_ordered_alphabetically_so_the_list_is_scannable(
+        self, db_session, item_repo, catalog
+    ):
         # Ordering by count put a category wherever its size happened to land,
         # so finding a known one meant reading the whole sidebar. The counts are
         # flat anyway (most categories hold one or two items), so size bought
@@ -335,7 +350,9 @@ class TestCategoryCounts:
             ("other", 1),
         ]
 
-    async def test_the_fallback_bucket_sorts_last_however_big_it_is(self, db_session, item_repo, catalog):
+    async def test_the_fallback_bucket_sorts_last_however_big_it_is(
+        self, db_session, item_repo, catalog
+    ):
         # "other" is where the source puts what it couldn't classify -- a
         # fallback, not a peer. Alphabetically it would land mid-list, and by
         # size it sat near the top; neither is where it belongs.
@@ -347,7 +364,24 @@ class TestCategoryCounts:
         assert counts[-1][1] == 6
         assert [value for value, _ in counts] == ["data", "other"]
 
-    async def test_a_category_named_like_the_fallback_is_not_demoted(self, db_session, item_repo, catalog):
+    async def test_the_fallback_bucket_sorts_last_whatever_its_casing(
+        self, db_session, item_repo, catalog
+    ):
+        # Sources disagree on casing. Skills write "other"; the MCP catalog
+        # title-cases its agentarea:category values and writes "Other". A
+        # case-sensitive pin demoted only the first, so on the connections
+        # catalog "Other" sat mid-list between Marketing and Productivity --
+        # read as a real category, which is exactly what it is not.
+        a, _ = catalog
+        await _item(item_repo, a, "8", "eight", tags=["category:Other"])
+
+        values = [value for value, _ in await item_repo.category_counts("skills")]
+
+        assert values == ["data", "Other", "other"]
+
+    async def test_a_category_named_like_the_fallback_is_not_demoted(
+        self, db_session, item_repo, catalog
+    ):
         # Only the exact fallback value is special; "other-tools" is a category.
         a, _ = catalog
         await _item(item_repo, a, "7", "seven", tags=["category:other-tools"])

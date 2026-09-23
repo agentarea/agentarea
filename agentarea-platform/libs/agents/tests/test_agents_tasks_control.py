@@ -71,7 +71,14 @@ class TestAgentTaskControl:
 
     @pytest.mark.asyncio
     async def test_pause_agent_task_success(
-        self, mock_agent_service, mock_task_service, mock_workflow_service, test_agent_id, test_task_id, mock_agent, test_user_context
+        self,
+        mock_agent_service,
+        mock_task_service,
+        mock_workflow_service,
+        test_agent_id,
+        test_task_id,
+        mock_agent,
+        test_user_context,
     ):
         """Test successful task pause."""
         # Setup mocks
@@ -100,14 +107,18 @@ class TestAgentTaskControl:
 
         # Verify service calls
         mock_agent_service.get.assert_called_once_with(test_agent_id)
-        mock_workflow_service.get_workflow_status.assert_called_once_with(
-            f"task-{test_task_id}"
-        )
+        mock_workflow_service.get_workflow_status.assert_called_once_with(f"task-{test_task_id}")
         mock_workflow_service.pause_task.assert_called_once_with(f"task-{test_task_id}")
 
     @pytest.mark.asyncio
     async def test_pause_agent_task_agent_not_found(
-        self, mock_agent_service, mock_task_service, mock_workflow_service, test_agent_id, test_task_id, test_user_context
+        self,
+        mock_agent_service,
+        mock_task_service,
+        mock_workflow_service,
+        test_agent_id,
+        test_task_id,
+        test_user_context,
     ):
         """Test pause task when agent doesn't exist."""
         # Setup mocks
@@ -129,7 +140,14 @@ class TestAgentTaskControl:
 
     @pytest.mark.asyncio
     async def test_pause_agent_task_task_not_found(
-        self, mock_agent_service, mock_task_service, mock_workflow_service, test_agent_id, test_task_id, mock_agent, test_user_context
+        self,
+        mock_agent_service,
+        mock_task_service,
+        mock_workflow_service,
+        test_agent_id,
+        test_task_id,
+        mock_agent,
+        test_user_context,
     ):
         """Test pause task when task doesn't exist."""
         # Setup mocks
@@ -154,7 +172,14 @@ class TestAgentTaskControl:
 
     @pytest.mark.asyncio
     async def test_pause_agent_task_already_completed(
-        self, mock_agent_service, mock_task_service, mock_workflow_service, test_agent_id, test_task_id, mock_agent, test_user_context
+        self,
+        mock_agent_service,
+        mock_task_service,
+        mock_workflow_service,
+        test_agent_id,
+        test_task_id,
+        mock_agent,
+        test_user_context,
     ):
         """Test pause task when task is already completed."""
         # Setup mocks
@@ -179,7 +204,14 @@ class TestAgentTaskControl:
 
     @pytest.mark.asyncio
     async def test_pause_agent_task_already_paused(
-        self, mock_agent_service, mock_task_service, mock_workflow_service, test_agent_id, test_task_id, mock_agent, test_user_context
+        self,
+        mock_agent_service,
+        mock_task_service,
+        mock_workflow_service,
+        test_agent_id,
+        test_task_id,
+        mock_agent,
+        test_user_context,
     ):
         """Test pause task when task is already paused."""
         # Setup mocks
@@ -204,7 +236,14 @@ class TestAgentTaskControl:
 
     @pytest.mark.asyncio
     async def test_pause_agent_task_pause_fails(
-        self, mock_agent_service, mock_task_service, mock_workflow_service, test_agent_id, test_task_id, mock_agent, test_user_context
+        self,
+        mock_agent_service,
+        mock_task_service,
+        mock_workflow_service,
+        test_agent_id,
+        test_task_id,
+        mock_agent,
+        test_user_context,
     ):
         """Test pause task when pause operation fails."""
         # Setup mocks
@@ -230,7 +269,14 @@ class TestAgentTaskControl:
 
     @pytest.mark.asyncio
     async def test_resume_agent_task_success(
-        self, mock_agent_service, mock_task_service, mock_workflow_service, test_agent_id, test_task_id, mock_agent, test_user_context
+        self,
+        mock_agent_service,
+        mock_task_service,
+        mock_workflow_service,
+        test_agent_id,
+        test_task_id,
+        mock_agent,
+        test_user_context,
     ):
         """Test successful task resume."""
         # Setup mocks
@@ -258,14 +304,19 @@ class TestAgentTaskControl:
 
         # Verify service calls
         mock_agent_service.get.assert_called_once_with(test_agent_id)
-        mock_workflow_service.get_workflow_status.assert_called_once_with(
-            f"task-{test_task_id}"
-        )
+        mock_workflow_service.get_workflow_status.assert_called_once_with(f"task-{test_task_id}")
         mock_workflow_service.resume_task.assert_called_once_with(f"task-{test_task_id}")
 
     @pytest.mark.asyncio
     async def test_resume_agent_task_running_is_accepted(
-        self, mock_agent_service, mock_task_service, mock_workflow_service, test_agent_id, test_task_id, mock_agent, test_user_context
+        self,
+        mock_agent_service,
+        mock_task_service,
+        mock_workflow_service,
+        test_agent_id,
+        test_task_id,
+        mock_agent,
+        test_user_context,
     ):
         """Resume from 'running' is accepted: signal-based pause keeps Temporal's
         external status as 'running' while the workflow's internal handler
@@ -292,7 +343,14 @@ class TestAgentTaskControl:
 
     @pytest.mark.asyncio
     async def test_resume_agent_task_resume_fails(
-        self, mock_agent_service, mock_task_service, mock_workflow_service, test_agent_id, test_task_id, mock_agent, test_user_context
+        self,
+        mock_agent_service,
+        mock_task_service,
+        mock_workflow_service,
+        test_agent_id,
+        test_task_id,
+        mock_agent,
+        test_user_context,
     ):
         """Test resume task when resume operation fails."""
         # Setup mocks
@@ -318,7 +376,14 @@ class TestAgentTaskControl:
 
     @pytest.mark.asyncio
     async def test_pause_agent_task_exception_handling(
-        self, mock_agent_service, mock_task_service, mock_workflow_service, test_agent_id, test_task_id, mock_agent, test_user_context
+        self,
+        mock_agent_service,
+        mock_task_service,
+        mock_workflow_service,
+        test_agent_id,
+        test_task_id,
+        mock_agent,
+        test_user_context,
     ):
         """Test pause task exception handling."""
         # Setup mocks
@@ -341,7 +406,14 @@ class TestAgentTaskControl:
 
     @pytest.mark.asyncio
     async def test_resume_agent_task_exception_handling(
-        self, mock_agent_service, mock_task_service, mock_workflow_service, test_agent_id, test_task_id, mock_agent, test_user_context
+        self,
+        mock_agent_service,
+        mock_task_service,
+        mock_workflow_service,
+        test_agent_id,
+        test_task_id,
+        mock_agent,
+        test_user_context,
     ):
         """Test resume task exception handling."""
         # Setup mocks
@@ -532,6 +604,23 @@ class TestTemporalWorkflowOutcomeStatus:
         assert status["success"] is False
         assert status["failure_reason"] == "provider_quota_exceeded"
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "outcome", ["waiting_for_input", "waiting_for_approval", "waiting_for_continuation"]
+    )
+    async def test_closed_execution_preserves_waiting_outcome(self, outcome):
+        orchestrator = self._orchestrator_with_result(
+            SimpleNamespace(status=outcome, success=False, final_response=None)
+        )
+
+        status = await orchestrator.get_workflow_status("task-1")
+
+        assert status["execution_status"] == "completed"
+        assert status["status"] == outcome
+        assert status["success"] is None
+        assert status["failure_reason"] is None
+        assert status["result"]["status"] == outcome
+
 
 class TestSendWorkflowCommandDelivery:
     """The orchestrator must distinguish "workflow not running" from real
@@ -568,9 +657,7 @@ class TestSendWorkflowCommandDelivery:
         orch = self._orchestrator()
         orch._client = self._client_with_signal()
 
-        ok = await orch.send_workflow_command(
-            "task-1", "change_model", {"model_id": "m"}
-        )
+        ok = await orch.send_workflow_command("task-1", "change_model", {"model_id": "m"})
         assert ok is True
 
     @pytest.mark.asyncio
@@ -580,9 +667,7 @@ class TestSendWorkflowCommandDelivery:
             side_effect=RuntimeError("workflow not found for ID: task-1")
         )
 
-        ok = await orch.send_workflow_command(
-            "task-1", "change_model", {"model_id": "m"}
-        )
+        ok = await orch.send_workflow_command("task-1", "change_model", {"model_id": "m"})
         # Not running -> False (API turns this into a 409, not a silent 200).
         assert ok is False
 
@@ -595,17 +680,13 @@ class TestSendWorkflowCommandDelivery:
 
         # A genuine failure must NOT be swallowed into "not running".
         with pytest.raises(RuntimeError, match="connection reset"):
-            await orch.send_workflow_command(
-                "task-1", "change_model", {"model_id": "m"}
-            )
+            await orch.send_workflow_command("task-1", "change_model", {"model_id": "m"})
 
     @pytest.mark.asyncio
     async def test_continuation_uses_request_response_update(self):
         orch = self._orchestrator()
         handle = MagicMock()
-        handle.execute_update = AsyncMock(
-            return_value={"accepted": True, "continuation_count": 2}
-        )
+        handle.execute_update = AsyncMock(return_value={"accepted": True, "continuation_count": 2})
         client = MagicMock()
         client.get_workflow_handle.return_value = handle
         orch._client = client

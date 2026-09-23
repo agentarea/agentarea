@@ -5,6 +5,10 @@ const ACTION_COLORS: Record<string, string> = {
   delete: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
 };
 
+export function auditVerb(action: string): string {
+  return action.split(".").pop() || "";
+}
+
 export function auditActionColor(action: string): string {
   const verb = action.split(".").pop() || "";
   return (

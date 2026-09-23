@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import type { PolicyDocument } from "@/api/client/types.gen";
 import type { HumanInputSecretValue } from "@/components/Chat/types";
+import type { TaskResourceRef } from "@/components/ResourcePicker/TaskResourceAttach";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useMentions } from "@/hooks/useMentions";
 import { useTaskActions } from "@/hooks/useTaskActions";
@@ -14,6 +15,7 @@ import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import {
   applyEvent,
   initialState,
+  isInteractionClosed,
   type CompletedRun,
   type EventState,
 } from "@/lib/events/reducer";
@@ -21,6 +23,7 @@ import {
   pauseAgentTaskAction as pauseAgentTask,
   resumeAgentTaskAction as resumeAgentTask,
 } from "@/lib/server-actions";
+import { getTaskStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import {
   extractPlainText,
@@ -41,6 +44,17 @@ import { useFileUpload } from "./hooks/useFileUpload";
 import { useScrollManagement } from "./hooks/useScrollManagement";
 import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
 import { createTaskWithAttachments } from "./utils/createTaskWithAttachments";
+import { deliverTaskMessage } from "./utils/deliverTaskMessage";
+import {
+  adoptCreatedTaskId,
+  routeComposerMessage,
+} from "./utils/routeComposerMessage";
+
+/** What the runtime needs to look a resource up; the rest is presentation. */
+const toRunRef = ({ id, name }: TaskResourceRef) => ({
+  id,
+  ...(name ? { name } : {}),
+});
 
 // A user message the person typed. Not a task event — interleaved by arrival.
 interface UserChatMessage {
@@ -64,7 +78,6 @@ export interface Agent {
   name: string;
   description?: string | null;
   icon?: string | null;
- 
 }
 
 export interface ProjectOption {
@@ -184,7 +197,7 @@ interface FullChatProps {
   className?: string;
   placeholder?: string;
   welcomeComponent?: React.ReactNode;
-  badgeSuggestions?: BadgeSuggestion[];
+  badgeSuggestions?: BadgeSuggestion[] | Promise<BadgeSuggestion[]>;
 }
 
 export default function FullChat({
@@ -247,6 +260,8 @@ export default function FullChat({
   // listing an unstable function reference as a dep (useFileUpload doesn't
   // memoize it).
   const clearFilesRef = React.useRef<() => void>(() => {});
+  const activeStreamRef =
+    React.useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 
   // Clear conversation when agent changes
   React.useEffect(() => {
@@ -256,6 +271,11 @@ export default function FullChat({
     setInput("");
     setInputDisplay("");
     clearFilesRef.current();
+    return () => {
+      const reader = activeStreamRef.current;
+      activeStreamRef.current = null;
+      void reader?.cancel();
+    };
   }, [agent.id]);
 
   const { currentTaskId, setCurrentTaskId, callbacks } = useTaskLifecycle(
@@ -313,6 +333,8 @@ export default function FullChat({
   const [selectedTaskPolicyId, setSelectedTaskPolicyId] = React.useState<
     string | null
   >(null);
+  const [taskMcps, setTaskMcps] = React.useState<TaskResourceRef[]>([]);
+  const [taskSkills, setTaskSkills] = React.useState<TaskResourceRef[]>([]);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const cardContainerRef = React.useRef<HTMLDivElement>(null);
 
@@ -434,19 +456,25 @@ export default function FullChat({
           event.data.original_event_type) ||
         event.type;
 
-      // Adopt the created task id once, before folding events.
+      // Each accepted task owns subsequent input and action submissions.
       if (rawType === "task_created") {
-        const newTaskId =
-          typeof event.data?.task_id === "string" ? event.data.task_id : null;
-        if (newTaskId && !currentTaskIdRef.current) {
+        const newTaskId = adoptCreatedTaskId(
+          currentTaskIdRef.current,
+          event.data
+        );
+        if (newTaskId) {
           currentTaskIdRef.current = newTaskId;
           setCurrentTaskId(newTaskId);
+          pushEvent("task.started", { task_id: newTaskId });
+          setTaskLifecycleStatus("running");
           callbacks.onTaskCreated.current?.(newTaskId);
           callbacks.onTaskStarted.current?.(newTaskId);
         }
         return;
       }
 
+      const normalized = normalizeSSEEvent(event.type, event.data);
+      if (normalized) pushEvent(normalized.eventType, normalized.data);
       const canonical = canonicalType(rawType);
       if (canonical === "task.completed") {
         setTaskLifecycleStatus("completed");
@@ -454,20 +482,27 @@ export default function FullChat({
         const finishedId = currentTaskIdRef.current;
         if (finishedId) callbacks.onTaskFinished.current?.(finishedId);
       } else if (canonical === "task.failed") {
-        const errorText = String(
-          event.data?.error || event.data?.message || ""
-        ).toLowerCase();
-        const blocked =
-          errorText.includes("insufficient balance") ||
-          errorText.includes("no resource package") ||
-          errorText.includes("quota exceeded");
-        setTaskLifecycleStatus(blocked ? "blocked" : "failed");
+        setTaskLifecycleStatus(eventStateRef.current.status);
         setIsLoading(false);
         const finishedId = currentTaskIdRef.current;
         if (finishedId) callbacks.onTaskFinished.current?.(finishedId);
       } else if (canonical === "task.cancelled") {
         setTaskLifecycleStatus("cancelled");
         setIsLoading(false);
+      } else if (
+        canonical === "input.request" ||
+        canonical === "approval.request" ||
+        canonical === "task.awaiting_follow_up"
+      ) {
+        setTaskLifecycleStatus(eventStateRef.current.status);
+        setIsLoading(false);
+      } else if (
+        canonical === "input.response" ||
+        canonical === "approval.response" ||
+        canonical === "llm.call.started"
+      ) {
+        setTaskLifecycleStatus(eventStateRef.current.status);
+        setIsLoading(eventStateRef.current.executionStatus === "running");
       } else if (canonical === "task.awaiting_continuation") {
         setTaskLifecycleStatus("waiting_for_continuation");
         setIsLoading(false);
@@ -479,9 +514,6 @@ export default function FullChat({
       } else if (rawType === "execution_resumed") {
         setTaskLifecycleStatus("running");
       }
-
-      const normalized = normalizeSSEEvent(event.type, event.data);
-      if (normalized) pushEvent(normalized.eventType, normalized.data);
     },
     [callbacks, setCurrentTaskId, pushEvent]
   );
@@ -513,7 +545,27 @@ export default function FullChat({
       textareaRef.current.style.height = "auto";
     }
 
+    let streamReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
+      const route = routeComposerMessage(eventStateRef.current, {
+        currentTaskId,
+        hasFiles: filesToUpload.length > 0,
+      });
+      if (route.route === "current") {
+        const delivery = await deliverTaskMessage({
+          actions,
+          files: [],
+          message: plainContent,
+          pendingInputId: route.pendingInputId,
+          queueOnCurrentTask: true,
+        });
+        if ("error" in delivery && delivery.error)
+          throw new Error("The task did not accept the message.");
+        addUserMessage(userMessage);
+        setInput("");
+        setInputDisplay("");
+        return;
+      }
       const response = await createTaskWithAttachments({
         files: filesToUpload,
         request: (attachments) => {
@@ -529,7 +581,16 @@ export default function FullChat({
                 task_policy_rule_name: selectedTaskPolicy?.name,
               },
               task_type: "chat",
+              interaction: { channel: "web" },
               session_id: `chat-${Date.now()}`,
+              // Additive for this run only. The activity resolves these against
+              // the agent's own tools and refuses the run if one has gone away,
+              // so a stale pick fails loudly instead of silently running short.
+              // Only id and name travel: the logo is for the chip, not the run.
+              ...(taskMcps.length > 0 ? { mcps: taskMcps.map(toRunRef) } : {}),
+              ...(taskSkills.length > 0
+                ? { skills: taskSkills.map(toRunRef) }
+                : {}),
             },
             enable_agent_communication: true,
             ...(attachments.length > 0 ? { attachments } : {}),
@@ -552,19 +613,29 @@ export default function FullChat({
         },
       });
 
-      const reader = response.body.getReader();
+      streamReader = response.body.getReader();
+      const previousReader = activeStreamRef.current;
+      activeStreamRef.current = streamReader;
+      void previousReader?.cancel();
 
-      await parseSSEStream(reader, {
-        onEvent: handleSSEMessage,
+      await parseSSEStream(streamReader, {
+        onEvent: (event) => {
+          if (activeStreamRef.current === streamReader) handleSSEMessage(event);
+        },
         buffered: true,
       });
     } catch (error) {
-      setIsLoading(false);
-      toast.error("Failed to send message", {
-        description: error instanceof Error ? error.message : String(error),
-      });
+      if (!streamReader || activeStreamRef.current === streamReader) {
+        setIsLoading(false);
+        toast.error("Failed to send message", {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      }
     } finally {
-      setIsLoading(false);
+      if (!streamReader || activeStreamRef.current === streamReader) {
+        if (streamReader) activeStreamRef.current = null;
+        setIsLoading(false);
+      }
     }
   };
 
@@ -715,12 +786,7 @@ export default function FullChat({
     return items;
   }, [eventState.completedRuns, userEntries, parts, visiblePartIds]);
 
-  const terminalTone =
-    eventState.status === "failed"
-      ? "danger"
-      : eventState.status === "cancelled"
-        ? "warning"
-        : "success";
+  const terminalTone = getTaskStatusPresentation(eventState.status).tone;
 
   // Keydown handler
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -818,12 +884,19 @@ export default function FullChat({
                       key={segment.run.id}
                       run={segment.run}
                       onFormSubmit={handleFormSubmit}
+                      isInteractionClosed={(part) =>
+                        isInteractionClosed(eventState, part)
+                      }
                       onA2UIAction={dispatchA2UIAction}
                     />
                   ) : (
                     <PartRenderer
                       key={segment.part.partId}
                       part={segment.part}
+                      interactionClosed={isInteractionClosed(
+                        eventState,
+                        segment.part
+                      )}
                       onFormSubmit={handleFormSubmit}
                       onA2UIAction={dispatchA2UIAction}
                     />
@@ -896,6 +969,10 @@ export default function FullChat({
             currentTaskPolicyId={selectedTaskPolicyId}
             availableTaskPolicies={availableTaskPolicies}
             onTaskPolicyChange={setSelectedTaskPolicyId}
+            taskMcps={taskMcps}
+            taskSkills={taskSkills}
+            onTaskMcpsChange={setTaskMcps}
+            onTaskSkillsChange={setTaskSkills}
             onStop={isLoading && currentTaskId ? handlePause : undefined}
             isStopping={isPausing}
             onResume={currentTaskId ? handleResume : undefined}
@@ -908,14 +985,17 @@ export default function FullChat({
         </div>
       </div>
 
-      {/* Badge Suggestions */}
-      {startCentered && (badgeSuggestions?.length ?? 0) > 0 && (
+      {/* Starter chips. Their own boundary: they may still be loading while
+          the composer above is already usable. */}
+      {startCentered && badgeSuggestions && (
         <div className="flex-none w-full pb-4">
-          <BadgeSuggestions
-            suggestions={badgeSuggestions || []}
-            onBadgeClick={handleBadgeClick}
-            visible={!hasUserMessages}
-          />
+          <React.Suspense fallback={null}>
+            <BadgeSuggestions
+              suggestions={badgeSuggestions}
+              onBadgeClick={handleBadgeClick}
+              visible={!hasUserMessages}
+            />
+          </React.Suspense>
         </div>
       )}
     </div>

@@ -7,13 +7,13 @@ import type {
   SkillResponse,
   WorkspaceFileInfo,
 } from "@/api/client/types.gen";
-import { listWorkspaceSecretsAction } from "@/app/(main)/bundles/components/actions";
 import type { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
 import {
   listMCPServerInstancesAction,
   listMCPServersAction,
   listSkillsAction,
   listWorkspaceFilesAction,
+  listWorkspaceSecretsAction,
 } from "@/lib/server-actions";
 
 /** Which fetch failed, so a picker can report only its own bad news. */

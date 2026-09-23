@@ -230,13 +230,16 @@ class LLMCallFailedEvent(WorkflowEvent):
 
 
 class LLMCallChunkEvent(WorkflowEvent):
-    """Event emitted for streaming LLM response chunks."""
+    """Cumulative text and reasoning snapshot for one streaming LLM call."""
 
     event_type: Literal[EventType.LLM_CALL_CHUNK] = EventType.LLM_CALL_CHUNK
-    chunk: str = Field(..., description="Response chunk content")
+    chunk: str = Field(..., description="Cumulative response text for this LLM call")
+    thinking: str = Field(default="", description="Cumulative reasoning for this LLM call")
     chunk_index: int = Field(..., description="Chunk sequence number")
     is_final: bool = Field(default=False, description="Whether this is the final chunk")
-    chunk_type: str = Field(default="text", description="Chunk type: 'text' or 'thinking'")
+    chunk_type: str = Field(
+        default="text", description="Latest delta channel: 'text' or 'thinking'"
+    )
 
 
 class ToolExecutionStartedEvent(WorkflowEvent):

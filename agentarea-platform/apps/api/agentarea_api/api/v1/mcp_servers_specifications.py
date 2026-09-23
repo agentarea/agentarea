@@ -5,6 +5,7 @@ from uuid import UUID
 from agentarea_api.api.deps.services import get_mcp_server_service
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
+from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.service import MCPServerService
@@ -66,7 +67,13 @@ async def _resolve_server_id(mcp_server_service: MCPServerService, identifier: s
     return server.id if server else None
 
 
-@router.post("/", response_model=MCPServerResponse)
+@router.post(
+    "/",
+    response_model=MCPServerResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_mcp_server(
     data: MCPServerCreate,
     user_context: UserContextDep,
@@ -81,7 +88,11 @@ async def create_mcp_server(
     return MCPServerResponse.from_domain(server)
 
 
-@router.get("/", response_model=PaginatedResponse[MCPServerResponse])
+@router.get(
+    "/",
+    response_model=PaginatedResponse[MCPServerResponse],
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def list_mcp_servers(
     user_context: UserContextDep,
     pagination: PaginationParams = Depends(),
@@ -107,7 +118,11 @@ async def list_mcp_servers(
     )
 
 
-@router.get("/{server_id}", response_model=MCPServerResponse)
+@router.get(
+    "/{server_id}",
+    response_model=MCPServerResponse,
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def get_mcp_server(
     server_id: str,
     user_context: UserContextDep,
@@ -122,7 +137,13 @@ async def get_mcp_server(
     return MCPServerResponse.from_domain(server)
 
 
-@router.patch("/{server_id}", response_model=MCPServerResponse)
+@router.patch(
+    "/{server_id}",
+    response_model=MCPServerResponse,
+    dependencies=[
+        enforced_in_handler("per-object permission resolved by the PDP once the object is loaded")
+    ],
+)
 async def update_mcp_server(
     server_id: str,
     data: MCPServerUpdate,
@@ -139,7 +160,12 @@ async def update_mcp_server(
     return MCPServerResponse.from_domain(server)
 
 
-@router.delete("/{server_id}")
+@router.delete(
+    "/{server_id}",
+    dependencies=[
+        enforced_in_handler("per-object permission resolved by the PDP once the object is loaded")
+    ],
+)
 async def delete_mcp_server(
     server_id: str,
     user_context: UserContextDep,
@@ -155,7 +181,12 @@ async def delete_mcp_server(
     return {"status": "success"}
 
 
-@router.post("/{server_id}/deploy")
+@router.post(
+    "/{server_id}/deploy",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def deploy_mcp_server(
     server_id: str,
     user_context: UserContextDep,

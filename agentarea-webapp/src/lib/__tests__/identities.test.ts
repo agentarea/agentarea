@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { identityToProfile, resolveIdentityProfiles } from "@/lib/identities";
 
-const mockEnv: { ORY_ADMIN_URL: string | undefined } = {
+const mockEnv = vi.hoisted<{ ORY_ADMIN_URL: string | undefined }>(() => ({
   ORY_ADMIN_URL: "http://kratos:4434",
-};
+}));
 vi.mock("@/env", () => ({ env: mockEnv }));
 vi.mock("server-only", () => ({}));
 

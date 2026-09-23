@@ -14,6 +14,7 @@ from uuid import UUID
 
 from agentarea_agents.domain.models import Agent
 from agentarea_common.auth import UserContextDep
+from agentarea_common.auth.route_authz import requires_workspace_admin, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
 from agentarea_common.money import to_money
@@ -159,7 +160,13 @@ async def _get_workspace_policy_cap_usd(
     return None
 
 
-@router.get("/dashboard", response_model=DashboardResponse)
+@router.get(
+    "/dashboard",
+    response_model=DashboardResponse,
+    dependencies=[
+        unrestricted("members see the spend they generate; the cap that limits it is admin-only")
+    ],
+)
 async def get_dashboard(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
@@ -197,7 +204,7 @@ async def get_dashboard(
     hitl_q = (
         select(TaskORM)
         .where(TaskORM.workspace_id == workspace_id)
-        .where(TaskORM.status == "input_required")
+        .where(TaskORM.status.in_(("waiting_for_input", "waiting_for_approval")))
         .order_by(desc(TaskORM.updated_at))
         .limit(20)
     )
@@ -369,7 +376,13 @@ async def get_dashboard(
                 "failed"
             ),
             func.coalesce(
-                func.sum(case((TaskORM.status == "input_required", 1), else_=0)), 0
+                func.sum(
+                    case(
+                        (TaskORM.status.in_(("waiting_for_input", "waiting_for_approval")), 1),
+                        else_=0,
+                    )
+                ),
+                0,
             ).label("input_required"),
         )
         .where(TaskORM.workspace_id == workspace_id)
@@ -405,7 +418,15 @@ class WorkspaceSettingsUpdate(BaseModel):
     monthly_cap_usd: float | None
 
 
-@router.get("/settings", response_model=WorkspaceSettingsResponse)
+@router.get(
+    "/settings",
+    response_model=WorkspaceSettingsResponse,
+    dependencies=[
+        unrestricted(
+            "the monthly cap is read beside every agent's spend; changing it is admin-only"
+        )
+    ],
+)
 async def get_workspace_settings(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
@@ -416,7 +437,9 @@ async def get_workspace_settings(
     return WorkspaceSettingsResponse(monthly_cap_usd=cap)
 
 
-@router.put("/settings", response_model=WorkspaceSettingsResponse)
+@router.put(
+    "/settings", response_model=WorkspaceSettingsResponse, dependencies=[requires_workspace_admin()]
+)
 async def update_workspace_settings(
     payload: WorkspaceSettingsUpdate,
     user_context: UserContextDep,

@@ -9,6 +9,7 @@ registry, reading from the live registry. The class IS the source of truth.
 
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import Any
 
@@ -70,6 +71,43 @@ def _ensure_all_toolsets_imported() -> None:
             logger.debug("Skipping toolset module %s: %s", mod_name, exc)
 
 
+def _method_summary(method: Any) -> str:
+    """One-line description for a tool method, from its metadata or docstring."""
+    meta = getattr(method, "_tool_meta", None)
+    described = getattr(meta, "description", "") if meta is not None else ""
+    if described:
+        return described
+    doc = inspect.getdoc(method) or ""
+    return doc.split("\n", 1)[0].strip()
+
+
+def _tool_methods(cls: type) -> list[dict[str, Any]]:
+    """Enumerate a toolset's ``@tool_method``s without instantiating it.
+
+    The catalog is read by the API and the UI, neither of which can construct a
+    toolset — those need runtime context (storage, sandbox URL, task identity).
+    So walk the class rather than an instance; ``@tool_method`` stamps the
+    functions themselves, so nothing is lost by staying at class level.
+    """
+    methods: list[dict[str, Any]] = []
+    for name, func in inspect.getmembers(cls, predicate=inspect.isfunction):
+        if not hasattr(func, "_is_tool_method"):
+            continue
+        meta = getattr(func, "_tool_meta", None)
+        methods.append(
+            {
+                "name": name,
+                "display_name": getattr(meta, "display_name", "") or name,
+                "description": _method_summary(func),
+                "effect": getattr(meta, "effect", None),
+                "requires_user_confirmation": bool(
+                    getattr(meta, "requires_user_confirmation", False)
+                ),
+            }
+        )
+    return sorted(methods, key=lambda m: m["name"])
+
+
 def _meta_to_dict(meta: ToolsetMetadata, cls: type) -> dict[str, Any]:
     return {
         "namespace": meta.namespace,
@@ -79,6 +117,7 @@ def _meta_to_dict(meta: ToolsetMetadata, cls: type) -> dict[str, Any]:
         "plane": meta.plane,
         "enabled_by_default": meta.enabled_by_default,
         "requires_user_confirmation": meta.requires_user_confirmation,
+        "available_methods": _tool_methods(cls),
         "class_path": f"{cls.__module__}.{cls.__name__}",
     }
 

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import Callable
 from typing import Any, cast
@@ -24,10 +25,12 @@ with workflow.unsafe.imports_passed_through():
         CodeToolProvider,
         MCPToolProvider,
     )
+    from agentarea_common.auth.tool_authorization import tool_matches_any
     from agentarea_common.money import ZERO, Money, serialize_money, to_money
     from agentarea_governance.domain.policies import effective_policy_from_json
     from agentarea_governance.domain.tool_calls import metered_tool_call_count
 
+    from ..interaction import resolve_interaction_capabilities
     from .context_manager import (
         ContextWindowManager,
         find_compaction_boundary,
@@ -216,6 +219,23 @@ class AgentExecutionWorkflow:
         self._continuation_message: str | None = None
         self._continuation_count = 0
         self._delegated_cost: Money = ZERO
+        # Old histories retain their recorded command sequence.
+        self._interaction_contract_enabled = True
+
+    @property
+    def _questions_available(self) -> bool:
+        if not self._interaction_contract_enabled:
+            return True
+        denied = ((self.state.effective_policy or {}).get("tools") or {}).get("denied") or []
+        return self.state.interaction_capabilities.allow_questions and not tool_matches_any(
+            "request_user_input", denied
+        )
+
+    @property
+    def _a2ui_available(self) -> bool:
+        return bool(self.state.agent_config.get("a2ui_enabled", False)) and (
+            not self._interaction_contract_enabled or self.state.interaction_capabilities.allow_a2ui
+        )
 
     @property
     def _events(self) -> EventManager:
@@ -322,6 +342,45 @@ class AgentExecutionWorkflow:
         The action is queued and injected as a user message on the next LLM call,
         so the agent can respond to the user's interaction.
         """
+        if self._interaction_contract_enabled:
+            surface_id = action_data.get("surface_id")
+            actions = (
+                self.state.a2ui_surfaces.get(surface_id, {}) if isinstance(surface_id, str) else {}
+            )
+            name = action_data.get("name")
+            component_id = action_data.get("source_component_id")
+            if (
+                not self._a2ui_available
+                or name not in actions.values()
+                or (component_id and actions.get(component_id) != name)
+            ):
+                workflow.logger.warning("Ignoring unavailable or undeclared A2UI action")
+                return
+            if self._pending_input_requests:
+                for request_id, pending in self._pending_input_requests.items():
+                    if pending.get("surface_id") == surface_id and not pending.get("resolved"):
+                        # Secrets can only enter via the authenticated input endpoint.
+                        if any(q.get("type") == "secret" for q in pending["questions"]):
+                            return
+                        context = action_data.get("context")
+                        if isinstance(context, dict):
+                            answers = dict(context)
+                            # ChoicePicker uses string lists even in single-selection mode.
+                            for question in pending["questions"]:
+                                value = answers.get(question["id"])
+                                if (
+                                    question.get("type") == "select"
+                                    and isinstance(value, list)
+                                    and len(value) == 1
+                                    and isinstance(value[0], str)
+                                ):
+                                    answers[question["id"]] = value[0]
+                            self._handle_submit_user_input(
+                                {"input_request_id": request_id, "answers": answers}
+                            )
+                        return
+                # An unrelated action is not an answer and must not become one later.
+                return
         if len(self._a2ui_action_queue) >= self._MAX_A2UI_QUEUE_SIZE:
             workflow.logger.warning("A2UI action queue full, dropping oldest")
             self._a2ui_action_queue.pop(0)
@@ -620,9 +679,56 @@ class AgentExecutionWorkflow:
             )
             return
 
+        if pending.get("resolved"):
+            return
+        answers = payload.get("answers") or {}
+        secret_refs = payload.get("secret_refs") or {}
+        if self._interaction_contract_enabled:
+            if not isinstance(answers, dict) or not isinstance(secret_refs, dict):
+                return
+            questions = pending.get("questions") or []
+            fields = {q["id"]: q for q in questions}
+            if answers.keys() - fields.keys() or secret_refs.keys() - fields.keys():
+                return
+            for field_id, field in fields.items():
+                if field.get("type") == "secret":
+                    if field_id in answers:
+                        return
+                    ref = secret_refs.get(field_id)
+                    if ref is not None and (
+                        not isinstance(ref, dict)
+                        or not isinstance(ref.get("secret_ref"), str)
+                        or not ref["secret_ref"].startswith("secret:")
+                    ):
+                        return
+                    if field.get("required", True) and not ref:
+                        return
+                    continue
+                if field_id in secret_refs:
+                    return
+                value = answers.get(field_id)
+                if value is None or value == "" or value == []:
+                    if field.get("required", True):
+                        return
+                    continue
+                field_type = field.get("type", "text")
+                if field_type == "boolean" and not isinstance(value, bool):
+                    return
+                if field_type == "number" and (
+                    isinstance(value, bool) or not isinstance(value, (int, float))
+                ):
+                    return
+                if field_type in {"text", "textarea", "select"} and not isinstance(value, str):
+                    return
+                if field_type == "multiselect" and (
+                    not isinstance(value, list) or any(not isinstance(item, str) for item in value)
+                ):
+                    return
+                if field.get("options") and not pending.get("allow_custom_response", True):
+                    values = value if isinstance(value, list) else [value]
+                    if any(item not in field["options"] for item in values):
+                        return
         pending["resolved"] = True
-        answers = cast(dict[str, Any], payload.get("answers") or {})
-        secret_refs = cast(dict[str, Any], payload.get("secret_refs") or {})
         pending["submission"] = {"answers": answers, "secret_refs": secret_refs}
         if self.event_manager:
             self.event_manager.add_event(
@@ -659,6 +765,17 @@ class AgentExecutionWorkflow:
             # Finalize and return result
             return await self._finalize_execution(result)
 
+        except asyncio.CancelledError:
+            if self._interaction_contract_enabled:
+                self._pending_input_requests.clear()
+                self._awaiting_input = False
+                self.state.status = ExecutionStatus.CANCELLED
+                if not self.state.success:
+                    self.state.failure_reason = "cancelled"
+                    self.state.error_message = "Task cancelled"
+                await asyncio.shield(self._finalize_execution({}))
+            raise
+
         except Exception as e:
             workflow.logger.error(f"Workflow execution failed: {e}")
             await self._handle_workflow_error(e)
@@ -667,6 +784,7 @@ class AgentExecutionWorkflow:
     async def _initialize_workflow(self, request: AgentExecutionRequest) -> None:
         """Initialize workflow state and dependencies."""
         workflow.logger.info(f"Initializing workflow for agent {request.agent_id}")
+        self._interaction_contract_enabled = workflow.patched("channel-aware-interaction-v1")
 
         # Check if this is a continue-as-new restart
         if request.continued_state:
@@ -748,6 +866,13 @@ class AgentExecutionWorkflow:
 
         if self.state.agent_config.get("execution_context") is not None:
             self._workflow_metadata = dict(self.state.agent_config["execution_context"])
+
+        if self._interaction_contract_enabled:
+            self.state.interaction_capabilities = resolve_interaction_capabilities(
+                self.state.goal.context if self.state.goal else {},
+                self._workflow_metadata,
+                bool(self.state.agent_config.get("a2ui_enabled", False)),
+            )
 
         self._events.add_event(
             EventTypes.RUNTIME_DISCOVERED,
@@ -1044,6 +1169,29 @@ class AgentExecutionWorkflow:
                 },
             },
         )
+        if self._interaction_contract_enabled:
+            completion_tool_definition["function"]["parameters"]["properties"]["outcome"] = {
+                "type": "string",
+                "enum": ["completed", "blocked"],
+                "description": (
+                    "Use blocked only for an actual unmet prerequisite after attempting "
+                    "available autonomous alternatives. Explain what is missing in result. "
+                    "Unavailable questions alone are not a reason to stop."
+                ),
+            }
+            available_tools[1]["function"]["parameters"]["properties"]["surface_id"] = {
+                "type": "string",
+                "description": (
+                    "Bind required non-secret answers to an already emitted A2UI surface. "
+                    "Action context keys must match question IDs. Omit for native input forms."
+                ),
+            }
+            if not self._questions_available:
+                available_tools = [
+                    tool
+                    for tool in available_tools
+                    if (tool.get("function") or {}).get("name") != "request_user_input"
+                ]
 
         # recall_history — query past execution context
         available_tools.append(
@@ -1273,6 +1421,17 @@ class AgentExecutionWorkflow:
         self._paused = state.paused
         self._pause_reason = state.pause_reason
         self._workflow_metadata = dict(state.workflow_metadata)
+        if state.interaction_contract_enabled is not None:
+            self._interaction_contract_enabled = state.interaction_contract_enabled
+        self.state.interaction_capabilities = (
+            state.interaction_capabilities
+            or resolve_interaction_capabilities(
+                state.goal.context,
+                state.workflow_metadata,
+                bool(state.agent_config.get("a2ui_enabled", False)),
+            )
+        )
+        self.state.a2ui_surfaces = state.a2ui_surfaces
         self._completion_event_published = state.completion_event_published
         self._waiting_for_continuation = state.waiting_for_continuation
         self._continuation_failure_reason = state.continuation_failure_reason
@@ -1405,6 +1564,9 @@ class AgentExecutionWorkflow:
             pending_escalations=self._pending_escalations,
             pending_input_requests=self._pending_input_requests,
             a2ui_action_queue=self._a2ui_action_queue,
+            interaction_contract_enabled=self._interaction_contract_enabled,
+            interaction_capabilities=self.state.interaction_capabilities,
+            a2ui_surfaces=self.state.a2ui_surfaces,
             awaiting_input=self._awaiting_input,
             paused=self._paused,
             pause_reason=self._pause_reason,
@@ -1498,6 +1660,8 @@ class AgentExecutionWorkflow:
 
             if self.state.validation_terminal:
                 break
+            if self._interaction_contract_enabled and self.state.status == ExecutionStatus.BLOCKED:
+                break
 
             # If agent completed the task, wait for follow-up messages.
             # Exception: a workflow spawned via agent delegation has no
@@ -1550,6 +1714,11 @@ class AgentExecutionWorkflow:
 
     async def _await_continuation(self, failure_reason: str, message: str) -> bool:
         """Idle durably until the user grants resources or the window expires."""
+        if (
+            self._interaction_contract_enabled
+            and self.state.interaction_capabilities.channel == "none"
+        ):
+            return False
         if self._is_delegation_child():
             return False
 
@@ -1638,7 +1807,10 @@ class AgentExecutionWorkflow:
 
         try:
             await workflow.wait_condition(
-                lambda: len(self._message_queue) > 0,
+                lambda: (
+                    bool(self._message_queue)
+                    or (self._interaction_contract_enabled and bool(self._a2ui_action_queue))
+                ),
                 timeout=timedelta(minutes=30),
             )
         except TimeoutError:
@@ -1778,6 +1950,15 @@ class AgentExecutionWorkflow:
                         "total_cost": serialize_money(self._budget.cost),
                         "result": self.state.final_response,
                         "validation_state": self.state.validation_state,
+                        **(
+                            {
+                                "execution_status": "completed"
+                                if self._is_delegation_child()
+                                else "waiting"
+                            }
+                            if self._interaction_contract_enabled
+                            else {}
+                        ),
                     },
                 )
                 self._completion_event_published = True
@@ -1853,13 +2034,41 @@ class AgentExecutionWorkflow:
                 if openapi_catalog_text:
                     agent_instruction = agent_instruction + openapi_catalog_text
 
+            if self._interaction_contract_enabled:
+                agent_instruction += (
+                    "\n\nInteraction contract: attempt the task autonomously with available "
+                    "context and tools. Do not invent missing facts, credentials, or authorization. "
+                    "Unavailable interaction alone does not block useful work. If an actual "
+                    "prerequisite remains unmet after available alternatives, call completion "
+                    "with outcome='blocked', explain it in result, and declare any artifacts."
+                )
+                if not self._questions_available:
+                    agent_instruction += (
+                        "\nQuestions are unavailable for this run. Do not ask the user, "
+                        "promise a reply channel, or call request_user_input."
+                    )
+                if not self.state.interaction_capabilities.allow_approvals:
+                    agent_instruction += (
+                        "\nHuman approvals cannot be collected on this route. Protected tools "
+                        "remain denied; use permitted alternatives, never bypass approval."
+                    )
+                if self._a2ui_available:
+                    agent_instruction += (
+                        "\nA2UI presentation alone is informational, not a request for input. "
+                        "For required forms, emit the surface and call request_user_input "
+                        "with its surface_id and questions in the same turn; do not complete "
+                        "until the matching answer arrives. Button action.event.context must "
+                        "map question IDs to data-model values. Secret fields MUST use the "
+                        "native request_user_input form without surface_id, never A2UI."
+                    )
+
             system_prompt = MessageBuilder.build_system_prompt(
                 agent_name=self.state.agent_config.get("name", "AI Agent"),
                 agent_instruction=agent_instruction,
                 goal_description=self.state.goal.description,
                 success_criteria=self.state.goal.success_criteria,
                 available_tools=self.state.available_tools,
-                a2ui_enabled=self.state.agent_config.get("a2ui_enabled", False),
+                a2ui_enabled=self._a2ui_available,
             )
 
             # Add system message and user message if first iteration
@@ -1956,11 +2165,19 @@ class AgentExecutionWorkflow:
                 for msg in self.state.messages
             ]
 
+            available_tools = self.state.available_tools
+            if not self._questions_available:
+                available_tools = [
+                    tool
+                    for tool in available_tools
+                    if (tool.get("function") or {}).get("name") != "request_user_input"
+                ]
+
             # Create Pydantic request model
             llm_request = LLMCallRequest(
                 messages=messages_dict,
                 model_id=str(self.state.agent_config.get("model_id") or ""),
-                tools=self.state.available_tools,
+                tools=available_tools,
                 workspace_id=self.state.user_context_data["workspace_id"],
                 user_context_data=self.state.user_context_data,
                 temperature=None,
@@ -2035,7 +2252,7 @@ class AgentExecutionWorkflow:
 
             # Strip A2UI JSON from the content sent to frontend via LLM_CALL_COMPLETED
             display_content = content_value
-            if self.state.agent_config.get("a2ui_enabled", False) and content_value:
+            if self._a2ui_available and content_value:
                 from .a2ui_parser import A2UI_DELIMITER
 
                 if A2UI_DELIMITER in content_value:
@@ -2131,7 +2348,7 @@ class AgentExecutionWorkflow:
         thinking_value = response.get("thinking", "")
 
         # Parse and publish A2UI events if agent has A2UI enabled
-        if self.state.agent_config.get("a2ui_enabled", False) and content:
+        if self._a2ui_available and content:
             from .a2ui_parser import A2UI_DELIMITER, A2UI_TYPE_TO_CANONICAL, parse_a2ui_response
 
             if A2UI_DELIMITER in content:
@@ -2145,6 +2362,35 @@ class AgentExecutionWorkflow:
                     # LLM speaks the A2UI protocol type names; translate to the
                     # canonical dotted vocabulary before emitting.
                     for a2ui_event in a2ui_result.a2ui_events:
+                        if self._interaction_contract_enabled:
+                            surface_id = a2ui_event["surface_id"]
+                            if not isinstance(surface_id, str):
+                                continue
+                            if a2ui_event["type"] == "A2UICreateSurface":
+                                self.state.a2ui_surfaces[surface_id] = {}
+                            elif a2ui_event["type"] == "A2UIDeleteSurface":
+                                self.state.a2ui_surfaces.pop(surface_id, None)
+                            elif a2ui_event["type"] == "A2UIUpdateComponents":
+                                actions = self.state.a2ui_surfaces.get(surface_id)
+                                if actions is not None:
+                                    for component in a2ui_event.get("components") or []:
+                                        if not isinstance(component, dict):
+                                            continue
+                                        component_id = component.get("id")
+                                        action = component.get("action") or {}
+                                        event = (
+                                            action.get("event")
+                                            if isinstance(action, dict)
+                                            else None
+                                        )
+                                        name = (
+                                            event.get("name") if isinstance(event, dict) else None
+                                        )
+                                        if isinstance(component_id, str):
+                                            if isinstance(name, str) and name:
+                                                actions[component_id] = name
+                                            else:
+                                                actions.pop(component_id, None)
                         event_data = {k: v for k, v in a2ui_event.items() if k != "type"}
                         event_data["task_id"] = str(self.state.task_id)
                         canonical_a2ui = A2UI_TYPE_TO_CANONICAL[a2ui_event["type"]]
@@ -2211,8 +2457,6 @@ class AgentExecutionWorkflow:
         Regular MCP/code tools run sequentially (they may have side effects
         that depend on execution order).
         """
-        import asyncio
-
         execution_limits = (self.state.effective_policy or {}).get("execution") or {}
         max_per_turn = execution_limits.get("max_tool_calls_per_turn")
         max_total = execution_limits.get("max_tool_calls_total")
@@ -2305,6 +2549,8 @@ class AgentExecutionWorkflow:
                 *agent_calls,
                 *regular_calls,
             ]
+            if self._interaction_contract_enabled and completion_call:
+                skipped_calls.append(completion_call)
             for skipped in skipped_calls:
                 skipped_name = skipped.function.get("name", "unknown")
                 self.state.messages.append(
@@ -2371,6 +2617,11 @@ class AgentExecutionWorkflow:
 
     async def _handle_task_completion(self, completion_call: ToolCall) -> None:
         """Gate completion on code-enforced validation of published artifacts."""
+        if self._interaction_contract_enabled and self._pending_input_requests:
+            self._reject_invalid_completion_arguments(
+                completion_call, "required input is still pending; await its matching submission"
+            )
+            return
         try:
             tool_args = json.loads(completion_call.function["arguments"])
         except (json.JSONDecodeError, KeyError, TypeError) as exc:
@@ -2415,6 +2666,16 @@ class AgentExecutionWorkflow:
             return
         result_text = result_value.strip()
         declared_paths = raw_paths
+        outcome = (
+            tool_args.get("outcome", "completed")
+            if self._interaction_contract_enabled
+            else "completed"
+        )
+        if outcome not in {"completed", "blocked"}:
+            self._reject_invalid_completion_arguments(
+                completion_call, "outcome must be completed or blocked"
+            )
+            return
 
         validation = await self._validate_completion_artifacts(declared_paths)
         if validation.state != "passed":
@@ -2467,7 +2728,7 @@ class AgentExecutionWorkflow:
                     tool_call_id=completion_call.id,
                     content=json.dumps(
                         {
-                            "status": "completed",
+                            "status": outcome,
                             "result": result_text,
                             "artifacts": declared_paths,
                         },
@@ -2476,6 +2737,15 @@ class AgentExecutionWorkflow:
                     ),
                 )
             )
+        if outcome == "blocked":
+            self.state.success = False
+            self.state.status = ExecutionStatus.BLOCKED
+            self.state.failure_reason = "unmet_prerequisite"
+            self.state.blocked_reason = result_text
+            self.state.error_message = result_text
+            self.state.final_response = result_text
+            self._awaiting_input = False
+            return
 
         self.state.success = True
         self.state.final_response = result_text
@@ -2516,11 +2786,18 @@ class AgentExecutionWorkflow:
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
+        if (
+            self._interaction_contract_enabled
+            and self.state.interaction_capabilities.channel == "none"
+        ):
+            self._awaiting_input = False
+            return
         self._events.add_event(
             EventTypes.WORKFLOW_AWAITING_FOLLOW_UP,
             {
                 "state": "awaiting_follow_up",
                 "timeout_seconds": 1800,
+                **({"final_response": result_text} if self._interaction_contract_enabled else {}),
             },
         )
         await self._publish_events_immediately()
@@ -2687,24 +2964,64 @@ class AgentExecutionWorkflow:
         )
 
     async def _execute_request_user_input(self, tool_call: ToolCall) -> None:
-        """Pause execution until the user replies via the queue_message command."""
+        """Wait for this request's validated submission, never a generic message."""
         from datetime import timedelta
+
+        if not self._questions_available:
+            await self._deny_tool_call(
+                tool_call,
+                "request_user_input",
+                "Questions are unavailable on this route or denied by policy. Continue "
+                "autonomously using available context and tools without inventing facts. "
+                "Only if an actual prerequisite remains unmet, complete with outcome='blocked'.",
+            )
+            return
 
         try:
             tool_args = json.loads(tool_call.function["arguments"])
         except (json.JSONDecodeError, KeyError):
             tool_args = {}
+        if not isinstance(tool_args, dict):
+            await self._deny_tool_call(
+                tool_call, "request_user_input", "arguments must be an object"
+            )
+            return
+        if self._interaction_contract_enabled and self._pending_input_requests:
+            await self._deny_tool_call(
+                tool_call, "request_user_input", "A required input request is already pending."
+            )
+            return
 
         questions = self._normalize_user_input_questions(tool_args)
         question = str(tool_args.get("question") or "").strip()
         if not question:
             question = questions[0]["question"] if questions else "Please provide input."
         allow_custom_response = bool(tool_args.get("allow_custom_response", True))
+        surface_id = tool_args.get("surface_id") if self._interaction_contract_enabled else None
+        if surface_id is not None and (
+            not isinstance(surface_id, str)
+            or not self._a2ui_available
+            or surface_id not in self.state.a2ui_surfaces
+            or not self.state.a2ui_surfaces[surface_id]
+            or any(q["type"] == "secret" for q in questions)
+        ):
+            await self._deny_tool_call(
+                tool_call,
+                "request_user_input",
+                "surface_id must identify an emitted A2UI surface with an action. "
+                "Secret questions must use the native input form without surface_id.",
+            )
+            return
         input_request_id = str(workflow.uuid4())
         pending_request = {
             "resolved": False,
             "submission": None,
             "questions": questions,
+            **(
+                {"surface_id": surface_id, "allow_custom_response": allow_custom_response}
+                if self._interaction_contract_enabled
+                else {}
+            ),
         }
         self._pending_input_requests[input_request_id] = pending_request
 
@@ -2733,6 +3050,7 @@ class AgentExecutionWorkflow:
                 "questions": questions,
                 "allow_custom_response": allow_custom_response,
                 "input_mode": "form" if len(questions) > 1 else questions[0]["type"],
+                **({"surface_id": surface_id} if surface_id is not None else {}),
             },
         )
         await self._publish_events_immediately()
@@ -2752,9 +3070,23 @@ class AgentExecutionWorkflow:
                 )
             )
             self._pending_input_requests.pop(input_request_id, None)
+            if self._interaction_contract_enabled:
+                self.state.success = False
+                self.state.status = ExecutionStatus.BLOCKED
+                self.state.failure_reason = "input_timeout"
+                self.state.blocked_reason = (
+                    "Required user input was not received within 30 minutes."
+                )
+                self.state.error_message = self.state.blocked_reason
+                self._awaiting_input = False
             return
+        except asyncio.CancelledError:
+            self._pending_input_requests.pop(input_request_id, None)
+            raise
 
         submission = pending_request.get("submission") or {}
+        if surface_id is not None:
+            self.state.a2ui_surfaces.pop(surface_id, None)
 
         self._events.add_event(
             EventTypes.HUMAN_INPUT_RECEIVED,
@@ -2764,6 +3096,7 @@ class AgentExecutionWorkflow:
                 "answer_keys": sorted((submission.get("answers") or {}).keys()),
                 "secret_keys": sorted((submission.get("secret_refs") or {}).keys()),
                 "iteration": self.state.current_iteration,
+                **({"surface_id": surface_id} if surface_id is not None else {}),
             },
         )
         await self._publish_events_immediately()
@@ -2884,6 +3217,18 @@ class AgentExecutionWorkflow:
         self, tool_call: ToolCall, tool_name: str, tool_args: dict
     ) -> bool:
         """Run the human-in-the-loop escalation flow. Returns True if approved."""
+        if (
+            self._interaction_contract_enabled
+            and not self.state.interaction_capabilities.allow_approvals
+        ):
+            await self._deny_tool_call(
+                tool_call,
+                tool_name,
+                "Required human approval is unavailable on this return route. The operation "
+                "was not executed. Use permitted alternatives; if approval is indispensable, "
+                "complete with outcome='blocked' and explain the missing authorization.",
+            )
+            return False
         escalation_id = str(workflow.uuid4())
         escalation = PendingEscalation(
             escalation_id=escalation_id,
@@ -4101,6 +4446,7 @@ class AgentExecutionWorkflow:
     async def _finalize_execution(self, result: dict[str, Any]) -> AgentExecutionResult:
         """Finalize workflow execution and return result."""
         workflow.logger.info("Finalizing workflow execution")
+        execution_cancelled = self.state.status == ExecutionStatus.CANCELLED
 
         # Determine final status.
         # If task_complete was already called, the task succeeded regardless of
@@ -4121,13 +4467,17 @@ class AgentExecutionWorkflow:
                 self.state.failure_reason = "task_unsuccessful"
                 self.state.error_message = self.state.error_message or "Task did not complete"
             self.state.success = False
-            if self.state.status != ExecutionStatus.BLOCKED:
+            if self.state.status not in {ExecutionStatus.BLOCKED, ExecutionStatus.CANCELLED}:
                 self.state.status = ExecutionStatus.FAILED
 
         # Only publish completion/failure event if not already published at task_complete
         if not self._completion_event_published:
             event_type = (
-                EventTypes.WORKFLOW_COMPLETED if self.state.success else EventTypes.WORKFLOW_FAILED
+                EventTypes.WORKFLOW_CANCELLED
+                if self.state.status == ExecutionStatus.CANCELLED
+                else EventTypes.WORKFLOW_COMPLETED
+                if self.state.success
+                else EventTypes.WORKFLOW_FAILED
             )
             self._events.add_event(
                 event_type,
@@ -4140,6 +4490,11 @@ class AgentExecutionWorkflow:
                     "failure_reason": self.state.failure_reason,
                     "error": self.state.error_message,
                     "blocked_reason": self.state.blocked_reason,
+                    **(
+                        {"blocked": self.state.status == ExecutionStatus.BLOCKED}
+                        if self._interaction_contract_enabled
+                        else {}
+                    ),
                     "validation_state": self.state.validation_state,
                 },
             )
@@ -4151,6 +4506,8 @@ class AgentExecutionWorkflow:
             final_status = "completed"
         elif self.state.status == ExecutionStatus.BLOCKED:
             final_status = "blocked"
+        elif self.state.status == ExecutionStatus.CANCELLED:
+            final_status = "cancelled"
         else:
             final_status = "failed"
         await workflow.execute_activity(
@@ -4178,6 +4535,20 @@ class AgentExecutionWorkflow:
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
         )
+        if self._interaction_contract_enabled:
+            self._events.add_event(
+                EventTypes.EXECUTION_FINISHED,
+                {
+                    "status": self.state.status,
+                    "execution_status": "cancelled" if execution_cancelled else "completed",
+                    "success": self.state.success,
+                    "final_response": self.state.final_response,
+                    "failure_reason": self.state.failure_reason,
+                    "blocked": self.state.status == ExecutionStatus.BLOCKED,
+                    "blocked_reason": self.state.blocked_reason,
+                },
+            )
+            await self._publish_events_immediately()
 
         # Return result - convert messages to dict format for response
         conversation_history: list[dict[str, Any]] = []

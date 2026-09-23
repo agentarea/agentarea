@@ -8,9 +8,11 @@ payload against the identity the contract actually derives, rather than against
 a hand-written payload the producer never emits.
 """
 
+from agentarea_common.events.adapters.redis_streams import decode
 from agentarea_common.events.base_events import DomainEvent
 from agentarea_common.events.broker import EventBroker
-from agentarea_common.events.contract import derive_part
+from agentarea_common.events.contract import Part, derive_part, reduce_parts
+from agentarea_common.events.ports import IntegrationEvent
 from agentarea_execution.activities.event_publisher import create_event_publisher
 
 
@@ -20,6 +22,24 @@ class CapturingBroker(EventBroker):
 
     async def publish(self, event: DomainEvent) -> None:
         self.events.append(event)
+
+
+class CapturingStreamBroker:
+    def __init__(self) -> None:
+        self.events: list[IntegrationEvent] = []
+
+    async def submit(self, topic: str, fields: dict[str, str], *, maxlen: int) -> str:
+        self.events.append(decode(fields))
+        return f"{len(self.events)}-0"
+
+
+def _published_parts(
+    broker: CapturingBroker, stream: CapturingStreamBroker
+) -> tuple[list[Part], list[Part]]:
+    return (
+        reduce_parts((event.event_type, event.data["original_data"]) for event in broker.events),
+        reduce_parts((event.type, event.data) for event in stream.events),
+    )
 
 
 def _published_chunk_data(broker) -> dict:
@@ -84,3 +104,69 @@ async def test_chunks_of_different_iterations_are_different_parts() -> None:
     assert parts[0] is not None
     assert parts[1] is not None
     assert parts[0].part_id != parts[1].part_id
+
+
+async def test_chunk_snapshots_preserve_text_through_empty_final_marker() -> None:
+    broker = CapturingBroker()
+    stream = CapturingStreamBroker()
+    publish_chunk = create_event_publisher(
+        broker, "task-1", execution_id="e", iteration=2, broker_client=stream
+    )
+
+    for index, (delta, is_final, expected) in enumerate(
+        [("hel", False, "hel"), ("lo", False, "hello"), ("", True, "hello")]
+    ):
+        await publish_chunk(delta, index, is_final)
+
+        for parts in _published_parts(broker, stream):
+            assert len(parts) == 1
+            assert parts[0].part_id == "e:2"
+            assert parts[0].data["chunk"] == expected
+            assert parts[0].data["thinking"] == ""
+            assert parts[0].data["is_final"] is is_final
+
+
+async def test_thinking_and_text_accumulate_without_replacing_each_other() -> None:
+    broker = CapturingBroker()
+    stream = CapturingStreamBroker()
+    publish_chunk = create_event_publisher(
+        broker, "task-1", execution_id="e", iteration=2, broker_client=stream
+    )
+    steps = [
+        ("Let", "thinking", False, "", "Let"),
+        ("hel", "text", False, "hel", "Let"),
+        (" me think", "thinking", False, "hel", "Let me think"),
+        ("lo", "text", False, "hello", "Let me think"),
+        ("", "text", True, "hello", "Let me think"),
+    ]
+
+    for index, (delta, channel, is_final, text, thinking) in enumerate(steps):
+        await publish_chunk(delta, index, is_final, chunk_type=channel)
+
+        for parts in _published_parts(broker, stream):
+            assert len(parts) == 1
+            assert parts[0].part_id == "e:2"
+            assert parts[0].data["chunk"] == text
+            assert parts[0].data["thinking"] == thinking
+            assert parts[0].data["chunk_type"] == channel
+
+
+async def test_new_attempt_replaces_previous_text_and_thinking() -> None:
+    broker = CapturingBroker()
+    stream = CapturingStreamBroker()
+    first = create_event_publisher(
+        broker, "task-1", execution_id="e", iteration=2, broker_client=stream
+    )
+    await first("old reasoning", 0, chunk_type="thinking")
+    await first("old answer", 1)
+    retry = create_event_publisher(
+        broker, "task-1", execution_id="e", iteration=2, broker_client=stream
+    )
+
+    await retry("new", 0)
+
+    for parts in _published_parts(broker, stream):
+        assert len(parts) == 1
+        assert parts[0].part_id == "e:2"
+        assert parts[0].data["chunk"] == "new"
+        assert parts[0].data["thinking"] == ""

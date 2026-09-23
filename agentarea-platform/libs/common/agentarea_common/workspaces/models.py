@@ -17,9 +17,10 @@ class WorkspaceInvitation(BaseModel):
     """A pending or resolved invitation to join a workspace.
 
     Token is sha256-hashed at rest. The plaintext token is returned to
-    the caller exactly once, on create. ``email`` is metadata only — not
-    used for security checks. The single security primitive is the
-    token; whoever holds it (and is authenticated) can accept once.
+    the caller exactly once, on create. Without an ``email`` the link is
+    open: whoever holds the token (and is authenticated) can accept once.
+    With one, only an account signed in under that address can see or
+    accept it.
     """
 
     __tablename__ = "workspace_invitations"

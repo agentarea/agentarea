@@ -17,6 +17,7 @@ import type {
   HttpValidationError,
   InstallRequest,
   InvitationCreatedResponse,
+  InvitationPreviewResponse,
   InvitationResponse,
   ListPolicyRulesV1PoliciesGetData,
   ListRelationshipsV1AccessControlRelationshipsGetData,
@@ -49,7 +50,6 @@ import type {
   ProviderSpecWithModelsResponse,
   RelationshipWriteRequest,
   ResolveRequest,
-  SandboxListResponse,
   SkillContentResponse,
   SkillCreateRequest,
   SkillFileResponse,
@@ -105,16 +105,6 @@ export const listAgents = async () => {
     client: serverClient,
   });
   return { data, error };
-};
-
-export const listSandboxes = async () => {
-  const result = await sdk.listSandboxesV1SandboxesGet({
-    client: serverClient,
-  });
-  return {
-    ...withStatus(result),
-    data: result.data as SandboxListResponse | undefined,
-  };
 };
 
 export const createAgent = async (agent: AgentCreate) => {
@@ -1379,12 +1369,15 @@ export const removeWorkspaceMember = async (
 };
 
 export const listWorkspaceInvitations = async (workspaceId: string) => {
-  const { data, error } =
-    await sdk.listInvitationsV1WorkspacesWorkspaceIdInvitationsGet({
+  const result = await sdk.listInvitationsV1WorkspacesWorkspaceIdInvitationsGet(
+    {
       client: serverClient,
       path: { workspace_id: workspaceId },
-    });
-  return { data, error };
+    }
+  );
+  // Pending invitations are admin-only; the caller needs the status to tell
+  // "you may not see these" from "the call failed".
+  return withStatus(result);
 };
 
 export const createWorkspaceInvitation = async (
@@ -1411,6 +1404,14 @@ export const revokeWorkspaceInvitation = async (
         path: { workspace_id: workspaceId, invitation_id: invitationId },
       }
     );
+  return withStatus(result);
+};
+
+export const previewWorkspaceInvitation = async (token: string) => {
+  const result = await sdk.previewInvitationV1InvitationsPreviewPost({
+    client: serverClient,
+    body: { token },
+  });
   return withStatus(result);
 };
 
@@ -2362,6 +2363,7 @@ export type Project = ProjectResponse;
 export type WorkspaceMember = MemberResponse;
 export type WorkspaceInvitation = InvitationResponse;
 export type WorkspaceInvitationCreated = InvitationCreatedResponse;
+export type WorkspaceInvitationPreview = InvitationPreviewResponse;
 
 // --- Workspace secrets -----------------------------------------------------
 // Values only ever travel inwards: no endpoint here returns one, so nothing

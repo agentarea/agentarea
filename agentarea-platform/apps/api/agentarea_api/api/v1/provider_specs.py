@@ -3,6 +3,7 @@ from uuid import UUID
 from agentarea_api.api.deps.services import get_provider_service
 from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelSpec, ProviderSpec
@@ -122,7 +123,11 @@ class ProviderSpecWithModelsResponse(BaseModel):
 
 
 # Provider Spec endpoints
-@router.get("/", response_model=list[ProviderSpecResponse])
+@router.get(
+    "/",
+    response_model=list[ProviderSpecResponse],
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def list_provider_specs(
     request: Request,
     user_context: UserContextDep,
@@ -135,7 +140,11 @@ async def list_provider_specs(
     return [ProviderSpecResponse.from_domain(spec, request) for spec in sorted_specs]
 
 
-@router.get("/with-models", response_model=list[ProviderSpecWithModelsResponse])
+@router.get(
+    "/with-models",
+    response_model=list[ProviderSpecWithModelsResponse],
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def list_provider_specs_with_models(
     request: Request,
     user_context: UserContextDep,
@@ -148,7 +157,11 @@ async def list_provider_specs_with_models(
     return [ProviderSpecWithModelsResponse.from_domain(spec, request) for spec in sorted_specs]
 
 
-@router.get("/{provider_spec_id}", response_model=ProviderSpecWithModelsResponse)
+@router.get(
+    "/{provider_spec_id}",
+    response_model=ProviderSpecWithModelsResponse,
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def get_provider_spec(
     provider_spec_id: UUID,
     request: Request,
@@ -162,7 +175,11 @@ async def get_provider_spec(
     return ProviderSpecWithModelsResponse.from_domain(provider_spec, request)
 
 
-@router.get("/by-key/{provider_key}", response_model=ProviderSpecWithModelsResponse)
+@router.get(
+    "/by-key/{provider_key}",
+    response_model=ProviderSpecWithModelsResponse,
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def get_provider_spec_by_key(
     provider_key: str,
     request: Request,

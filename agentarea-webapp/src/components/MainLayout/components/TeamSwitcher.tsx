@@ -116,17 +116,9 @@ export function TeamSwitcher({
                 <div className="flex aspect-square size-8 items-center justify-center bg-transparent">
                   <WorkspaceIcon workspace={active} className="size-8" />
                 </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-                    {active.name}
-                  </span>
-                  {/* The slug, not a tier label: there is no organization
-                      level in the model, and the slug is what identifies the
-                      workspace everywhere else. */}
-                  <span className="truncate text-[10px] font-medium text-zinc-500 tracking-wider">
-                    {active.slug}
-                  </span>
-                </div>
+                <span className="flex-1 truncate text-left text-sm font-semibold leading-tight tracking-tight text-zinc-900 dark:text-zinc-100">
+                  {active.name}
+                </span>
                 <ChevronsUpDown className="ml-auto text-zinc-400" />
               </SidebarMenuButton>
             </DropdownMenuTrigger>

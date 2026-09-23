@@ -60,3 +60,40 @@ def test_tags_are_surfaced_in_the_code_tools_catalog() -> None:
     entry = catalog.get("agentarea/agents")
     assert entry is not None, "agentarea/agents missing from the code tools catalog"
     assert entry["plane"] == "build"
+
+
+def test_every_registered_toolset_declares_a_plane() -> None:
+    """The whole registry, not just ``get_platform_tools()``.
+
+    The per-toolset checks above iterate the platform MCP surface, so a toolset
+    registered from anywhere else — the agent-runtime SDK, or a cross-package
+    extension like ``agentarea/triggers`` — was never covered and could ship
+    untagged. Anything the catalog serves is something a client has to group.
+    """
+    from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
+
+    untagged = sorted(
+        namespace
+        for namespace, entry in get_code_tools_metadata().items()
+        if entry.get("plane") not in PLANES
+    )
+    assert not untagged, (
+        f"toolsets registered without a plane: {untagged}. "
+        f"Declare plane=... on @toolset (one of {sorted(PLANES)})."
+    )
+
+
+def test_every_registered_tool_method_declares_an_effect() -> None:
+    """Same widening for ``effect`` — the UI shows what a call can break."""
+    from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
+
+    missing = sorted(
+        f"{namespace}.{method['name']}"
+        for namespace, entry in get_code_tools_metadata().items()
+        for method in entry.get("available_methods", [])
+        if method.get("effect") not in EFFECTS
+    )
+    assert not missing, (
+        f"tool methods without a valid effect: {missing}. "
+        f"Pass effect=... to @tool_method (one of {sorted(EFFECTS)})."
+    )

@@ -28,11 +28,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { formatApiError } from "@/lib/api-errors";
+import { getMCPInstanceConsumers, type MCPInstanceConsumer } from "@/lib/api";
 import { getMcpVerificationStatusPresentation } from "@/lib/status";
+import { discoverMCPInstanceToolsAction as discoverMCPInstanceTools } from "@/lib/server-actions";
+import { OAuthConnectPanel } from "../OAuthConnectPanel";
 import {
-  discoverMCPInstanceToolsAction as discoverMCPInstanceTools,
-  oauthAuthorizeAction,
-} from "@/lib/server-actions";
+  summarizeAuthorization,
+  type OAuthConnectState,
+} from "../oauth-connect-state";
 import { ToolsTable } from "../components/ToolsTable";
 import { ConsumersSection } from "./ConsumersSection";
 import { InstanceActivitySection } from "./InstanceActivitySection";
@@ -122,25 +125,21 @@ export default function MCPInstanceDetail({
     Date.now() - new Date(verification.at).getTime() > 30_000;
 
   const [isVerifying, setIsVerifying] = useState(false);
-  const [isStartingOAuth, setIsStartingOAuth] = useState(false);
+  const [oauthState, setOauthState] = useState<OAuthConnectState | undefined>();
 
-  const handleOAuthConnect = async () => {
-    setIsStartingOAuth(true);
-    try {
-      const result = await oauthAuthorizeAction(instance.id);
-      if (result.error || !result.data?.authorize_url) {
-        toast.error(
-          result.error || "OAuth discovery failed — this server may not support OAuth"
-        );
-        return;
-      }
-      window.location.href = result.data.authorize_url;
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to start OAuth flow");
-    } finally {
-      setIsStartingOAuth(false);
-    }
-  };
+  // One fetch for both the tools table (principals per tool) and the consumers
+  // section (tools per agent) — the endpoint scans every agent in the
+  // workspace, so it must not be called twice for the same page.
+  const [consumers, setConsumers] = useState<MCPInstanceConsumer[] | null>(null);
+  useEffect(() => {
+    let active = true;
+    getMCPInstanceConsumers(instance.id).then((data) => {
+      if (active) setConsumers(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [instance.id]);
 
   const handleVerify = async () => {
     setIsVerifying(true);
@@ -270,6 +269,13 @@ export default function MCPInstanceDetail({
   const isCommandType = specType === MCP_TRANSPORT.command;
   const isBundleType = specType === MCP_TRANSPORT.bundle;
   const bundleMembers = (instance.json_spec?.members ?? []) as string[];
+
+  const authorization = summarizeAuthorization({
+    isUrlType,
+    verificationStatus: verification?.status,
+    connected: !!instance.auth_config_id,
+    oauthState: oauthState?.kind,
+  });
 
   // Command-type fields
   const commandStr = instance.json_spec?.command as string | undefined;
@@ -403,6 +409,25 @@ export default function MCPInstanceDetail({
               </div>
             </div>
 
+            {/* Authorization — the one place this connection is connected from.
+                Rendered from the API preflight, so a provider that needs the
+                workspace's own OAuth app asks for it here instead of offering a
+                Connect that can only fail. */}
+            {isUrlType && (
+              <div className="space-y-2">
+                {authorization.reachableButUnauthorized && (
+                  <p className="text-xs text-muted-foreground">
+                    {t("oauth.unauthorizedNote")}
+                  </p>
+                )}
+                <OAuthConnectPanel
+                  instanceId={instance.id}
+                  isUrlType={isUrlType}
+                  onStateChange={setOauthState}
+                />
+              </div>
+            )}
+
             {/* Stuck verification banner */}
             {isStuck && (
               <div
@@ -446,24 +471,12 @@ export default function MCPInstanceDetail({
                   </p>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  {isUrlType && (
-                    <Button
-                      size="xs"
-                      onClick={handleOAuthConnect}
-                      isLoading={isStartingOAuth}
-                      disabled={isStartingOAuth || isVerifying}
-                    >
-                      {instance.auth_config_id
-                        ? "Reconnect with OAuth"
-                        : "Connect with OAuth"}
-                    </Button>
-                  )}
                   <Button
                     size="xs"
                     variant="outline"
                     onClick={handleVerify}
                     isLoading={isVerifying}
-                    disabled={isVerifying || isStartingOAuth}
+                    disabled={isVerifying}
                   >
                     Retry Verification
                   </Button>
@@ -660,7 +673,7 @@ export default function MCPInstanceDetail({
                     Refresh
                   </Button>
                 </div>
-                <ToolsTable tools={tools} />
+                <ToolsTable tools={tools} consumers={consumers} />
               </div>
             )}
 
@@ -683,7 +696,7 @@ export default function MCPInstanceDetail({
               </div>
             )}
 
-            <ConsumersSection instanceId={instance.id} />
+            <ConsumersSection consumers={consumers} />
 
             <InstanceActivitySection instanceId={instance.id} />
 

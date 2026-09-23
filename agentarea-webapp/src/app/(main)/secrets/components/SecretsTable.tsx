@@ -5,7 +5,6 @@ import Link from "next/link";
 import { KeyRound, Lock } from "lucide-react";
 import Table, { type Column } from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
-import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { SecretRowActions } from "./SecretRowActions";
@@ -35,7 +34,7 @@ export type Secret = {
 
 /** Where each owning entity's page lives. */
 const OWNER_HREFS: Record<string, (id: string) => string | null> = {
-  provider_config: () => "/admin/provider-configs",
+  provider_config: () => "/models",
   mcp_instance: (id) => `/connections/${id}`,
   // Auth configs are edited inside the connection they belong to, so there is
   // no page of their own to link at.
@@ -66,7 +65,6 @@ function CellLines({
 }
 
 function SecretCell({ secret }: { secret: Secret }) {
-  const t = useTranslations("SecretsPage.table");
   const typeLabel = useSecretTypeLabel();
   const owner = secret.owner;
 
@@ -86,7 +84,10 @@ function SecretCell({ secret }: { secret: Secret }) {
             id and reads as noise; the slot it fills identifies it to a human. */}
         {owner ? (owner.field ?? typeLabel(owner.type)) : secret.name}
       </span>
-      {owner && <BlueprintBadge>{t("managed")}</BlueprintBadge>}
+      {/* No "Managed" badge here. It was set on every secret that had an
+          owner, so a token you pasted in yourself came back labelled as
+          something the platform provisioned — and it only ever repeated what
+          the "Used by" column already spells out. */}
     </span>
   );
 }

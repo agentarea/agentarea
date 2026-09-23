@@ -128,6 +128,33 @@ class TestTrigger:
             )
         assert "updated_at cannot be before created_at" in str(exc_info.value)
 
+    def test_reconstituting_tolerates_skewed_timestamps(self):
+        """A row already in the database has to stay readable.
+
+        created_at and last_execution_at are stamped by different processes, so
+        clock skew between them is enough to invert the ordering. Refusing to
+        load such a row makes the trigger permanently unreadable through the
+        API -- including the endpoint you would use to inspect or repair it.
+        """
+        created_at = datetime.utcnow()
+        stored = {
+            "name": "Skewed Trigger",
+            "agent_id": uuid4(),
+            "trigger_type": TriggerType.CRON,
+            "created_by": "test_user",
+            "created_at": created_at,
+            "updated_at": created_at,
+            "last_execution_at": created_at - timedelta(minutes=1),
+        }
+
+        # Creating one like this is still a programming error.
+        with pytest.raises(ValidationError):
+            Trigger(**stored)
+
+        # Reading one back is not.
+        trigger = Trigger.model_validate(stored, context={"reconstituting": True})
+        assert trigger.last_execution_at < trigger.created_at
+
     # Rate limiting has been moved to infrastructure layer (ingress/load balancer/API gateway)
     # No application-level rate limiting tests needed
 

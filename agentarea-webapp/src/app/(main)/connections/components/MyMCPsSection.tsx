@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { formatDistanceToNow } from "date-fns";
 import { Server } from "lucide-react";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
@@ -12,18 +14,19 @@ import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
-import {
-  getMcpHealthStatusPresentation,
-  getMcpVerificationStatusPresentation,
-  getOpenApiConnectionDisplayStatus,
-  type StatusPresentation,
-} from "@/lib/status";
 import { getMCPConnectionIconSrc } from "@/lib/entity-identity";
-import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
+import { getOpenApiConnectionDisplayStatus } from "@/lib/status";
+import { cn } from "@/lib/utils";
+import { LIST_FILTERS } from "../list-sections";
 import {
-  getEffectiveMCPVerificationStatus,
-  getMCPInstanceToolCount,
-} from "../utils";
+  getMcpConnectionState,
+  getOpenApiConnectionState,
+  type ConnectionState,
+} from "../state";
+import { MCPInstance, MCPServer, OpenAPIConnection } from "../types";
+import type { ConnectionUsage } from "../usage";
+import { useConnectionListFilter } from "../useConnectionListFilter";
+import { getMCPInstanceToolCount } from "../utils";
 import {
   MCPInstanceCard,
   OpenAPIConnectionCard,
@@ -49,23 +52,12 @@ function hostOf(url?: string | null): string {
   }
 }
 
-// An OpenAPI connection's own status, in the vocabulary the shared status
-// presenter speaks. Unlike MCP workloads there is nothing to start on demand
-// here — the connection either reaches its upstream spec or it does not.
-const OPENAPI_STATUS_TO_HEALTH: Record<string, string> = {
-  connected: "connected",
-  succeeded: "connected",
-  running: "healthy",
-  failed: "unhealthy",
-  stopped: "unknown",
-  pending: "starting",
-  starting: "starting",
-};
-
 interface MyMCPsSectionProps {
   mcpInstances: MCPInstance[];
   mcpServers: MCPServer[];
   openApiConnections?: OpenAPIConnection[];
+  /** Per-connection usage, keyed by MCP instance id. */
+  usage?: Record<string, ConnectionUsage>;
   viewMode?: string;
   searchQuery?: string;
   hasNoData?: boolean;
@@ -75,24 +67,13 @@ export function MyMCPsSection({
   mcpInstances,
   mcpServers,
   openApiConnections = [],
+  usage = {},
   viewMode = "grid",
   searchQuery = "",
   hasNoData = false,
 }: MyMCPsSectionProps) {
   const t = useTranslations("MCPServersPage");
   const router = useRouter();
-
-  // Shared status presentation: a coloured dot + label, matching the table design.
-  const getStatusIndicator = (presentation: StatusPresentation) => {
-    const label = presentation.labelKey
-      ? t(`status.${presentation.labelKey}`)
-      : presentation.label;
-    return (
-      <StatusIndicator tone={presentation.tone} pulse={presentation.pulse}>
-        {label}
-      </StatusIndicator>
-    );
-  };
 
   type TableRow = {
     id: string;
@@ -104,7 +85,67 @@ export function MyMCPsSection({
     _instance: MCPInstance | null;
     _serverSpec: MCPServer | undefined;
     _connection: OpenAPIConnection | null;
+    _state: ConnectionState;
+    _usage: ConnectionUsage | undefined;
   };
+
+  // One row per connection, shared by both views: the verdict and usage decide
+  // filtering and grouping, so they are computed once rather than per cell.
+  const rows = useMemo<TableRow[]>(
+    () => [
+      ...mcpInstances.map((inst) => {
+        const instanceUsage = usage[inst.id];
+        return {
+          id: inst.id,
+          name: inst.name,
+          description: inst.description,
+          endpoint_url: inst.endpoint_url,
+          type: "MCP" as const,
+          _type: "mcp" as const,
+          _instance: inst,
+          _serverSpec: mcpServers.find(
+            (server) => server.id === inst.server_spec_id
+          ),
+          _connection: null,
+          _state: getMcpConnectionState({
+            verification: inst.verification,
+            last_dispatch: inst.last_dispatch,
+            toolCount: getMCPInstanceToolCount(inst),
+          }),
+          _usage: instanceUsage,
+        };
+      }),
+      ...openApiConnections.map((conn) => ({
+        id: conn.id,
+        name: conn.name,
+        description: conn.description,
+        endpoint_url: conn.base_url,
+        type: "OpenAPI" as const,
+        _type: "openapi" as const,
+        _instance: null,
+        _serverSpec: undefined,
+        _connection: conn,
+        _state: getOpenApiConnectionState(
+          getOpenApiConnectionDisplayStatus(
+            conn.status,
+            conn.available_tools.length
+          ),
+          conn.available_tools.length
+        ),
+        _usage: undefined,
+      })),
+    ],
+    [mcpInstances, mcpServers, openApiConnections, usage]
+  );
+
+  const {
+    filter,
+    setFilter,
+    counts,
+    visibleRows,
+    sections,
+    showSectionHeadings,
+  } = useConnectionListFilter(rows);
 
   // Subtitle under the connection name — transport for MCP, host for OpenAPI.
   const rowSubtitle = (item: TableRow): string => {
@@ -180,54 +221,104 @@ export function MyMCPsSection({
       ),
     },
     {
-      accessor: "endpoint_url",
-      header: t("table.endpoint"),
-      render: (value: string) => (
-        <span className="truncate font-mono text-[11.5px] text-muted-foreground/70">
-          {value || "—"}
-        </span>
-      ),
-    },
-    {
-      accessor: "tools",
-      header: "Tools",
+      accessor: "usedBy",
+      header: t("table.usedBy"),
+      // Who actually holds this connection, and how much of it. A bare tool
+      // count says nothing: 400 available with 12 granted is a healthy
+      // connection, 400 available with all granted is a blast radius.
       render: (_: unknown, item: TableRow) => {
-        const count =
+        const total =
           item._type === "openapi" && item._connection
             ? item._connection.available_tools.length
             : getMCPInstanceToolCount(item._instance || item);
-        return count > 0 ? (
-          <span className="font-mono text-[12px] text-foreground/70 tabular-nums">
-            {count}
-          </span>
-        ) : (
-          <span className="text-[12px] text-muted-foreground/50">—</span>
+        const connectionUsage =
+          item._type === "mcp" ? usage[item.id] : undefined;
+
+        if (!connectionUsage) {
+          return (
+            <span className="font-mono text-[12px] text-muted-foreground/60 tabular-nums">
+              {total > 0 ? t("table.toolsTotal", { total }) : "—"}
+            </span>
+          );
+        }
+
+        const granted =
+          connectionUsage.grantedTools === null
+            ? t("table.allTools")
+            : `${connectionUsage.grantedTools} / ${total}`;
+
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span
+              className={
+                connectionUsage.agents === 0
+                  ? "text-[12px] text-muted-foreground/60"
+                  : "text-[12px] text-foreground/80"
+              }
+            >
+              {connectionUsage.agents === 0
+                ? t("table.unused")
+                : t("table.agentCount", { count: connectionUsage.agents })}
+            </span>
+            <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+              {t("table.toolsGranted", { granted })}
+            </span>
+          </div>
         );
       },
     },
     {
-      accessor: "status",
-      header: t("table.status"),
-      // Whether the connection works — the same verdict the cards show. Not
-      // whether a container is warm: workloads start on demand and are reaped
-      // when idle, so liveness is the data plane's business, not a column here.
-      render: (_: string, item: TableRow) => {
-        if (item._type === "openapi" && item._connection) {
-          const displayStatus = getOpenApiConnectionDisplayStatus(
-            item._connection.status,
-            item._connection.available_tools.length
-          );
-          return getStatusIndicator(
-            getMcpHealthStatusPresentation(
-              OPENAPI_STATUS_TO_HEALTH[displayStatus] ?? "unknown"
-            )
-          );
-        }
-        if (!item._instance) return null;
-        return getStatusIndicator(
-          getMcpVerificationStatusPresentation(
-            getEffectiveMCPVerificationStatus(item._instance)
-          )
+      accessor: "state",
+      header: t("table.state"),
+      // One verdict from the two facts we record: the setup-time verification
+      // probe and the outcome of the last real tool call. Never liveness —
+      // workloads start on demand and are reaped when idle, so "connected" is
+      // not a state this product has.
+      render: (_: unknown, item: TableRow) => {
+        const connectionState =
+          item._type === "openapi" && item._connection
+            ? getOpenApiConnectionState(
+                getOpenApiConnectionDisplayStatus(
+                  item._connection.status,
+                  item._connection.available_tools.length
+                ),
+                item._connection.available_tools.length
+              )
+            : item._instance
+              ? getMcpConnectionState({
+                  verification: item._instance.verification,
+                  last_dispatch: item._instance.last_dispatch,
+                  toolCount: getMCPInstanceToolCount(item._instance),
+                })
+              : null;
+        if (!connectionState) return null;
+
+        // The timestamp means different things per verdict — call time for
+        // working/failing, probe time for broken — so a state that has never
+        // been called says so instead of dating its setup.
+        const secondary =
+          connectionState.key === "ready"
+            ? t("state.neverCalled")
+            : connectionState.at
+              ? formatDistanceToNow(new Date(connectionState.at), {
+                  addSuffix: true,
+                })
+              : null;
+
+        return (
+          <div className="flex flex-col gap-0.5">
+            <StatusIndicator
+              tone={connectionState.tone}
+              pulse={connectionState.pulse}
+            >
+              {t(`state.${connectionState.key}`)}
+            </StatusIndicator>
+            {secondary && (
+              <span className="pl-3.5 text-[11px] text-muted-foreground">
+                {secondary}
+              </span>
+            )}
+          </div>
         );
       },
     },
@@ -240,11 +331,26 @@ export function MyMCPsSection({
     return (
       <div className="py-1">
         <EmptyState
-          title={hasNoData ? "No connections" : "No matching connections"}
+          title={hasNoData ? "No connections yet" : "No matching connections"}
           description={
             hasNoData
-              ? "You haven't connected anything yet — add your first connection from the catalog."
+              ? "A connection is an outside system — an MCP server or an OpenAPI service — whose tools your agents are allowed to call."
               : `No connections match your search query: "${searchQuery}"`
+          }
+          hints={
+            hasNoData
+              ? [
+                  { text: "Add an MCP server", href: "/connections/add" },
+                  {
+                    text: "Connect an OpenAPI service from its spec",
+                    href: "/connections/add-openapi",
+                  },
+                  {
+                    text: "Install a ready-made connection from the catalog",
+                    href: "/explore?type=connections",
+                  },
+                ]
+              : undefined
           }
           iconsType="mcp"
           action={
@@ -258,103 +364,127 @@ export function MyMCPsSection({
     );
   }
 
-  // Render table view
-  if (viewMode === "table") {
-    // Unified rows: MCP instances + OpenAPI connections with a Type column
-    const tableRows = [
-      ...mcpInstances.map((inst) => ({
-        id: inst.id,
-        name: inst.name,
-        description: inst.description,
-        endpoint_url: inst.endpoint_url,
-        type: "MCP" as const,
-        _type: "mcp" as const,
-        _instance: inst,
-        _serverSpec: mcpServers.find(
-          (server) => server.id === inst.server_spec_id
-        ),
-        _connection: null,
-      })),
-      ...openApiConnections.map((conn) => ({
-        id: conn.id,
-        name: conn.name,
-        description: conn.description,
-        endpoint_url: conn.base_url,
-        type: "OpenAPI" as const,
-        _type: "openapi" as const,
-        _instance: null,
-        _serverSpec: undefined,
-        _connection: conn,
-      })),
-    ];
+  const filters = (
+    <div className="mb-3 flex flex-wrap items-center gap-1">
+      {LIST_FILTERS.map((key) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => setFilter(key)}
+          disabled={key !== "all" && counts[key] === 0}
+          className={cn(
+            "rounded-md border px-2 py-1 text-[11px] transition-colors",
+            filter === key
+              ? "border-primary/40 bg-primary/10 text-foreground"
+              : "border-border text-muted-foreground hover:bg-muted/50",
+            key !== "all" &&
+              counts[key] === 0 &&
+              "opacity-40 hover:bg-transparent"
+          )}
+        >
+          {t(`listFilters.${key}`)}
+          <span className="ml-1 tabular-nums">{counts[key]}</span>
+        </button>
+      ))}
+    </div>
+  );
 
-    const unifiedColumns = [
-      {
-        accessor: "type",
-        header: "Type",
-        render: (value: string) => (
-          <Badge
-            variant="outline"
-            className={
-              value === "OpenAPI"
-                ? "gap-1.5 border-orange-300 text-orange-600"
-                : "gap-1.5"
-            }
-          >
-            {value === "OpenAPI" ? (
-              <OpenAPIConnectionMark className="h-3.5 w-3.5 rounded-sm text-[6px]" />
-            ) : (
-              <Image
-                src="/mcp.svg"
-                alt=""
-                width={14}
-                height={14}
-                className="h-3.5 w-3.5"
-              />
-            )}
-            {value}
-          </Badge>
-        ),
-      },
-      ...instanceColumns,
-    ];
-
-    return (
-      <Table
-        data={tableRows}
-        columns={unifiedColumns}
-        onRowClick={(row) => {
-          if (row._type === "openapi") {
-            router.push(`/connections/openapi/${row.id}`);
-          } else {
-            router.push(`/connections/${row.id}`);
+  const unifiedColumns = [
+    {
+      accessor: "type",
+      header: t("filters.type"),
+      render: (value: string) => (
+        <Badge
+          variant="outline"
+          className={
+            value === "OpenAPI"
+              ? "gap-1.5 border-orange-300 text-orange-600"
+              : "gap-1.5"
           }
-        }}
-      />
+        >
+          {value === "OpenAPI" ? (
+            <OpenAPIConnectionMark className="h-3.5 w-3.5 rounded-sm text-[6px]" />
+          ) : (
+            <Image
+              src="/mcp.svg"
+              alt=""
+              width={14}
+              height={14}
+              className="h-3.5 w-3.5"
+            />
+          )}
+          {value}
+        </Badge>
+      ),
+    },
+    ...instanceColumns,
+  ];
+
+  const openRow = (row: TableRow) => {
+    router.push(
+      row._type === "openapi"
+        ? `/connections/openapi/${row.id}`
+        : `/connections/${row.id}`
+    );
+  };
+
+  if (visibleRows.length === 0) {
+    return (
+      <div>
+        {filters}
+        <EmptyState
+          title={t(`listFilters.empty.${filter}`)}
+          description={t("listFilters.emptyDescription")}
+          iconsType="mcp"
+          action={{
+            label: t("listFilters.all"),
+            onClick: () => setFilter("all"),
+          }}
+        />
+      </div>
     );
   }
 
-  // Render grid view (default)
   return (
-    <div className={CARD_GRID_DENSE}>
-      {mcpInstances.map((instance) => {
-        const serverSpec = mcpServers.find(
-          (server) => server.id === instance.server_spec_id
-        );
-        return (
-          <MCPInstanceCard
-            key={instance.id}
-            instance={instance}
-            serverSpec={serverSpec}
-          />
-        );
-      })}
-      {openApiConnections.map((connection) => (
-        <OpenAPIConnectionCard
-          key={`openapi-${connection.id}`}
-          connection={connection}
-        />
-      ))}
+    <div>
+      {filters}
+      <div className="space-y-5">
+        {sections.map((section, index) => (
+          <div key={section.key}>
+            {showSectionHeadings && (
+              <h5 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                {t(`sections.${section.key}`)} ({section.rows.length})
+              </h5>
+            )}
+            {viewMode === "table" ? (
+              <Table
+                data={section.rows}
+                columns={unifiedColumns}
+                onRowClick={openRow}
+                hideHeader={index > 0}
+              />
+            ) : (
+              <div className={CARD_GRID_DENSE}>
+                {section.rows.map((row) =>
+                  row._type === "mcp" && row._instance ? (
+                    <MCPInstanceCard
+                      key={row.id}
+                      instance={row._instance}
+                      serverSpec={row._serverSpec}
+                      usage={row._usage}
+                    />
+                  ) : row._connection ? (
+                    <OpenAPIConnectionCard
+                      key={`openapi-${row.id}`}
+                      connection={row._connection}
+                    />
+                  ) : null
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

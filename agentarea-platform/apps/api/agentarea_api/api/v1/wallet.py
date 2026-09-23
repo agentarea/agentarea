@@ -15,6 +15,7 @@ from agentarea_api.api.deps.services import (
 )
 from agentarea_common.auth import assert_workspace_admin
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.utils.types import UtcDatetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -164,7 +165,12 @@ async def ensure_agent_exists(
 # ---------------------------------------------------------------------------
 
 
-@router.post("", status_code=201, response_model=WalletResponse)
+@router.post(
+    "",
+    status_code=201,
+    response_model=WalletResponse,
+    dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
+)
 async def create_wallet(
     agent_id: UUID,
     request: CreateWalletRequest,
@@ -197,7 +203,13 @@ async def create_wallet(
         raise HTTPException(status_code=400, detail=str(e)) from None
 
 
-@router.get("", response_model=WalletResponse)
+@router.get(
+    "",
+    response_model=WalletResponse,
+    dependencies=[
+        unrestricted("credentials are never returned; funding and deletion are admin-gated")
+    ],
+)
 async def get_wallet(
     agent_id: UUID,
     _agent_exists: None = Depends(ensure_agent_exists),
@@ -213,7 +225,11 @@ async def get_wallet(
         raise HTTPException(status_code=404, detail="No wallet configured for this agent") from None
 
 
-@router.put("", response_model=WalletResponse)
+@router.put(
+    "",
+    response_model=WalletResponse,
+    dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
+)
 async def update_wallet(
     agent_id: UUID,
     request: UpdateWalletRequest,
@@ -255,7 +271,11 @@ async def update_wallet(
         raise HTTPException(status_code=400, detail=str(e)) from None
 
 
-@router.delete("", status_code=204)
+@router.delete(
+    "",
+    status_code=204,
+    dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
+)
 async def delete_wallet(
     agent_id: UUID,
     user_context: UserContextDep,
@@ -272,7 +292,13 @@ async def delete_wallet(
         raise HTTPException(status_code=404, detail="No wallet configured for this agent") from None
 
 
-@router.get("/balance", response_model=WalletBalanceResponse)
+@router.get(
+    "/balance",
+    response_model=WalletBalanceResponse,
+    dependencies=[
+        unrestricted("credentials are never returned; funding and deletion are admin-gated")
+    ],
+)
 async def get_wallet_balance(
     agent_id: UUID,
     _agent_exists: None = Depends(ensure_agent_exists),
@@ -296,7 +322,13 @@ async def get_wallet_balance(
         raise HTTPException(status_code=404, detail="No wallet configured for this agent") from None
 
 
-@router.get("/payments", response_model=PaginatedPaymentsResponse)
+@router.get(
+    "/payments",
+    response_model=PaginatedPaymentsResponse,
+    dependencies=[
+        unrestricted("credentials are never returned; funding and deletion are admin-gated")
+    ],
+)
 async def get_payment_history(
     agent_id: UUID,
     _agent_exists: None = Depends(ensure_agent_exists),
@@ -328,7 +360,11 @@ async def get_payment_history(
     )
 
 
-@router.post("/fund", response_model=WalletResponse)
+@router.post(
+    "/fund",
+    response_model=WalletResponse,
+    dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
+)
 async def fund_wallet(
     agent_id: UUID,
     request: FundWalletRequest,

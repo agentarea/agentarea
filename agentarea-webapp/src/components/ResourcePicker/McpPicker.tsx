@@ -43,7 +43,7 @@ export function McpPicker({
       onRefresh={refresh}
       emptyText={t("noMcps")}
       manageText={t("manageMcps")}
-      manageHref="/mcp-servers"
+      manageHref="/connections"
       extractIconSrc={(instance) => {
         const resolved = resolve(instance);
         return resolved.status === "unresolved"

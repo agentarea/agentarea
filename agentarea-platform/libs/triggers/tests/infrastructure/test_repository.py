@@ -44,6 +44,43 @@ class TestTriggerRepository:
         """Create a TriggerRepository instance with mock session."""
         return TriggerRepository(mock_session, mock_user_context)
 
+    def test_orm_to_domain_loads_row_with_skewed_timestamps(self, repository):
+        """A stored row whose execution predates its creation must still load.
+
+        The three stamps are written by different processes, so clock skew
+        alone can invert them. This used to raise out of the domain validator,
+        which turned GET /v1/triggers/{id} into a permanent 500 -- the trigger
+        could no longer even be inspected, let alone repaired.
+        """
+        created_at = datetime.utcnow()
+        trigger_orm = TriggerORM(
+            id=uuid4(),
+            name="Skewed Webhook",
+            description="",
+            agent_id=uuid4(),
+            trigger_type=TriggerType.WEBHOOK.value,
+            is_active=True,
+            task_parameters={},
+            conditions={},
+            created_at=created_at,
+            updated_at=created_at,
+            created_by="test_user",
+            workspace_id="test_workspace",
+            failure_threshold=5,
+            consecutive_failures=0,
+            last_execution_at=created_at - timedelta(minutes=1),
+            webhook_id="hook-1",
+            allowed_methods=["POST"],
+            webhook_type=WebhookType.GENERIC.value,
+            validation_rules={},
+            event_types=[],
+        )
+
+        domain = repository._orm_to_domain(trigger_orm)
+
+        assert isinstance(domain, WebhookTrigger)
+        assert domain.last_execution_at < domain.created_at
+
     @pytest.fixture
     def sample_trigger_orm(self):
         """Create a sample TriggerORM for testing."""

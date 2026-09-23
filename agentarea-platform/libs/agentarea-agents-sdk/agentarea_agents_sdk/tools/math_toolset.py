@@ -13,6 +13,7 @@ from .tool_definition import toolset
     display_name="Math Toolset",
     description="Mathematical operations including addition, subtraction, multiplication, division, and more.",
     category="math",
+    plane="runtime",
 )
 class MathToolset(Toolset):
     """
@@ -77,7 +78,7 @@ class MathToolset(Toolset):
                     methods[name] = method
         return methods
 
-    @tool_method
+    @tool_method(effect="read")
     async def add(self, a: float, b: float) -> str:
         """Add two numbers together.
 
@@ -97,7 +98,7 @@ class MathToolset(Toolset):
         except Exception as e:
             return f"Error in addition: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def subtract(self, a: float, b: float) -> str:
         """Subtract one number from another.
 
@@ -117,7 +118,7 @@ class MathToolset(Toolset):
         except Exception as e:
             return f"Error in subtraction: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def multiply(self, a: float, b: float) -> str:
         """Multiply two numbers.
 
@@ -137,7 +138,7 @@ class MathToolset(Toolset):
         except Exception as e:
             return f"Error in multiplication: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def divide(self, a: float, b: float) -> str:
         """Divide one number by another.
 
@@ -159,7 +160,7 @@ class MathToolset(Toolset):
         except Exception as e:
             return f"Error in division: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def power(self, base: float, exponent: float) -> str:
         """Raise a number to a power.
 
@@ -179,7 +180,7 @@ class MathToolset(Toolset):
         except Exception as e:
             return f"Error in power calculation: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def sqrt(self, number: float) -> str:
         """Calculate the square root of a number.
 
@@ -200,7 +201,7 @@ class MathToolset(Toolset):
         except Exception as e:
             return f"Error in square root calculation: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def sin(self, angle: float, degrees: bool = False) -> str:
         """Calculate the sine of an angle.
 
@@ -223,7 +224,7 @@ class MathToolset(Toolset):
         except Exception as e:
             return f"Error in sine calculation: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def cos(self, angle: float, degrees: bool = False) -> str:
         """Calculate the cosine of an angle.
 
@@ -246,7 +247,7 @@ class MathToolset(Toolset):
         except Exception as e:
             return f"Error in cosine calculation: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def tan(self, angle: float, degrees: bool = False) -> str:
         """Calculate the tangent of an angle.
 
@@ -269,7 +270,7 @@ class MathToolset(Toolset):
         except Exception as e:
             return f"Error in tangent calculation: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def log(self, number: float, base: float = math.e) -> str:
         """Calculate the logarithm of a number.
 
@@ -298,7 +299,7 @@ class MathToolset(Toolset):
         except Exception as e:
             return f"Error in logarithm calculation: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def abs(self, number: float) -> str:
         """Calculate the absolute value of a number.
 

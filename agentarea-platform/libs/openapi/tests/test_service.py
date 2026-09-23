@@ -1,11 +1,18 @@
 """Tests for OpenAPIConnectionService."""
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import httpx
 import pytest
+from agentarea_openapi.application import service as service_module
 from agentarea_common.testing.flows import MainFlow
-from agentarea_openapi.application.service import MissingHeaderSecretError, OpenAPIConnectionService
+from agentarea_openapi.application.service import (
+    MissingHeaderSecretError,
+    OpenAPIConnectionService,
+    fetch_and_parse_spec,
+)
 from agentarea_openapi.domain.models import OpenAPIConnection
 from agentarea_openapi.schemas.dto import (
     OpenAPIConnectionCreate,
@@ -295,3 +302,67 @@ class TestSpecParser:
         for tool in tools:
             assert "item_id" in tool["inputSchema"]["properties"]
             assert "item_id" in tool["inputSchema"]["required"]
+
+
+BARE_DATE_YAML_SPEC = """\
+openapi: 3.0.0
+info:
+  title: Dated API
+  version: 2024-01-01
+x-released-at: 2024-01-01T10:30:00Z
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      summary: List users
+"""
+
+
+def _serve(text: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    real_client = httpx.AsyncClient
+    transport = httpx.MockTransport(lambda _req: httpx.Response(200, text=text))
+    monkeypatch.setattr(
+        service_module.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=transport, **kwargs),
+    )
+
+
+class TestYamlSpecWithBareDates:
+    @pytest.mark.parametrize(
+        "spec_url",
+        ["http://127.0.0.1/openapi.yaml", "http://127.0.0.1/openapi"],
+    )
+    @pytest.mark.asyncio
+    async def test_bare_dates_stay_strings(self, spec_url, monkeypatch):
+        _serve(BARE_DATE_YAML_SPEC, monkeypatch)
+
+        spec = await fetch_and_parse_spec(spec_url, allow_private=True)
+
+        assert spec["info"]["version"] == "2024-01-01"
+        assert spec["x-released-at"] == "2024-01-01T10:30:00Z"
+        assert json.loads(json.dumps(spec)) == spec
+
+    @pytest.mark.asyncio
+    async def test_create_connection_stores_json_compatible_spec(self, monkeypatch):
+        _serve(BARE_DATE_YAML_SPEC, monkeypatch)
+        mock_factory = MagicMock()
+        mock_factory.create_repository.return_value = AsyncMock()
+        service = OpenAPIConnectionService(
+            repository_factory=mock_factory,
+            secret_manager=AsyncMock(),
+            allow_private_urls=True,
+        )
+
+        await service.create_connection(
+            OpenAPIConnectionCreate.model_construct(
+                name="Dated",
+                base_url="https://api.example.com",
+                spec_url="http://127.0.0.1/openapi.yaml",
+            )
+        )
+
+        stored = service._repo.create.call_args.kwargs
+        assert stored["spec_content"]["info"]["version"] == "2024-01-01"
+        assert json.loads(json.dumps(stored["spec_content"])) == stored["spec_content"]
+        assert [t["name"] for t in stored["available_tools"]] == ["listUsers"]

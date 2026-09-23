@@ -113,6 +113,7 @@ async def iter_task_event_feed(
     snapshot: Callable[[], Awaitable[list[TaskEventEnvelope]]],
     terminal_types: frozenset[str],
     exclude_types: frozenset[str] = frozenset(),
+    follow_execution: bool = False,
     max_wall_time_seconds: float = 30 * 60,
 ) -> AsyncIterator[TaskEventEnvelope]:
     """Yield a task's events: full history (catch-up) then live, dedup'd.
@@ -122,6 +123,8 @@ async def iter_task_event_feed(
     ``exclude_types`` are silently dropped (e.g. a consumer that does not want
     high-volume incremental ``llm.call.chunk`` events) — this never contains a
     terminal type, so it cannot suppress feed termination.
+    ``follow_execution`` keeps a web conversation subscribed across completed
+    turns whose workflow is still waiting for follow-up; A2A remains turn-scoped.
 
     Membership tests are keyed on the canonical (dotted) event type. Rows and
     stream events already carry canonical names; ``canonical_type`` only strips a
@@ -137,7 +140,9 @@ async def iter_task_event_feed(
             continue
         seen.add(env.event_id)
         yield env
-        if canonical in terminal:
+        if canonical in terminal and not (
+            follow_execution and env.data.get("execution_status") == "waiting"
+        ):
             return
 
     # Live tail from the start of the retained stream; dedup against the
@@ -153,7 +158,9 @@ async def iter_task_event_feed(
                     continue
                 seen.add(env.event_id)
                 yield env
-                if canonical in terminal:
+                if canonical in terminal and not (
+                    follow_execution and env.data.get("execution_status") == "waiting"
+                ):
                     return
                 if loop.time() >= deadline:
                     return
