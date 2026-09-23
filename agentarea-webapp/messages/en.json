@@ -161,6 +161,7 @@
   },
   "Sidebar": {
     "dashboard": "Dashboard",
+    "newTask": "New task",
     "sandboxes": "Sandboxes",
     "inbox": "Inbox",
     "admin": "Admin",

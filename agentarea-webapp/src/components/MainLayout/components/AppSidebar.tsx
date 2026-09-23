@@ -8,9 +8,9 @@ import { Github, Inbox, SquarePen } from "lucide-react";
 import {
   SidebarFooter,
   SidebarHeader,
+  SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import {
   Tooltip,
@@ -20,7 +20,7 @@ import {
 import { APP_VERSION } from "@/lib/app-version";
 import { cn } from "@/lib/utils";
 import type { Workspace } from "@/lib/workspaces";
-import { NavMain } from "./NavMain";
+import { NavMain, navItemClassName } from "./NavMain";
 import { NavUser } from "./NavUser";
 import { SidebarNavScroll } from "./SidebarNavScroll";
 import { TeamSwitcher } from "./TeamSwitcher";
@@ -86,55 +86,59 @@ export function AppSidebarContent({
           activeSlug={activeWorkspaceSlug}
         />
         <div className={cn("flex items-center gap-1", !open && "flex-col")}>
+          {/* Like the nav items, the tooltip only shows while the sidebar is
+              collapsed; expanded, the label is already visible. */}
+          <SidebarMenuButton
+            asChild
+            isActive={homeActive}
+            tooltip={{
+              // Layout goes on an inner span: a display class on the content
+              // itself would override the `hidden` that keeps it off while
+              // the sidebar is expanded.
+              children: (
+                <span className="flex items-center gap-1.5">
+                  {t("newTask")}
+                  <Kbd keys={["⌘", "J"]} variant="inverse" />
+                </span>
+              ),
+            }}
+            className={cn(navItemClassName, "group/new-task min-w-0 flex-1")}
+          >
+            <Link
+              href="/workplace"
+              aria-current={homeActive ? "page" : undefined}
+            >
+              <SquarePen />
+              {open && (
+                <>
+                  <span className="min-w-0 flex-1 truncate">
+                    {t("newTask")}
+                  </span>
+                  {/* Hidden at rest so it does not read as a second control
+                      competing with the label. */}
+                  <Kbd
+                    keys={["⌘", "J"]}
+                    className="opacity-0 transition-opacity duration-200 group-hover/new-task:opacity-100 group-focus-visible/new-task:opacity-100"
+                  />
+                </>
+              )}
+            </Link>
+          </SidebarMenuButton>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
+              <SidebarMenuButton
                 asChild
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  "group h-8 min-w-0 flex-1 justify-start gap-2 rounded-md px-2 text-[13px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                  !open && "w-full justify-center px-0",
-                  homeActive && "bg-muted/60 text-foreground"
-                )}
-              >
-                <Link
-                  href="/workplace"
-                  aria-current={homeActive ? "page" : undefined}
-                >
-                  <SquarePen className="shrink-0 text-muted-foreground/80 group-hover:text-foreground" />
-                  {open && (
-                    <span className="flex-1 truncate text-left">New task</span>
-                  )}
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            {/* The shortcut lives here rather than inline: on the button it
-                reads as a second control competing with the label. */}
-            <TooltipContent side="right" className="flex items-center gap-1.5">
-              New task
-              <Kbd keys={["⌘", "J"]} />
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                asChild
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "group h-8 w-8 shrink-0 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                  inboxActive && "bg-muted/60 text-foreground"
-                )}
+                isActive={inboxActive}
+                className={cn(navItemClassName, "w-8 shrink-0")}
               >
                 <Link
                   href="/inbox"
                   aria-label={t("inbox")}
                   aria-current={inboxActive ? "page" : undefined}
                 >
-                  <Inbox className="shrink-0 text-muted-foreground/80 group-hover:text-foreground" />
+                  <Inbox />
                 </Link>
-              </Button>
+              </SidebarMenuButton>
             </TooltipTrigger>
             <TooltipContent side="right">{t("inbox")}</TooltipContent>
           </Tooltip>
