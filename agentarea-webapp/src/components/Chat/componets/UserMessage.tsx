@@ -20,7 +20,9 @@ export const UserMessage: React.FC<UserMessageProps> = ({
 }) => {
   const formatTimestamp = useFormatTimestamp();
   const handleFileDownload = (file: File) => {
-    const url = URL.createObjectURL(file);
+    const url = URL.createObjectURL(
+      new Blob([file], { type: "application/octet-stream" })
+    );
     const a = document.createElement("a");
     a.href = url;
     a.download = file.name;

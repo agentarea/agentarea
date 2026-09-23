@@ -2,8 +2,8 @@
 
 import React, { use } from "react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 import { ArrowRight, Plug, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 function isPromise<T>(value: T[] | Promise<T[]>): value is Promise<T[]> {
   return typeof (value as Promise<T[]>)?.then === "function";
@@ -47,11 +47,8 @@ export const BadgeSuggestions: React.FC<BadgeSuggestionsProps> = ({
   return (
     <div
       className={cn(
-        "grid grid-cols-1 sm:grid-cols-2 gap-3 transition-all duration-700 ease-out",
-        "mx-auto w-full max-w-2xl px-4",
-        visible
-          ? "opacity-100 mt-6"
-          : "opacity-0 pointer-events-none max-h-0 overflow-hidden mt-0"
+        "grid grid-cols-1 sm:grid-cols-2 gap-3",
+        "mx-auto mt-6 w-full max-w-2xl px-4"
       )}
     >
       {suggestions.map((badge, index) => {
@@ -118,4 +115,3 @@ export const BadgeSuggestions: React.FC<BadgeSuggestionsProps> = ({
     </div>
   );
 };
-

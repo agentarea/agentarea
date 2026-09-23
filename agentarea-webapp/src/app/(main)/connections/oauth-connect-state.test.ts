@@ -112,7 +112,7 @@ describe("buildAuthorizeRequest", () => {
       instance_id: INSTANCE_ID,
       credential_mode: "custom",
       client_id: "cid",
-      client_secret: "shh",
+      client_secret: "shh", // pragma: allowlist secret
     });
   });
 
@@ -149,7 +149,7 @@ describe("buildAuthorizeRequest", () => {
         state: needsApp,
         credentials: {
           client_id: "cid",
-          client_secret: "shh",
+          client_secret: "shh", // pragma: allowlist secret
           client_secret_secret_id: "secret-2",
         },
       })

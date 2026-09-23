@@ -24,7 +24,7 @@ import { getApiKeyStatusPresentation } from "@/lib/status";
 import CreateAPIKeyDialog from "./components/CreateAPIKeyDialog";
 import { revokeAPIKeyAction } from "./actions";
 
-type APIKeyStatusType = "active" | "revoked" | "expired";
+type APIKeyStatusType = "active" | "revoked" | "expired"; // pragma: allowlist secret
 
 interface APIKey {
   id: string;

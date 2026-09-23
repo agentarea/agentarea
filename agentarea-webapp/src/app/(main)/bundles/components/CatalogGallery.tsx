@@ -67,13 +67,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { ToolbarButton } from "@/components/ui/toolbar";
 import { cn } from "@/lib/utils";
