@@ -29,18 +29,31 @@ The distinction that matters is not allow versus deny; it is *decided* versus
 
 from __future__ import annotations
 
-from agentarea_api.api.v1.router import protected_v1_router, public_v1_router
+from agentarea_api.main import app
 from agentarea_common.auth.route_authz import route_authz
 from fastapi.routing import APIRoute
 
 HTTP_METHODS = {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}
 
+# Routes that belong to the framework or to a mount, not to this application.
+_NOT_OURS = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
+
 
 def _all_routes() -> list[APIRoute]:
+    """Every route the running app serves.
+
+    Enumerated from ``app.routes`` rather than from the two ``/v1`` routers,
+    because the app mounts more than those two: the RFC 9728 OAuth metadata
+    router, the webhook receiver (deliberately outside ``/v1`` to bypass the
+    auth middleware), and whatever an installed extension contributes. The
+    extension router is the reason this matters most -- it is assembled outside
+    this repository, so a fence drawn around our own routers would not see it
+    at all.
+    """
     return [
         route
-        for route in list(protected_v1_router.routes) + list(public_v1_router.routes)
-        if isinstance(route, APIRoute)
+        for route in app.routes
+        if isinstance(route, APIRoute) and route.path not in _NOT_OURS
     ]
 
 

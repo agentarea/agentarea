@@ -34,6 +34,10 @@ class SkillCollection(BaseModel, WorkspaceScopedMixin):
         UniqueConstraint("workspace_id", "slug", name="uq_skill_collections_workspace_slug"),
     )
 
+    #: Governed by the authorization graph: creating one writes
+    #: ``resource:<id>`` tuples so its creator can reach it afterwards.
+    __graph_resource__ = True
+
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     # Workspace-unique human-readable identifier.
     slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)

@@ -1,78 +1,31 @@
-"""Small helpers for keeping resource CRUD aligned with graph permissions."""
+"""Graph grants for resources the API creates, and for fresh workspaces.
+
+The ownership grant itself lives in ``agentarea_common.rebac.ownership`` and is
+written by ``WorkspaceScopedRepository.create``, so every creation path gets it
+-- including the platform toolsets in ``libs/agents``, which cannot import this
+module. What remains here is the HTTP translation (a failed grant is a 503, not
+a 500) and the workspace seed, which has no row of its own to hang off.
+"""
 
 from __future__ import annotations
 
-import logging
 from uuid import UUID
 
-from agentarea_common.config import get_settings
-from agentarea_common.di.container import get_container
 from agentarea_common.rebac import (
-    KetoClient,
-    KetoError,
-    KetoUnavailableError,
-    OpenFGAClient,
-    OpenFGAError,
-    OpenFGAUnavailableError,
     RelationTuple,
+    ResourceOwnershipError,
+    resolve_graph_client,
+    root_project_id,
+    write_tuple_idempotent,
 )
+from agentarea_common.rebac import grant_resource_owner as _grant_resource_owner
 from fastapi import HTTPException
 
-logger = logging.getLogger(__name__)
-
-GraphClient = KetoClient | OpenFGAClient
-_GRAPH_WRITE_ERRORS = (KetoError, KetoUnavailableError, OpenFGAError, OpenFGAUnavailableError)
+__all__ = ["grant_resource_owner", "root_project_id", "seed_workspace"]
 
 
-def root_project_id(workspace_id: str) -> str:
-    """Object id of the default root project for a workspace.
-
-    Every workspace-level resource attaches to ``project:<ws>-root``; because a
-    project rolls ``admin from workspace`` into all three bits, a workspace admin
-    manages the root project and everything under it.
-    """
-    return f"{workspace_id}-root"
-
-
-def _is_existing_tuple_error(exc: Exception) -> bool:
-    message = str(exc).lower()
-    return "already exists" in message or "tuple to be written already existed" in message
-
-
-def _resolve_graph_client() -> tuple[GraphClient, str] | None:
-    """Return (client, backend_name) for the configured graph, or None when disabled."""
-    settings = get_settings()
-    backend = settings.access_control.ACCESS_CONTROL_BACKEND
-    if backend == "openfga":
-        client_type: type[GraphClient] = OpenFGAClient
-        backend_name = "OpenFGA"
-    elif backend == "keto":
-        client_type = KetoClient
-        backend_name = "Keto"
-    else:
-        return None
-    try:
-        return get_container().get(client_type), backend_name
-    except ValueError:
-        logger.exception("%s is enabled but client is not registered", backend_name)
-        raise HTTPException(
-            status_code=503,
-            detail=f"{backend_name} grant writer is unavailable",
-        ) from None
-
-
-async def _write_idempotent(client: GraphClient, backend: str, relationship: RelationTuple) -> None:
-    try:
-        await client.write_tuple(relationship)
-    except _GRAPH_WRITE_ERRORS as exc:
-        if _is_existing_tuple_error(exc):
-            logger.debug("Relation already exists in %s: %s", backend, relationship)
-            return
-        logger.exception("Failed to write relation in %s: %s", backend, relationship)
-        raise HTTPException(
-            status_code=503,
-            detail=f"{backend} grant write failed",
-        ) from exc
+def _as_http(exc: ResourceOwnershipError) -> HTTPException:
+    return HTTPException(status_code=503, detail=str(exc))
 
 
 async def grant_resource_owner(
@@ -81,41 +34,18 @@ async def grant_resource_owner(
     workspace_id: str,
     user_id: str,
 ) -> None:
-    """Attach a newly created resource to its workspace root project and own it.
+    """Assert ownership from a request handler, surfacing failure as a 503.
 
-    Writes ``resource:<id>#project@project:<ws>-root`` plus direct
-    reader/writer/manager for the creator. The three bits are granted explicitly
-    because the model uses INDEPENDENT permission bits (no roll-up): ``manager``
-    alone would not confer read/write. A workspace admin additionally reaches the
-    resource through the workspace -> root-project -> resource cascade.
+    Repository-created rows are already granted; this stays for the paths that
+    materialize a resource some other way (catalog install, copy-on-write fork)
+    and for re-asserting ownership, which is idempotent.
     """
-    resolved = _resolve_graph_client()
-    if resolved is None:
-        return
-    client, backend = resolved
-    resource_obj = str(resource_id)
-
-    await _write_idempotent(
-        client,
-        backend,
-        RelationTuple(
-            namespace="resource",
-            object=resource_obj,
-            relation="project",
-            subject_id=f"project:{root_project_id(workspace_id)}",
-        ),
-    )
-    for relation in ("reader", "writer", "manager"):
-        await _write_idempotent(
-            client,
-            backend,
-            RelationTuple(
-                namespace="resource",
-                object=resource_obj,
-                relation=relation,
-                subject_id=f"User:{user_id}",
-            ),
+    try:
+        await _grant_resource_owner(
+            resource_id=resource_id, workspace_id=workspace_id, user_id=user_id
         )
+    except ResourceOwnershipError as exc:
+        raise _as_http(exc) from exc
 
 
 async def seed_workspace(*, workspace_id: str, creator_user_id: str) -> None:
@@ -130,34 +60,27 @@ async def seed_workspace(*, workspace_id: str, creator_user_id: str) -> None:
     creation hook (``provision_default_policies``), keeping this graph seed free of
     a dependency on the governance domain.
     """
-    resolved = _resolve_graph_client()
+    try:
+        resolved = resolve_graph_client()
+    except ResourceOwnershipError as exc:
+        raise _as_http(exc) from exc
     if resolved is None:
         return
     client, backend = resolved
 
-    await _write_idempotent(
-        client,
-        backend,
+    tuples = (
         RelationTuple(
             namespace="Workspace",
             object=workspace_id,
             relation="members",
             subject_id=f"User:{creator_user_id}",
         ),
-    )
-    await _write_idempotent(
-        client,
-        backend,
         RelationTuple(
             namespace="Workspace",
             object=workspace_id,
             relation="admin",
             subject_id=f"User:{creator_user_id}",
         ),
-    )
-    await _write_idempotent(
-        client,
-        backend,
         RelationTuple(
             namespace="project",
             object=root_project_id(workspace_id),
@@ -165,3 +88,8 @@ async def seed_workspace(*, workspace_id: str, creator_user_id: str) -> None:
             subject_id=f"Workspace:{workspace_id}",
         ),
     )
+    try:
+        for relationship in tuples:
+            await write_tuple_idempotent(client, backend, relationship)
+    except ResourceOwnershipError as exc:
+        raise _as_http(exc) from exc

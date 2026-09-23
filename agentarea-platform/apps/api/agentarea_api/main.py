@@ -12,6 +12,7 @@ from typing import cast
 for _noisy_logger in ("LiteLLM", "LiteLLM Proxy", "LiteLLM Router", "httpcore", "httpx"):
     logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
 
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.di.container import get_container, register_factory, register_singleton
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.registration import register_error_handlers
@@ -411,6 +412,7 @@ def create_app() -> FastAPI:
     # show "you've spent $X of $Y, raise the cap or wait".
     from agentarea_agents.application.agent_service import InvalidModelIdError
     from agentarea_common.exceptions import problem_response
+    from agentarea_common.rebac import ResourceOwnershipError
     from agentarea_llm.application.provider_service import PlatformManagedConfigError
     from agentarea_tasks.domain.exceptions import BudgetCapExceededError
     from fastapi import Request
@@ -438,6 +440,17 @@ def create_app() -> FastAPI:
             detail=str(exc),
         )
 
+    # A row committed without its ownership tuples is unreachable to everyone,
+    # including whoever just created it. 503 rather than 500: the grant is
+    # idempotent, so repeating the request is the right response.
+    @app.exception_handler(ResourceOwnershipError)
+    async def _resource_ownership_handler(_request: Request, exc: ResourceOwnershipError):
+        return problem_response(
+            status_code=503,
+            code="resource_ownership_unavailable",
+            detail=str(exc),
+        )
+
     @app.exception_handler(BudgetCapExceededError)
     async def _budget_cap_exceeded_handler(_request: Request, exc: BudgetCapExceededError):
         return problem_response(
@@ -452,7 +465,7 @@ def create_app() -> FastAPI:
         )
 
     # Health check endpoint
-    @app.get("/health")
+    @app.get("/health", dependencies=[unrestricted("liveness probe, returns no workspace data")])
     async def health():
         """Health check endpoint."""
         return {
@@ -518,13 +531,13 @@ def _instrument_api(app: FastAPI) -> None:
 app = create_app()
 
 
-@app.get("/")
+@app.get("/", dependencies=[unrestricted("service banner, returns no workspace data")])
 async def root():
     """Root endpoint."""
     return {"message": "AgentArea API is running."}
 
 
-@app.get("/health")
+@app.get("/health", dependencies=[unrestricted("liveness probe, returns no workspace data")])
 async def health_check():
     """Health check endpoint for the main application."""
     from agentarea_common.infrastructure.connection_manager import get_connection_health

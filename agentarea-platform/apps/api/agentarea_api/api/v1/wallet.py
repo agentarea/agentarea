@@ -15,7 +15,10 @@ from agentarea_api.api.deps.services import (
 )
 from agentarea_common.auth import assert_workspace_admin
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.auth.route_authz import (
+    enforced_in_handler,
+    requires_workspace_admin,
+)
 from agentarea_common.utils.types import UtcDatetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -206,9 +209,7 @@ async def create_wallet(
 @router.get(
     "",
     response_model=WalletResponse,
-    dependencies=[
-        unrestricted("credentials are never returned; funding and deletion are admin-gated")
-    ],
+    dependencies=[requires_workspace_admin()],
 )
 async def get_wallet(
     agent_id: UUID,
@@ -295,9 +296,7 @@ async def delete_wallet(
 @router.get(
     "/balance",
     response_model=WalletBalanceResponse,
-    dependencies=[
-        unrestricted("credentials are never returned; funding and deletion are admin-gated")
-    ],
+    dependencies=[requires_workspace_admin()],
 )
 async def get_wallet_balance(
     agent_id: UUID,
@@ -325,9 +324,7 @@ async def get_wallet_balance(
 @router.get(
     "/payments",
     response_model=PaginatedPaymentsResponse,
-    dependencies=[
-        unrestricted("credentials are never returned; funding and deletion are admin-gated")
-    ],
+    dependencies=[requires_workspace_admin()],
 )
 async def get_payment_history(
     agent_id: UUID,

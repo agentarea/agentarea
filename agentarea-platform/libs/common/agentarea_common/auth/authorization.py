@@ -57,13 +57,31 @@ class AuthorizationService(ABC):
         does not confer it.
 
         The default resolves ownership, which is what an implementation without
-        its own notion of roles can answer. It is deliberately concrete rather
-        than abstract: an implementation that has not considered the question
-        must deny, not inherit a hole.
+        its own notion of roles can answer, and it is the only implementation:
+        ``WorkspaceScopedAuthorizationService`` had a byte-identical copy until
+        2026-09-23, which is two places to keep in step and one to forget. An
+        implementation with real roles overrides this; one that has not
+        considered the question inherits ownership-only rather than a hole,
+        which is why this is concrete rather than abstract.
         """
         if workspace_id == user_context.user_id:
             return True
         return workspace_id in (user_context.admin_workspaces or [])
+
+
+async def _ensure_admin_workspaces_resolved(user_context: UserContext) -> None:
+    """Fill ``admin_workspaces`` for a context minted outside the HTTP boundary.
+
+    ``None`` means nobody has asked yet; ``[]`` means the question was answered
+    and this user administers nothing. Without the distinction every non-HTTP
+    door -- the MCP bearer path, the worker's code-tool activity -- denied
+    silently, which reads as "gated" and is really "never resolved".
+    """
+    if user_context.admin_workspaces is not None:
+        return
+    from agentarea_common.workspaces.authority import administered_workspace_ids
+
+    user_context.admin_workspaces = await administered_workspace_ids(user_context.user_id)
 
 
 async def assert_workspace_admin(user_context: UserContext) -> None:
@@ -75,6 +93,7 @@ async def assert_workspace_admin(user_context: UserContext) -> None:
     loosen their own spend cap, delete a deny rule, or drain another
     agent's wallet.
     """
+    await _ensure_admin_workspaces_resolved(user_context)
     from agentarea_common.di.container import resolve
 
     authz = resolve(AuthorizationService)
@@ -96,6 +115,7 @@ async def assert_workspace_admin_of(user_context: UserContext, workspace_id: str
 
     if not workspace_id:
         raise HTTPException(status_code=422, detail="workspace_id is required")
+    await _ensure_admin_workspaces_resolved(user_context)
     authz = resolve(AuthorizationService)
     if not await authz.can_administer_workspace(user_context, workspace_id):
         raise HTTPException(

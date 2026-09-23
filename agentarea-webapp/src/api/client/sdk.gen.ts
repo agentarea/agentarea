@@ -1460,14 +1460,13 @@ export const syncGrantsV1AccessControlSyncPost = <
 /**
  * List Agents
  *
- * List all workspace agents.
+ * List the agents in this workspace the caller may read.
  *
- * Access Control:
- * Returns all agents within the current user's workspace (workspace isolation).
- * All users in the same workspace can see all workspace agents.
- *
- * Note: User-level access control should be implemented via authorization
- * layer (future access-control) rather than query parameters.
+ * The workspace column narrows the query to one tenant; the graph then decides
+ * which of those rows this caller sees. A plain member reads them all through
+ * the root-project role their membership grants, so the two answers usually
+ * agree -- the point is that revoking that role now actually removes the rows,
+ * instead of leaving a tuple nobody consults.
  */
 export const listAgentsV1AgentsGet = <ThrowOnError extends boolean = false>(
   options?: Options<ListAgentsV1AgentsGetData, ThrowOnError>
@@ -1491,14 +1490,13 @@ export const listAgentsV1AgentsGet = <ThrowOnError extends boolean = false>(
 /**
  * List Agents
  *
- * List all workspace agents.
+ * List the agents in this workspace the caller may read.
  *
- * Access Control:
- * Returns all agents within the current user's workspace (workspace isolation).
- * All users in the same workspace can see all workspace agents.
- *
- * Note: User-level access control should be implemented via authorization
- * layer (future access-control) rather than query parameters.
+ * The workspace column narrows the query to one tenant; the graph then decides
+ * which of those rows this caller sees. A plain member reads them all through
+ * the root-project role their membership grants, so the two answers usually
+ * agree -- the point is that revoking that role now actually removes the rows,
+ * instead of leaving a tuple nobody consults.
  */
 export const listAgentsV1AgentsGet2 = <ThrowOnError extends boolean = false>(
   options?: Options<ListAgentsV1AgentsGet2Data, ThrowOnError>

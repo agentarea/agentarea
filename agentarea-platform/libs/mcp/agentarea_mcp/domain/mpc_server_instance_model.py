@@ -17,6 +17,10 @@ import_module("agentarea_mcp.domain.auth_models")
 class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
     __tablename__ = "mcp_server_instances"
 
+    #: Governed by the authorization graph: creating one writes
+    #: ``resource:<id>`` tuples so its creator can reach it afterwards.
+    __graph_resource__ = True
+
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     server_spec_id: Mapped[str] = mapped_column(String(255), nullable=False)

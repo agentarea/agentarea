@@ -1,7 +1,10 @@
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from agentarea_common.base.workspace_scoped_repository import (
+    WorkspaceScopedRepository,
+    as_record_ids,
+)
 from agentarea_common.utils.slug import generate_slug
 from sqlalchemy import String, case, cast, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,6 +109,7 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         search: str | None = None,
         creator_scoped: bool = False,
         include_system: bool = True,
+        ids: set[str] | None = None,
     ):
         """Build the base filtered query (without pagination) for list_servers."""
         query = select(self.model_class)
@@ -114,6 +118,11 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             query = query.where(self._get_creator_workspace_filter())
         else:
             query = query.where(self._get_workspace_filter())
+
+        if ids is not None:
+            # What the authorization graph says this caller may read, applied in
+            # SQL so the returned total matches the rows they actually get.
+            query = query.where(self.model_class.id.in_(as_record_ids(ids)))
 
         if status is not None:
             query = query.where(self.model_class.status == status)
@@ -156,6 +165,7 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         offset: int = 0,
         creator_scoped: bool = False,
         include_system: bool = True,
+        ids: set[str] | None = None,
     ) -> tuple[list[MCPServer], int]:
         """List MCP servers with filtering, search, and pagination.
 
@@ -169,6 +179,7 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             search=search,
             creator_scoped=creator_scoped,
             include_system=include_system,
+            ids=ids,
         )
 
         # Order: specs with icons first (json_spec has 'icons' key), then by name

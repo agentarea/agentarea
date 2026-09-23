@@ -7,7 +7,7 @@ from uuid import UUID
 
 import httpx
 from agentarea_api.api.deps.services import get_openapi_connection_service
-from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_openapi.application.service import OpenAPIConnectionService, fetch_and_parse_spec
@@ -230,9 +230,7 @@ async def get_connection(
 @router.patch(
     "/{connection_id}",
     response_model=OpenAPIConnectionResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "openapi_connection", id_param="connection_id")],
 )
 async def update_connection(
     connection_id: UUID,
@@ -257,9 +255,7 @@ async def update_connection(
 @router.delete(
     "/{connection_id}",
     status_code=204,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("delete", "openapi_connection", id_param="connection_id")],
 )
 async def delete_connection(
     connection_id: UUID,
@@ -272,9 +268,7 @@ async def delete_connection(
 
 @router.post(
     "/{connection_id}/discover-tools",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "openapi_connection", id_param="connection_id")],
 )
 async def discover_tools(
     connection_id: UUID,

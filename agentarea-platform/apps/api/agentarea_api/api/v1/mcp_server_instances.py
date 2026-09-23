@@ -10,7 +10,7 @@ from agentarea_api.api.v1.mcp_oauth_links import (
     get_oauth_link_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.route_authz import requires_workspace_admin, unrestricted
+from agentarea_common.auth.route_authz import requires, requires_workspace_admin, unrestricted
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.utils.types import UtcDatetime
@@ -496,9 +496,7 @@ async def list_mcp_server_instance_consumers(
 @router.patch(
     "/{instance_id}",
     response_model=MCPServerInstanceResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "mcp_instance", id_param="instance_id")],
 )
 async def update_mcp_server_instance(
     instance_id: UUID,
@@ -514,9 +512,7 @@ async def update_mcp_server_instance(
 
 @router.delete(
     "/{instance_id}",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("delete", "mcp_instance", id_param="instance_id")],
 )
 async def delete_mcp_server_instance(
     instance_id: UUID,
@@ -531,9 +527,7 @@ async def delete_mcp_server_instance(
 
 @router.post(
     "/{instance_id}/verify",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "mcp_instance", id_param="instance_id")],
 )
 async def verify_mcp_server_instance(
     instance_id: UUID,
@@ -561,9 +555,7 @@ async def verify_mcp_server_instance(
 
 @router.post(
     "/{instance_id}/discover-tools",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "mcp_instance", id_param="instance_id")],
 )
 async def discover_mcp_server_instance_tools(
     instance_id: UUID,
@@ -690,9 +682,7 @@ async def get_containers_health(
 
 @router.post(
     "/{instance_id}/probe",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "mcp_instance", id_param="instance_id")],
 )
 async def probe_instance_auth(
     instance_id: UUID,
@@ -740,9 +730,7 @@ async def probe_instance_auth(
 
 @router.post(
     "/{instance_id}/test-auth",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("edit", "mcp_instance", id_param="instance_id")],
 )
 async def run_test_auth(
     instance_id: UUID,
@@ -772,7 +760,7 @@ async def run_test_auth(
 
 @router.post(
     "/{instance_id}/oauth-link",
-    dependencies=[requires_workspace_admin()],
+    dependencies=[requires("edit", "mcp_instance", id_param="instance_id")],
 )
 async def create_oauth_link(
     instance_id: UUID,

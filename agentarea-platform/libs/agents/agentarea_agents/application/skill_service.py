@@ -514,6 +514,7 @@ class SkillService:
         source_type: str | None = None,
         network_scope: str | None = None,
         from_registry: bool | None = None,
+        ids: set[str] | None = None,
     ) -> tuple[list[Skill], int]:
         """List skills with pagination metadata, merging catalog projections.
 
@@ -521,6 +522,10 @@ class SkillService:
         projections; forked catalog items are shadowed by their tenant copy.
         Both halves are filtered and paginated in SQL — the catalog is global
         and large, so it must never be materialized per request.
+
+        ``ids`` narrows the tenant half to what the caller may read. The
+        catalog half is untouched by it: catalog items are platform data with
+        no ownership tuples, and filtering them would empty Explore.
         """
         repo = self._get_repository()
         tenant_page, tenant_total = await repo.list_paginated(
@@ -530,6 +535,7 @@ class SkillService:
             source_type=source_type,
             network_scope=network_scope,
             from_registry=from_registry,
+            ids=ids,
         )
         await self._flag_outdated_forks(tenant_page)
 

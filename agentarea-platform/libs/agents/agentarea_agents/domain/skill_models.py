@@ -40,6 +40,7 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     """
 
     __tablename__ = "skills"
+
     __table_args__ = (
         UniqueConstraint("workspace_id", "slug", name="uq_skills_workspace_slug"),
         # Provenance uniqueness is per-workspace: a built-in catalog item is forked
@@ -53,6 +54,10 @@ class Skill(BaseModel, WorkspaceScopedMixin):
             postgresql_where=text("registry_item_id IS NOT NULL"),
         ),
     )
+
+    #: Governed by the authorization graph: creating one writes
+    #: ``resource:<id>`` tuples so its creator can reach it afterwards.
+    __graph_resource__ = True
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     # Immutable, workspace-scoped human-readable identifier (derived from name at creation).

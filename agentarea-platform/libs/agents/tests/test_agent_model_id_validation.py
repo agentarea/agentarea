@@ -18,10 +18,21 @@ from agentarea_common.audit.models import AuditEventORM
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.testing import install_graph_ownership_stub
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_llm.domain.models import ModelInstance, ModelSpec, ProviderConfig, ProviderSpec
 from agentarea_secrets.models import EncryptedSecret
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+
+@pytest.fixture(autouse=True)
+def _graph(monkeypatch):
+    """Creating an agent records ownership; here the graph is scenery.
+
+    ``agentarea_common/tests/test_graph_resource_ownership.py`` is where that
+    write is the subject.
+    """
+    return install_graph_ownership_stub(monkeypatch)
 
 
 @pytest.fixture

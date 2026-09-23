@@ -24,15 +24,3 @@ class WorkspaceScopedAuthorizationService(AuthorizationService):
 
     async def can_write_workspace(self, user_context: UserContext, workspace_id: str) -> bool:
         return workspace_id == user_context.workspace_id
-
-    async def can_administer_workspace(self, user_context: UserContext, workspace_id: str) -> bool:
-        """Ownership, not membership.
-
-        The open-core deployment has no role store, but it does know who owns a
-        workspace, and that is enough to keep a member from rewriting policy or
-        spending someone else's budget. A personal workspace is keyed by the
-        user's own id and has no owner row, so its user administers it.
-        """
-        if workspace_id == user_context.user_id:
-            return True
-        return workspace_id in (user_context.admin_workspaces or [])

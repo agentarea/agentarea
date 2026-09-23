@@ -17,6 +17,10 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
     """
 
     __tablename__ = "openapi_connections"
+
+    #: Governed by the authorization graph: creating one writes
+    #: ``resource:<id>`` tuples so its creator can reach it afterwards.
+    __graph_resource__ = True
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     spec_url: Mapped[str | None] = mapped_column(Text, nullable=True)
