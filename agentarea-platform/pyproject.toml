@@ -51,7 +51,8 @@ members = [
 required-version = ">=0.8.22"
 
 constraint-dependencies = [
-    "cryptography>=48.0.1",
+    "anyio>=4.14.2",
+    "cryptography>=50.0.0",
     "idna>=3.15",
     "joserfc>=1.6.8",
     "litellm>=1.83.11",
