@@ -123,10 +123,15 @@ class TestWebhookHTTPIntegration:
             headers = dict(request.headers)
             query_params = dict(request.query_params)
 
-            # Get request body
+            # Decode the body the way the real endpoint (api/v1/webhooks.py)
+            # does, so form-encoded payloads such as Slack slash commands reach
+            # the parser as a dict.
+            content_type = headers.get("content-type", "").lower()
             try:
-                if headers.get("content-type", "").startswith("application/json"):
+                if "application/json" in content_type:
                     body = await request.json()
+                elif "application/x-www-form-urlencoded" in content_type:
+                    body = dict(await request.form())
                 else:
                     body_bytes = await request.body()
                     body = body_bytes.decode("utf-8") if body_bytes else ""
@@ -180,7 +185,11 @@ class TestWebhookHTTPIntegration:
             webhook_id=str(uuid4()),
             webhook_type=WebhookType.GENERIC,
             allowed_methods=["POST"],
-            task_parameters={"webhook_type": "generic", "action": "process"},
+            task_parameters={
+                "text": "Process the incoming webhook payload",
+                "webhook_type": "generic",
+                "action": "process",
+            },
             created_by="test_user",
             workspace_id="webhook-test-workspace",
         )
@@ -238,7 +247,10 @@ class TestWebhookHTTPIntegration:
             webhook_id=str(uuid4()),
             webhook_type=WebhookType.GENERIC,
             allowed_methods=["POST", "PUT", "PATCH"],
-            task_parameters={"supports_multiple_methods": True},
+            task_parameters={
+                "text": "Process the incoming webhook payload",
+                "supports_multiple_methods": True,
+            },
             created_by="test_user",
             workspace_id="webhook-test-workspace",
         )
@@ -289,7 +301,11 @@ class TestWebhookHTTPIntegration:
             webhook_id=str(uuid4()),
             webhook_type=WebhookType.GITHUB,
             allowed_methods=["POST"],
-            task_parameters={"action": "deploy", "environment": "staging"},
+            task_parameters={
+                "text": "Deploy the pushed commit to staging",
+                "action": "deploy",
+                "environment": "staging",
+            },
             validation_rules={"required_headers": ["X-GitHub-Event"]},
             created_by="test_user",
             workspace_id="webhook-test-workspace",
@@ -443,6 +459,9 @@ class TestWebhookHTTPIntegration:
         # Verify task was created with Slack-specific data
         mock_task_service.route_or_submit_task.assert_called_once()
         call_args = mock_task_service.route_or_submit_task.call_args
+
+        # The slash command's own text is the ask; nothing is set on the trigger.
+        assert call_args.args[0].query == "staging main"
 
         task_params = call_args.args[0].task_parameters
         assert task_params["platform"] == "slack"
@@ -604,6 +623,7 @@ class TestWebhookHTTPIntegration:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
             webhook_id=str(uuid4()),
+            task_parameters={"text": "Process the incoming webhook payload"},
             created_by="test_user",
             workspace_id="webhook-test-workspace",
         )
@@ -640,6 +660,7 @@ class TestWebhookHTTPIntegration:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
             webhook_id=str(uuid4()),
+            task_parameters={"text": "Process the incoming webhook payload"},
             created_by="test_user",
             workspace_id="webhook-test-workspace",
         )
@@ -677,6 +698,7 @@ class TestWebhookHTTPIntegration:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
             webhook_id=str(uuid4()),
+            task_parameters={"text": "Process the incoming webhook payload"},
             created_by="test_user",
             workspace_id="webhook-test-workspace",
         )
@@ -719,6 +741,7 @@ class TestWebhookHTTPIntegration:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.WEBHOOK,
             webhook_id=str(uuid4()),
+            task_parameters={"text": "Process the incoming webhook payload"},
             created_by="test_user",
             workspace_id="webhook-test-workspace",
         )

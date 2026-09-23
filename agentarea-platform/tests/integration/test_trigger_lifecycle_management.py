@@ -127,7 +127,7 @@ class TestTriggerLifecycleManagement:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * 1-5",  # 9 AM weekdays
             timezone="UTC",
-            task_parameters={"lifecycle_test": True},
+            task_parameters={"text": "Summarize the open support tickets", "lifecycle_test": True},
             conditions={"business_hours": True},
             created_by="lifecycle_test",
             workspace_id="lifecycle-test-workspace",
@@ -214,7 +214,7 @@ class TestTriggerLifecycleManagement:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             timezone="UTC",
-            task_parameters={"original": True},
+            task_parameters={"text": "Summarize the open support tickets", "original": True},
             conditions={"original_condition": True},
             failure_threshold=5,
             created_by="update_test",
@@ -231,7 +231,7 @@ class TestTriggerLifecycleManagement:
             description="Updated description",
             cron_expression="0 10 * * *",  # Changed time
             timezone="America/New_York",  # Changed timezone
-            task_parameters={"updated": True, "version": 2},
+            task_parameters={"text": "Summarize the closed support tickets", "version": 2},
             conditions={"updated_condition": True},
             failure_threshold=3,  # Changed threshold
         )
@@ -244,7 +244,10 @@ class TestTriggerLifecycleManagement:
         assert updated_trigger.description == "Updated description"
         assert updated_trigger.cron_expression == "0 10 * * *"
         assert updated_trigger.timezone == "America/New_York"
-        assert updated_trigger.task_parameters == {"updated": True, "version": 2}
+        assert updated_trigger.task_parameters == {
+            "text": "Summarize the closed support tickets",
+            "version": 2,
+        }
         assert updated_trigger.conditions == {"updated_condition": True}
         assert updated_trigger.failure_threshold == 3
 
@@ -305,6 +308,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="enable_disable_test",
             workspace_id="lifecycle-test-workspace",
         )
@@ -394,6 +398,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="deletion_test",
             workspace_id="lifecycle-test-workspace",
         )
@@ -478,6 +483,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="state_test",
             workspace_id="lifecycle-test-workspace",
         )
@@ -536,6 +542,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="execution_lifecycle_test",
             workspace_id="lifecycle-test-workspace",
         )
@@ -579,6 +586,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="concurrent_test",
             workspace_id="lifecycle-test-workspace",
         )
@@ -631,6 +639,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="schedule_failure_test",
             workspace_id="lifecycle-test-workspace",
         )
@@ -663,6 +672,7 @@ class TestTriggerLifecycleManagement:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="history_test",
             workspace_id="lifecycle-test-workspace",
         )

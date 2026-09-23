@@ -50,6 +50,19 @@ services:
       - SMTP_SKIP_SSL_VERIFY=${SMTP_SKIP_SSL_VERIFY:-true}
       - SMTP_DISABLE_STARTTLS=${SMTP_DISABLE_STARTTLS:-true}
       - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:3000}
+      # Access control: the authorization graph lives in OpenFGA. Bootstrap
+      # finds or creates the store and applies the bundled model on start, so
+      # a fresh install needs no ids up front.
+      - ACCESS_CONTROL_BACKEND=${ACCESS_CONTROL_BACKEND:-openfga}
+      - ACCESS_CONTROL_OPENFGA_API_URL=${ACCESS_CONTROL_OPENFGA_API_URL:-http://openfga:8080}
+      - ACCESS_CONTROL_OPENFGA_STORE_ID=${ACCESS_CONTROL_OPENFGA_STORE_ID:-}
+      - ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID=${ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID:-}
+      - ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP=${ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP:-true}
+      - ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=${ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL:-true}
+      - ACCESS_CONTROL_OPENFGA_STORE_NAME=${ACCESS_CONTROL_OPENFGA_STORE_NAME:-agentarea}
+      - ACCESS_CONTROL_OPENFGA_MODEL_PATH=${ACCESS_CONTROL_OPENFGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
+    volumes:
+      - ./config/auth/openfga:/app/config/auth/openfga:ro
     depends_on:
       db:
         condition: service_healthy
@@ -59,6 +72,8 @@ services:
         condition: service_started
       app_migrations:
         condition: service_completed_successfully
+      openfga:
+        condition: service_healthy
       # mcp-manager:
       #   condition: service_healthy
     # Probed with Python rather than curl, which the API image does not ship.
@@ -142,7 +157,7 @@ services:
       - -c
       - |
         set -e
-        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}"; do
+        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${OPENFGA_DB:-openfga}"; do
           exists=$$(psql -tAc "SELECT 1 FROM pg_database WHERE datname='$$db'")
           if [ "$$exists" != "1" ]; then
             echo "Creating database $$db"
@@ -399,6 +414,10 @@ services:
         condition: service_started
       temporal:
         condition: service_healthy
+      openfga:
+        condition: service_healthy
+    volumes:
+      - ./config/auth/openfga:/app/config/auth/openfga:ro
     environment:
       # Database
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
@@ -430,6 +449,18 @@ services:
       - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
       - MCP_MANAGER_URL=http://agentarea-mcp-manager:80
       - SANDBOX_CLEANUP_AUTH_SECRET=${SANDBOX_CLEANUP_AUTH_SECRET:?SANDBOX_CLEANUP_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
+
+      # Access control: the authorization graph lives in OpenFGA. Bootstrap
+      # finds or creates the store and applies the bundled model on start, so
+      # a fresh install needs no ids up front.
+      - ACCESS_CONTROL_BACKEND=${ACCESS_CONTROL_BACKEND:-openfga}
+      - ACCESS_CONTROL_OPENFGA_API_URL=${ACCESS_CONTROL_OPENFGA_API_URL:-http://openfga:8080}
+      - ACCESS_CONTROL_OPENFGA_STORE_ID=${ACCESS_CONTROL_OPENFGA_STORE_ID:-}
+      - ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID=${ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID:-}
+      - ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP=${ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP:-true}
+      - ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=${ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL:-true}
+      - ACCESS_CONTROL_OPENFGA_STORE_NAME=${ACCESS_CONTROL_OPENFGA_STORE_NAME:-agentarea}
+      - ACCESS_CONTROL_OPENFGA_MODEL_PATH=${ACCESS_CONTROL_OPENFGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
 
       # Development
       # - DEBUG=true
@@ -522,6 +553,45 @@ services:
       db:
         condition: service_healthy
       kratos-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # OpenFGA schema migration. Tag matches the Helm chart's openfga.image.tag.
+  openfga-migrate:
+    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.18.0}
+    command: migrate
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${OPENFGA_DB:-openfga}?sslmode=disable
+    networks:
+      - default
+    depends_on:
+      db:
+        condition: service_healthy
+      postgres_init:
+        condition: service_completed_successfully
+
+  # OpenFGA authorization server (the ReBAC graph behind every permission check)
+  openfga:
+    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.18.0}
+    command: run
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${OPENFGA_DB:-openfga}?sslmode=disable
+      OPENFGA_LOG_FORMAT: json
+      OPENFGA_PLAYGROUND_ENABLED: "false"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=localhost:8081"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - default
+    depends_on:
+      db:
+        condition: service_healthy
+      openfga-migrate:
         condition: service_completed_successfully
     restart: unless-stopped
 

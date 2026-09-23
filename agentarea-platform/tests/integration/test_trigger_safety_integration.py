@@ -107,7 +107,10 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=3,  # Low threshold for testing
-            task_parameters={"auto_disable_test": True},
+            task_parameters={
+                "text": "Summarize the open support tickets",
+                "auto_disable_test": True,
+            },
             created_by="safety_test",
             workspace_id="safety-test-workspace",
         )
@@ -158,6 +161,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=5,
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="failure_reset_test",
             workspace_id="safety-test-workspace",
         )
@@ -206,6 +210,7 @@ class TestTriggerSafetyIntegration:
                 trigger_type=TriggerType.CRON,
                 cron_expression=f"0 {9 + i} * * *",
                 failure_threshold=3,
+                task_parameters={"text": "Summarize the open support tickets"},
                 created_by="independent_test",
                 workspace_id="safety-test-workspace",
             )
@@ -257,6 +262,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=5,
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="safety_status_test",
             workspace_id="safety-test-workspace",
         )
@@ -316,6 +322,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=5,
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="reset_test",
             workspace_id="safety-test-workspace",
         )
@@ -358,6 +365,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=2,  # Low threshold
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="recovery_test",
             workspace_id="safety-test-workspace",
         )
@@ -412,6 +420,7 @@ class TestTriggerSafetyIntegration:
             webhook_id=str(uuid4()),
             webhook_type=WebhookType.GENERIC,
             failure_threshold=3,
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="webhook_safety_test",
             workspace_id="safety-test-workspace",
         )
@@ -436,6 +445,7 @@ class TestTriggerSafetyIntegration:
             }
             result = await trigger_service.execute_trigger(trigger_id, execution_data)
             assert result.status == ExecutionStatus.FAILED
+            assert "Webhook failure" in result.error_message
 
         # Verify webhook trigger was auto-disabled
         disabled_trigger = await trigger_service.get_trigger(trigger_id)
@@ -467,6 +477,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=5,
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="concurrent_safety_test",
             workspace_id="safety-test-workspace",
         )
@@ -532,6 +543,7 @@ class TestTriggerSafetyIntegration:
                 trigger_type=TriggerType.CRON,
                 cron_expression="0 9 * * *",
                 failure_threshold=threshold,
+                task_parameters={"text": "Summarize the open support tickets"},
                 created_by="custom_threshold_test",
                 workspace_id="safety-test-workspace",
             )
@@ -563,6 +575,7 @@ class TestTriggerSafetyIntegration:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
             failure_threshold=2,
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="event_failure_test",
             workspace_id="safety-test-workspace",
         )
