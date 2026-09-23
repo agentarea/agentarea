@@ -1984,9 +1984,7 @@ class AgentExecutionWorkflow:
         # Build system prompt with agent context and current task
         if self.state.goal:
             # Build instruction with skills appended
-            agent_instruction = self.state.agent_config.get(
-                "instruction", "You are a helpful AI assistant."
-            )
+            agent_instruction = self.state.agent_config["instruction"]
 
             # Append skill catalog (progressive disclosure — full content
             # loaded on-demand via the activate_skill tool)

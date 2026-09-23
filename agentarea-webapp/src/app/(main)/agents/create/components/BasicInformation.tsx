@@ -153,13 +153,12 @@ const BasicInformation = ({
           )}
         </div>
         <div className="space-y-2">
-          <FormLabel htmlFor="instruction" icon={MessageSquare} required>
+          <FormLabel htmlFor="instruction" icon={MessageSquare}>
             {t("instruction")}
           </FormLabel>
           <Controller
             name="instruction"
             control={control}
-            rules={{ required: "Instruction is required" }}
             render={({ field }) => (
               <MarkdownTextarea
                 id="instruction"
