@@ -103,6 +103,10 @@ jobs:
         run: |
           mkdir -p dist
           helm package charts/agentarea --destination dist
+          # Versioned on its own: bump charts/agentarea-dataplane/Chart.yaml when
+          # the chart changes. Re-packaging an unchanged version replaces the
+          # identical archive in the repo.
+          helm package charts/agentarea-dataplane --destination dist
 
           ls -la dist
 

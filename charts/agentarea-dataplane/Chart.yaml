@@ -1,0 +1,19 @@
+apiVersion: v2
+name: agentarea-dataplane
+description: >-
+  AgentArea MCP data plane for an execution cluster: the mcp-manager data-plane
+  API, and the namespace, admission and network policy the untrusted MCP servers
+  it creates are confined to.
+type: application
+version: 0.1.0
+# The mcp-manager release this chart runs. Keep it equal to the control plane's:
+# both halves of the data-plane API are one build.
+appVersion: "0.0.15"
+kubeVersion: ">=1.30.0-0"
+home: https://github.com/agentarea/agentarea
+sources:
+  - https://github.com/agentarea/agentarea/tree/main/agentarea-mcp-manager
+keywords:
+  - mcp
+  - gvisor
+  - sandbox

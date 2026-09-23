@@ -1,0 +1,34 @@
+{{- if .Values.workloads.admission.requireRuntimeClass }}
+# No MCP server runs on the host kernel. The data plane already asks for the
+# RuntimeClass; this makes asking the only way a pod is admitted at all.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "dataplane.fullname" . }}-requires-runtimeclass
+  labels:
+    {{- include "dataplane.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Values.workloads.namespace }}
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  validations:
+    - expression: "has(object.spec.runtimeClassName) && object.spec.runtimeClassName == '{{ .Values.workloads.runtimeClassName }}'"
+      message: "pods in {{ .Values.workloads.namespace }} must run with runtimeClassName {{ .Values.workloads.runtimeClassName }}"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "dataplane.fullname" . }}-requires-runtimeclass
+  labels:
+    {{- include "dataplane.labels" . | nindent 4 }}
+spec:
+  policyName: {{ include "dataplane.fullname" . }}-requires-runtimeclass
+  validationActions: [Deny]
+{{- end }}

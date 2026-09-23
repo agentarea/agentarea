@@ -1,0 +1,73 @@
+{{ template "chart.header" . }}
+
+{{ template "chart.description" . }}
+
+The AgentArea control plane runs MCP servers through a *data plane*: the
+mcp-manager binary in data-plane mode, serving an authenticated HTTP API that
+creates, proxies and deletes MCP server workloads. This chart installs one on an
+**execution cluster** -- a cluster whose job is to run untrusted MCP servers,
+separate from the one the control plane lives on -- together with everything
+that confines those servers:
+
+- a namespace for them, with Pod Security `baseline` and no ServiceAccount token;
+- a ValidatingAdmissionPolicy that refuses any pod there without the sandboxing
+  RuntimeClass (gVisor by default), whatever the data plane asks for;
+- NetworkPolicy: only the data plane may reach them; they may reach cluster DNS
+  and the public internet, not each other, the cluster or private networks;
+- a Role for the data plane scoped to that namespace.
+
+## Prerequisites
+
+- Kubernetes 1.30+ (ValidatingAdmissionPolicy)
+- A RuntimeClass that points at a sandboxing runtime, e.g. `gvisor` with handler
+  `runsc`. Managed clusters rarely allow registering one; a k3s node does.
+- A CNI that enforces NetworkPolicy (k3s's default does)
+- Nodes that can pull the MCP server images the control plane will ask for
+
+## Install
+
+```bash
+kubectl create namespace agentarea-system
+kubectl -n agentarea-system create secret generic mcp-dataplane-token \
+  --from-literal=token="$MCP_DATAPLANE_TOKEN"   # the value the control plane sends
+
+helm install agentarea-dataplane agentarea/agentarea-dataplane \
+  --namespace agentarea-system \
+  --set dataPlane.id=my-execution-cluster \
+  --set dataPlane.auth.existingSecret=mcp-dataplane-token
+```
+
+Then point the control plane at it, in the `agentarea` chart:
+
+```yaml
+mcpManager:
+  dataPlane:
+    url: http://<data plane address>:8090
+    tokenSecret: <secret holding the same token>
+```
+
+Check it answers, and refuses without the token:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://<address>:8090/healthz                  # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://<address>:8090/dataplane/v1/instances   # 401
+```
+
+## Single-node host (k3s)
+
+On a single node whose host firewall guards its ports, serve on the node address
+instead of a Service, and allow the node to reach the MCP servers:
+
+```yaml
+exposure:
+  hostNetwork:
+    enabled: true
+    bindAddress: 10.0.0.10        # the address the control plane routes to
+workloads:
+  networkPolicy:
+    ingressFromCIDRs: [10.0.0.10/32, <pod bridge gateway>/32]
+```
+
+## Parameters
+
+{{ template "chart.valuesTable" . }}
