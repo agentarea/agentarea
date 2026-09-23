@@ -1193,8 +1193,18 @@ class MCPServerInstanceService:
                 return await session.list_tools()
 
     async def validate_connection(
-        self, url: str, headers: dict[str, str] | None = None
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        *,
+        server_id: str | None = None,
     ) -> dict[str, Any]:
+        """Probe ``url`` with list_tools without creating an instance.
+
+        ``server_id`` names the catalog spec the caller is connecting; when it
+        is given and its stored endpoint is ``url``, an auth failure also
+        reports ``auth_methods`` so the create page can render the right form.
+        """
         if not url:
             return {"valid": False, "errors": ["URL is required"]}
 
@@ -1226,21 +1236,78 @@ class MCPServerInstanceService:
             all_msgs.append(str(e))
             combined = " ".join(all_msgs)
 
-            if "401" in combined:
-                return {
-                    "valid": False,
-                    "errors": ["Authentication failed — check your credentials"],
-                }
-            if "403" in combined:
+            # The transport fallback (streamable HTTP -> SSE) surfaces only the
+            # last failure, so a 401 on /mcp is often masked by a 404 on /sse.
+            # Ask the endpoint directly whether it wants auth so the caller can
+            # tell "wrong credentials" from "unreachable" and render the right form.
+            auth_methods = await self._catalog_auth_methods(url, server_id)
+            needs_auth = auth_methods in (["oauth", "credentials"], ["credentials"])
+            if "403" in combined and "401" not in combined:
                 return {
                     "valid": False,
                     "errors": ["Access denied — insufficient permissions"],
+                    "auth_methods": auth_methods,
+                }
+            if "401" in combined or needs_auth:
+                return {
+                    "valid": False,
+                    "errors": ["Authentication failed — check your credentials"],
+                    "auth_methods": auth_methods,
                 }
             logger.warning("validate_connection failed for %s: %s", url, e, exc_info=True)
             return {
                 "valid": False,
                 "errors": ["Connection failed. Verify the URL, headers, and server availability."],
             }
+
+    async def _catalog_auth_methods(self, url: str, server_id: str | None) -> "list[str]":
+        """Detect auth methods for a catalog spec, using the endpoint stored on it.
+
+        The probe only ever dials a URL recorded in the catalog: the caller's
+        ``url`` must match the spec's own ``remote_url``, and it is the stored
+        value that is contacted. Without a spec there is nothing to detect.
+        """
+        if not server_id:
+            return []
+        spec = await self.mcp_server_repository.get_server_by_id(str(server_id))
+        if spec is None or not spec.remote_url or spec.remote_url != url:
+            return []
+        return await self._detect_auth_methods(spec.remote_url)
+
+    async def _detect_auth_methods(self, mcp_url: str) -> "list[str]":
+        """Classify an endpoint's unauthenticated challenge without creating an instance.
+
+        ``["oauth", "credentials"]`` when the 401/403 advertises a bearer challenge
+        and authorization-server discovery succeeds, ``["credentials"]`` for any
+        other auth challenge, ``["none"]`` for an open endpoint, ``[]`` when the
+        endpoint could not be classified. Lets the create-connection page render
+        the right auth form up front instead of after a first failed attempt.
+        """
+        try:
+            validate_outbound_url(mcp_url, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
+        except UnsafeUrlError:
+            logger.debug("Auth-method detection refused for unsafe URL %s", mcp_url, exc_info=True)
+            return []
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+                resp = await client.get(mcp_url, follow_redirects=False)
+        except Exception:
+            logger.debug("Auth-method detection failed for %s", mcp_url, exc_info=True)
+            return []
+
+        if resp.status_code in (200, 405):
+            return ["none"]
+        if resp.status_code not in (401, 403):
+            return []
+
+        www_auth = resp.headers.get("www-authenticate", "").lower()
+        if "resource_metadata" in www_auth or "bearer" in www_auth:
+            try:
+                await MCPOAuthClientService().discover_auth_server(mcp_url)
+                return ["oauth", "credentials"]
+            except Exception:
+                logger.debug("OAuth discovery failed for %s", mcp_url, exc_info=True)
+        return ["credentials"]
 
     async def probe_instance_auth(self, instance_id: UUID) -> dict[str, Any]:
         import httpx

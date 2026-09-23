@@ -4481,6 +4481,9 @@ export const validateInstanceSpecV1McpServerInstancesValidatePost = <
  * Validate Connection
  *
  * Test a connection to an MCP server without creating an instance.
+ *
+ * ``server_id`` (optional) is the catalog spec being connected; with it, an
+ * auth failure also reports the spec endpoint's ``auth_methods``.
  */
 export const validateConnectionV1McpServerInstancesValidateConnectionPost = <
   ThrowOnError extends boolean = false,
