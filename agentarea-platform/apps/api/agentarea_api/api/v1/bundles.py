@@ -18,6 +18,7 @@ from agentarea_bundles.application.service import BundleService
 from agentarea_bundles.schemas.bundle import Bundle
 from agentarea_bundles.schemas.preview import ImportPreview
 from agentarea_bundles.schemas.result import InstallResult
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config import get_settings
 from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
@@ -167,7 +168,13 @@ class InstallRequest(BaseModel):
 # ============================================================================
 
 
-@router.post("/analyze", response_model=ImportPreview)
+@router.post(
+    "/analyze",
+    response_model=ImportPreview,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def analyze_bundle(
     body: AnalyzeRequest,
     service: BundleServiceDep,
@@ -200,7 +207,13 @@ async def analyze_bundle(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/install", response_model=InstallResult)
+@router.post(
+    "/install",
+    response_model=InstallResult,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def install_bundle(
     body: InstallRequest,
     service: BundleServiceDep,

@@ -9,6 +9,8 @@ whitelist omits them, `_validate_task` rejects a legitimate task (the
 from __future__ import annotations
 
 from datetime import datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -38,7 +40,16 @@ def _task(status: str) -> AgentTask:
 
 
 def _service() -> _Service:
-    return _Service(task_repository=None, event_broker=None, outbox_publisher=None)
+    async def persist(task):
+        task.user_id = "user-1"
+        task.workspace_id = "ws-1"
+        return task
+
+    return _Service(
+        task_repository=SimpleNamespace(create_task=AsyncMock(side_effect=persist)),
+        event_broker=None,
+        outbox_publisher=None,
+    )
 
 
 @pytest.mark.asyncio
@@ -48,6 +59,7 @@ def _service() -> _Service:
         "submitted",
         "pending",
         "preparing",
+        "scheduled",
         "running",
         "working",
         "completed",
@@ -56,13 +68,17 @@ def _service() -> _Service:
         "cancelled",
         "waiting_for_continuation",
         "waiting_for_input",
+        "waiting_for_approval",
     ],
 )
-async def test_every_real_status_validates(status: str) -> None:
-    await _service()._validate_task(_task(status))  # must not raise
+async def test_task_creation_preserves_business_status(status: str) -> None:
+    task = await _service().create_task(_task(status))
+
+    assert task.status == status
+    assert task.workspace_id == "ws-1"
 
 
 @pytest.mark.asyncio
 async def test_unknown_status_is_rejected() -> None:
     with pytest.raises(TaskValidationError):
-        await _service()._validate_task(_task("not-a-real-status"))
+        await _service().create_task(_task("not-a-real-status"))

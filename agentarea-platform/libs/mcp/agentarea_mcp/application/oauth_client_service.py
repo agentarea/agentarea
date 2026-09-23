@@ -53,6 +53,9 @@ class AuthServerMetadata:
     scopes_supported: list[str] = field(default_factory=list)
     code_challenge_methods_supported: list[str] = field(default_factory=list)
     resource: str = ""  # The MCP server's resource identifier
+    # Whether the AS itself listed offline_access. Tracked separately from
+    # scopes_supported, which discovery replaces with the resource's scopes.
+    offline_access_supported: bool = False
 
 
 @dataclass
@@ -86,26 +89,27 @@ class MCPOAuthClientService:
         """Discover the authorization server for a remote MCP endpoint.
 
         Steps:
-            1. GET mcp_url → expect a 401/403 auth challenge with WWW-Authenticate
+            1. GET mcp_url → read a WWW-Authenticate challenge if the server sends one
             2. Parse resource_metadata URL from the header
             3. Fetch Protected Resource Metadata (RFC 9728)
             4. Fetch Authorization Server Metadata (RFC 8414)
         """
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-            # Step 1: Hit the MCP endpoint to get the auth challenge. RFC 9728 says
-            # servers SHOULD answer 401 with WWW-Authenticate, but some (e.g. Vercel)
-            # return 403 to an unauthenticated request. Both are auth challenges — the
-            # status is only a hint to find the metadata URL, which we can also reach
-            # via the /.well-known fallback below when the header is missing.
+            # Step 1: Probe the MCP endpoint for an auth challenge. The challenge is
+            # only a shortcut to the metadata URL, never a precondition: servers
+            # answer an unauthenticated GET with 401 (RFC 9728), 403 (Vercel), or
+            # 405 (Google's Gmail MCP is POST-only), and a server that lists tools
+            # without auth sends no challenge at all. Any of those still publish
+            # protected-resource metadata at the well-known paths below, so treat a
+            # missing challenge as a missing hint rather than a dead end.
             resp = await client.get(mcp_url, follow_redirects=True)
 
-            if resp.status_code not in (401, 403):
-                raise MCPOAuthDiscoveryError(
-                    f"Expected 401/403 auth challenge from {mcp_url}, got {resp.status_code}"
-                )
-
             www_auth = resp.headers.get("www-authenticate", "")
-            logger.info("WWW-Authenticate header: %s", www_auth)
+            logger.info(
+                "Auth challenge probe: HTTP %s, WWW-Authenticate: %s",
+                resp.status_code,
+                www_auth or "(none)",
+            )
             resource_metadata_url = _parse_resource_metadata_url(www_auth)
             scope_hint = _parse_scope_from_www_authenticate(www_auth)
 
@@ -142,7 +146,21 @@ class MCPOAuthClientService:
                     f"(HTTP {pr_resp.status_code}). The server may not support automated "
                     f"OAuth discovery."
                 )
-            pr_meta = pr_resp.json()
+            try:
+                pr_meta = pr_resp.json()
+            except ValueError as exc:
+                # A 200 that isn't JSON is a server answering something else at the
+                # well-known path (an SPA index, an error page) — the same "no
+                # discovery here" outcome as a non-200, not an unhandled 500.
+                raise MCPOAuthDiscoveryError(
+                    f"OAuth protected-resource metadata at {resource_metadata_url} is not "
+                    f"valid JSON. The server may not support automated OAuth discovery."
+                ) from exc
+            if not isinstance(pr_meta, dict):
+                raise MCPOAuthDiscoveryError(
+                    f"OAuth protected-resource metadata at {resource_metadata_url} is not "
+                    f"an object. The server may not support automated OAuth discovery."
+                )
 
             resource = pr_meta.get("resource", mcp_url)
             auth_servers = pr_meta.get("authorization_servers", [])
@@ -158,7 +176,21 @@ class MCPOAuthClientService:
             as_meta = await self._fetch_as_metadata(client, as_base)
 
             as_meta.resource = resource
-            if scope_hint and not as_meta.scopes_supported:
+            # Scope precedence: the resource's own RFC 9728 list, then the
+            # challenge hint, then whatever the AS advertises. The AS list is
+            # generic (openid/email/profile) and for some providers — Google —
+            # it is the only one present, so a token minted from it carries no
+            # access to the MCP server at all.
+            resource_scopes = pr_meta.get("scopes_supported") or []
+            if isinstance(resource_scopes, list):
+                resource_scopes = [
+                    str(scope) for scope in resource_scopes if isinstance(scope, str)
+                ]
+            else:
+                resource_scopes = []
+            if resource_scopes:
+                as_meta.scopes_supported = resource_scopes
+            elif scope_hint:
                 as_meta.scopes_supported = scope_hint.split()
 
             return as_meta
@@ -186,15 +218,17 @@ class MCPOAuthClientService:
                 resp = await client.get(f"{as_base}{path}")
                 if resp.status_code == 200:
                     data = resp.json()
+                    advertised = data.get("scopes_supported") or []
                     return AuthServerMetadata(
                         issuer=data.get("issuer", as_base),
                         authorization_endpoint=data["authorization_endpoint"],
                         token_endpoint=data["token_endpoint"],
                         registration_endpoint=data.get("registration_endpoint"),
-                        scopes_supported=data.get("scopes_supported", []),
+                        scopes_supported=list(advertised),
                         code_challenge_methods_supported=data.get(
                             "code_challenge_methods_supported", ["S256"]
                         ),
+                        offline_access_supported="offline_access" in advertised,
                     )
             except (httpx.HTTPError, KeyError):
                 continue
@@ -251,11 +285,13 @@ class MCPOAuthClientService:
     ) -> str:
         """Build the OAuth 2.1 authorization URL with PKCE and resource indicator."""
         scope_list = list(scopes or as_metadata.scopes_supported or [])
-        # Always request offline_access so the AS issues a refresh_token; without
-        # it many providers (e.g. Vercel) return a ~1h access token and nothing to
-        # renew with, so the connection silently 403s once it expires. Harmless if
-        # the AS ignores unknown scopes.
-        if "offline_access" not in scope_list:
+        # Request offline_access when the AS advertises it, so it issues a
+        # refresh_token; without one, providers like Vercel return a ~1h access
+        # token with nothing to renew and the connection silently 403s. Only when
+        # advertised, though: a provider that never claimed the scope may answer
+        # invalid_scope, which costs the whole authorization instead of just its
+        # refresh token (Google lists openid/email/profile and nothing more).
+        if as_metadata.offline_access_supported and "offline_access" not in scope_list:
             scope_list.append("offline_access")
         params: dict[str, str] = {
             "response_type": "code",

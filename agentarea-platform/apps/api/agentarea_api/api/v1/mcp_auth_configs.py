@@ -10,6 +10,7 @@ from agentarea_api.api.deps.services import (
     SecretCatalogServiceDep,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import requires_workspace_admin
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_mcp.application.auth_service import MCPAuthService
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
@@ -81,7 +82,12 @@ async def get_mcp_auth_service(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/", response_model=MCPAuthConfigResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=MCPAuthConfigResponse,
+    status_code=201,
+    dependencies=[requires_workspace_admin()],
+)
 async def create_mcp_auth_config(
     data: MCPAuthConfigCreateRequest,
     user_context: UserContextDep,
@@ -104,7 +110,9 @@ async def create_mcp_auth_config(
         raise HTTPException(status_code=500, detail=f"Failed to create auth config: {exc}") from exc
 
 
-@router.get("/", response_model=list[MCPAuthConfigResponse])
+@router.get(
+    "/", response_model=list[MCPAuthConfigResponse], dependencies=[requires_workspace_admin()]
+)
 async def list_mcp_auth_configs(
     user_context: UserContextDep,
     service: MCPAuthService = Depends(get_mcp_auth_service),
@@ -114,7 +122,9 @@ async def list_mcp_auth_configs(
     return [MCPAuthConfigResponse.model_validate(c) for c in configs]
 
 
-@router.get("/{config_id}", response_model=MCPAuthConfigResponse)
+@router.get(
+    "/{config_id}", response_model=MCPAuthConfigResponse, dependencies=[requires_workspace_admin()]
+)
 async def get_mcp_auth_config(
     config_id: UUID,
     user_context: UserContextDep,
@@ -126,7 +136,9 @@ async def get_mcp_auth_config(
     return MCPAuthConfigResponse.model_validate(config)
 
 
-@router.put("/{config_id}", response_model=MCPAuthConfigResponse)
+@router.put(
+    "/{config_id}", response_model=MCPAuthConfigResponse, dependencies=[requires_workspace_admin()]
+)
 async def update_mcp_auth_config(
     config_id: UUID,
     data: MCPAuthConfigUpdateRequest,
@@ -150,7 +162,7 @@ async def update_mcp_auth_config(
         raise HTTPException(status_code=500, detail=f"Failed to update auth config: {exc}") from exc
 
 
-@router.delete("/{config_id}", status_code=204)
+@router.delete("/{config_id}", status_code=204, dependencies=[requires_workspace_admin()])
 async def delete_mcp_auth_config(
     config_id: UUID,
     user_context: UserContextDep,

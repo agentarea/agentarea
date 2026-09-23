@@ -149,6 +149,13 @@ class TemporalTaskManager(BaseTaskManager):
                     "All tasks must have a workspace_id for proper multi-tenancy isolation."
                 )
 
+            workflow_metadata = task.metadata or {}
+            if task.scheduled_at is not None:
+                workflow_metadata = {
+                    **workflow_metadata,
+                    "scheduled_at": task.scheduled_at.isoformat(),
+                }
+
             # Create AgentExecutionRequest format
             execution_request = AgentExecutionRequest(
                 task_id=task.id,
@@ -160,7 +167,7 @@ class TemporalTaskManager(BaseTaskManager):
                 requires_human_approval=bool(
                     (task.metadata or {}).get("requires_human_approval", False)
                 ),
-                workflow_metadata=task.metadata or {},
+                workflow_metadata=workflow_metadata,
                 effective_policy=task.effective_policy,
             )
 

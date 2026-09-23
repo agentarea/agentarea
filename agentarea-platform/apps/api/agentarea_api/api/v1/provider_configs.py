@@ -10,6 +10,7 @@ from agentarea_api.api.deps.services import (  # type: ignore
 )
 from agentarea_api.api.v1._provider_icons import build_provider_icon_url
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import requires_workspace_admin, unrestricted
 from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_llm.application.model_discovery_service import DiscoveredModel, ModelDiscoveryService
@@ -204,7 +205,7 @@ class ProviderConfigWithInstancesResponse(BaseModel):
 # Provider Config endpoints
 
 
-@router.post("/", response_model=ProviderConfigResponse)
+@router.post("/", response_model=ProviderConfigResponse, dependencies=[requires_workspace_admin()])
 async def create_provider_config(
     data: ProviderConfigCreate,
     user_context: UserContextDep,
@@ -218,7 +219,13 @@ async def create_provider_config(
     return ProviderConfigResponse.from_domain(config)
 
 
-@router.get("/", response_model=list[ProviderConfigResponse])
+@router.get(
+    "/",
+    response_model=list[ProviderConfigResponse],
+    dependencies=[
+        unrestricted("configurations carry no key material and members need them to pick a model")
+    ],
+)
 async def list_provider_configs(
     user_context: UserContextDep,
     provider_spec_id: UUID | None = None,
@@ -233,7 +240,13 @@ async def list_provider_configs(
     return [ProviderConfigResponse.from_domain(config) for config in configs]
 
 
-@router.get("/with-instances", response_model=list[ProviderConfigResponse])
+@router.get(
+    "/with-instances",
+    response_model=list[ProviderConfigResponse],
+    dependencies=[
+        unrestricted("configurations carry no key material and members need them to pick a model")
+    ],
+)
 async def list_provider_configs_with_instances(
     user_context: UserContextDep,
     provider_spec_id: UUID | None = None,
@@ -348,7 +361,13 @@ def _require_any_usable_model(
         )
 
 
-@router.post("/discover-preview", response_model=DiscoverPreviewResponse)
+@router.post(
+    "/discover-preview",
+    response_model=DiscoverPreviewResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def discover_models_preview(
     data: DiscoverPreviewRequest,
     user_context: UserContextDep,
@@ -440,7 +459,13 @@ async def discover_models_preview(
     )
 
 
-@router.get("/{config_id}", response_model=ProviderConfigResponse)
+@router.get(
+    "/{config_id}",
+    response_model=ProviderConfigResponse,
+    dependencies=[
+        unrestricted("configurations carry no key material and members need them to pick a model")
+    ],
+)
 async def get_provider_config(
     config_id: UUID,
     user_context: UserContextDep,
@@ -453,7 +478,9 @@ async def get_provider_config(
     return ProviderConfigResponse.from_domain(config)
 
 
-@router.put("/{config_id}", response_model=ProviderConfigResponse)
+@router.put(
+    "/{config_id}", response_model=ProviderConfigResponse, dependencies=[requires_workspace_admin()]
+)
 async def update_provider_config(
     config_id: UUID,
     data: ProviderConfigUpdate,
@@ -470,7 +497,9 @@ async def update_provider_config(
     return ProviderConfigResponse.from_domain(config)
 
 
-@router.patch("/{config_id}", response_model=ProviderConfigResponse)
+@router.patch(
+    "/{config_id}", response_model=ProviderConfigResponse, dependencies=[requires_workspace_admin()]
+)
 async def patch_provider_config(
     config_id: UUID,
     data: ProviderConfigUpdate,
@@ -487,7 +516,7 @@ async def patch_provider_config(
     return ProviderConfigResponse.from_domain(config)
 
 
-@router.delete("/{config_id}")
+@router.delete("/{config_id}", dependencies=[requires_workspace_admin()])
 async def delete_provider_config(
     config_id: UUID,
     user_context: UserContextDep,
@@ -522,7 +551,13 @@ class DiscoveryResponse(BaseModel):
     skipped: list[SkippedModelResponse] = []
 
 
-@router.post("/{config_id}/discover", response_model=DiscoveryResponse)
+@router.post(
+    "/{config_id}/discover",
+    response_model=DiscoveryResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def discover_models(
     config_id: UUID,
     user_context: UserContextDep,
@@ -633,7 +668,10 @@ async def discover_models(
 
 
 # Logo/Icon endpoints
-@router.get("/admin/{provider_key}/logo")
+@router.get(
+    "/admin/{provider_key}/logo",
+    dependencies=[unrestricted("static provider artwork, no workspace data")],
+)
 async def get_provider_logo(
     provider_key: str,
     user_context: UserContextDep,

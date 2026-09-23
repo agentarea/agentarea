@@ -26,6 +26,7 @@ def _resolve_context_path(path: str) -> str:
     display_name="Organization Context",
     description="Read files from the organization's durable context store (read-only).",
     category="utility",
+    plane="runtime",
     requires_user_confirmation=False,
 )
 class ContextToolset(Toolset):
@@ -49,7 +50,7 @@ class ContextToolset(Toolset):
             )
         self.workspace_id: str = workspace_id
 
-    @tool_method
+    @tool_method(effect="read")
     async def list_org_files(self, prefix: str = "") -> str:
         """List files in the organization library (shared, read-only).
 
@@ -73,7 +74,7 @@ class ContextToolset(Toolset):
             return "No context files found."
         return "\n".join(paths)
 
-    @tool_method
+    @tool_method(effect="read")
     async def read_org_file(self, path: str) -> str:
         """Read a text file from the organization library (shared, read-only).
 

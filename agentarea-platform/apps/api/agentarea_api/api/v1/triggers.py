@@ -31,6 +31,7 @@ from agentarea_api.api.deps.services import (
 )
 from agentarea_api.api.v1._icons import CHANNEL_ICON_NAMESPACE, build_icon_url
 from agentarea_common.auth.dependencies import UserContext, get_user_context
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config.app import get_app_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -380,7 +381,10 @@ async def _has_credentials(secret_manager: Any, trigger: Any, trigger_id: UUID) 
 # API Endpoints
 
 
-@router.get("/catalog")
+@router.get(
+    "/catalog",
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def get_catalog(
     user_context: UserContext = Depends(get_user_context),
 ) -> list[dict[str, Any]]:
@@ -396,7 +400,10 @@ async def get_catalog(
     ]
 
 
-@router.get("/channels/events")
+@router.get(
+    "/channels/events",
+    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+)
 async def get_channel_events(
     user_context: UserContext = Depends(get_user_context),
 ) -> dict[str, list[str]]:
@@ -482,7 +489,14 @@ async def _resolve_channel_credentials(
     return resolved
 
 
-@router.post("/", response_model=TriggerResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=TriggerResponse,
+    status_code=201,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_trigger(
     secret_manager: BaseSecretManagerDep,
     secret_catalog: SecretCatalogServiceDep,
@@ -580,7 +594,13 @@ async def create_trigger(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/", response_model=list[TriggerResponse])
+@router.get(
+    "/",
+    response_model=list[TriggerResponse],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_triggers(
     secret_manager: BaseSecretManagerDep,
     agent_id: UUID | None = Query(None, description="Filter by agent ID"),
@@ -653,7 +673,11 @@ async def list_triggers(
 
 
 # Health check endpoint
-@router.get("/health", response_model=dict[str, Any])
+@router.get(
+    "/health",
+    response_model=dict[str, Any],
+    dependencies=[unrestricted("liveness probe, returns no workspace data")],
+)
 async def triggers_health_check(
     health_checker=Depends(get_trigger_health_check),
 ) -> dict[str, Any]:
@@ -686,7 +710,13 @@ async def triggers_health_check(
         }
 
 
-@router.get("/{trigger_id}", response_model=TriggerResponse)
+@router.get(
+    "/{trigger_id}",
+    response_model=TriggerResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_trigger(
     trigger_id: UUID,
     secret_manager: BaseSecretManagerDep,
@@ -723,7 +753,13 @@ async def get_trigger(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.put("/{trigger_id}", response_model=TriggerResponse)
+@router.put(
+    "/{trigger_id}",
+    response_model=TriggerResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def update_trigger(
     trigger_id: UUID,
     secret_manager: BaseSecretManagerDep,
@@ -828,7 +864,13 @@ async def update_trigger(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.delete("/{trigger_id}", status_code=204)
+@router.delete(
+    "/{trigger_id}",
+    status_code=204,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def delete_trigger(
     secret_manager: BaseSecretManagerDep,
     trigger_id: UUID,
@@ -882,7 +924,13 @@ async def delete_trigger(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{trigger_id}/enable", response_model=dict[str, Any])
+@router.post(
+    "/{trigger_id}/enable",
+    response_model=dict[str, Any],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def enable_trigger(
     trigger_id: UUID,
     user_context: UserContext = Depends(get_user_context),
@@ -926,7 +974,13 @@ async def enable_trigger(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{trigger_id}/disable", response_model=dict[str, Any])
+@router.post(
+    "/{trigger_id}/disable",
+    response_model=dict[str, Any],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def disable_trigger(
     trigger_id: UUID,
     user_context: UserContext = Depends(get_user_context),
@@ -970,7 +1024,13 @@ async def disable_trigger(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{trigger_id}/executions", response_model=ExecutionHistoryResponse)
+@router.get(
+    "/{trigger_id}/executions",
+    response_model=ExecutionHistoryResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_execution_history(
     trigger_id: UUID,
     page: int = Query(1, ge=1, description="Page number"),
@@ -1070,7 +1130,13 @@ async def get_execution_history(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{trigger_id}/status", response_model=TriggerStatusResponse)
+@router.get(
+    "/{trigger_id}/status",
+    response_model=TriggerStatusResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_trigger_status(
     trigger_id: UUID,
     user_context: UserContext = Depends(get_user_context),
@@ -1119,7 +1185,13 @@ async def get_trigger_status(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{trigger_id}/metrics", response_model=ExecutionMetricsResponse)
+@router.get(
+    "/{trigger_id}/metrics",
+    response_model=ExecutionMetricsResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_execution_metrics(
     trigger_id: UUID,
     hours: int | None = Query(
@@ -1178,7 +1250,13 @@ async def get_execution_metrics(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{trigger_id}/timeline", response_model=ExecutionTimelineResponse)
+@router.get(
+    "/{trigger_id}/timeline",
+    response_model=ExecutionTimelineResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_execution_timeline(
     trigger_id: UUID,
     hours: int = Query(24, ge=1, le=168, description="Time period in hours (max 7 days)"),
@@ -1226,7 +1304,13 @@ async def get_execution_timeline(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{trigger_id}/correlations", response_model=ExecutionCorrelationResponse)
+@router.get(
+    "/{trigger_id}/correlations",
+    response_model=ExecutionCorrelationResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_execution_correlations(
     trigger_id: UUID,
     page: int = Query(1, ge=1, description="Page number"),
@@ -1280,7 +1364,13 @@ async def get_execution_correlations(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{trigger_id}/execute", response_model=dict[str, Any])
+@router.post(
+    "/{trigger_id}/execute",
+    response_model=dict[str, Any],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def execute_trigger(
     trigger_id: UUID,
     request: TriggerExecuteRequest,
@@ -1336,7 +1426,13 @@ async def execute_trigger(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/{trigger_id}/run", response_model=TriggerRunResponse)
+@router.post(
+    "/{trigger_id}/run",
+    response_model=TriggerRunResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def run_trigger_now(
     trigger_id: UUID,
     trigger_service: TriggerService = Depends(get_trigger_service),

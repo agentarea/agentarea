@@ -16,6 +16,11 @@ from agentarea_common.auth.identity_directory import (
     get_identity_directory,
     identity_for,
 )
+from agentarea_common.auth.route_authz import (
+    enforced_in_handler,
+    requires_workspace_admin,
+    unrestricted,
+)
 from agentarea_common.config import get_database
 from agentarea_common.rebac import (
     KetoError,
@@ -264,6 +269,7 @@ router = APIRouter(tags=["workspace-invitations"])
     "/workspaces/{workspace_id}/invitations",
     response_model=InvitationCreatedResponse,
     status_code=201,
+    dependencies=[requires_workspace_admin(workspace_param="workspace_id")],
 )
 async def create_invitation(
     workspace_id: str,
@@ -300,6 +306,7 @@ async def create_invitation(
 @router.get(
     "/workspaces/{workspace_id}/invitations",
     response_model=list[InvitationResponse],
+    dependencies=[requires_workspace_admin(workspace_param="workspace_id")],
 )
 async def list_invitations(
     workspace_id: str,
@@ -316,6 +323,7 @@ async def list_invitations(
 @router.delete(
     "/workspaces/{workspace_id}/invitations/{invitation_id}",
     status_code=204,
+    dependencies=[requires_workspace_admin(workspace_param="workspace_id")],
 )
 async def revoke_invitation(
     workspace_id: str,
@@ -336,6 +344,9 @@ async def revoke_invitation(
 @router.post(
     "/invitations/accept",
     response_model=AcceptInvitationResponse,
+    dependencies=[
+        unrestricted("bearer of the invitation token; there is no prior membership to check")
+    ],
 )
 async def accept_invitation(
     body: AcceptInvitationBody,
@@ -379,6 +390,9 @@ async def accept_invitation(
 @router.get(
     "/workspaces/{workspace_id}/members",
     response_model=list[MemberResponse],
+    dependencies=[
+        enforced_in_handler("membership in the target workspace is asserted in the handler")
+    ],
 )
 async def list_members(
     workspace_id: str,
@@ -409,6 +423,7 @@ async def list_members(
 @router.delete(
     "/workspaces/{workspace_id}/members/{user_id}",
     status_code=204,
+    dependencies=[enforced_in_handler("owner-only, enforced by MembershipService.remove")],
 )
 async def remove_member(
     workspace_id: str,

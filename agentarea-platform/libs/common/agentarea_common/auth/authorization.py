@@ -49,6 +49,22 @@ class AuthorizationService(ABC):
         """
         ...
 
+    async def can_administer_workspace(self, user_context: UserContext, workspace_id: str) -> bool:
+        """Check if the user may change the workspace itself, not just its contents.
+
+        Administering means policy rules, spend limits and access grants —
+        authority over what everyone else in the workspace may do. Membership
+        does not confer it.
+
+        The default resolves ownership, which is what an implementation without
+        its own notion of roles can answer. It is deliberately concrete rather
+        than abstract: an implementation that has not considered the question
+        must deny, not inherit a hole.
+        """
+        if workspace_id == user_context.user_id:
+            return True
+        return workspace_id in (user_context.admin_workspaces or [])
+
 
 async def assert_workspace_admin(user_context: UserContext) -> None:
     """Raise 403 unless the caller may mutate the given workspace.
@@ -62,7 +78,26 @@ async def assert_workspace_admin(user_context: UserContext) -> None:
     from agentarea_common.di.container import resolve
 
     authz = resolve(AuthorizationService)
-    if not await authz.can_write_workspace(user_context, user_context.workspace_id):
+    if not await authz.can_administer_workspace(user_context, user_context.workspace_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a workspace admin may perform this action",
+        )
+
+
+async def assert_workspace_admin_of(user_context: UserContext, workspace_id: str) -> None:
+    """Raise 403 unless the caller may administer ``workspace_id``.
+
+    For endpoints that name the workspace in their path -- invitations,
+    membership -- where the target need not be the workspace the caller is
+    currently acting in. An empty target is refused rather than defaulted.
+    """
+    from agentarea_common.di.container import resolve
+
+    if not workspace_id:
+        raise HTTPException(status_code=422, detail="workspace_id is required")
+    authz = resolve(AuthorizationService)
+    if not await authz.can_administer_workspace(user_context, workspace_id):
         raise HTTPException(
             status_code=403,
             detail="Only a workspace admin may perform this action",

@@ -17,6 +17,7 @@ from agentarea_agents.schemas.skills_dto import (
 )
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
+from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -170,7 +171,13 @@ class SkillMemberResponse(BaseModel):
 # ============================================================================
 
 
-@router.post("", response_model=SkillResponse)
+@router.post(
+    "",
+    response_model=SkillResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_skill(
     request: SkillCreateRequest,
     skill_service: SkillServiceDep,
@@ -213,7 +220,13 @@ async def create_skill(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.post("/upload", response_model=SkillResponse)
+@router.post(
+    "/upload",
+    response_model=SkillResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def upload_skill(
     skill_service: SkillServiceDep,
     file: UploadFile = File(..., description="ZIP file containing the skill package"),
@@ -242,7 +255,13 @@ async def upload_skill(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.get("", response_model=PaginatedResponse[SkillResponse])
+@router.get(
+    "",
+    response_model=PaginatedResponse[SkillResponse],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_skills(
     skill_service: SkillServiceDep,
     pagination: PaginationParams = Depends(),
@@ -268,7 +287,13 @@ async def list_skills(
     )
 
 
-@router.get("/{skill_id}", response_model=SkillResponse)
+@router.get(
+    "/{skill_id}",
+    response_model=SkillResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_skill(
     skill_id: UUID,
     skill_service: SkillServiceDep,
@@ -280,7 +305,13 @@ async def get_skill(
     return SkillResponse.from_skill(skill)
 
 
-@router.post("/{skill_id}/install", response_model=SkillResponse)
+@router.post(
+    "/{skill_id}/install",
+    response_model=SkillResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def install_skill(
     skill_id: UUID,
     skill_service: SkillServiceDep,
@@ -298,7 +329,13 @@ async def install_skill(
     return SkillResponse.from_skill(skill)
 
 
-@router.get("/{skill_id}/content", response_model=SkillContentResponse)
+@router.get(
+    "/{skill_id}/content",
+    response_model=SkillContentResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_skill_content(
     skill_id: UUID,
     skill_service: SkillServiceDep,
@@ -315,7 +352,13 @@ async def get_skill_content(
     )
 
 
-@router.get("/{skill_id}/files", response_model=SkillFilesResponse)
+@router.get(
+    "/{skill_id}/files",
+    response_model=SkillFilesResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_skill_files(
     skill_id: UUID,
     skill_service: SkillServiceDep,
@@ -332,7 +375,12 @@ async def list_skill_files(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
-@router.get("/{skill_id}/files/{path:path}")
+@router.get(
+    "/{skill_id}/files/{path:path}",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_skill_file(
     skill_id: UUID,
     path: str,
@@ -358,7 +406,13 @@ async def get_skill_file(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
-@router.put("/{skill_id}", response_model=SkillResponse)
+@router.put(
+    "/{skill_id}",
+    response_model=SkillResponse,
+    dependencies=[
+        enforced_in_handler("per-object permission resolved by the PDP once the object is loaded")
+    ],
+)
 async def update_skill(
     skill_id: UUID,
     request: SkillUpdateRequest,
@@ -387,7 +441,12 @@ async def update_skill(
     return SkillResponse.from_skill(skill)
 
 
-@router.delete("/{skill_id}")
+@router.delete(
+    "/{skill_id}",
+    dependencies=[
+        enforced_in_handler("per-object permission resolved by the PDP once the object is loaded")
+    ],
+)
 async def delete_skill(
     skill_id: UUID,
     skill_service: SkillServiceDep,
@@ -408,7 +467,13 @@ async def delete_skill(
 # ============================================================================
 
 
-@router.post("/{skill_id}/members", response_model=SkillMemberResponse)
+@router.post(
+    "/{skill_id}/members",
+    response_model=SkillMemberResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def add_skill_member(
     skill_id: UUID,
     request: SkillMemberAddRequest,
@@ -434,7 +499,13 @@ async def add_skill_member(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.get("/{skill_id}/members", response_model=list[SkillMemberResponse])
+@router.get(
+    "/{skill_id}/members",
+    response_model=list[SkillMemberResponse],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_skill_members(
     skill_id: UUID,
     skill_service: SkillServiceDep,
@@ -453,7 +524,12 @@ async def list_skill_members(
     ]
 
 
-@router.delete("/{skill_id}/members/{child_skill_id}")
+@router.delete(
+    "/{skill_id}/members/{child_skill_id}",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def remove_skill_member(
     skill_id: UUID,
     child_skill_id: UUID,
@@ -470,7 +546,13 @@ async def remove_skill_member(
     }
 
 
-@router.get("/{skill_id}/flatten", response_model=list[str])
+@router.get(
+    "/{skill_id}/flatten",
+    response_model=list[str],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def flatten_skill_members(
     skill_id: UUID,
     skill_service: SkillServiceDep,

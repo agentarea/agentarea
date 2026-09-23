@@ -10,6 +10,7 @@ from agentarea_api.api.v1.mcp_oauth_links import (
     get_oauth_link_service,
 )
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import requires_workspace_admin, unrestricted
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.utils.types import UtcDatetime
@@ -123,7 +124,12 @@ class MCPServerConnectionCreateRequest(BaseModel):
     instance: MCPServerInstanceCreateWithoutSpec
 
 
-@router.post("/validate")
+@router.post(
+    "/validate",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def validate_instance_spec(
     data: ValidateRequest,
     user_context: UserContextDep,
@@ -146,7 +152,14 @@ async def validate_instance_spec(
     return {"valid": False, "errors": [f"Unknown type: {data.type}"]}
 
 
-@router.post("/", status_code=201, response_model=MCPServerInstanceResponse)
+@router.post(
+    "/",
+    status_code=201,
+    response_model=MCPServerInstanceResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_mcp_server_instance(
     data: MCPServerInstanceCreateRequest,
     response: Response,
@@ -179,7 +192,14 @@ async def create_mcp_server_instance(
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
-@router.post("/with-spec", status_code=201, response_model=MCPServerInstanceResponse)
+@router.post(
+    "/with-spec",
+    status_code=201,
+    response_model=MCPServerInstanceResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def create_mcp_server_connection(
     data: MCPServerConnectionCreateRequest,
     response: Response,
@@ -220,7 +240,12 @@ async def create_mcp_server_connection(
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}") from e
 
 
-@router.post("/validate-connection")
+@router.post(
+    "/validate-connection",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def validate_connection(
     data: dict[str, Any],
     user_context: UserContextDep,
@@ -233,7 +258,12 @@ async def validate_connection(
     return result
 
 
-@router.post("/check")
+@router.post(
+    "/check",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def check_mcp_server_instance_configuration(
     data: dict[str, Any],
     user_context: UserContextDep,
@@ -275,7 +305,7 @@ async def check_mcp_server_instance_configuration(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/{instance_id}/environment")
+@router.get("/{instance_id}/environment", dependencies=[requires_workspace_admin()])
 async def get_instance_environment(
     instance_id: UUID,
     user_context: UserContextDep,
@@ -292,7 +322,13 @@ async def get_instance_environment(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/", response_model=list[MCPServerInstanceResponse])
+@router.get(
+    "/",
+    response_model=list[MCPServerInstanceResponse],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_mcp_server_instances(
     user_context: UserContextDep,
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
@@ -324,7 +360,13 @@ async def list_mcp_server_instances(
     return response_instances
 
 
-@router.get("/{instance_id}", response_model=MCPServerInstanceResponse)
+@router.get(
+    "/{instance_id}",
+    response_model=MCPServerInstanceResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_mcp_server_instance(
     instance_id: UUID,
     user_context: UserContextDep,
@@ -375,7 +417,13 @@ def _mcp_config_matches(tool_config: dict[str, Any], instance: MCPServerInstance
     return str(ref) == str(instance.id) or str(ref) == instance.name
 
 
-@router.get("/{instance_id}/consumers", response_model=list[MCPInstanceConsumer])
+@router.get(
+    "/{instance_id}/consumers",
+    response_model=list[MCPInstanceConsumer],
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def list_mcp_server_instance_consumers(
     instance_id: UUID,
     user_context: UserContextDep,
@@ -436,7 +484,13 @@ async def list_mcp_server_instance_consumers(
     return consumers
 
 
-@router.patch("/{instance_id}", response_model=MCPServerInstanceResponse)
+@router.patch(
+    "/{instance_id}",
+    response_model=MCPServerInstanceResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def update_mcp_server_instance(
     instance_id: UUID,
     data: MCPServerInstanceUpdate,
@@ -449,7 +503,12 @@ async def update_mcp_server_instance(
     return MCPServerInstanceResponse.from_domain(instance)
 
 
-@router.delete("/{instance_id}")
+@router.delete(
+    "/{instance_id}",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def delete_mcp_server_instance(
     instance_id: UUID,
     user_context: UserContextDep,
@@ -461,7 +520,12 @@ async def delete_mcp_server_instance(
     return {"status": "success"}
 
 
-@router.post("/{instance_id}/verify")
+@router.post(
+    "/{instance_id}/verify",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def verify_mcp_server_instance(
     instance_id: UUID,
     user_context: UserContextDep,
@@ -486,7 +550,12 @@ async def verify_mcp_server_instance(
         ) from e
 
 
-@router.post("/{instance_id}/discover-tools")
+@router.post(
+    "/{instance_id}/discover-tools",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def discover_mcp_server_instance_tools(
     instance_id: UUID,
     user_context: UserContextDep,
@@ -533,7 +602,13 @@ class MCPContainersHealthResponse(BaseModel):
     healthy: int
 
 
-@router.get("/health/containers", response_model=MCPContainersHealthResponse)
+@router.get(
+    "/health/containers",
+    response_model=MCPContainersHealthResponse,
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def get_containers_health(
     user_context: UserContextDep,
     service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
@@ -604,7 +679,12 @@ async def get_containers_health(
     }
 
 
-@router.post("/{instance_id}/probe")
+@router.post(
+    "/{instance_id}/probe",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def probe_instance_auth(
     instance_id: UUID,
     user_context: UserContextDep,
@@ -649,7 +729,12 @@ async def probe_instance_auth(
     return result
 
 
-@router.post("/{instance_id}/test-auth")
+@router.post(
+    "/{instance_id}/test-auth",
+    dependencies=[
+        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+    ],
+)
 async def run_test_auth(
     instance_id: UUID,
     user_context: UserContextDep,
@@ -676,7 +761,10 @@ async def run_test_auth(
     }
 
 
-@router.post("/{instance_id}/oauth-link")
+@router.post(
+    "/{instance_id}/oauth-link",
+    dependencies=[requires_workspace_admin()],
+)
 async def create_oauth_link(
     instance_id: UUID,
     data: dict,
@@ -693,7 +781,7 @@ async def create_oauth_link(
     )
 
 
-@router.get("/{instance_id}/oauth-links")
+@router.get("/{instance_id}/oauth-links", dependencies=[requires_workspace_admin()])
 async def list_oauth_links(
     instance_id: UUID,
     user_context: UserContextDep,

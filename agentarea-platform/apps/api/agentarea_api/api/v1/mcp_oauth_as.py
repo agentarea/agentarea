@@ -24,6 +24,7 @@ import re
 from urllib.parse import urlparse
 
 import httpx
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config import get_settings
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
@@ -248,7 +249,10 @@ async def hydra_auth_redirect(request: Request) -> Response:
     return RedirectResponse(url=target, status_code=302)
 
 
-@oauth_as_router.post("/oauth2/register")
+@oauth_as_router.post(
+    "/oauth2/register",
+    dependencies=[unrestricted("OAuth authorization-server surface; unauthenticated by protocol")],
+)
 async def hydra_dcr_proxy(request: Request) -> Response:
     """Dynamic Client Registration (RFC 7591) — proxy to Hydra admin API.
 
@@ -384,18 +388,22 @@ async def hydra_dcr_proxy(request: Request) -> Response:
 @oauth_as_router.post(
     "/oauth2/{path:path}",
     operation_id="hydra_oauth2_proxy_oauth2__path__post",
+    dependencies=[unrestricted("OAuth authorization-server surface; unauthenticated by protocol")],
 )
 @oauth_as_router.put(
     "/oauth2/{path:path}",
     operation_id="hydra_oauth2_proxy_oauth2__path__put",
+    dependencies=[unrestricted("OAuth authorization-server surface; unauthenticated by protocol")],
 )
 @oauth_as_router.delete(
     "/oauth2/{path:path}",
     operation_id="hydra_oauth2_proxy_oauth2__path__delete",
+    dependencies=[unrestricted("OAuth authorization-server surface; unauthenticated by protocol")],
 )
 @oauth_as_router.patch(
     "/oauth2/{path:path}",
     operation_id="hydra_oauth2_proxy_oauth2__path__patch",
+    dependencies=[unrestricted("OAuth authorization-server surface; unauthenticated by protocol")],
 )
 async def hydra_oauth2_proxy(path: str, request: Request) -> Response:
     """Proxy all /oauth2/* requests through to Hydra (excluding /register handled above)."""

@@ -34,6 +34,7 @@ from agentarea_common.auth import (
 from agentarea_common.auth import (
     assert_workspace_admin as _assert_workspace_admin,
 )
+from agentarea_common.auth.route_authz import enforced_in_handler
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
@@ -387,7 +388,11 @@ def _to_resource_grant(payload: RelationshipWriteRequest) -> RelationTuple:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/graph", response_model=GraphResponse)
+@router.get(
+    "/graph",
+    response_model=GraphResponse,
+    dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
+)
 async def get_graph(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
@@ -504,7 +509,11 @@ async def get_graph(
     )
 
 
-@router.get("/relationships", response_model=RelationshipsResponse)
+@router.get(
+    "/relationships",
+    response_model=RelationshipsResponse,
+    dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
+)
 async def list_relationships(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
@@ -605,7 +614,13 @@ async def list_relationships(
     return RelationshipsResponse(relationships=items, count=len(items))
 
 
-@router.post("/relationships", status_code=201)
+@router.post(
+    "/relationships",
+    status_code=201,
+    dependencies=[
+        enforced_in_handler("workspace admin, asserted before any graph or database read")
+    ],
+)
 async def create_relationship(
     payload: RelationshipWriteRequest,
     user_context: UserContextDep,
@@ -627,7 +642,13 @@ async def create_relationship(
     return {"ok": True}
 
 
-@router.delete("/relationships", status_code=204)
+@router.delete(
+    "/relationships",
+    status_code=204,
+    dependencies=[
+        enforced_in_handler("workspace admin, asserted before any graph or database read")
+    ],
+)
 async def delete_relationship(
     payload: RelationshipWriteRequest,
     user_context: UserContextDep,
@@ -647,7 +668,13 @@ async def delete_relationship(
         raise HTTPException(status_code=503, detail="Graph authorization delete failed") from exc
 
 
-@router.post("/check", response_model=CheckResponse)
+@router.post(
+    "/check",
+    response_model=CheckResponse,
+    dependencies=[
+        enforced_in_handler("workspace admin, asserted before any graph or database read")
+    ],
+)
 async def check_permission(
     payload: CheckRequest,
     user_context: UserContextDep,
@@ -681,7 +708,13 @@ async def check_permission(
     return CheckResponse(allowed=result.allowed)
 
 
-@router.post("/resolve", response_model=ResolveResponse)
+@router.post(
+    "/resolve",
+    response_model=ResolveResponse,
+    dependencies=[
+        enforced_in_handler("workspace admin, asserted before any graph or database read")
+    ],
+)
 async def resolve_access(
     payload: ResolveRequest,
     user_context: UserContextDep,
@@ -784,7 +817,13 @@ async def resolve_access(
     )
 
 
-@router.post("/sync", response_model=SyncResponse)
+@router.post(
+    "/sync",
+    response_model=SyncResponse,
+    dependencies=[
+        enforced_in_handler("workspace admin, asserted before any graph or database read")
+    ],
+)
 async def sync_grants(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,

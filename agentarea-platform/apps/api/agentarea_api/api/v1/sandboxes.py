@@ -5,6 +5,7 @@ from datetime import datetime
 
 import httpx
 from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config import get_settings
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -42,7 +43,13 @@ class SandboxListResponse(BaseModel):
     total: int
 
 
-@router.get("", response_model=SandboxListResponse)
+@router.get(
+    "",
+    response_model=SandboxListResponse,
+    dependencies=[
+        unrestricted("provider state, filtered to the caller's workspace before it is returned")
+    ],
+)
 async def list_sandboxes(user_context: UserContextDep) -> SandboxListResponse:
     """Return live provider state for the authenticated workspace only."""
     settings = get_settings().mcp

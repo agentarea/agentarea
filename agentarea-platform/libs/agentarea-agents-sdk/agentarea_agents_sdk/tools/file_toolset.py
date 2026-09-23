@@ -192,6 +192,7 @@ class InMemoryStorage:
     display_name="File Operations",
     description="Read, write, list, and search files in the agent's workspace storage.",
     category="utility",
+    plane="runtime",
     requires_user_confirmation=True,
 )
 class FileToolset(Toolset):
@@ -244,7 +245,7 @@ class FileToolset(Toolset):
             return f"{self.base_prefix}/{name}"
         return name
 
-    @tool_method
+    @tool_method(effect="write")
     async def save_file(self, contents: str, file_name: str, overwrite: bool = True) -> str:
         """Save ``contents`` as a text file in the live task workspace.
 
@@ -290,7 +291,7 @@ class FileToolset(Toolset):
         except Exception as e:
             return f"Error saving to file: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def read_file(self, file_name: str) -> str:
         """Read a text file from the live task workspace.
 
@@ -312,7 +313,7 @@ class FileToolset(Toolset):
         except Exception as e:
             return f"Error reading file: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def list_files(self, pattern: str = "*") -> str:
         """List files under the task scope, optionally filtered by glob pattern.
 
@@ -342,7 +343,7 @@ class FileToolset(Toolset):
         except Exception as e:
             return f"Error listing files: {e}"
 
-    @tool_method
+    @tool_method(effect="read")
     async def search_files(self, pattern: str) -> str:
         """Search the task scope for files whose name matches a glob pattern.
 

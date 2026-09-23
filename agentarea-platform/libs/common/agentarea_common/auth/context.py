@@ -15,6 +15,10 @@ class UserContext:
     user_id: str
     workspace_id: str
     accessible_workspaces: list[str] | None = None
+    # Workspaces this principal may ADMINISTER (policy, spend, access grants),
+    # as opposed to merely write entities in. Resolved per request from
+    # ownership; ``None`` means "not resolved", which denies rather than allows.
+    admin_workspaces: list[str] | None = None
     email: str | None = None
     # Set when the principal itself is a Client (agent-proxy), e.g. an OAuth2
     # client-credentials token; the gateway trusts it over URL scoping.
