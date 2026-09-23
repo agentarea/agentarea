@@ -9,9 +9,5 @@ const COLUMNS = [
 ];
 
 export default function SecretsSkeleton() {
-  return (
-    <div className="space-y-6">
-      <TableSkeleton columns={COLUMNS} rows={8} />
-    </div>
-  );
+  return <TableSkeleton columns={COLUMNS} rows={8} />;
 }

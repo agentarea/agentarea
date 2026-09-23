@@ -70,8 +70,8 @@ export function CreateSecretDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       {showTrigger && (
         <DialogTrigger asChild>
-          <Button size="sm">
-            <Plus className="mr-1 h-4 w-4" />
+          <Button className="shrink-0" size="xs">
+            <Plus />
             New secret
           </Button>
         </DialogTrigger>

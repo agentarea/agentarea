@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import { CreateSecretDialog } from "./components/CreateSecretDialog";
 import { SecretsData } from "./components/SecretsData";
 import SecretsSkeleton from "./components/SecretsSkeleton";
 
@@ -13,13 +14,12 @@ export default async function SecretsPage() {
     <ContentBlock
       header={{
         breadcrumb: [{ label: "Secrets" }],
+        controls: <CreateSecretDialog />,
       }}
     >
-      <div className="main-content">
-        <Suspense fallback={<SecretsSkeleton />}>
-          <SecretsData />
-        </Suspense>
-      </div>
+      <Suspense fallback={<SecretsSkeleton />}>
+        <SecretsData />
+      </Suspense>
     </ContentBlock>
   );
 }
