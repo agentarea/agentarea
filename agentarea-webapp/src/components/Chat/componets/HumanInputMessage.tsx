@@ -39,12 +39,13 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
   const [values, setValues] = useState<Record<string, FieldValue>>(() =>
     Object.fromEntries(fields.map((f) => [f.id, initialValue(f)]))
   );
-  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
 
   const setValue = (id: string, v: FieldValue) =>
     setValues((prev) => ({ ...prev, [id]: v }));
 
-  const isResolved = data.resolved || submitted;
+  const isResolved = data.resolved;
 
   // A required field is satisfied when it holds a non-empty value.
   const canSubmit = useMemo(() => {
@@ -57,8 +58,8 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
     });
   }, [fields, values]);
 
-  const handleSubmit = () => {
-    if (!canSubmit) return;
+  const handleSubmit = async () => {
+    if (!canSubmit || submitting || !data._onSubmit) return;
     const answers: Record<string, unknown> = {};
     const secrets: Record<string, HumanInputSecretValue> = {};
 
@@ -76,8 +77,17 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
       }
     }
 
-    setSubmitted(true);
-    data._onSubmit?.(data.input_request_id, answers, secrets);
+    setSubmitting(true);
+    setSubmissionError(null);
+    try {
+      await data._onSubmit(data.input_request_id, answers, secrets);
+    } catch (error) {
+      setSubmissionError(
+        error instanceof Error ? error.message : "Response was not accepted."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderField = (field: HumanInputField) => {
@@ -132,8 +142,13 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
             <Input
               id={inputId}
               type="number"
-              value={value as string}
-              onChange={(e) => setValue(field.id, e.target.value)}
+              value={value as string | number}
+              onChange={(e) =>
+                setValue(
+                  field.id,
+                  e.target.value === "" ? "" : e.target.valueAsNumber
+                )
+              }
             />
           </div>
         );
@@ -227,7 +242,10 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
 
   if (isResolved) {
     return (
-      <MessageWrapper type="tool-result" icon={<Check className="text-muted-foreground" />}>
+      <MessageWrapper
+        type="tool-result"
+        icon={<Check className="h-4 w-4 text-muted-foreground" />}
+      >
         <details className="group min-w-0 flex-1 text-[13px] leading-5">
           <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-1 py-0.5 text-foreground/80 outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
             <span className="font-medium">Information provided</span>
@@ -255,9 +273,9 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
       type="tool-call"
       icon={
         hasSecret ? (
-          <KeyRound className="text-amber-500" />
+          <KeyRound className="h-4 w-4 text-amber-500" />
         ) : (
-          <Check className="text-zinc-700 dark:text-zinc-200" />
+          <Check className="h-4 w-4 text-zinc-700 dark:text-zinc-200" />
         )
       }
     >
@@ -276,9 +294,18 @@ const HumanInputMessage: React.FC<Props> = ({ data }) => {
       >
         <div className="space-y-3">
           <div className="space-y-3">{fields.map(renderField)}</div>
-          <Button size="sm" onClick={handleSubmit} disabled={!canSubmit}>
-            Submit
+          <Button
+            size="sm"
+            onClick={handleSubmit}
+            disabled={!canSubmit || submitting || !data._onSubmit}
+          >
+            {submitting ? "Submitting…" : "Submit"}
           </Button>
+          {submissionError && (
+            <p role="alert" className="text-xs text-destructive">
+              {submissionError}
+            </p>
+          )}
         </div>
       </BaseMessage>
     </MessageWrapper>

@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { ChevronRight, Loader2 } from "lucide-react";
 import type {
-  A2UIAction,
+  A2UIActionHandler,
   HumanInputSecretValue,
 } from "@/components/Chat/types";
+import { summarizeToolGroup } from "@/components/Chat/utils/describeToolCall";
 import {
   containsUnavailableToolValue,
   TOOL_DETAILS_UNAVAILABLE,
 } from "@/components/Chat/utils/toolDetails";
-import { summarizeToolGroup } from "@/components/Chat/utils/describeToolCall";
 import { ToolIcon } from "@/components/Chat/utils/toolIcon";
+import type { Part } from "@/lib/events/contract";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import { cn } from "@/lib/utils";
 import type { ActivityRun } from "./activityView";
@@ -23,17 +24,15 @@ interface ActivityGroupProps {
     answers: Record<string, unknown>,
     secrets: Record<string, HumanInputSecretValue>
   ) => void;
-  onA2UIAction?: (
-    action: A2UIAction,
-    surfaceId: string,
-    sourceComponentId: string
-  ) => void;
+  onA2UIAction?: A2UIActionHandler;
+  isInteractionClosed?: (part: Part) => boolean;
 }
 
 export function ActivityGroup({
   run,
   onFormSubmit,
   onA2UIAction,
+  isInteractionClosed,
 }: ActivityGroupProps) {
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const open = userOpen ?? !run.completed;
@@ -109,9 +108,7 @@ export function ActivityGroup({
             className="h-3 w-3 animate-spin motion-reduce:animate-none"
           />
         )}
-        <span className="text-foreground/80">
-          {actionSummary || summary}
-        </span>
+        <span className="text-foreground/80">{actionSummary || summary}</span>
         <span className="text-muted-foreground/60" aria-hidden>
           ·
         </span>
@@ -140,6 +137,7 @@ export function ActivityGroup({
           <PartRenderer
             key={part.partId}
             part={part}
+            interactionClosed={isInteractionClosed?.(part)}
             onFormSubmit={onFormSubmit}
             onA2UIAction={onA2UIAction}
             onToolInspect={() => setUserOpen(true)}

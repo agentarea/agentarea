@@ -118,9 +118,22 @@ export type DynamicStringList = string[] | { path: string };
 
 // A2UI Action (what happens when a user interacts)
 export interface A2UIAction {
-  event?: { name: string; context?: Record<string, DynamicString> };
+  event?: {
+    name: string;
+    context?: Record<
+      string,
+      DynamicString | DynamicNumber | DynamicBoolean | DynamicStringList
+    >;
+  };
   functionCall?: { call: string; args?: Record<string, unknown> };
 }
+
+export type A2UIActionHandler = (
+  action: A2UIAction,
+  surfaceId: string,
+  sourceComponentId: string,
+  resolvedContext: Record<string, unknown>
+) => void;
 
 // Flat adjacency-list component node (children are ID strings, not nested objects)
 export interface A2UIComponent {
@@ -156,7 +169,7 @@ export interface A2UIComponent {
   text?: DynamicString;
   trigger?: string;
   url?: DynamicString;
-  value?: DynamicString | DynamicNumber | DynamicBoolean;
+  value?: DynamicString | DynamicNumber | DynamicBoolean | DynamicStringList;
   variant?: string;
   // Per-component props (open-ended to support all catalog props)
   [key: string]: unknown;

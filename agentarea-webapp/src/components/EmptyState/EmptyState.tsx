@@ -28,12 +28,17 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import { EmptyState as EmptyStateComponent } from "@/components/ui/empty-state";
+import {
+  EmptyState as EmptyStateComponent,
+  type EmptyStateHint,
+} from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
 type EmptyStateProps = {
   title: string;
   description?: string;
+  /** What you can do from here — one line per concrete route forward. */
+  hints?: EmptyStateHint[];
   icons?: LucideIcon[];
   iconsType?:
     | "404"
@@ -65,6 +70,7 @@ type EmptyStateProps = {
 
 export default function EmptyState({
   description,
+  hints,
   title,
   action,
   additionAction,
@@ -116,6 +122,7 @@ export default function EmptyState({
         )}
         title={title}
         description={description || ""}
+        hints={hints}
         icons={resolvedIcons}
         accentClassName={accentClassName}
         action={

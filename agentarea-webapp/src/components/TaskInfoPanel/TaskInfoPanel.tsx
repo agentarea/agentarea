@@ -24,6 +24,7 @@ interface TaskInfoPanelProps {
   task?: Task | null;
   agentId?: string; // Optional agentId if no task
   currentStatus?: string;
+  executionStatus?: string;
   isActive?: boolean;
   startTime?: string;
   endTime?: string;
@@ -39,6 +40,7 @@ export default function TaskInfoPanel({
   task,
   agentId,
   currentStatus = "unknown",
+  executionStatus,
   isActive = false,
   startTime = "",
   endTime,
@@ -79,6 +81,16 @@ export default function TaskInfoPanel({
       <InfoPanelBody className="space-y-1.5">
         {activeTab === "overview" && (
           <>
+            {executionStatus && (
+              <p className="px-1 text-xs text-muted-foreground">
+                Execution:{" "}
+                {executionStatus === "waiting"
+                  ? currentStatus === "completed"
+                    ? "waiting for follow-up"
+                    : "waiting for interaction"
+                  : executionStatus}
+              </p>
+            )}
             <KeyMetrics
               currentStatus={currentStatus}
               isActive={isActive}

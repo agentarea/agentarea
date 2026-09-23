@@ -1,15 +1,16 @@
 import React from "react";
-import type { Part } from "../contract";
 import HumanInputMessage from "@/components/Chat/componets/HumanInputMessage";
-import { StatusIndicator } from "@/components/ui/status-indicator";
 import type {
   HumanInputField,
   HumanInputRequestData,
   HumanInputSecretValue,
 } from "@/components/Chat/types";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import type { Part } from "../contract";
 
 interface FormPartProps {
   part: Part;
+  disabled?: boolean;
   onSubmit?: (
     inputRequestId: string,
     answers: Record<string, unknown>,
@@ -30,7 +31,11 @@ function asFields(value: unknown): HumanInputField[] {
  * approval.response supersedes the request at the same partId, so the part's
  * eventType alone tells us whether it is still awaiting a human.
  */
-export const FormPart: React.FC<FormPartProps> = ({ part, onSubmit }) => {
+export const FormPart: React.FC<FormPartProps> = ({
+  part,
+  onSubmit,
+  disabled,
+}) => {
   const resolved =
     part.eventType === "input.response" ||
     part.eventType === "approval.response";
@@ -38,11 +43,31 @@ export const FormPart: React.FC<FormPartProps> = ({ part, onSubmit }) => {
     part.eventType === "approval.request" ||
     part.eventType === "approval.response";
 
+  // A request the run ended without answering can no longer be submitted, and
+  // saying so adds nothing to the transcript -- drop it rather than render a
+  // form whose submit button would go nowhere.
+  if (!resolved && disabled) return null;
+
+  if (!isApproval && typeof part.data.surface_id === "string") {
+    return (
+      <StatusIndicator
+        tone={resolved ? "success" : "warning"}
+        pulse={!resolved}
+      >
+        {resolved ? "Form response received" : "Waiting for form response"}
+      </StatusIndicator>
+    );
+  }
+
   if (isApproval) {
     if (resolved) {
       const approved = part.data.approved;
       const decision =
-        approved === true ? "Approved" : approved === false ? "Rejected" : "Resolved";
+        approved === true
+          ? "Approved"
+          : approved === false
+            ? "Rejected"
+            : "Resolved";
       const reason = asString(part.data.reason, "Approval request");
       const comment = asString(part.data.deny_comment ?? part.data.comment);
       return (

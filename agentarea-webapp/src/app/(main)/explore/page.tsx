@@ -25,7 +25,7 @@ import CatalogGallery, {
 } from "../bundles/components/CatalogGallery";
 
 export const metadata: Metadata = {
-  title: "Explore",
+  title: "Catalog",
 };
 
 interface ExplorePageProps {
@@ -85,7 +85,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     <ExplorePendingProvider>
       <ContentBlock
         header={{
-          breadcrumb: [{ label: "Explore" }],
+          breadcrumb: [{ label: "Catalog" }],
           description:
             "Browse the catalog. Filter by type, use case, or integration, then add to your workspace.",
         }}

@@ -19,8 +19,6 @@ vi.mock("@/lib/server-actions", () => ({
   listMCPServersAction: vi.fn(async () => ({ data: [] })),
   listSkillsAction: vi.fn(async () => ({ data: [] })),
   listWorkspaceFilesAction: vi.fn(async () => ({ data: { files: [] } })),
-}));
-vi.mock("@/app/(main)/bundles/components/actions", () => ({
   listWorkspaceSecretsAction: () => listWorkspaceSecretsAction(),
 }));
 vi.mock("@/app/(main)/secrets/actions", () => ({

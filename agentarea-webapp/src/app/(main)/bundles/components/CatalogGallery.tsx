@@ -36,13 +36,14 @@ import {
   Star,
   Telescope,
 } from "lucide-react";
+import { getCategoryIcon } from "@/lib/category-icons";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { Streamdown } from "streamdown";
 import type {
   CatalogConnectionRequest,
-  SecretResponse,
 } from "@/api/client/types.gen";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { CustomOAuthAppFields } from "@/components/CustomOAuthAppFields";
 import EmptyState from "@/components/EmptyState";
 import EntityMark from "@/components/EntityMark";
 import HeaderTabs from "@/components/HeaderTabs";
@@ -89,10 +90,10 @@ import {
   listActiveModelInstancesAction,
   listSkillFilesAction,
   listWorkspaceAgentsAction,
-  listWorkspaceSecretsAction,
   type AgentLite,
   type WorkspaceModel,
 } from "./actions";
+import { listWorkspaceSecretsAction } from "@/lib/server-actions";
 import { BundleInstallWizard } from "./BundleInstallWizard";
 import {
   ALL,
@@ -138,6 +139,38 @@ const TYPES: { key: CatalogType; label: string; icon: LucideIcon }[] = [
   { key: "skills", label: "Skills", icon: Puzzle },
   { key: "connections", label: "Connections", icon: Plug },
 ];
+
+/**
+ * The way out of the catalog when it does not have the thing.
+ *
+ * Shown only in the empty state: the catalog runs to thousands of entries and
+ * most searches land, so a standing banner above the list would tax everyone
+ * who is about to succeed in order to serve the few who do not.
+ *
+ * Every route here is a real page, and "ask an agent" is not a figure of
+ * speech either — `apps/api/agentarea_api/tools/mcp_servers_toolset.py`
+ * exposes `create_spec` to agents through `get_platform_tools()`.
+ */
+const BRING_YOUR_OWN: Record<CatalogType, { text: string; href?: string }[]> = {
+  connections: [
+    { text: "Connect your own MCP server", href: "/connections/add" },
+    { text: "Point at any REST API you already have", href: "/connections/add-openapi" },
+    { text: "Or describe it to an agent and have it wire the connection up", href: "/workplace" },
+  ],
+  skills: [{ text: "Write the skill yourself", href: "/skills/create" }],
+  agents: [{ text: "Build the agent yourself", href: "/agents/create" }],
+  bundles: [{ text: "Import a bundle you already have", href: "/bundles/import" }],
+};
+
+const BRING_YOUR_OWN_ACTION: Record<
+  CatalogType,
+  { label: string; href: string }
+> = {
+  connections: { label: "Add your own", href: "/connections/add" },
+  skills: { label: "Create a skill", href: "/skills/create" },
+  agents: { label: "Create an agent", href: "/agents/create" },
+  bundles: { label: "Import a bundle", href: "/bundles/import" },
+};
 
 const VIEW_KEYS = ["grid", "table"] as const;
 
@@ -648,6 +681,7 @@ export default function CatalogGallery({
             <FacetGroup
               label="Category"
               options={categories}
+              icons={getCategoryIcon}
               selected={category}
               onSelect={(v) => {
                 void setCategory(v === ALL ? null : v);
@@ -722,13 +756,18 @@ export default function CatalogGallery({
               paging.entries.length === 0 &&
               !paging.error && (
                 <EmptyState
-                  title={hasFilters ? "No matches" : "Nothing here"}
+                  title={hasFilters ? "No matches" : "Nothing published yet"}
                   description={
                     hasFilters
                       ? "Nothing matches your search and filters."
-                      : "Nothing to show for this type yet."
+                      : "The catalog is synced from the platform registry. Entries of this type appear here once they are published."
                   }
                   icons={hasFilters ? [Telescope, Compass, Search] : undefined}
+                  // Failing to find something is the one moment where the way
+                  // out of the catalog is worth showing. "Clear filters" on its
+                  // own assumed the answer was always in here and you had
+                  // merely filtered wrong.
+                  hints={BRING_YOUR_OWN[type]}
                   action={
                     hasFilters
                       ? {
@@ -742,6 +781,7 @@ export default function CatalogGallery({
                         }
                       : undefined
                   }
+                  additionAction={BRING_YOUR_OWN_ACTION[type]}
                 />
               )}
 
@@ -843,15 +883,7 @@ function CatalogTable({
                   {e.verified && (
                     <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />
                   )}
-                  {e.category && (
-                    <Badge
-                      variant="light"
-                      size="sm"
-                      className="shrink-0 whitespace-nowrap capitalize"
-                    >
-                      {e.category}
-                    </Badge>
-                  )}
+                  {e.category && <CategoryBadge category={e.category} />}
                 </div>
               </td>
               {/* Description absorbs the remaining row width and truncates
@@ -893,6 +925,7 @@ function FacetGroup({
   label,
   options,
   labels,
+  icons,
   selected,
   onSelect,
 }: {
@@ -900,6 +933,8 @@ function FacetGroup({
   options: [string, number][];
   /** Display names for machine values ("mcp" reads as "Mcp" otherwise). */
   labels?: Record<string, string>;
+  /** Icon per option value. Omitted by facets whose values are not topics. */
+  icons?: (value: string) => LucideIcon;
   selected: string;
   onSelect: (v: string) => void;
 }) {
@@ -910,7 +945,11 @@ function FacetGroup({
         {label}
       </div>
       <div className="space-y-0.5">
-        {rows.map(([value, count]) => (
+        {rows.map(([value, count]) => {
+          // "All" is the absence of a filter, not a topic, so it stays bare —
+          // but it still takes the icon's width so the labels line up.
+          const Icon = icons && value !== ALL ? icons(value) : null;
+          return (
           <button
             key={value}
             onClick={() => onSelect(value)}
@@ -921,6 +960,12 @@ function FacetGroup({
                 : "text-muted-foreground hover:bg-muted/50"
             )}
           >
+            {icons &&
+              (Icon ? (
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <span className="h-3.5 w-3.5 shrink-0" />
+              ))}
             <span className="min-w-0 flex-1 truncate text-left capitalize">
               {value === ALL ? "All" : (labels?.[value] ?? value)}
             </span>
@@ -930,13 +975,38 @@ function FacetGroup({
               </span>
             )}
           </button>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
 // ── Card (uniform across every type) ──
+
+/**
+ * A catalog entry's category, with the icon the sidebar files it under.
+ *
+ * The three sources spell categories differently ("Data & Analytics" vs
+ * "data"), so the text alone does not read as the same bucket across types.
+ * The icon does, and it matches the facet the entry is reachable through.
+ */
+function CategoryBadge({ category }: { category: string }) {
+  // createElement rather than a capitalised local: the lookup returns an
+  // existing icon, but assigning one to `const Icon` here reads to
+  // react-hooks/static-components as defining a component mid-render.
+  const icon = getCategoryIcon(category);
+  return (
+    <Badge
+      variant="light"
+      size="sm"
+      className="shrink-0 gap-1 whitespace-nowrap capitalize"
+    >
+      {React.createElement(icon, { className: "h-3 w-3" })}
+      {category}
+    </Badge>
+  );
+}
 
 /**
  * What a connection speaks. The catalog tile shows the vendor's own logo, so
@@ -1017,11 +1087,7 @@ function CatalogCard({
       <div className="flex flex-1 flex-col gap-1 p-3">
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-semibold">{entry.title}</span>
-          {entry.category && (
-            <Badge variant="light" size="sm" className="capitalize">
-              {entry.category}
-            </Badge>
-          )}
+          {entry.category && <CategoryBadge category={entry.category} />}
         </div>
         <p className="table-description line-clamp-2">{entry.description}</p>
         {(entry.protocol || entry.meta.length > 0) && (
@@ -1193,11 +1259,7 @@ function DetailView({
                 </Badge>
               )}
               {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
-              {entry.category && (
-                <Badge variant="light" size="sm" className="capitalize">
-                  {entry.category}
-                </Badge>
-              )}
+              {entry.category && <CategoryBadge category={entry.category} />}
             </div>
             {entry.description && (
               <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
@@ -1439,53 +1501,20 @@ function CustomOAuthApp({
   connecting: boolean;
   onConnect: (credentials: CustomOAuthAppInput) => void;
 }) {
-  const manual = "manual";
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
-  const [clientIdSource, setClientIdSource] = useState(manual);
-  const [clientSecretSource, setClientSecretSource] = useState(manual);
-  const [secrets, setSecrets] = useState<SecretResponse[] | null>(null);
-  const [secretsError, setSecretsError] = useState<string | null>(null);
-  const loadingSecrets = useRef(false);
-  const reusableSecrets = (secrets ?? []).filter((secret) => !secret.owner);
-  const ready =
-    (clientIdSource !== manual || clientId.trim().length > 0) &&
-    (clientSecretSource !== manual || clientSecret.length > 0);
-
-  async function loadSecrets() {
-    if (secrets !== null || loadingSecrets.current) return;
-    loadingSecrets.current = true;
-    setSecretsError(null);
-    try {
-      setSecrets(await listWorkspaceSecretsAction());
-    } catch (error) {
-      setSecretsError(
-        error instanceof Error
-          ? error.message
-          : "Failed to load workspace secrets"
-      );
-    } finally {
-      loadingSecrets.current = false;
-    }
-  }
-
-  function connect() {
-    onConnect({
-      client_id: clientIdSource === manual ? clientId.trim() : undefined,
-      client_secret: clientSecretSource === manual ? clientSecret : undefined,
-      client_id_secret_id:
-        clientIdSource === manual ? undefined : clientIdSource,
-      client_secret_secret_id:
-        clientSecretSource === manual ? undefined : clientSecretSource,
-    });
-  }
+  const [open, setOpen] = useState(false);
+  const [credentials, setCredentials] = useState<CustomOAuthAppInput | null>(
+    null
+  );
+  const ready = Boolean(
+    credentials &&
+      Boolean(credentials.client_id || credentials.client_id_secret_id) &&
+      Boolean(credentials.client_secret || credentials.client_secret_secret_id)
+  );
 
   return (
     <details
       className="group rounded-lg border border-border/60"
-      onToggle={(event) => {
-        if (event.currentTarget.open) void loadSecrets();
-      }}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground">
         Advanced
@@ -1494,71 +1523,19 @@ function CustomOAuthApp({
         <p className="text-xs text-muted-foreground">
           Use your own OAuth app credentials instead of the AgentArea app.
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Select value={clientIdSource} onValueChange={setClientIdSource}>
-              <SelectTrigger aria-label="OAuth client ID source">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={manual}>Enter client ID</SelectItem>
-                {reusableSecrets.map((secret) => (
-                  <SelectItem key={secret.id} value={secret.id}>
-                    {secret.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {clientIdSource === manual && (
-              <Input
-                value={clientId}
-                onChange={(event) => setClientId(event.target.value)}
-                aria-label="OAuth client ID"
-                placeholder="Client ID"
-                autoComplete="off"
-              />
-            )}
-          </div>
-          <div className="space-y-2">
-            <Select
-              value={clientSecretSource}
-              onValueChange={setClientSecretSource}
-            >
-              <SelectTrigger aria-label="OAuth client secret source">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={manual}>Enter client secret</SelectItem>
-                {reusableSecrets.map((secret) => (
-                  <SelectItem key={secret.id} value={secret.id}>
-                    {secret.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {clientSecretSource === manual && (
-              <Input
-                value={clientSecret}
-                onChange={(event) => setClientSecret(event.target.value)}
-                aria-label="OAuth client secret"
-                placeholder="Client secret"
-                type="password"
-                autoComplete="new-password"
-              />
-            )}
-          </div>
-        </div>
-        {secretsError && <p className="text-xs text-red-600">{secretsError}</p>}
-        {secrets !== null && reusableSecrets.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            No reusable workspace secrets yet. You can enter both values here.
-          </p>
+        {/* Mounted only once opened, so closed cards don't each fetch secrets. */}
+        {open && (
+          <CustomOAuthAppFields
+            loadSecrets={listWorkspaceSecretsAction}
+            onChange={setCredentials}
+            disabled={connecting}
+          />
         )}
         <Button
           size="sm"
           variant="outline"
           disabled={!ready || connecting}
-          onClick={connect}
+          onClick={() => credentials && onConnect(credentials)}
         >
           Connect with custom app
         </Button>

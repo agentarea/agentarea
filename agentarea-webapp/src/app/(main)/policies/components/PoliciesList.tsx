@@ -114,24 +114,29 @@ export default function PoliciesList({
                 strokeWidth={1.8}
               />
             </span>
+            {/* The rule and the figure it is set to belong together: "Monthly
+                budget" alone says nothing, and a column headed "Value" holding
+                "$500" said even less. */}
             <div className="min-w-0">
               <div className="truncate text-[13px] font-medium text-foreground">
                 {value}
               </div>
-              <div className="truncate text-[11px] text-muted-foreground">
-                {item.subjectLabel}
-              </div>
+              {item.value && (
+                <div className="truncate font-mono text-[11.5px] text-muted-foreground">
+                  {item.value}
+                </div>
+              )}
             </div>
           </div>
         );
       },
     },
     {
-      accessor: "value",
-      header: "Value",
-      render: (value: string) => (
-        <span className="truncate font-mono text-[11.5px] text-muted-foreground/70">
-          {value || "—"}
+      accessor: "subjectLabel",
+      header: "Applies to",
+      render: (_: unknown, item: PolicyRow) => (
+        <span className="truncate text-[12.5px] text-foreground/80">
+          {item.subjectLabel}
         </span>
       ),
     },

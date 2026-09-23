@@ -1,6 +1,7 @@
 import type { ProjectResponse } from "@/api/client/types.gen";
 import { FileText } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import { ProjectsEmptyState } from "./ProjectsEmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { Badge } from "@/components/ui/badge";
 import { listProjects } from "@/lib/api";
@@ -35,12 +36,7 @@ export default async function ProjectsContent({
 
   if ((projects as ProjectResponse[]).length === 0) {
     return (
-      <EmptyState
-        title="No projects yet"
-        description="Create a project to organize your agents, skills, and tools"
-        iconsType="agent"
-        action={{ label: "Create project", href: "/projects/create" }}
-      />
+      <ProjectsEmptyState />
     );
   }
 

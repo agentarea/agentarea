@@ -34,7 +34,9 @@ describe("hand-rolled fetches in server actions", () => {
     [
       "OAuth authorize",
       async () =>
-        (await import("./server-actions")).oauthAuthorizeAction(INSTANCE_ID),
+        (await import("./server-actions")).oauthAuthorizeAction({
+          instance_id: INSTANCE_ID,
+        }),
     ],
     [
       "auth probe",

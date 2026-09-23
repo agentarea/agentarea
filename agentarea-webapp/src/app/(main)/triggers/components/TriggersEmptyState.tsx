@@ -10,6 +10,11 @@ export default function TriggersEmptyState() {
     <EmptyState
       title={t("noTriggers")}
       description={t("noTriggersDescription")}
+      hints={[
+        { text: t("noTriggersHintCron"), href: "/triggers/create" },
+        { text: t("noTriggersHintWebhook"), href: "/triggers/create" },
+        { text: t("noTriggersHintHistory") },
+      ]}
       iconsType="triggers"
       action={{ label: t("createTrigger"), href: "/triggers/create" }}
     />

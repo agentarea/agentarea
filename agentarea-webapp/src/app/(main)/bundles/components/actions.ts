@@ -11,7 +11,6 @@ import type {
   InstallResult,
   ModelInstanceResponse,
   RegistryItemResponse,
-  SecretResponse,
   SkillFileResponse,
 } from "@/api/client/types.gen";
 import {
@@ -30,7 +29,6 @@ import {
   zInstallSkillV1SkillsSkillIdInstallPostResponse,
   zListAgentsV1AgentsGetResponse,
   zListModelInstancesV1ModelInstancesGetResponse,
-  zListSecretsV1SecretsGetResponse,
   zListSkillFilesV1SkillsSkillIdFilesGetResponse,
   zUpdateAgentV1AgentsAgentIdPatchResponse,
 } from "@/api/client/zod.gen";
@@ -48,7 +46,6 @@ import {
   installSkill,
   listAgents,
   listModelInstances,
-  listSecrets,
   updateAgent,
 } from "@/lib/api";
 import {
@@ -69,13 +66,11 @@ export type WorkspaceModel = Pick<
   | "provider_icon_url"
 >;
 
-export async function listWorkspaceSecretsAction(): Promise<SecretResponse[]> {
-  const { data, error } = await listSecrets();
-  if (error || !data) {
-    throw new Error(errorMessage(error, "Failed to load workspace secrets"));
-  }
-  return zListSecretsV1SecretsGetResponse.parse(data);
-}
+// The reusable-secret list lives in @/lib/server-actions, where every Connect
+// flow imports it from directly. Re-exporting it through here is illegal in a
+// "use server" module — only async function declarations may be exported — and
+// it also dragged this whole module into the bundle of anything that wanted
+// one function out of it.
 
 function errorMessage(error: unknown, fallback: string): string {
   if (!error) return fallback;

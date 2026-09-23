@@ -61,8 +61,6 @@ export default async function MCPInstancePage({ params }: Props) {
           <MCPInstanceHeaderControls
             instanceId={instance.id}
             instanceName={instance.name}
-            instanceType={instance.json_spec?.type as string | undefined}
-            hasAuthConfig={!!instance.auth_config_id}
           />
         ),
       }}

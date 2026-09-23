@@ -333,9 +333,9 @@ export default function ChatRendererShowcase() {
               <SectionLabel>A2UI v0.9 basic catalog</SectionLabel>
               <PartRenderer
                 part={a2uiPart}
-                onA2UIAction={(action, surfaceId, componentId) =>
+                onA2UIAction={(action, surfaceId, componentId, context) =>
                   setAnnouncement(
-                    `A2UI action from ${surfaceId}/${componentId}: ${action.event?.name ?? action.functionCall?.call ?? "unknown"}.`
+                    `A2UI action from ${surfaceId}/${componentId}: ${action.event?.name ?? action.functionCall?.call ?? "unknown"}. ${JSON.stringify(context)}`
                   )
                 }
               />

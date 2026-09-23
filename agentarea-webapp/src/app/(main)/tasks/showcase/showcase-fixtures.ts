@@ -356,7 +356,10 @@ export const a2uiSurface: A2UISurfaceState = {
       child: "action-label",
       accessibility: { label: "Run local demo action" },
       action: {
-        event: { name: "showcase.action", context: { source: "catalog" } },
+        event: {
+          name: "showcase.action",
+          context: { source: "catalog", owner: { path: "/owner" } },
+        },
       },
     },
     "media-card": {

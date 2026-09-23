@@ -1,12 +1,21 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import {
-  getTaskAction as getTask,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import {
   getAgentTaskStatusAction as getAgentTaskStatus,
+  getTaskAction as getTask,
   getTaskPolicySnapshotAction as getTaskPolicySnapshot,
 } from "@/lib/server-actions";
-import type { EffectivePolicy, EffectivePolicyResponse } from "@/types/policies";
+import type {
+  EffectivePolicy,
+  EffectivePolicyResponse,
+} from "@/types/policies";
 
 interface TaskData {
   id: string;
@@ -26,6 +35,7 @@ interface TaskStatus {
   agent_id?: string;
   execution_id?: string;
   status?: string;
+  execution_status?: string;
   start_time?: string;
   end_time?: string;
   execution_time?: string;
@@ -59,9 +69,17 @@ function parseTaskData(raw: unknown): TaskData | null {
     created_at: r.created_at as string | undefined,
     execution_id: r.execution_id ? String(r.execution_id) : undefined,
     agent_name: r.agent_name as string | undefined,
-    agent_description: r.agent_description ? String(r.agent_description) : undefined,
-    result: typeof r.result === "object" && r.result !== null ? r.result as Record<string, unknown> : undefined,
-    parameters: typeof r.parameters === "object" && r.parameters !== null ? r.parameters as Record<string, unknown> : undefined,
+    agent_description: r.agent_description
+      ? String(r.agent_description)
+      : undefined,
+    result:
+      typeof r.result === "object" && r.result !== null
+        ? (r.result as Record<string, unknown>)
+        : undefined,
+    parameters:
+      typeof r.parameters === "object" && r.parameters !== null
+        ? (r.parameters as Record<string, unknown>)
+        : undefined,
   };
 }
 
@@ -72,8 +90,15 @@ interface TaskProviderProps {
   children: React.ReactNode;
 }
 
-export function TaskProvider({ taskId, initialTask, initialError, children }: TaskProviderProps) {
-  const [task, setTask] = useState<TaskData | null>(() => parseTaskData(initialTask));
+export function TaskProvider({
+  taskId,
+  initialTask,
+  initialError,
+  children,
+}: TaskProviderProps) {
+  const [task, setTask] = useState<TaskData | null>(() =>
+    parseTaskData(initialTask)
+  );
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
   const [policy, setPolicy] = useState<EffectivePolicy | null>(null);
   const [loading, setLoading] = useState(!initialTask && !initialError);
