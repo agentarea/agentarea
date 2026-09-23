@@ -44,6 +44,7 @@ from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.auth.test_utils import create_test_user_context
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_tasks.task_service import TaskService
 
 pytestmark = pytest.mark.asyncio
@@ -132,8 +133,13 @@ class TestTriggerE2EScenarios:
         )
 
     @pytest.fixture
-    def test_app(self, trigger_service, webhook_manager):
+    def test_app(self, trigger_service, webhook_manager, monkeypatch):
         """Create test FastAPI app with trigger endpoints."""
+        # Every route now clears a permission check and every create records
+        # ownership in the graph; neither is the subject here.
+        allow_all_permissions()
+        install_graph_ownership_stub(monkeypatch)
+
         app = FastAPI()
 
         # Override dependencies
@@ -180,7 +186,11 @@ class TestTriggerE2EScenarios:
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * 1-5",  # 9 AM weekdays
             timezone="UTC",
-            task_parameters={"report_type": "daily", "format": "pdf"},
+            task_parameters={
+                "text": "Summarize the open support tickets",
+                "report_type": "daily",
+                "format": "pdf",
+            },
             conditions={"business_hours": True},
             created_by="test_user",
             workspace_id="e2e-test-workspace",
@@ -256,7 +266,11 @@ class TestTriggerE2EScenarios:
             webhook_id=str(uuid4()),
             webhook_type=WebhookType.GITHUB,
             allowed_methods=["POST"],
-            task_parameters={"action": "deploy", "environment": "staging"},
+            task_parameters={
+                "text": "Deploy the pushed commit to staging",
+                "action": "deploy",
+                "environment": "staging",
+            },
             conditions={"branch": "main"},
             validation_rules={"required_headers": ["X-GitHub-Event"]},
             created_by="test_user",
@@ -344,7 +358,7 @@ class TestTriggerE2EScenarios:
             "trigger_type": "cron",
             "cron_expression": "0 10 * * *",
             "timezone": "UTC",
-            "task_parameters": {"api_test": True},
+            "task_parameters": {"text": "Summarize the open support tickets", "api_test": True},
             "conditions": {"test_mode": True},
         }
 
@@ -425,7 +439,7 @@ class TestTriggerE2EScenarios:
             webhook_id=str(uuid4()),
             webhook_type=WebhookType.GENERIC,
             allowed_methods=["POST", "PUT"],
-            task_parameters={"http_test": True},
+            task_parameters={"text": "Summarize the open support tickets", "http_test": True},
             created_by="test_user",
             workspace_id="e2e-test-workspace",
         )
@@ -487,6 +501,7 @@ class TestTriggerE2EScenarios:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="test_user",
             workspace_id="e2e-test-workspace",
         )
@@ -518,7 +533,7 @@ class TestTriggerE2EScenarios:
                 agent_id=sample_agent_id,
                 trigger_type=TriggerType.CRON,
                 cron_expression=f"0 {9 + i} * * *",
-                task_parameters={"trigger_index": i},
+                task_parameters={"text": "Summarize the open support tickets", "trigger_index": i},
                 created_by="test_user",
                 workspace_id="e2e-test-workspace",
             )
@@ -580,6 +595,7 @@ class TestTriggerE2EScenarios:
             trigger_type=TriggerType.WEBHOOK,
             webhook_id=str(uuid4()),
             conditions=conditions,
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="test_user",
             workspace_id="e2e-test-workspace",
         )
@@ -627,6 +643,7 @@ class TestTriggerE2EScenarios:
             agent_id=sample_agent_id,
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="test_user",
             workspace_id="e2e-test-workspace",
         )
@@ -688,6 +705,7 @@ class TestTriggerE2EScenarios:
             webhook_id=str(uuid4()),
             webhook_type=WebhookType.GITHUB,
             validation_rules={"required_headers": ["X-GitHub-Event"]},
+            task_parameters={"text": "Summarize the open support tickets"},
             created_by="test_user",
             workspace_id="e2e-test-workspace",
         )
