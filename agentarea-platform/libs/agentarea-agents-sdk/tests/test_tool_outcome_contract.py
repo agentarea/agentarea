@@ -18,7 +18,13 @@ from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
 
 
-@toolset(namespace="test/structured", display_name="S", description="d", category="utility")
+@toolset(
+    namespace="test/structured",
+    display_name="S",
+    description="d",
+    category="utility",
+    register=False,
+)
 class _StructuredToolset(Toolset):
     @tool_method
     async def run(self, code: int = 0) -> dict:
@@ -31,7 +37,13 @@ class _StructuredToolset(Toolset):
         }
 
 
-@toolset(namespace="test/prose", display_name="P", description="d", category="utility")
+@toolset(
+    namespace="test/prose",
+    display_name="P",
+    description="d",
+    category="utility",
+    register=False,
+)
 class _ProseToolset(Toolset):
     @tool_method
     async def run(self) -> str:
@@ -39,7 +51,13 @@ class _ProseToolset(Toolset):
         return "all good"
 
 
-@toolset(namespace="test/raises", display_name="R", description="d", category="utility")
+@toolset(
+    namespace="test/raises",
+    display_name="R",
+    description="d",
+    category="utility",
+    register=False,
+)
 class _RaisingToolset(Toolset):
     @tool_method
     async def run(self) -> str:

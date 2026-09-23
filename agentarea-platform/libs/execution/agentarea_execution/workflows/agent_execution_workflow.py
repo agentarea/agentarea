@@ -344,7 +344,9 @@ class AgentExecutionWorkflow:
         """
         if self._interaction_contract_enabled:
             surface_id = action_data.get("surface_id")
-            actions = self.state.a2ui_surfaces.get(surface_id, {})
+            actions = (
+                self.state.a2ui_surfaces.get(surface_id, {}) if isinstance(surface_id, str) else {}
+            )
             name = action_data.get("name")
             component_id = action_data.get("source_component_id")
             if (
