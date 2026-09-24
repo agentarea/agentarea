@@ -34,3 +34,21 @@ def build_auth_header_resolver(
         return await service.get_auth_headers(config)
 
     return resolve
+
+
+def build_auth_config_access_checker(
+    repository_factory,
+    secret_manager: BaseSecretManager,
+) -> Callable[[UUID], Awaitable[None]]:
+    """Build a checker that only an auth config's creator or a workspace admin passes.
+
+    Used at the point a connection attaches (or keeps) an auth config, before
+    any credential is ever resolved -- see ``MCPAuthService.get_for_use``.
+    """
+    repository = repository_factory.create_repository(MCPAuthConfigRepository)
+    service = MCPAuthService(repository, secret_manager)
+
+    async def check(config_id: UUID) -> None:
+        await service.get_for_use(config_id)
+
+    return check

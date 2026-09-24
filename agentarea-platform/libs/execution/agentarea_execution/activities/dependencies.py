@@ -98,7 +98,10 @@ class ActivityServiceContainer:
         )
         from agentarea_common.auth.context import UserContext
         from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
-        from agentarea_mcp.application.auth_resolver import build_auth_header_resolver
+        from agentarea_mcp.application.auth_resolver import (
+            build_auth_config_access_checker,
+            build_auth_header_resolver,
+        )
 
         managed_secret_manager = self.dependencies.secret_manager_factory.create(
             session=session,
@@ -118,6 +121,9 @@ class ActivityServiceContainer:
         service = OpenAPIConnectionService(
             repository_factory=repository_factory,
             secret_manager=secret_manager,
+            auth_config_access_checker=build_auth_config_access_checker(
+                repository_factory, secret_manager
+            ),
             auth_header_resolver=build_auth_header_resolver(
                 repository_factory,
                 secret_manager,

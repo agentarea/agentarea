@@ -31,6 +31,7 @@ from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
+from agentarea_mcp.application.auth_resolver import build_auth_config_access_checker
 from agentarea_mcp.application.auth_service import MCPAuthService, MissingCredentialsError
 from agentarea_mcp.application.oauth_client_service import PKCEPair
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
@@ -300,6 +301,9 @@ async def connect_catalog_item(
     connection_service = OpenAPIConnectionService(
         repository_factory=repository_factory,
         secret_manager=workspace_secret_manager,
+        auth_config_access_checker=build_auth_config_access_checker(
+            repository_factory, workspace_secret_manager
+        ),
         allow_private_urls=get_settings().mcp.ALLOW_PRIVATE_URLS,
     )
     # A catalog item is a reusable connection definition, not a singleton.

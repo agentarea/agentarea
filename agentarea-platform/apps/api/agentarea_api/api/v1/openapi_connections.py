@@ -169,6 +169,8 @@ async def create_connection(
         resp = OpenAPIConnectionResponse.model_validate(conn)
         resp.custom_headers = _format_headers(conn.custom_headers)
         return resp
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except httpx.HTTPStatusError as e:
@@ -242,6 +244,8 @@ async def update_connection(
 
     try:
         conn = await service.update_connection(connection_id, request)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

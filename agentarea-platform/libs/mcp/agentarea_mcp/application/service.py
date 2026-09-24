@@ -471,6 +471,19 @@ class MCPServerInstanceService:
         await self.repository.session.flush()
         return copy
 
+    async def _assert_may_use_auth_config(self, auth_config_id: UUID | str) -> None:
+        """Only the auth config's creator or a workspace admin may attach it.
+
+        Attaching one lets this instance send its stored credential wherever
+        the connection points, so workspace membership alone is not enough.
+        """
+        from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
+
+        auth_repo = MCPAuthConfigRepository(self.repository.session, self.repository.user_context)
+        auth_service = MCPAuthService(auth_repo, self.secret_manager)
+        config_id = auth_config_id if isinstance(auth_config_id, UUID) else UUID(auth_config_id)
+        await auth_service.get_for_use(config_id)
+
     @audited("mcp_instance.create", resource_type="mcp_instance")
     async def create_instance(self, payload: MCPServerInstanceCreate) -> MCPServerInstance | None:
         name = payload.name
@@ -523,6 +536,7 @@ class MCPServerInstanceService:
                 "verification": dict(DEFAULT_VERIFICATION),
             }
             if auth_config_id:
+                await self._assert_may_use_auth_config(auth_config_id)
                 create_kwargs["auth_config_id"] = auth_config_id
 
             instance = MCPServerInstance(

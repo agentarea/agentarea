@@ -147,6 +147,7 @@ class OpenAPIConnectionService:
         self,
         repository_factory: Any,
         secret_manager: BaseSecretManager,
+        auth_config_access_checker: Callable[[UUID], Awaitable[None]],
         auth_header_resolver: (
             Callable[[UUID, str, list[str] | None], Awaitable[dict[str, str]]] | None
         ) = None,
@@ -157,7 +158,20 @@ class OpenAPIConnectionService:
         )
         self._secret_manager = secret_manager
         self._auth_header_resolver = auth_header_resolver
+        self._auth_config_access_checker = auth_config_access_checker
         self._allow_private_urls = allow_private_urls
+
+    async def _assert_may_use_auth_config(self, auth_config_id: UUID) -> None:
+        """Only the auth config's creator or a workspace admin may attach it.
+
+        Attaching one -- or keeping it while the connection's base_url moves --
+        sends its stored credential to a host the caller chooses, so workspace
+        membership alone is not enough. Built via
+        ``agentarea_mcp.application.auth_resolver.build_auth_config_access_checker``,
+        a required collaborator -- there is no code path where skipping this
+        check is correct, so it has no default and no silent bypass.
+        """
+        await self._auth_config_access_checker(auth_config_id)
 
     async def create_connection(
         self,
@@ -171,6 +185,9 @@ class OpenAPIConnectionService:
         validate_url(payload.base_url, allow_private=self._allow_private_urls)
         if payload.spec_url:
             validate_url(payload.spec_url, allow_private=self._allow_private_urls)
+
+        if payload.auth_config_id:
+            await self._assert_may_use_auth_config(payload.auth_config_id)
 
         # Pre-generate ID so secrets can be stored atomically
         conn_id = uuid4()
@@ -359,6 +376,9 @@ class OpenAPIConnectionService:
                 if not conn:
                     return None
 
+        if "auth_config_id" in patch and patch["auth_config_id"] is not None:
+            await self._assert_may_use_auth_config(patch["auth_config_id"])
+
         # Validate URLs on update (SSRF protection)
         if patch.get("base_url"):
             validate_url(patch["base_url"], allow_private=self._allow_private_urls)
@@ -370,6 +390,11 @@ class OpenAPIConnectionService:
                     raise ValueError(
                         "Catalog OAuth connections cannot be pointed at a different API origin."
                     )
+            # Redirecting a connection that keeps its auth config sends that
+            # config's credential to the new host -- the same authority as
+            # attaching it in the first place.
+            if current and current.auth_config_id and "auth_config_id" not in patch:
+                await self._assert_may_use_auth_config(current.auth_config_id)
         if patch.get("spec_url"):
             validate_url(patch["spec_url"], allow_private=self._allow_private_urls)
 

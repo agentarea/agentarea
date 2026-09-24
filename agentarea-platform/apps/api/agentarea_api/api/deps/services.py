@@ -314,7 +314,10 @@ async def get_openapi_connection_service(
     """Get an OpenAPIConnectionService instance for the current request."""
     from agentarea_common.auth.context import UserContext
     from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
-    from agentarea_mcp.application.auth_resolver import build_auth_header_resolver
+    from agentarea_mcp.application.auth_resolver import (
+        build_auth_config_access_checker,
+        build_auth_header_resolver,
+    )
 
     settings = get_settings()
     managed_secret_manager = get_real_secret_manager(
@@ -331,6 +334,10 @@ async def get_openapi_connection_service(
             repository_factory,
             secret_manager,
             managed_secret_manager,
+        ),
+        auth_config_access_checker=build_auth_config_access_checker(
+            repository_factory,
+            secret_manager,
         ),
         allow_private_urls=settings.mcp.ALLOW_PRIVATE_URLS,
     )

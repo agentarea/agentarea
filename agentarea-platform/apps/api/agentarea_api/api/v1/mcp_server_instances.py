@@ -188,6 +188,8 @@ async def create_mcp_server_instance(
 
     except MCPValidationError as e:
         raise HTTPException(status_code=422, detail={"errors": e.errors}) from e
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -236,6 +238,8 @@ async def create_mcp_server_connection(
         return MCPServerInstanceResponse.from_domain(instance)
     except MCPValidationError as e:
         raise HTTPException(status_code=422, detail={"errors": e.errors}) from e
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

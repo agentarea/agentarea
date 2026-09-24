@@ -97,6 +97,11 @@ async def test_connect_uses_requested_credential_source_without_secret_in_state(
     monkeypatch.setattr(connection_oauth, "OpenAPIConnectionService", _ConnectionService)
     monkeypatch.setattr(connection_oauth, "MCPAuthService", _AuthService)
     monkeypatch.setattr(connection_oauth, "RepositoryFactory", lambda *_args: object())
+    monkeypatch.setattr(
+        connection_oauth,
+        "build_auth_config_access_checker",
+        lambda *_args, **_kwargs: AsyncMock(),
+    )
     client_id_secret = SimpleNamespace(
         id=uuid4(),
         secret_name="metrika_client_id",  # noqa: S106  # pragma: allowlist secret
