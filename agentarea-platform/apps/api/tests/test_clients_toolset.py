@@ -113,7 +113,7 @@ async def test_create_returns_endpoint_url_and_grants_ownership(service):
     result = json.loads(await ClientsToolset().create(name="codex"))
 
     assert result["id"] == str(CLIENT_ID)
-    assert result["mcp_endpoint_url"].endswith(f"/client-mcp/{CLIENT_ID}")
+    assert result["mcp_endpoint_url"].endswith(f"/mcp/clients/{CLIENT_ID}")
     assert service.created[0].name == "codex"
     assert service.created[0].kind == "harness"
     assert service.grants == [(str(CLIENT_ID), "ws-1", "user-1")]
@@ -146,4 +146,4 @@ async def test_get_lists_attached_skills(service):
     result = json.loads(await ClientsToolset().get(client_id=str(CLIENT_ID)))
 
     assert result["skills"][0]["name"] == "research"
-    assert result["mcp_endpoint_url"].endswith(f"/client-mcp/{CLIENT_ID}")
+    assert result["mcp_endpoint_url"].endswith(f"/mcp/clients/{CLIENT_ID}")

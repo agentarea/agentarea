@@ -202,6 +202,11 @@ func TestGatewayAnswersAConcurrentStartAsRetryable(t *testing.T) {
 	if recorder.Header().Get("Retry-After") == "" {
 		t.Error("no Retry-After: the caller is being asked to retry without being told when")
 	}
+	// Clients repeat a request only when the gateway itself says it was never
+	// forwarded; a 503 from the workload carries no such promise.
+	if recorder.Header().Get(StartingHeader) != "1" {
+		t.Errorf("%s = %q, want \"1\" on the gateway's own starting answer", StartingHeader, recorder.Header().Get(StartingHeader))
+	}
 	// The other caller owns this start; touching the runtime or the failure
 	// counter here would report a cold start that never happened.
 	if runtime.ensured != 0 || repository.failed != 0 {

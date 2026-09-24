@@ -17,11 +17,13 @@ from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.mcp_app_ui import is_visible_to_model
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.server.fastmcp import FastMCP
 
 from agentarea_mcp.application.tool_list_cache import ToolListCache
+from agentarea_mcp.tool_serialization import serialize_mcp_tool
 from agentarea_mcp.verification import mcp_transport_candidates
 
 logger = logging.getLogger(__name__)
@@ -150,13 +152,14 @@ class MCPAggregatorProxy:
                     async with ClientSession(read_stream, write_stream) as session:
                         await session.initialize()
                         result = await session.list_tools()
+                        # A bundle proxies tool calls only, not member ui://
+                        # resources, so it neither offers app-only tools nor
+                        # carries the MCP Apps metadata that points at them.
+                        serialized = [serialize_mcp_tool(tool) for tool in result.tools]
                         return [
-                            {
-                                "name": t.name,
-                                "description": t.description or "",
-                                "inputSchema": t.inputSchema or {},
-                            }
-                            for t in result.tools
+                            {key: value for key, value in tool.items() if key != "_meta"}
+                            for tool in serialized
+                            if is_visible_to_model(tool)
                         ]
             except Exception as e:
                 last_err = e

@@ -13,11 +13,10 @@ app the way a real deployment does — the routes have to arrive *through
 discovery*.
 """
 
-from fastapi import APIRouter
-
 import agentarea_common.extensions as extensions_module
 from agentarea_api.main import create_app
 from agentarea_common.extensions.registry import ExtensionRegistry
+from fastapi import APIRouter
 
 SENTINEL_PATH = "/v1/__extension_sentinel__"
 

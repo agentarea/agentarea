@@ -1,6 +1,6 @@
 """ClientsToolset — register harnesses (codex, claude, ...) and wire their tools.
 
-A client is an agent-proxy: it connects to ``/client-mcp/{id}`` and gets the
+A client is an agent-proxy: it connects to ``/mcp/clients/{id}`` and gets the
 skills and MCP instances attached to it. Attaching is ``privileged`` rather than
 plain ``write`` because it widens what an outside harness can reach.
 

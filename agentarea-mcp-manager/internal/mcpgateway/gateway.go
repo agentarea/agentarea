@@ -23,6 +23,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// StartingHeader marks the gateway's own "workload is starting" 503. A request
+// answered with it never reached the workload, so a client can repeat it, even
+// a tools/call, without running the tool twice. A 503 that the workload or a
+// remote server sends does not carry it.
+const StartingHeader = "X-AgentArea-MCP-Starting"
+
 type InstanceRuntime interface {
 	EnsureReady(context.Context, *models.MCPServerInstance) (string, error)
 	Delete(context.Context, *models.MCPServerInstance) error
@@ -260,6 +266,7 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		// the start this caller wanted is already running. Ask it to come back
 		// instead — that retry is what completes the cold start.
 		response.Header().Set("Retry-After", "1")
+		response.Header().Set(StartingHeader, "1")
 		http.Error(response, "MCP instance is starting", http.StatusServiceUnavailable)
 		return
 	}

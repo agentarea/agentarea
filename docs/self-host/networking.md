@@ -117,6 +117,47 @@ different problem with a different mechanism.
     install.
   </Step>
 
+  <Step title="Serve MCP Apps from their own origin">
+    The Apps page embeds HTML that an MCP server instance returns, so it loads that
+    HTML from a second origin. An app there cannot read the webapp's session cookie
+    or DOM. Point a separate hostname at the frontend and route only the sandbox
+    path on it:
+
+    ```yaml
+    global:
+      webapp:
+        url: https://app.example.com
+        mcpAppsSandboxUrl: https://apps-sandbox.example.com
+
+    ingress:
+      hosts:
+        mcpAppsSandbox:
+          host: apps-sandbox.example.com
+          paths:
+            - path: /mcp-app-sandbox
+              pathType: Exact
+      tls:
+        - secretName: agentarea-tls
+          hosts:
+            - app.example.com
+            - api.example.com
+            - auth.example.com
+            - apps-sandbox.example.com
+    ```
+
+    `global.webapp.url` matters here too: it becomes `WEBAPP_PUBLIC_ORIGIN`, the
+    only origin the sandbox lets embed it. When it is empty, the chart derives the
+    internal frontend service URL, which no browser uses, and every app fails to
+    start.
+
+    The sandbox sends a Content-Security-Policy built from the app's resource
+    metadata. Scripts may run inline and use `eval`. `fetch`, XHR, and WebSocket
+    reach only the connect domains the resource declares, and none when it declares
+    none; external scripts, styles, images, and frames are limited the same way.
+    The app itself declares those domains, so this policy catches mistakes, not a
+    hostile MCP server: install only MCP servers you trust.
+  </Step>
+
   <Step title="Allow browser uploads through CORS">
     Presigned uploads go from the browser straight to the object store, bypassing
     the API, so the object store needs its own CORS rule. The chart applies one to

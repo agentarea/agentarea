@@ -123,6 +123,7 @@ The following table lists configurable parameters of the chart and their default
 | global.api.auth.headerName | string | `""` |  |
 | global.api.auth.headerValue | string | `""` |  |
 | global.webapp.url | string | `""` |  |
+| global.webapp.mcpAppsSandboxUrl | string | `""` |  |
 | global.jobs.kube.namespace | string | `""` |  |
 | global.jobs.kube.serviceAccount | string | `""` |  |
 | global.jobs.kube.scheduling.spec.nodeSelectors | object | `{}` |  |
@@ -177,6 +178,9 @@ The following table lists configurable parameters of the chart and their default
 | ingress.hosts.kratos.host | string | `""` |  |
 | ingress.hosts.kratos.paths[0].path | string | `"/"` |  |
 | ingress.hosts.kratos.paths[0].pathType | string | `"Prefix"` |  |
+| ingress.hosts.mcpAppsSandbox.host | string | `""` |  |
+| ingress.hosts.mcpAppsSandbox.paths[0].path | string | `"/mcp-app-sandbox"` |  |
+| ingress.hosts.mcpAppsSandbox.paths[0].pathType | string | `"Exact"` |  |
 | ingress.tls | list | `[]` |  |
 | backend.enabled | bool | `true` |  |
 | backend.replicaCount | int | `1` |  |
@@ -337,8 +341,10 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.admission.allowedImageRepositories[1] | string | `"mcp/fetch"` |  |
 | mcpManager.admission.allowedCommandPackages[0] | string | `"npx -y @modelcontextprotocol/server-everything"` |  |
 | mcpManager.admission.allowedCommandPackages[1] | string | `"npx -y @modelcontextprotocol/server-sequential-thinking"` |  |
-| mcpManager.admission.allowedCommandPackages[2] | string | `"uvx mcp-server-fetch"` |  |
-| mcpManager.admission.allowedCommandPackages[3] | string | `"uvx mcp-server-time"` |  |
+| mcpManager.admission.allowedCommandPackages[2] | string | `"npx -y @modelcontextprotocol/server-customer-segmentation --stdio"` |  |
+| mcpManager.admission.allowedCommandPackages[3] | string | `"npx -y @modelcontextprotocol/server-map --stdio"` |  |
+| mcpManager.admission.allowedCommandPackages[4] | string | `"uvx mcp-server-fetch"` |  |
+| mcpManager.admission.allowedCommandPackages[5] | string | `"uvx mcp-server-time"` |  |
 | mcpManager.executionCluster.kubeconfigSecret | string | `""` |  |
 | mcpManager.executionCluster.kubeconfigKey | string | `""` |  |
 | mcpManager.runtime.serviceAccount.create | bool | `true` |  |
@@ -489,14 +495,7 @@ The following table lists configurable parameters of the chart and their default
 | rustfs.livenessProbe.failureThreshold | int | `6` |  |
 | jobs.dbMigration.enabled | bool | `true` |  |
 | registryReconcile.enabled | bool | `true` |  |
-| registryReconcile.registries[0].name | string | `"system-llm-providers"` |  |
-| registryReconcile.registries[0].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json"` |  |
-| registryReconcile.registries[1].name | string | `"system-llm-models"` |  |
-| registryReconcile.registries[1].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json"` |  |
-| registryReconcile.registries[2].name | string | `"system-mcp-servers"` |  |
-| registryReconcile.registries[2].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"` |  |
-| registryReconcile.registries[3].name | string | `"system-skills-curated"` |  |
-| registryReconcile.registries[3].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json"` |  |
+| registryReconcile.registries | list | `[{"name":"system-llm-providers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json"},{"name":"system-llm-models","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json"},{"name":"system-mcp-servers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"},{"name":"system-skills-curated","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json"}]` | a custom catalog, or the ~123k community mirror, which stays opt-in and must not drive first-run picks -- lands after them instead of interleaving its first entries with the curated front page. |
 | keto.enabled | bool | `false` |  |
 | keto.replicaCount | int | `1` |  |
 | keto.image.repository | string | `"oryd/keto"` |  |

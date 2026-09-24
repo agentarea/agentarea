@@ -191,6 +191,9 @@ services:
       - ORY_BROWSER_URL=${ORY_BROWSER_URL:-http://localhost:4433}
       - API_BROWSER_URL=${API_BROWSER_URL:-http://localhost:8000}
       - NEXT_PUBLIC_ORY_SDK_URL=${NEXT_PUBLIC_ORY_SDK_URL:-http://localhost:4433}
+      # MCP Apps run in an iframe on a different origin than the webapp.
+      - MCP_APPS_SANDBOX_ORIGIN=${MCP_APPS_SANDBOX_ORIGIN:-http://127.0.0.1:3000}
+      - WEBAPP_PUBLIC_ORIGIN=${WEBAPP_PUBLIC_ORIGIN:-http://localhost:3000}
     networks:
       - default
       - auth-network
@@ -294,7 +297,7 @@ services:
       # and an absent list is refused: "not decided yet" must not read as
       # "allow everything". Declare one empty to disable that instance type.
       MCP_ALLOWED_IMAGE_REPOSITORIES: "ghcr.io/github/github-mcp-server,mcp/fetch"
-      MCP_ALLOWED_COMMAND_PACKAGES: "npx -y @modelcontextprotocol/server-everything,npx -y @modelcontextprotocol/server-sequential-thinking,uvx mcp-server-fetch,uvx mcp-server-time"
+      MCP_ALLOWED_COMMAND_PACKAGES: "npx -y @modelcontextprotocol/server-everything,npx -y @modelcontextprotocol/server-sequential-thinking,npx -y @modelcontextprotocol/server-customer-segmentation --stdio,npx -y @modelcontextprotocol/server-map --stdio,uvx mcp-server-fetch,uvx mcp-server-time"
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
       SANDBOX_EMBEDDED_RUNNER: "true"

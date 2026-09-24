@@ -21,7 +21,7 @@ import {type AuthToken} from '../types/index.js';
  * `agentarea login` — browser authorization-code + PKCE against the API's own
  * OAuth surface. The CLI registers itself as a public loopback client (RFC 7591)
  * so nothing has to be provisioned by hand, and the resulting Hydra token is
- * accepted by every edge: REST, /mcp and /client-mcp.
+ * accepted by every edge: REST and /mcp.
  */
 
 const CALLBACK_PORTS = [51789, 51790, 51791];

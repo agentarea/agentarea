@@ -14,7 +14,8 @@ import type { CustomOAuthAppCredentials } from "@/lib/oauth-app";
 export type { CustomOAuthAppCredentials };
 
 export type MCPOAuthPreflight = {
-  instance_id: string;
+  instance_id: string | null;
+  server_id?: string | null;
   status: "ready" | "oauth_app_required" | "unsupported";
   connected: boolean;
   detail: string;
@@ -91,13 +92,34 @@ export function buildAuthorizeRequest({
   credentials?: CustomOAuthAppCredentials | null;
   returnTo?: string;
 }): AuthorizeRequest | null {
-  if (state.kind === "ready") {
-    return {
-      instance_id: instanceId,
-      credential_mode: "auto",
-      ...(returnTo ? { return_to: returnTo } : {}),
-    };
-  }
+  const fields = authorizeFields(state, credentials);
+  if (!fields) return null;
+  return {
+    instance_id: instanceId,
+    ...fields,
+    ...(returnTo ? { return_to: returnTo } : {}),
+  };
+}
+
+/**
+ * Whether Connect can run yet. Separate from building the request because the
+ * create page answers it before the instance the request names exists.
+ */
+export function canAuthorize({
+  state,
+  credentials,
+}: {
+  state: OAuthConnectState;
+  credentials?: CustomOAuthAppCredentials | null;
+}): boolean {
+  return authorizeFields(state, credentials) !== null;
+}
+
+function authorizeFields(
+  state: OAuthConnectState,
+  credentials: CustomOAuthAppCredentials | null | undefined
+): Omit<AuthorizeRequest, "instance_id" | "return_to"> | null {
+  if (state.kind === "ready") return { credential_mode: "auto" };
 
   if (state.kind !== "needs_oauth_app" || !credentials) return null;
 
@@ -110,7 +132,6 @@ export function buildAuthorizeRequest({
   if (!hasOneClientId || !hasOneClientSecret) return null;
 
   return {
-    instance_id: instanceId,
     credential_mode: "custom",
     ...(clientId ? { client_id: clientId } : {}),
     ...(clientSecret ? { client_secret: clientSecret } : {}),
@@ -120,7 +141,6 @@ export function buildAuthorizeRequest({
     ...(credentials.client_secret_secret_id
       ? { client_secret_secret_id: credentials.client_secret_secret_id }
       : {}),
-    ...(returnTo ? { return_to: returnTo } : {}),
   };
 }
 

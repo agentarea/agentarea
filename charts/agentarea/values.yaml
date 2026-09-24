@@ -187,6 +187,12 @@ global:
   # Web application configuration
   webapp:
     url: ""  # Public URL of the frontend (e.g. https://app.example.com). If empty, defaults to internal service URL.
+    # Origin that serves the MCP Apps sandbox proxy (e.g. https://apps-sandbox.example.com).
+    # Must differ from `url`: the Apps page runs third-party app HTML only inside an
+    # iframe on this origin, so it can never read the webapp's cookies or DOM. Route
+    # it to the frontend with `ingress.hosts.mcpAppsSandbox`. Empty keeps the Apps
+    # page refusing to open any app.
+    mcpAppsSandboxUrl: ""
     
   # Jobs configuration - Background task processing
   jobs:
@@ -312,6 +318,13 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    # Dedicated host for the MCP Apps sandbox proxy; set it to the host of
+    # global.webapp.mcpAppsSandboxUrl. Only the sandbox path is routed.
+    mcpAppsSandbox:
+      host: ""  # e.g., apps-sandbox.example.com
+      paths:
+        - path: /mcp-app-sandbox
+          pathType: Exact
   # TLS configuration
   tls: []
     # - secretName: agentarea-tls
@@ -780,6 +793,8 @@ mcpManager:
     allowedCommandPackages:
       - npx -y @modelcontextprotocol/server-everything
       - npx -y @modelcontextprotocol/server-sequential-thinking
+      - npx -y @modelcontextprotocol/server-customer-segmentation --stdio
+      - npx -y @modelcontextprotocol/server-map --stdio
       - uvx mcp-server-fetch
       - uvx mcp-server-time
   # The cluster MCP instances and agent sandboxes are created in, when that is
@@ -1165,21 +1180,25 @@ jobs:
 registryReconcile:
   enabled: true
   # Each entry needs `name` + `source_url`; the catalog type is auto-detected
-  # from the fetched payload. Optional `recommendation_priority` (default 100,
-  # lower first) weights a whole source in the /explore "Recommended" order --
-  # raise it for a bulk/community mirror so its entries land after the curated
-  # catalog instead of interleaving with it. Seed the small official/known-good
-  # skills catalog; the ~123k community mirror remains opt-in and must not
-  # drive first-run picks.
+  # from the fetched payload. `recommendation_priority` (lower first, default
+  # 100) weights a whole source in the /explore "Recommended" order. The
+  # built-in curated sources below take 10, so any registry added without one
+  # -- a custom catalog, or the ~123k community mirror, which stays opt-in and
+  # must not drive first-run picks -- lands after them instead of interleaving
+  # its first entries with the curated front page.
   registries:
     - name: system-llm-providers
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json
+      recommendation_priority: 10
     - name: system-llm-models
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json
+      recommendation_priority: 10
     - name: system-mcp-servers
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json
+      recommendation_priority: 10
     - name: system-skills-curated
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json
+      recommendation_priority: 10
 
 # Ory Kratos Identity Server
 # Ory Keto (ReBAC) — powers Govern -> Policies -> Access (the relationship graph).

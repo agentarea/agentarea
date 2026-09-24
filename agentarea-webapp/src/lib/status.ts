@@ -193,6 +193,8 @@ export function getTaskStatusPresentation(status: string): StatusPresentation {
         icon: "check",
       };
     case "running":
+    // A2A's name for the same state.
+    case "working":
     case "in_progress":
       return {
         label: "Running",
@@ -229,10 +231,16 @@ export function getTaskStatusPresentation(status: string): StatusPresentation {
     case "blocked":
       return { label: "Blocked", labelKey: "blocked", tone: "neutral" };
     case "cancelled":
+    case "canceled":
       return { label: "Cancelled", labelKey: "cancelled", tone: "neutral" };
     case "paused":
       return { label: "Paused", labelKey: "paused", tone: "neutral" };
+    // Accepted but not picked up by a worker yet. `submitted` is the status a
+    // task is created with and `preparing` precedes its dispatch; A2A folds
+    // both into SUBMITTED alongside `pending`, and so do we.
     case "pending":
+    case "submitted":
+    case "preparing":
       return { label: "Pending", labelKey: "pending", tone: "warning" };
     case "scheduled":
       // Waiting for its moment, not working — no pulse.

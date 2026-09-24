@@ -1,8 +1,8 @@
 """MembersToolset — workspace membership and invitations.
 
-Every tool acts on the caller's own workspace: the MCP mount is
-workspace-scoped, and taking a ``workspace_id`` argument would offer callers a
-handle on workspaces the graph would then have to refuse. Accepting an
+Every tool acts on the workspace the call is bound to (the pinned URL or the
+membership-checked ``workspace`` argument), never on one named by a tool's own
+parameters. Accepting an
 invitation is deliberately absent — the acceptor is not yet a member of the
 target workspace, so it belongs on the REST surface the invitee opens, not on
 a member's tool surface.

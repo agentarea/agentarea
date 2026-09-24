@@ -5243,9 +5243,16 @@
             "type": "string"
           },
           "instance_id": {
-            "format": "uuid",
-            "title": "Instance Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance Id"
           },
           "issuer": {
             "anyOf": [
@@ -5265,6 +5272,18 @@
             "title": "Scopes",
             "type": "array"
           },
+          "server_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Id"
+          },
           "status": {
             "enum": [
               "ready",
@@ -5276,7 +5295,6 @@
           }
         },
         "required": [
-          "instance_id",
           "status",
           "connected"
         ],
@@ -19486,19 +19504,45 @@
     },
     "/v1/mcp-oauth/preflight": {
       "get": {
-        "description": "Report whether this instance can be authorized, and with what.\n\nEvery outcome is a 200: \"this server has no OAuth\" is an answer the UI\nrenders, not a failure it has to decode from an error response.",
+        "description": "Report whether a connection can be authorized, and with what.\n\nTakes an existing instance, or a catalog spec so the create page can ask\nbefore it creates anything. Every outcome is a 200: \"this server has no\nOAuth\" is an answer the UI renders, not a failure it has to decode.",
         "operationId": "oauth_preflight_v1_mcp_oauth_preflight_get",
         "parameters": [
           {
             "description": "MCP instance to inspect",
             "in": "query",
             "name": "instance_id",
-            "required": true,
+            "required": false,
             "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "MCP instance to inspect",
-              "format": "uuid",
-              "title": "Instance Id",
-              "type": "string"
+              "title": "Instance Id"
+            }
+          },
+          {
+            "description": "Catalog spec to inspect before any instance exists",
+            "in": "query",
+            "name": "server_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Catalog spec to inspect before any instance exists",
+              "title": "Server Id"
             }
           }
         ],

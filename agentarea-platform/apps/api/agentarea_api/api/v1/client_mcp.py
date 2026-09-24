@@ -1,10 +1,13 @@
 """Dynamically-scoped MCP endpoint for clients (agent-proxies).
 
-A single MCP server is mounted at ``/client-mcp`` and its session manager is
+A single MCP server is mounted at ``/mcp/clients`` and its session manager is
 started once in the app lifespan. Each request carries a client id in the path
-(``/client-mcp/{client_id}``); a scope middleware stashes it in a ContextVar and
+(``/mcp/clients/{client_id}``); a scope middleware stashes it in a ContextVar and
 the ``list_tools`` / ``call_tool`` handlers resolve that client's own MCP
 instance set and aggregate the member tools on the fly.
+
+``/client-mcp/{client_id}`` is the previous address, still mounted so harnesses
+configured against it keep working until they are re-installed.
 """
 
 from __future__ import annotations
@@ -235,20 +238,21 @@ async def _call_tool(name: str, arguments: dict) -> list[TextContent]:
 
 
 class ClientMCPScopeMiddleware:
-    """Extracts the client id from ``/client-mcp/{client_id}`` and rewrites the
+    """Extracts the client id from ``{prefix}/{client_id}`` and rewrites the
     path to the mount root so the inner MCP app serves it.
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, prefix: str) -> None:
         self.app = app
+        self._prefix = prefix.rstrip("/")
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         path: str = scope.get("path", "")
-        if path.startswith("/client-mcp/"):
-            path = path[len("/client-mcp") :]
+        if path.startswith(f"{self._prefix}/"):
+            path = path[len(self._prefix) :]
         client_id: str | None = None
         if path.startswith("/"):
             client_id, _, tail = path[1:].partition("/")
@@ -259,7 +263,7 @@ class ClientMCPScopeMiddleware:
                 # Name the resource for the auth middleware's 401: each client's
                 # endpoint is its own RFC 9728 resource, and a harness rejects
                 # metadata whose `resource` does not match the URL it called.
-                scope[PROTECTED_RESOURCE_SCOPE_KEY] = f"client-mcp/{client_id}"
+                scope[PROTECTED_RESOURCE_SCOPE_KEY] = f"{self._prefix.strip('/')}/{client_id}"
         token = _client_id_var.set(client_id)
         try:
             await self.app(scope, receive, send)

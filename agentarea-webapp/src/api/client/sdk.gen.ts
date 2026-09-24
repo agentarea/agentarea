@@ -4380,21 +4380,22 @@ export const oauthCallbackV1McpOauthCallbackGet = <
 /**
  * Oauth Preflight
  *
- * Report whether this instance can be authorized, and with what.
+ * Report whether a connection can be authorized, and with what.
  *
- * Every outcome is a 200: "this server has no OAuth" is an answer the UI
- * renders, not a failure it has to decode from an error response.
+ * Takes an existing instance, or a catalog spec so the create page can ask
+ * before it creates anything. Every outcome is a 200: "this server has no
+ * OAuth" is an answer the UI renders, not a failure it has to decode.
  */
 export const oauthPreflightV1McpOauthPreflightGet = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<OauthPreflightV1McpOauthPreflightGetData, ThrowOnError>
+  options?: Options<OauthPreflightV1McpOauthPreflightGetData, ThrowOnError>
 ): RequestResult<
   OauthPreflightV1McpOauthPreflightGetResponses,
   OauthPreflightV1McpOauthPreflightGetErrors,
   ThrowOnError
 > =>
-  (options.client ?? client).get<
+  (options?.client ?? client).get<
     OauthPreflightV1McpOauthPreflightGetResponses,
     OauthPreflightV1McpOauthPreflightGetErrors,
     ThrowOnError

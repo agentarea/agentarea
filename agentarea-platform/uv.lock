@@ -345,6 +345,7 @@ name = "agentarea-mcp"
 version = "0.0.15"
 source = { editable = "libs/mcp" }
 dependencies = [
+    { name = "agentarea-agents-sdk" },
     { name = "agentarea-common" },
     { name = "httpx" },
     { name = "pydantic" },
@@ -352,6 +353,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agentarea-agents-sdk", editable = "libs/agentarea-agents-sdk" },
     { name = "agentarea-common", editable = "libs/common" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "pydantic", specifier = ">=2.4.2" },

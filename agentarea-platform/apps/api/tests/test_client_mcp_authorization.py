@@ -172,7 +172,7 @@ class TestTransportSecurity:
         from agentarea_agents_sdk.mcp_server import create_mcp_server
         from agentarea_api.api.v1.client_mcp import client_mcp_server
 
-        platform = create_mcp_server(toolsets=[], name="probe")
+        platform = create_mcp_server(toolsets=[], name="probe", workspace_argument=True)
 
         assert (
             client_mcp_server.settings.transport_security.enable_dns_rebinding_protection

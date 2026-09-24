@@ -1143,9 +1143,10 @@ export const zMcpoAuthPreflightResponse = z.object({
   authorization_endpoint: z.string().nullish(),
   connected: z.boolean(),
   detail: z.string().optional().default(""),
-  instance_id: z.string().uuid(),
+  instance_id: z.string().uuid().nullish(),
   issuer: z.string().nullish(),
   scopes: z.array(z.string()).optional(),
+  server_id: z.string().uuid().nullish(),
   status: z.enum(["ready", "oauth_app_required", "unsupported"]),
 });
 
@@ -4437,7 +4438,8 @@ export const zOauthCallbackV1McpOauthCallbackGetQuery = z.object({
 });
 
 export const zOauthPreflightV1McpOauthPreflightGetQuery = z.object({
-  instance_id: z.string().uuid(),
+  instance_id: z.string().uuid().nullish(),
+  server_id: z.string().uuid().nullish(),
 });
 
 /**

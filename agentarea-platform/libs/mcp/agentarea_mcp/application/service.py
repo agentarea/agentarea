@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import inspect
 import logging
@@ -1121,40 +1123,44 @@ class MCPServerInstanceService:
 
         return mcp_url, headers, transport
 
-    async def _call_tool_via_mcp(
+    async def _with_mcp_session(
         self,
         mcp_url: str,
         headers: dict[str, str],
-        tool_name: str,
-        tool_args: dict[str, Any],
+        operation: Callable[[Any], Any],
+        *,
         httpx_client_factory: Callable[..., Any] | None = None,
         transport: str | None = None,
-    ):
+        timeout_seconds: int = 30,
+    ) -> Any:
+        """Open an initialized MCP session and retry the operation per transport."""
         from mcp import ClientSession
         from mcp.shared._httpx_utils import create_mcp_http_client
 
         streamable_urls, sse_url = mcp_transport_candidates(mcp_url, transport)
-
+        client_factory = httpx_client_factory or create_mcp_http_client
         last_err: BaseException | None = None
+
         for streamable_url in streamable_urls:
             try:
                 from mcp.client.streamable_http import streamablehttp_client
 
                 async with streamablehttp_client(
                     streamable_url,
-                    timeout=timedelta(seconds=30),
+                    timeout=timedelta(seconds=timeout_seconds),
                     headers=headers or None,
-                    httpx_client_factory=httpx_client_factory or create_mcp_http_client,
+                    httpx_client_factory=client_factory,
                 ) as (read_stream, write_stream, _):
                     async with ClientSession(read_stream, write_stream) as session:
                         await session.initialize()
-                        return await session.call_tool(tool_name, tool_args)
-            except Exception as e:
-                last_err = e
+                        result = operation(session)
+                        return await result if inspect.isawaitable(result) else result
+            except Exception as exc:
+                last_err = exc
                 logger.info(
-                    "Streamable HTTP call failed for %s (%s), trying next transport",
+                    "Streamable HTTP MCP operation failed for %s (%s), trying next transport",
                     streamable_url,
-                    e,
+                    exc,
                 )
 
         if sse_url is None:
@@ -1164,55 +1170,42 @@ class MCPServerInstanceService:
 
         async with sse_client(
             sse_url,
-            timeout=30,
+            timeout=timeout_seconds,
             headers=headers or None,
-            httpx_client_factory=httpx_client_factory or create_mcp_http_client,
-        ) as (
-            read_stream,
-            write_stream,
-        ):
+            httpx_client_factory=client_factory,
+        ) as (read_stream, write_stream):
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
-                return await session.call_tool(tool_name, tool_args)
+                result = operation(session)
+                return await result if inspect.isawaitable(result) else result
+
+    async def _call_tool_via_mcp(
+        self,
+        mcp_url: str,
+        headers: dict[str, str],
+        tool_name: str,
+        tool_args: dict[str, Any],
+        httpx_client_factory: Callable[..., Any] | None = None,
+        transport: str | None = None,
+    ):
+        return await self._with_mcp_session(
+            mcp_url,
+            headers,
+            lambda session: session.call_tool(tool_name, tool_args),
+            httpx_client_factory=httpx_client_factory,
+            transport=transport,
+        )
 
     async def _list_tools_via_mcp(
         self, mcp_url: str, headers: dict[str, str], transport: str | None = None
     ):
-        from mcp import ClientSession
-
-        streamable_urls, sse_url = mcp_transport_candidates(mcp_url, transport)
-
-        last_err: BaseException | None = None
-        for streamable_url in streamable_urls:
-            try:
-                from mcp.client.streamable_http import streamablehttp_client
-
-                async with streamablehttp_client(
-                    streamable_url, timeout=timedelta(seconds=10), headers=headers or None
-                ) as (read_stream, write_stream, _):
-                    async with ClientSession(read_stream, write_stream) as session:
-                        await session.initialize()
-                        return await session.list_tools()
-            except Exception as e:
-                last_err = e
-                logger.info(
-                    "Streamable HTTP failed for %s (%s), trying next transport",
-                    streamable_url,
-                    e,
-                )
-
-        if sse_url is None:
-            raise last_err or RuntimeError(f"No usable MCP transport for {mcp_url}")
-
-        from mcp.client.sse import sse_client
-
-        async with sse_client(sse_url, timeout=10, headers=headers or None) as (
-            read_stream,
-            write_stream,
-        ):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                return await session.list_tools()
+        return await self._with_mcp_session(
+            mcp_url,
+            headers,
+            lambda session: session.list_tools(),
+            transport=transport,
+            timeout_seconds=10,
+        )
 
     async def validate_connection(
         self,
@@ -1244,12 +1237,21 @@ class MCPServerInstanceService:
         try:
             result = await self._list_tools_via_mcp(url, headers or {})
             tools = [serialize_mcp_tool(t) for t in result.tools]
-            return {
+            validated: dict[str, Any] = {
                 "valid": True,
                 "errors": [],
                 "tool_count": len(tools),
                 "tools": tools,
             }
+            # Listing tools is not using them: Gmail's MCP answers tools/list
+            # without a token and 401s every call. For a bare endpoint, report the
+            # OAuth it advertises so the page asks to connect instead of creating
+            # a connection that can list and never call.
+            if not headers:
+                auth_methods = await self._catalog_auth_methods(url, server_id)
+                if "oauth" in auth_methods:
+                    validated["auth_methods"] = auth_methods
+            return validated
         except Exception as e:
             all_msgs: list[str] = []
             if isinstance(e, ExceptionGroup):
@@ -1282,7 +1284,7 @@ class MCPServerInstanceService:
                 "errors": ["Connection failed. Verify the URL, headers, and server availability."],
             }
 
-    async def _catalog_auth_methods(self, url: str, server_id: str | None) -> "list[str]":
+    async def _catalog_auth_methods(self, url: str, server_id: str | None) -> list[str]:
         """Detect auth methods for a catalog spec, using the endpoint stored on it.
 
         The probe only ever dials a URL recorded in the catalog: the caller's
@@ -1296,20 +1298,27 @@ class MCPServerInstanceService:
             return []
         return await self._detect_auth_methods(spec.remote_url)
 
-    async def _detect_auth_methods(self, mcp_url: str) -> "list[str]":
-        """Classify an endpoint's unauthenticated challenge without creating an instance.
+    async def _detect_auth_methods(self, mcp_url: str) -> list[str]:
+        """Classify how an endpoint wants to be authorized, without an instance.
 
-        ``["oauth", "credentials"]`` when the 401/403 advertises a bearer challenge
-        and authorization-server discovery succeeds, ``["credentials"]`` for any
-        other auth challenge, ``["none"]`` for an open endpoint, ``[]`` when the
-        endpoint could not be classified. Lets the create-connection page render
-        the right auth form up front instead of after a first failed attempt.
+        ``["oauth", "credentials"]`` when the server publishes OAuth metadata,
+        ``["credentials"]`` for any other auth challenge, ``["none"]`` for an open
+        endpoint, ``[]`` when the endpoint could not be classified.
+
+        OAuth comes from the shared classifier, not from the status of a GET: an
+        MCP endpoint may be POST-only (405) or list tools without a token while
+        still requiring one to call them, and the metadata is what says so.
         """
         try:
             validate_outbound_url(mcp_url, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
         except UnsafeUrlError:
             logger.debug("Auth-method detection refused for unsafe URL %s", mcp_url, exc_info=True)
             return []
+
+        capability = await MCPOAuthClientService().assess(mcp_url)
+        if capability.advertises_oauth:
+            return ["oauth", "credentials"]
+
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
                 resp = await client.get(mcp_url, follow_redirects=False)
@@ -1319,17 +1328,9 @@ class MCPServerInstanceService:
 
         if resp.status_code in (200, 405):
             return ["none"]
-        if resp.status_code not in (401, 403):
-            return []
-
-        www_auth = resp.headers.get("www-authenticate", "").lower()
-        if "resource_metadata" in www_auth or "bearer" in www_auth:
-            try:
-                await MCPOAuthClientService().discover_auth_server(mcp_url)
-                return ["oauth", "credentials"]
-            except Exception:
-                logger.debug("OAuth discovery failed for %s", mcp_url, exc_info=True)
-        return ["credentials"]
+        if resp.status_code in (401, 403):
+            return ["credentials"]
+        return []
 
     async def probe_instance_auth(self, instance_id: UUID) -> dict[str, Any]:
         import httpx

@@ -47,7 +47,7 @@ def _sse_payload(body: str) -> dict:
 
 @pytest.mark.asyncio
 async def test_tools_list_does_not_need_the_initialize_session():
-    server = create_mcp_server(toolsets=[_EchoToolset()], name="Test")
+    server = create_mcp_server(toolsets=[_EchoToolset()], name="Test", workspace_argument=False)
     app = server.streamable_http_app()
 
     async with app.router.lifespan_context(app):
@@ -83,7 +83,7 @@ async def test_mount_root_is_served_without_a_redirect():
     binds its token to the URL it ends up posting to and a server that checks
     the audience against the advertised one disagree by one character.
     """
-    server = create_mcp_server(toolsets=[_EchoToolset()], name="Test")
+    server = create_mcp_server(toolsets=[_EchoToolset()], name="Test", workspace_argument=False)
     app = FastAPI()
     mount_mcp_app(app, "/mcp", server.streamable_http_app())
 

@@ -17,12 +17,12 @@ from typing import get_args
 
 import pytest
 from agentarea_agents_sdk.tools.tool_definition import ToolEffect, ToolPlane
-from agentarea_api.tools import get_platform_tools
+from agentarea_api.tools import get_spanning_mcp_tools
 
 PLANES = set(get_args(ToolPlane))
 EFFECTS = set(get_args(ToolEffect))
 
-TOOLSETS = get_platform_tools()
+TOOLSETS = get_spanning_mcp_tools()
 
 
 def _ids(toolset) -> str:

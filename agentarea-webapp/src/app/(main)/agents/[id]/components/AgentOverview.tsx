@@ -20,7 +20,7 @@ import {
   type OpenApiConnectionRef,
   resolveAgentToolIcons,
 } from "@/utils/agentToolIcons";
-import { isRunningTask } from "../../shared/taskStatus";
+import { isAwaitingUserTask, isRunningTask } from "../../shared/taskStatus";
 import {
   AgentOverviewView,
   type AgentOverviewModel,
@@ -186,9 +186,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
           !["pending", "submitted"].includes(String(task.status ?? ""))
       )
       .slice(0, 5),
-    pendingApprovals: tasks.filter(
-      (task) => String(task.status ?? "") === "input_required"
-    ),
+    pendingApprovals: tasks.filter(isAwaitingUserTask),
     skills: (agent.skills ?? []).map((s) => s.name),
     connections: toolIcons.map((tool) => tool.label),
     policyCount: policyRules.length,

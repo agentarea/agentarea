@@ -2,7 +2,7 @@
   "metadata": {
     "source": "curated",
     "generated_by": "agentarea curated command/stdio MCP catalog",
-    "total_count": 1
+    "total_count": 3
   },
   "servers": [
     {
@@ -80,6 +80,96 @@
           "isLatest": true,
           "publishedAt": "2026-06-20T00:00:00Z",
           "updatedAt": "2026-06-20T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/customer-segmentation",
+        "title": "Customer Segmentation MCP App",
+        "description": "Customer segmentation MCP server that ships an interactive MCP Apps UI for customer segmentation workflows.",
+        "version": "2.0.0",
+        "websiteUrl": "https://github.com/modelcontextprotocol/ext-apps/tree/main/examples/customer-segmentation-server",
+        "repository": {
+          "url": "https://github.com/modelcontextprotocol/ext-apps",
+          "source": "github",
+          "subfolder": "examples/customer-segmentation-server"
+        },
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "@modelcontextprotocol/server-customer-segmentation",
+            "name": "@modelcontextprotocol/server-customer-segmentation",
+            "version": "2.0.0",
+            "runtimeArgs": [
+              "npx",
+              "-y",
+              "@modelcontextprotocol/server-customer-segmentation",
+              "--stdio"
+            ],
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ],
+        "metadata": {
+          "agentarea:source_type": "official",
+          "agentarea:source_url": "https://github.com/modelcontextprotocol/ext-apps",
+          "agentarea:notes": "Interactive MCP Apps UI example from the official ext-apps repository. The npm package runs in stdio mode with '--stdio' inside agentarea/mcp-bridge:latest."
+        }
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-09-23T00:00:00Z",
+          "updatedAt": "2026-09-23T00:00:00Z"
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentarea.catalog/map",
+        "title": "Map MCP App",
+        "description": "Map MCP server that ships an interactive MCP Apps UI for viewing and interacting with maps.",
+        "version": "2.0.0",
+        "websiteUrl": "https://github.com/modelcontextprotocol/ext-apps/tree/main/examples/map-server",
+        "repository": {
+          "url": "https://github.com/modelcontextprotocol/ext-apps",
+          "source": "github",
+          "subfolder": "examples/map-server"
+        },
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "@modelcontextprotocol/server-map",
+            "name": "@modelcontextprotocol/server-map",
+            "version": "2.0.0",
+            "runtimeArgs": [
+              "npx",
+              "-y",
+              "@modelcontextprotocol/server-map",
+              "--stdio"
+            ],
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ],
+        "metadata": {
+          "agentarea:source_type": "official",
+          "agentarea:source_url": "https://github.com/modelcontextprotocol/ext-apps",
+          "agentarea:notes": "Interactive MCP Apps UI example from the official ext-apps repository. The npm package runs in stdio mode with '--stdio' inside agentarea/mcp-bridge:latest."
+        }
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true,
+          "publishedAt": "2026-09-23T00:00:00Z",
+          "updatedAt": "2026-09-23T00:00:00Z"
         }
       }
     }

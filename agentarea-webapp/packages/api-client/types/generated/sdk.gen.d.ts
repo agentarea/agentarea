@@ -770,12 +770,13 @@ export declare const oauthCallbackV1McpOauthCallbackGet: <ThrowOnError extends b
 /**
  * Oauth Preflight
  *
- * Report whether this instance can be authorized, and with what.
+ * Report whether a connection can be authorized, and with what.
  *
- * Every outcome is a 200: "this server has no OAuth" is an answer the UI
- * renders, not a failure it has to decode from an error response.
+ * Takes an existing instance, or a catalog spec so the create page can ask
+ * before it creates anything. Every outcome is a 200: "this server has no
+ * OAuth" is an answer the UI renders, not a failure it has to decode.
  */
-export declare const oauthPreflightV1McpOauthPreflightGet: <ThrowOnError extends boolean = false>(options: Options<OauthPreflightV1McpOauthPreflightGetData, ThrowOnError>) => RequestResult<OauthPreflightV1McpOauthPreflightGetResponses, OauthPreflightV1McpOauthPreflightGetErrors, ThrowOnError>;
+export declare const oauthPreflightV1McpOauthPreflightGet: <ThrowOnError extends boolean = false>(options?: Options<OauthPreflightV1McpOauthPreflightGetData, ThrowOnError>) => RequestResult<OauthPreflightV1McpOauthPreflightGetResponses, OauthPreflightV1McpOauthPreflightGetErrors, ThrowOnError>;
 /**
  * List Mcp Server Instances
  *

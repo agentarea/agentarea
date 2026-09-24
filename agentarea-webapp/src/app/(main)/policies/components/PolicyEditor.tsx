@@ -343,10 +343,10 @@ function buildToolCatalog(
       const name = str(tool?.name);
       if (tool?.type === "mcp") {
         const ref = resolveMcpRef(name, mcpInstances, mcpServers);
+        const unrestricted = tool.settings?.allowed_tools == null;
         const allowedTools = asToolNames(tool.settings?.allowed_tools);
         if (ref.status === "instance" && ref.availableTools.length > 0) {
-          const allowedSet =
-            allowedTools.length > 0 ? new Set(allowedTools) : null;
+          const allowedSet = unrestricted ? null : new Set(allowedTools);
           for (const available of ref.availableTools) {
             if (allowedSet && !allowedSet.has(available.name)) continue;
             addToolOption(map, available.name, "mcp", agentName, {
@@ -361,7 +361,7 @@ function buildToolCatalog(
               sourceLabel: `MCP · ${ref.displayName}`,
             });
           }
-          if (allowedTools.length === 0) {
+          if (unrestricted) {
             addToolOption(map, name, "mcp", agentName, {
               sourceLabel: `MCP · ${ref.displayName}`,
             });
@@ -369,10 +369,10 @@ function buildToolCatalog(
         }
       } else if (tool?.type === "openapi") {
         const connection = openapiById.get(name);
+        const unrestricted = tool.settings?.allowed_tools == null;
         const allowedTools = asToolNames(tool.settings?.allowed_tools);
         if (connection?.available_tools?.length) {
-          const allowedSet =
-            allowedTools.length > 0 ? new Set(allowedTools) : null;
+          const allowedSet = unrestricted ? null : new Set(allowedTools);
           for (const available of connection.available_tools) {
             if (allowedSet && !allowedSet.has(available.name)) continue;
             addToolOption(map, available.name, "openapi", agentName, {
@@ -389,7 +389,7 @@ function buildToolCatalog(
                 : "OpenAPI",
             });
           }
-          if (allowedTools.length === 0) {
+          if (unrestricted) {
             addToolOption(map, name, "openapi", agentName, {
               sourceLabel: connection
                 ? `OpenAPI · ${connection.name}`

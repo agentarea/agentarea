@@ -29,6 +29,11 @@ log = logging.getLogger("mcp-bridge")
 
 # How long to wait for a response from the child process (seconds)
 REQUEST_TIMEOUT = float(os.environ.get("MCP_BRIDGE_TIMEOUT", "30"))
+# The bridge serves HTTP as soon as the child is spawned, but `npx -y`/`uvx`
+# fetch the package first, so on a fresh container the child's first reply
+# includes that install. Until the child has said anything, requests wait this
+# long instead; answering them with a timeout would fail every cold start.
+STARTUP_TIMEOUT = float(os.environ.get("MCP_BRIDGE_STARTUP_TIMEOUT", "300"))
 
 
 class StdioBridge:
@@ -47,6 +52,7 @@ class StdioBridge:
         self._write_lock = asyncio.Lock()
         self._reader_task: asyncio.Task | None = None
         self._healthy = False
+        self._child_started = False
 
     async def start(self):
         log.info("Spawning: %s %s", self.command, " ".join(self.args))
@@ -88,6 +94,7 @@ class StdioBridge:
             except json.JSONDecodeError:
                 log.debug("Non-JSON stdout: %s", line[:200])
                 continue
+            self._child_started = True
             internal_id = msg.get("id")
             if internal_id is not None and str(internal_id) in self._pending:
                 original_id, future = self._pending[str(internal_id)]
@@ -137,7 +144,8 @@ class StdioBridge:
 
         if future is not None and internal_id is not None:
             try:
-                return await asyncio.wait_for(future, timeout=REQUEST_TIMEOUT)
+                timeout = REQUEST_TIMEOUT if self._child_started else STARTUP_TIMEOUT
+                return await asyncio.wait_for(future, timeout=timeout)
             except asyncio.TimeoutError:
                 log.error("Timeout waiting for response to request id=%s", original_id)
                 return {

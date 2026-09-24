@@ -21,7 +21,7 @@ import hashlib
 import logging
 import secrets
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlencode, urlparse
 
 import httpx
@@ -106,8 +106,57 @@ class OAuthClientCredentials:
     client_secret: str | None = None
 
 
+@dataclass
+class OAuthCapability:
+    """Whether a remote MCP server can be authorized, and what it takes.
+
+    ``ready`` — the provider supports dynamic registration, so Connect runs on
+    its own. ``oauth_app_required`` — it does not, so the workspace brings an
+    OAuth app it registered with the provider. ``unsupported`` — no OAuth
+    discovery here; ``detail`` says why.
+    """
+
+    status: Literal["ready", "oauth_app_required", "unsupported"]
+    detail: str = ""
+    metadata: AuthServerMetadata | None = None
+
+    @property
+    def advertises_oauth(self) -> bool:
+        return self.status != "unsupported"
+
+
+def oauth_app_required_detail(issuer: str) -> str:
+    return (
+        f"{issuer} does not support Dynamic Client Registration (RFC 7591), so AgentArea "
+        "cannot register itself. Register an OAuth app with this provider and connect with "
+        "its client ID and secret."
+    )
+
+
 class MCPOAuthClientService:
     """Client-side MCP authorization: discovery, DCR, PKCE auth flow."""
+
+    async def assess(self, mcp_url: str) -> OAuthCapability:
+        """Answer "can this server be authorized, and with what" in one place.
+
+        Every caller that decides whether to offer Connect — the preflight
+        endpoint, the create page's auth detection — reads this, so a server
+        cannot be "OAuth" on one screen and "open" on the next.
+        """
+        try:
+            metadata = await self.discover_auth_server(mcp_url)
+        except MCPOAuthDiscoveryError as exc:
+            return OAuthCapability(status="unsupported", detail=str(exc))
+        except httpx.HTTPError as exc:
+            logger.info("OAuth discovery could not reach %s", mcp_url, exc_info=True)
+            return OAuthCapability(status="unsupported", detail=f"Could not reach {mcp_url}: {exc}")
+        if metadata.registration_endpoint:
+            return OAuthCapability(status="ready", metadata=metadata)
+        return OAuthCapability(
+            status="oauth_app_required",
+            detail=oauth_app_required_detail(metadata.issuer),
+            metadata=metadata,
+        )
 
     async def discover_auth_server(self, mcp_url: str) -> AuthServerMetadata:
         """Discover the authorization server for a remote MCP endpoint.

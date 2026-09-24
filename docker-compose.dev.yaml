@@ -388,8 +388,8 @@ services:
       # Admission lists, mirroring charts/agentarea/values.yaml
       # (mcpManager.admission). Both are required and an absent list is
       # refused: "not decided yet" must not read as "allow everything".
-      MCP_ALLOWED_IMAGE_REPOSITORIES: "ghcr.io/github/github-mcp-server,mcp/fetch"
-      MCP_ALLOWED_COMMAND_PACKAGES: "npx -y @modelcontextprotocol/server-everything,npx -y @modelcontextprotocol/server-sequential-thinking,uvx mcp-server-fetch,uvx mcp-server-time"
+      MCP_ALLOWED_IMAGE_REPOSITORIES: "ghcr.io/github/github-mcp-server,mcp/fetch,agentarea/mcp-outreach-demo"
+      MCP_ALLOWED_COMMAND_PACKAGES: "npx -y @modelcontextprotocol/server-everything,npx -y @modelcontextprotocol/server-sequential-thinking,npx -y @modelcontextprotocol/server-customer-segmentation --stdio,npx -y @modelcontextprotocol/server-map --stdio,uvx mcp-server-fetch,uvx mcp-server-time"
       # Catalog servers are third-party but not user-authored, which is what
       # the standard tier describes. The untrusted default pins --runtime to
       # gVisor, and no Docker Desktop has runsc, so every instance would fail

@@ -73,7 +73,9 @@ def _google_metadata(*, registration_endpoint: str | None = None) -> AuthServerM
     )
 
 
-def _patch_instance_lookup(monkeypatch, *, auth_config_id=None, remote_url: str | None = _GMAIL_URL):
+def _patch_instance_lookup(
+    monkeypatch, *, auth_config_id=None, remote_url: str | None = _GMAIL_URL
+):
     """Point the endpoint at one URL-type instance without touching a database."""
     instance = SimpleNamespace(
         id=uuid4(),
@@ -199,6 +201,52 @@ async def test_preflight_reports_unsupported_for_an_instance_without_a_remote_ur
 
     assert result.status == "unsupported"
     assert "remote URL" in result.detail
+
+
+@pytest.mark.asyncio
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+async def test_preflight_answers_for_a_catalog_spec_before_any_instance_exists(monkeypatch):
+    """The create page has to know whether to ask for an OAuth app before it
+    creates anything — otherwise the question arrives only after a connection
+    that cannot be authorized already exists."""
+    _patch_instance_lookup(monkeypatch)
+    _patch_discovery(monkeypatch, _google_metadata())
+    server_id = uuid4()
+
+    result = await mcp_oauth_connect.oauth_preflight(
+        _user_context(), AsyncMock(), server_id=server_id
+    )
+
+    assert result.status == "oauth_app_required"
+    assert result.connected is False
+    assert result.instance_id is None
+    assert result.server_id == server_id
+
+
+@pytest.mark.asyncio
+async def test_preflight_for_an_unknown_spec_is_not_found(monkeypatch):
+    class _NoServer:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def get_server_by_id(self, _requested_id):
+            return None
+
+    monkeypatch.setattr(mcp_oauth_connect, "MCPServerRepository", _NoServer)
+
+    with pytest.raises(HTTPException) as excinfo:
+        await mcp_oauth_connect.oauth_preflight(_user_context(), AsyncMock(), server_id=uuid4())
+
+    assert excinfo.value.status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("targets", [{}, {"instance_id": uuid4(), "server_id": uuid4()}])
+async def test_preflight_takes_exactly_one_target(targets):
+    with pytest.raises(HTTPException) as excinfo:
+        await mcp_oauth_connect.oauth_preflight(_user_context(), AsyncMock(), **targets)
+
+    assert excinfo.value.status_code == 422
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +403,7 @@ async def test_authorize_with_a_custom_oauth_app_keeps_the_secret_out_of_state(
         assert "client_id" not in auth_kwargs["config"]
         assert auth_kwargs["config"]["client_id_secret_name"] == "gmail_client_id"  # noqa: S105
         assert (
-            auth_kwargs["config"]["client_secret_secret_name"]  # noqa: S105
+            auth_kwargs["config"]["client_secret_secret_name"]
             == "gmail_client_secret"  # pragma: allowlist secret
         )
         assert secret_catalog.add_reference.await_args_list == [

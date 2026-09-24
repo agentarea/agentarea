@@ -2959,7 +2959,7 @@ export type McpoAuthPreflightResponse = {
     /**
      * Instance Id
      */
-    instance_id: string;
+    instance_id?: string | null;
     /**
      * Issuer
      */
@@ -2968,6 +2968,10 @@ export type McpoAuthPreflightResponse = {
      * Scopes
      */
     scopes?: Array<string>;
+    /**
+     * Server Id
+     */
+    server_id?: string | null;
     /**
      * Status
      */
@@ -10397,13 +10401,19 @@ export type OauthCallbackV1McpOauthCallbackGetResponses = {
 export type OauthPreflightV1McpOauthPreflightGetData = {
     body?: never;
     path?: never;
-    query: {
+    query?: {
         /**
          * Instance Id
          *
          * MCP instance to inspect
          */
-        instance_id: string;
+        instance_id?: string | null;
+        /**
+         * Server Id
+         *
+         * Catalog spec to inspect before any instance exists
+         */
+        server_id?: string | null;
     };
     url: '/v1/mcp-oauth/preflight';
 };

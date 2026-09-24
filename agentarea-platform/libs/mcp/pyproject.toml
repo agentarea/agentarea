@@ -10,12 +10,13 @@ license = {text = "Apache-2.0"}
 requires-python = ">=3.12"
 dependencies = [
     "agentarea-common",
+    "agentarea-agents-sdk",
     "pydantic>=2.4.2",
     "httpx>=0.25.0",
 ]
 
 [tool.uv.sources]
 agentarea-common = { workspace = true }
-
+agentarea-agents-sdk = { workspace = true }
 [tool.hatch.build.targets.wheel]
 packages = ["agentarea_mcp"] 
