@@ -198,7 +198,7 @@ class TestX402PaymentClient:
         monkeypatch.setattr(x402_client.X402PaymentClient, "_create_signer", lambda self: None)
 
         client = x402_client.X402PaymentClient(
-            private_key="0x" + "11" * 32, payment_identifier="k" * 64
+            private_key="0x" + "11" * 32, payment_identifier="k" * 64  # pragma: allowlist secret
         )._get_client()
         payment_required = SimpleNamespace(extensions=extensions)
         for hook in client.hooks:

@@ -7,7 +7,7 @@ show it holds.
 
 Needs a PostgreSQL migrated to head; skips without one:
 
-    WALLET_TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/agentarea_test
+    WALLET_TEST_DATABASE_URL=postgresql+asyncpg://<user>:<password>@localhost:5432/agentarea_test
 """
 
 import os
