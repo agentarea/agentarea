@@ -236,6 +236,166 @@ class TestUpdateConnection:
                 )
 
 
+class TestCreateConnectionAuthConfigAccess:
+    """Attaching an auth_config_id at create time is authority-checked (#486)."""
+
+    def _service(self, checker):
+        mock_factory = AsyncMock()
+        mock_factory.create_repository.return_value = AsyncMock()
+        svc = OpenAPIConnectionService(
+            repository_factory=mock_factory,
+            secret_manager=AsyncMock(),
+            auth_config_access_checker=checker,
+        )
+        svc._repo = AsyncMock()
+        svc._repo.create.return_value = OpenAPIConnection(
+            name="Test", base_url="https://api.example.com"
+        )
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_a_foreign_auth_config_is_refused(self):
+        checker = AsyncMock(side_effect=PermissionError("nope"))
+        svc = self._service(checker)
+        payload = OpenAPIConnectionCreate.model_construct(
+            name="Test",
+            base_url="https://api.example.com",
+            auth_config_id=uuid4(),
+        )
+
+        with (
+            patch("agentarea_openapi.application.service.validate_url", return_value=[]),
+            pytest.raises(PermissionError),
+        ):
+            await svc.create_connection(payload)
+
+        svc._repo.create.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_own_auth_config_is_checked_then_attached(self):
+        checker = AsyncMock()
+        svc = self._service(checker)
+        config_id = uuid4()
+        payload = OpenAPIConnectionCreate.model_construct(
+            name="Test",
+            base_url="https://api.example.com",
+            auth_config_id=config_id,
+        )
+
+        with patch("agentarea_openapi.application.service.validate_url", return_value=[]):
+            await svc.create_connection(payload)
+
+        checker.assert_awaited_once_with(config_id)
+        assert svc._repo.create.call_args.kwargs["auth_config_id"] == config_id
+
+    @pytest.mark.asyncio
+    async def test_no_auth_config_skips_the_checker(self):
+        checker = AsyncMock()
+        svc = self._service(checker)
+        payload = OpenAPIConnectionCreate.model_construct(
+            name="Test",
+            base_url="https://api.example.com",
+        )
+
+        with patch("agentarea_openapi.application.service.validate_url", return_value=[]):
+            await svc.create_connection(payload)
+
+        checker.assert_not_awaited()
+
+
+class TestUpdateConnectionAuthConfigAccess:
+    """Attaching, or keeping while redirecting base_url, is authority-checked (#486)."""
+
+    def _service(self, checker, current: OpenAPIConnection | None = None):
+        mock_factory = AsyncMock()
+        mock_factory.create_repository.return_value = AsyncMock()
+        svc = OpenAPIConnectionService(
+            repository_factory=mock_factory,
+            secret_manager=AsyncMock(),
+            auth_config_access_checker=checker,
+        )
+        svc._repo = AsyncMock()
+        svc._repo.get_by_id.return_value = current
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_attaching_a_foreign_auth_config_is_refused(self):
+        checker = AsyncMock(side_effect=PermissionError("nope"))
+        svc = self._service(checker)
+        payload = OpenAPIConnectionUpdate.model_construct(auth_config_id=uuid4())
+
+        with pytest.raises(PermissionError):
+            await svc.update_connection(connection_id="some-id", payload=payload)
+
+        svc._repo.update.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_redirecting_base_url_while_keeping_a_foreign_auth_config_is_refused(self):
+        """B changing base_url on a connection that still uses A's config."""
+        checker = AsyncMock(side_effect=PermissionError("nope"))
+        existing_config_id = uuid4()
+        current = OpenAPIConnection(
+            name="Test",
+            base_url="https://api.example.com",
+            auth_config_id=existing_config_id,
+        )
+        svc = self._service(checker, current=current)
+        payload = OpenAPIConnectionUpdate.model_construct(base_url="https://attacker.example")
+
+        with (
+            patch("agentarea_openapi.application.service.validate_url", return_value=[]),
+            pytest.raises(PermissionError),
+        ):
+            await svc.update_connection(connection_id="some-id", payload=payload)
+
+        checker.assert_awaited_once_with(existing_config_id)
+        svc._repo.update.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_redirecting_base_url_without_any_auth_config_skips_the_checker(self):
+        checker = AsyncMock()
+        current = OpenAPIConnection(name="Test", base_url="https://api.example.com")
+        svc = self._service(checker, current=current)
+        payload = OpenAPIConnectionUpdate.model_construct(base_url="https://new-host.example")
+
+        with patch("agentarea_openapi.application.service.validate_url", return_value=[]):
+            await svc.update_connection(connection_id="some-id", payload=payload)
+
+        checker.assert_not_awaited()
+        svc._repo.update.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_changing_base_url_and_auth_config_together_checks_once(self):
+        checker = AsyncMock()
+        current = OpenAPIConnection(
+            name="Test", base_url="https://api.example.com", auth_config_id=uuid4()
+        )
+        svc = self._service(checker, current=current)
+        new_config_id = uuid4()
+        payload = OpenAPIConnectionUpdate.model_construct(
+            base_url="https://new-host.example",
+            auth_config_id=new_config_id,
+        )
+
+        with patch("agentarea_openapi.application.service.validate_url", return_value=[]):
+            await svc.update_connection(connection_id="some-id", payload=payload)
+
+        checker.assert_awaited_once_with(new_config_id)
+
+    @pytest.mark.asyncio
+    async def test_clearing_an_auth_config_skips_the_checker(self):
+        checker = AsyncMock()
+        current = OpenAPIConnection(
+            name="Test", base_url="https://api.example.com", auth_config_id=uuid4()
+        )
+        svc = self._service(checker, current=current)
+        payload = OpenAPIConnectionUpdate.model_construct(auth_config_id=None)
+
+        await svc.update_connection(connection_id="some-id", payload=payload)
+
+        checker.assert_not_awaited()
+
+
 class TestSpecParser:
     """Test $ref resolution and path-level parameters."""
 

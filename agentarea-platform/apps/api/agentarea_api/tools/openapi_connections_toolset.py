@@ -44,12 +44,14 @@ def _serialize(conn: Any) -> dict:
 def _build_service(repo_factory, secret_mgr):
     """Construct an OpenAPIConnectionService bound to the current request context."""
     from agentarea_common.config import get_settings
+    from agentarea_mcp.application.auth_resolver import build_auth_config_access_checker
     from agentarea_openapi.application.service import OpenAPIConnectionService
 
     settings = get_settings()
     return OpenAPIConnectionService(
         repository_factory=repo_factory,
         secret_manager=secret_mgr,
+        auth_config_access_checker=build_auth_config_access_checker(repo_factory, secret_mgr),
         allow_private_urls=settings.mcp.ALLOW_PRIVATE_URLS,
     )
 
