@@ -39,6 +39,14 @@ from agentarea_tasks.infrastructure.orm import TaskEventORM, TaskORM  # noqa: F4
 from agentarea_triggers.infrastructure.orm import TriggerExecutionORM, TriggerORM  # noqa: F401
 
 
+@pytest.fixture(autouse=True)
+def _graph_ownership(monkeypatch):
+    """Creating a governed row writes ownership tuples; here the graph is scenery."""
+    from agentarea_common.testing.graph import install_graph_ownership_stub
+
+    return install_graph_ownership_stub(monkeypatch)
+
+
 # SQLite foreign key support (mirrors tests/integration/repositories/conftest.py)
 @event.listens_for(Engine, "connect")
 def _set_sqlite_pragma(dbapi_connection, connection_record):
