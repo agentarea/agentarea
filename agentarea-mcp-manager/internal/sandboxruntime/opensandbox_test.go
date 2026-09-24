@@ -59,7 +59,8 @@ func TestOpenSandboxProviderUsesOfficialLifecycleAndExecdContracts(t *testing.T)
 			}
 			// Kubernetes rejects the pod for any container resource it does not
 			// know, and "disk" is not one.
-			if request.ResourceLimits["ephemeral-storage"] != "2147483648" || request.ResourceLimits["disk"] != "" {
+			// The workspace quota plus headroom for the rest of the pod's writes.
+			if request.ResourceLimits["ephemeral-storage"] != "3221225472" || request.ResourceLimits["disk"] != "" {
 				t.Errorf("resource limits = %+v", request.ResourceLimits)
 			}
 			if request.ResourceRequests != nil {
@@ -245,6 +246,8 @@ func TestOpenSandboxSendsConfiguredResourceRequests(t *testing.T) {
 		ResourceMemory:     "1Gi",
 		ResourceStorage:    "2147483648",
 		ResourceRequestCPU: "100m",
+		StorageLimit:       "4Gi",
+		StorageRequest:     "256Mi",
 		LeaseTTL:           time.Minute,
 		Isolation:          "gvisor", RuntimeIdentity: "runsc-release",
 		AllowInsecure: true, EgressMode: "host-public", AllowInternetAccess: true,
@@ -256,8 +259,11 @@ func TestOpenSandboxSendsConfiguredResourceRequests(t *testing.T) {
 		WorkspaceID: "workspace-1", TaskID: "task-1", ProvisioningID: "provision-1",
 		Supervisor: testSupervisorAttestation(),
 	})
-	if len(got.ResourceRequests) != 1 || got.ResourceRequests["cpu"] != "100m" {
-		t.Fatalf("resource requests = %+v, want only cpu=100m", got.ResourceRequests)
+	if len(got.ResourceRequests) != 2 || got.ResourceRequests["cpu"] != "100m" || got.ResourceRequests["ephemeral-storage"] != "256Mi" {
+		t.Fatalf("resource requests = %+v, want cpu=100m and ephemeral-storage=256Mi", got.ResourceRequests)
+	}
+	if got.ResourceLimits["ephemeral-storage"] != "4Gi" {
+		t.Fatalf("storage limit = %q, want the configured 4Gi", got.ResourceLimits["ephemeral-storage"])
 	}
 }
 
@@ -270,6 +276,8 @@ func TestOpenSandboxRejectsRequestAboveLimit(t *testing.T) {
 		{"cpu", func(c *OpenSandboxConfig) { c.ResourceRequestCPU = "2" }, "cpu request 2 exceeds its limit 1000m"},
 		{"memory", func(c *OpenSandboxConfig) { c.ResourceRequestMemory = "2Gi" }, "memory request 2Gi exceeds its limit 1Gi"},
 		{"unparsable", func(c *OpenSandboxConfig) { c.ResourceRequestCPU = "lots" }, `cpu request "lots"`},
+		{"storage request", func(c *OpenSandboxConfig) { c.StorageRequest = "4Gi" }, "storage request 4Gi exceeds its limit"},
+		{"storage below workspace", func(c *OpenSandboxConfig) { c.StorageLimit = "1Gi" }, "below the workspace quota"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := OpenSandboxConfig{

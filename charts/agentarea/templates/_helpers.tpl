@@ -123,6 +123,14 @@ rendered into values-backed ConfigMaps.
 - name: SANDBOX_PROVIDER_MEMORY_REQUEST
   value: {{ . | quote }}
 {{- end }}
+{{- with $runtime.resources.storageLimit }}
+- name: SANDBOX_PROVIDER_STORAGE_LIMIT
+  value: {{ . | quote }}
+{{- end }}
+{{- with $runtime.resources.storageRequest }}
+- name: SANDBOX_PROVIDER_STORAGE_REQUEST
+  value: {{ . | quote }}
+{{- end }}
 - name: SANDBOX_ALLOW_INTERNET
   value: {{ $runtime.allowInternet | quote }}
 {{- if not (empty $runtime.manifest) }}

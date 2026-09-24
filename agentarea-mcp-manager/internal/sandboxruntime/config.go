@@ -183,6 +183,8 @@ func NewFromEnv(_ context.Context, builtin ManagedRuntime, redisClient *redis.Cl
 			ResourceStorage:       strconv.FormatInt(workspaceLimits.MaxBytes, 10),
 			ResourceRequestCPU:    os.Getenv("SANDBOX_PROVIDER_CPU_REQUEST"),
 			ResourceRequestMemory: os.Getenv("SANDBOX_PROVIDER_MEMORY_REQUEST"),
+			StorageLimit:          os.Getenv("SANDBOX_PROVIDER_STORAGE_LIMIT"),
+			StorageRequest:        os.Getenv("SANDBOX_PROVIDER_STORAGE_REQUEST"),
 			LeaseTTL:              policy.TaskLeaseTTL,
 			Isolation:             os.Getenv("SANDBOX_OPENSANDBOX_ISOLATION"),
 			RuntimeIdentity:       os.Getenv("SANDBOX_OPENSANDBOX_RUNTIME_IDENTITY"),
