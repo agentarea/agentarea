@@ -156,7 +156,7 @@ func TestResolveSecretEnvVars_NoEnvVarsIsNoop(t *testing.T) {
 	manager := newTestManager(t)
 	manager.SetSecretResolver(&stubSecretResolver{values: map[string]string{"X": "y"}})
 	got, err := manager.ResolveSecretEnvVars("inst-1", map[string]interface{}{
-		"environment": map[string]interface{}{"LOG_LEVEL": "info"},
+		"environment": map[string]interface{}{"AGENTAREA_LOG_LEVEL": "info"},
 	})
 	if err != nil {
 		t.Fatalf("ResolveSecretEnvVars() error = %v, want nil", err)

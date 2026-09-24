@@ -28,10 +28,10 @@ type DatabaseSecretResolver struct {
 // NewDatabaseSecretResolver creates a resolver that reads from PostgreSQL
 func NewDatabaseSecretResolver(logger *slog.Logger) (*DatabaseSecretResolver, error) {
 	// Get encryption key from environment
-	encryptionKey := os.Getenv("SECRET_MANAGER_ENCRYPTION_KEY")
+	encryptionKey := os.Getenv("AGENTAREA_SECRET_ENCRYPTION_KEY")
 	if encryptionKey == "" {
-		logger.Warn("SECRET_MANAGER_ENCRYPTION_KEY not set, secrets will not be decryptable")
-		return nil, errors.New("SECRET_MANAGER_ENCRYPTION_KEY is required for database secret manager")
+		logger.Warn("AGENTAREA_SECRET_ENCRYPTION_KEY not set, secrets will not be decryptable")
+		return nil, errors.New("AGENTAREA_SECRET_ENCRYPTION_KEY is required for database secret manager")
 	}
 
 	// Fernet key is already 32 bytes base64url-encoded, decode it
@@ -45,10 +45,10 @@ func NewDatabaseSecretResolver(logger *slog.Logger) (*DatabaseSecretResolver, er
 		return nil, fmt.Errorf("invalid Fernet key length: got %d bytes, expected 32", len(keyBytes))
 	}
 
-	// Build connection string: prefer DATABASE_URL, fall back to individual vars
+	// Build connection string: prefer AGENTAREA_DB_URL, fall back to individual vars
 	connStr := database.BuildConnStr(logger)
 	if connStr == "" {
-		return nil, errors.New("database credentials not configured (set DATABASE_URL or POSTGRES_USER/POSTGRES_PASSWORD)")
+		return nil, errors.New("database credentials not configured (set AGENTAREA_DB_URL or AGENTAREA_DB_USER/AGENTAREA_DB_PASSWORD)")
 	}
 
 	// Connect to database

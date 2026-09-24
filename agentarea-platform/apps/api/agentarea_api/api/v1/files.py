@@ -213,7 +213,7 @@ async def _ensure_no_file_ancestors(service: ArtifactService, workspace_id: str,
 
 
 def _workspace_file_download_url(file_path: str) -> str:
-    base = get_app_settings().API_BASE_URL.rstrip("/")
+    base = get_app_settings().API_URL.rstrip("/")
     encoded_path = quote(file_path.lstrip("/"), safe="/")
     return f"{base}/v1/files/download/{encoded_path}"
 

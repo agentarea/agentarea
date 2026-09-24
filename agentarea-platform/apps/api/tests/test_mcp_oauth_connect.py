@@ -423,7 +423,7 @@ async def test_callback_error_returns_to_the_frontend_with_the_reason_as_data(
     monkeypatch.setattr(
         mcp_oauth_connect,
         "get_settings",
-        lambda: SimpleNamespace(app=SimpleNamespace(FRONTEND_BASE_URL="https://app.agentarea.ai/")),
+        lambda: SimpleNamespace(app=SimpleNamespace(APP_URL="https://app.agentarea.ai/")),
     )
 
     response = await mcp_oauth_connect.oauth_callback(

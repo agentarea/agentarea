@@ -20,13 +20,13 @@ func TestNewFromEnvSelectsExternalProviderWithoutBuiltinFallback(t *testing.T) {
 	t.Cleanup(func() { _ = client.Close() })
 	manifestPath := writeManifest(t, testManifest())
 
-	t.Setenv("SANDBOX_PROVIDER", "cube")
-	t.Setenv("SANDBOX_CUBE_API_URL", "https://cube.example")
-	t.Setenv("SANDBOX_CUBE_API_KEY", "e2b_test")
-	t.Setenv("SANDBOX_CUBE_TEMPLATE", "cube-template")
-	t.Setenv("SANDBOX_CUBE_ISOLATION", "firecracker")
-	t.Setenv("SANDBOX_RUNTIME_MANIFEST_PATH", manifestPath)
-	t.Setenv("SANDBOX_ALLOW_INTERNET", "false")
+	t.Setenv("AGENTAREA_SBX_PROVIDER", "cube")
+	t.Setenv("AGENTAREA_SBX_CUBE_URL", "https://cube.example")
+	t.Setenv("AGENTAREA_SBX_CUBE_API_KEY", "e2b_test")
+	t.Setenv("AGENTAREA_SBX_CUBE_TEMPLATE", "cube-template")
+	t.Setenv("AGENTAREA_SBX_CUBE_ISOLATION", "firecracker")
+	t.Setenv("AGENTAREA_SBX_MANIFEST_PATH", manifestPath)
+	t.Setenv("AGENTAREA_SBX_ALLOW_INTERNET", "false")
 
 	runtime, provider, err := NewFromEnv(context.Background(), nil, client, "kubernetes", mustControlPolicy(t), testWorkspaceLimits())
 	if err != nil {
@@ -42,15 +42,15 @@ func TestNewFromEnvSupportsExplicitLocalOpenSandboxMode(t *testing.T) {
 	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
 
-	t.Setenv("SANDBOX_PROVIDER", "opensandbox")
-	t.Setenv("SANDBOX_OPENSANDBOX_URL", "http://127.0.0.1:8080")
-	t.Setenv("SANDBOX_OPENSANDBOX_ALLOW_INSECURE", "true")
-	t.Setenv("SANDBOX_OPENSANDBOX_ISOLATION", "container-dev")
-	t.Setenv("SANDBOX_OPENSANDBOX_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT", "true")
-	t.Setenv("SANDBOX_OPENSANDBOX_EGRESS_MODE", "provider")
-	t.Setenv("SANDBOX_OPENSANDBOX_IMAGE", "opensandbox/code-interpreter:test")
-	t.Setenv("SANDBOX_RUNTIME_MANIFEST_PATH", writeManifest(t, testManifest()))
-	t.Setenv("SANDBOX_ALLOW_INTERNET", "false")
+	t.Setenv("AGENTAREA_SBX_PROVIDER", "opensandbox")
+	t.Setenv("AGENTAREA_SBX_OSB_URL", "http://127.0.0.1:8080")
+	t.Setenv("AGENTAREA_SBX_OSB_INSECURE", "true")
+	t.Setenv("AGENTAREA_SBX_OSB_ISOLATION", "container-dev")
+	t.Setenv("AGENTAREA_SBX_OSB_WEAK_ISOLATION", "true")
+	t.Setenv("AGENTAREA_SBX_OSB_EGRESS", "provider")
+	t.Setenv("AGENTAREA_SBX_OSB_IMAGE", "opensandbox/code-interpreter:test")
+	t.Setenv("AGENTAREA_SBX_MANIFEST_PATH", writeManifest(t, testManifest()))
+	t.Setenv("AGENTAREA_SBX_ALLOW_INTERNET", "false")
 
 	runtime, provider, err := NewFromEnv(context.Background(), nil, client, "kubernetes", mustControlPolicy(t), testWorkspaceLimits())
 	if err != nil {
@@ -70,13 +70,13 @@ func TestNewFromEnvLoadsInlineManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("SANDBOX_PROVIDER", "e2b")
-	t.Setenv("SANDBOX_E2B_API_URL", "https://api.e2b.app")
-	t.Setenv("SANDBOX_E2B_API_KEY", "e2b_test")
-	t.Setenv("SANDBOX_E2B_TEMPLATE", "agentarea-runtime")
-	t.Setenv("SANDBOX_E2B_ISOLATION", "firecracker")
-	t.Setenv("SANDBOX_RUNTIME_MANIFEST_JSON", string(manifest))
-	t.Setenv("SANDBOX_ALLOW_INTERNET", "true")
+	t.Setenv("AGENTAREA_SBX_PROVIDER", "e2b")
+	t.Setenv("AGENTAREA_SBX_E2B_URL", "https://api.e2b.app")
+	t.Setenv("AGENTAREA_SBX_E2B_API_KEY", "e2b_test")
+	t.Setenv("AGENTAREA_SBX_E2B_TEMPLATE", "agentarea-runtime")
+	t.Setenv("AGENTAREA_SBX_E2B_ISOLATION", "firecracker")
+	t.Setenv("AGENTAREA_SBX_MANIFEST_JSON", string(manifest))
+	t.Setenv("AGENTAREA_SBX_ALLOW_INTERNET", "true")
 
 	runtime, provider, err := NewFromEnv(context.Background(), nil, client, "kubernetes", mustControlPolicy(t), testWorkspaceLimits())
 	if err != nil {
@@ -88,7 +88,7 @@ func TestNewFromEnvLoadsInlineManifest(t *testing.T) {
 }
 
 func TestNewFromEnvRejectsUnknownProviderInsteadOfFallingBack(t *testing.T) {
-	t.Setenv("SANDBOX_PROVIDER", "mystery")
+	t.Setenv("AGENTAREA_SBX_PROVIDER", "mystery")
 	_, _, err := NewFromEnv(context.Background(), nil, nil, "kubernetes", mustControlPolicy(t), testWorkspaceLimits())
 	if err == nil {
 		t.Fatal("unknown provider unexpectedly accepted")
@@ -99,11 +99,11 @@ func TestNewFromEnvRejectsSessionRecordTTLShorterThanProviderLease(t *testing.T)
 	server := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
-	t.Setenv("SANDBOX_PROVIDER", "e2b")
-	t.Setenv("SANDBOX_TASK_LEASE_TTL", "2h")
-	t.Setenv("SANDBOX_TASK_IDLE_TTL", "15m")
-	t.Setenv("SANDBOX_PROVIDER_PROVISIONING_TIMEOUT", "30s")
-	t.Setenv("SANDBOX_PROVIDER_SESSION_TTL", "1h")
+	t.Setenv("AGENTAREA_SBX_PROVIDER", "e2b")
+	t.Setenv("AGENTAREA_SBX_LEASE_TTL", "2h")
+	t.Setenv("AGENTAREA_SBX_IDLE_TTL", "15m")
+	t.Setenv("AGENTAREA_SBX_PROVISION_TIMEOUT", "30s")
+	t.Setenv("AGENTAREA_SBX_SESSION_TTL", "1h")
 
 	if _, err := LoadControlPolicyFromEnv(); err == nil {
 		t.Fatal("short provider session record TTL unexpectedly accepted by policy loader")
@@ -114,42 +114,42 @@ func TestNewFromEnvRejectsSessionRecordTTLShorterThanProviderLease(t *testing.T)
 }
 
 func TestControlPolicyRejectsSessionRecordTTLThatCanExpireBeforeIdleSandbox(t *testing.T) {
-	t.Setenv("SANDBOX_TASK_LEASE_TTL", "30m")
-	t.Setenv("SANDBOX_TASK_IDLE_TTL", "2h")
-	t.Setenv("SANDBOX_PROVIDER_PROVISIONING_TIMEOUT", "30s")
+	t.Setenv("AGENTAREA_SBX_LEASE_TTL", "30m")
+	t.Setenv("AGENTAREA_SBX_IDLE_TTL", "2h")
+	t.Setenv("AGENTAREA_SBX_PROVISION_TIMEOUT", "30s")
 	for _, recordTTL := range []string{"90m", "2h"} {
 		t.Run(recordTTL, func(t *testing.T) {
-			t.Setenv("SANDBOX_PROVIDER_SESSION_TTL", recordTTL)
+			t.Setenv("AGENTAREA_SBX_SESSION_TTL", recordTTL)
 			if _, err := LoadControlPolicyFromEnv(); err == nil {
 				t.Fatalf("session record TTL %s unexpectedly accepted", recordTTL)
 			}
 		})
 	}
-	t.Setenv("SANDBOX_PROVIDER_SESSION_TTL", "2h1s")
+	t.Setenv("AGENTAREA_SBX_SESSION_TTL", "2h1s")
 	if _, err := LoadControlPolicyFromEnv(); err != nil {
 		t.Fatalf("session record outliving idle sandbox rejected: %v", err)
 	}
 }
 
 func TestControlPolicyRequiresProvisioningIntentToOutliveCreateAndLease(t *testing.T) {
-	t.Setenv("SANDBOX_TASK_LEASE_TTL", "30m")
-	t.Setenv("SANDBOX_TASK_IDLE_TTL", "15m")
-	t.Setenv("SANDBOX_PROVIDER_PROVISIONING_TIMEOUT", "30s")
-	t.Setenv("SANDBOX_PROVIDER_SESSION_TTL", "30m30s")
+	t.Setenv("AGENTAREA_SBX_LEASE_TTL", "30m")
+	t.Setenv("AGENTAREA_SBX_IDLE_TTL", "15m")
+	t.Setenv("AGENTAREA_SBX_PROVISION_TIMEOUT", "30s")
+	t.Setenv("AGENTAREA_SBX_SESSION_TTL", "30m30s")
 	if _, err := LoadControlPolicyFromEnv(); err == nil {
 		t.Fatal("session record expiring with the last possible remote lease unexpectedly accepted")
 	}
-	t.Setenv("SANDBOX_PROVIDER_SESSION_TTL", "30m31s")
+	t.Setenv("AGENTAREA_SBX_SESSION_TTL", "30m31s")
 	if _, err := LoadControlPolicyFromEnv(); err != nil {
 		t.Fatalf("session record outliving create and lease rejected: %v", err)
 	}
 }
 
 func TestLoadControlPolicyRequiresExplicitValues(t *testing.T) {
-	t.Setenv("SANDBOX_TASK_LEASE_TTL", "")
-	t.Setenv("SANDBOX_TASK_IDLE_TTL", "")
-	t.Setenv("SANDBOX_PROVIDER_PROVISIONING_TIMEOUT", "")
-	t.Setenv("SANDBOX_PROVIDER_SESSION_TTL", "")
+	t.Setenv("AGENTAREA_SBX_LEASE_TTL", "")
+	t.Setenv("AGENTAREA_SBX_IDLE_TTL", "")
+	t.Setenv("AGENTAREA_SBX_PROVISION_TIMEOUT", "")
+	t.Setenv("AGENTAREA_SBX_SESSION_TTL", "")
 
 	if _, err := LoadControlPolicyFromEnv(); err == nil {
 		t.Fatal("missing sandbox control policy unexpectedly accepted")
@@ -162,10 +162,10 @@ func testWorkspaceLimits() WorkspaceLimits {
 
 func mustControlPolicy(t *testing.T) ControlPolicy {
 	t.Helper()
-	t.Setenv("SANDBOX_TASK_LEASE_TTL", "2h")
-	t.Setenv("SANDBOX_TASK_IDLE_TTL", "15m")
-	t.Setenv("SANDBOX_PROVIDER_PROVISIONING_TIMEOUT", "30s")
-	t.Setenv("SANDBOX_PROVIDER_SESSION_TTL", "24h")
+	t.Setenv("AGENTAREA_SBX_LEASE_TTL", "2h")
+	t.Setenv("AGENTAREA_SBX_IDLE_TTL", "15m")
+	t.Setenv("AGENTAREA_SBX_PROVISION_TIMEOUT", "30s")
+	t.Setenv("AGENTAREA_SBX_SESSION_TTL", "24h")
 	policy, err := LoadControlPolicyFromEnv()
 	if err != nil {
 		t.Fatal(err)
@@ -187,13 +187,13 @@ func TestNewFromEnvRequiresExplicitInternetPolicy(t *testing.T) {
 	server := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
-	t.Setenv("SANDBOX_PROVIDER", "e2b")
-	t.Setenv("SANDBOX_E2B_API_URL", "https://api.e2b.app")
-	t.Setenv("SANDBOX_E2B_API_KEY", "e2b_test")
-	t.Setenv("SANDBOX_E2B_TEMPLATE", "agentarea-runtime")
-	t.Setenv("SANDBOX_E2B_ISOLATION", "firecracker")
-	t.Setenv("SANDBOX_RUNTIME_MANIFEST_PATH", writeManifest(t, testManifest()))
-	t.Setenv("SANDBOX_ALLOW_INTERNET", "")
+	t.Setenv("AGENTAREA_SBX_PROVIDER", "e2b")
+	t.Setenv("AGENTAREA_SBX_E2B_URL", "https://api.e2b.app")
+	t.Setenv("AGENTAREA_SBX_E2B_API_KEY", "e2b_test")
+	t.Setenv("AGENTAREA_SBX_E2B_TEMPLATE", "agentarea-runtime")
+	t.Setenv("AGENTAREA_SBX_E2B_ISOLATION", "firecracker")
+	t.Setenv("AGENTAREA_SBX_MANIFEST_PATH", writeManifest(t, testManifest()))
+	t.Setenv("AGENTAREA_SBX_ALLOW_INTERNET", "")
 
 	if _, _, err := NewFromEnv(context.Background(), nil, client, "kubernetes", mustControlPolicy(t), testWorkspaceLimits()); err == nil {
 		t.Fatal("missing sandbox internet policy unexpectedly accepted")
@@ -214,15 +214,15 @@ func writeManifest(t *testing.T, manifest any) string {
 }
 
 func TestLoadWorkspaceProviderFromEnvIsRequiredAndClosed(t *testing.T) {
-	t.Setenv("SANDBOX_WORKSPACE_PROVIDER", "")
+	t.Setenv("AGENTAREA_SBX_STORAGE", "")
 	if _, err := LoadWorkspaceProviderFromEnv(); err == nil {
 		t.Fatal("missing workspace provider unexpectedly resolved")
 	}
-	t.Setenv("SANDBOX_WORKSPACE_PROVIDER", "gcs")
+	t.Setenv("AGENTAREA_SBX_STORAGE", "gcs")
 	if _, err := LoadWorkspaceProviderFromEnv(); err == nil {
 		t.Fatal("unsupported workspace provider unexpectedly resolved")
 	}
-	t.Setenv("SANDBOX_WORKSPACE_PROVIDER", "s3")
+	t.Setenv("AGENTAREA_SBX_STORAGE", "s3")
 	provider, err := LoadWorkspaceProviderFromEnv()
 	if err != nil || provider != WorkspaceProviderS3 {
 		t.Fatalf("LoadWorkspaceProviderFromEnv() = %q, %v", provider, err)
@@ -232,7 +232,7 @@ func TestLoadWorkspaceProviderFromEnvIsRequiredAndClosed(t *testing.T) {
 // The decorator must not re-read process state: an unresolved provider value
 // fails here rather than silently picking one up from the environment.
 func TestWorkspaceRuntimeFactoryIgnoresProcessEnvironment(t *testing.T) {
-	t.Setenv("SANDBOX_WORKSPACE_PROVIDER", "s3")
+	t.Setenv("AGENTAREA_SBX_STORAGE", "s3")
 	if _, err := NewWorkspaceRuntimeForProvider(context.Background(), nil, WorkspaceProvider(""), workspace.RepositoryConfig{}); err == nil {
 		t.Fatal("unresolved workspace provider unexpectedly built a runtime")
 	}

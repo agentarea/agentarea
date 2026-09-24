@@ -17,7 +17,7 @@ deployment is described, and reconciled into rows.
 
 Env vars:
     DATABASE_URL                     – PostgreSQL connection string
-    SECRET_MANAGER_ENCRYPTION_KEY    – Fernet key, same one the platform uses
+    AGENTAREA_SECRET_ENCRYPTION_KEY    – Fernet key, same one the platform uses
     WATCH_NAMESPACE                  – Namespace to watch (default: all)
 """
 
@@ -50,7 +50,7 @@ MANAGED_BY_PLATFORM = "platform"
 PLATFORM_ID_NAMESPACE = uuid.UUID("8f3d4b2a-6c1e-5a7f-9d0b-2e4a6c8f1d3b")
 
 DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
+    "AGENTAREA_DB_URL",
     "postgresql+psycopg2://user:password@localhost:5432/agentarea",
 )
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
@@ -63,7 +63,7 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 # role restricted to the tables below — tracked separately; until then this is the
 # most privileged thing in the cluster after the API itself, and its RBAC and image
 # provenance should be treated that way.
-ENCRYPTION_KEY = os.environ.get("SECRET_MANAGER_ENCRYPTION_KEY", "")
+ENCRYPTION_KEY = os.environ.get("AGENTAREA_SECRET_ENCRYPTION_KEY", "")
 
 
 def platform_config_id(provider_key: str) -> str:
@@ -100,7 +100,7 @@ def store_api_key(conn, workspace_id: str, secret_name: str, api_key: str) -> st
     """
     if not ENCRYPTION_KEY:
         raise kopf.PermanentError(
-            "SECRET_MANAGER_ENCRYPTION_KEY is not set; refusing to write a provider "
+            "AGENTAREA_SECRET_ENCRYPTION_KEY is not set; refusing to write a provider "
             "configuration whose credential cannot be stored. Set it to the same "
             "Fernet key the platform API uses."
         )

@@ -38,25 +38,25 @@ class SecretManagerFactory:
         self.settings = settings
 
         # Validate configuration at startup to fail fast
-        secret_type = settings.SECRET_MANAGER_TYPE.lower()
+        secret_type = settings.BACKEND.lower()
 
         if secret_type == "database":  # noqa: S105
-            if not settings.SECRET_MANAGER_ENCRYPTION_KEY:
+            if not settings.ENCRYPTION_KEY:
                 raise ValueError(
-                    "SECRET_MANAGER_ENCRYPTION_KEY environment variable must be "
+                    "AGENTAREA_SECRET_ENCRYPTION_KEY environment variable must be "
                     "set when using database secret manager. Generate one with: "
                     "python -c 'from cryptography.fernet import Fernet; "
                     "print(Fernet.generate_key().decode())'"
                 )
         elif secret_type == "infisical":  # noqa: S105
-            if not settings.SECRET_MANAGER_ACCESS_KEY or not settings.SECRET_MANAGER_SECRET_KEY:
+            if not settings.CLIENT_ID or not settings.CLIENT_SECRET:
                 raise ValueError(
                     "Infisical credentials not configured. "
-                    "Set SECRET_MANAGER_ACCESS_KEY and SECRET_MANAGER_SECRET_KEY."
+                    "Set AGENTAREA_SECRET_CLIENT_ID and AGENTAREA_SECRET_CLIENT_SECRET."
                 )
-            if not settings.SECRET_MANAGER_PROJECT_ID:
+            if not settings.PROJECT_ID:
                 raise ValueError(
-                    "SECRET_MANAGER_PROJECT_ID must be set when using the Infisical "
+                    "AGENTAREA_SECRET_PROJECT_ID must be set when using the Infisical "
                     "secret manager: it selects which Infisical project holds the secrets."
                 )
 
@@ -84,7 +84,7 @@ class SecretManagerFactory:
         Raises:
             ValueError: If invalid configuration or missing dependencies
         """
-        secret_type = self.settings.SECRET_MANAGER_TYPE.lower()
+        secret_type = self.settings.BACKEND.lower()
 
         if secret_type == "database":  # noqa: S105
             from .database_secret_manager import DatabaseSecretManager
@@ -95,7 +95,7 @@ class SecretManagerFactory:
             return DatabaseSecretManager(
                 session=session,
                 user_context=user_context,
-                encryption_key=self.settings.SECRET_MANAGER_ENCRYPTION_KEY,
+                encryption_key=self.settings.ENCRYPTION_KEY,
             )
 
         elif secret_type == "infisical":  # noqa: S105
@@ -106,22 +106,22 @@ class SecretManagerFactory:
             from .infisical_secret_manager import InfisicalSecretManager
 
             client = cast(Any, InfisicalSDKClient)(
-                host=self.settings.SECRET_MANAGER_ENDPOINT or "https://app.infisical.com",
-                client_id=self.settings.SECRET_MANAGER_ACCESS_KEY,
-                client_secret=self.settings.SECRET_MANAGER_SECRET_KEY,
+                host=self.settings.ENDPOINT or "https://app.infisical.com",
+                client_id=self.settings.CLIENT_ID,
+                client_secret=self.settings.CLIENT_SECRET,
             )
 
             logger.debug("Created InfisicalSecretManager")
             return InfisicalSecretManager(
                 client,
                 workspace_id=user_context.workspace_id,
-                project_id=self.settings.SECRET_MANAGER_PROJECT_ID,
-                environment_slug=self.settings.SECRET_MANAGER_ENVIRONMENT,
+                project_id=self.settings.PROJECT_ID,
+                environment_slug=self.settings.ENV,
             )
 
         else:
             raise ValueError(
-                f"Invalid SECRET_MANAGER_TYPE: '{secret_type}'. "
+                f"Invalid AGENTAREA_SECRET_BACKEND: '{secret_type}'. "
                 f"Supported types: 'database', 'infisical'"
             )
 

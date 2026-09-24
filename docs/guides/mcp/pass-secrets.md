@@ -90,7 +90,7 @@ explicitly if you want some values to stay readable.
         \"json_spec\": {
           \"type\": \"docker\",
           \"image\": \"mcp/postgres:latest\",
-          \"environment\": {\"DATABASE_URL\": \"postgres://user:pw@host/db\"}
+          \"environment\": {\"AGENTAREA_DB_URL\": \"postgres://user:pw@host/db\"}
         }
       }"
     ```

@@ -33,5 +33,5 @@ def build_icon_url(namespace: str, icon: str | None) -> str | None:
         return None
     if icon.startswith(("http://", "https://")):
         return icon
-    base = get_app_settings().API_BASE_URL.rstrip("/")
+    base = get_app_settings().API_URL.rstrip("/")
     return f"{base}/static/icons/{namespace}/{icon}.svg"

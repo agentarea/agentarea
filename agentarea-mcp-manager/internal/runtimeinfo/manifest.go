@@ -84,7 +84,7 @@ func Load(path string) (*Manifest, error) {
 }
 
 func PathFromEnv() string {
-	if path := os.Getenv("RUNTIME_MANIFEST_PATH"); path != "" {
+	if path := os.Getenv("AGENTAREA_SBX_MANIFEST_PATH"); path != "" {
 		return path
 	}
 	return DefaultManifestPath

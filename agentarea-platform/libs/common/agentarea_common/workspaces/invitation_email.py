@@ -96,7 +96,7 @@ async def deliver_invitation_for_workspace(
     Shared by the REST route and the members toolset so both surfaces produce
     the same email and report the same outcome.
     """
-    base_url = get_settings().app.FRONTEND_BASE_URL.rstrip("/")
+    base_url = get_settings().app.APP_URL.rstrip("/")
     workspace = await workspace_repo.get(workspace_id)
     return await deliver_invitation_email(
         mailer=get_mailer(),

@@ -2,10 +2,14 @@
 
 from typing import Literal
 
+from pydantic_settings import SettingsConfigDict
+
 from .base import BaseAppSettings
 
 
 class AccessControlSettings(BaseAppSettings):
     """Provider-neutral access-control configuration."""
 
-    ACCESS_CONTROL_BACKEND: Literal["keto", "openfga"] = "openfga"
+    model_config = SettingsConfigDict(env_prefix="AGENTAREA_AUTHZ_")
+
+    BACKEND: Literal["keto", "openfga"] = "openfga"

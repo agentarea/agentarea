@@ -71,7 +71,7 @@ is the agent, not the deployment.
 
   <Step title="The stack will not start">
     **Compose aborts before creating any container.** A required variable is empty.
-    `SANDBOX_ACTIVATION_AUTH_SECRET` and `SANDBOX_CLEANUP_AUTH_SECRET` are declared
+    `AGENTAREA_SBX_ACTIVATION_SECRET` and `AGENTAREA_SBX_CLEANUP_SECRET` are declared
     `${VAR:?message}`, so Compose refuses rather than starting an unauthenticated
     sandbox path. Set both in `.env`, at least 32 bytes each.
 
@@ -94,7 +94,7 @@ is the agent, not the deployment.
     docker compose -f docker-compose.yaml logs app | head -50
     ```
 
-    `SECRET_MANAGER_ENCRYPTION_KEY environment variable must be set` is the most
+    `AGENTAREA_SECRET_ENCRYPTION_KEY environment variable must be set` is the most
     common. `SecretManagerFactory` validates its configuration at construction, so
     the process exits at startup instead of failing later on the first secret read.
 
@@ -151,7 +151,7 @@ is the agent, not the deployment.
     | Redirected to `localhost:4433` in production | `kratos.urls.public` unset, so the internal service URL was used |
     | Login succeeds, next request is anonymous | `kratos.session.cookieDomain` still `localhost` |
     | CORS error in the browser console | `kratos.config.serve.public.cors.allowed_origins` still points at the shipped staging domain |
-    | Token rejected with a signature error | `KRATOS_JWKS_B64` differs between Kratos and the API |
+    | Token rejected with a signature error | `AGENTAREA_AUTH_JWKS_B64` differs between Kratos and the API |
 
     `ORY_SDK_URL` is for server-side calls from the frontend container;
     `ORY_BROWSER_URL` is where the browser goes. They are allowed to differ, and
@@ -168,8 +168,8 @@ is the agent, not the deployment.
     ```
 
     The worker and the API must agree on all three Temporal values —
-    `WORKFLOW__TEMPORAL_SERVER_URL`, `WORKFLOW__TEMPORAL_NAMESPACE`, and
-    `WORKFLOW__TEMPORAL_TASK_QUEUE`. A worker polling a different task queue than the
+    `AGENTAREA_WF_TEMPORAL_URL`, `AGENTAREA_WF_NAMESPACE`, and
+    `AGENTAREA_WF_QUEUE`. A worker polling a different task queue than the
     API submits to produces exactly this symptom, with no error on either side.
 
     Under Compose, `temporal` has a 120-second health-check start period and the
@@ -201,13 +201,13 @@ is the agent, not the deployment.
     them.
 
     **Instances start and immediately go idle.** With
-    `mcpManager.serverless.enabled`, `MCP_IDLE_TIMEOUT` reclaims uncalled instances.
+    `mcpManager.serverless.enabled`, `AGENTAREA_MCP_IDLE_TIMEOUT` reclaims uncalled instances.
     This is normal: the next call starts the workload again through the demand
     gateway. Check `mcp_runtime_instances.state` to tell a reclaimed instance
     (`dormant`) from a broken one (`failed`, with `last_error` set).
 
     **A call to a dormant instance times out.** The gateway bounds a cold start with
-    `MCP_GATEWAY_STARTUP_TIMEOUT` (default `5m`), which must exceed the readiness
+    `AGENTAREA_MCP_STARTUP_TIMEOUT` (default `5m`), which must exceed the readiness
     probe's first success — an instance that needs longer than the timeout can never
     come up. Concurrent callers get a retry response rather than an error while one
     start is in flight.
@@ -224,7 +224,7 @@ is the agent, not the deployment.
 
     ```bash
     kubectl get configmap -n agentarea agentarea-env-backend \
-      -o jsonpath='{.data.PUBLIC_S3_ENDPOINT}{"\n"}'
+      -o jsonpath='{.data.AGENTAREA_S3_PUBLIC_ENDPOINT}{"\n"}'
     ```
 
     Empty means presigned URLs point at the in-cluster object store address, which
@@ -285,12 +285,12 @@ Failures that look like one problem and are another:
     .
   </Accordion>
   <Accordion title="Provider icons are broken and OAuth callbacks fail">
-    Both are served from `API_BASE_URL` . When `global.api.publicUrl` is empty
+    Both are served from `AGENTAREA_API_URL` . When `global.api.publicUrl` is empty
     the chart derives it from the backend ingress host, assuming `https` , and
     falls back to a ClusterIP URL if ingress is off.
   </Accordion>
   <Accordion title="Stored credentials fail with `InvalidToken`">
-    `SECRET_MANAGER_ENCRYPTION_KEY` no longer matches the ciphertext in
+    `AGENTAREA_SECRET_ENCRYPTION_KEY` no longer matches the ciphertext in
     `encrypted_secrets` . There is no recovery path without the original key.
     See [secrets backends](/self-host/secrets-backends) .
   </Accordion>

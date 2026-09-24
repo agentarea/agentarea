@@ -5,7 +5,7 @@ from agentarea_common.observability.otel import setup_otel
 
 
 def test_setup_otel_returns_false_when_disabled():
-    settings = ObservabilitySettings(OTEL_ENABLED=False)
+    settings = ObservabilitySettings(AGENTAREA_OTEL_ENABLED=False)
 
     assert setup_otel("agentarea-test", settings) is False
 

@@ -845,8 +845,8 @@ async def test_create_telegram_webhook_trigger_registers_webhook(
     mock_trigger_service.create_trigger.return_value = WebhookTrigger(**data)
 
     class _Settings:
-        TELEGRAM_WEBHOOK_BASE_URL = "https://gw.example"
-        API_BASE_URL = "http://localhost:8000"
+        TELEGRAM_WEBHOOK_URL = "https://gw.example"
+        API_URL = "http://localhost:8000"
 
     with (
         patch(

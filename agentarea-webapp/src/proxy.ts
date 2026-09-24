@@ -11,7 +11,7 @@ import oryConfig from "@/ory.config";
 // This function can be marked `async` if using `await` inside
 // The middleware automatically reads ORY_SDK_URL from environment variables
 export const proxy = async (request: Request) => {
-  // Redirect /self-service requests from the current host to NEXT_PUBLIC_ORY_SDK_URL if necessary
+  // Redirect /self-service requests from the current host to ORY_BROWSER_URL if necessary
   const currentHost = request.headers.get("host");
   const publicOryUrl = env.ORY_BROWSER_URL;
   if (

@@ -49,9 +49,9 @@ async def test_agent_workflow_starts_on_the_configured_task_queue(monkeypatch) -
         "get_settings",
         lambda: SimpleNamespace(
             workflow=SimpleNamespace(
-                TEMPORAL_NAMESPACE="default",
-                TEMPORAL_SERVER_URL="temporal:7233",
-                TEMPORAL_TASK_QUEUE="agent-tasks-enterprise",
+                NAMESPACE="default",
+                TEMPORAL_URL="temporal:7233",
+                QUEUE="agent-tasks-enterprise",
             )
         ),
     )

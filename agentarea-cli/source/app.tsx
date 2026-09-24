@@ -15,7 +15,7 @@ interface AppProps {
 export default function App({token: cliToken, apiUrl}: AppProps) {
 	// Initialize config with provided API URL if specified
 	if (apiUrl) {
-		process.env['API_URL'] = apiUrl;
+		process.env['AGENTAREA_API_URL'] = apiUrl;
 		configManager.reinitialize();
 		apiClient.reinitialize();
 	}

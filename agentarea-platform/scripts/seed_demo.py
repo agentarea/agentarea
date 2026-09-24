@@ -28,7 +28,7 @@ Notes:
 - Costs go in ``task.result.total_cost`` so dashboard spend aggregator picks
   them up.
 - Telegram bot token is encrypted with Fernet using
-  ``SECRET_MANAGER_ENCRYPTION_KEY`` and stored in ``encrypted_secrets``.
+  ``AGENTAREA_SECRET_ENCRYPTION_KEY`` and stored in ``encrypted_secrets``.
 """
 
 from __future__ import annotations
@@ -737,16 +737,16 @@ async def main() -> None:
     parser.add_argument("--telegram-token", default=DEFAULT_TELEGRAM_TOKEN)
     parser.add_argument(
         "--webhook-base-url",
-        default=os.environ.get("TRIGGERS_WEBHOOK_BASE_URL", WEBHOOK_BASE_URL_DEFAULT),
+        default=os.environ.get("AGENTAREA_TRIG_WEBHOOK_URL", WEBHOOK_BASE_URL_DEFAULT),
         help="Public base URL for Telegram setWebhook (e.g., https://api.example.com/webhooks)",
     )
     args = parser.parse_args()
 
     random.seed()
-    encryption_key = os.environ.get("SECRET_MANAGER_ENCRYPTION_KEY")
+    encryption_key = os.environ.get("AGENTAREA_SECRET_ENCRYPTION_KEY")
     if args.with_telegram and not encryption_key:
         raise SystemExit(
-            "SECRET_MANAGER_ENCRYPTION_KEY env var is required for --telegram seeding "
+            "AGENTAREA_SECRET_ENCRYPTION_KEY env var is required for --telegram seeding "
             "(or pass --no-telegram)."
         )
     if not args.openrouter_key:

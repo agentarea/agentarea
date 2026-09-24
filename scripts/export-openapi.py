@@ -15,10 +15,10 @@ from pathlib import Path
 # Provide dummy values for required env vars so the app can initialize
 # without real services. Only the OpenAPI schema is extracted — no connections are made.
 _DUMMY_ENV = {
-    "WORKFLOW__TEMPORAL_SERVER_URL": "http://localhost:7233",
-    "WORKFLOW__TEMPORAL_NAMESPACE": "default",
-    "WORKFLOW__TEMPORAL_TASK_QUEUE": "agent-tasks",
-    "KRATOS_JWKS_B64": "eyJrZXlzIjpbXX0=",  # {"keys":[]} - empty JWKS, enough for schema export
+    "AGENTAREA_WF_TEMPORAL_URL": "http://localhost:7233",
+    "AGENTAREA_WF_NAMESPACE": "default",
+    "AGENTAREA_WF_QUEUE": "agent-tasks",
+    "AGENTAREA_AUTH_JWKS_B64": "eyJrZXlzIjpbXX0=",  # {"keys":[]} - empty JWKS, enough for schema export
 }
 for key, value in _DUMMY_ENV.items():
     os.environ.setdefault(key, value)

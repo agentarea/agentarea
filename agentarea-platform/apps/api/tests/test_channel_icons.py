@@ -31,7 +31,7 @@ def test_every_declared_icon_is_shipped():
 
 
 def test_catalog_icon_resolves_into_the_channels_namespace(monkeypatch):
-    monkeypatch.setenv("API_BASE_URL", "https://api.agentarea.ai")
+    monkeypatch.setenv("AGENTAREA_API_URL", "https://api.agentarea.ai")
     from agentarea_common.config.app import get_app_settings
 
     get_app_settings.cache_clear()

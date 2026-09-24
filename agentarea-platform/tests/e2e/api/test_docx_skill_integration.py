@@ -34,7 +34,7 @@ import pytest
 from tests.e2e.api.conftest import _psql, wait_for_workflow
 from tests.e2e.api.test_skill_mcp_orchestration import _ensure_artifacts_bucket
 
-API_URL = os.environ.get("API_URL", "http://localhost:8000")
+API_URL = os.environ.get("AGENTAREA_API_URL", "http://localhost:8000")
 
 # OpenRouter / Kimi K2 credentials must come from the environment.
 # DO NOT hardcode keys here — this file is checked into version control.

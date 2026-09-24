@@ -313,11 +313,11 @@ func TestGatewayRefusesRetirementWithActiveLease(t *testing.T) {
 }
 
 func TestLoadPolicyFromEnvRequiresExplicitOperationalValues(t *testing.T) {
-	t.Setenv("MCP_REQUEST_LEASE_TTL", "90s")
-	t.Setenv("MCP_GATEWAY_STARTUP_TIMEOUT", "5m")
-	t.Setenv("MCP_IDLE_TIMEOUT", "0")
-	t.Setenv("MCP_IDLE_SWEEP_INTERVAL", "1m")
-	t.Setenv("MCP_GATEWAY_AUTH_SECRET", testGatewaySecret)
+	t.Setenv("AGENTAREA_MCP_LEASE_TTL", "90s")
+	t.Setenv("AGENTAREA_MCP_STARTUP_TIMEOUT", "5m")
+	t.Setenv("AGENTAREA_MCP_IDLE_TIMEOUT", "0")
+	t.Setenv("AGENTAREA_MCP_SWEEP_INTERVAL", "1m")
+	t.Setenv("AGENTAREA_MCP_GATEWAY_SECRET", testGatewaySecret)
 
 	policy, err := LoadPolicyFromEnv()
 	if err != nil {
@@ -327,7 +327,7 @@ func TestLoadPolicyFromEnvRequiresExplicitOperationalValues(t *testing.T) {
 		t.Fatalf("unexpected policy: %+v", policy)
 	}
 
-	t.Setenv("MCP_REQUEST_LEASE_TTL", "invalid")
+	t.Setenv("AGENTAREA_MCP_LEASE_TTL", "invalid")
 	if _, err := LoadPolicyFromEnv(); err == nil {
 		t.Fatal("malformed duration was accepted")
 	}

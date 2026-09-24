@@ -226,7 +226,7 @@ export async function connectClient(
 	const mcpUrl = client.mcp_endpoint_url;
 	if (!mcpUrl) {
 		throw new Error(
-			`The API returned no mcp_endpoint_url for client ${client.id}; check API_BASE_URL on the server`,
+			`The API returned no mcp_endpoint_url for client ${client.id}; check AGENTAREA_API_URL on the server`,
 		);
 	}
 

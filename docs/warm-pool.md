@@ -161,7 +161,7 @@ Enable warm pool via feature flags:
 
 ```bash
 # Environment variables
-MCP_FEATURES_ENABLED=warm_pool,gateway_api,state_reconciler
+AGENTAREA_MCP_FEATURES=warm_pool,gateway_api,state_reconciler
 WARM_POOL_ENABLED=true
 WARM_POOL_SIZE=10
 ```

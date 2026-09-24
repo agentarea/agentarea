@@ -31,15 +31,15 @@ def start(debug: bool, max_activities: int | None, max_workflows: int | None):
 
     # Override settings if provided
     if max_activities:
-        settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES = max_activities
+        settings.workflow.MAX_ACTIVITIES = max_activities
     if max_workflows:
-        settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS = max_workflows
+        settings.workflow.MAX_WORKFLOWS = max_workflows
 
     click.echo("Starting AgentArea Temporal Worker...")
-    click.echo(f"Temporal Server: {settings.workflow.TEMPORAL_SERVER_URL}")
-    click.echo(f"Task Queue: {settings.workflow.TEMPORAL_TASK_QUEUE}")
-    click.echo(f"Max Activities: {settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES}")
-    click.echo(f"Max Workflows: {settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS}")
+    click.echo(f"Temporal Server: {settings.workflow.TEMPORAL_URL}")
+    click.echo(f"Task Queue: {settings.workflow.QUEUE}")
+    click.echo(f"Max Activities: {settings.workflow.MAX_ACTIVITIES}")
+    click.echo(f"Max Workflows: {settings.workflow.MAX_WORKFLOWS}")
 
     try:
         worker = AgentAreaWorker()
@@ -107,10 +107,10 @@ def status():
     settings = get_settings()
 
     click.echo("Worker Configuration:")
-    click.echo(f"Temporal Server: {settings.workflow.TEMPORAL_SERVER_URL}")
-    click.echo(f"Namespace: {settings.workflow.TEMPORAL_NAMESPACE}")
-    click.echo(f"Task Queue: {settings.workflow.TEMPORAL_TASK_QUEUE}")
-    click.echo(f"Database: {settings.database.POSTGRES_HOST}:{settings.database.POSTGRES_PORT}")
+    click.echo(f"Temporal Server: {settings.workflow.TEMPORAL_URL}")
+    click.echo(f"Namespace: {settings.workflow.NAMESPACE}")
+    click.echo(f"Task Queue: {settings.workflow.QUEUE}")
+    click.echo(f"Database: {settings.database.HOST}:{settings.database.PORT}")
 
 
 @cli.command()

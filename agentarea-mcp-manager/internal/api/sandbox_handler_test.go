@@ -210,7 +210,7 @@ func TestSandboxCleanupFailsClosedWithoutConfiguredSecret(t *testing.T) {
 func TestExternalSandboxCleanupRunsEvenWhenWarmPoolFeatureIsDisabled(t *testing.T) {
 	t.Setenv(sandboxCleanupAuthSecretEnv, "cleanup-secret-for-tests")
 	t.Setenv("MCP_FEATURE_WARM_POOL", "false")
-	t.Setenv("SANDBOX_TASK_IDLE_TTL", "42s")
+	t.Setenv("AGENTAREA_SBX_IDLE_TTL", "42s")
 	runtime := &retiringSandboxRuntime{}
 	recorder := httptest.NewRecorder()
 	context, _ := gin.CreateTestContext(recorder)

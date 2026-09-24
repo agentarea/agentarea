@@ -42,23 +42,23 @@ type ClientConfig struct {
 // must reject it, and a token without a URL names no data plane at all; neither is a
 // state worth starting in.
 func ClientConfigFromEnv() (*ClientConfig, error) {
-	base := strings.TrimSpace(os.Getenv("MCP_DATAPLANE_URL"))
-	token := os.Getenv("MCP_DATAPLANE_AUTH_TOKEN")
+	base := strings.TrimSpace(os.Getenv("AGENTAREA_MCP_DATAPLANE_URL"))
+	token := os.Getenv("AGENTAREA_MCP_DATAPLANE_TOKEN")
 
 	if base == "" {
-		return nil, fmt.Errorf("MCP_DATAPLANE_URL is required when BACKEND_TYPE=dataplane")
+		return nil, fmt.Errorf("AGENTAREA_MCP_DATAPLANE_URL is required when AGENTAREA_MCP_BACKEND=dataplane")
 	}
 	if token == "" {
-		return nil, fmt.Errorf("MCP_DATAPLANE_AUTH_TOKEN is required when BACKEND_TYPE=dataplane")
+		return nil, fmt.Errorf("AGENTAREA_MCP_DATAPLANE_TOKEN is required when AGENTAREA_MCP_BACKEND=dataplane")
 	}
 	parsed, err := url.Parse(base)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return nil, fmt.Errorf("MCP_DATAPLANE_URL must be an absolute URL, got %q", base)
+		return nil, fmt.Errorf("AGENTAREA_MCP_DATAPLANE_URL must be an absolute URL, got %q", base)
 	}
-	if parsed.Scheme != "https" && os.Getenv("MCP_DATAPLANE_ALLOW_INSECURE") != "true" {
+	if parsed.Scheme != "https" && os.Getenv("AGENTAREA_MCP_DATAPLANE_INSECURE") != "true" {
 		return nil, fmt.Errorf(
-			"MCP_DATAPLANE_URL is %s; the data-plane token would cross the network in cleartext. "+
-				"Use https, or set MCP_DATAPLANE_ALLOW_INSECURE=true when the hop is already private (SSH tunnel, WireGuard)",
+			"AGENTAREA_MCP_DATAPLANE_URL is %s; the data-plane token would cross the network in cleartext. "+
+				"Use https, or set AGENTAREA_MCP_DATAPLANE_INSECURE=true when the hop is already private (SSH tunnel, WireGuard)",
 			parsed.Scheme,
 		)
 	}

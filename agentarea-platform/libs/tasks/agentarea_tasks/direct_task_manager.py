@@ -4,7 +4,7 @@ Same BaseTaskManager interface and same dependency chain as TemporalTaskManager.
 The agent's model, skills, and tools are resolved from the database —
 same as the Temporal workflow does via activities, but called directly.
 
-Swap via WORKFLOW__EXECUTION_ENGINE=direct. No other config needed.
+Swap via AGENTAREA_WF_ENGINE=direct. No other config needed.
 """
 
 import json

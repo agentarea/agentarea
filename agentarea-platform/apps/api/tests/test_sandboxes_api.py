@@ -27,8 +27,8 @@ class _AsyncClient:
 def _settings(secret: str | None):
     return SimpleNamespace(
         mcp=SimpleNamespace(
-            MCP_MANAGER_URL="http://mcp-manager",
-            SANDBOX_INSPECTION_AUTH_SECRET=SecretStr(secret) if secret else None,
+            MANAGER_URL="http://mcp-manager",
+            SBX_INSPECT_SECRET=SecretStr(secret) if secret else None,
         )
     )
 

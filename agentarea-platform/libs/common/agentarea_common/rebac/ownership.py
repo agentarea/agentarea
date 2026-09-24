@@ -66,7 +66,7 @@ def resolve_graph_client() -> tuple[GraphClient, str] | None:
     from agentarea_common.config import get_settings
     from agentarea_common.di.container import get_container
 
-    backend = get_settings().access_control.ACCESS_CONTROL_BACKEND
+    backend = get_settings().access_control.BACKEND
     if backend == "openfga":
         client_type: type[GraphClient] = OpenFGAClient
         backend_name = "OpenFGA"

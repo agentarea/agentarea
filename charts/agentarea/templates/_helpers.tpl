@@ -86,39 +86,39 @@ rendered into values-backed ConfigMaps.
 {{- fail "an external sandboxRuntime.provider requires sandboxRuntime.manifest" -}}
 {{- end -}}
 {{- if $runtime.provider }}
-- name: SANDBOX_PROVIDER
+- name: AGENTAREA_SBX_PROVIDER
   value: {{ $runtime.provider | quote }}
 {{- end }}
 {{- if $runtime.region }}
-- name: SANDBOX_REGION
+- name: AGENTAREA_SBX_REGION
   value: {{ $runtime.region | quote }}
 {{- end }}
-- name: SANDBOX_TASK_IDLE_TTL
+- name: AGENTAREA_SBX_IDLE_TTL
   value: {{ $runtime.idleTTL | quote }}
-- name: SANDBOX_TASK_LEASE_TTL
+- name: AGENTAREA_SBX_LEASE_TTL
   value: {{ $runtime.leaseTTL | quote }}
-- name: SANDBOX_PROVIDER_PROVISIONING_TIMEOUT
+- name: AGENTAREA_SBX_PROVISION_TIMEOUT
   value: {{ required "sandboxRuntime.provisioningTimeout is required; ambiguous creates must have a bounded reconciliation window" $runtime.provisioningTimeout | quote }}
-- name: SANDBOX_PROVIDER_SESSION_TTL
+- name: AGENTAREA_SBX_SESSION_TTL
   value: {{ $runtime.sessionRecordTTL | quote }}
-- name: SANDBOX_EXECUTION_RECORD_TTL
+- name: AGENTAREA_SBX_RECORD_TTL
   value: {{ required "sandboxRuntime.executionRecordTTL is required; execution-record retention has no application default" $runtime.executionRecordTTL | quote }}
-- name: SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS
+- name: AGENTAREA_SBX_MAX_EXEC_SECONDS
   value: {{ required "sandboxRuntime.maxExecutionTimeoutSeconds is required; execution admission has no application default" $runtime.maxExecutionTimeoutSeconds | quote }}
-- name: SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS
+- name: AGENTAREA_SBX_EXEC_SECONDS
   value: {{ required "sandboxRuntime.defaultExecutionTimeoutSeconds is required; execution admission has no application default" $runtime.defaultExecutionTimeoutSeconds | quote }}
-- name: SANDBOX_EXECUTION_QUEUE_TIMEOUT
+- name: AGENTAREA_SBX_QUEUE_TIMEOUT
   value: {{ required "sandboxRuntime.executionQueueTimeout is required; queued work needs a server-owned expiry" $runtime.executionQueueTimeout | quote }}
-- name: SANDBOX_EXECUTION_COMPLETION_GRACE
+- name: AGENTAREA_SBX_COMPLETION_GRACE
   value: {{ required "sandboxRuntime.executionCompletionGrace is required; post-command completion needs a bounded deadline" $runtime.executionCompletionGrace | quote }}
-- name: SANDBOX_PROVIDER_CPU
+- name: AGENTAREA_SBX_CPU
   value: {{ $runtime.resources.cpu | quote }}
-- name: SANDBOX_PROVIDER_MEMORY
+- name: AGENTAREA_SBX_MEMORY
   value: {{ $runtime.resources.memory | quote }}
-- name: SANDBOX_ALLOW_INTERNET
+- name: AGENTAREA_SBX_ALLOW_INTERNET
   value: {{ $runtime.allowInternet | quote }}
 {{- if not (empty $runtime.manifest) }}
-- name: SANDBOX_RUNTIME_MANIFEST_JSON
+- name: AGENTAREA_SBX_MANIFEST_JSON
   value: {{ $runtime.manifest | toJson | quote }}
 {{- end }}
 {{- if eq $runtime.provider "opensandbox" }}
@@ -155,35 +155,35 @@ rendered into values-backed ConfigMaps.
 {{- if and (not $runtime.opensandbox.secureAccess) (not $runtime.opensandbox.useServerProxy) -}}
 {{- fail "sandboxRuntime.opensandbox.secureAccess=false requires useServerProxy=true" -}}
 {{- end }}
-- name: SANDBOX_OPENSANDBOX_URL
+- name: AGENTAREA_SBX_OSB_URL
   value: {{ required "sandboxRuntime.opensandbox.url is required" $runtime.opensandbox.url | quote }}
-- name: SANDBOX_OPENSANDBOX_ALLOW_INSECURE
+- name: AGENTAREA_SBX_OSB_INSECURE
   value: {{ $runtime.opensandbox.allowInsecure | quote }}
-- name: SANDBOX_OPENSANDBOX_SECURE_ACCESS
+- name: AGENTAREA_SBX_OSB_SECURE_ACCESS
   value: {{ $runtime.opensandbox.secureAccess | quote }}
-- name: SANDBOX_OPENSANDBOX_ISOLATION
+- name: AGENTAREA_SBX_OSB_ISOLATION
   value: {{ $openSandboxIsolation | quote }}
 {{- if $openSandboxRuntimeIdentity }}
-- name: SANDBOX_OPENSANDBOX_RUNTIME_IDENTITY
+- name: AGENTAREA_SBX_OSB_IDENTITY
   value: {{ $openSandboxRuntimeIdentity | quote }}
 {{- end }}
-- name: SANDBOX_OPENSANDBOX_EGRESS_MODE
+- name: AGENTAREA_SBX_OSB_EGRESS
   value: {{ $egressMode | quote }}
-- name: SANDBOX_OPENSANDBOX_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT
+- name: AGENTAREA_SBX_OSB_WEAK_ISOLATION
   value: {{ $runtime.opensandbox.allowWeakIsolationForDevelopment | quote }}
-- name: SANDBOX_OPENSANDBOX_USE_SERVER_PROXY
+- name: AGENTAREA_SBX_OSB_SERVER_PROXY
   value: {{ $runtime.opensandbox.useServerProxy | quote }}
-- name: SANDBOX_OPENSANDBOX_AUTH_HEADER
+- name: AGENTAREA_SBX_OSB_AUTH_HEADER
   value: {{ $runtime.opensandbox.authHeader | quote }}
-- name: SANDBOX_OPENSANDBOX_IMAGE
+- name: AGENTAREA_SBX_OSB_IMAGE
   value: {{ $runtime.opensandbox.image | quote }}
 {{- if $runtime.opensandbox.entrypoint }}
-- name: SANDBOX_OPENSANDBOX_ENTRYPOINT
+- name: AGENTAREA_SBX_OSB_ENTRYPOINT
   value: {{ $runtime.opensandbox.entrypoint | toJson | quote }}
 {{- end }}
 {{- with $runtime.opensandbox.apiKeySecretRef }}
 {{- if and .name .key }}
-- name: SANDBOX_OPENSANDBOX_API_KEY
+- name: AGENTAREA_SBX_OSB_API_KEY
   valueFrom:
     secretKeyRef:
       name: {{ .name | quote }}
@@ -198,27 +198,27 @@ rendered into values-backed ConfigMaps.
 {{- if or (not $runtime.e2b.apiKeySecretRef.name) (not $runtime.e2b.apiKeySecretRef.key) -}}
 {{- fail "sandboxRuntime.e2b.apiKeySecretRef name and key are required" -}}
 {{- end }}
-- name: SANDBOX_E2B_API_URL
+- name: AGENTAREA_SBX_E2B_URL
   value: {{ required "sandboxRuntime.e2b.apiUrl is required" $runtime.e2b.apiUrl | quote }}
-- name: SANDBOX_E2B_ISOLATION
+- name: AGENTAREA_SBX_E2B_ISOLATION
   value: {{ required "sandboxRuntime.e2b.isolation is required; an E2B-compatible endpoint must attest a verifiable boundary" $runtime.e2b.isolation | quote }}
-- name: SANDBOX_E2B_ATTESTATION_PATH
+- name: AGENTAREA_SBX_E2B_ATTESTATION
   value: {{ required "sandboxRuntime.e2b.attestationPath is required" $runtime.e2b.attestationPath | quote }}
 {{- if $runtime.e2b.runtimeIdentity }}
-- name: SANDBOX_E2B_RUNTIME_IDENTITY
+- name: AGENTAREA_SBX_E2B_IDENTITY
   value: {{ $runtime.e2b.runtimeIdentity | quote }}
 {{- end }}
 {{- if $runtime.e2b.sandboxUrl }}
-- name: SANDBOX_E2B_SANDBOX_URL
+- name: AGENTAREA_SBX_E2B_SANDBOX_URL
   value: {{ $runtime.e2b.sandboxUrl | quote }}
 {{- end }}
-- name: SANDBOX_E2B_ALLOW_INSECURE
+- name: AGENTAREA_SBX_E2B_INSECURE
   value: {{ $runtime.e2b.allowInsecure | quote }}
-- name: SANDBOX_E2B_TEMPLATE
+- name: AGENTAREA_SBX_E2B_TEMPLATE
   value: {{ $runtime.e2b.template | quote }}
 {{- with $runtime.e2b.apiKeySecretRef }}
 {{- if and .name .key }}
-- name: SANDBOX_E2B_API_KEY
+- name: AGENTAREA_SBX_E2B_API_KEY
   valueFrom:
     secretKeyRef:
       name: {{ .name | quote }}
@@ -233,27 +233,27 @@ rendered into values-backed ConfigMaps.
 {{- if or (not $runtime.cube.apiKeySecretRef.name) (not $runtime.cube.apiKeySecretRef.key) -}}
 {{- fail "sandboxRuntime.cube.apiKeySecretRef name and key are required" -}}
 {{- end }}
-- name: SANDBOX_CUBE_API_URL
+- name: AGENTAREA_SBX_CUBE_URL
   value: {{ required "sandboxRuntime.cube.apiUrl is required" $runtime.cube.apiUrl | quote }}
-- name: SANDBOX_CUBE_ISOLATION
+- name: AGENTAREA_SBX_CUBE_ISOLATION
   value: {{ required "sandboxRuntime.cube.isolation is required; a Cube endpoint must attest a verifiable boundary" $runtime.cube.isolation | quote }}
-- name: SANDBOX_CUBE_ATTESTATION_PATH
+- name: AGENTAREA_SBX_CUBE_ATTESTATION
   value: {{ required "sandboxRuntime.cube.attestationPath is required" $runtime.cube.attestationPath | quote }}
 {{- if $runtime.cube.runtimeIdentity }}
-- name: SANDBOX_CUBE_RUNTIME_IDENTITY
+- name: AGENTAREA_SBX_CUBE_IDENTITY
   value: {{ $runtime.cube.runtimeIdentity | quote }}
 {{- end }}
 {{- if $runtime.cube.sandboxUrl }}
-- name: SANDBOX_CUBE_SANDBOX_URL
+- name: AGENTAREA_SBX_CUBE_SANDBOX_URL
   value: {{ $runtime.cube.sandboxUrl | quote }}
 {{- end }}
-- name: SANDBOX_CUBE_ALLOW_INSECURE
+- name: AGENTAREA_SBX_CUBE_INSECURE
   value: {{ $runtime.cube.allowInsecure | quote }}
-- name: SANDBOX_CUBE_TEMPLATE
+- name: AGENTAREA_SBX_CUBE_TEMPLATE
   value: {{ $runtime.cube.template | quote }}
 {{- with $runtime.cube.apiKeySecretRef }}
 {{- if and .name .key }}
-- name: SANDBOX_CUBE_API_KEY
+- name: AGENTAREA_SBX_CUBE_API_KEY
   valueFrom:
     secretKeyRef:
       name: {{ .name | quote }}
@@ -399,14 +399,14 @@ no execution cluster is configured.
 
 Every workload that builds a Kubernetes backend from the mcpManager env block
 needs these, and that is not only the manager: the sandbox runner builds the
-same backend from the same KUBERNETES_KUBECONFIG and exits if the file it names
+same backend from the same AGENTAREA_K8S_KUBECONFIG and exits if the file it names
 is absent. Keeping the pair here is what stops one deployment from getting the
 path without the file.
 */}}
 {{- define "agentarea.mcpManager.executionKubeconfigMount" }}
 {{- if include "agentarea.mcpManager.executionKubeconfigPath" . }}
 # Credentials for the separate execution cluster, at the path handed to the
-# process as KUBERNETES_KUBECONFIG.
+# process as AGENTAREA_K8S_KUBECONFIG.
 - name: execution-kubeconfig
   mountPath: {{ include "agentarea.mcpManager.executionKubeconfigDir" . }}
   readOnly: true

@@ -53,8 +53,8 @@ If applicable, add screenshots or videos to help explain your problem.
 **Environment Variables:**
 ```bash
 # Please include relevant environment variables (sanitize sensitive data)
-LOG_LEVEL=INFO
-DATABASE_URL=postgresql://...
+AGENTAREA_LOG_LEVEL=INFO
+AGENTAREA_DB_URL=postgresql://...
 # etc.
 ```
 

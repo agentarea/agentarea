@@ -11,14 +11,16 @@ const __dirname = path.dirname(__filename);
 
 // Default configuration values
 const defaultConfig: CLIConfig = {
-	kratosUrl: process.env['KRATOS_URL'] || 'http://localhost:4433',
-	apiBaseUrl: process.env['API_URL'] || 'http://localhost:8000',
-	apiTimeout: Number(process.env['API_TIMEOUT']) || 30000,
-	maxRetries: Number(process.env['MAX_RETRIES']) || 3,
-	retryDelay: Number(process.env['RETRY_DELAY']) || 1000,
-	streamTimeout: Number(process.env['STREAM_TIMEOUT']) || 60000,
-	logLevel: (process.env['LOG_LEVEL'] as CLIConfig['logLevel']) || 'info',
-	theme: (process.env['THEME'] as CLIConfig['theme']) || 'auto',
+	kratosUrl:
+		process.env['AGENTAREA_AUTH_KRATOS_URL'] || 'http://localhost:4433',
+	apiBaseUrl: process.env['AGENTAREA_API_URL'] || 'http://localhost:8000',
+	apiTimeout: Number(process.env['AGENTAREA_API_TIMEOUT']) || 30000,
+	maxRetries: Number(process.env['AGENTAREA_MAX_RETRIES']) || 3,
+	retryDelay: Number(process.env['AGENTAREA_RETRY_DELAY']) || 1000,
+	streamTimeout: Number(process.env['AGENTAREA_STREAM_TIMEOUT']) || 60000,
+	logLevel:
+		(process.env['AGENTAREA_LOG_LEVEL'] as CLIConfig['logLevel']) || 'info',
+	theme: (process.env['AGENTAREA_THEME'] as CLIConfig['theme']) || 'auto',
 };
 
 // Create persistent config store
@@ -40,36 +42,40 @@ export class ConfigManager {
 			// Load from environment variables (highest priority)
 			const envConfig: Partial<CLIConfig> = {};
 
-			if (process.env['KRATOS_URL']) {
-				envConfig.kratosUrl = process.env['KRATOS_URL'];
+			if (process.env['AGENTAREA_AUTH_KRATOS_URL']) {
+				envConfig.kratosUrl = process.env['AGENTAREA_AUTH_KRATOS_URL'];
 			}
 
-			if (process.env['API_URL']) {
-				envConfig.apiBaseUrl = process.env['API_URL'];
+			if (process.env['AGENTAREA_API_URL']) {
+				envConfig.apiBaseUrl = process.env['AGENTAREA_API_URL'];
 			}
 
-			if (process.env['API_TIMEOUT']) {
-				envConfig.apiTimeout = Number(process.env['API_TIMEOUT']);
+			if (process.env['AGENTAREA_API_TIMEOUT']) {
+				envConfig.apiTimeout = Number(process.env['AGENTAREA_API_TIMEOUT']);
 			}
 
-			if (process.env['MAX_RETRIES']) {
-				envConfig.maxRetries = Number(process.env['MAX_RETRIES']);
+			if (process.env['AGENTAREA_MAX_RETRIES']) {
+				envConfig.maxRetries = Number(process.env['AGENTAREA_MAX_RETRIES']);
 			}
 
-			if (process.env['RETRY_DELAY']) {
-				envConfig.retryDelay = Number(process.env['RETRY_DELAY']);
+			if (process.env['AGENTAREA_RETRY_DELAY']) {
+				envConfig.retryDelay = Number(process.env['AGENTAREA_RETRY_DELAY']);
 			}
 
-			if (process.env['STREAM_TIMEOUT']) {
-				envConfig.streamTimeout = Number(process.env['STREAM_TIMEOUT']);
+			if (process.env['AGENTAREA_STREAM_TIMEOUT']) {
+				envConfig.streamTimeout = Number(
+					process.env['AGENTAREA_STREAM_TIMEOUT'],
+				);
 			}
 
-			if (process.env['LOG_LEVEL']) {
-				envConfig.logLevel = process.env['LOG_LEVEL'] as CLIConfig['logLevel'];
+			if (process.env['AGENTAREA_LOG_LEVEL']) {
+				envConfig.logLevel = process.env[
+					'AGENTAREA_LOG_LEVEL'
+				] as CLIConfig['logLevel'];
 			}
 
-			if (process.env['THEME']) {
-				envConfig.theme = process.env['THEME'] as CLIConfig['theme'];
+			if (process.env['AGENTAREA_THEME']) {
+				envConfig.theme = process.env['AGENTAREA_THEME'] as CLIConfig['theme'];
 			}
 
 			// Merge with persistent config

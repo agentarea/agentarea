@@ -33,11 +33,11 @@ services:
   agentarea-worker:
     pull_policy: never
     environment:
-      # The job env exports WORKFLOW__TEMPORAL_SERVER_URL=localhost:7233 for
+      # The job env exports AGENTAREA_WF_TEMPORAL_URL=localhost:7233 for
       # processes on the runner, and the base file interpolates it into the
       # container, where localhost is the worker itself. The worker connects to
       # Temporal at startup, so it needs the service name.
-      - WORKFLOW__TEMPORAL_SERVER_URL=temporal:7233
+      - AGENTAREA_WF_TEMPORAL_URL=temporal:7233
   rustfs:
     volumes:
       - rustfs_ci_data:/data

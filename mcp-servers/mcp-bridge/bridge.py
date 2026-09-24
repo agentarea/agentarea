@@ -28,7 +28,7 @@ logging.basicConfig(
 log = logging.getLogger("mcp-bridge")
 
 # How long to wait for a response from the child process (seconds)
-REQUEST_TIMEOUT = float(os.environ.get("MCP_BRIDGE_TIMEOUT", "30"))
+REQUEST_TIMEOUT = float(os.environ.get("AGENTAREA_MCP_BRIDGE_TIMEOUT", "30"))
 
 
 class StdioBridge:

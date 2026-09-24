@@ -75,12 +75,12 @@ Create a `.env` file in the `core` directory with the following variables:
 # Kratos Authentication Configuration
 # Default test values are provided in config/app.py
 # Override in production with your Kratos JWKS
-KRATOS_JWKS_B64=<base64-encoded-jwks>
-KRATOS_ISSUER=https://agentarea.dev
-KRATOS_AUDIENCE=agentarea-api
+AGENTAREA_AUTH_JWKS_B64=<base64-encoded-jwks>
+AGENTAREA_AUTH_ISSUER=https://agentarea.dev
+AGENTAREA_AUTH_AUDIENCE=agentarea-api
 
 # Database
-DATABASE_URL=postgresql://user:password@localhost/dbname
+AGENTAREA_DB_URL=postgresql://user:password@localhost/dbname
 
 # Other settings...
 ```

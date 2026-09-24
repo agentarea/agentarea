@@ -9,35 +9,34 @@ services:
     pull_policy: always
     environment:
       # S3 settings
-      - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
-      - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
-      - AWS_REGION=${RUSTFS_REGION:-us-east-1}
-      - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
-      - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
-      - AWS_ENDPOINT_URL=http://rustfs:9000
+      - AGENTAREA_S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
+      - AGENTAREA_S3_SECRET_KEY=${RUSTFS_SECRET_KEY}
+      - AGENTAREA_S3_REGION=${RUSTFS_REGION:-us-east-1}
+      - AGENTAREA_S3_BUCKET=${DOCUMENTS_BUCKET}
+      - AGENTAREA_S3_ARTIFACTS_BUCKET=${ARTIFACTS_BUCKET:-artifacts}
+      - AGENTAREA_S3_ENDPOINT=http://rustfs:9000
       # Database settings
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - AGENTAREA_DB_HOST=db
+      - AGENTAREA_DB_PORT=5432
+      - AGENTAREA_DB_USER=${AGENTAREA_DB_USER}
+      - AGENTAREA_DB_PASSWORD=${AGENTAREA_DB_PASSWORD}
+      - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
       # MCP settings
-      - MCP_MANAGER_URL=http://agentarea-mcp-manager:80/api/mcp
-      - REDIS_URL=redis://valkey:6379
-      - MCP_CLIENT_TIMEOUT=30
+      - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80/api/mcp
+      - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_MCP_TIMEOUT=30
       # Server settings
       - PORT=${PORT:-8000}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - RELOAD=${RELOAD:-false}
-      - WORKERS=${WORKERS:-1}
-      - WORKFLOW__TEMPORAL_SERVER_URL=${WORKFLOW__TEMPORAL_SERVER_URL:-temporal:7233}
-      - WORKFLOW__TEMPORAL_NAMESPACE=default
-      - WORKFLOW__TEMPORAL_TASK_QUEUE=agent-tasks
-      - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
-      - KRATOS_JWKS_B64=${KRATOS_JWKS_B64}
-      - KRATOS_ISSUER=${KRATOS_ISSUER:-http://localhost:4433}
-      - KRATOS_AUDIENCE=${KRATOS_AUDIENCE:-agentarea-api}
-      - KRATOS_ADMIN_URL=${KRATOS_ADMIN_URL:-http://kratos:4434}
+      - AGENTAREA_LOG_LEVEL=${AGENTAREA_LOG_LEVEL:-info}
+      - AGENTAREA_API_WORKERS=${AGENTAREA_API_WORKERS:-1}
+      - AGENTAREA_WF_TEMPORAL_URL=${AGENTAREA_WF_TEMPORAL_URL:-temporal:7233}
+      - AGENTAREA_WF_NAMESPACE=default
+      - AGENTAREA_WF_QUEUE=agent-tasks
+      - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
+      - AGENTAREA_AUTH_JWKS_B64=${AGENTAREA_AUTH_JWKS_B64}
+      - AGENTAREA_AUTH_ISSUER=${AGENTAREA_AUTH_ISSUER:-http://localhost:4433}
+      - AGENTAREA_AUTH_AUDIENCE=${AGENTAREA_AUTH_AUDIENCE:-agentarea-api}
+      - AGENTAREA_AUTH_KRATOS_ADMIN_URL=${AGENTAREA_AUTH_KRATOS_ADMIN_URL:-http://kratos:4434}
       # Transactional mail (workspace invitations). Same server Kratos' courier
       # uses, so one SMTP setup covers both senders.
       - SMTP_HOST=${SMTP_HOST}
@@ -49,18 +48,18 @@ services:
       - SMTP_FROM_NAME=${SMTP_FROM_NAME:-AgentArea}
       - SMTP_SKIP_SSL_VERIFY=${SMTP_SKIP_SSL_VERIFY:-true}
       - SMTP_DISABLE_STARTTLS=${SMTP_DISABLE_STARTTLS:-true}
-      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:3000}
+      - AGENTAREA_APP_URL=${AGENTAREA_APP_URL:-http://localhost:3000}
       # Access control: the authorization graph lives in OpenFGA. Bootstrap
       # finds or creates the store and applies the bundled model on start, so
       # a fresh install needs no ids up front.
-      - ACCESS_CONTROL_BACKEND=${ACCESS_CONTROL_BACKEND:-openfga}
-      - ACCESS_CONTROL_OPENFGA_API_URL=${ACCESS_CONTROL_OPENFGA_API_URL:-http://openfga:8080}
-      - ACCESS_CONTROL_OPENFGA_STORE_ID=${ACCESS_CONTROL_OPENFGA_STORE_ID:-}
-      - ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID=${ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID:-}
-      - ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP=${ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP:-true}
-      - ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=${ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL:-true}
-      - ACCESS_CONTROL_OPENFGA_STORE_NAME=${ACCESS_CONTROL_OPENFGA_STORE_NAME:-agentarea}
-      - ACCESS_CONTROL_OPENFGA_MODEL_PATH=${ACCESS_CONTROL_OPENFGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
+      - AGENTAREA_AUTHZ_BACKEND=${AGENTAREA_AUTHZ_BACKEND:-openfga}
+      - AGENTAREA_AUTHZ_FGA_URL=${AGENTAREA_AUTHZ_FGA_URL:-http://openfga:8080}
+      - AGENTAREA_AUTHZ_FGA_STORE_ID=${AGENTAREA_AUTHZ_FGA_STORE_ID:-}
+      - AGENTAREA_AUTHZ_FGA_MODEL_ID=${AGENTAREA_AUTHZ_FGA_MODEL_ID:-}
+      - AGENTAREA_AUTHZ_FGA_BOOTSTRAP=${AGENTAREA_AUTHZ_FGA_BOOTSTRAP:-true}
+      - AGENTAREA_AUTHZ_FGA_APPLY_MODEL=${AGENTAREA_AUTHZ_FGA_APPLY_MODEL:-true}
+      - AGENTAREA_AUTHZ_FGA_STORE_NAME=${AGENTAREA_AUTHZ_FGA_STORE_NAME:-agentarea}
+      - AGENTAREA_AUTHZ_FGA_MODEL_PATH=${AGENTAREA_AUTHZ_FGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
     volumes:
       - ./config/auth/openfga:/app/config/auth/openfga:ro
     depends_on:
@@ -99,17 +98,17 @@ services:
     image: agentarea/agentarea-api:${VERSION:-latest}
     pull_policy: always
     environment:
-      - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
-      - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
-      - AWS_REGION=${RUSTFS_REGION:-us-east-1}
-      - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
-      - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
-      - AWS_ENDPOINT_URL=http://rustfs:9000
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
+      - AGENTAREA_S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
+      - AGENTAREA_S3_SECRET_KEY=${RUSTFS_SECRET_KEY}
+      - AGENTAREA_S3_REGION=${RUSTFS_REGION:-us-east-1}
+      - AGENTAREA_S3_BUCKET=${DOCUMENTS_BUCKET}
+      - AGENTAREA_S3_ARTIFACTS_BUCKET=${ARTIFACTS_BUCKET:-artifacts}
+      - AGENTAREA_S3_ENDPOINT=http://rustfs:9000
+      - AGENTAREA_DB_USER=${AGENTAREA_DB_USER}
+      - AGENTAREA_DB_PASSWORD=${AGENTAREA_DB_PASSWORD}
+      - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
+      - AGENTAREA_DB_HOST=db
+      - AGENTAREA_DB_PORT=5432
     depends_on:
       db:
         condition: service_healthy
@@ -126,11 +125,11 @@ services:
     image: agentarea/agentarea-api:${VERSION:-latest}
     pull_policy: always
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
+      - AGENTAREA_DB_USER=${AGENTAREA_DB_USER}
+      - AGENTAREA_DB_PASSWORD=${AGENTAREA_DB_PASSWORD}
+      - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
+      - AGENTAREA_DB_HOST=db
+      - AGENTAREA_DB_PORT=5432
     depends_on:
       app:
         condition: service_healthy
@@ -150,14 +149,14 @@ services:
     environment:
       - PGHOST=db
       - PGPORT=5432
-      - PGUSER=${POSTGRES_USER}
-      - PGPASSWORD=${POSTGRES_PASSWORD}
+      - PGUSER=${AGENTAREA_DB_USER}
+      - PGPASSWORD=${AGENTAREA_DB_PASSWORD}
     entrypoint:
       - bash
       - -c
       - |
         set -e
-        for db in "${POSTGRES_DB:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${OPENFGA_DB:-openfga}"; do
+        for db in "${AGENTAREA_DB_NAME:-agentarea}" "${TEMPORAL_DB:-temporal}" "${KRATOS_DB:-kratos}" "${OPENFGA_DB:-openfga}"; do
           exists=$$(psql -tAc "SELECT 1 FROM pg_database WHERE datname='$$db'")
           if [ "$$exists" != "1" ]; then
             echo "Creating database $$db"
@@ -181,13 +180,12 @@ services:
     environment:
       # - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
-      - API_URL=${API_URL:-http://app:8000}
-      - ORY_ADMIN_URL=${ORY_ADMIN_URL:-http://kratos:4434}
+      - AGENTAREA_API_URL=${AGENTAREA_API_URL:-http://app:8000}
+      - AGENTAREA_AUTH_KRATOS_ADMIN_URL=${AGENTAREA_AUTH_KRATOS_ADMIN_URL:-http://kratos:4434}
       # ORY_SDK_URL: internal Docker URL for server-side API calls to Kratos
       - ORY_SDK_URL=${ORY_SDK_URL:-http://kratos:4433}
-      - ORY_BROWSER_URL=${ORY_BROWSER_URL:-http://localhost:4433}
-      - API_BROWSER_URL=${API_BROWSER_URL:-http://localhost:8000}
       - NEXT_PUBLIC_ORY_SDK_URL=${NEXT_PUBLIC_ORY_SDK_URL:-http://localhost:4433}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     networks:
       - default
       - auth-network
@@ -210,8 +208,8 @@ services:
   db:
     image: postgres:18
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=${AGENTAREA_DB_USER}
+      - POSTGRES_PASSWORD=${AGENTAREA_DB_PASSWORD}
       - POSTGRES_DB=postgres  # Maintenance DB; postgres_init creates the main app DB plus aux DBs
     volumes:
       # postgres:18 stores data under /var/lib/postgresql/<ver>/docker, so the
@@ -226,7 +224,7 @@ services:
     # itself: the database spends its life rejecting connections.
     init: true
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${AGENTAREA_DB_USER}"]
       interval: 10s
       # Long enough to cover an fsync-bound start on a bind mount; a probe that
       # is killed for being slow is the input to the loop described above.
@@ -262,80 +260,80 @@ services:
       - mcp-network
       - default
     environment:
-      LOG_LEVEL: INFO
+      AGENTAREA_LOG_LEVEL: INFO
       # The rest of the stack addresses the manager as
       # http://agentarea-mcp-manager:80, and the published port maps to 80.
       # The binary otherwise listens on 8000, which leaves both dead.
-      SERVER_PORT: "80"
+      PORT: "80"
       # Spawned MCP workloads join the segregated MCP network rather than the
       # project default, which also carries the database and Redis.
-      MCP_NETWORK: agentarea_mcp-network
-      REDIS_URL: redis://valkey:6379
-      CORE_API_URL: http://app:8000
+      AGENTAREA_MCP_NETWORK: agentarea_mcp-network
+      AGENTAREA_REDIS_URL: redis://valkey:6379
+      AGENTAREA_API_URL: http://app:8000
       # Demand gateway: MCP workloads start on the first call and are reclaimed
       # after MCP_IDLE_TIMEOUT (0 keeps them running once started). All four are
       # required — the gateway refuses to configure itself without them.
-      MCP_REQUEST_LEASE_TTL: "90s"
-      MCP_GATEWAY_STARTUP_TIMEOUT: "5m"
-      MCP_IDLE_TIMEOUT: "10m"
-      MCP_IDLE_SWEEP_INTERVAL: "60s"
+      AGENTAREA_MCP_LEASE_TTL: "90s"
+      AGENTAREA_MCP_STARTUP_TIMEOUT: "5m"
+      AGENTAREA_MCP_IDLE_TIMEOUT: "10m"
+      AGENTAREA_MCP_SWEEP_INTERVAL: "60s"
       # Admission lists for MCP instances, mirroring the chart defaults in
       # charts/agentarea/values.yaml (mcpManager.admission). Both are required
       # and an absent list is refused: "not decided yet" must not read as
       # "allow everything". Declare one empty to disable that instance type.
-      MCP_ALLOWED_IMAGE_REPOSITORIES: "ghcr.io/github/github-mcp-server,mcp/fetch"
-      MCP_ALLOWED_COMMAND_PACKAGES: "npx -y @modelcontextprotocol/server-everything,npx -y @modelcontextprotocol/server-sequential-thinking,uvx mcp-server-fetch,uvx mcp-server-time"
+      AGENTAREA_MCP_ALLOWED_IMAGES: "ghcr.io/github/github-mcp-server,mcp/fetch"
+      AGENTAREA_MCP_ALLOWED_PACKAGES: "npx -y @modelcontextprotocol/server-everything,npx -y @modelcontextprotocol/server-sequential-thinking,uvx mcp-server-fetch,uvx mcp-server-time"
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
-      SANDBOX_EMBEDDED_RUNNER: "true"
-      SANDBOX_EXECUTOR_URL: http://sandbox-executor:8080
+      AGENTAREA_SBX_EMBEDDED_RUNNER: "true"
+      AGENTAREA_SBX_EXECUTOR_URL: http://sandbox-executor:8080
       # Explicit acknowledgement: the compose executor shares this host's
       # kernel and is not an isolation boundary for hostile multi-tenant code.
       # Kubernetes replaces it with per-task warm-pool pods under a sandboxed
       # runtime class; the manager refuses the shared path without this flag.
-      SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT: "true"
-      SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:?SANDBOX_ACTIVATION_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
-      SANDBOX_CLEANUP_AUTH_SECRET: ${SANDBOX_CLEANUP_AUTH_SECRET:?SANDBOX_CLEANUP_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
-      SANDBOX_FILE_AUTH_SECRET: ${SANDBOX_FILE_AUTH_SECRET:?SANDBOX_FILE_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
-      SANDBOX_CONTROL_AUTH_SECRET: ${SANDBOX_CONTROL_AUTH_SECRET:?SANDBOX_CONTROL_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
-      MCP_GATEWAY_AUTH_SECRET: ${MCP_GATEWAY_AUTH_SECRET:?MCP_GATEWAY_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
+      AGENTAREA_SBX_ALLOW_WEAK_ISOLATION: "true"
+      AGENTAREA_SBX_ACTIVATION_SECRET: ${AGENTAREA_SBX_ACTIVATION_SECRET:?AGENTAREA_SBX_ACTIVATION_SECRET is required; run scripts/gen-dev-secrets.sh}
+      AGENTAREA_SBX_CLEANUP_SECRET: ${AGENTAREA_SBX_CLEANUP_SECRET:?AGENTAREA_SBX_CLEANUP_SECRET is required; run scripts/gen-dev-secrets.sh}
+      AGENTAREA_SBX_FILE_SECRET: ${AGENTAREA_SBX_FILE_SECRET:?AGENTAREA_SBX_FILE_SECRET is required; run scripts/gen-dev-secrets.sh}
+      AGENTAREA_SBX_CONTROL_SECRET: ${AGENTAREA_SBX_CONTROL_SECRET:?AGENTAREA_SBX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
+      AGENTAREA_MCP_GATEWAY_SECRET: ${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
       # Lifecycle and admission policy. The manager refuses to start when any
       # value is absent or malformed rather than inventing retention behavior,
       # so these belong here in the deployment config — the binary holds no
       # defaults. Helm emits the same set from .Values.sandboxRuntime.
-      SANDBOX_TASK_LEASE_TTL: "2h"
-      SANDBOX_TASK_IDLE_TTL: "15m"
-      SANDBOX_PROVIDER_PROVISIONING_TIMEOUT: "30s"
-      SANDBOX_PROVIDER_SESSION_TTL: "24h"
-      SANDBOX_EXECUTION_RECORD_TTL: "24h"
-      SANDBOX_MAX_EXECUTION_TIMEOUT_SECONDS: "1800"
-      SANDBOX_DEFAULT_EXECUTION_TIMEOUT_SECONDS: "120"
-      SANDBOX_EXECUTION_QUEUE_TIMEOUT: "5m"
-      SANDBOX_EXECUTION_COMPLETION_GRACE: "2m"
-      SANDBOX_ALLOW_INTERNET: ${SANDBOX_ALLOW_INTERNET:-true}
+      AGENTAREA_SBX_LEASE_TTL: "2h"
+      AGENTAREA_SBX_IDLE_TTL: "15m"
+      AGENTAREA_SBX_PROVISION_TIMEOUT: "30s"
+      AGENTAREA_SBX_SESSION_TTL: "24h"
+      AGENTAREA_SBX_RECORD_TTL: "24h"
+      AGENTAREA_SBX_MAX_EXEC_SECONDS: "1800"
+      AGENTAREA_SBX_EXEC_SECONDS: "120"
+      AGENTAREA_SBX_QUEUE_TIMEOUT: "5m"
+      AGENTAREA_SBX_COMPLETION_GRACE: "2m"
+      AGENTAREA_SBX_ALLOW_INTERNET: ${AGENTAREA_SBX_ALLOW_INTERNET:-true}
       # The trusted control plane resolves immutable workspace refs in S3 and
       # gives the executor signed URLs. These credentials are not passed to the
       # executor or to task processes.
-      SANDBOX_WORKSPACE_PROVIDER: s3
-      SANDBOX_WORKSPACE_MAX_FILES: "10000"
-      SANDBOX_WORKSPACE_MAX_FILE_BYTES: "268435456"
-      SANDBOX_WORKSPACE_MAX_BYTES: "2147483648"
-      SANDBOX_WORKSPACE_SIGNED_URL_TTL: "1h"
-      SANDBOX_WORKSPACE_S3_BUCKET: ${ARTIFACTS_BUCKET:-artifacts}
-      SANDBOX_WORKSPACE_S3_ENDPOINT: http://rustfs:9000
-      SANDBOX_WORKSPACE_S3_REGION: ${RUSTFS_REGION:-us-east-1}
-      SANDBOX_WORKSPACE_S3_FORCE_PATH_STYLE: "true"
-      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
-      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
+      AGENTAREA_SBX_STORAGE: s3
+      AGENTAREA_SBX_MAX_FILES: "10000"
+      AGENTAREA_SBX_MAX_FILE_SIZE: "268435456"
+      AGENTAREA_SBX_MAX_TOTAL_SIZE: "2147483648"
+      AGENTAREA_SBX_S3_URL_TTL: "1h"
+      AGENTAREA_SBX_S3_BUCKET: ${ARTIFACTS_BUCKET:-artifacts}
+      AGENTAREA_SBX_S3_ENDPOINT: http://rustfs:9000
+      AGENTAREA_SBX_S3_REGION: ${RUSTFS_REGION:-us-east-1}
+      AGENTAREA_SBX_S3_PATH_STYLE: "true"
+      AGENTAREA_S3_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      AGENTAREA_S3_SECRET_KEY: ${RUSTFS_SECRET_KEY}
       # Secret manager configuration
-      SECRET_MANAGER_TYPE: ${SECRET_MANAGER_TYPE:-database}
+      AGENTAREA_SECRET_BACKEND: ${AGENTAREA_SECRET_BACKEND:-database}
       # Database secret manager settings
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-      SECRET_MANAGER_ENCRYPTION_KEY: ${SECRET_MANAGER_ENCRYPTION_KEY}
+      AGENTAREA_DB_HOST: db
+      AGENTAREA_DB_PORT: 5432
+      AGENTAREA_DB_USER: ${AGENTAREA_DB_USER}
+      AGENTAREA_DB_PASSWORD: ${AGENTAREA_DB_PASSWORD}
+      AGENTAREA_DB_NAME: ${AGENTAREA_DB_NAME}
+      AGENTAREA_SECRET_ENCRYPTION_KEY: ${AGENTAREA_SECRET_ENCRYPTION_KEY}
 
   # Sandbox executor — isolated jail that actually runs agent code (data plane).
   # mcp-manager (control plane) delegates executions here so untrusted code
@@ -351,19 +349,19 @@ services:
       - mcp-network
       - default
     environment:
-      ACTIVATION_PORT: "8080"
+      PORT: "8080"
       HOME: /home/sandbox
       # Activation policy. Same contract as the warm-pool pods in Helm
       # (charts/agentarea/templates/warm-pool/daemonset.yaml): the service
       # exits at boot when any of these is missing, so the deployment states
       # them and the binary keeps no defaults. 0 disables the idle watchdog —
       # a compose executor is not reclaimed the way a warm pod is.
-      MAX_EXECUTION_TIMEOUT_SECONDS: "1800"
-      IDLE_TIMEOUT_SECONDS: "0"
-      SANDBOX_WORKSPACE_MAX_FILES: "10000"
-      SANDBOX_WORKSPACE_MAX_FILE_BYTES: "268435456"
-      SANDBOX_WORKSPACE_MAX_BYTES: "2147483648"
-      SANDBOX_ACTIVATION_AUTH_SECRET: ${SANDBOX_ACTIVATION_AUTH_SECRET:?SANDBOX_ACTIVATION_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
+      AGENTAREA_SBX_MAX_EXEC_SECONDS: "1800"
+      AGENTAREA_SBX_IDLE_SHUTDOWN: "0"
+      AGENTAREA_SBX_MAX_FILES: "10000"
+      AGENTAREA_SBX_MAX_FILE_SIZE: "268435456"
+      AGENTAREA_SBX_MAX_TOTAL_SIZE: "2147483648"
+      AGENTAREA_SBX_ACTIVATION_SECRET: ${AGENTAREA_SBX_ACTIVATION_SECRET:?AGENTAREA_SBX_ACTIVATION_SECRET is required; run scripts/gen-dev-secrets.sh}
 
   # Temporal Infrastructure Services
   temporal:
@@ -378,8 +376,8 @@ services:
     environment:
       - DB=postgres12
       - DB_PORT=5432
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PWD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=${AGENTAREA_DB_USER}
+      - POSTGRES_PWD=${AGENTAREA_DB_PASSWORD}
       - POSTGRES_SEEDS=db
       - DBNAME=${TEMPORAL_DB:-temporal}
       - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
@@ -420,51 +418,51 @@ services:
       - ./config/auth/openfga:/app/config/auth/openfga:ro
     environment:
       # Database
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - AGENTAREA_DB_URL=postgresql://${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@db:5432/${AGENTAREA_DB_NAME}
+      - AGENTAREA_DB_HOST=db
+      - AGENTAREA_DB_PORT=5432
+      - AGENTAREA_DB_USER=${AGENTAREA_DB_USER}
+      - AGENTAREA_DB_PASSWORD=${AGENTAREA_DB_PASSWORD}
+      - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
       - LLM_DOCKER_HOST=host.docker.internal
-      - AWS_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}
-      - AWS_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}
-      - AWS_REGION=${RUSTFS_REGION:-us-east-1}
-      - AWS_ENDPOINT_URL=http://rustfs:9000
-      - S3_BUCKET_NAME=${DOCUMENTS_BUCKET}
-      - ARTIFACTS_BUCKET_NAME=${ARTIFACTS_BUCKET:-artifacts}
+      - AGENTAREA_S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
+      - AGENTAREA_S3_SECRET_KEY=${RUSTFS_SECRET_KEY}
+      - AGENTAREA_S3_REGION=${RUSTFS_REGION:-us-east-1}
+      - AGENTAREA_S3_ENDPOINT=http://rustfs:9000
+      - AGENTAREA_S3_BUCKET=${DOCUMENTS_BUCKET}
+      - AGENTAREA_S3_ARTIFACTS_BUCKET=${ARTIFACTS_BUCKET:-artifacts}
 
       # Redis
-      - REDIS_URL=redis://valkey:6379
+      - AGENTAREA_REDIS_URL=redis://valkey:6379
 
       # Temporal
-      - WORKFLOW__TEMPORAL_SERVER_URL=${WORKFLOW__TEMPORAL_SERVER_URL:-temporal:7233}
-      - WORKFLOW__TEMPORAL_NAMESPACE=default
-      - WORKFLOW__TEMPORAL_TASK_QUEUE=agent-tasks
-      - WORKFLOW__TEMPORAL_MAX_CONCURRENT_ACTIVITIES=10
-      - WORKFLOW__TEMPORAL_MAX_CONCURRENT_WORKFLOWS=5
+      - AGENTAREA_WF_TEMPORAL_URL=${AGENTAREA_WF_TEMPORAL_URL:-temporal:7233}
+      - AGENTAREA_WF_NAMESPACE=default
+      - AGENTAREA_WF_QUEUE=agent-tasks
+      - AGENTAREA_WF_MAX_ACTIVITIES=10
+      - AGENTAREA_WF_MAX_WORKFLOWS=5
 
       # Task execution
-      - TASK__ENABLE_DYNAMIC_ACTIVITY_DISCOVERY=true
-      - SECRET_MANAGER_ENCRYPTION_KEY=${SECRET_MANAGER_ENCRYPTION_KEY}
-      - MCP_MANAGER_URL=http://agentarea-mcp-manager:80
-      - SANDBOX_CLEANUP_AUTH_SECRET=${SANDBOX_CLEANUP_AUTH_SECRET:?SANDBOX_CLEANUP_AUTH_SECRET is required; run scripts/gen-dev-secrets.sh}
+      - AGENTAREA_TASK_DISCOVERY_ENABLED=true
+      - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
+      - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80
+      - AGENTAREA_SBX_CLEANUP_SECRET=${AGENTAREA_SBX_CLEANUP_SECRET:?AGENTAREA_SBX_CLEANUP_SECRET is required; run scripts/gen-dev-secrets.sh}
 
       # Access control: the authorization graph lives in OpenFGA. Bootstrap
       # finds or creates the store and applies the bundled model on start, so
       # a fresh install needs no ids up front.
-      - ACCESS_CONTROL_BACKEND=${ACCESS_CONTROL_BACKEND:-openfga}
-      - ACCESS_CONTROL_OPENFGA_API_URL=${ACCESS_CONTROL_OPENFGA_API_URL:-http://openfga:8080}
-      - ACCESS_CONTROL_OPENFGA_STORE_ID=${ACCESS_CONTROL_OPENFGA_STORE_ID:-}
-      - ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID=${ACCESS_CONTROL_OPENFGA_AUTHORIZATION_MODEL_ID:-}
-      - ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP=${ACCESS_CONTROL_OPENFGA_AUTO_BOOTSTRAP:-true}
-      - ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=${ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL:-true}
-      - ACCESS_CONTROL_OPENFGA_STORE_NAME=${ACCESS_CONTROL_OPENFGA_STORE_NAME:-agentarea}
-      - ACCESS_CONTROL_OPENFGA_MODEL_PATH=${ACCESS_CONTROL_OPENFGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
+      - AGENTAREA_AUTHZ_BACKEND=${AGENTAREA_AUTHZ_BACKEND:-openfga}
+      - AGENTAREA_AUTHZ_FGA_URL=${AGENTAREA_AUTHZ_FGA_URL:-http://openfga:8080}
+      - AGENTAREA_AUTHZ_FGA_STORE_ID=${AGENTAREA_AUTHZ_FGA_STORE_ID:-}
+      - AGENTAREA_AUTHZ_FGA_MODEL_ID=${AGENTAREA_AUTHZ_FGA_MODEL_ID:-}
+      - AGENTAREA_AUTHZ_FGA_BOOTSTRAP=${AGENTAREA_AUTHZ_FGA_BOOTSTRAP:-true}
+      - AGENTAREA_AUTHZ_FGA_APPLY_MODEL=${AGENTAREA_AUTHZ_FGA_APPLY_MODEL:-true}
+      - AGENTAREA_AUTHZ_FGA_STORE_NAME=${AGENTAREA_AUTHZ_FGA_STORE_NAME:-agentarea}
+      - AGENTAREA_AUTHZ_FGA_MODEL_PATH=${AGENTAREA_AUTHZ_FGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
 
       # Development
       # - DEBUG=true
-      - ENVIRONMENT=production
+      - AGENTAREA_ENV=production
     # /readyz is 200 once the worker reached its dependencies and every Temporal
     # worker is polling. Probed with Python: the worker image ships no curl.
     healthcheck:
@@ -514,10 +512,10 @@ services:
       valkey:
         condition: service_started
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
-      - REDIS_URL=redis://valkey:6379
-      - POLL_INTERVAL=30s
-      - MAX_POLLERS=10
+      - AGENTAREA_DB_URL=postgresql://${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@db:5432/${AGENTAREA_DB_NAME}?sslmode=disable
+      - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVT_POLL_INTERVAL=30s
+      - AGENTAREA_EVT_MAX_POLLERS=10
     networks:
       - default
     restart: unless-stopped
@@ -526,7 +524,7 @@ services:
   kratos-migrate:
     image: oryd/kratos:v1.3.1
     environment:
-      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
+      DSN: postgres://${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
     command: ["migrate", "sql", "-c", "/etc/config/kratos/kratos.yml", "-e", "--yes"]
     volumes:
       - ./config/auth/kratos:/etc/config/kratos
@@ -546,7 +544,7 @@ services:
     ports:
       - "4433:4433" # public API
     environment:
-      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
+      DSN: postgres://${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
       LOG_LEVEL: info
       SECRETS_COOKIE: ${KRATOS_SECRETS_COOKIE:?KRATOS_SECRETS_COOKIE is required; run scripts/gen-dev-secrets.sh}
       SECRETS_CIPHER: ${KRATOS_SECRETS_CIPHER:?KRATOS_SECRETS_CIPHER is required and must be exactly 32 characters; run scripts/gen-dev-secrets.sh}
@@ -576,7 +574,7 @@ services:
     command: migrate
     environment:
       OPENFGA_DATASTORE_ENGINE: postgres
-      OPENFGA_DATASTORE_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${OPENFGA_DB:-openfga}?sslmode=disable
+      OPENFGA_DATASTORE_URI: postgres://${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@db:5432/${OPENFGA_DB:-openfga}?sslmode=disable
     networks:
       - default
     depends_on:
@@ -591,7 +589,7 @@ services:
     command: run
     environment:
       OPENFGA_DATASTORE_ENGINE: postgres
-      OPENFGA_DATASTORE_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${OPENFGA_DB:-openfga}?sslmode=disable
+      OPENFGA_DATASTORE_URI: postgres://${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@db:5432/${OPENFGA_DB:-openfga}?sslmode=disable
       OPENFGA_LOG_FORMAT: json
       OPENFGA_PLAYGROUND_ENABLED: "false"
     healthcheck:

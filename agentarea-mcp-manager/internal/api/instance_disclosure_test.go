@@ -49,7 +49,7 @@ const disclosedSecret = "1AZWarzwBu32uEudLyEwrynvwayCBkkv-test-session"
 
 func disclosureRouter(t *testing.T) *gin.Engine {
 	t.Helper()
-	t.Setenv("SANDBOX_EXECUTION_RECORD_TTL", "24h")
+	t.Setenv("AGENTAREA_SBX_RECORD_TTL", "24h")
 	gin.SetMode(gin.TestMode)
 
 	backend := &disclosureBackendStub{status: &backends.InstanceStatus{

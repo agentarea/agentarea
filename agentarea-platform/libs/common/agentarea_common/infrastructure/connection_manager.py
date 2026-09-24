@@ -36,7 +36,7 @@ class ConnectionManager:
         self._execution_service_singleton = None
         from agentarea_common.config.app import get_app_settings
 
-        self._environment = get_app_settings().ENVIRONMENT.lower()
+        self._environment = get_app_settings().ENV.lower()
         self._initialized = True
         logger.info("ConnectionManager singleton initialized")
 
@@ -79,10 +79,10 @@ class ConnectionManager:
 
                 settings = get_settings()
                 orchestrator = TemporalWorkflowOrchestrator(
-                    temporal_address=settings.workflow.TEMPORAL_SERVER_URL,
-                    task_queue=settings.workflow.TEMPORAL_TASK_QUEUE,
-                    max_concurrent_activities=settings.workflow.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
-                    max_concurrent_workflows=settings.workflow.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,
+                    temporal_address=settings.workflow.TEMPORAL_URL,
+                    task_queue=settings.workflow.QUEUE,
+                    max_concurrent_activities=settings.workflow.MAX_ACTIVITIES,
+                    max_concurrent_workflows=settings.workflow.MAX_WORKFLOWS,
                 )
                 self._execution_service_singleton = ExecutionService(orchestrator)
                 logger.info("Created Temporal execution service singleton")

@@ -75,10 +75,10 @@ test-integration:
 # would catch persistence/constraint 5xx on real create paths (e.g. the MCP slug
 # NOT NULL 500). Override *_URL to point at a non-local stack.
 API_URL ?= http://localhost:8000
-KRATOS_ADMIN_URL ?= http://localhost:4434
-KRATOS_PUBLIC_URL ?= http://localhost:4433
+AGENTAREA_AUTH_KRATOS_ADMIN_URL ?= http://localhost:4434
+AGENTAREA_AUTH_KRATOS_URL ?= http://localhost:4433
 test-api:
-	API_URL=$(API_URL) KRATOS_ADMIN_URL=$(KRATOS_ADMIN_URL) KRATOS_PUBLIC_URL=$(KRATOS_PUBLIC_URL) \
+	API_URL=$(API_URL) AGENTAREA_AUTH_KRATOS_ADMIN_URL=$(AGENTAREA_AUTH_KRATOS_ADMIN_URL) AGENTAREA_AUTH_KRATOS_URL=$(AGENTAREA_AUTH_KRATOS_URL) \
 		uv run python -m pytest tests/e2e/api -p no:cacheprovider -o addopts="" --tb=short
 
 # Everything, in order of infra cost: hermetic gate -> real-DB integration ->

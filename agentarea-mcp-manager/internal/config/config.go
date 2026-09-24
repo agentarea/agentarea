@@ -110,47 +110,47 @@ type RedisConfig struct {
 func Load() *Config {
 	config := &Config{
 		Server: ServerConfig{
-			Host:         getEnv("SERVER_HOST", "0.0.0.0"),
-			Port:         getEnvInt("SERVER_PORT", 8000),
-			ReadTimeout:  getEnvDuration("SERVER_READ_TIMEOUT", 30*time.Second),
-			WriteTimeout: getEnvDuration("SERVER_WRITE_TIMEOUT", 35*time.Minute),
+			Host:         getEnv("HOST", "0.0.0.0"),
+			Port:         getEnvInt("PORT", 8000),
+			ReadTimeout:  getEnvDuration("AGENTAREA_HTTP_READ_TIMEOUT", 30*time.Second),
+			WriteTimeout: getEnvDuration("AGENTAREA_HTTP_WRITE_TIMEOUT", 35*time.Minute),
 			// CORS disabled by default for security
-			CORSEnabled:        getEnvBool("CORS_ENABLED", false),
-			CORSAllowedOrigins: getEnvStringSlice("CORS_ALLOWED_ORIGINS", []string{}),
+			CORSEnabled:        getEnvBool("AGENTAREA_MCP_CORS_ENABLED", false),
+			CORSAllowedOrigins: getEnvStringSlice("AGENTAREA_CORS_ORIGINS", []string{}),
 		},
 		Container: ContainerConfig{
-			Runtime:            getEnv("CONTAINER_RUNTIME", "docker"),
-			Network:            getEnv("MCP_NETWORK", "agentarea_default"),
-			NamePrefix:         getEnv("CONTAINER_NAME_PREFIX", "mcp-"),
-			ManagedByLabel:     getEnv("CONTAINER_MANAGED_BY_LABEL", "mcp-manager"),
-			MaxContainers:      getEnvInt("MAX_CONTAINERS", 50),
-			StartupTimeout:     getEnvDuration("STARTUP_TIMEOUT", 120*time.Second),
-			ShutdownTimeout:    getEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
-			DefaultMemoryLimit: getEnv("DEFAULT_MEMORY_LIMIT", "512m"),
-			DefaultCPULimit:    getEnv("DEFAULT_CPU_LIMIT", "1.0"),
+			Runtime:            getEnv("AGENTAREA_MCP_RUNTIME", "docker"),
+			Network:            getEnv("AGENTAREA_MCP_NETWORK", "agentarea_default"),
+			NamePrefix:         getEnv("AGENTAREA_MCP_NAME_PREFIX", "mcp-"),
+			ManagedByLabel:     getEnv("AGENTAREA_MCP_LABEL", "mcp-manager"),
+			MaxContainers:      getEnvInt("AGENTAREA_MCP_MAX_CONTAINERS", 50),
+			StartupTimeout:     getEnvDuration("AGENTAREA_STARTUP_TIMEOUT", 120*time.Second),
+			ShutdownTimeout:    getEnvDuration("AGENTAREA_SHUTDOWN_TIMEOUT", 30*time.Second),
+			DefaultMemoryLimit: getEnv("AGENTAREA_MCP_MEMORY", "512m"),
+			DefaultCPULimit:    getEnv("AGENTAREA_MCP_CPU", "1.0"),
 			// The most a single workload may ask for. Defaults to the default:
 			// a caller may size an instance down, never up, unless this host
 			// says otherwise.
-			LogWorkloadOutput:  getEnv("LOG_WORKLOAD_OUTPUT", "false") == "true",
-			MaxMemoryLimit:     getEnv("MAX_MEMORY_LIMIT", getEnv("DEFAULT_MEMORY_LIMIT", "512m")),
-			MaxCPULimit:        getEnv("MAX_CPU_LIMIT", getEnv("DEFAULT_CPU_LIMIT", "1.0")),
-			SandboxExecutorURL: getEnv("SANDBOX_EXECUTOR_URL", ""),
+			LogWorkloadOutput:  getEnv("AGENTAREA_LOG_WORKLOAD", "false") == "true",
+			MaxMemoryLimit:     getEnv("AGENTAREA_MCP_MAX_MEMORY", getEnv("AGENTAREA_MCP_MEMORY", "512m")),
+			MaxCPULimit:        getEnv("AGENTAREA_MCP_MAX_CPU", getEnv("AGENTAREA_MCP_CPU", "1.0")),
+			SandboxExecutorURL: getEnv("AGENTAREA_SBX_EXECUTOR_URL", ""),
 
-			DefaultIsolationTier: getEnv("DEFAULT_ISOLATION_TIER", IsolationUntrusted),
+			DefaultIsolationTier: getEnv("AGENTAREA_MCP_ISOLATION", IsolationUntrusted),
 
 			// Off by default: enabling reaping changes how long an instance
 			// lives, so an operator opts in rather than discovering it.
-			MCPIdleTimeout:       getEnvDuration("MCP_IDLE_TIMEOUT", 0),
-			MCPIdleSweepInterval: getEnvDuration("MCP_IDLE_SWEEP_INTERVAL", 60*time.Second),
+			MCPIdleTimeout:       getEnvDuration("AGENTAREA_MCP_IDLE_TIMEOUT", 0),
+			MCPIdleSweepInterval: getEnvDuration("AGENTAREA_MCP_SWEEP_INTERVAL", 60*time.Second),
 		},
 		Logging: LoggingConfig{
-			Level:  getEnv("LOG_LEVEL", "INFO"),
-			Format: getEnv("LOG_FORMAT", "json"),
+			Level:  getEnv("AGENTAREA_LOG_LEVEL", "INFO"),
+			Format: getEnv("AGENTAREA_LOG_FORMAT", "json"),
 		},
 		Redis: RedisConfig{
-			URL: getEnv("REDIS_URL", "redis://localhost:6379"),
+			URL: getEnv("AGENTAREA_REDIS_URL", "redis://localhost:6379"),
 		},
-		CoreAPIURL:  getEnv("CORE_API_URL", "http://localhost:8000"),
+		CoreAPIURL:  getEnv("AGENTAREA_API_URL", "http://localhost:8000"),
 		Kubernetes:  loadKubernetesConfig(),
 		Environment: backendEnvironment(),
 		Features:    loadFeaturesConfig(),
@@ -228,71 +228,71 @@ func loadKubernetesConfig() KubernetesConfig {
 	config := DefaultKubernetesConfig()
 
 	// Override with environment variables
-	config.Enabled = getEnvBool("KUBERNETES_ENABLED", config.Enabled)
-	config.Namespace = getEnv("KUBERNETES_NAMESPACE", config.Namespace)
-	config.RuntimeClass = getEnv("KUBERNETES_RUNTIME_CLASS", config.RuntimeClass)
-	config.Kubeconfig = getEnv("KUBERNETES_KUBECONFIG", config.Kubeconfig)
-	config.PodServiceAccountName = getEnv("KUBERNETES_POD_SERVICE_ACCOUNT_NAME", config.PodServiceAccountName)
-	config.ImagePullPolicy = getEnv("K8S_IMAGE_PULL_POLICY", config.ImagePullPolicy)
-	config.GatewayName = getEnv("KUBERNETES_GATEWAY_NAME", config.GatewayName)
-	config.GatewayNamespace = getEnv("KUBERNETES_GATEWAY_NAMESPACE", config.GatewayNamespace)
-	config.Domain = getEnv("KUBERNETES_DOMAIN", config.Domain)
-	config.IngressClass = getEnv("KUBERNETES_INGRESS_CLASS", config.IngressClass)
-	config.StorageClass = getEnv("KUBERNETES_STORAGE_CLASS", config.StorageClass)
+	config.Enabled = getEnvBool("AGENTAREA_K8S_ENABLED", config.Enabled)
+	config.Namespace = getEnv("AGENTAREA_K8S_NAMESPACE", config.Namespace)
+	config.RuntimeClass = getEnv("AGENTAREA_K8S_RUNTIME_CLASS", config.RuntimeClass)
+	config.Kubeconfig = getEnv("AGENTAREA_K8S_KUBECONFIG", config.Kubeconfig)
+	config.PodServiceAccountName = getEnv("AGENTAREA_K8S_SERVICE_ACCOUNT", config.PodServiceAccountName)
+	config.ImagePullPolicy = getEnv("AGENTAREA_K8S_PULL_POLICY", config.ImagePullPolicy)
+	config.GatewayName = getEnv("AGENTAREA_K8S_GATEWAY", config.GatewayName)
+	config.GatewayNamespace = getEnv("AGENTAREA_K8S_GATEWAY_NS", config.GatewayNamespace)
+	config.Domain = getEnv("AGENTAREA_K8S_DOMAIN", config.Domain)
+	config.IngressClass = getEnv("AGENTAREA_K8S_INGRESS_CLASS", config.IngressClass)
+	config.StorageClass = getEnv("AGENTAREA_K8S_STORAGE_CLASS", config.StorageClass)
 
 	// Resource defaults
-	config.DefaultRequests.CPU = getEnv("KUBERNETES_DEFAULT_CPU_REQUEST", config.DefaultRequests.CPU)
-	config.DefaultRequests.Memory = getEnv("KUBERNETES_DEFAULT_MEMORY_REQUEST", config.DefaultRequests.Memory)
-	config.DefaultLimits.CPU = getEnv("KUBERNETES_DEFAULT_CPU_LIMIT", config.DefaultLimits.CPU)
-	config.DefaultLimits.Memory = getEnv("KUBERNETES_DEFAULT_MEMORY_LIMIT", config.DefaultLimits.Memory)
+	config.DefaultRequests.CPU = getEnv("AGENTAREA_K8S_CPU_REQUEST", config.DefaultRequests.CPU)
+	config.DefaultRequests.Memory = getEnv("AGENTAREA_K8S_MEMORY_REQUEST", config.DefaultRequests.Memory)
+	config.DefaultLimits.CPU = getEnv("AGENTAREA_K8S_CPU_LIMIT", config.DefaultLimits.CPU)
+	config.DefaultLimits.Memory = getEnv("AGENTAREA_K8S_MEMORY_LIMIT", config.DefaultLimits.Memory)
 
 	// Security context
-	config.SecurityContext.RunAsNonRoot = getEnvBool("KUBERNETES_RUN_AS_NON_ROOT", config.SecurityContext.RunAsNonRoot)
-	if runAsUser := getEnv("KUBERNETES_RUN_AS_USER", ""); runAsUser != "" {
+	config.SecurityContext.RunAsNonRoot = getEnvBool("AGENTAREA_K8S_NON_ROOT", config.SecurityContext.RunAsNonRoot)
+	if runAsUser := getEnv("AGENTAREA_K8S_RUN_AS_USER", ""); runAsUser != "" {
 		user, err := strconv.ParseInt(runAsUser, 10, 64)
 		if err != nil {
-			panic("KUBERNETES_RUN_AS_USER must be an integer")
+			panic("AGENTAREA_K8S_RUN_AS_USER must be an integer")
 		}
 		config.SecurityContext.RunAsUser = user
 	}
-	config.SecurityContext.ReadOnlyRootFilesystem = getEnvBool("KUBERNETES_READ_ONLY_ROOT_FS", config.SecurityContext.ReadOnlyRootFilesystem)
-	config.SecurityContext.AllowPrivilegeEscalation = getEnvBool("KUBERNETES_ALLOW_PRIVILEGE_ESCALATION", config.SecurityContext.AllowPrivilegeEscalation)
+	config.SecurityContext.ReadOnlyRootFilesystem = getEnvBool("AGENTAREA_K8S_READONLY_ROOT", config.SecurityContext.ReadOnlyRootFilesystem)
+	config.SecurityContext.AllowPrivilegeEscalation = getEnvBool("AGENTAREA_K8S_PRIV_ESCALATION", config.SecurityContext.AllowPrivilegeEscalation)
 
 	// Network policy
-	config.NetworkPolicy.Enabled = getEnvBool("KUBERNETES_NETWORK_POLICY_ENABLED", config.NetworkPolicy.Enabled)
+	config.NetworkPolicy.Enabled = getEnvBool("AGENTAREA_K8S_NETWORK_POLICY", config.NetworkPolicy.Enabled)
 
 	// Operator-supplied instance pod customization (labels/annotations/scheduling),
 	// passed by the chart as one JSON blob. Malformed placement policy is a
 	// deployment error rather than permission to run elsewhere.
-	if raw := getEnv("KUBERNETES_INSTANCE_POD", ""); raw != "" {
+	if raw := getEnv("AGENTAREA_K8S_INSTANCE_POD", ""); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &config.InstancePod); err != nil {
-			panic(fmt.Sprintf("KUBERNETES_INSTANCE_POD must be valid JSON: %v", err))
+			panic(fmt.Sprintf("AGENTAREA_K8S_INSTANCE_POD must be valid JSON: %v", err))
 		}
 	}
 
 	// Monitoring
-	config.Monitoring.Enabled = getEnvBool("KUBERNETES_MONITORING_ENABLED", config.Monitoring.Enabled)
-	config.Monitoring.PrometheusEnabled = getEnvBool("KUBERNETES_PROMETHEUS_ENABLED", config.Monitoring.PrometheusEnabled)
-	config.Monitoring.ServiceMonitor.Enabled = getEnvBool("KUBERNETES_SERVICE_MONITOR_ENABLED", config.Monitoring.ServiceMonitor.Enabled)
+	config.Monitoring.Enabled = getEnvBool("AGENTAREA_K8S_MONITORING", config.Monitoring.Enabled)
+	config.Monitoring.PrometheusEnabled = getEnvBool("AGENTAREA_K8S_PROMETHEUS", config.Monitoring.PrometheusEnabled)
+	config.Monitoring.ServiceMonitor.Enabled = getEnvBool("AGENTAREA_K8S_SERVICE_MONITOR", config.Monitoring.ServiceMonitor.Enabled)
 
 	// TLS
-	config.TLS.Enabled = getEnvBool("KUBERNETES_TLS_ENABLED", config.TLS.Enabled)
-	config.TLS.SecretName = getEnv("KUBERNETES_TLS_SECRET_NAME", config.TLS.SecretName)
-	config.TLS.CertManager.Enabled = getEnvBool("KUBERNETES_CERT_MANAGER_ENABLED", config.TLS.CertManager.Enabled)
-	config.TLS.CertManager.ClusterIssuer = getEnv("KUBERNETES_CERT_MANAGER_CLUSTER_ISSUER", config.TLS.CertManager.ClusterIssuer)
+	config.TLS.Enabled = getEnvBool("AGENTAREA_K8S_TLS", config.TLS.Enabled)
+	config.TLS.SecretName = getEnv("AGENTAREA_K8S_TLS_SECRET", config.TLS.SecretName)
+	config.TLS.CertManager.Enabled = getEnvBool("AGENTAREA_K8S_CERT_MANAGER", config.TLS.CertManager.Enabled)
+	config.TLS.CertManager.ClusterIssuer = getEnv("AGENTAREA_K8S_CLUSTER_ISSUER", config.TLS.CertManager.ClusterIssuer)
 
 	// Timeouts
-	if deploymentTimeout := getEnv("KUBERNETES_DEPLOYMENT_TIMEOUT", ""); deploymentTimeout != "" {
+	if deploymentTimeout := getEnv("AGENTAREA_K8S_DEPLOY_TIMEOUT", ""); deploymentTimeout != "" {
 		timeout, err := time.ParseDuration(deploymentTimeout)
 		if err != nil || timeout <= 0 {
-			panic("KUBERNETES_DEPLOYMENT_TIMEOUT must be a positive duration")
+			panic("AGENTAREA_K8S_DEPLOY_TIMEOUT must be a positive duration")
 		}
 		config.DeploymentTimeout = timeout
 	}
-	if readinessTimeout := getEnv("KUBERNETES_READINESS_TIMEOUT", ""); readinessTimeout != "" {
+	if readinessTimeout := getEnv("AGENTAREA_K8S_READY_TIMEOUT", ""); readinessTimeout != "" {
 		timeout, err := time.ParseDuration(readinessTimeout)
 		if err != nil || timeout <= 0 {
-			panic("KUBERNETES_READINESS_TIMEOUT must be a positive duration")
+			panic("AGENTAREA_K8S_READY_TIMEOUT must be a positive duration")
 		}
 		config.ReadinessTimeout = timeout
 	}
@@ -308,7 +308,7 @@ func loadFeaturesConfig() FeaturesConfig {
 	}
 
 	// Parse enabled features from comma-separated list
-	if features := getEnv("MCP_FEATURES_ENABLED", ""); features != "" {
+	if features := getEnv("AGENTAREA_MCP_FEATURES", ""); features != "" {
 		config.Enabled = strings.Split(features, ",")
 		// Trim whitespace
 		for i, f := range config.Enabled {

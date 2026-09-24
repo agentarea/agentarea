@@ -95,8 +95,8 @@ different problem with a different mechanism.
 
     | Value | Becomes | Used for |
     |---|---|---|
-    | `global.api.publicUrl` | `API_BASE_URL` | Provider icon URLs, OAuth protected-resource metadata, the MCP `WWW-Authenticate` header |
-    | `global.storage.publicEndpoint` | `PUBLIC_S3_ENDPOINT` | Signing presigned URLs for browser-direct upload and download |
+    | `global.api.publicUrl` | `AGENTAREA_API_URL` | Provider icon URLs, OAuth protected-resource metadata, the MCP `WWW-Authenticate` header |
+    | `global.storage.publicEndpoint` | `AGENTAREA_S3_PUBLIC_ENDPOINT` | Signing presigned URLs for browser-direct upload and download |
     | `kratos.urls.public` | `ORY_SDK_URL` | Server-side calls from the frontend container to Kratos |
     | `kratos.urls.publicBrowser` | `ORY_BROWSER_URL` | Where the browser is redirected for login |
 
@@ -224,8 +224,8 @@ Confirm the backend advertises the right URL — this catches the derived-value
 fallback silently pointing at a ClusterIP name:
 
 ```bash
-kubectl get configmap -n agentarea agentarea-env-backend -o jsonpath='{.data.API_BASE_URL}'
-kubectl get configmap -n agentarea agentarea-env-backend -o jsonpath='{.data.PUBLIC_S3_ENDPOINT}'
+kubectl get configmap -n agentarea agentarea-env-backend -o jsonpath='{.data.AGENTAREA_API_URL}'
+kubectl get configmap -n agentarea agentarea-env-backend -o jsonpath='{.data.AGENTAREA_S3_PUBLIC_ENDPOINT}'
 ```
 
 Check the endpoints answer from outside the cluster:
@@ -282,7 +282,7 @@ policy and the protection you think you have does not exist.
     installed. The manager creates HTTPRoutes that nothing programs.
   </Accordion>
   <Accordion title="Provider icons are broken in the UI">
-    `API_BASE_URL` resolved to an internal address. Icons are served by the
+    `AGENTAREA_API_URL` resolved to an internal address. Icons are served by the
     backend at that URL; set `global.api.publicUrl` .
   </Accordion>
   <Accordion title="The egress NetworkPolicy exists and untrusted pods still reach the metadata endpoint">

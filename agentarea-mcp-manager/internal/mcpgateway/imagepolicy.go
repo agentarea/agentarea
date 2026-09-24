@@ -28,17 +28,17 @@ type ImagePolicy struct {
 // answering that with "allow everything" is the failure this type exists to
 // prevent. A declared-but-empty list disables that surface.
 func LoadImagePolicyFromEnv() (ImagePolicy, error) {
-	repositories, err := requiredStringSetEnv("MCP_ALLOWED_IMAGE_REPOSITORIES")
+	repositories, err := requiredStringSetEnv("AGENTAREA_MCP_ALLOWED_IMAGES")
 	if err != nil {
 		return ImagePolicy{}, err
 	}
-	packages, err := requiredStringSetEnv("MCP_ALLOWED_COMMAND_PACKAGES")
+	packages, err := requiredStringSetEnv("AGENTAREA_MCP_ALLOWED_PACKAGES")
 	if err != nil {
 		return ImagePolicy{}, err
 	}
 	if len(repositories) == 0 && len(packages) == 0 {
 		return ImagePolicy{}, fmt.Errorf(
-			"MCP_ALLOWED_IMAGE_REPOSITORIES and MCP_ALLOWED_COMMAND_PACKAGES are both empty; no MCP instance could ever start",
+			"AGENTAREA_MCP_ALLOWED_IMAGES and AGENTAREA_MCP_ALLOWED_PACKAGES are both empty; no MCP instance could ever start",
 		)
 	}
 	return ImagePolicy{repositories: repositories, packages: packages}, nil
@@ -84,7 +84,7 @@ func (p ImagePolicy) AuthorizeImage(image string, command []string) error {
 	}
 	if _, admitted := p.repositories[invocation]; !admitted {
 		return fmt.Errorf(
-			"MCP instance image invocation %q is not in MCP_ALLOWED_IMAGE_REPOSITORIES",
+			"MCP instance image invocation %q is not in AGENTAREA_MCP_ALLOWED_IMAGES",
 			invocation,
 		)
 	}
@@ -160,7 +160,7 @@ func (p ImagePolicy) AuthorizeCommand(command string, args []string) error {
 	invocation := strings.Join(append([]string{strings.TrimSpace(command)}, args...), " ")
 	if _, admitted := p.packages[invocation]; !admitted {
 		return fmt.Errorf(
-			"MCP instance command %q is not in MCP_ALLOWED_COMMAND_PACKAGES",
+			"MCP instance command %q is not in AGENTAREA_MCP_ALLOWED_PACKAGES",
 			invocation,
 		)
 	}

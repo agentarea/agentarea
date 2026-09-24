@@ -52,12 +52,12 @@ type DockerBackend struct {
 // refused to start at all. Sandbox callers hit it here instead, where the
 // weak-isolation decision actually applies.
 func (d *DockerBackend) sharedExecutorBase() (string, error) {
-	if os.Getenv("SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT") != "true" {
-		return "", fmt.Errorf("docker shared sandbox executor is development-only; set SANDBOX_SHARED_EXECUTOR_ALLOW_WEAK_ISOLATION_FOR_DEVELOPMENT=true explicitly")
+	if os.Getenv("AGENTAREA_SBX_ALLOW_WEAK_ISOLATION") != "true" {
+		return "", fmt.Errorf("docker shared sandbox executor is development-only; set AGENTAREA_SBX_ALLOW_WEAK_ISOLATION=true explicitly")
 	}
 	base := strings.TrimRight(d.config.Container.SandboxExecutorURL, "/")
 	if base == "" {
-		return "", fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+		return "", fmt.Errorf("sandbox executor not configured (set AGENTAREA_SBX_EXECUTOR_URL)")
 	}
 	return base, nil
 }
@@ -316,7 +316,7 @@ func (d *DockerBackend) RetireSandboxTask(ctx context.Context, workspaceID, task
 		return err
 	}
 	if strings.TrimRight(d.config.Container.SandboxExecutorURL, "/") == "" {
-		return fmt.Errorf("sandbox executor not configured (set SANDBOX_EXECUTOR_URL)")
+		return fmt.Errorf("sandbox executor not configured (set AGENTAREA_SBX_EXECUTOR_URL)")
 	}
 	key := dockerTaskKey(workspaceID, taskID)
 	d.retirementMu.Lock()

@@ -28,7 +28,7 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=your-secret-key-change-in-production
 
 # Server-side API Configuration (not exposed to browser)
-API_URL=http://localhost:8000
+AGENTAREA_API_URL=http://localhost:8000
 
 # Generic OIDC Configuration (fallback)
 OIDC_ISSUER=https://your-oidc-provider.com

@@ -453,7 +453,7 @@ async def test_verify_passes_extra_headers_to_list_tools():
         patch("agentarea_mcp.verification.get_database", return_value=db_mock),
         patch("agentarea_mcp.verification.get_settings") as mock_settings,
     ):
-        mock_settings.return_value.mcp.MCP_MANAGER_URL = "http://fake-go:7999"
+        mock_settings.return_value.mcp.MANAGER_URL = "http://fake-go:7999"
 
         from agentarea_mcp.verification import verify
 
