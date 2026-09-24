@@ -5,9 +5,8 @@ into the same task totals and budgets that its siblings record billing
 currency into. Exiting hands the problem to the orchestrator, loudly.
 """
 
-import pytest
-
 import agentarea_common.extensions as extensions_module
+import pytest
 from agentarea_common.extensions.customer_pricing import (
     CUSTOMER_PRICING_EXTENSION,
     CustomerPricingUnavailableError,
