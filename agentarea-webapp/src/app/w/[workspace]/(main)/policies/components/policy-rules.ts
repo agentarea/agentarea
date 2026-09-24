@@ -32,6 +32,12 @@ function fmtMoney(
 ): string {
   if (value === null || value === undefined) return "";
   const n = typeof value === "number" ? value : Number(value);
+  // Malformed params (a non-numeric string, say) must surface as the raw
+  // text so the drawer shows *something is wrong here*, not $0.00 — the
+  // same convention fmtNum below uses. formatMoney's own NaN->0 behavior is
+  // the right default for a real money value that failed to parse; here the
+  // "amount" was never a number to begin with.
+  if (Number.isNaN(n)) return String(value);
   return formatMoney(n, currency, locale, { compact: true });
 }
 

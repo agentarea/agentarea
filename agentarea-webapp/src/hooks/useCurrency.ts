@@ -14,6 +14,12 @@ let cachedCurrency: string | null = null;
 let cachedAt = 0;
 let inflight: Promise<string> | null = null;
 
+// Bumped by resetCurrencyCache(). A fetch that was already in flight when a
+// reset happens carries the OLD generation, so its own resolution (however
+// late) must never overwrite a fresher fetch's result — otherwise the
+// slower of the two requests wins the race, not the newer one.
+let generation = 0;
+
 // Every mounted useCurrency() instance registers its own refetch-and-render
 // callback here. `router.refresh()` (App Router) re-fetches Server Component
 // data but does NOT unmount already-mounted Client Components, so merely
@@ -43,6 +49,7 @@ async function fetchCurrency(): Promise<string> {
  * same numbers ×95 apart), and nothing else notices that switch client-side.
  */
 export function resetCurrencyCache(): void {
+  generation += 1;
   cachedCurrency = null;
   cachedAt = 0;
   inflight = null;
@@ -70,16 +77,28 @@ export function useCurrency(): { currency: string; isLoading: boolean } {
         return;
       }
 
+      const gen = generation;
       setIsLoading(true);
       if (!inflight) {
         inflight = fetchCurrency().finally(() => {
-          inflight = null;
+          // Only clear the shared slot if a reset hasn't already replaced it
+          // with a newer fetch (or nulled it) — this fetch is stale, and
+          // clearing `inflight` here would wipe out that newer one's
+          // reference out from under it.
+          if (generation === gen) inflight = null;
         });
       }
       inflight.then((value) => {
+        if (cancelled) return;
+        if (generation !== gen) {
+          // A reset happened while this fetch was in flight. A fresher fetch
+          // already applied (or is about to apply) its own result — writing
+          // this stale one now would overwrite the new workspace's currency
+          // with the old one's, however late this one happens to resolve.
+          return;
+        }
         cachedCurrency = value;
         cachedAt = Date.now();
-        if (cancelled) return;
         setCurrency(value);
         setIsLoading(false);
       });

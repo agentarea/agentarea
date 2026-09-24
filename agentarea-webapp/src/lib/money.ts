@@ -21,9 +21,12 @@ export interface FormatMoneyOptions {
  * - one minor unit and up formats as ordinary currency (2 digits), or 0
  *   digits for a whole number when `compact` is set
  * - an amount too small to show even at 4 digits (would format as all
- *   zeros) renders as "< " + the smallest displayable unit, sign preserved
- *   (e.g. "< -$0.0001" for a tiny negative amount), so it never reads as
- *   exactly zero or flips sign
+ *   zeros) renders relative to the smallest displayable unit instead of
+ *   reading as exactly zero: "< $0.0001" for a tiny positive amount (its
+ *   magnitude is under the floor), "> -$0.0001" for a tiny negative one (its
+ *   magnitude is under the floor too, so the signed value is *greater* than
+ *   -$0.0001, not less) — "< -$0.0001" would misread as smaller/more-negative
+ *   than it actually is
  */
 export function formatMoney(
   amount: number,
@@ -51,7 +54,9 @@ export function formatMoney(
 
   const smallestUnit = 10 ** -fractionDigits;
   if (abs > 0 && abs < smallestUnit / 2) {
-    return `< ${format(value < 0 ? -smallestUnit : smallestUnit)}`;
+    return value < 0
+      ? `> ${format(-smallestUnit)}`
+      : `< ${format(smallestUnit)}`;
   }
 
   return format(value);
