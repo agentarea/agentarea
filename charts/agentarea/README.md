@@ -123,7 +123,7 @@ The following table lists configurable parameters of the chart and their default
 | global.api.auth.headerName | string | `""` |  |
 | global.api.auth.headerValue | string | `""` |  |
 | global.webapp.url | string | `""` |  |
-| global.webapp.mcpAppsSandboxUrl | string | `""` |  |
+| global.webapp.appsSandboxUrl | string | `""` |  |
 | global.jobs.kube.namespace | string | `""` |  |
 | global.jobs.kube.serviceAccount | string | `""` |  |
 | global.jobs.kube.scheduling.spec.nodeSelectors | object | `{}` |  |
@@ -178,9 +178,9 @@ The following table lists configurable parameters of the chart and their default
 | ingress.hosts.kratos.host | string | `""` |  |
 | ingress.hosts.kratos.paths[0].path | string | `"/"` |  |
 | ingress.hosts.kratos.paths[0].pathType | string | `"Prefix"` |  |
-| ingress.hosts.mcpAppsSandbox.host | string | `""` |  |
-| ingress.hosts.mcpAppsSandbox.paths[0].path | string | `"/mcp-app-sandbox"` |  |
-| ingress.hosts.mcpAppsSandbox.paths[0].pathType | string | `"Exact"` |  |
+| ingress.hosts.appsSandbox.host | string | `""` |  |
+| ingress.hosts.appsSandbox.paths[0].path | string | `"/app-sandbox"` |  |
+| ingress.hosts.appsSandbox.paths[0].pathType | string | `"Exact"` |  |
 | ingress.tls | list | `[]` |  |
 | backend.enabled | bool | `true` |  |
 | backend.replicaCount | int | `1` |  |

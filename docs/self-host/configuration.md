@@ -237,7 +237,7 @@ be weakened from these values.
 | `ORY_ADMIN_URL` | `kratos.urls.admin`, else the internal service | derived |
 | `METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
 | `HEALTH_CHECK_ENABLED` | `global.monitoring.health.enabled` | `true` |
-| `MCP_APPS_SANDBOX_ORIGIN` | `global.webapp.mcpAppsSandboxUrl` | empty |
+| `APPS_SANDBOX_ORIGIN` | `global.webapp.appsSandboxUrl` | empty |
 | `WEBAPP_PUBLIC_ORIGIN` | `global.webapp.url`, else the internal frontend service URL | derived |
 
 `ORY_SDK_URL` is used for server-side calls from the frontend container;
@@ -246,9 +246,9 @@ be weakened from these values.
 domain.
 
 The Apps page renders each MCP App inside an iframe loaded from
-`MCP_APPS_SANDBOX_ORIGIN`. The frontend answers `/mcp-app-sandbox` only when the
+`APPS_SANDBOX_ORIGIN`. The frontend answers `/app-sandbox` only when the
 request's `Host` matches that origin, and the sandbox refuses to run unless it is
-embedded by `WEBAPP_PUBLIC_ORIGIN`. With `MCP_APPS_SANDBOX_ORIGIN` empty, or equal
+embedded by `WEBAPP_PUBLIC_ORIGIN`. With `APPS_SANDBOX_ORIGIN` empty, or equal
 to the webapp origin, the Apps page lists apps but opens none. The ingress side
 is in [networking](/self-host/networking).
 

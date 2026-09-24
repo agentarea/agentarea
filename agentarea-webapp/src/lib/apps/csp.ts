@@ -16,7 +16,7 @@ function joinDirective(name: string, sources: string[]): string {
 }
 
 /**
- * Build the HTTP CSP used by the dedicated MCP Apps sandbox origin.
+ * Build the HTTP CSP used by the dedicated Apps sandbox origin.
  *
  * Domain declarations are treated as data, not directives: values that could
  * terminate a directive or inject a CSP keyword are omitted.

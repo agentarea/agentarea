@@ -8,8 +8,8 @@ import {
   type OpenedMcpApp,
 } from "@/app/(main)/apps/actions";
 import { Button } from "@/components/ui/button";
-import type { McpAppLink } from "@/lib/mcp-apps/links";
-import type { McpAppUiResource } from "@/lib/mcp-apps/tools";
+import type { McpAppLink } from "@/lib/apps/links";
+import type { McpAppUiResource } from "@/lib/apps/mcp/tools";
 import McpAppFrame from "./McpAppFrame";
 
 type McpAppWorkspaceProps = {

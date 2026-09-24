@@ -12,7 +12,7 @@ ORY_SDK_URL: "{{ include "agentarea.kratosPublicUrl" . }}"
 ORY_BROWSER_URL: "{{ include "agentarea.kratosPublicBrowserUrl" . }}"
 METRICS_ENABLED: "{{ .Values.global.monitoring.prometheus.enabled }}"
 HEALTH_CHECK_ENABLED: "{{ .Values.global.monitoring.health.enabled }}"
-MCP_APPS_SANDBOX_ORIGIN: "{{ .Values.global.webapp.mcpAppsSandboxUrl }}"
+APPS_SANDBOX_ORIGIN: "{{ .Values.global.webapp.appsSandboxUrl }}"
 WEBAPP_PUBLIC_ORIGIN: "{{ include "agentarea.frontendUrl" . }}"
 {{- end }}
 
@@ -57,11 +57,11 @@ WEBAPP_PUBLIC_ORIGIN: "{{ include "agentarea.frontendUrl" . }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-frontend
       key: HEALTH_CHECK_ENABLED
-- name: MCP_APPS_SANDBOX_ORIGIN
+- name: APPS_SANDBOX_ORIGIN
   valueFrom:
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-frontend
-      key: MCP_APPS_SANDBOX_ORIGIN
+      key: APPS_SANDBOX_ORIGIN
 - name: WEBAPP_PUBLIC_ORIGIN
   valueFrom:
     configMapKeyRef:

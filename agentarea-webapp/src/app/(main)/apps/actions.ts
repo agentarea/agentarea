@@ -8,14 +8,14 @@ import { apiErrorMessage } from "@/lib/api-errors";
 import {
   callMcpAppTool,
   readMcpAppUiResource,
-} from "@/lib/mcp-apps/proxy-client";
+} from "@/lib/apps/mcp/proxy-client";
 import {
   mcpAppEntries,
   mcpAppLinkArguments,
   resolveMcpAppTool,
   type McpAppCaller,
   type McpAppUiResource,
-} from "@/lib/mcp-apps/tools";
+} from "@/lib/apps/mcp/tools";
 
 // The actions return failures instead of throwing: production Next.js
 // replaces a thrown server-action error with a generic message, and the reason

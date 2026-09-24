@@ -5,8 +5,8 @@ import EmptyState from "@/components/EmptyState/EmptyState";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { Badge } from "@/components/ui/badge";
 import { listMCPServerInstances } from "@/lib/api";
+import { mcpAppEntries, type McpAppEntry } from "@/lib/apps/mcp/tools";
 import { EntityIcon } from "@/lib/entity-icons";
-import { mcpAppEntries, type McpAppEntry } from "@/lib/mcp-apps/tools";
 import { requireApiData } from "@/lib/server-resource";
 
 export const metadata: Metadata = {

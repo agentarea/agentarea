@@ -127,7 +127,7 @@ function loadSandboxProxy(iframe: HTMLIFrameElement, sandboxUrl: string, view: V
 async function main() {
   const config: HostConfig = await (await fetch("/config.json")).json();
 
-  const client = new Client(HOST_INFO);
+  const client = new Client(HOST_INFO, { versionNegotiation: { mode: "auto" } });
   await client.connect(new StreamableHTTPClientTransport(new URL(config.mcpUrl)));
   const serverName = client.getServerVersion()?.name ?? config.mcpUrl;
   const { tools } = await client.listTools();

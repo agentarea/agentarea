@@ -2269,7 +2269,7 @@
     "needsInput": "This app needs input",
     "needsInputDescription": "This app requires values before it can be launched. Input forms are not available here yet.",
     "loading": "Loading app…",
-    "configurationError": "MCP Apps sandbox is not configured for this deployment.",
+    "configurationError": "Apps sandbox is not configured for this deployment.",
     "resourceError": "The app resource could not be loaded.",
     "toolError": "The app tool call failed.",
     "iframeTitle": "MCP App",

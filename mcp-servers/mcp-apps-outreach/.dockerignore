@@ -1,4 +1,4 @@
 *
 !dist/server.js
-!dist/app/dashboard.html
+!dist/app/*.html
 !data/outreach.json

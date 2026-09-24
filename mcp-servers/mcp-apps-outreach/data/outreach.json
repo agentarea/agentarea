@@ -2222,11 +2222,7 @@
       "lastName": "Clarke",
       "title": "VP Finance",
       "email": "camille.clarke@foundrysecurity.com",
-      "enrollment": {
-        "campaignId": "series-a-cfo",
-        "signalId": "sig_298",
-        "enrolledAt": "2026-09-24T13:49:48.405Z"
-      }
+      "enrollment": null
     },
     {
       "id": "ct_094",
@@ -2815,11 +2811,7 @@
       "lastName": "Silva",
       "title": "Director of Sales",
       "email": "mei.silva@helixcommerce.com",
-      "enrollment": {
-        "campaignId": "sdr-hiring",
-        "signalId": "sig_296",
-        "enrolledAt": "2026-09-24T14:03:27.624Z"
-      }
+      "enrollment": null
     },
     {
       "id": "ct_147",
@@ -2930,11 +2922,7 @@
       "lastName": "García",
       "title": "SDR Manager",
       "email": "tomas.garcia@zephyrhealth.com",
-      "enrollment": {
-        "campaignId": "sdr-hiring",
-        "signalId": "sig_286",
-        "enrolledAt": "2026-09-24T14:03:30.364Z"
-      }
+      "enrollment": null
     },
     {
       "id": "ct_158",

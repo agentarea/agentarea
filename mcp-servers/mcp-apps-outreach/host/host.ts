@@ -125,9 +125,13 @@ function loadSandboxProxy(iframe: HTMLIFrameElement, sandboxUrl: string, view: V
 
 async function main() {
   const config: HostConfig = await (await fetch("/config.json")).json();
-  const ENTRY_TOOL = config.entryTool;
+  // `?tool=show_lead_card&contact_id=ct_042` picks another entry tool and its
+  // arguments, the same shape AgentArea's `agentarea-app://` links carry.
+  const query = new URLSearchParams(location.search);
+  const ENTRY_TOOL = query.get("tool") ?? config.entryTool;
+  query.delete("tool");
 
-  const client = new Client(HOST_INFO);
+  const client = new Client(HOST_INFO, { versionNegotiation: { mode: "auto" } });
   await client.connect(new StreamableHTTPClientTransport(new URL(config.mcpUrl)));
   const serverName = client.getServerVersion()?.name ?? config.mcpUrl;
   const { tools } = await client.listTools();
@@ -143,7 +147,7 @@ async function main() {
 
   // Start the tool call and the view fetch together, as a chat host would:
   // the view renders while the result is still on its way.
-  const input = {};
+  const input: Record<string, string> = Object.fromEntries(query);
   log("host → server", `tools/call ${ENTRY_TOOL}`, input);
   const resultPromise = client.callTool({ name: ENTRY_TOOL, arguments: input });
   const view = await readView(client, viewUri);
@@ -161,7 +165,7 @@ async function main() {
   const bridge = new AppBridge(
     null,
     HOST_INFO,
-    { serverTools: client.getServerCapabilities()?.tools },
+    { serverTools: client.getServerCapabilities()?.tools, openLinks: {} },
     {
       hostContext: {
         theme,
@@ -186,6 +190,21 @@ async function main() {
   };
   bridge.onsizechange = ({ height }) => {
     if (height !== undefined) iframe.style.height = `${height}px`;
+  };
+  // Mirrors AgentArea: `agentarea-app://<tool>?<args>` opens another view of
+  // this connection (here in a new tab); other links open normally.
+  bridge.onopenlink = async ({ url }) => {
+    const target = new URL(url);
+    if (target.protocol === "agentarea-app:") {
+      const next = new URLSearchParams(target.search);
+      next.set("tool", target.hostname);
+      log("app → host", `open view ${url}`);
+      window.open(`/?${next}`, "_blank");
+      return {};
+    }
+    if (target.protocol !== "http:" && target.protocol !== "https:") return { isError: true };
+    window.open(target.href, "_blank", "noopener,noreferrer");
+    return {};
   };
   bridge.onloggingmessage = (params) => log("app log", String(params.data));
   const initialized = new Promise<void>((resolve) => {

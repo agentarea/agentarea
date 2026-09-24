@@ -95,7 +95,7 @@ export function PeopleTable({
             </Badge>
           )}
         </CardTitle>
-        <CardDescription>Everyone enrolled from a signal detected in this period</CardDescription>
+        <CardDescription>Everyone enrolled from a signal detected in this period · click a row for the lead card</CardDescription>
         <CardAction>
           <Tabs
             value={view}

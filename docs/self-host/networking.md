@@ -127,14 +127,14 @@ different problem with a different mechanism.
     global:
       webapp:
         url: https://app.example.com
-        mcpAppsSandboxUrl: https://apps-sandbox.example.com
+        appsSandboxUrl: https://apps-sandbox.example.com
 
     ingress:
       hosts:
-        mcpAppsSandbox:
+        appsSandbox:
           host: apps-sandbox.example.com
           paths:
-            - path: /mcp-app-sandbox
+            - path: /app-sandbox
               pathType: Exact
       tls:
         - secretName: agentarea-tls

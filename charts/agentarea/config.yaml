@@ -76,7 +76,7 @@ groups:
       ORY_BROWSER_URL: '{{ include "agentarea.kratosPublicBrowserUrl" . }}'
       METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
       HEALTH_CHECK_ENABLED: '{{ .Values.global.monitoring.health.enabled }}'
-      MCP_APPS_SANDBOX_ORIGIN: '{{ .Values.global.webapp.mcpAppsSandboxUrl }}'
+      APPS_SANDBOX_ORIGIN: '{{ .Values.global.webapp.appsSandboxUrl }}'
       WEBAPP_PUBLIC_ORIGIN: '{{ include "agentarea.frontendUrl" . }}'
 
   backend:

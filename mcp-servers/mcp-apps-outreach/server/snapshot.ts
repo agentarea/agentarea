@@ -317,7 +317,7 @@ export function buildSnapshot(data: OutreachData, campaign: string | null, days:
         classification: reply.classification,
         handled: reply.handled,
         body: reply.body,
-        contact: { id: contact.id, name, title: contact.title, email: contact.email },
+        contact: { id: contact.id, name: `${contact.firstName} ${contact.lastName}`, title: contact.title, email: contact.email },
         account: { name: account.name, domain: account.domain, industry: account.industry },
         campaign: index.campaignRef(reply.campaignId),
         signal: index.signalRef(contact),

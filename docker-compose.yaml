@@ -192,7 +192,7 @@ services:
       - API_BROWSER_URL=${API_BROWSER_URL:-http://localhost:8000}
       - NEXT_PUBLIC_ORY_SDK_URL=${NEXT_PUBLIC_ORY_SDK_URL:-http://localhost:4433}
       # MCP Apps run in an iframe on a different origin than the webapp.
-      - MCP_APPS_SANDBOX_ORIGIN=${MCP_APPS_SANDBOX_ORIGIN:-http://127.0.0.1:3000}
+      - APPS_SANDBOX_ORIGIN=${APPS_SANDBOX_ORIGIN:-http://127.0.0.1:3000}
       - WEBAPP_PUBLIC_ORIGIN=${WEBAPP_PUBLIC_ORIGIN:-http://localhost:3000}
     networks:
       - default

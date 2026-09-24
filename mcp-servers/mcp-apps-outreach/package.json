@@ -5,7 +5,7 @@
   "scripts": {
     "seed": "bun scripts/seed.ts",
     "build": "bun run build:app && bun run build:server",
-    "build:app": "INPUT=app/dashboard.html vite build",
+    "build:app": "INPUT=app/dashboard.html vite build && INPUT=app/lead.html vite build",
     "build:server": "bun build server/main.ts --target=node --outfile dist/server.js",
     "build:host": "INPUT=host/index.html vite build && INPUT=host/sandbox.html vite build",
     "typecheck": "tsc --noEmit",

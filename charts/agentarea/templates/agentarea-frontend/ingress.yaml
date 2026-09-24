@@ -55,7 +55,7 @@ spec:
                   name: http
           {{- end }}
     {{- end }}
-    {{- with .Values.ingress.hosts.mcpAppsSandbox }}
+    {{- with .Values.ingress.hosts.appsSandbox }}
     {{- if .host }}
     - host: {{ .host | quote }}
       http:

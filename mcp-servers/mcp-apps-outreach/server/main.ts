@@ -1,7 +1,7 @@
 import { createMcpExpressApp } from "@modelcontextprotocol/express";
-import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
+import { toNodeHandler } from "@modelcontextprotocol/node";
+import { createMcpHandler } from "@modelcontextprotocol/server";
 import cors from "cors";
-import type { Request, Response } from "express";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createServer, VIEW_FILES } from "./server.ts";
@@ -33,29 +33,16 @@ const store = await OutreachStore.open(dataPath);
 const app = createMcpExpressApp({ host, allowedHosts });
 app.use(cors());
 
-// Stateless Streamable HTTP: a fresh server per request, sharing one store.
-app.all("/mcp", async (req: Request, res: Response) => {
-  const server = createServer(store, appDir);
-  const transport = new NodeStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  res.on("close", () => {
-    transport.close().catch(() => {});
-    server.close().catch(() => {});
-  });
-
-  try {
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-  } catch (error) {
-    console.error("MCP request failed:", error);
-    if (!res.headersSent) {
-      res.status(500).json({
-        jsonrpc: "2.0",
-        error: { code: -32603, message: "Internal server error" },
-        id: null,
-      });
-    }
-  }
-});
+// Stateless for both protocol eras: 2026-07-28 requests and 2025 clients each
+// get a fresh server over the shared store, and no session is ever minted.
+const mcp = toNodeHandler(
+  createMcpHandler(() => createServer(store, appDir), {
+    legacy: "stateless",
+    onerror: (error) => console.error("MCP request failed:", error),
+  })
+);
+// express.json() in createMcpExpressApp has already read the body.
+app.all("/mcp", (req, res) => mcp(req, res, req.body));
 
 app.listen(port, host, (error) => {
   if (error) {

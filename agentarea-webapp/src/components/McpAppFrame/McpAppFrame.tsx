@@ -11,19 +11,19 @@ import {
   callMcpAppToolAction,
   startMcpAppAction,
 } from "@/app/(main)/apps/actions";
-import { parseMcpAppLink, type McpAppLink } from "@/lib/mcp-apps/links";
+import { parseMcpAppLink, type McpAppLink } from "@/lib/apps/links";
+import type { McpAppUiResource } from "@/lib/apps/mcp/tools";
 import {
   MCP_UI_STYLE_TOKEN_NAMES,
   mcpUiStyleVariablesFromTokens,
-} from "@/lib/mcp-apps/styles";
-import type { McpAppUiResource } from "@/lib/mcp-apps/tools";
+} from "@/lib/apps/styles";
 
 const HOST_INFO = {
   name: "AgentArea MCP Apps",
   version: "0.1.0",
 } as const;
 const SANDBOX_PROXY_READY = "ui/notifications/sandbox-proxy-ready";
-const SANDBOX_PATH = "/mcp-app-sandbox";
+const SANDBOX_PATH = "/app-sandbox";
 const PROXY_READY_TIMEOUT_MS = 15_000;
 // An app that throws before connecting (a blocked script, a bad bundle) never
 // initializes; without a bound the page would say "Loading" forever.
@@ -41,7 +41,7 @@ type McpAppFrameProps = {
 };
 
 type RuntimeConfig = {
-  MCP_APPS_SANDBOX_ORIGIN?: string;
+  APPS_SANDBOX_ORIGIN?: string;
 };
 
 function runtimeConfig(): RuntimeConfig {
@@ -109,10 +109,10 @@ export default function McpAppFrame({
       console.error("MCP App failed", reason);
     };
 
-    const sandboxValue = runtimeConfig().MCP_APPS_SANDBOX_ORIGIN?.trim();
+    const sandboxValue = runtimeConfig().APPS_SANDBOX_ORIGIN?.trim();
     if (!sandboxValue) {
       fail(
-        new Error("MCP Apps sandbox origin is not configured"),
+        new Error("Apps sandbox origin is not configured"),
         "configurationError"
       );
       return;
@@ -122,15 +122,12 @@ export default function McpAppFrame({
     try {
       sandboxOrigin = new URL(sandboxValue).origin;
     } catch {
-      fail(
-        new Error("MCP Apps sandbox origin is invalid"),
-        "configurationError"
-      );
+      fail(new Error("Apps sandbox origin is invalid"), "configurationError");
       return;
     }
     if (sandboxOrigin === window.location.origin) {
       fail(
-        new Error("MCP Apps sandbox must use a different origin"),
+        new Error("Apps sandbox must use a different origin"),
         "configurationError"
       );
       return;
@@ -156,7 +153,7 @@ export default function McpAppFrame({
       const timer = window.setTimeout(() => {
         cleanup();
         cancelProxyReady = () => {};
-        reject(new Error("Timed out waiting for the MCP Apps sandbox"));
+        reject(new Error("Timed out waiting for the Apps sandbox"));
       }, PROXY_READY_TIMEOUT_MS);
       const cleanup = () => {
         window.clearTimeout(timer);
@@ -164,7 +161,7 @@ export default function McpAppFrame({
       };
       cancelProxyReady = () => {
         cleanup();
-        reject(new Error("MCP Apps sandbox setup was cancelled"));
+        reject(new Error("Apps sandbox setup was cancelled"));
       };
       window.addEventListener("message", onMessage);
     });

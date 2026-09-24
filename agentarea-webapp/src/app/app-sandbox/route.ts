@@ -4,7 +4,7 @@ import {
   type McpUiResourceCsp,
 } from "@modelcontextprotocol/ext-apps/app-bridge";
 import { env } from "@/env";
-import { buildSandboxCsp } from "@/lib/mcp-apps/csp";
+import { buildSandboxCsp } from "@/lib/apps/csp";
 
 function configuredOrigin(value: string | undefined): string | null {
   if (!value) return null;
@@ -40,7 +40,7 @@ function sandboxHtml(appOrigin: string): string {
         "use strict";
 
         if (window.self === window.top) {
-          throw new Error("The MCP Apps sandbox must be embedded");
+          throw new Error("The Apps sandbox must be embedded");
         }
 
         const allowedHostOrigin = ${allowedHostOrigin};
@@ -49,18 +49,18 @@ function sandboxHtml(appOrigin: string): string {
         try {
           hostOrigin = new URL(referrer).origin;
         } catch {
-          throw new Error("The MCP Apps sandbox requires a valid embedding origin");
+          throw new Error("The Apps sandbox requires a valid embedding origin");
         }
         if (hostOrigin !== allowedHostOrigin) {
-          throw new Error("The MCP Apps sandbox embedding origin is not allowed");
+          throw new Error("The Apps sandbox embedding origin is not allowed");
         }
 
         // A sandbox that can read its parent is misconfigured and must not run.
         try {
           void window.top.document;
-          throw new Error("The MCP Apps sandbox can reach its host");
+          throw new Error("The Apps sandbox can reach its host");
         } catch (error) {
-          if (error instanceof Error && error.message === "The MCP Apps sandbox can reach its host") {
+          if (error instanceof Error && error.message === "The Apps sandbox can reach its host") {
             throw error;
           }
         }
@@ -117,20 +117,20 @@ function sandboxHtml(appOrigin: string): string {
 }
 
 export function GET(request: Request) {
-  const sandboxOrigin = configuredOrigin(env.MCP_APPS_SANDBOX_ORIGIN);
+  const sandboxOrigin = configuredOrigin(env.APPS_SANDBOX_ORIGIN);
   const requestHost = request.headers.get("host")?.toLowerCase();
   const sandboxHost = sandboxOrigin
     ? new URL(sandboxOrigin).host.toLowerCase()
     : null;
   if (!sandboxOrigin || requestHost !== sandboxHost) {
-    return new NextResponse("MCP Apps sandbox is not served on this origin", {
+    return new NextResponse("Apps sandbox is not served on this origin", {
       status: 404,
     });
   }
 
   const appOrigin = configuredOrigin(env.WEBAPP_PUBLIC_ORIGIN);
   if (!appOrigin) {
-    return new NextResponse("MCP Apps host origin is not configured", {
+    return new NextResponse("Apps host origin is not configured", {
       status: 500,
     });
   }
@@ -139,12 +139,9 @@ export function GET(request: Request) {
   if (referer) {
     const refererOrigin = configuredOrigin(referer);
     if (refererOrigin !== appOrigin) {
-      return new NextResponse(
-        "MCP Apps sandbox embedding origin is not allowed",
-        {
-          status: 403,
-        }
-      );
+      return new NextResponse("Apps sandbox embedding origin is not allowed", {
+        status: 403,
+      });
     }
   }
 

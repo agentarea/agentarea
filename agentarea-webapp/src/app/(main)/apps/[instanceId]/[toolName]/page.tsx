@@ -4,8 +4,8 @@ import { zGetMcpServerInstanceV1McpServerInstancesInstanceIdGetPath } from "@/ap
 import ContentBlock from "@/components/ContentBlock";
 import { McpAppWorkspace } from "@/components/McpAppFrame";
 import { getMCPServerInstance } from "@/lib/api";
-import { readMcpAppUiResource } from "@/lib/mcp-apps/proxy-client";
-import { mcpAppEntries, type McpAppUiResource } from "@/lib/mcp-apps/tools";
+import { readMcpAppUiResource } from "@/lib/apps/mcp/proxy-client";
+import { mcpAppEntries, type McpAppUiResource } from "@/lib/apps/mcp/tools";
 import { requireApiData } from "@/lib/server-resource";
 
 interface Props {
