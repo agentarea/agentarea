@@ -64,7 +64,7 @@ from running away.
 
     <Note>
     The schedule is registered in Temporal as `cron-trigger-<trigger_id>`, so it
-    also appears in the Temporal UI and can be paused there. Pausing it there
+    also appears in `temporal schedule list` and can be paused there. Pausing it there
     does not update the trigger record — prefer the API below.
     </Note>
   </Step>
@@ -137,7 +137,7 @@ the task itself went wrong. A trigger's job ends when the task exists.
     Cron triggers are Temporal schedules. Check that the Temporal service is
     reachable and that a worker is running — the schedule fires into a task queue
     and a tick with no worker produces nothing. Look for
-    `cron-trigger-<trigger_id>` in the Temporal UI: if the schedule is absent,
+    `cron-trigger-<trigger_id>` in `temporal schedule list`: if the schedule is absent,
     creation did not reach Temporal; if it is present and firing, the problem is
     downstream.
   </Accordion>

@@ -432,14 +432,6 @@ The following table lists configurable parameters of the chart and their default
 | temporal.service.port | int | `7233` |  |
 | temporal.resources | object | `{}` |  |
 | temporal.extraEnv | list | `[]` |  |
-| temporalUi.enabled | bool | `true` |  |
-| temporalUi.replicaCount | int | `1` |  |
-| temporalUi.image.repository | string | `"temporalio/ui"` |  |
-| temporalUi.image.tag | string | `"2.39.0"` |  |
-| temporalUi.service.type | string | `"ClusterIP"` |  |
-| temporalUi.service.port | int | `8080` |  |
-| temporalUi.resources | object | `{}` |  |
-| temporalUi.extraEnv | list | `[]` |  |
 | postgresql.enabled | bool | `true` |  |
 | postgresql.image.repository | string | `"postgres"` |  |
 | postgresql.image.tag | string | `"16-alpine"` |  |

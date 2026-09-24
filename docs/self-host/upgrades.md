@@ -228,7 +228,8 @@ kubectl get pods -n agentarea -l app.kubernetes.io/component=worker
   <Accordion title="Tasks fail after upgrade with workflow errors, while the API is fine">
     The worker is running an older image against a newer schema, or Temporal is
     replaying history with changed workflow code. Confirm the worker image
-    matches, and check the Temporal UI for the failing workflow's history.
+    matches, and read the failing workflow's history with
+    `temporal workflow describe`.
   </Accordion>
   <Accordion title="`helm upgrade` rotated the database password">
     The Secret was deleted between operations, so `lookup` found nothing and

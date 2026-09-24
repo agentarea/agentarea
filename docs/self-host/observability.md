@@ -179,15 +179,48 @@ scrape config against something that will never answer.
     the `rustfs` image returns 403 on its health path.
   </Step>
 
-  <Step title="Watch workflow execution in Temporal UI">
-    Task execution is Temporal workflows, so the Temporal UI is the real execution
-    view — retries, failures, activity history.
+  <Step title="Watch workflow execution in Temporal">
+    Task execution is Temporal workflows, so Temporal's own history — retries,
+    failures, per-activity detail — is the real execution view.
+
+    Neither the chart nor Compose ships a Temporal UI. Reach the server yourself.
+    Under Kubernetes, forward the Temporal frontend:
 
     ```bash
-    kubectl port-forward -n agentarea svc/agentarea-temporal-ui 8080:8080
+    kubectl port-forward -n agentarea svc/agentarea-temporal 7233:7233
     ```
 
-    Under Compose the UI is in `docker-compose.dev.yaml` only, on port 8080.
+    Under Compose, `temporal` already publishes 7233 on the host, so skip the
+    forward. Either way, query it with the `temporal` CLI:
+
+    ```bash
+    temporal workflow list --address localhost:7233 --namespace default
+    temporal workflow describe --address localhost:7233 --namespace default \
+      --workflow-id "$WORKFLOW_ID"
+    ```
+
+    Without a local CLI, the dev Compose file's `temporal-admin-tools` container
+    carries one:
+
+    ```bash
+    docker compose -f docker-compose.dev.yaml exec temporal-admin-tools \
+      temporal workflow list --address temporal:7233 --namespace default
+    ```
+
+    The namespace is `global.temporal.namespace` in the chart and
+    `WORKFLOW__TEMPORAL_NAMESPACE` under Compose; both default to `default`.
+
+    If you want the graphical history, run the UI against the same address for as
+    long as you need it:
+
+    ```bash
+    docker run --rm -p 8080:8080 \
+      -e TEMPORAL_ADDRESS=host.docker.internal:7233 \
+      temporalio/ui:2.39.0
+    ```
+
+    On Linux, `host.docker.internal` does not resolve — add
+    `--add-host=host.docker.internal:host-gateway`.
   </Step>
 
   <Step title="What does not exist">

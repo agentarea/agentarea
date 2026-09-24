@@ -111,7 +111,7 @@ The services you will actually interact with:
 | API | 8000 | REST, SSE, A2A, and the platform MCP server |
 | Dashboard | 3000 | The web UI, run outside Compose |
 | MCP manager | 7999 | Sandbox and MCP lifecycle, Go |
-| Temporal UI | 8082 | Workflow inspection |
+| Temporal | 7233 | Workflow server; inspect with the `temporal` CLI |
 | Object storage | 9000 / 9001 | RustFS, S3-compatible |
 | Kratos | 4433 / 4434 | Identity, public and admin APIs |
 | Mailpit | 8025 | Catches sign-up emails locally; SMTP stays internal |

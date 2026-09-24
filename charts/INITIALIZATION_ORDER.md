@@ -51,7 +51,6 @@
 │ • Worker                                                │
 │ • MCP Manager                                           │
 │ • Temporal                                              │
-│ • Temporal UI                                           │
 │ • Event Service                                         │
 └─────────────────────────────────────────────────────────┘
 ```

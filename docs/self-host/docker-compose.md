@@ -25,7 +25,7 @@ Two Compose files sit at the repository root:
 | File | Purpose |
 |---|---|
 | `docker-compose.yaml` | The deployment target. Pulls published images. |
-| `docker-compose.dev.yaml` | Development. Bind-mounts source, adds Traefik, Temporal UI, Keto, OpenFGA, Hydra, and Mailpit. |
+| `docker-compose.dev.yaml` | Development. Bind-mounts source, adds Traefik, Keto, OpenFGA, Hydra, and Mailpit. |
 
 This guide covers `docker-compose.yaml`.
 

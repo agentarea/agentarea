@@ -56,7 +56,7 @@ block, and its own safety counters. Two concrete types subclass it:
 calls `create_schedule` with id `cron-trigger-<trigger_id>` and a
 `ScheduleSpec(cron_expressions=[…], time_zone_name=…)`. The schedule lives in
 Temporal, so it survives a restart of every AgentArea process, and it is visible
-and pauseable in the Temporal UI like any other schedule.
+and pauseable through Temporal like any other schedule.
 
 **Webhook triggers get an unguessable id.** When `webhook_id` is omitted at
 creation the platform generates one with `secrets.token_urlsafe(16)`. The URL is
