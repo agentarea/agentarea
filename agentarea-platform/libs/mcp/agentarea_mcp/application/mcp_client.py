@@ -147,7 +147,7 @@ class SafeMCPTransport(httpx2.AsyncBaseTransport):
         policy: OutboundPolicy,
         *,
         resolve: Resolver = resolve_host,
-        inner: httpx2.AsyncBaseTransport | None = None,
+        inner: Callable[[], httpx2.AsyncBaseTransport] | None = None,
     ) -> None:
         self._sender = PinnedSender(
             httpx2, policy, error=UnsafeMCPDestinationError, resolve=resolve, inner=inner
@@ -190,9 +190,7 @@ def pinned_client_factory(
                 inner=SafeOutboundTransport(effective, resolve=resolve),
             )
         kwargs: dict[str, Any] = {
-            "transport": SafeMCPTransport(
-                effective, resolve=resolve, inner=inner() if inner else None
-            ),
+            "transport": SafeMCPTransport(effective, resolve=resolve, inner=inner),
             "timeout": timeout
             or httpx2.Timeout(MCP_CONNECT_TIMEOUT_SECONDS, read=SSE_READ_TIMEOUT_SECONDS),
         }

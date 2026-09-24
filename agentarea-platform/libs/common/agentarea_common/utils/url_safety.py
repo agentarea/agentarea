@@ -215,6 +215,11 @@ class PinnedSender:
     The request goes to the vetted IP, with the original name kept in the Host
     header and as the TLS server name, so a name cannot resolve to one address
     when vetted and another when connected.
+
+    Each name gets its own connection pool from ``inner``. The pool keys
+    connections by the address it connects to, so two names served from one
+    address would otherwise share a TLS connection, and the second name's
+    certificate would never be checked.
     """
 
     def __init__(
@@ -224,13 +229,20 @@ class PinnedSender:
         *,
         error: Callable[..., Exception],
         resolve: Resolver = resolve_host,
-        inner: Any = None,
+        inner: Callable[[], Any] | None = None,
     ) -> None:
         self._lib = lib
         self._policy = policy
         self._error = error
         self._resolve = resolve
-        self._inner = inner or lib.AsyncHTTPTransport(trust_env=False)
+        self._new_pool = inner or (lambda: lib.AsyncHTTPTransport(trust_env=False))
+        self._pools: dict[str, Any] = {}
+
+    def _pool_for(self, host: str) -> Any:
+        pool = self._pools.get(host)
+        if pool is None:
+            pool = self._pools[host] = self._new_pool()
+        return pool
 
     async def send(self, request: Any) -> Any:
         url = request.url
@@ -268,10 +280,12 @@ class PinnedSender:
             stream=request.stream,
             extensions=extensions,
         )
-        return await self._inner.handle_async_request(pinned)
+        return await self._pool_for(host).handle_async_request(pinned)
 
     async def aclose(self) -> None:
-        await self._inner.aclose()
+        pools, self._pools = list(self._pools.values()), {}
+        for pool in pools:
+            await pool.aclose()
 
 
 class SafeOutboundTransport(httpx.AsyncBaseTransport):
@@ -286,7 +300,7 @@ class SafeOutboundTransport(httpx.AsyncBaseTransport):
         policy: OutboundPolicy,
         *,
         resolve: Resolver = resolve_host,
-        inner: httpx.AsyncBaseTransport | None = None,
+        inner: Callable[[], httpx.AsyncBaseTransport] | None = None,
     ) -> None:
         self._sender = PinnedSender(
             httpx, policy, error=UnsafeDestinationError, resolve=resolve, inner=inner

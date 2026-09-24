@@ -20,7 +20,7 @@ def _client(table, handler, policy=None, **kwargs) -> httpx.AsyncClient:
     transport = SafeOutboundTransport(
         policy=policy or OutboundPolicy(),
         resolve=_resolver(table),
-        inner=httpx.MockTransport(handler),
+        inner=lambda: httpx.MockTransport(handler),
     )
     return httpx.AsyncClient(transport=transport, **kwargs)
 
@@ -148,6 +148,35 @@ def test_the_allowlist_is_read_from_settings(monkeypatch):
     policy = OutboundPolicy.from_env()
 
     assert policy.private_allowlist == ("localhost", "10.43.0.0/16")
+
+
+async def test_two_names_on_one_address_never_share_a_connection_pool():
+    """Pooling by the pinned IP would hand the second name the first name's TLS session."""
+    pools: list[list[httpx.Request]] = []
+
+    def make_pool() -> httpx.MockTransport:
+        seen: list[httpx.Request] = []
+        pools.append(seen)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(200)
+
+        return httpx.MockTransport(handler)
+
+    transport = SafeOutboundTransport(
+        policy=OutboundPolicy(),
+        resolve=_resolver({"a.example.com": ["93.184.216.34"], "b.example.com": ["93.184.216.34"]}),
+        inner=make_pool,
+    )
+    async with httpx.AsyncClient(transport=transport) as client:
+        await client.get("https://a.example.com/")
+        await client.get("https://b.example.com/")
+        await client.get("https://a.example.com/again")
+
+    assert len(pools) == 2
+    assert [r.extensions["sni_hostname"] for r in pools[0]] == ["a.example.com"] * 2
+    assert [r.extensions["sni_hostname"] for r in pools[1]] == ["b.example.com"]
 
 
 def test_an_invalid_allowlist_entry_fails_loudly():

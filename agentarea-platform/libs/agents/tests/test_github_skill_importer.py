@@ -61,9 +61,7 @@ class TestParseGitHubUrl:
     def test_parse_https_url_with_blob(self):
         """Test parsing HTTPS URL with blob (file path)."""
         importer = GitHubSkillImporter()
-        result = importer.parse_github_url(
-            "https://github.com/owner/repo/blob/main/README.md"
-        )
+        result = importer.parse_github_url("https://github.com/owner/repo/blob/main/README.md")
 
         assert result.owner == "owner"
         assert result.repo == "repo"
@@ -172,9 +170,7 @@ class TestDownloadRepo:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await importer.download_repo(
-                "https://github.com/owner/repo/tree/develop"
-            )
+            result = await importer.download_repo("https://github.com/owner/repo/tree/develop")
 
             assert result == mock_zip_content
             # Verify the URL contains the branch
@@ -518,7 +514,7 @@ class TestImportStaysOnPublicAddresses:
 
         def client(**kwargs):
             transport = SafeOutboundTransport(
-                OutboundPolicy(), resolve=resolve, inner=httpx.MockTransport(handler)
+                OutboundPolicy(), resolve=resolve, inner=lambda: httpx.MockTransport(handler)
             )
             return httpx.AsyncClient(transport=transport, **kwargs)
 

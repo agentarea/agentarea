@@ -894,7 +894,7 @@ class TestDiscoveryStaysOnPublicAddresses:
 
         def client(**kwargs):
             transport = SafeOutboundTransport(
-                OutboundPolicy(), resolve=resolve, inner=httpx.MockTransport(handler)
+                OutboundPolicy(), resolve=resolve, inner=lambda: httpx.MockTransport(handler)
             )
             return _REAL_ASYNC_CLIENT(transport=transport, **kwargs)
 
