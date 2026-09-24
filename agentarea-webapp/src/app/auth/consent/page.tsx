@@ -42,7 +42,12 @@ export default function ConsentPage() {
     }
 
     fetch(`/api/hydra/consent?challenge=${consentChallenge}`)
-      .then((response) => response.json())
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load consent request");
+        }
+        return response.json();
+      })
       .then((data) => {
         setConsentRequest(data);
         setLoading(false);

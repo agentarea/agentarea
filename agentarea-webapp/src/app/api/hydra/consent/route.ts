@@ -2,6 +2,9 @@
  * Server-side proxy for Hydra admin consent API.
  *
  * Keeps the Hydra admin URL server-side only — never exposed to the browser.
+ * Every request must carry a live Kratos session: this is the choke point
+ * that actually grants OAuth consent, so accepting (or even reading) a
+ * consent request without an authenticated user must be impossible.
  *
  * GET  /api/hydra/consent?challenge=<challenge>
  *   → fetch consent request details
@@ -14,11 +17,19 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { hasLiveSession } from "@/lib/auth-session";
 
 const HYDRA_ADMIN_URL =
   process.env.HYDRA_ADMIN_URL ||
   process.env.ORY_HYDRA_ADMIN_URL ||
   "http://localhost:4445";
+const KRATOS_PUBLIC_URL = process.env.ORY_SDK_URL || "http://localhost:4433";
+
+async function requireSession(request: NextRequest): Promise<boolean> {
+  return hasLiveSession(request.headers.get("cookie"), {
+    orySdkUrl: KRATOS_PUBLIC_URL,
+  });
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -26,6 +37,10 @@ export async function GET(request: NextRequest) {
 
   if (!challenge) {
     return NextResponse.json({ error: "Missing challenge" }, { status: 400 });
+  }
+
+  if (!(await requireSession(request))) {
+    return NextResponse.json({ error: "No active session" }, { status: 401 });
   }
 
   try {
@@ -51,6 +66,10 @@ export async function PUT(request: NextRequest) {
 
   if (action !== "accept" && action !== "reject") {
     return NextResponse.json({ error: "action must be accept or reject" }, { status: 400 });
+  }
+
+  if (!(await requireSession(request))) {
+    return NextResponse.json({ error: "No active session" }, { status: 401 });
   }
 
   let body: unknown;
