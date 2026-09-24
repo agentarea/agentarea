@@ -153,7 +153,7 @@ of letting the chart generate them.
     deploy:
 
     - `SECRET_MANAGER_ENCRYPTION_KEY` — a real Fernet key, committed to the repository
-    - `SANDBOX_ACTIVATION_AUTH_SECRET` and `SANDBOX_CLEANUP_AUTH_SECRET` — placeholders that say `change-in-prod`; both must be at least 32 bytes
+    - `SANDBOX_ACTIVATION_AUTH_SECRET` and `SANDBOX_CLEANUP_AUTH_SECRET` — empty; `scripts/gen-dev-secrets.sh` generates them, and the services refuse to start on a value an older `.env.example` shipped
     - `KRATOS_JWKS_B64` — a test JWKS **including the private key `d`**, so anyone with the repository can mint tokens the API will accept
     - `POSTGRES_PASSWORD=postgres`, `RUSTFS_ACCESS_KEY=minioadmin`, `RUSTFS_SECRET_KEY=minioadmin`
 
