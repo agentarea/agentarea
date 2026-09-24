@@ -13,11 +13,28 @@ class ExtensionRegistry:
     """
 
     _factories: ClassVar[dict[str, Callable[[], Any]]] = {}
+    # Extension points whose entry point was installed but failed to load, with the
+    # reason. Discovery skips these so one broken plugin does not stop the rest,
+    # which is right for most points — but an extension point that must not
+    # silently degrade (customer_pricing) needs to tell "not installed" from
+    # "installed and broken", and only this records the difference.
+    _failures: ClassVar[dict[str, str]] = {}
 
     @classmethod
     def register(cls, interface: str, factory: Callable[[], Any]) -> None:
         """Register a factory for an extension point."""
         cls._factories[interface] = factory
+        cls._failures.pop(interface, None)
+
+    @classmethod
+    def record_failure(cls, interface: str, reason: str) -> None:
+        """Record that an installed extension for this point failed to load."""
+        cls._failures[interface] = reason
+
+    @classmethod
+    def get_failure(cls, interface: str) -> str | None:
+        """Why an installed extension for this point failed to load, or None."""
+        return cls._failures.get(interface)
 
     @classmethod
     def get_factory(cls, interface: str) -> Callable[[], Any] | None:
@@ -33,3 +50,4 @@ class ExtensionRegistry:
     def clear(cls) -> None:
         """Clear all registrations. For testing only."""
         cls._factories = {}
+        cls._failures = {}

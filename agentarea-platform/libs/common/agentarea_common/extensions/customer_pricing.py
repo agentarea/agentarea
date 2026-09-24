@@ -88,6 +88,13 @@ def resolve_customer_pricing() -> CustomerPricing:
     """
     factory = ExtensionRegistry.get_factory(CUSTOMER_PRICING_EXTENSION)
     if factory is None:
+        # Installed but failed to import: the same unknown currency as a factory
+        # that raises, only earlier. Discovery logged and moved on; here it counts.
+        failure = ExtensionRegistry.get_failure(CUSTOMER_PRICING_EXTENSION)
+        if failure is not None:
+            raise CustomerPricingUnavailableError(
+                f"customer_pricing extension is installed but failed to load: {failure}"
+            )
         logger.info("No customer_pricing extension registered; amounts are provider cost in USD")
         return ProviderCostPricing()
 
