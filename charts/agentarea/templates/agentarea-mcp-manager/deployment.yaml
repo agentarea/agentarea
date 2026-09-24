@@ -22,10 +22,14 @@ spec:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: mcp-manager
     spec:
+      {{- $dockerBackend := eq (default "kubernetes" .Values.mcpManager.backend) "docker" }}
+      {{- $execKubeconfig := include "agentarea.mcpManager.executionKubeconfigPath" . }}
       serviceAccountName: {{ include "agentarea.mcpManagerServiceAccountName" . }}
+      {{- if not $dockerBackend }}
       {{- with .Values.global.security.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- end }}
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
@@ -38,7 +42,15 @@ spec:
                restricted default below. */}}
           securityContext:
             {{- toYaml .Values.mcpManager.securityContext | nindent 12 }}
-          {{- else }}
+          {{- else if not $dockerBackend }}
+          {{/* The restricted default is only safe to apply automatically for the
+               "kubernetes" backend (the production path). The "docker" backend
+               shells out to the docker CLI against the mounted host socket and
+               has always required an explicit mcpManager.securityContext of its
+               own (see the value's own comment) -- auto-applying
+               readOnlyRootFilesystem here for an operator who left it unset
+               would be a new, unannounced behavior change for that opt-in,
+               non-default mode. */}}
           {{- with .Values.global.security.containerSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -136,19 +148,24 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 6
-          {{- $dockerBackend := eq (default "kubernetes" .Values.mcpManager.backend) "docker" }}
-          {{- $execKubeconfig := include "agentarea.mcpManager.executionKubeconfigPath" . }}
-          {{- if or $dockerBackend $execKubeconfig }}
           volumeMounts:
+            # Scratch spool for artifact/upload verification under
+            # readOnlyRootFilesystem: os.CreateTemp("", ...) resolves to /tmp
+            # in internal/artifactstore/repository.go (PublishStream),
+            # internal/api/sandbox_artifacts_handler.go (download staging)
+            # and internal/sandboxruntime/manager.go (SandboxFileUpload).
+            - name: tmp
+              mountPath: /tmp
             {{- if $dockerBackend }}
             # Docker backend: drive containers through the host Docker socket.
             - name: docker-sock
               mountPath: /var/run/docker.sock
             {{- end }}
             {{- include "agentarea.mcpManager.executionKubeconfigMount" . | nindent 12 }}
-          {{- end }}
-      {{- if or $dockerBackend $execKubeconfig }}
       volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.mcpManager.tmpVolume.sizeLimit | quote }}
         {{- if $dockerBackend }}
         - name: docker-sock
           hostPath:
@@ -156,5 +173,4 @@ spec:
             type: Socket
         {{- end }}
         {{- include "agentarea.mcpManager.executionKubeconfigVolume" . | nindent 8 }}
-      {{- end }}
 {{- end }}
