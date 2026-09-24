@@ -343,7 +343,7 @@ class OpenAPIToolFactory:
 
         Args:
             connection_name_or_id: Connection UUID or name string.
-            allowed_tools: If non-empty list, only operations with matching names are returned.
+            allowed_tools: Operation names to return; ``None`` means all, ``[]`` means none.
             openapi_connection_service: OpenAPIConnectionService instance.
 
         Returns:
@@ -404,8 +404,7 @@ class OpenAPIToolFactory:
             )
             return []
 
-        # Filter by allowed_tools if a non-empty list is provided
-        if allowed_tools:
+        if allowed_tools is not None:
             allowed_set = set(allowed_tools)
             operations = [op for op in operations if op["name"] in allowed_set]
 

@@ -47,16 +47,17 @@ export default function AgentEditClient({
 
       // MCP tools — preserve per-tool approval settings
       for (const mcpConfig of formData.tools_config.mcp_server_configs || []) {
-        const allowedTools = (mcpConfig.allowed_tools || []).map((t) => ({
-          tool_name: t.tool_name,
-          requires_user_confirmation: t.requires_user_confirmation || false,
-        }));
+        const allowedTools =
+          mcpConfig.allowed_tools?.map((t) => ({
+            tool_name: t.tool_name,
+            requires_user_confirmation: t.requires_user_confirmation || false,
+          })) ?? null;
 
         tools.push({
           type: "mcp",
           name: mcpConfig.mcp_server_id,
           settings: {
-            allowed_tools: allowedTools.length > 0 ? allowedTools : null,
+            allowed_tools: allowedTools,
           },
         });
       }
@@ -71,7 +72,7 @@ export default function AgentEditClient({
           name: openapiConfig.openapi_connection_id,
           settings: {
             openapi_connection_id: openapiConfig.openapi_connection_id,
-            allowed_tools: openapiConfig.allowed_tools?.length ? openapiConfig.allowed_tools : null,
+            allowed_tools: openapiConfig.allowed_tools ?? null,
           },
         });
       }

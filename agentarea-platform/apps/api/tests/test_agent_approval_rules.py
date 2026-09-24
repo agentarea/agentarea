@@ -72,9 +72,9 @@ def test_unticked_code_tool_produces_no_target():
     assert approval_targets_from_tools([_code_tool("agentarea/shell", None)]) == set()
 
 
-def test_mcp_tool_name_is_the_raw_tool_name_unprefixed():
-    # MCPToolFactory takes ``name`` verbatim from the server's tools/list, so the
-    # allowed_tools entry and the LLM-facing name are the same string.
+def test_mcp_tool_is_named_through_its_server():
+    # Two attached servers may both advertise ``create_issue``; the rule must say
+    # which server's tool needs approval.
     tools = [
         _mcp_tool(
             "github",
@@ -84,7 +84,7 @@ def test_mcp_tool_name_is_the_raw_tool_name_unprefixed():
             ],
         )
     ]
-    assert approval_targets_from_tools(tools) == {"tool:create_issue"}
+    assert approval_targets_from_tools(tools) == {"tool:mcp:github:create_issue"}
 
 
 def test_bare_string_allowed_tools_carry_no_confirmation():
@@ -100,7 +100,7 @@ def test_multiple_tools_accumulate_targets():
     assert approval_targets_from_tools(tools) == {
         "tool:shell",
         "tool:files",
-        "tool:create_issue",
+        "tool:mcp:github:create_issue",
     }
 
 
@@ -153,10 +153,22 @@ def test_apply_puts_the_flag_back_on_the_right_mcp_permission():
             [{"tool_name": "create_issue"}, {"tool_name": "list_issues"}],
         )
     ]
-    applied = apply_approval_targets(tools, {"tool:create_issue"})
+    applied = apply_approval_targets(tools, {"tool:mcp:github:create_issue"})
     allowed = applied[0]["settings"]["allowed_tools"]
     assert allowed[0]["requires_user_confirmation"] is True
     assert allowed[1]["requires_user_confirmation"] is False
+
+
+def test_apply_reads_a_rule_written_before_tools_were_qualified():
+    tools = [_mcp_tool("github", [{"tool_name": "create_issue"}])]
+    applied = apply_approval_targets(tools, {"tool:create_issue"})
+    assert applied[0]["settings"]["allowed_tools"][0]["requires_user_confirmation"] is True
+
+
+def test_apply_does_not_leak_another_servers_rule():
+    tools = [_mcp_tool("gitlab", [{"tool_name": "create_issue"}])]
+    applied = apply_approval_targets(tools, {"tool:mcp:github:create_issue"})
+    assert applied[0]["settings"]["allowed_tools"][0]["requires_user_confirmation"] is False
 
 
 def test_strip_then_apply_round_trips_the_ui_payload():
@@ -287,6 +299,40 @@ async def test_a_ticked_toggle_puts_the_tool_in_escalation_rules(session_factory
         effective = await resolver.resolve(workspace_id=context.workspace_id, agent_id=agent_id)
 
         assert "shell" in effective.approval.escalation_rules
+
+
+async def test_a_ticked_mcp_toggle_escalates_only_that_servers_tool(session_factory):
+    from agentarea_agents_sdk.tools.mcp_tool_identity import McpToolIdentity
+    from agentarea_common.auth.tool_authorization import (
+        ToolAuthorizationAction,
+        decide_tool_policy,
+    )
+
+    async with session_factory() as session:
+        context = _context()
+        agent_id = uuid4()
+        github, gitlab = str(uuid4()), str(uuid4())
+        tools = [
+            _mcp_tool(github, [{"tool_name": "create_issue", "requires_user_confirmation": True}]),
+            _mcp_tool(gitlab, [{"tool_name": "create_issue"}]),
+        ]
+
+        await sync_agent_approval_rules(
+            session, context, agent_id, approval_targets_from_tools(tools)
+        )
+        resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
+        policy = (
+            await resolver.resolve(workspace_id=context.workspace_id, agent_id=agent_id)
+        ).to_json_dict()
+
+        def verdict(instance_id: str, model_name: str):
+            identity = McpToolIdentity(model_name, instance_id, "create_issue", instance_id)
+            return decide_tool_policy(policy, model_name, aliases=identity.policy_names).action
+
+        assert verdict(github, "mcp__github__create_issue") is (
+            ToolAuthorizationAction.REQUIRE_APPROVAL
+        )
+        assert verdict(gitlab, "mcp__gitlab__create_issue") is ToolAuthorizationAction.ALLOW
 
 
 async def test_an_unticked_toggle_leaves_the_pdp_unescalated(session_factory):

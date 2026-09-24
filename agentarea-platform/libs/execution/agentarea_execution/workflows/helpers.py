@@ -1,14 +1,15 @@
 """Helper classes and utilities for agent execution workflows."""
 
 import re
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, cast
 
 from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
+    any_name_matches,
     decide_tool_policy,
-    tool_matches_any,
 )
 from agentarea_common.events.contract import canonical_type, ensure_terminal_message
 from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
@@ -20,6 +21,16 @@ with workflow.unsafe.imports_passed_through():
     from agentarea_common.money import ZERO, Money, to_money
 
 from agentarea_agents_sdk.prompts import MessageTemplates, PromptBuilder
+
+from ..models import McpToolRoute
+
+
+def tool_policy_aliases(
+    routes: Mapping[str, McpToolRoute] | None, tool_name: str
+) -> tuple[str, ...]:
+    """The names besides ``tool_name`` a policy rule may use for this tool."""
+    route = (routes or {}).get(tool_name)
+    return route.policy_names(tool_name) if route else ()
 
 
 def resolve_effective_budget(
@@ -45,7 +56,9 @@ def resolve_effective_budget(
     return min(candidates)
 
 
-def policy_requires_approval(effective_policy: dict[str, Any] | None, tool_name: str) -> bool:
+def policy_requires_approval(
+    effective_policy: dict[str, Any] | None, tool_name: str, aliases: Sequence[str] = ()
+) -> bool:
     """Whether a tool call needs human approval — driven solely by ApprovalPolicy.
 
     The policy engine is the single source of truth: either approval is required
@@ -56,7 +69,7 @@ def policy_requires_approval(effective_policy: dict[str, Any] | None, tool_name:
     approval = (effective_policy or {}).get("approval") or {}
     if approval.get("requires_human_approval") is True:
         return True
-    return tool_matches_any(tool_name, approval.get("escalation_rules") or [])
+    return any_name_matches((tool_name, *aliases), approval.get("escalation_rules") or [])
 
 
 def policy_approvers(effective_policy: dict[str, Any] | None) -> list[str]:
@@ -64,7 +77,9 @@ def policy_approvers(effective_policy: dict[str, Any] | None) -> list[str]:
     return list(((effective_policy or {}).get("approval") or {}).get("approvers") or [])
 
 
-def approvers_for_tool(effective_policy: dict[str, Any] | None, tool_name: str) -> list[str]:
+def approvers_for_tool(
+    effective_policy: dict[str, Any] | None, tool_name: str, aliases: Sequence[str] = ()
+) -> list[str]:
     """Subject refs allowed to approve a specific tool.
 
     Per-tool approvers (ApprovalPolicy.approvers_by_tool) win when present, so a
@@ -74,10 +89,11 @@ def approvers_for_tool(effective_policy: dict[str, Any] | None, tool_name: str) 
     """
     approval = (effective_policy or {}).get("approval") or {}
     by_tool = approval.get("approvers_by_tool") or {}
+    names = (tool_name, *aliases)
     # Keyed by whatever the rule targeted, which may be a pattern; an exact
     # lookup would drop a pattern rule's own approvers onto the global list.
-    per_tool = by_tool.get(tool_name) or next(
-        (refs for pattern, refs in by_tool.items() if tool_matches_any(tool_name, [pattern])),
+    per_tool = next((by_tool[name] for name in names if by_tool.get(name)), None) or next(
+        (refs for pattern, refs in by_tool.items() if any_name_matches(names, [pattern])),
         None,
     )
     if per_tool:
@@ -93,9 +109,11 @@ class ToolAction(StrEnum):
     REQUIRE_APPROVAL = "require_approval"
 
 
-def decide_tool_action(effective_policy: dict[str, Any] | None, tool_name: str) -> ToolAction:
+def decide_tool_action(
+    effective_policy: dict[str, Any] | None, tool_name: str, aliases: Sequence[str] = ()
+) -> ToolAction:
     """Deterministic workflow preflight view of the tool authorization PDP."""
-    decision = decide_tool_policy(effective_policy, tool_name)
+    decision = decide_tool_policy(effective_policy, tool_name, aliases=aliases)
     if decision.action is ToolAuthorizationAction.ALLOW:
         return ToolAction.ALLOW
     if decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL:
@@ -111,7 +129,9 @@ def tool_definition_name(tool: dict[str, Any]) -> str | None:
 
 
 def filter_disclosed_tools(
-    effective_policy: dict[str, Any] | None, tools: list[dict[str, Any]]
+    effective_policy: dict[str, Any] | None,
+    tools: list[dict[str, Any]],
+    mcp_tool_routes: Mapping[str, McpToolRoute] | None = None,
 ) -> list[dict[str, Any]]:
     """Offer the model only the capability tools policy would actually let it call.
 
@@ -128,7 +148,8 @@ def filter_disclosed_tools(
         if name in CONTROL_FLOW_TOOL_NAMES:
             disclosed.append(tool)
             continue
-        if decide_tool_action(effective_policy, name) is not ToolAction.DENY:
+        aliases = tool_policy_aliases(mcp_tool_routes, name)
+        if decide_tool_action(effective_policy, name, aliases) is not ToolAction.DENY:
             disclosed.append(tool)
     return disclosed
 

@@ -1,7 +1,9 @@
 import { Edit, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Control, useWatch, type Path } from "react-hook-form";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import type { AgentFormValues, MCPToolConfig } from "../types";
 import { MethodsList } from "./MethodsList";
 
@@ -42,6 +44,7 @@ interface TriggerControlProps {
   // MCP tool-level control
   allowedToolsFieldName?: string;
   onToolStateChange?: (toolName: string, state: ToolState) => void;
+  onAllToolsChange?: (all: boolean) => void;
 }
 
 export const TriggerControl = ({
@@ -56,16 +59,19 @@ export const TriggerControl = ({
   onMethodToggle,
   allowedToolsFieldName,
   onToolStateChange,
+  onAllToolsChange,
 }: TriggerControlProps) => {
+  const t = useTranslations("AgentsPage");
   // Reactively watch allowed_tools so checkboxes update on change
   const watchedAllowedTools = useWatch({
     control,
     name: allowedToolsFieldName as Path<AgentFormValues>,
-    defaultValue: [],
   });
-  const allowedTools: MCPToolConfig[] = Array.isArray(watchedAllowedTools)
+  const allowedTools: MCPToolConfig[] | null = Array.isArray(
+    watchedAllowedTools
+  )
     ? watchedAllowedTools
-    : [];
+    : null;
 
   if (!trigger) {
     return (
@@ -90,13 +96,12 @@ export const TriggerControl = ({
       : 0;
 
   const getToolEnabled = (toolName: string): boolean => {
-    if (!allowedTools || allowedTools.length === 0) return true;
+    if (allowedTools === null) return true;
     return allowedTools.some((t) => t.tool_name === toolName);
   };
 
   const getToolApproval = (toolName: string): boolean => {
-    if (!allowedTools) return false;
-    const config = allowedTools.find((t) => t.tool_name === toolName);
+    const config = allowedTools?.find((t) => t.tool_name === toolName);
     return config?.requires_user_confirmation ?? false;
   };
 
@@ -235,6 +240,23 @@ export const TriggerControl = ({
             onSelectAll={hasMethodToggle ? handleSelectAllMethods : undefined}
             label="Available Methods:"
           />
+        )}
+
+        {onAllToolsChange && (
+          <div className="flex items-center gap-2 pl-1">
+            <Switch
+              id={`all-tools-${index}`}
+              size="xs"
+              checked={allowedTools === null}
+              onCheckedChange={onAllToolsChange}
+            />
+            <label
+              htmlFor={`all-tools-${index}`}
+              className="cursor-pointer text-xs text-foreground"
+            >
+              {t("create.allToolsIncludingNew")}
+            </label>
+          </div>
         )}
 
         {/* MCP tools — same component, with approval toggle */}

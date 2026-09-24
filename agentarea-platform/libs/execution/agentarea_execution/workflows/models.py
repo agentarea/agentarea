@@ -9,6 +9,7 @@ from agentarea_common.money import ZERO, Money
 from pydantic import BaseModel, Field
 
 from ..interaction import InteractionCapabilities
+from ..models import McpToolRoute
 
 
 # Define a simple Message class to avoid SDK imports in workflows
@@ -126,6 +127,8 @@ class ContinueAsNewState(BaseModel):
     # Names from the pool already revealed into available_tools — re-applied on replay
     # so prior tool_calls keep resolving after continue-as-new.
     revealed_openapi_tools: list[str] = Field(default_factory=list)
+    # Model-facing MCP tool name -> the server and raw name it routes to.
+    mcp_tool_routes: dict[str, McpToolRoute] = Field(default_factory=dict)
     # Service budget (wallet payments)
     service_budget_usd: Money | None = None
     service_cost_used: Money = ZERO
@@ -204,6 +207,8 @@ class AgentExecutionState(BaseModel):
     # Names from the pool whose full schemas have been appended to
     # `available_tools`; tracked so continue-as-new can re-reveal on replay.
     revealed_openapi_tools: list[str] = Field(default_factory=list)
+    # Model-facing MCP tool name -> the server and raw name it routes to.
+    mcp_tool_routes: dict[str, McpToolRoute] = Field(default_factory=dict)
     # Service budget (wallet payments)
     service_budget_usd: Money | None = None
     service_cost_used: Money = ZERO

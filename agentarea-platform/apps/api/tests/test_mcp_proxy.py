@@ -1,6 +1,7 @@
 """Unit tests for the per-instance MCP reverse proxy."""
 
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from agentarea_api.api.v1.mcp_proxy import (
@@ -177,6 +178,7 @@ def _install_policy(monkeypatch, policy: EffectivePolicy) -> None:
     )
 
 
+_INSTANCE = uuid4()
 _CALL = (
     b'{"jsonrpc":"2.0","method":"tools/call",'
     b'"params":{"name":"github.create_issue","arguments":{"repo":"acme/app"}}}'
@@ -189,7 +191,7 @@ async def test_authorize_mcp_tool_calls_allows_when_policy_permits(monkeypatch):
     _install_policy(monkeypatch, EffectivePolicy())
 
     await _authorize_mcp_tool_calls(
-        _CALL, SimpleNamespace(user_id="u1", workspace_id="ws1"), object()
+        _CALL, SimpleNamespace(user_id="u1", workspace_id="ws1"), object(), instance_id=_INSTANCE
     )
 
 
@@ -199,8 +201,30 @@ async def test_authorize_mcp_tool_calls_denies_when_policy_denies(monkeypatch):
 
     with pytest.raises(HTTPException) as exc:
         await _authorize_mcp_tool_calls(
-            _CALL, SimpleNamespace(user_id="u1", workspace_id="ws1"), object()
+            _CALL,
+            SimpleNamespace(user_id="u1", workspace_id="ws1"),
+            object(),
+            instance_id=_INSTANCE,
         )
 
     assert exc.value.status_code == 403
     assert "github.create_issue" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_a_rule_naming_the_tool_through_its_server_applies_at_the_proxy(monkeypatch):
+    target = f"mcp:{_INSTANCE}:github.create_issue"
+    _install_policy(monkeypatch, EffectivePolicy(tools=ToolsPolicy(denied=[target])))
+
+    with pytest.raises(HTTPException) as exc:
+        await _authorize_mcp_tool_calls(
+            _CALL,
+            SimpleNamespace(user_id="u1", workspace_id="ws1"),
+            object(),
+            instance_id=_INSTANCE,
+        )
+    assert exc.value.status_code == 403
+
+    await _authorize_mcp_tool_calls(
+        _CALL, SimpleNamespace(user_id="u1", workspace_id="ws1"), object(), instance_id=uuid4()
+    )

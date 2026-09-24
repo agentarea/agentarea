@@ -8,6 +8,7 @@ from pathlib import PurePosixPath
 from typing import Any, Literal
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.mcp_tool_identity import McpToolIdentity
 from agentarea_common.money import ZERO, Money
 from pydantic import BaseModel, Field, model_validator
 
@@ -423,6 +424,32 @@ class SearchableToolEntry(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class McpToolRoute(BaseModel):
+    """The server behind one model-facing MCP tool name, and the raw name it advertises.
+
+    ``attachment_ref`` is how the agent's attachment references the server (id or
+    name); an agent-scoped rule may name the tool through it.
+    """
+
+    instance_id: str
+    raw_name: str
+    attachment_ref: str
+
+    @classmethod
+    def from_identity(cls, identity: McpToolIdentity) -> "McpToolRoute":
+        return cls(
+            instance_id=identity.instance_id,
+            raw_name=identity.raw_name,
+            attachment_ref=identity.attachment_ref,
+        )
+
+    def policy_names(self, model_name: str) -> tuple[str, ...]:
+        """The names besides ``model_name`` a policy rule may use for this tool."""
+        return McpToolIdentity(
+            model_name, self.instance_id, self.raw_name, self.attachment_ref
+        ).policy_names
+
+
 class ToolDiscoveryResult(BaseModel):
     """Tools discovery result.
 
@@ -433,6 +460,7 @@ class ToolDiscoveryResult(BaseModel):
 
     tools: list[ToolDefinition]
     searchable_entries: list[SearchableToolEntry] = Field(default_factory=list)
+    mcp_tool_routes: dict[str, McpToolRoute] = Field(default_factory=dict)
 
 
 class LLMCallRequest(BaseModel):
@@ -482,6 +510,8 @@ class MCPToolRequest(BaseModel):
     tool_name: str
     tool_args: dict[str, Any]
     server_instance_id: UUID | None = None
+    # Set for MCP tools: the call is routed to server_instance_id under this name.
+    mcp_route: McpToolRoute | None = None
     workspace_id: str  # Required - must be provided explicitly
     user_id: str | None = None  # Authenticated task owner for workspace-scoped code tools
     task_id: str | None = None  # Scopes artifact-style tools to a task
@@ -896,5 +926,6 @@ class DiscoverToolProvidersResult(BaseModel):
     """Result from discover_tool_providers activity."""
 
     providers: list[ToolProviderData] = Field(default_factory=list)
+    mcp_tool_routes: dict[str, McpToolRoute] = Field(default_factory=dict)
     success: bool = True
     error: str | None = None

@@ -7,9 +7,12 @@ effect=APPROVAL)``, which the resolver already folds into the snapshot the
 workflow gate reads. The toggle's state is the source of truth, so unticking
 removes the row rather than disabling it.
 
-The one subtlety is the name. Policy judges the LLM-facing name: a code toolset
-collapses its namespace (``agentarea/shell`` -> ``shell``), while an MCP tool
-keeps the raw name it advertises, which is exactly the ``allowed_tools`` entry.
+The one subtlety is the name. A code toolset is judged by its LLM-facing name,
+which collapses the namespace (``agentarea/shell`` -> ``shell``). An MCP tool is
+named through the attachment that exposes it, ``mcp:<server ref>:<raw tool>``,
+because two attached servers can advertise the same raw name; the runtime offers
+that name to the PDP alongside the model-facing one. Rules written earlier under
+the bare raw name are still read back, and the next save rewrites them.
 
 This lives in the agents lib (not the API app) so every agent-creation path —
 the router, bundle install, workspace import, and catalog fork — reconciles
@@ -21,6 +24,7 @@ from __future__ import annotations
 from copy import deepcopy
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.mcp_tool_identity import mcp_tool_target
 from agentarea_common.auth.context import UserContext
 from agentarea_governance.domain.rules import PolicyEffect, PolicyRule, PolicySubjectType
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
@@ -32,17 +36,22 @@ def _llm_facing_name(tool_name: str) -> str:
     return tool_name.rsplit("/", 1)[-1]
 
 
+def _mcp_target(server_ref: str, tool_name: str) -> str:
+    return f"tool:{mcp_tool_target(server_ref, tool_name)}"
+
+
 def approval_targets_from_tools(tools: list[dict]) -> set[str]:
     """Rule targets for every tool the config marks as requiring approval."""
     targets: set[str] = set()
     for tool in tools:
         settings = tool.get("settings") or {}
         if tool.get("type") == "mcp":
+            server_ref = tool.get("name")
             for perm in settings.get("allowed_tools") or []:
                 if isinstance(perm, dict) and perm.get("requires_user_confirmation"):
                     name = perm.get("tool_name")
-                    if name:
-                        targets.add(f"tool:{name}")
+                    if name and server_ref:
+                        targets.add(_mcp_target(server_ref, name))
         elif settings.get("requires_user_confirmation"):
             name = tool.get("name")
             if name:
@@ -68,6 +77,11 @@ def strip_confirmation_flags(tools: list[dict]) -> list[dict]:
     return cleaned
 
 
+def mcp_tool_ticked(server_ref: str, tool_name: str, targets: set[str]) -> bool:
+    """Whether an attached server's tool has an approval rule, old spelling included."""
+    return _mcp_target(server_ref, tool_name) in targets or f"tool:{tool_name}" in targets
+
+
 def apply_approval_targets(tools: list[dict], targets: set[str]) -> list[dict]:
     """Copy the tools with the flag set from ``targets`` so the UI round-trips."""
     restored = deepcopy(tools)
@@ -76,9 +90,12 @@ def apply_approval_targets(tools: list[dict], targets: set[str]) -> list[dict]:
             settings = tool.get("settings")
             if not isinstance(settings, dict):
                 continue
+            server_ref = tool.get("name") or ""
             for perm in settings.get("allowed_tools") or []:
                 if isinstance(perm, dict) and perm.get("tool_name"):
-                    perm["requires_user_confirmation"] = f"tool:{perm['tool_name']}" in targets
+                    perm["requires_user_confirmation"] = mcp_tool_ticked(
+                        server_ref, perm["tool_name"], targets
+                    )
         else:
             name = tool.get("name")
             if not name:

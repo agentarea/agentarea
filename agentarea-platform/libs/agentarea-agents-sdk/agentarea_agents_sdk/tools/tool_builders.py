@@ -16,12 +16,13 @@ from __future__ import annotations
 import inspect
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from .agent_tool_factory import AgentToolFactory
 from .code_tools_loader import create_code_tool_instance, get_code_tool_class
 from .decorator_tool import Toolset, ToolsetAdapter
+from .mcp_tool_identity import McpToolIdentity, qualify_mcp_tool_name, server_label
 from .tool_provider import (
     AgentToolProvider,
     CodeToolProvider,
@@ -61,11 +62,32 @@ class ToolBuildContext:
     workspace_id: str | None = None
     user_id: str | None = None
     force_explicit: bool = True
+    tool_identities: dict[str, McpToolIdentity] = field(default_factory=dict)
+    _server_labels: dict[str, str] = field(default_factory=dict)
+
+    def claim_server_label(self, instance_id: str, instance_name: str) -> str:
+        """A label no other attached server holds; same-named servers get an id suffix."""
+        label = server_label(instance_name)
+        owner = self._server_labels.setdefault(label, instance_id)
+        if owner != instance_id:
+            label = f"{label}_{instance_id.replace('-', '')[:6]}"
+            self._server_labels[label] = instance_id
+        return label
+
+    def register(self, identity: McpToolIdentity) -> None:
+        existing = self.tool_identities.setdefault(identity.model_name, identity)
+        if existing != identity:
+            raise ValueError(
+                f"MCP tools {existing.canonical} and {identity.canonical} both resolve "
+                f"to the model-facing name {identity.model_name!r}"
+            )
 
 
-def _allowed_tool_names(settings: dict[str, Any]) -> list[str]:
-    """Flatten ``allowed_tools`` (strings or {tool_name,...} objects) to names."""
-    raw = settings.get("allowed_tools") or []
+def allowed_tool_names(settings: dict[str, Any]) -> list[str] | None:
+    """Flatten ``allowed_tools`` to names; ``None`` means every tool, ``[]`` means none."""
+    raw = settings.get("allowed_tools")
+    if raw is None:
+        return None
     return [str(t["tool_name"] if isinstance(t, dict) else t) for t in raw]
 
 
@@ -131,10 +153,20 @@ class McpToolBuilder(ToolBuilder):
     type = "mcp"
 
     async def _tool_defs(self, spec: ToolSpec, ctx: ToolBuildContext) -> list[dict[str, Any]]:
-        tools = await ctx.manager._discover_mcp_tools_by_name(
-            spec.name, _allowed_tool_names(spec.settings), ctx.mcp_server_instance_service
+        instance, tools = await ctx.manager._discover_mcp_tools_by_name(
+            spec.name, allowed_tool_names(spec.settings), ctx.mcp_server_instance_service
         )
-        return [t.get_openai_function_definition() for t in tools]
+        if instance is None:
+            return []
+        instance_id = str(instance.id)
+        label = ctx.claim_server_label(instance_id, instance.name)
+        defs = []
+        for tool in tools:
+            model_name = qualify_mcp_tool_name(label, tool.raw_name)
+            ctx.register(McpToolIdentity(model_name, instance_id, tool.raw_name, spec.name))
+            tool.expose_as(model_name)
+            defs.append(tool.get_openai_function_definition())
+        return defs
 
     def _provider(self, spec, ctx, defs):
         return MCPToolProvider(name=spec.name, instance_id="", tools=defs)
@@ -180,7 +212,7 @@ class OpenApiToolBuilder(ToolBuilder):
     async def _tool_defs(self, spec: ToolSpec, ctx: ToolBuildContext) -> list[dict[str, Any]]:
         tools = await ctx.manager._discover_openapi_tools_by_name(
             self._connection_ref(spec),
-            _allowed_tool_names(spec.settings),
+            allowed_tool_names(spec.settings),
             ctx.manager._openapi_connection_service,
         )
         return [t.get_openai_function_definition() for t in tools]
@@ -190,7 +222,7 @@ class OpenApiToolBuilder(ToolBuilder):
         if load_mode == "searchable" and not ctx.force_explicit:
             entries = await ctx.manager._build_openapi_searchable_entries(
                 self._connection_ref(spec),
-                _allowed_tool_names(spec.settings),
+                allowed_tool_names(spec.settings),
                 ctx.manager._openapi_connection_service,
             )
             result.searchable_entries.extend(entries)

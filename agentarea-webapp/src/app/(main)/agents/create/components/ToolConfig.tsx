@@ -8,7 +8,9 @@ import {
   FieldErrors,
   UseFieldArrayAppend,
   UseFieldArrayReturn,
+  UseFormGetValues,
   UseFormSetValue,
+  useWatch,
 } from "react-hook-form";
 import { toast } from "sonner";
 import FormLabel from "@/components/FormLabel/FormLabel";
@@ -16,6 +18,7 @@ import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import { Accordion } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import Note from "@/components/ui/note";
+import { Switch } from "@/components/ui/switch";
 import {
   checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration,
   createMCPServerInstanceAction as createMCPServerInstance,
@@ -53,6 +56,7 @@ interface BuiltinTool {
 type ToolConfigProps = {
   control: Control<AgentFormValues>;
   setValue: UseFormSetValue<AgentFormValues>;
+  getValues: UseFormGetValues<AgentFormValues>;
   errors: FieldErrors<AgentFormValues>;
   toolFields: UseFieldArrayReturn<
     AgentFormValues,
@@ -92,6 +96,7 @@ type ToolConfigProps = {
 const ToolConfig = ({
   control,
   setValue,
+  getValues,
   errors,
   toolFields,
   removeTool,
@@ -117,6 +122,10 @@ const ToolConfig = ({
     Record<string, Record<string, boolean>>
   >({});
   const t = useTranslations("AgentsPage");
+  const watchedOpenapiConfigs = useWatch({
+    control,
+    name: "tools_config.openapi_configs",
+  });
   const tMcp = useTranslations("MCPServersPage.createInstance");
 
   // Configure server overlay (like marketplace, but in sheet)
@@ -257,10 +266,13 @@ const ToolConfig = ({
     // the system prompt + load_tools meta-tool keeps token cost flat regardless
     // of spec size (issue #115). Existing entries without load_mode keep their
     // legacy "explicit" behavior.
+    const operations = connection.available_tools ?? [];
     appendOpenapiTool({
       openapi_connection_id: connection.id,
       openapi_connection_name: connection.name,
-      allowed_tools: [],
+      allowed_tools: operations.length
+        ? operations.map((operation) => operation.name)
+        : null,
       load_mode: "searchable",
     });
   };
@@ -298,15 +310,13 @@ const ToolConfig = ({
     );
     if (index === -1) return;
 
-    const field = openapiFields[index];
     const connection = openapiConnections.find((c) => c.id === connectionId);
     const allToolNames = (connection?.available_tools || []).map((t) => t.name);
 
-    // Empty allowed_tools means "all enabled" — initialize on first toggle
-    let current: string[] = field.allowed_tools || [];
-    if (current.length === 0 && allToolNames.length > 0) {
-      current = [...allToolNames];
-    }
+    // null means "all, including ones added later" — materialise on first toggle
+    const current =
+      getValues(`tools_config.openapi_configs.${index}.allowed_tools`) ??
+      allToolNames;
 
     let updated: string[];
     if (enabled) {
@@ -318,6 +328,17 @@ const ToolConfig = ({
     setValue(
       `tools_config.openapi_configs.${index}.allowed_tools`,
       updated
+    );
+  };
+
+  const handleOpenapiAllTools = (index: number, all: boolean) => {
+    const connectionId = getValues(
+      `tools_config.openapi_configs.${index}.openapi_connection_id`
+    );
+    const connection = openapiConnections.find((c) => c.id === connectionId);
+    setValue(
+      `tools_config.openapi_configs.${index}.allowed_tools`,
+      all ? null : (connection?.available_tools ?? []).map((t) => t.name)
     );
   };
 
@@ -388,6 +409,23 @@ const ToolConfig = ({
     return res.status === "instance" ? res.availableTools : [];
   };
 
+  // Known tools start as an explicit, fully ticked list; unknown ones start in
+  // the visible "all tools" mode.
+  const initialMcpAllowedTools = (
+    tools: McpAvailableTool[]
+  ): MCPToolConfig[] | null =>
+    tools.length
+      ? tools.map((tool) => ({
+          tool_name: tool.name,
+          requires_user_confirmation: false,
+        }))
+      : null;
+
+  const createdInstanceTools = (created: McpInstance): McpAvailableTool[] => {
+    const res = resolveMcpRef(created.id, [created], mcpServers);
+    return res.status === "instance" ? res.availableTools : [];
+  };
+
   // Agents reference an MCP by instance UUID (webapp flow) or instance name
   // (bundle installs); resolveMcpRef mirrors the runtime's id-then-name lookup.
   const resolveInstanceTrigger = (mcpServerId: string) => {
@@ -445,7 +483,7 @@ const ToolConfig = ({
 
     const configs = servers.map((server) => ({
       mcp_server_id: server.id,
-      allowed_tools: [],
+      allowed_tools: initialMcpAllowedTools(getInstanceTools(server)),
     }));
 
     appendTool(configs);
@@ -664,12 +702,12 @@ const ToolConfig = ({
                           <p className="text-xs font-medium text-foreground">Operations:</p>
                           <div className="space-y-1">
                             {connection.available_tools.map((tool) => {
-                              const field = (openapiFields || []).find(
+                              const field = (watchedOpenapiConfigs || []).find(
                                 (f) => f.openapi_connection_id === connection.id
                               );
-                              const allowedTools: string[] = field?.allowed_tools || [];
+                              const allowedTools = field?.allowed_tools ?? null;
                               const isEnabled =
-                                allowedTools.length === 0 ||
+                                allowedTools === null ||
                                 allowedTools.includes(tool.name);
                               const isSelected = (openapiFields || []).some(
                                 (f) => f.openapi_connection_id === connection.id
@@ -907,15 +945,20 @@ const ToolConfig = ({
                     removeEvent={() => removeTool(index)}
                     editEvent={() => editTool(index)}
                     allowedToolsFieldName={`tools_config.mcp_server_configs.${index}.allowed_tools`}
+                    onAllToolsChange={(all) => {
+                      const trigger = resolveInstanceTrigger(item.mcp_server_id);
+                      setValue(
+                        `tools_config.mcp_server_configs.${index}.allowed_tools`,
+                        all ? null : initialMcpAllowedTools(trigger.available_tools) ?? []
+                      );
+                    }}
                     onToolStateChange={(toolName, state) => {
                       const trigger = resolveInstanceTrigger(item.mcp_server_id);
                       const allTools = trigger?.available_tools || [];
-                      let currentAllowed: MCPToolConfig[] = item.allowed_tools || [];
-
-                      // Empty means "all enabled" — initialize with all tools on first toggle
-                      if (currentAllowed.length === 0 && allTools.length > 0) {
-                        currentAllowed = allTools.map((t) => ({ tool_name: t.name }));
-                      }
+                      // null means "all, including ones added later" — materialise on first toggle
+                      const currentAllowed: MCPToolConfig[] =
+                        getValues(`tools_config.mcp_server_configs.${index}.allowed_tools`) ??
+                        allTools.map((t) => ({ tool_name: t.name }));
 
                       let newAllowed: MCPToolConfig[];
                       if (state === "disabled") {
@@ -959,10 +1002,11 @@ const ToolConfig = ({
                     item.openapi_connection_name ||
                     connection?.name ||
                     item.openapi_connection_id;
-                  const allowedTools: string[] = item.allowed_tools || [];
+                  const allowedTools =
+                    watchedOpenapiConfigs?.[index]?.allowed_tools ?? null;
                   const allTools = connection?.available_tools || [];
                   const activeCount =
-                    allowedTools.length === 0
+                    allowedTools === null
                       ? allTools.length
                       : allowedTools.length;
 
@@ -982,9 +1026,27 @@ const ToolConfig = ({
                               {connection.base_url}
                             </p>
                           )}
-                          <p className="text-xs text-muted-foreground">
-                            {activeCount} of {allTools.length} operations
-                          </p>
+                          {(allowedTools !== null || allTools.length > 0) && (
+                            <p className="text-xs text-muted-foreground">
+                              {activeCount} of {allTools.length} operations
+                            </p>
+                          )}
+                          <div className="mt-1 flex items-center gap-2">
+                            <Switch
+                              id={`openapi-all-tools-${index}`}
+                              size="xs"
+                              checked={allowedTools === null}
+                              onCheckedChange={(all) =>
+                                handleOpenapiAllTools(index, all)
+                              }
+                            />
+                            <label
+                              htmlFor={`openapi-all-tools-${index}`}
+                              className="cursor-pointer text-xs text-foreground"
+                            >
+                              {t("create.allToolsIncludingNew")}
+                            </label>
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -1187,7 +1249,9 @@ const ToolConfig = ({
                           appendTool([
                             {
                               mcp_server_id: created.id,
-                              allowed_tools: [],
+                              allowed_tools: initialMcpAllowedTools(
+                                createdInstanceTools(created)
+                              ),
                             },
                           ]);
                         }
@@ -1284,7 +1348,9 @@ const ToolConfig = ({
                       appendTool([
                         {
                           mcp_server_id: created.id,
-                          allowed_tools: [],
+                          allowed_tools: initialMcpAllowedTools(
+                            createdInstanceTools(created)
+                          ),
                         },
                       ]);
                     }

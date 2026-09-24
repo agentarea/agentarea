@@ -316,14 +316,16 @@ export function TriggerExecutionContext(props: TriggerExecutionContextProps) {
                     <details className="group mt-1.5 text-xs text-muted-foreground">
                       <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                         <ChevronRight className="h-3 w-3 transition-transform group-open:rotate-90 motion-reduce:transition-none" />
-                        {resource.restricted
-                          ? t("execution.selectedTools", {
-                              count: resource.tools.length,
-                            })
-                          : t("execution.allTools")}
+                        {!resource.restricted
+                          ? t("execution.allTools")
+                          : resource.tools.length === 0
+                            ? t("execution.noTools")
+                            : t("execution.selectedTools", {
+                                count: resource.tools.length,
+                              })}
                       </summary>
                       <div className="mt-2 space-y-2 border-l border-border pl-3">
-                        {resource.tools.length === 0 && (
+                        {!resource.restricted && resource.tools.length === 0 && (
                           <p>{t("execution.toolListUnavailable")}</p>
                         )}
                         {resource.tools.map((tool) => (
@@ -411,9 +413,13 @@ export function TriggerExecutionContext(props: TriggerExecutionContextProps) {
                       {t("execution.approval")}
                     </p>
                   )}
-                  {tool.allowedTools.length > 0 && (
+                  {tool.type === "openapi" && (
                     <p className="mt-1 break-words text-xs text-muted-foreground">
-                      {tool.allowedTools.join(", ")}
+                      {tool.allowedTools === null
+                        ? t("execution.allTools")
+                        : tool.allowedTools.length === 0
+                          ? t("execution.noTools")
+                          : tool.allowedTools.join(", ")}
                     </p>
                   )}
                   {tool.disabledMethods.length > 0 && (

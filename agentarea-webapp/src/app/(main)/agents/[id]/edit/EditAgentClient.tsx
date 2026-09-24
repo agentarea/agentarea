@@ -71,6 +71,7 @@ export default function EditAgentClient({
     register,
     control,
     setValue,
+    getValues,
     handleSubmit,
     formState: { errors },
   } = useForm<AgentFormValues>({
@@ -130,7 +131,7 @@ export default function EditAgentClient({
         const configs = state.fieldValues.tools_config.mcp_server_configs.map(
           (config) => ({
             mcp_server_id: config.mcp_server_id,
-            allowed_tools: config.allowed_tools || [],
+            allowed_tools: config.allowed_tools ?? null,
           })
         );
         setValue("tools_config.mcp_server_configs", configs);
@@ -177,6 +178,7 @@ export default function EditAgentClient({
               <ToolConfig
                 control={control}
                 setValue={setValue}
+                getValues={getValues}
                 errors={errors}
                 toolFields={toolFields}
                 removeTool={removeTool}

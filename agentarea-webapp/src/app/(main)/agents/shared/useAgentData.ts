@@ -99,8 +99,8 @@ export async function loadAgentEditData(
             t.settings ?? {};
           // Transform backend allowed_tools to form format (MCPToolConfig[])
           // Handles both string[] (legacy) and {tool_name, requires_user_confirmation}[] (new)
-          const allowedTools = (settings.allowed_tools || []).map(
-            (item: string | McpToolPermission) => {
+          const allowedTools =
+            settings.allowed_tools?.map((item: string | McpToolPermission) => {
               if (typeof item === "string") {
                 return { tool_name: item, requires_user_confirmation: false };
               }
@@ -109,8 +109,7 @@ export async function loadAgentEditData(
                 requires_user_confirmation:
                   item.requires_user_confirmation ?? false,
               };
-            }
-          );
+            }) ?? null;
           return {
             mcp_server_id: settings.mcp_server_id || t.name,
             allowed_tools: allowedTools,
@@ -135,7 +134,7 @@ export async function loadAgentEditData(
           // Display name is resolved at render time from the fetched connections list
           // in ToolConfig.tsx — no need to cache it here.
           openapi_connection_name: undefined,
-          allowed_tools: t.settings?.allowed_tools || [],
+          allowed_tools: t.settings?.allowed_tools ?? null,
         })),
     },
     events_config: {

@@ -118,3 +118,48 @@ async def test_authorize_allows_when_no_policy_restricts():
     )
 
     assert decision.action is ToolAuthorizationAction.ALLOW
+
+
+# --- aliases: one tool, several names a rule may target ------------------------
+
+_MCP_SEARCH = ("mcp:3f2a:search", "search")
+
+
+def test_rule_on_any_alias_governs_the_tool():
+    by_canonical = {"tools": {"denied": ["mcp:3f2a:search"]}}
+    by_raw = {"tools": {"denied": ["search"]}}
+    by_model_name = {"tools": {"denied": ["mcp__github__*"]}}
+
+    for policy in (by_canonical, by_raw, by_model_name):
+        decision = decide_tool_policy(policy, "mcp__github__search", aliases=_MCP_SEARCH)
+        assert decision.action is ToolAuthorizationAction.DENY
+
+
+def test_canonical_rule_does_not_reach_the_same_tool_on_another_server():
+    policy = {"approval": {"escalation_rules": ["mcp:3f2a:search"]}}
+
+    other = decide_tool_policy(policy, "mcp__gitlab__search", aliases=("mcp:9c1b:search", "search"))
+
+    assert other.action is ToolAuthorizationAction.ALLOW
+
+
+def test_allowlist_admits_a_tool_named_by_any_alias():
+    policy = {"tools": {"allowed": ["mcp:3f2a:*"]}}
+
+    decision = decide_tool_policy(policy, "mcp__github__search", aliases=_MCP_SEARCH)
+
+    assert decision.action is ToolAuthorizationAction.ALLOW
+
+
+@pytest.mark.asyncio
+async def test_invocation_request_carries_aliases():
+    decision = await authorize_tool_invocation(
+        ToolAuthorizationRequest(
+            tool_name="mcp__github__search",
+            tool_args={},
+            effective_policy={"tools": {"denied": ["mcp:3f2a:search"]}},
+            aliases=_MCP_SEARCH,
+        )
+    )
+
+    assert decision.action is ToolAuthorizationAction.DENY

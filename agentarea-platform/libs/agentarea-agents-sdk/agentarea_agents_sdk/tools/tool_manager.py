@@ -9,6 +9,7 @@ from .base_tool import ToolRegistry
 from .completion_tool import CompletionTool
 from .decorator_tool import ToolsetAdapter
 from .mcp_tool import MCPToolFactory
+from .mcp_tool_identity import McpToolIdentity
 from .openapi_tool import OpenAPIToolFactory, _slugify_name
 from .tool_builders import (
     ToolBuildContext,
@@ -36,6 +37,15 @@ class DiscoveryResult:
 
     explicit_tools: list[dict[str, Any]] = field(default_factory=list)
     searchable_entries: list[dict[str, Any]] = field(default_factory=list)
+    tool_identities: dict[str, McpToolIdentity] = field(default_factory=dict)
+
+
+@dataclass
+class ProviderDiscovery:
+    """Output of `discover_tool_providers`: the providers and who serves each MCP tool."""
+
+    providers: list[ToolProvider] = field(default_factory=list)
+    tool_identities: dict[str, McpToolIdentity] = field(default_factory=dict)
 
 
 class ToolManager:
@@ -161,6 +171,7 @@ class ToolManager:
                 )
                 continue
             await builder.add_explicit(spec, ctx, result)
+        result.tool_identities = ctx.tool_identities
 
         logger.info(
             "Discovered %d explicit tools and %d searchable entries for agent %s",
@@ -173,7 +184,7 @@ class ToolManager:
     async def _build_openapi_searchable_entries(
         self,
         connection_name_or_id: str,
-        allowed_tools: list[str],
+        allowed_tools: list[str] | None,
         openapi_connection_service,
     ) -> list[dict[str, Any]]:
         """Cheap path: read pre-parsed `available_tools` from the DB, no spec re-parse.
@@ -197,7 +208,7 @@ class ToolManager:
             return []
 
         available = getattr(connection, "available_tools", None) or []
-        allowed_set = set(allowed_tools) if allowed_tools else None
+        allowed_set = set(allowed_tools) if allowed_tools is not None else None
 
         entries: list[dict[str, Any]] = []
         for op in available:
@@ -286,20 +297,21 @@ class ToolManager:
     async def _discover_mcp_tools_by_name(
         self,
         instance_name: str,
-        allowed_tools: list[str],
+        allowed_tools: list[str] | None,
         mcp_server_instance_service,
-    ) -> list:
-        """Discover tools from MCP server instance by name.
+    ) -> tuple[Any, list]:
+        """Discover tools from an MCP server instance referenced by id or name.
 
         Args:
-            instance_name: Name of the MCP server instance
-            allowed_tools: List of tool names to allow (empty means all)
+            instance_name: Id or name of the MCP server instance
+            allowed_tools: Tool names to allow; ``None`` means all, ``[]`` means none
             mcp_server_instance_service: Service for MCP server instances
 
         Returns:
-            List of MCP tools
+            The resolved instance (``None`` when it cannot be found) and its tools
         """
         all_mcp_tools = []
+        instance = None
 
         try:
             # Find instance by ID (UUID) or by name
@@ -317,16 +329,15 @@ class ToolManager:
 
             if not instance:
                 logger.warning(f"MCP server instance not found: {instance_name}")
-                return all_mcp_tools
+                return None, all_mcp_tools
 
             # Get tools from the instance
             mcp_tools = await MCPToolFactory.create_tools_from_server(
                 instance.id, mcp_server_instance_service
             )
 
-            # Filter by allowed_tools if specified
-            if allowed_tools:
-                mcp_tools = [tool for tool in mcp_tools if tool.name in allowed_tools]
+            if allowed_tools is not None:
+                mcp_tools = [tool for tool in mcp_tools if tool.raw_name in allowed_tools]
 
             all_mcp_tools.extend(mcp_tools)
             logger.info(f"Discovered {len(mcp_tools)} tools from MCP instance: {instance_name}")
@@ -336,19 +347,19 @@ class ToolManager:
                 f"Failed to get tools from MCP instance {instance_name}: {e}", exc_info=True
             )
 
-        return all_mcp_tools
+        return instance, all_mcp_tools
 
     async def _discover_openapi_tools_by_name(
         self,
         connection_name: str,
-        allowed_tools: list[str],
+        allowed_tools: list[str] | None,
         openapi_connection_service,
     ) -> list:
         """Discover tools from an OpenAPI connection by name or UUID.
 
         Args:
             connection_name: Name or UUID string of the OpenAPI connection.
-            allowed_tools: List of tool names to allow (empty means all).
+            allowed_tools: Operation names to allow; ``None`` means all, ``[]`` means none.
             openapi_connection_service: Service for OpenAPI connections.
 
         Returns:
@@ -363,7 +374,7 @@ class ToolManager:
         try:
             tools = await OpenAPIToolFactory.create_tools_from_connection(
                 connection_name_or_id=connection_name,
-                allowed_tools=allowed_tools if allowed_tools else None,
+                allowed_tools=allowed_tools,
                 openapi_connection_service=openapi_connection_service,
             )
             logger.info(f"Discovered {len(tools)} tools from OpenAPI connection: {connection_name}")
@@ -386,7 +397,7 @@ class ToolManager:
         task_service=None,
         workspace_id: str | None = None,
         user_id: str | None = None,
-    ) -> list[ToolProvider]:
+    ) -> ProviderDiscovery:
         """Discover tool providers for progressive disclosure.
 
         Same inputs as discover_available_tools, but returns ToolProvider
@@ -400,7 +411,7 @@ class ToolManager:
             providers.append(BuiltinToolProvider(name="builtin", tools=builtin_tools))
 
         if not tools_config:
-            return providers
+            return ProviderDiscovery(providers=providers)
 
         ctx = ToolBuildContext(
             manager=self,
@@ -426,7 +437,7 @@ class ToolManager:
             await builder.add_provider(spec, ctx, providers)
 
         logger.info(f"Discovered {len(providers)} tool providers for agent {agent_id}")
-        return providers
+        return ProviderDiscovery(providers=providers, tool_identities=ctx.tool_identities)
 
     def register_tool(self, tool) -> None:
         """Register a custom tool."""

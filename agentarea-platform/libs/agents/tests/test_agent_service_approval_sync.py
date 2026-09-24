@@ -139,7 +139,7 @@ async def test_update_agent_reconciles_the_rule_and_strips_the_flag(session_fact
         )
 
         rules = await _rules(session, context, agent.id)
-        assert {r.target for r in rules} == {"tool:create_issue"}
+        assert {r.target for r in rules} == {"tool:mcp:github:create_issue"}
         allowed = updated.tools[0]["settings"]["allowed_tools"]
         assert allowed == [{"tool_name": "create_issue"}]
 

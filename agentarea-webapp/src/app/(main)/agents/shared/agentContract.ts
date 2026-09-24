@@ -7,14 +7,15 @@ export function toToolsPayload(
   const tools: NonNullable<AgentCreate["tools"]> = [];
 
   for (const mcp of toolsConfig?.mcp_server_configs ?? []) {
-    const allowed = (mcp.allowed_tools ?? []).map((tool) => ({
-      tool_name: tool.tool_name,
-      requires_user_confirmation: tool.requires_user_confirmation ?? false,
-    }));
+    const allowed =
+      mcp.allowed_tools?.map((tool) => ({
+        tool_name: tool.tool_name,
+        requires_user_confirmation: tool.requires_user_confirmation ?? false,
+      })) ?? null;
     tools.push({
       type: "mcp",
       name: mcp.mcp_server_id,
-      settings: { allowed_tools: allowed.length ? allowed : null },
+      settings: { allowed_tools: allowed },
     });
   }
 
@@ -24,9 +25,7 @@ export function toToolsPayload(
       name: openapi.openapi_connection_id,
       settings: {
         openapi_connection_id: openapi.openapi_connection_id,
-        allowed_tools: openapi.allowed_tools?.length
-          ? openapi.allowed_tools
-          : null,
+        allowed_tools: openapi.allowed_tools ?? null,
         load_mode: openapi.load_mode,
       },
     });

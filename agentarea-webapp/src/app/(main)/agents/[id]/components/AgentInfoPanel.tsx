@@ -142,9 +142,10 @@ export default function AgentInfoPanel({ agent }: { agent: Agent }) {
                       c.openapi_connection_id ?? ""
                     ).slice(0, 8);
                     const allowed = c.allowed_tools;
-                    return allowed && allowed.length > 0
+                    if (allowed == null) return `${id} · all tools`;
+                    return allowed.length > 0
                       ? `${id} · ${allowed.length}`
-                      : id;
+                      : `${id} · no tools`;
                   })}
                 />
               )}

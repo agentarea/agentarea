@@ -29,6 +29,7 @@ def instance():
     workflow.state.context_window = 128000
     workflow.state.budget_usd = 1
     workflow.state.agent_config = {"a2ui_enabled": True}
+    workflow.state.available_tools = [{"type": "function", "function": {"name": "shell"}}]
     workflow.state.goal = AgentGoal(
         id="goal",
         description="deliver",

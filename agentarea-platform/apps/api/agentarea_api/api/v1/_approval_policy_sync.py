@@ -11,6 +11,7 @@ from agentarea_agents.application.approval_sync import (
     apply_approval_targets,
     approval_targets_for_agents,
     approval_targets_from_tools,
+    mcp_tool_ticked,
     strip_confirmation_flags,
     sync_agent_approval_rules,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "apply_approval_targets",
     "approval_targets_for_agents",
     "approval_targets_from_tools",
+    "mcp_tool_ticked",
     "strip_confirmation_flags",
     "sync_agent_approval_rules",
 ]

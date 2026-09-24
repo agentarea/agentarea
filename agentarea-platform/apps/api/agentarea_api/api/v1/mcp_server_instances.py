@@ -3,7 +3,10 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_api.api.deps.services import AgentServiceDep, get_mcp_server_instance_service
-from agentarea_api.api.v1._approval_policy_sync import approval_targets_for_agents
+from agentarea_api.api.v1._approval_policy_sync import (
+    approval_targets_for_agents,
+    mcp_tool_ticked,
+)
 from agentarea_api.api.v1.mcp_oauth_links import (
     MCPOAuthLinkService,
     OAuthLinkResponse,
@@ -450,7 +453,7 @@ async def list_mcp_server_instance_consumers(
     if not instance:
         raise HTTPException(status_code=404, detail="MCP Server Instance not found")
 
-    matches: list[tuple[Any, list[str] | None]] = []
+    matches: list[tuple[Any, str, list[str] | None]] = []
     for agent in await agent_service.list():
         tools = agent.tools
         if not isinstance(tools, list):
@@ -470,16 +473,18 @@ async def list_mcp_server_instance_consumers(
                             enabled_tools.append(str(name))
                     elif isinstance(perm, str):
                         enabled_tools.append(perm)
-            matches.append((agent, enabled_tools))
+            matches.append((agent, str(tc.get("name")), enabled_tools))
             break
 
     targets_by_agent = await approval_targets_for_agents(
-        session, user_context, [agent.id for agent, _ in matches]
+        session, user_context, [agent.id for agent, _, _ in matches]
     )
     consumers: list[MCPInstanceConsumer] = []
-    for agent, enabled_tools in matches:
+    for agent, server_ref, enabled_tools in matches:
         targets = targets_by_agent.get(agent.id, set())
-        confirm_tools = [name for name in (enabled_tools or []) if f"tool:{name}" in targets]
+        confirm_tools = [
+            name for name in (enabled_tools or []) if mcp_tool_ticked(server_ref, name, targets)
+        ]
         consumers.append(
             MCPInstanceConsumer(
                 agent_id=agent.id,

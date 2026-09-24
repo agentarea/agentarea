@@ -22,7 +22,8 @@ export type MCPToolConfig = {
  */
 export type MCPServerConfig = {
   mcp_server_id: string;
-  allowed_tools?: MCPToolConfig[];
+  // null = every tool of the server, including ones it adds later; [] = none
+  allowed_tools: MCPToolConfig[] | null;
 };
 
 /**
@@ -31,7 +32,7 @@ export type MCPServerConfig = {
 export type OpenAPIConfig = {
   openapi_connection_id: string;
   openapi_connection_name?: string;  // resolved name for backend; filled by picker
-  allowed_tools?: string[];  // operation names; empty/missing = all
+  allowed_tools: string[] | null;  // operation names; null = all, including ones added later; [] = none
   // Disclosure mode (issue #115). "searchable" defers operation schemas
   // behind a `load_tools` meta-tool; "explicit" sends every schema every call.
   // Absent = legacy explicit behavior preserved.

@@ -541,6 +541,7 @@
       "availableMcpServers": "Available MCP Servers",
       "availableOpenAPIConnections": "Available OpenAPI Connections",
       "openAPIConnections": "OpenAPI Connections",
+      "allToolsIncludingNew": "All tools, including ones added later",
       "mcpServers": "MCP Servers",
       "noActiveMcpServers": "No active MCP servers found",
       "noActiveMcpServersDescription": "You need to configure MCP server instances before you can add them to your agent. Go to MCP Servers to create instances.",

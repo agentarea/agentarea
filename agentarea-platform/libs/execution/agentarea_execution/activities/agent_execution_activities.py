@@ -32,6 +32,7 @@ from agentarea_agents_sdk import (
     ToolManager,
 )
 from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
+from agentarea_agents_sdk.tools.tool_builders import allowed_tool_names
 
 # Local imports
 from agentarea_common.auth.context import UserContext
@@ -74,6 +75,7 @@ from ..models import (
     MaterializeSkillFilesResult,
     MCPToolRequest,
     MCPToolResult,
+    McpToolRoute,
     ReadOutputRequest,
     ReadOutputResult,
     RecallHistoryRequest,
@@ -328,6 +330,31 @@ def _sandbox_control_auth_secret(dependencies: ActivityDependencies) -> str:
     if len(value.encode()) < 32:
         raise ValueError("SANDBOX_CONTROL_AUTH_SECRET must contain at least 32 bytes")
     return value
+
+
+def _mcp_attachment(tools: list[dict[str, Any]] | None, attachment_ref: str) -> dict | None:
+    """The agent's MCP attachment that references its server as ``attachment_ref``."""
+    return next(
+        (
+            tool
+            for tool in tools or []
+            if isinstance(tool, dict)
+            and tool.get("type") == "mcp"
+            and str(tool.get("name")) == attachment_ref
+        ),
+        None,
+    )
+
+
+def mcp_route_denial(tools: list[dict[str, Any]] | None, route: McpToolRoute) -> str | None:
+    """Why the agent may not call this routed MCP tool, or ``None`` when it may."""
+    attachment = _mcp_attachment(tools, route.attachment_ref)
+    if attachment is None:
+        return "its MCP server is not attached to this agent"
+    enabled = allowed_tool_names(attachment.get("settings") or {})
+    if enabled is not None and route.raw_name not in enabled:
+        return "the tool is not enabled for this agent"
+    return None
 
 
 def _deny_tool_result(tool_name: str, reason: str) -> MCPToolResult:
@@ -675,7 +702,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 )
                 for e in split.searchable_entries
             ]
-            return ToolDiscoveryResult(tools=tool_defs, searchable_entries=searchable)
+            return ToolDiscoveryResult(
+                tools=tool_defs,
+                searchable_entries=searchable,
+                mcp_tool_routes={
+                    name: McpToolRoute.from_identity(identity)
+                    for name, identity in split.tool_identities.items()
+                },
+            )
 
     @activity.defn
     async def discover_tool_providers_activity(
@@ -697,7 +731,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             tool_manager = ToolManager(openapi_connection_service=openapi_connection_service)
             base_url = f"{dependencies.settings.app.API_BASE_URL}/api/v1"
-            providers = await tool_manager.discover_tool_providers(
+            discovery = await tool_manager.discover_tool_providers(
                 agent_id=request.agent_id,
                 tools_config=request.tools
                 if request.tools is not None
@@ -709,7 +743,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             # Serialize providers to transport models
             provider_data = []
-            for p in providers:
+            for p in discovery.providers:
                 entry = p.get_catalog_entry()
                 provider_data.append(
                     ToolProviderData(
@@ -721,7 +755,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     )
                 )
 
-            return DiscoverToolProvidersResult(providers=provider_data)
+            return DiscoverToolProvidersResult(
+                providers=provider_data,
+                mcp_tool_routes={
+                    name: McpToolRoute.from_identity(identity)
+                    for name, identity in discovery.tool_identities.items()
+                },
+            )
 
     @activity.defn
     async def resolve_model_activity(
@@ -855,6 +895,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 user_id=request.user_id,
                 workspace_id=request.workspace_id,
                 effective_policy=request.effective_policy,
+                aliases=request.mcp_route.policy_names(request.tool_name)
+                if request.mcp_route
+                else (),
             )
         )
         if decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL:
@@ -1194,110 +1237,99 @@ def make_agent_activities(dependencies: ActivityDependencies):
                                 f"(connection={connection_ref})"
                             )
 
-            # MCP dispatch: resolve the requested tool against configured MCP
-            # instances and call the service directly. The service handles
-            # bundle namespace resolution and session.call_tool internally.
-            if request.tools and isinstance(request.tools, list):
-                mcp_configs = [
-                    tc for tc in request.tools if isinstance(tc, dict) and tc.get("type") == "mcp"
-                ]
-                for tool_config in mcp_configs:
-                    instance_ref = tool_config.get("name")
-                    if not instance_ref:
-                        continue
-
-                    instance = None
-                    try:
-                        instance = await mcp_server_instance_service.get(UUID(str(instance_ref)))
-                    except (ValueError, TypeError):
-                        pass
-                    if not instance:
-                        instance = await mcp_server_instance_service.get_by_name(instance_ref)
-                    if not instance:
-                        continue
-
-                    available = (
-                        instance.tools or (instance.json_spec or {}).get("available_tools") or []
+            # MCP dispatch: the workflow resolved the model-facing name to one
+            # attached server and the raw name it advertises. The call goes to that
+            # server only, and only for a tool the agent's attachment enables.
+            route = request.mcp_route
+            if route is not None:
+                denial = mcp_route_denial(request.tools, route)
+                if denial is not None:
+                    return _deny_tool_result(request.tool_name, denial)
+                instance = await mcp_server_instance_service.get(UUID(route.instance_id))
+                if instance is None:
+                    return MCPToolResult(
+                        success=False,
+                        result=f"MCP server instance {route.instance_id} no longer exists",
+                        execution_time="",
+                        error=f"MCP server instance {route.instance_id} not found",
+                        source="mcp",
+                        server_instance_id=route.instance_id,
                     )
-                    if not any(t.get("name") == request.tool_name for t in available):
-                        continue
 
-                    payment_httpx_client_factory = None
-                    mcp_payments: list[dict[str, Any]] = []
-                    if request.agent_id:
-                        payment_context = await get_payment_context()
-                        if payment_context:
-                            from .mcp_payment_httpx import create_payment_httpx_client_factory
+                payment_httpx_client_factory = None
+                mcp_payments: list[dict[str, Any]] = []
+                if request.agent_id:
+                    payment_context = await get_payment_context()
+                    if payment_context:
+                        from .mcp_payment_httpx import create_payment_httpx_client_factory
 
-                            _, _, wallet_config, _, budget_remaining = payment_context
+                        _, _, wallet_config, _, budget_remaining = payment_context
 
-                            async def on_mcp_payment(
-                                result: dict[str, Any],
-                                *,
-                                payment_context=payment_context,
-                                mcp_payments=mcp_payments,
-                                tool_name=request.tool_name,
-                            ) -> None:
-                                mcp_payments.append(result)
-                                await record_payment_result(
-                                    payment_context,
-                                    result,
-                                    tool_name=tool_name,
-                                )
-
-                            payment_httpx_client_factory = create_payment_httpx_client_factory(
-                                wallet_config=wallet_config,
-                                budget_remaining=budget_remaining,
-                                on_payment=on_mcp_payment,
+                        async def on_mcp_payment(
+                            result: dict[str, Any],
+                            *,
+                            payment_context=payment_context,
+                            mcp_payments=mcp_payments,
+                            tool_name=request.tool_name,
+                        ) -> None:
+                            mcp_payments.append(result)
+                            await record_payment_result(
+                                payment_context,
+                                result,
+                                tool_name=tool_name,
                             )
 
-                    try:
-                        mcp_result = await mcp_server_instance_service.execute_tool(
-                            UUID(str(instance.id)),
-                            request.tool_name,
-                            request.tool_args,
-                            httpx_client_factory=payment_httpx_client_factory,
-                        )
-                    except Exception as e:
-                        logger.error("MCP tool execution failed: %s", e, exc_info=True)
-                        _mcp_dispatch_failed_total.labels(reason=type(e).__name__).inc()
-                        return MCPToolResult(
-                            success=False,
-                            result=f"MCP tool error: {type(e).__name__}: {e}",
-                            execution_time="",
-                            error=str(e),
-                            source="mcp",
-                            server_instance_id=str(instance.id),
-                            server_name=getattr(instance, "name", None),
-                            server_icon=_server_icon_from_instance(instance),
+                        payment_httpx_client_factory = create_payment_httpx_client_factory(
+                            wallet_config=wallet_config,
+                            budget_remaining=budget_remaining,
+                            on_payment=on_mcp_payment,
                         )
 
-                    result_text = await _offload_large_activity_output(
-                        workspace_id=request.workspace_id,
-                        task_id=request.task_id,
-                        output_id=_activity_output_id("mcp_tool"),
-                        content=str(mcp_result.get("result") or ""),
+                try:
+                    mcp_result = await mcp_server_instance_service.execute_tool(
+                        UUID(str(instance.id)),
+                        route.raw_name,
+                        request.tool_args,
+                        httpx_client_factory=payment_httpx_client_factory,
                     )
+                except Exception as e:
+                    logger.error("MCP tool execution failed: %s", e, exc_info=True)
+                    _mcp_dispatch_failed_total.labels(reason=type(e).__name__).inc()
                     return MCPToolResult(
-                        success=bool(mcp_result.get("success", False)),
-                        result=result_text,
+                        success=False,
+                        result=f"MCP tool error: {type(e).__name__}: {e}",
                         execution_time="",
-                        error=mcp_result.get("error"),
-                        service_cost=sum(
-                            float(p.get("amount_usd") or 0.0)
-                            for p in mcp_payments
-                            if p.get("success")
-                        ),
-                        payment=(
-                            {"payments": mcp_payments}
-                            if len(mcp_payments) > 1
-                            else (mcp_payments[0] if mcp_payments else None)
-                        ),
+                        error=str(e),
                         source="mcp",
                         server_instance_id=str(instance.id),
                         server_name=getattr(instance, "name", None),
                         server_icon=_server_icon_from_instance(instance),
                     )
+
+                result_text = await _offload_large_activity_output(
+                    workspace_id=request.workspace_id,
+                    task_id=request.task_id,
+                    output_id=_activity_output_id("mcp_tool"),
+                    content=str(mcp_result.get("result") or ""),
+                )
+                return MCPToolResult(
+                    success=bool(mcp_result.get("success", False)),
+                    result=result_text,
+                    execution_time="",
+                    error=mcp_result.get("error"),
+                    service_cost=sum(
+                        float(p.get("amount_usd") or 0.0) for p in mcp_payments if p.get("success")
+                    ),
+                    payment=(
+                        {"payments": mcp_payments}
+                        if len(mcp_payments) > 1
+                        else (mcp_payments[0] if mcp_payments else None)
+                    ),
+                    source="mcp",
+                    server_instance_id=str(instance.id),
+                    server_name=getattr(instance, "name", None),
+                    server_icon=_server_icon_from_instance(instance),
+                )
 
             try:
                 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
