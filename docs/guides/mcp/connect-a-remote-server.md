@@ -166,7 +166,9 @@ the instance, injected the stored credential, and reached the server.
     The URL resolves to a private, loopback, or link-local address and was
     refused before any request was made. The message is deliberately generic so
     it cannot be used to probe which internal names resolve. For local
-    development, the deployment must set `ALLOW_PRIVATE_URLS` .
+    development, list the host or its CIDR in `OUTBOUND_PRIVATE_ALLOWLIST`
+    (comma-separated, for example `localhost,10.43.0.0/16`), or set
+    `ALLOW_PRIVATE_URLS` to allow every private address.
   </Accordion>
   <Accordion title="`Authentication failed — check your credentials`">
     The server returned 401. The credential is wrong, expired, or the header

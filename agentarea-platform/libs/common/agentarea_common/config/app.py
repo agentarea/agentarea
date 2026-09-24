@@ -44,6 +44,11 @@ class AppSettings(BaseAppSettings):
     # Audited service for agent-supplied URL fetches. The trusted worker never
     # fetches those URLs directly because that would expose internal networks.
     WEB_FETCH_BASE_URL: str | None = None
+    # Comma-separated host globs and CIDRs that member-supplied URLs (MCP
+    # servers, OAuth discovery, model endpoints, skill and spec imports) may
+    # reach even though they are private or loopback, e.g. "localhost" for a
+    # local Ollama in development. Empty: only public addresses.
+    OUTBOUND_PRIVATE_ALLOWLIST: str = ""
 
     # Comma-separated browser origins allowed to make credentialed CORS requests.
     # Defaults to the local frontend. NEVER "*": with allow_credentials=True a

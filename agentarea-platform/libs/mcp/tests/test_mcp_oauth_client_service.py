@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
+from agentarea_common.utils.url_safety import OutboundPolicy, SafeOutboundTransport, UnsafeUrlError
 
 from agentarea_mcp.application.oauth_client_service import (
     AuthServerMetadata,
@@ -47,6 +48,7 @@ def _patch_httpx(monkeypatch, handler) -> None:
             await self._client.aclose()
 
     monkeypatch.setattr("agentarea_mcp.application.oauth_client_service.httpx.AsyncClient", _Client)
+    monkeypatch.setattr("agentarea_mcp.application.oauth_client_service.safe_async_client", _Client)
 
 
 # ---------------------------------------------------------------------------
@@ -865,3 +867,41 @@ class TestAssess:
 
         assert capability.status == "unsupported"
         assert "boom" in capability.detail
+
+
+@pytest.mark.asyncio
+class TestDiscoveryStaysOnPublicAddresses:
+    async def test_an_mcp_url_at_the_metadata_address_is_never_fetched(self):
+        with pytest.raises(UnsafeUrlError):
+            await MCPOAuthClientService().discover_auth_server(
+                "http://169.254.169.254/latest/meta-data/"
+            )
+
+    async def test_a_challenge_pointing_at_an_internal_host_is_not_followed(self, monkeypatch):
+        fetched: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            fetched.append(request.headers["host"])
+            return httpx.Response(
+                401,
+                headers={
+                    "www-authenticate": 'Bearer resource_metadata="http://kube-api.internal/x"'
+                },
+            )
+
+        async def resolve(host: str, port: int) -> list[str]:
+            return {"mcp.example.com": ["93.184.216.34"], "kube-api.internal": ["10.0.0.1"]}[host]
+
+        def client(**kwargs):
+            transport = SafeOutboundTransport(
+                OutboundPolicy(), resolve=resolve, inner=httpx.MockTransport(handler)
+            )
+            return _REAL_ASYNC_CLIENT(transport=transport, **kwargs)
+
+        monkeypatch.setattr(
+            "agentarea_mcp.application.oauth_client_service.safe_async_client", client
+        )
+
+        with pytest.raises(UnsafeUrlError):
+            await MCPOAuthClientService().discover_auth_server("https://mcp.example.com/mcp")
+        assert fetched == ["mcp.example.com"]

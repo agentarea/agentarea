@@ -36,3 +36,12 @@ def test_discovery_parses_explicit_runtime_metadata():
     assert model.max_output_tokens == 8192
     assert model.input_cost_per_token == 0.000001
     assert model.output_cost_per_token == 0.000002
+
+
+async def test_a_member_endpoint_at_the_metadata_address_is_never_fetched(caplog):
+    models = await ModelDiscoveryService().discover(
+        "openai", "sk-test", endpoint_url="http://169.254.169.254/latest"
+    )
+
+    assert models == []
+    assert "blocked by outbound SSRF guard" in caplog.text

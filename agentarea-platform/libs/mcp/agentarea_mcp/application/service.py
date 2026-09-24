@@ -14,7 +14,12 @@ from agentarea_common.base.service import BaseCrudService
 from agentarea_common.config import get_database, get_settings
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
+from agentarea_common.utils.url_safety import (
+    OutboundPolicy,
+    UnsafeUrlError,
+    safe_async_client,
+    validate_outbound_url,
+)
 
 from agentarea_mcp.application.auth_service import MCPAuthService, OAuthReauthRequiredError
 from agentarea_mcp.application.mcp_client import (
@@ -1220,7 +1225,7 @@ class MCPServerInstanceService:
         # unguarded URL here is a full-read SSRF, not a blind one. Refuse before
         # dialing: a check after the request would still reach the internal host.
         try:
-            validate_outbound_url(url, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
+            validate_outbound_url(url, policy=OutboundPolicy.from_env())
         except UnsafeUrlError:
             # Deliberately generic: a specific reason would turn this into a DNS
             # oracle telling the caller which internal names resolve.
@@ -1303,7 +1308,7 @@ class MCPServerInstanceService:
         still requiring one to call them, and the metadata is what says so.
         """
         try:
-            validate_outbound_url(mcp_url, allow_private=get_settings().mcp.ALLOW_PRIVATE_URLS)
+            validate_outbound_url(mcp_url, policy=OutboundPolicy.from_env())
         except UnsafeUrlError:
             logger.debug("Auth-method detection refused for unsafe URL %s", mcp_url, exc_info=True)
             return []
@@ -1313,7 +1318,7 @@ class MCPServerInstanceService:
             return ["oauth", "credentials"]
 
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            async with safe_async_client(timeout=httpx.Timeout(10.0)) as client:
                 resp = await client.get(mcp_url, follow_redirects=False)
         except Exception:
             logger.debug("Auth-method detection failed for %s", mcp_url, exc_info=True)
@@ -1342,7 +1347,7 @@ class MCPServerInstanceService:
             return {"status": "error", "message": "No endpoint URL configured"}
 
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            async with safe_async_client(timeout=httpx.Timeout(10.0)) as client:
                 resp = await client.get(mcp_url, follow_redirects=True)
 
                 if resp.status_code in (200, 405):
@@ -1405,6 +1410,14 @@ class MCPServerInstanceService:
                     "message": f"Unexpected response: {resp.status_code}",
                 }
 
+        except UnsafeUrlError:
+            logger.warning(
+                "Refused auth probe of a non-public URL for %s", instance_id, exc_info=True
+            )
+            return {
+                "status": "error",
+                "message": "The configured endpoint is not an allowed address",
+            }
         except httpx.ConnectError:
             return {"status": "error", "message": "Cannot connect to the configured endpoint"}
         except httpx.TimeoutException:

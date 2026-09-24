@@ -31,6 +31,7 @@ from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 from agentarea_common.infrastructure.connection_manager import get_connection_manager
+from agentarea_common.utils.url_safety import safe_async_client
 from agentarea_mcp.application.auth_resolver import build_auth_config_access_checker
 from agentarea_mcp.application.auth_service import MCPAuthService, MissingCredentialsError
 from agentarea_mcp.application.oauth_client_service import PKCEPair
@@ -432,7 +433,7 @@ async def oauth_callback(
             "code_verifier": state_data["code_verifier"],
             "client_id": client_id,
         }
-        async with httpx.AsyncClient() as client:
+        async with safe_async_client() as client:
             if auth_config.config.get("client_auth_method") == "client_secret_basic":
                 response = await client.post(
                     auth_config.config["token_url"],

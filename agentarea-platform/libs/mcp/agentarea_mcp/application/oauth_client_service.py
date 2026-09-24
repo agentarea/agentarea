@@ -25,6 +25,7 @@ from typing import Any, Literal
 from urllib.parse import urlencode, urlparse
 
 import httpx
+from agentarea_common.utils.url_safety import safe_async_client
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +168,7 @@ class MCPOAuthClientService:
             3. Fetch Protected Resource Metadata (RFC 9728)
             4. Fetch Authorization Server Metadata (RFC 8414)
         """
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+        async with safe_async_client(timeout=_HTTP_TIMEOUT) as client:
             # Step 1: Probe the MCP endpoint for an auth challenge. The challenge is
             # only a shortcut to the metadata URL, never a precondition: servers
             # answer an unauthenticated GET with 401 (RFC 9728), 403 (Vercel), or
@@ -344,7 +345,7 @@ class MCPOAuthClientService:
             "application_type": "web",
         }
 
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+        async with safe_async_client(timeout=_HTTP_TIMEOUT) as client:
             resp = await client.post(
                 as_metadata.registration_endpoint,
                 json=payload,
@@ -416,7 +417,7 @@ class MCPOAuthClientService:
         if client_secret:
             data["client_secret"] = client_secret
 
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+        async with safe_async_client(timeout=_HTTP_TIMEOUT) as client:
             resp = await client.post(
                 as_metadata.token_endpoint,
                 data=data,
