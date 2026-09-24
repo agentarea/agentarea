@@ -53,6 +53,15 @@ from agentarea_tasks.task_service import TaskService
 pytestmark = pytest.mark.asyncio
 
 
+class _FakeSecretReader:
+    """In-memory SecretReader stand-in for DefaultWebhookManager's required
+    secret_reader. Every test below that needs a signing secret configures
+    it via validation_rules, so this never has to hold real values."""
+
+    async def get_secret(self, name: str) -> str | None:
+        return None
+
+
 class TestTriggerE2EScenarios:
     """End-to-end integration tests for trigger system."""
 
@@ -133,6 +142,7 @@ class TestTriggerE2EScenarios:
             execution_callback=execution_callback,
             event_broker=mock_event_broker,
             trigger_service=trigger_service,
+            secret_reader=_FakeSecretReader(),
         )
 
     @pytest.fixture

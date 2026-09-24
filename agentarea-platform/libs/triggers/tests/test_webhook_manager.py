@@ -50,7 +50,10 @@ def mock_execution_callback():
 def webhook_manager(mock_execution_callback):
     """Create a DefaultWebhookManager instance for testing."""
     return DefaultWebhookManager(
-        execution_callback=mock_execution_callback, event_broker=None, base_url="/webhooks"
+        execution_callback=mock_execution_callback,
+        event_broker=None,
+        base_url="/webhooks",
+        secret_reader=_FakeSecretReader(),
     )
 
 

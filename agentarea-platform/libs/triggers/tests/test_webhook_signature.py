@@ -30,11 +30,22 @@ class _FakeSecretReader:
         return self._values.get(name)
 
 
+# secret_reader/trigger_id are required params, not `| None` — a security
+# dependency that could be silently omitted is how the store went unread in
+# the first place. These are the "nothing real to pass" stand-ins for tests
+# below that resolve their secret from validation_rules/webhook_config (or
+# deliberately resolve nothing anywhere) and never actually touch the store.
+_EMPTY_READER = _FakeSecretReader()
+_UNUSED_TRIGGER_ID = uuid4()
+
+
 @pytest.mark.asyncio
 async def test_github_no_secret_anywhere_fails_closed():
     # github has a registered signature scheme; no secret configured at all
     # => reject, never silently treated as "verification not enabled".
-    result = await verify_webhook_signature("github", {}, {}, {}, BODY)
+    result = await verify_webhook_signature(
+        "github", {}, {}, {}, BODY, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
     assert result is False
 
 
@@ -42,7 +53,9 @@ async def test_github_no_secret_anywhere_fails_closed():
 async def test_github_valid_signature_passes():
     secret = "s3cr3t"  # noqa: S105
     headers = {"X-Hub-Signature-256": _github_sig(secret, BODY)}
-    result = await verify_webhook_signature("github", {"webhook_secret": secret}, {}, headers, BODY)
+    result = await verify_webhook_signature(
+        "github", {"webhook_secret": secret}, {}, headers, BODY, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
     assert result is True
 
 
@@ -50,7 +63,13 @@ async def test_github_valid_signature_passes():
 async def test_github_invalid_signature_fails():
     headers = {"X-Hub-Signature-256": "sha256=deadbeef"}
     result = await verify_webhook_signature(
-        "github", {"webhook_secret": "s3cr3t"}, {}, headers, BODY
+        "github",
+        {"webhook_secret": "s3cr3t"},
+        {},
+        headers,
+        BODY,
+        _EMPTY_READER,
+        _UNUSED_TRIGGER_ID,
     )
     assert result is False
 
@@ -61,7 +80,13 @@ async def test_github_tampered_body_fails():
     headers = {"X-Hub-Signature-256": _github_sig(secret, BODY)}
     tampered = BODY + b"x"
     result = await verify_webhook_signature(
-        "github", {"webhook_secret": secret}, {}, headers, tampered
+        "github",
+        {"webhook_secret": secret},
+        {},
+        headers,
+        tampered,
+        _EMPTY_READER,
+        _UNUSED_TRIGGER_ID,
     )
     assert result is False
 
@@ -70,7 +95,13 @@ async def test_github_tampered_body_fails():
 async def test_secret_configured_but_no_raw_body_fails_closed():
     # Can't verify without the exact bytes -> reject, never silently accept.
     result = await verify_webhook_signature(
-        "github", {"webhook_secret": "s3cr3t"}, {}, {"X-Hub-Signature-256": "x"}, None
+        "github",
+        {"webhook_secret": "s3cr3t"},
+        {},
+        {"X-Hub-Signature-256": "x"},
+        None,
+        _EMPTY_READER,
+        _UNUSED_TRIGGER_ID,
     )
     assert result is False
 
@@ -80,7 +111,9 @@ async def test_secret_resolved_from_webhook_config_fallback():
     secret = "fromconfig"  # noqa: S105
     headers = {"X-Hub-Signature-256": _github_sig(secret, BODY)}
     # validation_rules empty, secret lives in webhook_config instead.
-    result = await verify_webhook_signature("github", {}, {"webhook_secret": secret}, headers, BODY)
+    result = await verify_webhook_signature(
+        "github", {}, {"webhook_secret": secret}, headers, BODY, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
     assert result is True
 
 
@@ -90,7 +123,9 @@ async def test_generic_hmac_with_custom_header():
     sig = hmac.new(secret.encode(), BODY, hashlib.sha256).hexdigest()
     rules = {"signing_secret": secret, "signature_header": "x-acme-signature"}
     headers = {"X-Acme-Signature": sig}
-    result = await verify_webhook_signature("generic", rules, {}, headers, BODY)
+    result = await verify_webhook_signature(
+        "generic", rules, {}, headers, BODY, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
     assert result is True
 
 
@@ -98,19 +133,28 @@ async def test_generic_hmac_with_custom_header():
 async def test_generic_without_a_secret_still_skips_verification():
     # generic has no registered scheme and the catalog offers it with zero
     # credential fields: it is legitimately unsigned unless configured.
-    assert await verify_webhook_signature("generic", {}, {}, {}, BODY) is None
+    result = await verify_webhook_signature(
+        "generic", {}, {}, {}, BODY, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
+    assert result is None
 
 
 @pytest.mark.asyncio
 async def test_telegram_has_no_signature_scheme_in_this_framework():
     # Telegram validates via its own secret_token header, handled elsewhere;
     # it carries no entry in SIGNING_SECRET_KEYS or VERIFIER_REGISTRY.
-    assert await verify_webhook_signature("telegram", {}, {}, {}, BODY) is None
+    result = await verify_webhook_signature(
+        "telegram", {}, {}, {}, BODY, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
+    assert result is None
 
 
 @pytest.mark.asyncio
 async def test_resolve_signing_secret_unknown_type_returns_none():
-    assert await resolve_signing_secret("telegram", {"signing_secret": "x"}, {}) is None
+    result = await resolve_signing_secret(
+        "telegram", {"signing_secret": "x"}, {}, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
+    assert result is None
 
 
 def _stripe_sig_header(secret: str, body: bytes, timestamp: int) -> str:
@@ -124,7 +168,9 @@ async def test_stripe_valid_signature_passes():
     secret = "whsec_test"  # noqa: S105
     ts = int(time.time())
     headers = {"Stripe-Signature": _stripe_sig_header(secret, BODY, ts)}
-    result = await verify_webhook_signature("stripe", {"signing_secret": secret}, {}, headers, BODY)
+    result = await verify_webhook_signature(
+        "stripe", {"signing_secret": secret}, {}, headers, BODY, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
     assert result is True
 
 
@@ -133,7 +179,13 @@ async def test_stripe_invalid_signature_fails():
     ts = int(time.time())
     headers = {"Stripe-Signature": f"t={ts},v1=deadbeef"}
     result = await verify_webhook_signature(
-        "stripe", {"signing_secret": "whsec_test"}, {}, headers, BODY
+        "stripe",
+        {"signing_secret": "whsec_test"},
+        {},
+        headers,
+        BODY,
+        _EMPTY_READER,
+        _UNUSED_TRIGGER_ID,
     )
     assert result is False
 
@@ -143,14 +195,22 @@ async def test_stripe_stale_timestamp_fails():
     secret = "whsec_test"  # noqa: S105
     ts = int(time.time()) - 3600
     headers = {"Stripe-Signature": _stripe_sig_header(secret, BODY, ts)}
-    result = await verify_webhook_signature("stripe", {"signing_secret": secret}, {}, headers, BODY)
+    result = await verify_webhook_signature(
+        "stripe", {"signing_secret": secret}, {}, headers, BODY, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
     assert result is False
 
 
 @pytest.mark.asyncio
 async def test_stripe_missing_header_fails():
     result = await verify_webhook_signature(
-        "stripe", {"signing_secret": "whsec_test"}, {}, {}, BODY
+        "stripe",
+        {"signing_secret": "whsec_test"},
+        {},
+        {},
+        BODY,
+        _EMPTY_READER,
+        _UNUSED_TRIGGER_ID,
     )
     assert result is False
 
@@ -169,7 +229,9 @@ async def test_email_secret_is_actually_enforced():
     secret = "inbound-parse-secret"  # noqa: S105 — fixture credential
     headers = {"X-Webhook-Signature": _generic_sig(secret, BODY)}
 
-    result = await verify_webhook_signature("email", {"signing_secret": secret}, {}, headers, BODY)
+    result = await verify_webhook_signature(
+        "email", {"signing_secret": secret}, {}, headers, BODY, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
 
     assert result is True
 
@@ -182,6 +244,8 @@ async def test_email_bad_signature_is_rejected():
         {},
         {"X-Webhook-Signature": "nope"},
         BODY,
+        _EMPTY_READER,
+        _UNUSED_TRIGGER_ID,
     )
 
     assert result is False
@@ -198,19 +262,28 @@ async def test_email_signature_header_and_prefix_are_configurable():
     }
     headers = {"X-Provider-Signature": "sha256=" + _generic_sig(secret, BODY)}
 
-    assert await verify_webhook_signature("email", rules, {}, headers, BODY) is True
+    result = await verify_webhook_signature(
+        "email", rules, {}, headers, BODY, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
+    assert result is True
 
 
 @pytest.mark.asyncio
 async def test_email_without_a_secret_still_skips_verification():
     # email has no registered scheme (generic HMAC fallback only), so it too
     # is legitimately unsigned unless configured.
-    assert await verify_webhook_signature("email", {}, {}, {}, BODY) is None
+    result = await verify_webhook_signature(
+        "email", {}, {}, {}, BODY, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
+    assert result is None
 
 
 @pytest.mark.asyncio
 async def test_email_signing_secret_resolves():
-    assert await resolve_signing_secret("email", {"signing_secret": "x"}, {}) == "x"
+    result = await resolve_signing_secret(
+        "email", {"signing_secret": "x"}, {}, _EMPTY_READER, _UNUSED_TRIGGER_ID
+    )
+    assert result == "x"
 
 
 # --- Secrets configured the way the UI stores them (secret store) ----------

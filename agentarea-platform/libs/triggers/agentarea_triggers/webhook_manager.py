@@ -154,11 +154,17 @@ class DefaultWebhookManager(WebhookManager):
     def __init__(
         self,
         execution_callback: WebhookExecutionCallback,
+        *,
+        secret_reader: SecretReader,
         event_broker: EventBroker | None = None,
         base_url: str = "/webhooks",
         trigger_service: Any = None,
-        secret_reader: SecretReader | None = None,
     ):
+        # secret_reader is required, not `| None`: it is what resolves signing
+        # secrets for signature verification, and an optional security
+        # dependency is how that verification went unread from the secret
+        # store in the first place. Callers with nothing real to wire in
+        # (tests) must construct a fake reader explicitly.
         self.execution_callback = execution_callback
         self.event_broker = event_broker
         self.base_url = base_url.rstrip("/")

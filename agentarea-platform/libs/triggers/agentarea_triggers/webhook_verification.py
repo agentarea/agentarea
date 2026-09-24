@@ -363,18 +363,22 @@ async def resolve_signing_secret(
     webhook_type: str,
     validation_rules: dict | None,
     webhook_config: dict | None,
-    secret_reader: SecretReader | None = None,
-    trigger_id: Any | None = None,
+    secret_reader: SecretReader,
+    trigger_id: Any,
 ) -> str | None:
     """Resolve the configured signing secret for a webhook type.
 
     Looks up the type's secret key (e.g. ``signing_secret`` / ``webhook_secret``)
-    in ``validation_rules`` first, then ``webhook_config``, then — if a
-    ``secret_reader`` and ``trigger_id`` are given — the secret store, under
-    the same ``channel_cred:{type}:{trigger_id}`` key the trigger create/update
-    endpoints write channel credentials to (see ``channel_credential_secret_name``).
-    That entry is a JSON object of credential fields; only the signing key is
-    read out of it. Returns None when no secret is configured anywhere
+    in ``validation_rules`` first, then ``webhook_config``, then the secret
+    store, under the same ``channel_cred:{type}:{trigger_id}`` key the trigger
+    create/update endpoints write channel credentials to (see
+    ``channel_credential_secret_name``). That entry is a JSON object of
+    credential fields; only the signing key is read out of it.
+
+    ``secret_reader`` is required, not optional: a security dependency that
+    could silently be omitted is how the store went unread in the first
+    place. Callers with nothing real to pass (tests) must construct a fake
+    reader explicitly. Returns None when no secret is configured anywhere
     (signature verification not enabled for this trigger).
     """
     key = SIGNING_SECRET_KEYS.get(webhook_type)
@@ -385,9 +389,6 @@ async def resolve_signing_secret(
             value = source.get(key)
             if value:
                 return str(value)
-
-    if secret_reader is None or trigger_id is None:
-        return None
 
     secret_name = channel_credential_secret_name(webhook_type, trigger_id)
     try:
@@ -414,8 +415,8 @@ async def verify_webhook_signature(
     webhook_config: dict | None,
     headers: dict[str, str],
     body: bytes | str | None,
-    secret_reader: SecretReader | None = None,
-    trigger_id: Any | None = None,
+    secret_reader: SecretReader,
+    trigger_id: Any,
 ) -> bool | None:
     """Verify an incoming webhook's signature against the configured secret.
 
@@ -429,6 +430,10 @@ async def verify_webhook_signature(
         None  -- no signing secret configured and no verification scheme is
                  expected for this type: signature verification is not
                  enabled, caller may proceed.
+
+    ``secret_reader``/``trigger_id`` are required (see ``resolve_signing_secret``):
+    there is no "no reader" branch here for the secret-store lookup to
+    silently skip.
 
     The signature MUST be computed over the exact raw request body. Callers
     must pass the unparsed bytes, never a re-serialized dict.
