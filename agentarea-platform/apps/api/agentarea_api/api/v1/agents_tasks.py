@@ -11,6 +11,11 @@ from uuid import UUID, uuid4
 
 import httpx
 from agentarea_agents.application.agent_service import AgentService
+from agentarea_agents.application.execution_service import (
+    EscalationNotPendingError,
+    NotAnApproverError,
+    WorkflowNotFoundError,
+)
 from agentarea_agents.application.temporal_workflow_service import (
     TemporalWorkflowService,
 )
@@ -26,6 +31,7 @@ from agentarea_api.api.deps.services import (
 )
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.auth.tool_authorization import caller_can_approve
 from agentarea_common.base import ReadRepositoryFactoryDep
 from agentarea_common.config import get_settings
 from agentarea_common.events.contract import (
@@ -2077,8 +2083,18 @@ async def resolve_task_escalation(
 
     except HTTPException:
         raise
+    except EscalationNotPendingError as e:
+        raise HTTPException(
+            status_code=404, detail="Escalation not found or no longer pending"
+        ) from e
+    except NotAnApproverError as e:
+        raise HTTPException(
+            status_code=403, detail="You are not an approver of this escalation"
+        ) from e
     except Exception as e:
-        logger.error(f"Failed to resolve escalation for task {task_id}, agent {agent_id}: {e}")
+        logger.error(
+            "Failed to resolve escalation for task %s, agent %s", task_id, agent_id, exc_info=True
+        )
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -2143,6 +2159,54 @@ async def get_task_events(
     except Exception as e:
         logger.error(f"Failed to get task events for task {task_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+class PendingEscalationResponse(BaseModel):
+    escalation_id: str
+    tool_name: str
+    tool_call_id: str
+    tool_args: dict[str, Any]
+
+
+def escalations_caller_may_resolve(
+    pending: list[dict[str, Any]], user_id: str
+) -> list[PendingEscalationResponse]:
+    """The pending escalations this caller is an approver of, with their arguments."""
+    return [
+        PendingEscalationResponse(
+            escalation_id=escalation["escalation_id"],
+            tool_name=escalation["tool_name"],
+            tool_call_id=escalation["tool_call_id"],
+            tool_args=escalation["tool_args"],
+        )
+        for escalation in pending
+        if caller_can_approve(escalation["approvers"], user_id)
+    ]
+
+
+@router.get(
+    "/{task_id}/escalations",
+    response_model=list[PendingEscalationResponse],
+    dependencies=[requires_task_authority()],
+)
+async def list_pending_escalations(
+    agent_id: UUID,
+    task_id: UUID,
+    user_context: UserContextDep,
+    task_service: TaskService = Depends(get_task_service),
+    workflow_task_service: TemporalWorkflowService = Depends(get_temporal_workflow_service),
+) -> list[PendingEscalationResponse]:
+    """The escalations awaiting this caller's decision, with the exact arguments.
+
+    The event log redacts tool arguments, since a command can carry an inline
+    secret; the caller reads them here only where they may resolve the escalation.
+    """
+    await _verify_task_for_agent(task_service, agent_id, task_id)
+    try:
+        pending = await workflow_task_service.get_pending_escalations(f"task-{task_id}")
+    except WorkflowNotFoundError as e:
+        raise HTTPException(status_code=404, detail="Task has no workflow") from e
+    return escalations_caller_may_resolve(pending, str(user_context.user_id))
 
 
 @router.get(

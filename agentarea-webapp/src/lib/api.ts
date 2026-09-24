@@ -402,6 +402,15 @@ export const resolveEscalation = async (
   return { data, error };
 };
 
+export const listPendingEscalations = async (agentId: string, taskId: string) => {
+  const { data, error } =
+    await sdk.listPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGet({
+      client: serverClient,
+      path: { agent_id: agentId, task_id: taskId },
+    });
+  return { data, error };
+};
+
 export const submitTaskInput = async (
   agentId: string,
   taskId: string,

@@ -125,6 +125,38 @@ class TestSemanticGuard:
         assert "DELETE FROM" in result.reason
 
     @pytest.mark.asyncio
+    async def test_escalation_names_every_matched_pattern(self):
+        guard = SemanticGuard()
+        result = await guard.execute(
+            _ctx(action_params={"command": "rm -rf build && chmod 777 out"})
+        )
+        assert result.action == InterceptorAction.ESCALATE
+        assert result.metadata == {"patterns": ["rm -rf", "chmod 777"]}
+
+    @pytest.mark.asyncio
+    async def test_human_approval_satisfies_escalation(self):
+        guard = SemanticGuard()
+        result = await guard.execute(
+            _ctx(
+                action_params={"query": "DELETE FROM orders WHERE status = 'cancelled'"},
+                execution_state={"escalation_approved": True},
+            )
+        )
+        assert result.action == InterceptorAction.ALLOW
+        assert "DELETE FROM" in result.reason
+
+    @pytest.mark.asyncio
+    async def test_human_approval_never_lifts_a_deny(self):
+        guard = SemanticGuard()
+        result = await guard.execute(
+            _ctx(
+                action_params={"query": "DROP TABLE users"},
+                execution_state={"escalation_approved": True},
+            )
+        )
+        assert result.action == InterceptorAction.DENY
+
+    @pytest.mark.asyncio
     async def test_no_content(self):
         guard = SemanticGuard()
         result = await guard.execute(_ctx())

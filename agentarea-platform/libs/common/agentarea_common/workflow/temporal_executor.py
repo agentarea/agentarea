@@ -444,7 +444,8 @@ class TemporalTaskExecutor(TaskExecutorInterface):
     def __init__(
         self,
         workflow_executor: TemporalWorkflowExecutor | None = None,
-        default_task_queue: str = "agent-tasks",
+        *,
+        default_task_queue: str,
     ):
         self.workflow_executor = workflow_executor or TemporalWorkflowExecutor()
         self.default_task_queue = default_task_queue

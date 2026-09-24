@@ -93,6 +93,7 @@ import {
   listModelInstances,
   listModelSpecs,
   listOpenAPIConnections,
+  listPendingEscalations,
   listPolicies,
   listProjectFiles,
   listProjects,
@@ -462,6 +463,13 @@ export async function resolveEscalationAction(
     approved,
     comment
   );
+}
+
+export async function listPendingEscalationsAction(
+  agentId: string,
+  taskId: string
+) {
+  return await listPendingEscalations(agentId, taskId);
 }
 
 export async function submitTaskInputAction(

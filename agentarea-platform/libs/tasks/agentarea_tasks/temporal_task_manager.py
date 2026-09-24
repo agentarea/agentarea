@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from agentarea_common.workflow.executor import WorkflowConfig
+from agentarea_common.workflow.executor import WorkflowConfig, WorkflowExecutor
 from agentarea_common.workflow.temporal_executor import TemporalWorkflowExecutor
 from agentarea_execution.models import AgentExecutionRequest
 
@@ -26,18 +26,22 @@ class TemporalTaskManager(BaseTaskManager):
 
     supports_scheduling = True
 
-    def __init__(self, task_repository: TaskRepository):
-        """Initialize with TaskRepository dependency."""
+    def __init__(
+        self,
+        task_repository: TaskRepository,
+        temporal_executor: WorkflowExecutor | None = None,
+    ):
+        """Initialize with TaskRepository dependency and an optional shared executor."""
         from agentarea_common.config import get_settings
 
         self.task_repository = task_repository
 
-        # Get settings and configure Temporal executor properly
         settings = get_settings()
-        self.temporal_executor = TemporalWorkflowExecutor(
+        self.temporal_executor: WorkflowExecutor = temporal_executor or TemporalWorkflowExecutor(
             namespace=settings.workflow.TEMPORAL_NAMESPACE,
             server_url=settings.workflow.TEMPORAL_SERVER_URL,
         )
+        self.task_queue = settings.workflow.TEMPORAL_TASK_QUEUE
 
     def _task_to_agent_task(self, task) -> AgentTask:
         """Convert Task domain model to AgentTask."""
@@ -190,7 +194,7 @@ class TemporalTaskManager(BaseTaskManager):
             # terminal failure and can execute shell/MCP side effects again.
             start_delay = self._start_delay_for(task)
             config = WorkflowConfig(
-                task_queue="agent-tasks",
+                task_queue=self.task_queue,
                 retry_attempts=1,
                 start_delay=start_delay,
             )

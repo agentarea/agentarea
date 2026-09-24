@@ -123,16 +123,19 @@ func supervise(command []string, uid, gid uint32, timeout time.Duration, maxFile
 	defer timer.Stop()
 
 	result := executionResult{}
-	var waitErr error
+	var waitErr, killErr error
+	terminate := func() {
+		killErr = killDescendants(time.Now().Add(execsupervisor.DescendantFreezeTimeout))
+		killProcessGroup(cmd.Process.Pid)
+		waitErr = <-done
+	}
 	select {
 	case waitErr = <-done:
 	case <-timer.C:
 		result.timedOut = true
-		killProcessGroup(cmd.Process.Pid)
-		waitErr = <-done
+		terminate()
 	case received := <-signals:
-		killProcessGroup(cmd.Process.Pid)
-		waitErr = <-done
+		terminate()
 		if signalValue, ok := received.(syscall.Signal); ok {
 			result.exitCode = 128 + int(signalValue)
 		} else {
@@ -145,7 +148,7 @@ func supervise(command []string, uid, gid uint32, timeout time.Duration, maxFile
 	} else if result.exitCode == 0 {
 		result.exitCode = exitCode(waitErr)
 	}
-	if err := drainDescendants(cmd.Process.Pid, execsupervisor.DescendantDrainTimeout); err != nil {
+	if err := errors.Join(killErr, drainDescendants(time.Now().Add(execsupervisor.DescendantDrainTimeout))); err != nil {
 		return executionResult{}, err
 	}
 	return result, nil
@@ -197,16 +200,64 @@ func killProcessGroup(pid int) {
 	}
 }
 
-func drainDescendants(groupLeader int, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
+type descendant struct {
+	pid   int
+	state byte
+}
+
+// frozen reports a process that can no longer run user code or fork: stopped,
+// traced, dead, or blocked in the kernel (a vfork parent whose child is
+// stopped never leaves D, and anything in D stops before it returns to user
+// space because SIGSTOP is already pending).
+func (process descendant) frozen() bool {
+	switch process.state {
+	case 'T', 't', 'D', 'Z', 'X', 'x':
+		return true
+	}
+	return false
+}
+
+// killDescendants stops every descendant before it kills any of them. Killing
+// a running tree one process at a time lets the survivors react: a shell blocked
+// on `sleep` runs its next command the moment sleep dies. Enumeration repeats
+// until a scan finds no new process and every known one frozen, so a fork that
+// was in flight is caught too; SIGSTOP is re-sent to anything a SIGCONT woke.
+// freezeDeadline only bounds that wait: SIGKILL follows either way, deepest
+// first, so no exit orphans a process group whose stopped members the kernel
+// would SIGCONT.
+func killDescendants(freezeDeadline time.Time) error {
+	seen := make(map[int]bool)
 	for {
-		killProcessGroup(groupLeader)
-		descendants, err := descendantPIDs(os.Getpid())
+		tree, err := descendantProcesses(os.Getpid())
 		if err != nil {
 			return fmt.Errorf("enumerate descendants: %w", err)
 		}
-		for _, pid := range descendants {
-			_ = syscall.Kill(pid, syscall.SIGKILL)
+		frozen := true
+		for _, process := range tree {
+			if !seen[process.pid] || !process.frozen() {
+				_ = syscall.Kill(process.pid, syscall.SIGSTOP)
+				seen[process.pid] = true
+				frozen = false
+			}
+		}
+		if frozen || time.Now().After(freezeDeadline) {
+			for i := len(tree) - 1; i >= 0; i-- {
+				_ = syscall.Kill(tree[i].pid, syscall.SIGKILL)
+			}
+			return nil
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func drainDescendants(deadline time.Time) error {
+	for {
+		freezeDeadline := time.Now().Add(execsupervisor.DescendantFreezeTimeout)
+		if deadline.Before(freezeDeadline) {
+			freezeDeadline = deadline
+		}
+		if err := killDescendants(freezeDeadline); err != nil {
+			return err
 		}
 		for {
 			var status syscall.WaitStatus
@@ -223,7 +274,7 @@ func drainDescendants(groupLeader int, timeout time.Duration) error {
 			break
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("descendant drain did not reach ECHILD within %s", timeout)
+			return fmt.Errorf("descendant drain did not reach ECHILD within %s", execsupervisor.DescendantDrainTimeout)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

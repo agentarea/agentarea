@@ -130,7 +130,9 @@ The worker registers this pipeline as a Temporal worker interceptor. On the way
 into `call_llm`, `execute_mcp_tool` and `discover_available_tools` it runs the
 pre-phase; on the way out it runs the post-phase and applies any content
 modification to the activity's output. A `DENY` becomes a `GovernanceDenied`
-exception; an `ESCALATE` becomes `EscalationRequired`.
+exception; an `ESCALATE` becomes `EscalationRequired`. Neither is retried. On
+the tool path the workflow turns a `GovernanceDenied` into a policy denial the
+model sees, and an `EscalationRequired` into a human approval request.
 
 The registered set today is: `CostBudgetGuard` (priority 100, pre-LLM and
 pre-tool), `ServiceBudgetGuard` (105, pre-tool), `TokenBudgetGuard` (110,

@@ -8,6 +8,8 @@ import httpx
 import pytest
 from agentarea_triggers.channels import get_adapter, list_adapters, register_adapter
 from agentarea_triggers.channels.adapters import (
+    DISCORD_MD,
+    SLACK_MD,
     TELEGRAM_MD,
     TELEGRAM_SENDER,
     _strip_markdown,
@@ -484,3 +486,44 @@ class TestTelegramWebhookRegistration:
             # Must not raise; returns False so trigger creation can continue.
             ok = await set_webhook("123:ABC", "https://gw.example/webhooks/wh1")
             assert ok is False
+
+
+def _approval_response(approved: bool | None, comment: str | None = None) -> dict:
+    data: dict = {"escalation_id": "esc-1", "tool_name": "shell", "comment": comment}
+    if approved is not None:
+        data["approved"] = approved
+    return {"event_type": "approval.response", "data": data}
+
+
+_FORMATTERS = {
+    "telegram": lambda event: TelegramAdapter().format(event, "concise"),
+    "email": lambda event: EmailAdapter().format(event, "summary"),
+    "slack": lambda event: make_formatter(SLACK_MD)(event, "concise"),
+    "discord": lambda event: make_formatter(DISCORD_MD)(event, "concise"),
+    "telegram-composed": lambda event: make_formatter(TELEGRAM_MD)(event, "concise"),
+}
+
+
+class TestApprovalResponseOutcome:
+    """A rejection is not an approval: the channel says which one the human chose."""
+
+    @pytest.mark.parametrize("channel", sorted(_FORMATTERS))
+    def test_a_denial_says_the_call_was_denied(self, channel):
+        message = _FORMATTERS[channel](_approval_response(False, "not in prod"))
+        assert "denied" in message.lower()
+        assert "not in prod" in message.replace("\\", "")
+        assert "continuing" not in message.lower()
+        assert "approval received" not in message.lower()
+
+    @pytest.mark.parametrize("channel", sorted(_FORMATTERS))
+    def test_an_approval_says_the_agent_continues(self, channel):
+        message = _FORMATTERS[channel](_approval_response(True))
+        assert "approved" in message.lower()
+        assert "denied" not in message.lower()
+
+    @pytest.mark.parametrize("channel", sorted(_FORMATTERS))
+    def test_a_response_without_a_decision_claims_neither(self, channel):
+        message = _FORMATTERS[channel](_approval_response(None))
+        assert "denied" not in message.lower()
+        assert "approved" not in message.lower()
+        assert "resolved" in message.lower()

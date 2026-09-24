@@ -172,11 +172,14 @@ only the pattern-matching gates.
   user. The policy verdict is computed with the user's snapshot, but the work
   downstream of it is not user-scoped. Anything that depends on the acting user's
   identity inside the tool execution path does not see it.
-- **`SemanticGuard` escalation is a failure, not a pause.** Its medium-severity
-  patterns return `ESCALATE`, which the Temporal bridge turns into an
-  `EscalationRequired` exception. Because the interceptor sits at the activity
-  boundary it cannot pause and wait for a human — the activity fails. Only the
-  workflow-level approval path pauses.
+- **`SemanticGuard` escalation pauses after the tool call has started.** Its
+  medium-severity patterns return `ESCALATE`, which the Temporal bridge raises as
+  a non-retryable `EscalationRequired`. The workflow catches it and asks a human
+  through the same approval flow as `ApprovalPolicy`; on approval it re-issues
+  the same call with `escalation_approved` set, and the guard accepts that
+  approval. A rejection reaches the model as a denial. The approval never lifts
+  a deny pattern. Because the escalation is only known once the activity runs,
+  `tool.call.started` is emitted before the approval request, not after.
 - **The pattern gates are regular expressions.** `SemanticGuard`'s deny list
   covers a specific set of literal SQL and shell patterns. It is a guardrail
   against an obvious accident, not a defence against a model that is trying to get

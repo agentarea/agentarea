@@ -250,9 +250,7 @@ class AgentAreaWorker:
 
         governance_pipeline = create_governance_pipeline()
         all_activities = activities + mcp_activities
-        validate_activity_mapping(
-            [a.fn.__name__ if hasattr(a, "fn") else str(a) for a in all_activities]
-        )
+        validate_activity_mapping(all_activities)
 
         self.worker = Worker(
             self.client,

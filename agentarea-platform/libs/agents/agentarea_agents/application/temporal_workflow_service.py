@@ -2,6 +2,10 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents.application.execution_service import (
+    EscalationNotPendingError,
+    NotAnApproverError,
+)
 from agentarea_agents.domain.interfaces import ExecutionServiceInterface
 
 from ..domain.interfaces import ExecutionRequest
@@ -81,6 +85,9 @@ class TemporalWorkflowService:
             logger.error(f"Failed to get effective policy: {e}")
             return None
 
+    async def get_pending_escalations(self, execution_id: str) -> list[dict[str, Any]]:
+        return await self._execution_service.get_pending_escalations(execution_id)
+
     async def cancel_task(self, execution_id: str) -> bool:
         try:
             return await self._execution_service.cancel_execution(execution_id)
@@ -121,8 +128,10 @@ class TemporalWorkflowService:
             return await self._execution_service.resolve_escalation(
                 execution_id, escalation_id, approved, comment, resolved_by
             )
-        except Exception as e:
-            logger.error(f"Failed to resolve escalation: {e}")
+        except (EscalationNotPendingError, NotAnApproverError):
+            raise
+        except Exception:
+            logger.error("Failed to resolve escalation", exc_info=True)
             return False
 
     async def send_workflow_command(

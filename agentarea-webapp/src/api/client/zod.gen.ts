@@ -1826,6 +1826,16 @@ export const zPaginatedPaymentsResponse = z.object({
 });
 
 /**
+ * PendingEscalationResponse
+ */
+export const zPendingEscalationResponse = z.object({
+  escalation_id: z.string(),
+  tool_args: z.record(z.unknown()),
+  tool_call_id: z.string(),
+  tool_name: z.string(),
+});
+
+/**
  * PolicyEffect
  *
  * What a rule does when it applies.
@@ -3799,6 +3809,20 @@ export const zSendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostPath =
     agent_id: z.string().uuid(),
     task_id: z.string().uuid(),
   });
+
+export const zListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetPath =
+  z.object({
+    agent_id: z.string().uuid(),
+    task_id: z.string().uuid(),
+  });
+
+/**
+ * Response List Pending Escalations V1 Agents  Agent Id  Tasks  Task Id  Escalations Get
+ *
+ * Successful Response
+ */
+export const zListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponse =
+  z.array(zPendingEscalationResponse);
 
 export const zGetTaskEventsV1AgentsAgentIdTasksTaskIdEventsGetPath = z.object({
   agent_id: z.string().uuid(),

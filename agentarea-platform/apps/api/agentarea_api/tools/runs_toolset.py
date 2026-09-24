@@ -10,16 +10,23 @@ The control tools (pause/resume/input/command/escalation) mirror the REST
 handlers in ``api/v1/agents_tasks.py``, with one difference that matters:
 those routes carry an ``agent_id`` the caller owns, while these take only a
 ``run_id``. Each control tool therefore loads the run through the
-workspace-scoped ``TaskService`` first — that repository filter is the
-authorization boundary, so signalling before it would cross tenants.
+workspace-scoped ``TaskService`` first — signalling before that filter would
+cross tenants — and then applies the same run authority as the REST routes:
+only whoever started the run, or a workspace admin, may act on it.
 """
 
 import json
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents.application.execution_service import (
+    EscalationNotPendingError,
+    NotAnApproverError,
+    WorkflowNotFoundError,
+)
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.auth.context import UserContext
 from agentarea_common.money import serialize_money
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
@@ -32,12 +39,14 @@ from agentarea_api.api.deps.services import (
     _create_task_manager,
     get_temporal_workflow_service,
 )
+from agentarea_api.api.v1._task_authority import assert_may_act_on_task
 from agentarea_api.api.v1.agents_tasks import (
     ContinueTaskPayload,
     EscalationResolution,
     TaskCommandPayload,
     TaskInputSubmission,
     _resolve_model_info,
+    escalations_caller_may_resolve,
 )
 
 from .base import platform_context, platform_read_context
@@ -55,6 +64,20 @@ async def _build_task_service(repo_factory, event_broker) -> TaskService:
         task_manager=task_manager,
         workflow_service=workflow_service,
     )
+
+
+async def _refuse_unless_may_act(
+    service: TaskService, run_id: str, user_ctx: UserContext
+) -> str | None:
+    """The error to return unless the caller started this run or administers the workspace."""
+    task = await service.get_task(UUID(run_id))
+    if not task:
+        return RUN_NOT_FOUND
+    try:
+        await assert_may_act_on_task(task, user_ctx)
+    except HTTPException as exc:
+        return json.dumps({"error": exc.detail})
+    return None
 
 
 def _execution_id(run_id: str) -> str:
@@ -192,22 +215,24 @@ class RunsToolset(Toolset):
         """Cancel a running agent execution."""
         async with platform_context() as (
             _session,
-            _user_ctx,
+            user_ctx,
             repo_factory,
             event_broker,
             _,
         ):
             service = await _build_task_service(repo_factory, event_broker)
+            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
+                return refusal
             cancelled = await service.cancel_task(UUID(run_id))
             return json.dumps({"cancelled": cancelled})
 
     @tool_method(effect="write")
     async def pause(self, run_id: str) -> str:
         """Pause a running agent execution."""
-        async with platform_context() as (_s, _user_ctx, repo_factory, event_broker, _):
+        async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            if not await service.get_task(UUID(run_id)):
-                return RUN_NOT_FOUND
+            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
+                return refusal
             workflow = await get_temporal_workflow_service()
             paused = await workflow.pause_task(_execution_id(run_id))
             return json.dumps({"paused": paused})
@@ -215,10 +240,10 @@ class RunsToolset(Toolset):
     @tool_method(effect="write")
     async def resume(self, run_id: str) -> str:
         """Resume a paused agent execution."""
-        async with platform_context() as (_s, _user_ctx, repo_factory, event_broker, _):
+        async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            if not await service.get_task(UUID(run_id)):
-                return RUN_NOT_FOUND
+            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
+                return refusal
             workflow = await get_temporal_workflow_service()
             resumed = await workflow.resume_task(_execution_id(run_id))
             return json.dumps({"resumed": resumed})
@@ -243,8 +268,8 @@ class RunsToolset(Toolset):
         )
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            if not await service.get_task(UUID(run_id)):
-                return RUN_NOT_FOUND
+            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
+                return refusal
             workflow = await get_temporal_workflow_service()
             delivered = await workflow.send_workflow_command(
                 _execution_id(run_id),
@@ -288,8 +313,8 @@ class RunsToolset(Toolset):
             secret_mgr,
         ):
             service = await _build_task_service(repo_factory, event_broker)
-            if not await service.get_task(UUID(run_id)):
-                return RUN_NOT_FOUND
+            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
+                return refusal
 
             if payload.command == "queue_message":
                 if not payload.message:
@@ -335,17 +360,47 @@ class RunsToolset(Toolset):
         )
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            if not await service.get_task(UUID(run_id)):
-                return RUN_NOT_FOUND
+            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
+                return refusal
             workflow = await get_temporal_workflow_service()
-            resolved = await workflow.resolve_escalation(
-                _execution_id(run_id),
-                resolution.escalation_id,
-                resolution.approved,
-                resolution.comment,
-                resolved_by=str(user_ctx.user_id),
-            )
+            try:
+                resolved = await workflow.resolve_escalation(
+                    _execution_id(run_id),
+                    resolution.escalation_id,
+                    resolution.approved,
+                    resolution.comment,
+                    resolved_by=str(user_ctx.user_id),
+                )
+            except EscalationNotPendingError:
+                return json.dumps({"error": "Escalation not found or no longer pending"})
+            except NotAnApproverError:
+                return json.dumps({"error": "You are not an approver of this escalation"})
             return json.dumps({"resolved": resolved, "approved": resolution.approved})
+
+    @tool_method(effect="read")
+    async def list_pending_escalations(self, run_id: str) -> str:
+        """List the escalations a run is blocked on that you may resolve.
+
+        Each carries the exact tool arguments awaiting a decision. Run events
+        redact them, since a command can carry an inline secret, so only a
+        caller who may act on the run and is one of the escalation's approvers
+        sees them.
+        """
+        async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
+            service = await _build_task_service(repo_factory, event_broker)
+            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
+                return refusal
+            workflow = await get_temporal_workflow_service()
+            try:
+                pending = await workflow.get_pending_escalations(_execution_id(run_id))
+            except WorkflowNotFoundError:
+                return json.dumps({"error": "Run has no workflow to read escalations from"})
+            return json.dumps(
+                [
+                    escalation.model_dump()
+                    for escalation in escalations_caller_may_resolve(pending, str(user_ctx.user_id))
+                ]
+            )
 
     @tool_method(effect="privileged")
     async def continue_run(
@@ -361,8 +416,10 @@ class RunsToolset(Toolset):
                 "additional_budget_usd": additional_budget_usd,
             }
         )
-        async with platform_context() as (_s, _user_ctx, repo_factory, event_broker, _):
+        async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
+            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
+                return refusal
             result = await service.continue_execution(
                 UUID(run_id),
                 additional_iterations=payload.additional_iterations,

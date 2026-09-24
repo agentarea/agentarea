@@ -100,6 +100,7 @@ class BaseTaskService(ABC):
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,
+            scheduled_at=task.scheduled_at,
             # user_id and workspace_id will be set automatically by WorkspaceScopedRepository
             metadata=task.metadata,
         )
@@ -124,6 +125,7 @@ class BaseTaskService(ABC):
             started_at=created_task_domain.started_at,
             completed_at=created_task_domain.completed_at,
             execution_id=created_task_domain.execution_id,
+            scheduled_at=created_task_domain.scheduled_at,
             workspace_id=created_task_domain.workspace_id,
             metadata=created_task_domain.metadata,
         )
@@ -195,6 +197,7 @@ class BaseTaskService(ABC):
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,
+            scheduled_at=task.scheduled_at,
             user_id=task.user_id,
             workspace_id=task.workspace_id,
             metadata=task.metadata,
@@ -251,6 +254,7 @@ class BaseTaskService(ABC):
             started_at=updated_task_domain.started_at,
             completed_at=updated_task_domain.completed_at,
             execution_id=updated_task_domain.execution_id,
+            scheduled_at=updated_task_domain.scheduled_at,
             workspace_id=updated_task_domain.workspace_id,
             metadata=updated_task_domain.metadata,
         )
@@ -357,6 +361,7 @@ class BaseTaskService(ABC):
             started_at=task.started_at,
             completed_at=task.completed_at,
             execution_id=task.execution_id,
+            scheduled_at=task.scheduled_at,
             workspace_id=task.workspace_id,
             metadata=task.metadata,
         )

@@ -30,8 +30,8 @@ ESCALATE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 class SemanticGuard:
     """Gate interceptor that detects destructive tool call patterns.
 
-    High-severity patterns → DENY
-    Medium-severity patterns → ESCALATE (route to human)
+    High-severity patterns → DENY, even for a human-approved call
+    Medium-severity patterns → ESCALATE until a human approves the call
     """
 
     @property
@@ -60,14 +60,25 @@ class SemanticGuard:
                     metadata={"pattern": label},
                 )
 
-        for label, pattern in ESCALATE_PATTERNS:
-            if pattern.search(text):
+        matched = [label for label, pattern in ESCALATE_PATTERNS if pattern.search(text)]
+        if matched:
+            patterns = ", ".join(matched)
+            # The workflow records a human's approval of this exact call as
+            # escalation_approved and re-issues it; that approval is what this
+            # escalation asks for, so it is the only thing that satisfies it.
+            if context.execution_state.get("escalation_approved") is True:
                 return InterceptorResult(
-                    action=InterceptorAction.ESCALATE,
+                    action=InterceptorAction.ALLOW,
                     interceptor_name=self.name,
-                    reason=f"potentially destructive pattern: {label}",
-                    metadata={"pattern": label},
+                    reason=f"approved by a human: {patterns}",
+                    metadata={"patterns": matched},
                 )
+            return InterceptorResult(
+                action=InterceptorAction.ESCALATE,
+                interceptor_name=self.name,
+                reason=f"potentially destructive pattern: {patterns}",
+                metadata={"patterns": matched},
+            )
 
         return InterceptorResult(
             action=InterceptorAction.ALLOW,
