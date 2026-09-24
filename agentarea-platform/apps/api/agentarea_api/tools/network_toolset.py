@@ -1,5 +1,6 @@
 """NetworkToolset — workspace topology overview."""
 
+from agentarea_agents.tools.platform_authz import unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
 
@@ -17,6 +18,7 @@ class NetworkToolset(Toolset):
     """Inspect the workspace network topology (agents, skills, MCP instances, triggers)."""
 
     @tool_method(effect="read")
+    @unrestricted("the workspace graph, as GET /v1/network/topology serves it to any member")
     async def get_topology(self) -> str:
         """Return all nodes and edges in the workspace's agent/skill/MCP/trigger graph."""
         async with platform_read_context() as (_session, user_ctx, _repo, _broker, _secret):

@@ -2,6 +2,7 @@
 
 import json
 
+from agentarea_agents.tools.platform_authz import unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
 
@@ -19,6 +20,7 @@ class ModelsToolset(Toolset):
     """Inspect available model specs and manage the workspace's model instances."""
 
     @tool_method(effect="read")
+    @unrestricted("model specs are platform data, as GET /v1/model-specs serves them")
     async def list_specs(self) -> str:
         """List available model specifications (e.g. gpt-4o, claude-sonnet)."""
         async with platform_context() as (
@@ -60,6 +62,7 @@ class ModelsToolset(Toolset):
             )
 
     @tool_method(effect="read")
+    @unrestricted("model instances in the workspace, as GET /v1/model-instances lists them")
     async def list_instances(self) -> str:
         """List configured model instances (models connected to provider configs)."""
         async with platform_context() as (
@@ -103,6 +106,7 @@ class ModelsToolset(Toolset):
             )
 
     @tool_method(effect="write")
+    @unrestricted("any member may add a model instance, as POST /v1/model-instances allows")
     async def create_instance(
         self,
         provider_config_id: str,
@@ -162,6 +166,7 @@ class ModelsToolset(Toolset):
             )
 
     @tool_method(effect="read")
+    @unrestricted("a model instance in the workspace, as GET /v1/model-instances/{id} returns it")
     async def get(self, model_instance_id: str) -> str:
         """Get details of a model instance."""
         from uuid import UUID

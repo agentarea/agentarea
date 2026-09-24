@@ -14,8 +14,12 @@ import pytest
 import pytest_asyncio
 from agentarea_api.api.v1 import workspace_invitations
 from agentarea_api.main import app
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.auth.identity_directory import IdentityRecord
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import register_singleton
 from agentarea_common.workspaces import WorkspaceInvitationService
 from httpx import ASGITransport, AsyncClient
 
@@ -58,6 +62,7 @@ class FakeWorkspaceRepository:
 
 @pytest.fixture
 def service() -> WorkspaceInvitationService:
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
     return WorkspaceInvitationService(FakeInvitationRepository())  # type: ignore[arg-type]
 
 
@@ -120,8 +125,11 @@ async def make_client(service, memberships):
 
 
 async def _invite(service, email: str | None = None) -> str:
+    inviter = UserContext(
+        user_id=INVITER, workspace_id=WORKSPACE_ID, admin_workspaces=[WORKSPACE_ID]
+    )
     invitation, token = await service.create_invitation(
-        workspace_id=WORKSPACE_ID, invited_by=INVITER, email=email
+        actor=inviter, workspace_id=WORKSPACE_ID, email=email
     )
     invitation.expires_at = EXPIRES_AT
     return token

@@ -2,6 +2,7 @@
 
 import json
 
+from agentarea_agents.tools.platform_authz import enforced_in_handler, unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.authorization import assert_workspace_admin
@@ -42,6 +43,7 @@ class SecretsToolset(Toolset):
     """
 
     @tool_method(effect="read")
+    @unrestricted("names only, never values, exactly as the REST listing returns them")
     async def list(self) -> str:
         """List the workspace's own secret names. Values are not returned."""
         async with platform_context() as (
@@ -66,6 +68,7 @@ class SecretsToolset(Toolset):
             )
 
     @tool_method(effect="privileged")
+    @enforced_in_handler("workspace admin, asserted before the catalog is touched")
     async def create(self, name: str, value: str, description: str | None = None) -> str:
         """Create a secret. Fails if the name is taken or reserved by the platform."""
         async with platform_context() as (
@@ -87,6 +90,7 @@ class SecretsToolset(Toolset):
             return json.dumps({"created": True, "id": str(secret.id), "name": name})
 
     @tool_method(effect="destructive")
+    @enforced_in_handler("workspace admin, asserted before the catalog is touched")
     async def delete(self, name: str) -> str:
         """Delete one of the workspace's own secrets by name."""
         async with platform_context() as (

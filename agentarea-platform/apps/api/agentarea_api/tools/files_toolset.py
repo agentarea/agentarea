@@ -3,6 +3,7 @@
 import json
 from urllib.parse import quote
 
+from agentarea_agents.tools.platform_authz import unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.config.app import get_app_settings
@@ -29,6 +30,7 @@ class FilesToolset(Toolset):
     """List, fetch download URLs for, and delete workspace files."""
 
     @tool_method(effect="read")
+    @unrestricted("workspace files are member-level, as /v1/files serves them")
     async def list(self, prefix: str = "", max_items: int = 200) -> str:
         """List files in the current workspace's storage."""
         async with platform_read_context() as (_session, user_ctx, _repo, _broker, _secret):
@@ -50,6 +52,7 @@ class FilesToolset(Toolset):
             )
 
     @tool_method(effect="read")
+    @unrestricted("workspace files are member-level, as /v1/files serves them")
     async def get_url(self, path: str, expires_in: int = 3600) -> str:
         """Get an AgentArea API download URL for a workspace file."""
         async with platform_read_context() as (_session, user_ctx, _repo, _broker, _secret):
@@ -62,6 +65,7 @@ class FilesToolset(Toolset):
             return json.dumps({"url": url, "path": path, "expires_in": expires_in})
 
     @tool_method(effect="destructive")
+    @unrestricted("workspace files are member-level, as DELETE /v1/files allows")
     async def delete(self, path: str) -> str:
         """Delete a workspace file."""
         async with platform_context() as (_session, user_ctx, _repo, _broker, _secret):

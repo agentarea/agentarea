@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from uuid import UUID
 
+from agentarea_agents.tools.platform_authz import requires_workspace_admin
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
 
@@ -21,6 +22,7 @@ class AuditToolset(Toolset):
     """Query the workspace audit log (read-only)."""
 
     @tool_method(effect="read")
+    @requires_workspace_admin()
     async def list(
         self,
         action: str = "",

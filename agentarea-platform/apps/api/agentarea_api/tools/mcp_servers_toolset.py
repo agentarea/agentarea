@@ -12,14 +12,18 @@ import json
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents.tools.platform_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.auth.permission import require_permission
+from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_mcp.schemas.dto import (
     MCPServerCreate,
     MCPServerInstanceCreate,
     MCPServerInstanceUpdate,
     MCPServerUpdate,
 )
+from fastapi import HTTPException
 
 from .base import platform_context, platform_read_context
 
@@ -67,6 +71,7 @@ class MCPServersToolset(Toolset):
     # ------------------------------------------------------------------
 
     @tool_method(effect="write")
+    @unrestricted("any member may add a spec, as POST /v1/mcp-servers allows")
     async def create_spec(
         self,
         name: str,
@@ -132,6 +137,7 @@ class MCPServersToolset(Toolset):
             return json.dumps(_serialize_server(server), default=str)
 
     @tool_method(effect="write")
+    @requires("edit", "mcp_server", id_param="spec_id")
     async def update_spec(
         self,
         spec_id: str,
@@ -201,6 +207,9 @@ class MCPServersToolset(Toolset):
             return json.dumps(_serialize_server(server), default=str)
 
     @tool_method(effect="read")
+    @enforced_in_handler(
+        "tenant specs are narrowed to what the graph says is readable; the catalog is not"
+    )
     async def list_specs(
         self,
         is_public: bool = False,
@@ -212,7 +221,7 @@ class MCPServersToolset(Toolset):
         """List MCP server specs (templates) available in the workspace."""
         async with platform_read_context() as (
             _session,
-            _user_ctx,
+            user_ctx,
             repo_factory,
             event_broker,
             _secret_mgr,
@@ -229,6 +238,7 @@ class MCPServersToolset(Toolset):
                 search=search or None,
                 limit=limit,
                 offset=offset,
+                ids=await readable_resource_ids(user_ctx.user_id),
             )
             return json.dumps(
                 {
@@ -239,11 +249,12 @@ class MCPServersToolset(Toolset):
             )
 
     @tool_method(effect="read")
+    @enforced_in_handler("the PDP decides for a tenant spec; a catalog projection is platform data")
     async def get_spec(self, spec_id: str) -> str:
         """Get an MCP server spec (template) by ID."""
         async with platform_read_context() as (
             _session,
-            _user_ctx,
+            user_ctx,
             repo_factory,
             event_broker,
             _secret_mgr,
@@ -257,12 +268,18 @@ class MCPServersToolset(Toolset):
             server = await service.get(UUID(spec_id))
             if not server:
                 return json.dumps({"error": "MCP server spec not found"})
+            if not getattr(server, "is_catalog", False):
+                try:
+                    await require_permission("read", "mcp_server", spec_id, user_ctx.user_id)
+                except HTTPException as exc:
+                    return json.dumps({"error": exc.detail})
             payload = _serialize_server(server)
             payload["env_schema"] = server.env_schema
             payload["registry_url"] = server.registry_url
             return json.dumps(payload, default=str)
 
     @tool_method(effect="destructive")
+    @requires("delete", "mcp_server", id_param="spec_id")
     async def delete_spec(self, spec_id: str) -> str:
         """Delete an MCP server spec (template) by ID."""
         async with platform_context() as (
@@ -286,6 +303,7 @@ class MCPServersToolset(Toolset):
     # ------------------------------------------------------------------
 
     @tool_method(effect="write")
+    @unrestricted("any member may add an instance, as POST /v1/mcp-server-instances allows")
     async def create(
         self,
         name: str,
@@ -334,6 +352,7 @@ class MCPServersToolset(Toolset):
             return json.dumps(_serialize_instance(instance), default=str)
 
     @tool_method(effect="write")
+    @requires("edit", "mcp_instance", id_param="instance_id")
     async def update(
         self,
         instance_id: str,
@@ -375,6 +394,7 @@ class MCPServersToolset(Toolset):
             return json.dumps(_serialize_instance(instance), default=str)
 
     @tool_method(effect="read")
+    @unrestricted("instances in the caller's workspace, as the REST listing returns them")
     async def list(self) -> str:
         """List all MCP server instances in the workspace."""
         async with platform_read_context() as (
@@ -398,6 +418,7 @@ class MCPServersToolset(Toolset):
             )
 
     @tool_method(effect="read")
+    @unrestricted("an instance in the caller's workspace, as the REST detail returns it")
     async def get(self, instance_id: str) -> str:
         """Get details of an MCP server instance."""
         async with platform_read_context() as (
@@ -423,6 +444,7 @@ class MCPServersToolset(Toolset):
             return json.dumps(payload, default=str)
 
     @tool_method(effect="destructive")
+    @requires("delete", "mcp_instance", id_param="instance_id")
     async def delete_instance(self, instance_id: str) -> str:
         """Delete an MCP server instance."""
         async with platform_context() as (
@@ -443,6 +465,7 @@ class MCPServersToolset(Toolset):
             return json.dumps({"deleted": deleted})
 
     @tool_method(effect="write")
+    @requires("edit", "mcp_instance", id_param="instance_id")
     async def verify(self, instance_id: str) -> str:
         """Run end-to-end verification on an MCP server instance.
 

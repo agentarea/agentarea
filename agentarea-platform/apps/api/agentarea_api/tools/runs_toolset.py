@@ -24,6 +24,7 @@ from agentarea_agents.application.execution_service import (
     NotAnApproverError,
     WorkflowNotFoundError,
 )
+from agentarea_agents.tools.platform_authz import enforced_in_handler, unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.context import UserContext
@@ -52,6 +53,9 @@ from agentarea_api.api.v1.agents_tasks import (
 from .base import platform_context, platform_read_context
 
 RUN_NOT_FOUND = json.dumps({"error": "Run not found"})
+RUN_AUTHORITY = (
+    "whoever started the run, or a workspace admin; _refuse_unless_may_act loads the run first"
+)
 
 
 async def _build_task_service(repo_factory, event_broker) -> TaskService:
@@ -106,6 +110,7 @@ class RunsToolset(Toolset):
     """Start, list, get, and cancel agent runs."""
 
     @tool_method(effect="write")
+    @unrestricted("any member may start a run, as POST /v1/agents/{id}/tasks allows")
     async def start(
         self,
         agent_id: str,
@@ -161,6 +166,7 @@ class RunsToolset(Toolset):
             )
 
     @tool_method(effect="read")
+    @unrestricted("lists the caller's own runs, as GET /v1/tasks does")
     async def list(self, agent_id: str = "", limit: int = 20) -> str:
         """List recent runs, optionally filtered by agent ID."""
         async with platform_read_context() as (
@@ -186,6 +192,7 @@ class RunsToolset(Toolset):
             )
 
     @tool_method(effect="read")
+    @unrestricted("a run in the caller's workspace, as GET /v1/tasks/{id} returns it")
     async def get(self, run_id: str) -> str:
         """Get status and details of a specific run."""
         async with platform_read_context() as (
@@ -211,6 +218,7 @@ class RunsToolset(Toolset):
             )
 
     @tool_method(effect="destructive")
+    @enforced_in_handler(RUN_AUTHORITY)
     async def cancel(self, run_id: str) -> str:
         """Cancel a running agent execution."""
         async with platform_context() as (
@@ -227,6 +235,7 @@ class RunsToolset(Toolset):
             return json.dumps({"cancelled": cancelled})
 
     @tool_method(effect="write")
+    @enforced_in_handler(RUN_AUTHORITY)
     async def pause(self, run_id: str) -> str:
         """Pause a running agent execution."""
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
@@ -238,6 +247,7 @@ class RunsToolset(Toolset):
             return json.dumps({"paused": paused})
 
     @tool_method(effect="write")
+    @enforced_in_handler(RUN_AUTHORITY)
     async def resume(self, run_id: str) -> str:
         """Resume a paused agent execution."""
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
@@ -249,6 +259,7 @@ class RunsToolset(Toolset):
             return json.dumps({"resumed": resumed})
 
     @tool_method(effect="write")
+    @enforced_in_handler(RUN_AUTHORITY)
     async def send_input(
         self,
         run_id: str,
@@ -286,6 +297,7 @@ class RunsToolset(Toolset):
             )
 
     @tool_method(effect="write")
+    @enforced_in_handler(RUN_AUTHORITY)
     async def send_command(
         self,
         run_id: str,
@@ -347,6 +359,7 @@ class RunsToolset(Toolset):
             return json.dumps({"delivered": delivered, "command": payload.command}, default=str)
 
     @tool_method(effect="privileged")
+    @enforced_in_handler(RUN_AUTHORITY)
     async def resolve_escalation(
         self,
         run_id: str,
@@ -378,6 +391,7 @@ class RunsToolset(Toolset):
             return json.dumps({"resolved": resolved, "approved": resolution.approved})
 
     @tool_method(effect="read")
+    @enforced_in_handler(RUN_AUTHORITY)
     async def list_pending_escalations(self, run_id: str) -> str:
         """List the escalations a run is blocked on that you may resolve.
 
@@ -403,6 +417,7 @@ class RunsToolset(Toolset):
             )
 
     @tool_method(effect="privileged")
+    @enforced_in_handler(RUN_AUTHORITY)
     async def continue_run(
         self,
         run_id: str,
@@ -428,6 +443,7 @@ class RunsToolset(Toolset):
             return json.dumps(result, default=str)
 
     @tool_method(effect="read")
+    @unrestricted("persisted run events, as GET /v1/agents/{id}/tasks/{id}/events serves them")
     async def get_events(
         self,
         run_id: str,

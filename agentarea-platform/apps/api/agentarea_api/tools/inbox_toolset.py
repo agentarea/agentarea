@@ -3,6 +3,7 @@
 import json
 from uuid import UUID
 
+from agentarea_agents.tools.platform_authz import unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
 
@@ -22,6 +23,7 @@ class InboxToolset(Toolset):
     """List tasks awaiting user action (waiting_for_approval, waiting_for_input, completed, failed)."""
 
     @tool_method(effect="read")
+    @unrestricted("the caller's own inbox, as GET /v1/inbox serves it")
     async def list(
         self,
         status: str = "",

@@ -9,6 +9,7 @@ test in ``tests/unit/test_mcp_rest_parity.py`` enforces parity.
 import json
 from uuid import UUID
 
+from agentarea_agents.tools.platform_authz import requires_workspace_admin, unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
@@ -49,6 +50,7 @@ class ProvidersToolset(Toolset):
     """Manage LLM providers: list specs, list/create/update/delete configurations."""
 
     @tool_method(effect="read")
+    @unrestricted("the provider catalog is platform data every member reads")
     async def list_specs(self) -> str:
         """List available LLM provider specifications (e.g. OpenAI, Anthropic)."""
         async with platform_context() as (
@@ -66,6 +68,7 @@ class ProvidersToolset(Toolset):
             )
 
     @tool_method(effect="read")
+    @unrestricted("configurations carry no key material and members need them to pick a model")
     async def list_configs(self) -> str:
         """List configured LLM provider connections."""
         async with platform_context() as (
@@ -91,6 +94,7 @@ class ProvidersToolset(Toolset):
             )
 
     @tool_method(effect="privileged")
+    @requires_workspace_admin()
     async def create_config(
         self,
         provider_spec_id: str,
@@ -125,6 +129,7 @@ class ProvidersToolset(Toolset):
             return json.dumps({"id": str(config.id), "name": config.name}, default=str)
 
     @tool_method(effect="privileged")
+    @requires_workspace_admin()
     async def update_config(
         self,
         config_id: str,
@@ -168,6 +173,7 @@ class ProvidersToolset(Toolset):
             return json.dumps({"id": str(config.id), "name": config.name}, default=str)
 
     @tool_method(effect="destructive")
+    @requires_workspace_admin()
     async def delete_config(self, config_id: str) -> str:
         """Delete a provider configuration."""
         async with platform_context() as (

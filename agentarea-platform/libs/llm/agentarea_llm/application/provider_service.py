@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
+from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from sqlalchemy import delete, select
@@ -137,6 +138,7 @@ class ProviderService:
         Returns:
             ProviderConfig: The created provider configuration.
         """
+        await self._assert_may_manage_configs()
         config_id = uuid4()
         config = ProviderConfig(
             id=config_id,
@@ -159,6 +161,14 @@ class ProviderService:
 
         await self._register_reference(config)
         return await self.provider_config_repo.create_config(config)
+
+    async def _assert_may_manage_configs(self) -> None:
+        """A provider config holds the key every agent in the workspace bills against.
+
+        Writing one is workspace-admin work on every door, not only the REST
+        router: the platform toolset calls these methods too.
+        """
+        await assert_workspace_admin(self.provider_config_repo.user_context)
 
     async def _require_usable_secret(self, secret_id: UUID) -> "EncryptedSecret":
         """Look up a secret the caller asked to reuse, within their workspace."""
@@ -243,6 +253,7 @@ class ProviderService:
             Optional[ProviderConfig]: The updated configuration, or ``None``
             if no config exists for ``config_id``.
         """
+        await self._assert_may_manage_configs()
         config = await self.provider_config_repo.get_by_id(config_id)
         if not config:
             return None
@@ -303,6 +314,7 @@ class ProviderService:
         Returns:
             bool: True if deleted, False otherwise.
         """
+        await self._assert_may_manage_configs()
         from agentarea_secrets.models import SecretReference
 
         config = await self.provider_config_repo.get_by_id(config_id)

@@ -331,10 +331,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         return cast(CursorResult[Any], result).rowcount > 0
 
     async def disable_trigger(self, trigger_id: UUID) -> bool:
-        """Disable a trigger."""
+        """Disable a trigger in the current workspace."""
         stmt = (
             update(TriggerORM)
-            .where(TriggerORM.id == trigger_id)
+            .where(TriggerORM.id == trigger_id, self._get_workspace_filter())
             .values(is_active=False, updated_at=datetime.utcnow())
         )
         result = await self.session.execute(stmt)
@@ -343,10 +343,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         return cast(CursorResult[Any], result).rowcount > 0
 
     async def enable_trigger(self, trigger_id: UUID) -> bool:
-        """Enable a trigger."""
+        """Enable a trigger in the current workspace."""
         stmt = (
             update(TriggerORM)
-            .where(TriggerORM.id == trigger_id)
+            .where(TriggerORM.id == trigger_id, self._get_workspace_filter())
             .values(is_active=True, updated_at=datetime.utcnow())
         )
         result = await self.session.execute(stmt)

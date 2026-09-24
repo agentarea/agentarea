@@ -13,9 +13,15 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
 from agentarea_api.tools import members_toolset
 from agentarea_api.tools.members_toolset import MembersToolset
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.identity_directory import IdentityRecord
+from agentarea_common.auth.permission import PermissionService
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import get_container
 from agentarea_common.workspaces import (
     InvitationNotFound,
     OwnerRemovalRejected,
@@ -27,6 +33,25 @@ INVITATION_ID = uuid4()
 RETURNED_ONCE = "plaintext-token"
 
 
+class _AllowAll(PermissionService):
+    async def check(self, user_id, permission, resource_type, resource_id) -> bool:
+        return True
+
+
+@pytest.fixture(autouse=True)
+def caller():
+    """The tools check the MCP caller first; this one administers the workspace."""
+    container = get_container()
+    saved = dict(container._singletons)
+    container.register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+    container.register_singleton(PermissionService, _AllowAll())
+    owner = UserContext(user_id="user-1", workspace_id="ws-1", admin_workspaces=["ws-1"])
+    with use_mcp_user_context(owner):
+        yield
+    container._singletons.clear()
+    container._singletons.update(saved)
+
+
 class FakeInvitationService:
     def __init__(self):
         self.created: list = []
@@ -34,13 +59,13 @@ class FakeInvitationService:
         self.raise_on_revoke = False
 
     async def create_invitation(self, **kwargs):
-        self.created.append(kwargs)
+        self.created.append({**kwargs, "actor": kwargs["actor"].user_id})
         return (
             SimpleNamespace(
                 id=INVITATION_ID,
                 workspace_id=kwargs["workspace_id"],
                 email=kwargs.get("email"),
-                invited_by=kwargs["invited_by"],
+                invited_by=kwargs["actor"].user_id,
                 status="pending",
                 expires_at="2026-09-01T00:00:00Z",
                 accepted_at=None,
@@ -50,7 +75,7 @@ class FakeInvitationService:
             RETURNED_ONCE,
         )
 
-    async def list_pending(self, workspace_id):
+    async def list_pending(self, *, actor, workspace_id):
         return [
             SimpleNamespace(
                 id=INVITATION_ID,
@@ -65,7 +90,7 @@ class FakeInvitationService:
             )
         ]
 
-    async def revoke(self, *, workspace_id, invitation_id):
+    async def revoke(self, *, actor, workspace_id, invitation_id):
         if self.raise_on_revoke:
             raise InvitationNotFound(str(invitation_id))
         self.revoked.append((workspace_id, invitation_id))
@@ -189,8 +214,8 @@ async def test_invite_returns_the_token_once(harness):
     assert result["token"] == RETURNED_ONCE
     assert harness.service.created == [
         {
+            "actor": "user-1",
             "workspace_id": "ws-1",
-            "invited_by": "user-1",
             "email": "new@example.com",
             "expires_in_days": 7,
         }
