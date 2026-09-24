@@ -41,6 +41,19 @@ def test_clear_removes_all():
 def test_register_overwrites_existing():
     def other_factory():
         return "other"
+
     ExtensionRegistry.register("permissions", dummy_factory)
     ExtensionRegistry.register("permissions", other_factory)
     assert ExtensionRegistry.get_factory("permissions") is other_factory
+
+
+def test_failure_is_recorded_until_registered_or_cleared():
+    ExtensionRegistry.record_failure("permissions", "ImportError: boom")
+    assert ExtensionRegistry.get_failure("permissions") == "ImportError: boom"
+
+    ExtensionRegistry.register("permissions", dummy_factory)
+    assert ExtensionRegistry.get_failure("permissions") is None
+
+    ExtensionRegistry.record_failure("permissions", "ImportError: boom")
+    ExtensionRegistry.clear()
+    assert ExtensionRegistry.get_failure("permissions") is None

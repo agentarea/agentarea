@@ -141,3 +141,58 @@ def test_process_pricing_is_resolved_once_and_lazily():
     assert first is second
     assert first.currency() == "RUB"
     assert calls == [1]
+
+
+class _EntryPoint:
+    """Stands in for an installed distribution's entry point."""
+
+    def __init__(self, name, load):
+        self.name = name
+        self.value = f"fake:{name}"
+        self._load = load
+
+    def load(self):
+        return self._load()
+
+
+def _broken_import():
+    raise ImportError("No module named 'agentarea_enterprise.pricing'")
+
+
+def _install(monkeypatch, *entry_points):
+    from agentarea_common.extensions import discovery
+
+    monkeypatch.setattr(discovery, "entry_points", lambda group: list(entry_points))
+
+
+def test_installed_extension_that_fails_to_import_does_not_fall_back_to_usd(monkeypatch):
+    """Discovery swallows the import error; resolution must not read it as "not installed"."""
+    from agentarea_common.extensions import discover_extensions
+
+    _install(monkeypatch, _EntryPoint(CUSTOMER_PRICING_EXTENSION, _broken_import))
+    discover_extensions()
+
+    with pytest.raises(CustomerPricingUnavailableError, match="failed to load: ImportError"):
+        resolve_customer_pricing()
+
+
+def test_other_extensions_failing_to_import_leave_pricing_alone(monkeypatch):
+    from agentarea_common.extensions import discover_extensions
+
+    _install(monkeypatch, _EntryPoint("audit_sink", _broken_import))
+    discover_extensions()
+
+    assert isinstance(resolve_customer_pricing(), ProviderCostPricing)
+
+
+def test_a_working_copy_of_the_extension_supersedes_a_broken_one(monkeypatch):
+    from agentarea_common.extensions import discover_extensions
+
+    _install(
+        monkeypatch,
+        _EntryPoint(CUSTOMER_PRICING_EXTENSION, _broken_import),
+        _EntryPoint(CUSTOMER_PRICING_EXTENSION, lambda: _Rub),
+    )
+    discover_extensions()
+
+    assert resolve_customer_pricing().currency() == "RUB"
