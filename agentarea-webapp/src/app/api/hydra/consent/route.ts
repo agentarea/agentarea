@@ -2,9 +2,11 @@
  * Server-side proxy for Hydra admin consent API.
  *
  * Keeps the Hydra admin URL server-side only — never exposed to the browser.
- * Every request must carry a live Kratos session: this is the choke point
- * that actually grants OAuth consent, so accepting (or even reading) a
- * consent request without an authenticated user must be impossible.
+ * Every request must carry a live Kratos session, AND that session's
+ * identity must be the subject Hydra recorded for the consent request
+ * (returned by getOAuth2ConsentRequest). A live session alone is not
+ * enough — otherwise a logged-in user B could read or accept a consent
+ * challenge that belongs to user A's login.
  *
  * GET  /api/hydra/consent?challenge=<challenge>
  *   → fetch consent request details
@@ -17,7 +19,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { hasLiveSession } from "@/lib/auth-session";
+import { getLiveSessionIdentityId } from "@/lib/auth-session";
+import { sessionMatchesConsentSubject } from "./subject-match";
 
 const HYDRA_ADMIN_URL =
   process.env.HYDRA_ADMIN_URL ||
@@ -25,8 +28,8 @@ const HYDRA_ADMIN_URL =
   "http://localhost:4445";
 const KRATOS_PUBLIC_URL = process.env.ORY_SDK_URL || "http://localhost:4433";
 
-async function requireSession(request: NextRequest): Promise<boolean> {
-  return hasLiveSession(request.headers.get("cookie"), {
+async function requireSessionIdentity(request: NextRequest): Promise<string | null> {
+  return getLiveSessionIdentityId(request.headers.get("cookie"), {
     orySdkUrl: KRATOS_PUBLIC_URL,
   });
 }
@@ -39,7 +42,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing challenge" }, { status: 400 });
   }
 
-  if (!(await requireSession(request))) {
+  const sessionIdentityId = await requireSessionIdentity(request);
+  if (!sessionIdentityId) {
     return NextResponse.json({ error: "No active session" }, { status: 401 });
   }
 
@@ -48,6 +52,12 @@ export async function GET(request: NextRequest) {
       `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent?consent_challenge=${challenge}`
     );
     const data = await res.json();
+    if (res.ok && !sessionMatchesConsentSubject(sessionIdentityId, data?.subject)) {
+      return NextResponse.json(
+        { error: "Consent request does not belong to this session" },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(data, { status: res.status });
   } catch (err) {
     console.error("[hydra/consent] Failed to fetch consent request:", err);
@@ -68,8 +78,36 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "action must be accept or reject" }, { status: 400 });
   }
 
-  if (!(await requireSession(request))) {
+  const sessionIdentityId = await requireSessionIdentity(request);
+  if (!sessionIdentityId) {
     return NextResponse.json({ error: "No active session" }, { status: 401 });
+  }
+
+  try {
+    const consentRes = await fetch(
+      `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent?consent_challenge=${challenge}`
+    );
+    if (!consentRes.ok) {
+      const errBody = await consentRes.text();
+      console.error(
+        `[hydra/consent] Failed to load consent request before ${action}:`,
+        errBody
+      );
+      return NextResponse.json(
+        { error: "Failed to load consent request" },
+        { status: consentRes.status }
+      );
+    }
+    const consentRequest = await consentRes.json();
+    if (!sessionMatchesConsentSubject(sessionIdentityId, consentRequest?.subject)) {
+      return NextResponse.json(
+        { error: "Consent request does not belong to this session" },
+        { status: 403 }
+      );
+    }
+  } catch (err) {
+    console.error("[hydra/consent] Failed to verify consent request subject:", err);
+    return NextResponse.json({ error: "Failed to verify consent request" }, { status: 500 });
   }
 
   let body: unknown;

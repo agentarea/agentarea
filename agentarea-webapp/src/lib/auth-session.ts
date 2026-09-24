@@ -53,18 +53,24 @@ export function loginRedirectPath(pathname: string, search: string): string {
   return `${LOGIN_PATH}?${params}`;
 }
 
+interface WhoamiResult {
+  tokenized: boolean;
+  identityId: string | null;
+}
+
 /**
- * Returns true only when the forwarded cookies resolve to a live Kratos
- * session that can be tokenized as an agentarea JWT.
+ * Shared whoami call behind both `hasLiveSession` and
+ * `getLiveSessionIdentityId`, so the two never drift on what counts as
+ * "live" (tokenize_as=agentarea_jwt succeeding).
  *
  * The `fetchImpl` parameter exists purely for testability.
  */
-export async function hasLiveSession(
+async function fetchWhoami(
   cookieHeader: string | null,
   opts: { orySdkUrl: string; fetchImpl?: typeof fetch }
-): Promise<boolean> {
+): Promise<WhoamiResult> {
   if (!cookieHeader) {
-    return false;
+    return { tokenized: false, identityId: null };
   }
 
   const doFetch = opts.fetchImpl ?? fetch;
@@ -88,16 +94,46 @@ export async function hasLiveSession(
     if (!response.ok) {
       // A dead/expired session is an expected outcome, not an error.
       console.warn("[auth-session] whoami non-ok response:", response.status);
-      return false;
+      return { tokenized: false, identityId: null };
     }
 
     const data = await response.json();
-    return Boolean(data?.tokenized);
+    const identityId = data?.identity?.id;
+    return {
+      tokenized: Boolean(data?.tokenized),
+      identityId: typeof identityId === "string" && identityId ? identityId : null,
+    };
   } catch (error) {
     console.error(
       "[auth-session] whoami request failed:",
       (error as Error)?.name ?? "unknown"
     );
-    return false;
+    return { tokenized: false, identityId: null };
   }
+}
+
+/**
+ * Returns true only when the forwarded cookies resolve to a live Kratos
+ * session that can be tokenized as an agentarea JWT.
+ */
+export async function hasLiveSession(
+  cookieHeader: string | null,
+  opts: { orySdkUrl: string; fetchImpl?: typeof fetch }
+): Promise<boolean> {
+  const { tokenized } = await fetchWhoami(cookieHeader, opts);
+  return tokenized;
+}
+
+/**
+ * Returns the Kratos identity id for a live session, or null when there is
+ * none. Callers that need to check "is this session allowed to act on
+ * resource X owned by identity Y" — not just "is someone logged in" — use
+ * this instead of `hasLiveSession`.
+ */
+export async function getLiveSessionIdentityId(
+  cookieHeader: string | null,
+  opts: { orySdkUrl: string; fetchImpl?: typeof fetch }
+): Promise<string | null> {
+  const { tokenized, identityId } = await fetchWhoami(cookieHeader, opts);
+  return tokenized ? identityId : null;
 }
