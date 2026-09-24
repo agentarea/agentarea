@@ -57,6 +57,14 @@ func TestOpenSandboxProviderUsesOfficialLifecycleAndExecdContracts(t *testing.T)
 			if len(request.Volumes) != 0 {
 				t.Errorf("ephemeral sandbox unexpectedly requested volumes: %+v", request.Volumes)
 			}
+			// Kubernetes rejects the pod for any container resource it does not
+			// know, and "disk" is not one.
+			if request.ResourceLimits["ephemeral-storage"] != "2147483648" || request.ResourceLimits["disk"] != "" {
+				t.Errorf("resource limits = %+v", request.ResourceLimits)
+			}
+			if request.ResourceRequests != nil {
+				t.Errorf("resource requests = %+v, want none when unconfigured", request.ResourceRequests)
+			}
 			createdMetadata = request.Metadata
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
@@ -217,6 +225,67 @@ func TestOpenSandboxProviderUsesOfficialLifecycleAndExecdContracts(t *testing.T)
 	}
 	if creates.Load() != 1 || renews.Load() != 1 || deletes.Load() != 1 {
 		t.Fatalf("calls create=%d renew=%d delete=%d", creates.Load(), renews.Load(), deletes.Load())
+	}
+}
+
+func TestOpenSandboxSendsConfiguredResourceRequests(t *testing.T) {
+	var got opensandbox.CreateSandboxRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Error(err)
+		}
+		http.Error(w, "stop after create", http.StatusBadRequest)
+	}))
+	defer server.Close()
+
+	provider, err := NewOpenSandboxProvider(OpenSandboxConfig{
+		Connection:         opensandbox.ConnectionConfig{Domain: server.URL},
+		Image:              "agentarea/runtime@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ResourceCPU:        "1000m",
+		ResourceMemory:     "1Gi",
+		ResourceStorage:    "2147483648",
+		ResourceRequestCPU: "100m",
+		LeaseTTL:           time.Minute,
+		Isolation:          "gvisor", RuntimeIdentity: "runsc-release",
+		AllowInsecure: true, EgressMode: "host-public", AllowInternetAccess: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = provider.Create(context.Background(), CreateRequest{
+		WorkspaceID: "workspace-1", TaskID: "task-1", ProvisioningID: "provision-1",
+		Supervisor: testSupervisorAttestation(),
+	})
+	if len(got.ResourceRequests) != 1 || got.ResourceRequests["cpu"] != "100m" {
+		t.Fatalf("resource requests = %+v, want only cpu=100m", got.ResourceRequests)
+	}
+}
+
+func TestOpenSandboxRejectsRequestAboveLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cfg  func(*OpenSandboxConfig)
+		want string
+	}{
+		{"cpu", func(c *OpenSandboxConfig) { c.ResourceRequestCPU = "2" }, "cpu request 2 exceeds its limit 1000m"},
+		{"memory", func(c *OpenSandboxConfig) { c.ResourceRequestMemory = "2Gi" }, "memory request 2Gi exceeds its limit 1Gi"},
+		{"unparsable", func(c *OpenSandboxConfig) { c.ResourceRequestCPU = "lots" }, `cpu request "lots"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := OpenSandboxConfig{
+				Connection:      opensandbox.ConnectionConfig{Domain: "http://opensandbox.invalid"},
+				ResourceCPU:     "1000m",
+				ResourceMemory:  "1Gi",
+				ResourceStorage: "2147483648",
+				LeaseTTL:        time.Minute,
+				Isolation:       "gvisor", RuntimeIdentity: "runsc-release",
+				AllowInsecure: true, EgressMode: "host-public", AllowInternetAccess: true,
+			}
+			tc.cfg(&cfg)
+			if _, err := NewOpenSandboxProvider(cfg); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("NewOpenSandboxProvider() error = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }
 

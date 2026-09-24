@@ -383,6 +383,8 @@ The following table lists configurable parameters of the chart and their default
 | sandboxRuntime.workspace.forcePathStyle | bool | `true` |  |
 | sandboxRuntime.resources.cpu | string | `"500m"` |  |
 | sandboxRuntime.resources.memory | string | `"512Mi"` |  |
+| sandboxRuntime.resources.cpuRequest | string | `""` | What the scheduler reserves per sandbox, when the provider schedules on Kubernetes (OpenSandbox's Kubernetes runtime). Empty reserves the full limit, which leaves a small node room for only a few sandboxes. |
+| sandboxRuntime.resources.memoryRequest | string | `""` | Memory reserved per sandbox; see cpuRequest. |
 | sandboxRuntime.manifest | object | `{}` |  |
 | sandboxRuntime.opensandbox.url | string | `""` |  |
 | sandboxRuntime.opensandbox.allowInsecure | bool | `false` |  |

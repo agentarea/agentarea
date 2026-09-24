@@ -18,6 +18,7 @@ import (
 
 	opensandbox "github.com/alibaba/OpenSandbox/sdks/sandbox/go"
 	"github.com/google/uuid"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/agentarea/mcp-manager/internal/execsupervisor"
 	"github.com/agentarea/mcp-manager/internal/sandboxcontract"
@@ -25,20 +26,24 @@ import (
 )
 
 type OpenSandboxConfig struct {
-	Connection          opensandbox.ConnectionConfig
-	Image               string
-	Entrypoint          []string
-	ResourceCPU         string
-	ResourceMemory      string
-	ResourceStorage     string
-	LeaseTTL            time.Duration
-	Isolation           string
-	RuntimeIdentity     string
-	AllowWeakDev        bool
-	AllowInsecure       bool
-	SecureAccess        *bool
-	EgressMode          string
-	AllowInternetAccess bool
+	Connection      opensandbox.ConnectionConfig
+	Image           string
+	Entrypoint      []string
+	ResourceCPU     string
+	ResourceMemory  string
+	ResourceStorage string
+	// Requests are what the scheduler reserves. Empty sends none, and a
+	// Kubernetes-backed server then reserves the full limit for every sandbox.
+	ResourceRequestCPU    string
+	ResourceRequestMemory string
+	LeaseTTL              time.Duration
+	Isolation             string
+	RuntimeIdentity       string
+	AllowWeakDev          bool
+	AllowInsecure         bool
+	SecureAccess          *bool
+	EgressMode            string
+	AllowInternetAccess   bool
 }
 
 type OpenSandboxProvider struct {
@@ -144,7 +149,42 @@ func resolveOpenSandboxResources(cfg *OpenSandboxConfig) error {
 	if cfg.ResourceStorage == "" {
 		return fmt.Errorf("OpenSandbox ephemeral storage limit is required")
 	}
+	for _, pair := range []struct{ name, request, limit string }{
+		{"cpu", cfg.ResourceRequestCPU, cfg.ResourceCPU},
+		{"memory", cfg.ResourceRequestMemory, cfg.ResourceMemory},
+	} {
+		if pair.request == "" {
+			continue
+		}
+		request, err := resource.ParseQuantity(pair.request)
+		if err != nil {
+			return fmt.Errorf("OpenSandbox %s request %q: %w", pair.name, pair.request, err)
+		}
+		limit, err := resource.ParseQuantity(pair.limit)
+		if err != nil {
+			return fmt.Errorf("OpenSandbox %s limit %q: %w", pair.name, pair.limit, err)
+		}
+		if request.Cmp(limit) > 0 {
+			return fmt.Errorf("OpenSandbox %s request %s exceeds its limit %s", pair.name, pair.request, pair.limit)
+		}
+	}
 	return nil
+}
+
+// openSandboxResourceRequests returns the configured requests, or nil so the
+// server applies its own default.
+func (p *OpenSandboxProvider) openSandboxResourceRequests() opensandbox.ResourceLimits {
+	requests := opensandbox.ResourceLimits{}
+	if p.cfg.ResourceRequestCPU != "" {
+		requests["cpu"] = p.cfg.ResourceRequestCPU
+	}
+	if p.cfg.ResourceRequestMemory != "" {
+		requests["memory"] = p.cfg.ResourceRequestMemory
+	}
+	if len(requests) == 0 {
+		return nil
+	}
+	return requests
 }
 
 func resolveOpenSandboxEgress(cfg *OpenSandboxConfig) error {
@@ -214,12 +254,16 @@ func (p *OpenSandboxProvider) Create(ctx context.Context, req CreateRequest) (*S
 		TimeoutSeconds: &ttlSeconds,
 		SecureAccess:   *p.cfg.SecureAccess,
 		NetworkPolicy:  networkPolicy,
+		// ephemeral-storage is the name Kubernetes accepts; it rejects the pod
+		// outright for "disk". The Docker runtime reads cpu and memory only and
+		// has never enforced a storage limit under either name.
 		ResourceLimits: opensandbox.ResourceLimits{
-			"cpu":    p.cfg.ResourceCPU,
-			"memory": p.cfg.ResourceMemory,
-			"disk":   p.cfg.ResourceStorage,
+			"cpu":               p.cfg.ResourceCPU,
+			"memory":            p.cfg.ResourceMemory,
+			"ephemeral-storage": p.cfg.ResourceStorage,
 		},
-		Metadata: metadata,
+		ResourceRequests: p.openSandboxResourceRequests(),
+		Metadata:         metadata,
 	})
 	if err != nil {
 		return nil, err
