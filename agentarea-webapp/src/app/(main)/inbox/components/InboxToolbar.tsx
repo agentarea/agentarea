@@ -1,13 +1,14 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { CircleAlert, CircleCheck, CircleX, Inbox } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import {
-  FILTERS,
-  type InboxCounts,
+  FILTER_KEYS,
   type FilterValue,
+  type InboxCounts,
 } from "@/app/(main)/inbox/components/inboxShared";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 
 interface InboxToolbarProps {
   counts: InboxCounts;
@@ -25,20 +26,22 @@ const FILTER_ICON: Record<FilterValue, LucideIcon> = {
 // The subtle (grey) pill: this filters the task list rather than navigating
 // the page, so it stays quieter than the selected row beneath it.
 export function InboxToolbar({ counts, filter, onChange }: InboxToolbarProps) {
+  const t = useTranslations("InboxPage.filters");
+
   return (
     <div className="flex h-full min-w-0 w-full items-center">
       <CountSegmentedControl<FilterValue>
-        items={FILTERS.map((item) => {
-          const Icon = FILTER_ICON[item.key];
+        items={FILTER_KEYS.map((key) => {
+          const Icon = FILTER_ICON[key];
           return {
-            value: item.key,
+            value: key,
             label: (
               <span className="flex items-center gap-1.5 whitespace-nowrap">
                 <Icon className="h-4 w-4" strokeWidth={1.8} />
-                {item.label}
+                {t(key)}
               </span>
             ),
-            count: counts[item.key],
+            count: counts[key],
           };
         })}
         value={filter}

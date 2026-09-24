@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { getInbox, type TaskWithAgent } from "@/lib/api";
 import { InboxClient } from "./InboxClient";
 
@@ -8,18 +9,20 @@ import { InboxClient } from "./InboxClient";
  * restores time-to-first-byte.
  */
 export async function InboxData() {
+  const t = await getTranslations("InboxPage");
   let items: TaskWithAgent[] = [];
   let error: string | null = null;
 
   try {
     const res = await getInbox();
     if (res.error) {
-      error = "Failed to load inbox";
+      error = t("loadFailed");
     } else {
-      items = ((res.data as { items?: TaskWithAgent[] } | undefined)?.items ?? []);
+      items =
+        (res.data as { items?: TaskWithAgent[] } | undefined)?.items ?? [];
     }
   } catch {
-    error = "Failed to load inbox";
+    error = t("loadFailed");
   }
 
   return <InboxClient items={items} error={error} />;

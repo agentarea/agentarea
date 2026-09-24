@@ -1,12 +1,15 @@
+import { useTranslations } from "next-intl";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Shown while the inbox page fetches on the server. Keeps the real "Inbox"
 // breadcrumb; the toolbar counts and task list are skeletoned (they need data).
 export default function InboxLoading() {
+  const t = useTranslations("InboxPage");
+
   return (
     <ContentBlock
-      header={{ breadcrumb: [{ label: "Inbox" }] }}
+      header={{ breadcrumb: [{ label: t("title") }] }}
       subheader={
         <div className="flex items-center gap-2">
           {Array.from({ length: 4 }).map((_, i) => (

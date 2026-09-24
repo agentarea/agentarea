@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormatter, useNow, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -7,23 +8,22 @@ import {
   ChevronRight,
   Clock,
   ExternalLink,
-  Inbox as InboxIcon,
   Wallet,
   X,
   Zap,
 } from "lucide-react";
-import { AgentAvatar } from "@/components/AgentAvatar";
-import { TaskConversation } from "@/components/Chat/TaskConversation";
-import { TaskStatus } from "@/components/TaskStatus";
-import { Button } from "@/components/ui/button";
 import {
   fmtCost,
   formatRelative,
   isPending,
   type InboxTask,
 } from "@/app/(main)/inbox/components/inboxShared";
-import { InboxResultMessage } from "./InboxResultMessage";
+import { AgentAvatar } from "@/components/AgentAvatar";
+import { TaskConversation } from "@/components/Chat/TaskConversation";
+import { TaskStatus } from "@/components/TaskStatus";
+import { Button } from "@/components/ui/button";
 import { extractInboxResult } from "./inboxResult";
+import { InboxResultMessage } from "./InboxResultMessage";
 
 interface InboxClientPanelProps {
   task: InboxTask | null;
@@ -37,27 +37,17 @@ export function InboxClientPanel({
   onClose,
 }: InboxClientPanelProps) {
   const router = useRouter();
+  const t = useTranslations("InboxPage");
+  const format = useFormatter();
+  const now = useNow({ updateInterval: 60_000 });
 
-  if (!task) {
-    return (
-      <div className="flex h-full flex-1 flex-col items-center justify-center px-10 text-center text-sm text-muted-foreground">
-        <InboxIcon
-          size={40}
-          strokeWidth={1.4}
-          className="mb-3 text-muted-foreground/60"
-        />
-        <div>
-          Select a task to review its output
-          <br />
-          and approve or reject the action.
-        </div>
-      </div>
-    );
-  }
+  // The empty reading pane is InboxDetailEmpty; a null task only reaches here
+  // while the mobile sheet slides shut.
+  if (!task) return null;
 
   const status = task.status;
   const pend = isPending(status);
-  const agentName = task.agent_name || "Unknown agent";
+  const agentName = task.agent_name || t("row.unknownAgent");
   const hasResult = extractInboxResult(task.result).kind !== "empty";
   const failureText = task.error || task.failure_reason;
 
@@ -80,9 +70,7 @@ export function InboxClientPanel({
       )}
       {!hasResult && !failureText && (
         <p className="text-sm text-muted-foreground">
-          {pend
-            ? "Output will be available after the action runs."
-            : "No output was returned for this task."}
+          {pend ? t("detail.outputPending") : t("detail.noOutput")}
         </p>
       )}
       {hasResult && failureText && (
@@ -106,7 +94,7 @@ export function InboxClientPanel({
               {agentName}
             </span>
             <ChevronRight size={13} aria-hidden />
-            <span className="shrink-0">Inbox review</span>
+            <span className="shrink-0">{t("detail.review")}</span>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <Link
@@ -114,15 +102,15 @@ export function InboxClientPanel({
               className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ExternalLink size={12} aria-hidden />
-              <span className="hidden sm:inline">Open chat</span>
-              <span className="sr-only sm:hidden">Open chat</span>
+              <span className="hidden sm:inline">{t("detail.openChat")}</span>
+              <span className="sr-only sm:hidden">{t("detail.openChat")}</span>
             </Link>
             <Button
               type="button"
               variant="ghost"
               size="xs"
               onClick={onClose}
-              aria-label="Close details panel"
+              aria-label={t("detail.close")}
               className="h-7 w-7 p-0"
             >
               <X size={14} strokeWidth={2} />
@@ -138,7 +126,10 @@ export function InboxClientPanel({
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-muted-foreground">
             <Clock size={13} aria-hidden />
-            <span>{formatRelative(task.created_at) || "Requested recently"}</span>
+            <span>
+              {formatRelative(format, now, task.created_at) ||
+                t("detail.requestedRecently")}
+            </span>
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 font-mono text-muted-foreground">
             <Wallet size={13} aria-hidden />
@@ -156,11 +147,12 @@ export function InboxClientPanel({
               aria-hidden
             />
             <p>
-              Approving will let the agent run{" "}
-              <b className="font-semibold text-foreground">
-                {task.escalation_tool_name || "the requested action"}
-              </b>
-              .
+              {t.rich("detail.willRun", {
+                tool: task.escalation_tool_name || t("detail.requestedAction"),
+                b: (chunks) => (
+                  <b className="font-semibold text-foreground">{chunks}</b>
+                ),
+              })}
             </p>
           </div>
         </div>
@@ -194,14 +186,14 @@ export function InboxClientPanel({
               className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-4 text-[13px] font-semibold text-red-600 transition hover:border-red-500 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-none"
             >
               <X size={16} strokeWidth={2} aria-hidden />
-              Reject
+              {t("reject")}
             </button>
             <button
               onClick={() => onResolve(task, true)}
               className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-[13px] font-semibold text-white shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-none"
             >
               <Check size={16} strokeWidth={2.2} aria-hidden />
-              Approve
+              {t("approve")}
             </button>
           </div>
         </footer>
