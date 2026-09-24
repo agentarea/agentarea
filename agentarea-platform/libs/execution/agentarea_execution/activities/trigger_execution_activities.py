@@ -311,15 +311,11 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         task_manager=task_manager,
                     )
 
-                    # Build task parameters
+                    # Carries the channel_origin replies are routed by, built from
+                    # the trigger rather than copied from the extracted event.
                     task_params = await trigger_service._build_task_parameters(
                         trigger, execution_data
                     )
-
-                    # Pass channel_origin so agent response routes back to the channel
-                    channel_origin = execution_data.get("channel_origin")
-                    if channel_origin:
-                        task_params["channel_origin"] = channel_origin
 
                     # Submit task (creates DB record AND starts Temporal workflow)
                     task = AgentTask(
