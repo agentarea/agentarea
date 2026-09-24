@@ -170,8 +170,10 @@ async def seeded(session_factory):
                 created_by=USER_ID,
                 description="Failed task within 24h",
                 status="failed",
-                started_at=now - timedelta(hours=2),
-                completed_at=now - timedelta(hours=1),
+                # Midnight, not "now - 2h": between 00:00 and 02:00 UTC that
+                # landed on yesterday and the "today" assertion failed.
+                started_at=today,
+                completed_at=now,
                 error="Something went wrong",
                 result=None,
             )
