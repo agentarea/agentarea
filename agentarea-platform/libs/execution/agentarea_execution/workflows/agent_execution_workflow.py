@@ -33,6 +33,7 @@ with workflow.unsafe.imports_passed_through():
     )
     from agentarea_governance.domain.policies import effective_policy_from_json
     from agentarea_governance.domain.tool_calls import metered_tool_call_count
+    from pydantic import ValidationError
 
     from ..interaction import resolve_interaction_capabilities
     from .context_manager import (
@@ -487,7 +488,31 @@ class AgentExecutionWorkflow:
         }
         handler = handlers.get(command)
         if handler:
-            handler(payload)
+            # An exception escaping a signal handler fails every workflow task retry.
+            try:
+                handler(payload)
+            except (ValueError, KeyError) as error:
+                reason = (
+                    "; ".join(
+                        f"{'.'.join(map(str, e['loc']))}: {e['msg']}"
+                        for e in error.errors(include_url=False)
+                    )
+                    if isinstance(error, ValidationError)
+                    else str(error)
+                )
+                workflow.logger.warning(
+                    f"Rejected malformed workflow command {command!r}: {reason}", exc_info=True
+                )
+                if self.event_manager:
+                    self.event_manager.add_event(
+                        EventTypes.WORKFLOW_COMMAND_REJECTED,
+                        {
+                            "command": command,
+                            "reason": reason,
+                            "iteration": self.state.current_iteration,
+                        },
+                    )
+                return
             if self.event_manager:
                 self.event_manager.add_event(
                     EventTypes.WORKFLOW_COMMAND_RECEIVED,
@@ -691,7 +716,9 @@ class AgentExecutionWorkflow:
         """Queue a user message for the agent's next iteration."""
         msg_id = str(workflow.uuid4())
         # Accept both "message" and "content" keys for robustness
-        text = cast(str, payload.get("message") or payload.get("content") or "")
+        text = payload.get("message") or payload.get("content") or ""
+        if not isinstance(text, str):
+            raise ValueError("message must be a string")
         if not text:
             workflow.logger.warning("queue_message received with empty text, ignoring")
             return
