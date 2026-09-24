@@ -38,7 +38,11 @@ class TestDiscoverTools:
     def service(self):
         mock_factory = MagicMock()
         mock_factory.create_repository.return_value = AsyncMock()
-        return OpenAPIConnectionService(repository_factory=mock_factory, secret_manager=AsyncMock())
+        return OpenAPIConnectionService(
+            repository_factory=mock_factory,
+            secret_manager=AsyncMock(),
+            auth_config_access_checker=AsyncMock(),
+        )
 
     @pytest.mark.flow(MainFlow.OPENAPI_CONNECTIONS)
     @pytest.mark.asyncio
@@ -108,6 +112,7 @@ class TestResolveHeaders:
         service = OpenAPIConnectionService(
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
+            auth_config_access_checker=AsyncMock(),
             auth_header_resolver=resolver,
         )
         conn = OpenAPIConnection(
@@ -141,6 +146,7 @@ class TestResolveHeaders:
         service = OpenAPIConnectionService(
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
+            auth_config_access_checker=AsyncMock(),
             auth_header_resolver=resolver,
         )
         conn = OpenAPIConnection(
@@ -160,7 +166,11 @@ class TestCreateConnection:
     def service(self):
         mock_factory = AsyncMock()
         mock_factory.create_repository.return_value = AsyncMock()
-        svc = OpenAPIConnectionService(repository_factory=mock_factory, secret_manager=AsyncMock())
+        svc = OpenAPIConnectionService(
+            repository_factory=mock_factory,
+            secret_manager=AsyncMock(),
+            auth_config_access_checker=AsyncMock(),
+        )
         svc._repo = AsyncMock()
         return svc
 
@@ -215,7 +225,11 @@ class TestUpdateConnection:
     def service(self):
         mock_factory = AsyncMock()
         mock_factory.create_repository.return_value = AsyncMock()
-        svc = OpenAPIConnectionService(repository_factory=mock_factory, secret_manager=AsyncMock())
+        svc = OpenAPIConnectionService(
+            repository_factory=mock_factory,
+            secret_manager=AsyncMock(),
+            auth_config_access_checker=AsyncMock(),
+        )
         svc._repo = AsyncMock()
         return svc
 
@@ -511,6 +525,7 @@ class TestYamlSpecWithBareDates:
         service = OpenAPIConnectionService(
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
+            auth_config_access_checker=AsyncMock(),
             allow_private_urls=True,
         )
 

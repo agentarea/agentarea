@@ -147,10 +147,10 @@ class OpenAPIConnectionService:
         self,
         repository_factory: Any,
         secret_manager: BaseSecretManager,
+        auth_config_access_checker: Callable[[UUID], Awaitable[None]],
         auth_header_resolver: (
             Callable[[UUID, str, list[str] | None], Awaitable[dict[str, str]]] | None
         ) = None,
-        auth_config_access_checker: Callable[[UUID], Awaitable[None]] | None = None,
         allow_private_urls: bool = False,
     ) -> None:
         self._repo: OpenAPIConnectionRepository = repository_factory.create_repository(
@@ -167,13 +167,10 @@ class OpenAPIConnectionService:
         Attaching one -- or keeping it while the connection's base_url moves --
         sends its stored credential to a host the caller chooses, so workspace
         membership alone is not enough. Built via
-        ``agentarea_mcp.application.auth_resolver.build_auth_config_access_checker``.
+        ``agentarea_mcp.application.auth_resolver.build_auth_config_access_checker``,
+        a required collaborator -- there is no code path where skipping this
+        check is correct, so it has no default and no silent bypass.
         """
-        if self._auth_config_access_checker is None:
-            raise RuntimeError(
-                f"Connection references auth_config_id {auth_config_id} but no "
-                "auth_config_access_checker is configured."
-            )
         await self._auth_config_access_checker(auth_config_id)
 
     async def create_connection(
