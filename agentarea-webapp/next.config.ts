@@ -2,7 +2,6 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 import packageJson from "./package.json";
 import path from "path";
-import { buildContentSecurityPolicy } from "./src/lib/csp";
 import "./src/env";
 
 const nextConfig: NextConfig = {
@@ -28,17 +27,17 @@ const nextConfig: NextConfig = {
     ];
   },
   async headers() {
-    const csp = buildContentSecurityPolicy({
-      apiOrigin: process.env.API_BROWSER_URL || process.env.API_URL,
-      oryOrigin: process.env.ORY_BROWSER_URL || process.env.ORY_SDK_URL,
-    });
+    // Content-Security-Policy is NOT set here: this webapp is configured at
+    // runtime (window.__ENV__, one built image for every environment), so an
+    // origin-bearing header baked in at build time would carry whatever the
+    // build machine's env happened to be, not the deployment's. It is set
+    // per-request in src/proxy.ts instead, from the same runtime env
+    // src/env.ts already reads. X-Content-Type-Options carries no such
+    // origin, so it is safe to bake in here.
     return [
       {
         source: "/(.*)",
-        headers: [
-          { key: "Content-Security-Policy", value: csp },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-        ],
+        headers: [{ key: "X-Content-Type-Options", value: "nosniff" }],
       },
     ];
   },

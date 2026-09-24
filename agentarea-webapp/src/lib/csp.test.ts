@@ -10,14 +10,22 @@ describe("buildContentSecurityPolicy", () => {
     expect(csp).toContain("frame-ancestors 'none'");
   });
 
-  it("scopes connect-src and form-action to 'self' when no external origins are given", () => {
+  it("never sends form-action, which would block the Kratos/Hydra redirect chains", () => {
+    const csp = buildContentSecurityPolicy({
+      apiOrigin: "https://api.agentarea.ai",
+      oryOrigin: "https://auth.agentarea.ai",
+    });
+
+    expect(csp).not.toContain("form-action");
+  });
+
+  it("scopes connect-src to 'self' when no external origins are given", () => {
     const csp = buildContentSecurityPolicy({});
 
     expect(csp).toContain("connect-src 'self'");
-    expect(csp).toContain("form-action 'self'");
   });
 
-  it("adds the API and Ory origins to connect-src and form-action when configured", () => {
+  it("adds the API and Ory origins to connect-src when configured", () => {
     const csp = buildContentSecurityPolicy({
       apiOrigin: "https://api.agentarea.ai",
       oryOrigin: "https://auth.agentarea.ai",
@@ -25,9 +33,6 @@ describe("buildContentSecurityPolicy", () => {
 
     expect(csp).toContain(
       "connect-src 'self' https://api.agentarea.ai https://auth.agentarea.ai"
-    );
-    expect(csp).toContain(
-      "form-action 'self' https://api.agentarea.ai https://auth.agentarea.ai"
     );
   });
 
