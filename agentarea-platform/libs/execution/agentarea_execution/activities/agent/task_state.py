@@ -8,6 +8,7 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import bind_workspace_scope
+from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import to_money
 from temporalio import activity
 
@@ -133,6 +134,7 @@ def make_task_state_activities(
             exceeded=spent >= request.cap_usd,
             month_to_date_usd=spent,
             cap_usd=request.cap_usd,
+            currency=get_customer_pricing().currency(),
         )
 
     @activity.defn

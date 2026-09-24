@@ -373,6 +373,8 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             if isinstance(response, dict):
                 raw_usage = response.get("usage")
                 cost_value = response.get("cost", 0.0)
+                provider_cost_value = response.get("provider_cost_usd")
+                currency_value = response.get("currency")
                 role_value = response.get("role", "assistant")
                 content_value = response.get("content", "")
                 thinking_value = response.get("thinking", "")
@@ -380,6 +382,8 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             else:
                 raw_usage = getattr(response, "usage", None)
                 cost_value = getattr(response, "cost", 0.0)
+                provider_cost_value = getattr(response, "provider_cost_usd", None)
+                currency_value = getattr(response, "currency", None)
                 role_value = getattr(response, "role", "assistant")
                 content_value = getattr(response, "content", "")
                 thinking_value = getattr(response, "thinking", "")
@@ -406,6 +410,8 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 "usage": usage_payload,
             }
             total_tokens = usage_payload.get("total_tokens", 0) if usage_payload else 0
+            if currency_value:
+                self._budget.currency = currency_value
             self._record_inference_usage(
                 cost=usage_info["cost"],
                 total_tokens=total_tokens,
@@ -446,7 +452,16 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                     # customer — from a run on the customer's own, which costs us
                     # nothing and must not be charged for twice.
                     "managed_by": (self.state.resolved_model or {}).get("managed_by"),
+                    # Billing currency — what the customer pays.
                     "cost": usage_info["cost"],
+                    # USD the provider charged, before conversion; what usage
+                    # projection records as provider cost. None when the activity
+                    # predates the field.
+                    "provider_cost_usd": (
+                        serialize_money(provider_cost_value)
+                        if provider_cost_value is not None
+                        else None
+                    ),
                     "total_cost": serialize_money(self._budget.cost),
                     "usage": usage_info,
                     "content": display_content,

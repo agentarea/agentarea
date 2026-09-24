@@ -13,7 +13,7 @@ from typing import Any, cast
 from uuid import UUID, uuid4
 
 from agentarea_common.constants import MANAGED_BY_PLATFORM
-from agentarea_common.extensions.customer_pricing import price_llm_call
+from agentarea_common.extensions.customer_pricing import get_customer_pricing, price_llm_call
 from agentarea_common.money import ZERO, serialize_money, to_money
 from agentarea_governance.domain.policies import effective_policy_from_json
 from agentarea_governance.domain.tool_calls import metered_tool_call_count
@@ -172,7 +172,11 @@ class DirectTaskManager(BaseTaskManager):
                     provider_cost_usd=to_money(response.cost),
                 )
                 if cost_used > to_money(run_budget):
-                    raise RuntimeError(f"run budget exceeded: ${cost_used}/${to_money(run_budget)}")
+                    currency = get_customer_pricing().currency()
+                    raise RuntimeError(
+                        f"run budget exceeded: {cost_used} {currency}/"
+                        f"{to_money(run_budget)} {currency}"
+                    )
 
                 assistant_msg: dict[str, Any] = {
                     "role": "assistant",

@@ -304,3 +304,37 @@ class TestCreationEntryPointsInvokeBudgetCap:
 
         mock_create.assert_not_awaited()
         mock_submit.assert_not_awaited()
+
+
+@pytest.fixture
+def rub_pricing(monkeypatch):
+    """A customer_pricing extension billing in RUB, installed as discovery would."""
+    from agentarea_common.extensions import customer_pricing
+    from agentarea_common.extensions.registry import ExtensionRegistry
+
+    class _Rub:
+        def currency(self):
+            return "RUB"
+
+        async def price_llm_call(self, **kwargs):
+            return kwargs["provider_cost_usd"] * 95
+
+    monkeypatch.setattr(ExtensionRegistry, "_factories", {"customer_pricing": _Rub})
+    customer_pricing.get_customer_pricing.cache_clear()
+    yield
+    customer_pricing.get_customer_pricing.cache_clear()
+
+
+async def test_cap_error_names_the_billing_currency(rub_pricing, workspace_id, mock_task_repo):
+    mock_task_repo.sum_spend_mtd.return_value = 75.5
+    service = _make_service(
+        governance_policy_repository=_policy_repo_with_cap("50.0"),
+        task_repository=mock_task_repo,
+    )
+
+    with pytest.raises(BudgetCapExceededError) as exc_info:
+        await service._enforce_budget_cap(workspace_id)
+
+    assert exc_info.value.currency == "RUB"
+    assert "$" not in str(exc_info.value)
+    assert "75.50 RUB" in str(exc_info.value)

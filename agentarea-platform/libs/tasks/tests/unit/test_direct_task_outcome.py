@@ -230,3 +230,60 @@ async def test_direct_execution_counts_what_the_customer_pays(monkeypatch):
             "provider_cost_usd": to_money("0.01"),
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_direct_run_budget_error_names_the_billing_currency(monkeypatch):
+    from agentarea_common.extensions import customer_pricing
+    from agentarea_common.extensions.registry import ExtensionRegistry
+
+    class _Rub:
+        def currency(self):
+            return "RUB"
+
+        async def price_llm_call(self, **kwargs):
+            return kwargs["provider_cost_usd"] * 95
+
+    monkeypatch.setattr(ExtensionRegistry, "_factories", {"customer_pricing": _Rub})
+    customer_pricing.get_customer_pricing.cache_clear()
+
+    repository = AsyncMock()
+    manager = DirectTaskManager(repository)
+    llm = SimpleNamespace(
+        complete=AsyncMock(
+            return_value=SimpleNamespace(
+                content="",
+                cost=0.1,
+                usage=SimpleNamespace(prompt_tokens=3, completion_tokens=2, total_tokens=5),
+                tool_calls=[],
+            )
+        )
+    )
+    manager._resolve_agent = AsyncMock(return_value=(llm, "", [], "model-1", True))
+    task = AgentTask(
+        title="Task",
+        description="Task",
+        query="Task",
+        user_id=str(uuid4()),
+        workspace_id=str(uuid4()),
+        agent_id=uuid4(),
+        status="running",
+        created_at=datetime.now(UTC),
+        effective_policy=EffectivePolicy(
+            budget=BudgetPolicy(run_budget_usd=to_money("1.00")),
+            tokens=TokenPolicy(max_tokens=1000, max_tokens_per_call=100),
+            execution=ExecutionLimitsPolicy(
+                max_model_turns=3,
+                max_tool_calls_per_turn=1,
+                max_tool_calls_total=1,
+            ),
+        ).to_json_dict(),
+    )
+
+    try:
+        await manager._execute(task)
+    finally:
+        customer_pricing.get_customer_pricing.cache_clear()
+
+    error = repository.update_status.await_args.kwargs["error"]
+    assert error == "run budget exceeded: 9.5 RUB/1.00 RUB"
