@@ -637,6 +637,20 @@ class UpdateTaskGovernanceSnapshotResult(BaseModel):
     error: str | None = None
 
 
+class MonthlySpendCapRequest(BaseModel):
+    """Compare the workspace's month-to-date spend with the run's monthly cap."""
+
+    workspace_id: str
+    cap_usd: Money
+    user_context_data: dict[str, Any]
+
+
+class MonthlySpendCapResult(BaseModel):
+    exceeded: bool
+    month_to_date_usd: Money
+    cap_usd: Money
+
+
 class CompactMessagesRequest(BaseModel):
     """Request to compact/summarize older messages."""
 
