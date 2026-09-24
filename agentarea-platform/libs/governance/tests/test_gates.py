@@ -52,6 +52,8 @@ async def test_cost_guard_names_the_billing_currency_not_dollars(rub_pricing):
 
     assert denied.reason == "budget exhausted (12.00/10.00 RUB)"
     assert warned.reason == "budget at 85% (8.50/10.00 RUB)"
+    allowed = await guard.execute(_ctx(execution_state={"budget_usd": 10.0, "cost_used": 1.0}))
+    assert allowed.reason == "budget ok (1.00/10.00 RUB)"
 
 
 class TestCostBudgetGuard:

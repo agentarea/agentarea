@@ -75,5 +75,7 @@ class CostBudgetGuard:
         return InterceptorResult(
             action=InterceptorAction.ALLOW,
             interceptor_name=self.name,
-            reason=f"budget ok (${cost_used:.2f}/${budget_usd:.2f})",
+            reason=(
+                f"budget ok ({cost_used:.2f}/{budget_usd:.2f} {get_customer_pricing().currency()})"
+            ),
         )

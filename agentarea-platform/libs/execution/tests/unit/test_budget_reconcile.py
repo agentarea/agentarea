@@ -81,9 +81,7 @@ def test_budget_messages_name_the_currency_learned_from_priced_calls(monkeypatch
     workflow.budget_tracker.currency = "RUB"
 
     with pytest.raises(ApplicationError) as raised:
-        workflow._record_inference_usage(
-            cost=Decimal("12"), total_tokens=10, source="LLM call"
-        )
+        workflow._record_inference_usage(cost=Decimal("12"), total_tokens=10, source="LLM call")
 
     assert "$" not in str(raised.value)
     assert "12 RUB/10 RUB" in str(raised.value)
