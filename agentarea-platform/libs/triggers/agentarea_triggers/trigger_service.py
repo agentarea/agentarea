@@ -295,11 +295,11 @@ class TriggerService:
         for field in ("validation_rules", "webhook_config"):
             sent = getattr(trigger_update, field)
             if sent is not None:
-                setattr(
-                    trigger_update,
-                    field,
-                    keep_stored_secret_fields(sent, getattr(existing_trigger, field, None)),
-                )
+                try:
+                    kept = keep_stored_secret_fields(sent, getattr(existing_trigger, field, None))
+                except ValueError as exc:
+                    raise TriggerValidationError(f"{field}: {exc}") from exc
+                setattr(trigger_update, field, kept)
 
         # Update the trigger
         updated_trigger = await self.trigger_repository.update_by_id(trigger_id, trigger_update)

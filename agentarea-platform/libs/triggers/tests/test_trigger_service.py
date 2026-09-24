@@ -473,6 +473,21 @@ class TestTriggerService:
         }
 
     @pytest.mark.asyncio
+    async def test_the_mask_is_not_stored_as_a_secret_nothing_was_stored_for(
+        self, trigger_service, mock_trigger_repository, sample_webhook_trigger
+    ):
+        sample_webhook_trigger.validation_rules = {"required_headers": ["x-old"]}
+        mock_trigger_repository.get_trigger.return_value = sample_webhook_trigger
+        mock_trigger_repository.update_by_id.return_value = sample_webhook_trigger
+
+        with pytest.raises(TriggerValidationError, match="signing_secret"):
+            await trigger_service.update_trigger(
+                sample_webhook_trigger.id,
+                TriggerUpdate(validation_rules={"signing_secret": REDACTED_SECRET}),
+            )
+        mock_trigger_repository.update_by_id.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_update_trigger_not_found(self, trigger_service, mock_trigger_repository):
         """Test trigger update when trigger doesn't exist."""
         # Setup mocks

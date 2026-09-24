@@ -364,10 +364,15 @@ def keep_stored_secret_fields(
     """``sent`` with each credential it omits, or echoes masked, taken from ``stored``.
 
     A credential sent as a real value replaces the stored one; sent as null or
-    empty it is cleared.
+    empty it is cleared. The mask sent for a credential that has no stored value
+    raises ``ValueError``: it stands for a value, and there is none to keep.
     """
     merged = dict(sent)
-    for key in SECRET_CONFIG_FIELDS & (stored or {}).keys():
+    stored_keys = (stored or {}).keys()
+    for key in SECRET_CONFIG_FIELDS & merged.keys():
+        if merged[key] == REDACTED_SECRET and key not in stored_keys:
+            raise ValueError(f"{key} has no stored value to keep; send the value itself")
+    for key in SECRET_CONFIG_FIELDS & stored_keys:
         if key not in merged or merged[key] == REDACTED_SECRET:
             merged[key] = (stored or {})[key]
     return merged
