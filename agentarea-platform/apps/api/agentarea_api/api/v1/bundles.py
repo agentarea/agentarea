@@ -18,7 +18,7 @@ from agentarea_bundles.application.service import BundleService
 from agentarea_bundles.schemas.bundle import Bundle
 from agentarea_bundles.schemas.preview import ImportPreview
 from agentarea_bundles.schemas.result import InstallResult
-from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.config import get_settings
 from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
@@ -211,7 +211,10 @@ async def analyze_bundle(
     "/install",
     response_model=InstallResult,
     dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
+        enforced_in_handler(
+            "workspace member; a bundle carrying policies needs workspace admin, "
+            "checked by BundleInstaller before anything is written"
+        )
     ],
 )
 async def install_bundle(
