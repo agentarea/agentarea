@@ -1,4 +1,4 @@
-import { DEFAULT_CURRENCY } from "@/lib/money";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import type {
   Policy,
   PolicyDocument,
@@ -21,6 +21,10 @@ const STAGE = {
   custom: "Custom enforcement",
 } as const;
 
+// Delegates all actual formatting to the shared formatMoney — this is just a
+// null/unknown-value adapter (rule params arrive as `unknown`), so the
+// sub-cent floor and sign handling in @/lib/money stay the single source of
+// truth instead of drifting via a second Intl.NumberFormat copy here.
 function fmtMoney(
   value: unknown,
   currency: string = DEFAULT_CURRENCY,
@@ -28,13 +32,7 @@ function fmtMoney(
 ): string {
   if (value === null || value === undefined) return "";
   const n = typeof value === "number" ? value : Number(value);
-  if (Number.isNaN(n)) return String(value);
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(n);
+  return formatMoney(n, currency, locale, { compact: true });
 }
 
 function fmtNum(value: unknown): string {
@@ -405,23 +403,6 @@ export interface PolicyMatrix {
   customCount: number;
 }
 
-function fmtBudgetCompact(
-  value: unknown,
-  currency: string = DEFAULT_CURRENCY,
-  locale: string = "en"
-): string {
-  if (value === null || value === undefined) return "";
-  const n = typeof value === "number" ? value : Number(value);
-  if (Number.isNaN(n)) return String(value);
-  // Whole units without cents read cleaner for caps like "$100".
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-    minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
-    maximumFractionDigits: 2,
-  }).format(n);
-}
-
 function fmtTokensCompact(value: unknown): string {
   const n = typeof value === "number" ? value : Number(value);
   if (Number.isNaN(n)) return String(value);
@@ -479,12 +460,10 @@ function buildDimensions(
       if (policy.target === "spend") {
         const period = str(p.period);
         budgetParts.push(
-          `${fmtBudgetCompact(p.amount_usd, currency, locale)}/${period === "run" ? "run" : "mo"}`
+          `${fmtMoney(p.amount_usd, currency, locale)}/${period === "run" ? "run" : "mo"}`
         );
       } else {
-        budgetParts.push(
-          `${fmtBudgetCompact(p.amount_usd, currency, locale)}/svc`
-        );
+        budgetParts.push(`${fmtMoney(p.amount_usd, currency, locale)}/svc`);
       }
     } else if (dimension === "tokens") {
       const max = p.max_tokens ?? p.max_tokens_per_call;

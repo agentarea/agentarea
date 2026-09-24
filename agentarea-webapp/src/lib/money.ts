@@ -1,5 +1,15 @@
 export const DEFAULT_CURRENCY = "USD";
 
+export interface FormatMoneyOptions {
+  /**
+   * Whole-unit amounts drop the trailing ".00" (e.g. "$100" instead of
+   * "$100.00") — for compact chip/summary displays (policy budget caps).
+   * Sub-cent precision and the "< floor" fallback below still apply, so a
+   * genuinely fractional compact amount is never hidden.
+   */
+  compact?: boolean;
+}
+
 /**
  * Format a money amount in the billing currency the workspace actually pays
  * in (see `useCurrency()` in `@/hooks/useCurrency`, backed by C2
@@ -8,21 +18,29 @@ export const DEFAULT_CURRENCY = "USD";
  * A per-task LLM cost is routinely a fraction of a cent, so:
  * - amounts under one minor unit (a cent, for USD/RUB) keep 4 fraction
  *   digits (`$0.0071`, not `$0.00`) so the real cost survives
- * - one minor unit and up formats as ordinary currency (2 digits)
- * - a positive amount too small to show even at 4 digits (would format as
- *   all zeros) renders as "< " + the smallest displayable unit, so it never
- *   reads as exactly zero
+ * - one minor unit and up formats as ordinary currency (2 digits), or 0
+ *   digits for a whole number when `compact` is set
+ * - an amount too small to show even at 4 digits (would format as all
+ *   zeros) renders as "< " + the smallest displayable unit, sign preserved
+ *   (e.g. "< -$0.0001" for a tiny negative amount), so it never reads as
+ *   exactly zero or flips sign
  */
 export function formatMoney(
   amount: number,
   currency: string = DEFAULT_CURRENCY,
-  locale: string = "en"
+  locale: string = "en",
+  options?: FormatMoneyOptions
 ): string {
   const n = Number(amount);
   const value = Number.isFinite(n) ? n : 0;
   const abs = Math.abs(value);
 
-  const fractionDigits = abs > 0 && abs < 0.01 ? 4 : 2;
+  const fractionDigits =
+    options?.compact && Number.isInteger(value)
+      ? 0
+      : abs > 0 && abs < 0.01
+        ? 4
+        : 2;
   const format = (v: number) =>
     new Intl.NumberFormat(locale, {
       style: "currency",
@@ -33,7 +51,7 @@ export function formatMoney(
 
   const smallestUnit = 10 ** -fractionDigits;
   if (abs > 0 && abs < smallestUnit / 2) {
-    return `< ${format(smallestUnit)}`;
+    return `< ${format(value < 0 ? -smallestUnit : smallestUnit)}`;
   }
 
   return format(value);

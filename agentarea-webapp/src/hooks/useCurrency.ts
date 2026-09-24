@@ -14,6 +14,14 @@ let cachedCurrency: string | null = null;
 let cachedAt = 0;
 let inflight: Promise<string> | null = null;
 
+// Every mounted useCurrency() instance registers its own refetch-and-render
+// callback here. `router.refresh()` (App Router) re-fetches Server Component
+// data but does NOT unmount already-mounted Client Components, so merely
+// clearing the module vars above would leave every live component holding
+// the previous workspace's currency for up to an hour after a workspace
+// switch — this broadcast is what actually gets them to re-render.
+const listeners = new Set<() => void>();
+
 function isFresh(): boolean {
   return cachedCurrency !== null && Date.now() - cachedAt < STALE_TIME_MS;
 }
@@ -28,6 +36,20 @@ async function fetchCurrency(): Promise<string> {
 }
 
 /**
+ * Invalidate the cached currency and force every mounted `useCurrency()`
+ * instance to refetch. Call this whenever the active workspace changes
+ * (e.g. in TeamSwitcher, before `router.refresh()`) — a workspace switch can
+ * change the billing currency (a USD workspace and a RUB workspace read the
+ * same numbers ×95 apart), and nothing else notices that switch client-side.
+ */
+export function resetCurrencyCache(): void {
+  cachedCurrency = null;
+  cachedAt = 0;
+  inflight = null;
+  listeners.forEach((reload) => reload());
+}
+
+/**
  * The workspace's billing currency (C2). Defaults to "USD" while loading and
  * on any error — a failed lookup must not block money from rendering, and
  * must never mislabel a USD amount as another currency.
@@ -39,29 +61,35 @@ export function useCurrency(): { currency: string; isLoading: boolean } {
   const [isLoading, setIsLoading] = useState<boolean>(!isFresh());
 
   useEffect(() => {
-    if (isFresh()) {
-      setCurrency(cachedCurrency as string);
-      setIsLoading(false);
-      return;
-    }
-
     let cancelled = false;
-    setIsLoading(true);
-    if (!inflight) {
-      inflight = fetchCurrency().finally(() => {
-        inflight = null;
-      });
-    }
-    inflight.then((value) => {
-      cachedCurrency = value;
-      cachedAt = Date.now();
-      if (cancelled) return;
-      setCurrency(value);
-      setIsLoading(false);
-    });
 
+    const load = () => {
+      if (isFresh()) {
+        setCurrency(cachedCurrency as string);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      if (!inflight) {
+        inflight = fetchCurrency().finally(() => {
+          inflight = null;
+        });
+      }
+      inflight.then((value) => {
+        cachedCurrency = value;
+        cachedAt = Date.now();
+        if (cancelled) return;
+        setCurrency(value);
+        setIsLoading(false);
+      });
+    };
+
+    load();
+    listeners.add(load);
     return () => {
       cancelled = true;
+      listeners.delete(load);
     };
   }, []);
 

@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { useQueryState } from "nuqs";
+import { resetCurrencyCache } from "@/hooks/useCurrency";
 import type { WorkspaceInvitationPreview } from "@/lib/api";
 import {
   INVITATION_QUERY_PARAM,
@@ -64,6 +65,9 @@ export function useInvitationDialog() {
         setAcceptFailure({ token, value: result.error });
         return;
       }
+      // Joining a workspace makes it the active one — same
+      // currency-staleness risk as switching workspaces in TeamSwitcher.
+      resetCurrencyCache();
       router.replace(workspacePath(result.slug, WORKSPACE_HOME));
       router.refresh();
     });
