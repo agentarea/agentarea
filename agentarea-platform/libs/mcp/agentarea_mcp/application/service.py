@@ -481,7 +481,8 @@ class MCPServerInstanceService:
 
         auth_repo = MCPAuthConfigRepository(self.repository.session, self.repository.user_context)
         auth_service = MCPAuthService(auth_repo, self.secret_manager)
-        await auth_service.get_for_use(auth_config_id)
+        config_id = auth_config_id if isinstance(auth_config_id, UUID) else UUID(auth_config_id)
+        await auth_service.get_for_use(config_id)
 
     @audited("mcp_instance.create", resource_type="mcp_instance")
     async def create_instance(self, payload: MCPServerInstanceCreate) -> MCPServerInstance | None:
