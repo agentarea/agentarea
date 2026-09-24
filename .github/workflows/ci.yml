@@ -612,10 +612,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # jsdom (and its undici dependency) requires Node's worker_threads.markAsUncloneable,
+      # which Node 20 (used by the other webapp jobs) does not have — the vitest workers
+      # crash on import with "webidl.util.markAsUncloneable is not a function". jsdom's own
+      # engines field wants ^22.22.2 || ^24.15.0 || >=26.0.0; 22 is the smallest bump that
+      # satisfies it and stays closest to the Node 20 used elsewhere in this workflow.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
@@ -625,7 +630,7 @@ jobs:
       - name: Cache pnpm
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'pnpm'
           cache-dependency-path: 'agentarea-webapp/pnpm-lock.yaml'
 
