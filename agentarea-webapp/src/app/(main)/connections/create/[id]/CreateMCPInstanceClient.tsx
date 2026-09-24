@@ -26,6 +26,7 @@ import { StartAgentButton } from "@/components/ui/start-agent-button";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import FormError from "@/components/FormError";
 import { cn } from "@/lib/utils";
+import { isSafeRedirectUrl } from "@/lib/safe-redirect";
 import { ToolsTable } from "../../components/ToolsTable";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
 import {
@@ -500,7 +501,11 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     try {
       const instanceId = createdInstanceId ?? (await createInstance({})).id;
       const result = await oauthAuthorizeAction({ instance_id: instanceId });
-      if (result.error || !result.data?.authorize_url) {
+      if (
+        result.error ||
+        !result.data?.authorize_url ||
+        !isSafeRedirectUrl(result.data.authorize_url)
+      ) {
         setError(apiErrorText(result.error, t("oauthDiscoveryFailed")));
         return;
       }

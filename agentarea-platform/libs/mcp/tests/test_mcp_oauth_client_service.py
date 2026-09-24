@@ -177,6 +177,104 @@ class TestFetchAsMetadata:
             async with httpx.AsyncClient() as client:
                 await svc._fetch_as_metadata(client, "https://as.example.com")
 
+    async def test_rejects_javascript_scheme_authorization_endpoint(self, monkeypatch):
+        """A malicious/compromised AS can advertise any string as
+        authorization_endpoint; build_authorize_url() concatenates it unchecked
+        into the URL the frontend navigates the browser to, so a javascript:
+        value there is a stored XSS (#482)."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": "https://as.example.com",
+                    "authorization_endpoint": "javascript:alert(document.cookie)",
+                    "token_endpoint": "https://as.example.com/token",
+                },
+            )
+
+        _patch_httpx(monkeypatch, handler)
+        svc = MCPOAuthClientService()
+        with pytest.raises(MCPOAuthDiscoveryError, match="authorization_endpoint"):
+            async with httpx.AsyncClient() as client:
+                await svc._fetch_as_metadata(client, "https://as.example.com")
+
+    async def test_rejects_javascript_scheme_token_endpoint(self, monkeypatch):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": "https://as.example.com",
+                    "authorization_endpoint": "https://as.example.com/authorize",
+                    "token_endpoint": "javascript:alert(1)",
+                },
+            )
+
+        _patch_httpx(monkeypatch, handler)
+        svc = MCPOAuthClientService()
+        with pytest.raises(MCPOAuthDiscoveryError, match="token_endpoint"):
+            async with httpx.AsyncClient() as client:
+                await svc._fetch_as_metadata(client, "https://as.example.com")
+
+    async def test_rejects_plain_http_authorization_endpoint_for_non_loopback_host(
+        self, monkeypatch
+    ):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": "https://as.example.com",
+                    "authorization_endpoint": "http://as.example.com/authorize",
+                    "token_endpoint": "https://as.example.com/token",
+                },
+            )
+
+        _patch_httpx(monkeypatch, handler)
+        svc = MCPOAuthClientService()
+        with pytest.raises(MCPOAuthDiscoveryError, match="authorization_endpoint"):
+            async with httpx.AsyncClient() as client:
+                await svc._fetch_as_metadata(client, "https://as.example.com")
+
+    async def test_rejects_malicious_registration_endpoint(self, monkeypatch):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": "https://as.example.com",
+                    "authorization_endpoint": "https://as.example.com/authorize",
+                    "token_endpoint": "https://as.example.com/token",
+                    "registration_endpoint": "javascript:alert(1)",
+                },
+            )
+
+        _patch_httpx(monkeypatch, handler)
+        svc = MCPOAuthClientService()
+        with pytest.raises(MCPOAuthDiscoveryError, match="registration_endpoint"):
+            async with httpx.AsyncClient() as client:
+                await svc._fetch_as_metadata(client, "https://as.example.com")
+
+    async def test_allows_http_for_loopback_authorization_server(self, monkeypatch):
+        """Local dev MCP servers/AS run over plain http on loopback — the same
+        carve-out the DCR redirect_uri check (mcp_oauth_as.py) already uses."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": "http://localhost:9000",
+                    "authorization_endpoint": "http://localhost:9000/authorize",
+                    "token_endpoint": "http://127.0.0.1:9000/token",
+                },
+            )
+
+        _patch_httpx(monkeypatch, handler)
+        svc = MCPOAuthClientService()
+        async with httpx.AsyncClient() as client:
+            meta = await svc._fetch_as_metadata(client, "http://localhost:9000")
+
+        assert meta.authorization_endpoint == "http://localhost:9000/authorize"
+        assert meta.token_endpoint == "http://127.0.0.1:9000/token"
+
 
 # ---------------------------------------------------------------------------
 # Full discover_auth_server flow
@@ -422,6 +520,49 @@ class TestDiscoverAuthServer:
         svc = MCPOAuthClientService()
         with pytest.raises(MCPOAuthDiscoveryError, match="protected-resource metadata"):
             await svc.discover_auth_server("https://mcp.vercel.com")
+
+    async def test_rejects_javascript_scheme_authorization_endpoint_end_to_end(
+        self, monkeypatch
+    ):
+        """Same guard, exercised through the full discovery path
+        (`oauth_preflight`/`oauth_authorize` call `discover_auth_server`, not
+        `_fetch_as_metadata` directly)."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            if url == "https://mcp.example.com/sse":
+                return httpx.Response(
+                    401,
+                    headers={
+                        "WWW-Authenticate": (
+                            "Bearer resource_metadata="
+                            '"https://mcp.example.com/.well-known/oauth-protected-resource"'
+                        )
+                    },
+                )
+            if url.endswith("/.well-known/oauth-protected-resource"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "resource": "https://mcp.example.com/sse",
+                        "authorization_servers": ["https://as.example.com"],
+                    },
+                )
+            if url.endswith("/.well-known/oauth-authorization-server"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "issuer": "https://as.example.com",
+                        "authorization_endpoint": "javascript:alert(document.cookie)",
+                        "token_endpoint": "https://as.example.com/token",
+                    },
+                )
+            raise AssertionError(f"unexpected request: {url}")
+
+        _patch_httpx(monkeypatch, handler)
+        svc = MCPOAuthClientService()
+        with pytest.raises(MCPOAuthDiscoveryError, match="authorization_endpoint"):
+            await svc.discover_auth_server("https://mcp.example.com/sse")
 
     async def test_raises_when_no_authorization_servers_listed(self, monkeypatch):
         def handler(request: httpx.Request) -> httpx.Response:
