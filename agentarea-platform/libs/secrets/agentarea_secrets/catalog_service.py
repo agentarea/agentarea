@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 from agentarea_common.auth import UserContext
+from agentarea_common.auth.authorization import is_workspace_admin
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -31,6 +32,10 @@ class SecretNotFoundError(LookupError):
 
 class ManagedSecretError(PermissionError):
     """The secret belongs to a connection, so it is not the user's to change."""
+
+
+class SecretAccessDeniedError(PermissionError):
+    """Only the secret's creator or a workspace admin may put it to use."""
 
 
 class SecretInUseError(RuntimeError):
@@ -134,6 +139,23 @@ class SecretCatalogService:
         secret = result.scalar_one_or_none()
         if secret is None:
             raise SecretNotFoundError(f"No secret {secret_id} in this workspace")
+        return secret
+
+    async def get_for_use(self, secret_id: UUID) -> EncryptedSecret:
+        """A user-owned secret the caller may wire into a connection.
+
+        Using a secret sends its value somewhere the caller chooses -- an OAuth
+        authorize URL handed back to them, a mailbox host they named -- so
+        workspace membership is not enough to select one. Only whoever created
+        it, or a workspace admin, may.
+        """
+        secret = await self._require_user_owned(secret_id)
+        if secret.created_by != self._user_context.user_id and not await is_workspace_admin(
+            self._user_context
+        ):
+            raise SecretAccessDeniedError(
+                f"Secret '{secret.secret_name}' can only be used by its creator or a workspace admin."
+            )
         return secret
 
     async def get_by_name(self, name: str) -> EncryptedSecret:
