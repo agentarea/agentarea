@@ -18,12 +18,20 @@ spec:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: sandbox-runner
     spec:
-      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      serviceAccountName: {{ include "agentarea.sandboxRunnerServiceAccountName" . }}
+      {{- with .Values.global.security.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: sandbox-runner
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ default .Values.mcpManager.image.repository .Values.mcpSandboxRunner.image.repository }}:{{ default (default .Chart.AppVersion .Values.mcpManager.image.tag) .Values.mcpSandboxRunner.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          {{- with .Values.global.security.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command:
             - /app/sandbox-runner
           env:

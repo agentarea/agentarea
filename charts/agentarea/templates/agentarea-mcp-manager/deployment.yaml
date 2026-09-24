@@ -22,15 +22,27 @@ spec:
         {{- include "agentarea.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: mcp-manager
     spec:
-      serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
+      serviceAccountName: {{ include "agentarea.mcpManagerServiceAccountName" . }}
+      {{- with .Values.global.security.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: mcp-manager
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.mcpManager.image.repository }}:{{ default .Chart.AppVersion .Values.mcpManager.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
-          {{- with .Values.mcpManager.securityContext }}
+          {{- if .Values.mcpManager.securityContext }}
+          {{/* Explicit operator override -- e.g. the "docker" backend, which needs
+               privileged access to the mounted Docker socket and cannot use the
+               restricted default below. */}}
+          securityContext:
+            {{- toYaml .Values.mcpManager.securityContext | nindent 12 }}
+          {{- else }}
+          {{- with .Values.global.security.containerSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- end }}
           ports:
             - name: http

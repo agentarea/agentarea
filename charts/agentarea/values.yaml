@@ -596,6 +596,16 @@ mcpManager:
     type: ClusterIP
     port: 80
 
+  # Dedicated service account for the manager control plane. Kept separate
+  # from the shared app service account (serviceAccount above, which carries
+  # no Kubernetes RBAC) so only this component's pods are bound to the
+  # namespaced Role that manages MCP instance/sandbox pods, services,
+  # configmaps, secrets and deployments.
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+
   # Serverless MCP instances: a container-backed instance is started on its
   # first call and reclaimed once it has gone idle, instead of running from
   # creation until it is deleted.
@@ -988,6 +998,16 @@ mcpSandboxRunner:
   image:
     repository: "" # Defaults to mcpManager.image.repository
     tag: ""        # Defaults to mcpManager.image.tag
+
+  # Dedicated service account, separate from mcp-manager's. The runner drives
+  # the same Kubernetes backend/warm-pool client and so is bound to the same
+  # namespaced Role, but as its own identity: revocable, auditable and
+  # rotatable independently of the manager control plane.
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+
   consumerGroup: agentarea-sandbox-runners
   batchSize: 1
   resources:

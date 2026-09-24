@@ -1,62 +1,122 @@
+{{- if .Values.mcpManager.enabled }}
+# Namespaced Role, not a ClusterRole: the manager and the sandbox runner
+# (internal/backends.KubernetesBackend, internal/warmpool) only ever create,
+# read, update or delete resources in the release namespace named by
+# KUBERNETES_NAMESPACE (agentarea.mcpManager.envs -> .Release.Namespace).
+# Verbs below are the ones the Go code actually calls, not the full CRUD
+# matrix: no list/watch on Services or Secrets (never listed), no update on
+# Services (never updated), no cluster-wide reach into other namespaces'
+# Secrets. See internal/backends/kubernetes_resources.go and
+# internal/warmpool/client.go for the call sites this mirrors.
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
-  name: {{ include "agentarea.fullname" . }}-mcp-manager-clusterrole
+  name: {{ include "agentarea.fullname" . }}-mcp-workload
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: mcp-manager
 rules:
-  # Namespace access
+  # ensureNamespace() reads (never lists/watches) the manager's own
+  # namespace once at startup. A namespaced Role can grant "get" on the
+  # cluster-scoped Namespace object that shares its own binding's namespace
+  # name, via resourceNames -- see the Kubernetes RBAC docs' "referring to
+  # resources" example. No ClusterRole is needed for this.
   - apiGroups: [""]
     resources: ["namespaces"]
-    verbs: ["get", "list", "watch"]
-  
-  # Core resources for MCP instance management
+    resourceNames: [{{ .Release.Namespace | quote }}]
+    verbs: ["get"]
+
+  # MCP instance pods (createDeployment's pods) and sandbox task/warm pods
+  # (internal/warmpool/client.go): listed, read, created, updated in place
+  # (status/annotations), deleted on cleanup or task completion. Never
+  # watched -- the controller-runtime client here is direct/uncached.
   - apiGroups: [""]
-    resources: ["pods", "services", "configmaps", "secrets", "persistentvolumeclaims"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  
-  # Deployment management
+    resources: ["pods"]
+    verbs: ["get", "list", "create", "update", "delete"]
+
+  # MCP instance Service (mcp-<instance>): created, read back once to check
+  # the resource graph is complete, deleted on teardown. Never listed,
+  # updated or watched.
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "create", "delete"]
+
+  # MCP instance env ConfigMap: created, read, listed (by label, for the
+  # instance inventory), updated, deleted.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "create", "update", "delete"]
+
+  # MCP instance secret (the workload's own env/credentials secret, named
+  # mcp-<instance>): created, read, updated, deleted. Never listed -- the
+  # manager has no code path that enumerates secrets, in this namespace or
+  # any other.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "delete"]
+
+  # MCP instance Deployment: created, read, listed (instance inventory),
+  # updated, deleted. ReplicaSets are never touched directly (the Deployment
+  # controller owns them) and are intentionally absent here.
   - apiGroups: ["apps"]
-    resources: ["deployments", "replicasets"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  
+    resources: ["deployments"]
+    verbs: ["get", "list", "create", "update", "delete"]
+
   # No Ingress or Gateway API permissions: MCP instances are reachable only
   # through the demand gateway, so the manager never creates a route and must
   # not be able to.
-
-  # Events for logging
-  - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["get", "list", "watch", "create"]
-  
-  # ServiceAccount for pod identity
-  - apiGroups: [""]
-    resources: ["serviceaccounts"]
-    verbs: ["get", "list", "watch"]
+  #
+  # No ServiceAccounts or Events permissions: neither binary reads or writes
+  # either resource type today.
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: {{ include "agentarea.fullname" . }}-mcp-manager-crb
+  name: {{ include "agentarea.fullname" . }}-mcp-manager
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: mcp-manager
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: {{ include "agentarea.fullname" . }}-mcp-manager-clusterrole
+  kind: Role
+  name: {{ include "agentarea.fullname" . }}-mcp-workload
 subjects:
   - kind: ServiceAccount
-    name: {{ include "agentarea.serviceAccountName" . }}
+    name: {{ include "agentarea.mcpManagerServiceAccountName" . }}
     namespace: {{ .Release.Namespace }}
+{{- if .Values.mcpSandboxRunner.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "agentarea.fullname" . }}-sandbox-runner
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sandbox-runner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "agentarea.fullname" . }}-mcp-workload
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "agentarea.sandboxRunnerServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
 ---
 # Pod metrics are namespaced. No node metrics, proxy or exec access is needed.
+# Read only by the manager's usage sampler (cmd/mcp-manager/usage.go); the
+# sandbox runner never calls it, so it is not bound to this Role.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ include "agentarea.fullname" . }}-runtime-metrics
   namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-manager
 rules:
   - apiGroups: ["metrics.k8s.io"]
     resources: ["pods"]
@@ -67,11 +127,15 @@ kind: RoleBinding
 metadata:
   name: {{ include "agentarea.fullname" . }}-runtime-metrics
   namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-manager
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: {{ include "agentarea.fullname" . }}-runtime-metrics
 subjects:
   - kind: ServiceAccount
-    name: {{ include "agentarea.serviceAccountName" . }}
+    name: {{ include "agentarea.mcpManagerServiceAccountName" . }}
     namespace: {{ .Release.Namespace }}
+{{- end }}
