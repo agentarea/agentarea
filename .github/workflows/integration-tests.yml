@@ -3,9 +3,9 @@ name: Integration Tests
 on:
   workflow_dispatch:  # Always available manually
   pull_request:
-    # The heavy jobs stay gated per-job by the `run-integration-tests` label
-    # (see each job's `if:`). Listing pull_request here is what lets a labelled
-    # PR trigger them; `labeled` re-runs the workflow the moment the label lands.
+    # The heavy jobs run on a PR when it touches what they exercise (the
+    # `changes` job), or when it carries the `run-integration-tests` label;
+    # `labeled` re-runs the workflow the moment the label lands.
     types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
@@ -28,6 +28,31 @@ env:
   TEMPORAL_HOST: localhost:7233
 
 jobs:
+  # Decides whether a PR touches what the live-stack jobs exercise. They used
+  # to run on PRs only with a label, so a worker that could not start with the
+  # deployed config (2026-09-23: 2.5h of crash-looping prod workers) went
+  # through review green and was only caught, red and ignored, on main.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      stack: ${{ steps.filter.outputs.stack }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
+        with:
+          base: ${{ github.event_name == 'pull_request' && github.base_ref || 'main' }}
+          filters: |
+            stack:
+              - 'agentarea-platform/**'
+              - 'docker-compose.yaml'
+              - 'docker-compose.ci.yaml'
+              - 'charts/agentarea/**'
+              - 'scripts/install.sh'
+              - '.github/workflows/integration-tests.yml'
+
   # Import/collection gate — runs on EVERY PR (no label, no live stack). Pytest
   # collection imports every test module, so this catches the cheap-but-common
   # class of breakage the label-gated full suite otherwise only sees post-merge
@@ -160,11 +185,11 @@ jobs:
   # Full integration tests with all services
   integration-tests:
     runs-on: ubuntu-latest
-    needs: smoke-test
+    needs: [changes, smoke-test]
     # Hard cap: a workflow that fails activation is retried by Temporal forever,
     # so a single bad test can otherwise hang the job until the 6h default.
     timeout-minutes: 30
-    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'run-integration-tests')
+    if: github.ref == 'refs/heads/main' || needs.changes.outputs.stack == 'true' || contains(github.event.pull_request.labels.*.name, 'run-integration-tests')
     services:
       postgres:
         image: postgres:15
@@ -317,8 +342,9 @@ jobs:
   api-fuzz:
     name: OpenAPI fuzz (live stack)
     runs-on: ubuntu-latest
+    needs: changes
     timeout-minutes: 30
-    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'run-integration-tests')
+    if: github.ref == 'refs/heads/main' || needs.changes.outputs.stack == 'true' || contains(github.event.pull_request.labels.*.name, 'run-integration-tests')
     steps:
       - uses: actions/checkout@v4
 
