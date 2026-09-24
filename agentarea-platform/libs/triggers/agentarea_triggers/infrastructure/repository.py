@@ -195,6 +195,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         await self.session.flush()
         await self.session.refresh(trigger_orm)
 
+        # Bypasses WorkspaceScopedRepository.create, so grant ownership explicitly.
+        await self._record_graph_ownership(trigger_orm)
+
         return self._orm_to_domain(trigger_orm)
 
     async def update_by_id(self, trigger_id: UUID, trigger_update: TriggerUpdate) -> Trigger | None:

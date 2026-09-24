@@ -199,8 +199,12 @@ class TestSchemaMigration:
         assert migrated_config_2["slack"]["webhook_url"] == "https://old.slack.com/webhook"
 
     @pytest.mark.asyncio
-    async def test_create_webhook_trigger_with_config(self, repository, mock_session):
+    async def test_create_webhook_trigger_with_config(self, repository, mock_session, monkeypatch):
         """Test creating a webhook trigger with webhook_config through repository."""
+        monkeypatch.setattr(
+            "agentarea_common.base.workspace_scoped_repository.grant_resource_owner",
+            AsyncMock(),
+        )
         # Setup
         webhook_config = {
             "api_key": "test_api_key",
