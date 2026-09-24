@@ -931,6 +931,18 @@ sandboxRuntime:
   resources:
     cpu: 500m
     memory: 512Mi
+    # -- What the scheduler reserves per sandbox, when the provider schedules on
+    # Kubernetes (OpenSandbox's Kubernetes runtime). Empty reserves the full
+    # limit, which leaves a small node room for only a few sandboxes.
+    cpuRequest: ""
+    # -- Memory reserved per sandbox; see cpuRequest.
+    memoryRequest: ""
+    # -- A sandbox's ephemeral-storage limit on Kubernetes providers. It covers
+    # the workspace plus the container's own writes and is enforced by eviction.
+    # Empty is the workspace quota (workspace.maxBytes) plus 1Gi.
+    storageLimit: ""
+    # -- Ephemeral storage reserved per sandbox. Empty reserves the full limit.
+    storageRequest: ""
 
   # External runtimes must publish exactly one explicit capability manifest.
   manifest: {}

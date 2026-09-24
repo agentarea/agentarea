@@ -383,6 +383,10 @@ The following table lists configurable parameters of the chart and their default
 | sandboxRuntime.workspace.forcePathStyle | bool | `true` |  |
 | sandboxRuntime.resources.cpu | string | `"500m"` |  |
 | sandboxRuntime.resources.memory | string | `"512Mi"` |  |
+| sandboxRuntime.resources.cpuRequest | string | `""` | What the scheduler reserves per sandbox, when the provider schedules on Kubernetes (OpenSandbox's Kubernetes runtime). Empty reserves the full limit, which leaves a small node room for only a few sandboxes. |
+| sandboxRuntime.resources.memoryRequest | string | `""` | Memory reserved per sandbox; see cpuRequest. |
+| sandboxRuntime.resources.storageLimit | string | `""` | A sandbox's ephemeral-storage limit on Kubernetes providers. It covers the workspace plus the container's own writes and is enforced by eviction. Empty is the workspace quota (workspace.maxBytes) plus 1Gi. |
+| sandboxRuntime.resources.storageRequest | string | `""` | Ephemeral storage reserved per sandbox. Empty reserves the full limit. |
 | sandboxRuntime.manifest | object | `{}` |  |
 | sandboxRuntime.opensandbox.url | string | `""` |  |
 | sandboxRuntime.opensandbox.allowInsecure | bool | `false` |  |

@@ -115,6 +115,22 @@ rendered into values-backed ConfigMaps.
   value: {{ $runtime.resources.cpu | quote }}
 - name: SANDBOX_PROVIDER_MEMORY
   value: {{ $runtime.resources.memory | quote }}
+{{- with $runtime.resources.cpuRequest }}
+- name: SANDBOX_PROVIDER_CPU_REQUEST
+  value: {{ . | quote }}
+{{- end }}
+{{- with $runtime.resources.memoryRequest }}
+- name: SANDBOX_PROVIDER_MEMORY_REQUEST
+  value: {{ . | quote }}
+{{- end }}
+{{- with $runtime.resources.storageLimit }}
+- name: SANDBOX_PROVIDER_STORAGE_LIMIT
+  value: {{ . | quote }}
+{{- end }}
+{{- with $runtime.resources.storageRequest }}
+- name: SANDBOX_PROVIDER_STORAGE_REQUEST
+  value: {{ . | quote }}
+{{- end }}
 - name: SANDBOX_ALLOW_INTERNET
   value: {{ $runtime.allowInternet | quote }}
 {{- if not (empty $runtime.manifest) }}
