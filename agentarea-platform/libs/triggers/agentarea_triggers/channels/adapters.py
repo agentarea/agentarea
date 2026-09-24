@@ -374,16 +374,11 @@ def make_a2a_webhook_sender(
 
     async def _send(channel_config: dict[str, Any], message: str) -> None:
         from agentarea_common.utils.a2a_push import push_token_secret_name
-        from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
+        from agentarea_common.utils.url_safety import UnsafeUrlError, safe_async_client
 
         url = channel_config.get("url")
         if not url or not message:
             return
-        try:
-            validate_outbound_url(url)
-        except UnsafeUrlError as e:
-            # Misconfigured/hostile target — do not retry.
-            raise FatalError(f"unsafe push webhook url: {e}") from e
 
         headers = {"Content-Type": "application/json"}
         task_id = channel_config.get("task_id")
@@ -394,8 +389,11 @@ def make_a2a_webhook_sender(
                 headers["X-A2A-Notification-Token"] = token
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with safe_async_client(timeout=30.0) as client:
                 resp = await client.post(url, content=message, headers=headers)
+        except UnsafeUrlError as e:
+            # Misconfigured/hostile target — do not retry.
+            raise FatalError(f"unsafe push webhook url: {e}") from e
         except httpx.HTTPError as e:
             raise RetryableError(f"push webhook network error: {e}") from e
 

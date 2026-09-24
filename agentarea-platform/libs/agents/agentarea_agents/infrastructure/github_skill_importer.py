@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 import httpx
+from agentarea_common.utils.url_safety import safe_async_client
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +155,7 @@ class GitHubSkillImporter:
 
         headers = self._get_headers()
 
-        async with httpx.AsyncClient(timeout=self.DEFAULT_TIMEOUT, follow_redirects=True) as client:
+        async with safe_async_client(timeout=self.DEFAULT_TIMEOUT, follow_redirects=True) as client:
             try:
                 response = await client.get(zipball_url, headers=headers)
                 self._check_response(response)

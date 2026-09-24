@@ -302,3 +302,23 @@ class TestCreateSession:
         assert len(args.session_token) > 0
         assert args.identity == {"sub": "user-1"}
         assert result is created_session
+
+
+@pytest.mark.asyncio
+class TestExchangeStaysOnPublicAddresses:
+    async def test_a_code_is_never_posted_to_a_non_public_token_url(self):
+        from agentarea_common.utils.url_safety import UnsafeUrlError
+
+        svc, _, _ = _make_service()
+        link = _link(
+            provider_config={
+                "auth_url": "https://example.com/auth",
+                "client_id": "client-id",
+                "token_url": "http://10.0.0.8/token",
+            }
+        )
+
+        with pytest.raises(UnsafeUrlError):
+            await svc.exchange_code_for_identity(
+                link, code="c", redirect_uri="https://app/cb", client_secret="s"
+            )

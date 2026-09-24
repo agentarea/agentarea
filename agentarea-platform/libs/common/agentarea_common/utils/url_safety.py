@@ -10,21 +10,48 @@ multicast and unspecified addresses.
 This is the code layer of a two-layer SSRF defense. The rebinding-proof,
 topology-aware layer is the per-cluster egress network policy; see the wiki page
 ``operations/enterprise-deployment-hardening`` in the agentarea-wiki repo.
+
+``validate_outbound_url`` is a pre-check only: it resolves the name once and the
+HTTP client resolves it again, so a rebinding name can pass it. A request to a
+member-supplied URL goes through ``safe_async_client``, whose transport resolves,
+vets and pins the address for the connection itself, on every redirect hop.
 """
 
+import asyncio
 import fnmatch
 import ipaddress
 import socket
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
+from dataclasses import dataclass, field
+from typing import Any
 from urllib.parse import urlsplit
 
-__all__ = ["UnsafeUrlError", "validate_outbound_url"]
+import httpx
+
+__all__ = [
+    "OutboundPolicy",
+    "SafeOutboundTransport",
+    "UnsafeDestinationError",
+    "UnsafeUrlError",
+    "safe_async_client",
+    "validate_outbound_url",
+]
 
 _ALLOWED_SCHEMES = frozenset({"http", "https"})
+
+IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 
 
 class UnsafeUrlError(ValueError):
     """Raised when a URL is not safe to request (bad scheme or non-public host)."""
+
+
+class UnsafeDestinationError(httpx.RequestError, UnsafeUrlError):
+    """A request the pinned client refused to send.
+
+    An ``httpx.RequestError`` so callers that already treat "could not reach
+    the host" as a failed fetch handle it the same way.
+    """
 
 
 def _host_in_allowlist(host: str, allowed_hosts: Iterable[str]) -> bool:
@@ -37,7 +64,9 @@ def _host_in_allowlist(host: str, allowed_hosts: Iterable[str]) -> bool:
     return any(fnmatch.fnmatch(host_lower, pattern.lower()) for pattern in allowed_hosts)
 
 
-def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+def _is_blocked_ip(ip: IPAddress) -> bool:
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
     return (
         ip.is_private
         or ip.is_loopback
@@ -45,6 +74,9 @@ def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
         or ip.is_reserved
         or ip.is_multicast
         or ip.is_unspecified
+        # Shared address space (100.64.0.0/10) and the other special-purpose
+        # ranges; some clouds serve instance metadata from there.
+        or not ip.is_global
     )
 
 
@@ -53,6 +85,7 @@ def validate_outbound_url(
     *,
     allow_private: bool = False,
     allowed_hosts: Iterable[str] | None = None,
+    policy: "OutboundPolicy | None" = None,
 ) -> None:
     """Validate that ``url`` is safe to fetch; raise ``UnsafeUrlError`` otherwise.
 
@@ -70,6 +103,9 @@ def validate_outbound_url(
     an empty iterable means default-deny. Container-hosted MCPs egress out of the
     platform's sight — those are enforced by the enterprise EgressEnforcer, not
     here.
+
+    ``policy``, when given, replaces ``allow_private``: the check then admits
+    exactly what ``safe_async_client`` with that policy would connect to.
     """
     parts = urlsplit(url)
     scheme = parts.scheme.lower()
@@ -83,7 +119,7 @@ def validate_outbound_url(
     if allowed_hosts is not None and not _host_in_allowlist(host, allowed_hosts):
         raise UnsafeUrlError(f"URL host {host!r} is not in the egress allowlist; refusing request")
 
-    if allow_private:
+    if policy.allow_private if policy is not None else allow_private:
         return
 
     port = parts.port or (443 if scheme == "https" else 80)
@@ -97,7 +133,139 @@ def validate_outbound_url(
         # for the type checker (the stub types the tuple element as str | int).
         addr = str(info[4][0]).split("%")[0]  # strip IPv6 zone id (e.g. fe80::1%eth0)
         ip = ipaddress.ip_address(addr)
-        if _is_blocked_ip(ip):
+        blocked = _is_blocked_ip(ip) if policy is None else not policy.permits(host, ip)
+        if blocked:
             raise UnsafeUrlError(
                 f"URL host {host!r} resolves to non-public address {ip}; refusing request"
             )
+
+
+@dataclass(frozen=True)
+class OutboundPolicy:
+    """Which non-public destinations a member-supplied URL may still reach.
+
+    ``private_allowlist`` holds host globs (``localhost``, ``*.svc.cluster.local``)
+    and CIDRs (``192.168.1.0/24``) for deployments that legitimately target a
+    private endpoint, such as a local Ollama. ``allow_private`` is the existing
+    blanket opt-out (``ALLOW_PRIVATE_URLS``). Both default to closed.
+    """
+
+    allow_private: bool = False
+    private_allowlist: tuple[str, ...] = ()
+    _networks: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = field(
+        init=False, repr=False, compare=False
+    )
+    _host_patterns: tuple[str, ...] = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        """Split the allowlist into CIDRs and host globs; a malformed CIDR raises."""
+        networks = []
+        patterns = []
+        for entry in self.private_allowlist:
+            if "/" in entry:
+                networks.append(ipaddress.ip_network(entry, strict=False))
+            else:
+                patterns.append(entry.lower())
+        object.__setattr__(self, "_networks", tuple(networks))
+        object.__setattr__(self, "_host_patterns", tuple(patterns))
+
+    @classmethod
+    def from_env(cls) -> "OutboundPolicy":
+        from agentarea_common.config.app import AppSettings
+        from agentarea_common.config.mcp import MCPSettings
+
+        raw = AppSettings().OUTBOUND_PRIVATE_ALLOWLIST
+        return cls(
+            allow_private=MCPSettings().ALLOW_PRIVATE_URLS,
+            private_allowlist=tuple(e.strip() for e in raw.split(",") if e.strip()),
+        )
+
+    def permits(self, host: str, ip: IPAddress) -> bool:
+        if not _is_blocked_ip(ip) or self.allow_private:
+            return True
+        if any(fnmatch.fnmatch(host.lower(), pattern) for pattern in self._host_patterns):
+            return True
+        return any(ip in network for network in self._networks)
+
+
+Resolver = Callable[[str, int], Awaitable[list[str]]]
+
+
+async def _resolve(host: str, port: int) -> list[str]:
+    infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    return [str(info[4][0]).split("%")[0] for info in infos]
+
+
+class SafeOutboundTransport(httpx.AsyncBaseTransport):
+    """Sends each request only to an address it resolved and vetted itself.
+
+    The request goes to that IP, with the original name kept in the Host header
+    and as the TLS server name, so a name cannot resolve to one address when
+    vetted and another when connected. The client hands every redirect hop back
+    through here, so each hop is vetted the same way.
+    """
+
+    def __init__(
+        self,
+        policy: OutboundPolicy,
+        *,
+        resolve: Resolver = _resolve,
+        inner: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self._policy = policy
+        self._resolve = resolve
+        self._inner = inner or httpx.AsyncHTTPTransport(trust_env=False)
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        url = request.url
+        if url.scheme not in _ALLOWED_SCHEMES:
+            raise UnsafeDestinationError(
+                f"URL scheme {url.scheme!r} is not allowed", request=request
+            )
+        host = url.host
+        if not host:
+            raise UnsafeDestinationError("URL has no host", request=request)
+
+        try:
+            addresses = [ipaddress.ip_address(host)]
+        except ValueError:
+            port = url.port or (443 if url.scheme == "https" else 80)
+            try:
+                resolved = await self._resolve(host, port)
+            except OSError as exc:
+                raise UnsafeDestinationError(
+                    f"Could not resolve host {host!r}", request=request
+                ) from exc
+            addresses = [ipaddress.ip_address(addr) for addr in resolved]
+        if not addresses:
+            raise UnsafeDestinationError(f"Host {host!r} has no address", request=request)
+        for ip in addresses:
+            if not self._policy.permits(host, ip):
+                raise UnsafeDestinationError(
+                    f"URL host {host!r} resolves to non-public address {ip}; refusing request",
+                    request=request,
+                )
+
+        extensions: dict[str, Any] = dict(request.extensions)
+        if url.scheme == "https" and str(addresses[0]) != host:
+            extensions.setdefault("sni_hostname", host)
+        pinned = httpx.Request(
+            request.method,
+            url.copy_with(host=str(addresses[0])),
+            headers=request.headers,
+            stream=request.stream,
+            extensions=extensions,
+        )
+        return await self._inner.handle_async_request(pinned)
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
+
+
+def safe_async_client(*, policy: OutboundPolicy | None = None, **kwargs: Any) -> httpx.AsyncClient:
+    """``httpx.AsyncClient`` for a URL a member supplied, directly or via a document.
+
+    Takes the ``httpx.AsyncClient`` keyword arguments except ``transport``.
+    """
+    transport = SafeOutboundTransport(policy or OutboundPolicy.from_env())
+    return httpx.AsyncClient(transport=transport, **kwargs)

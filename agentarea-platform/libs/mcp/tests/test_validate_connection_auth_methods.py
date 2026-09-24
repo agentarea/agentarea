@@ -32,13 +32,13 @@ def _service(spec_url: str | None = URL) -> MCPServerInstanceService:
 
 
 def _client_returning(status_code: int, headers: dict[str, str] | None = None):
-    """Patch httpx.AsyncClient so `async with` yields a client whose GET answers once."""
+    """Patch the outbound client so `async with` yields a client whose GET answers once."""
     resp = MagicMock(status_code=status_code, headers=httpx.Headers(headers or {}))
     client = MagicMock()
     client.get = AsyncMock(return_value=resp)
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=None)
-    return patch("agentarea_mcp.application.service.httpx.AsyncClient", return_value=client)
+    return patch("agentarea_mcp.application.service.safe_async_client", return_value=client)
 
 
 def _oauth(status: str):
@@ -86,7 +86,7 @@ class TestDetectAuthMethods:
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=None)
         with (
-            patch("agentarea_mcp.application.service.httpx.AsyncClient", return_value=client),
+            patch("agentarea_mcp.application.service.safe_async_client", return_value=client),
             _oauth("unsupported"),
         ):
             assert await _service()._detect_auth_methods(URL) == []
