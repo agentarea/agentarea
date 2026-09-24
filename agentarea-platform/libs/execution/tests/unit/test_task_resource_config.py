@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from agentarea_agents_sdk.tools.tool_manager import DiscoveryResult, ProviderDiscovery
 from agentarea_common.auth.context import UserContext
 from agentarea_execution.activities import agent_execution_activities as activities
 from agentarea_execution.models import (
@@ -224,12 +225,9 @@ async def test_both_discovery_modes_use_resolved_run_tools(
     ctx.get_agent_service.return_value.get.return_value = saved
     manager = MagicMock()
     manager.discover_available_tools_split = AsyncMock(
-        return_value=SimpleNamespace(
-            explicit_tools=[],
-            searchable_entries=[],
-        )
+        return_value=DiscoveryResult(explicit_tools=[], searchable_entries=[])
     )
-    manager.discover_tool_providers = AsyncMock(return_value=[])
+    manager.discover_tool_providers = AsyncMock(return_value=ProviderDiscovery())
     monkeypatch.setattr(activities, "ToolManager", MagicMock(return_value=manager))
 
     await functions[mode](

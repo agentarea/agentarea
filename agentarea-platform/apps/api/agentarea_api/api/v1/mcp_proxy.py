@@ -26,6 +26,7 @@ from urllib.request import getproxies_environment
 from uuid import UUID
 
 import httpx
+from agentarea_agents_sdk.tools.mcp_tool_identity import mcp_tool_target
 from agentarea_api.api.deps.services import (
     BaseSecretManagerDep,
     DatabaseSessionDep,
@@ -117,9 +118,14 @@ async def authorize_mcp_tool_call(
     user_context,
     session,
     *,
+    instance_id: UUID,
     policy: dict[str, Any] | None = None,
 ) -> None:
-    """Deny one MCP tool call when the workspace policy does not permit it."""
+    """Deny one MCP tool call when the workspace policy does not permit it.
+
+    ``tool_name`` is the raw name the server advertises; a rule may also name the
+    tool through its server as ``mcp:<instance id>:<tool>``.
+    """
     if policy is None:
         resolver = GovernancePolicyResolver(RepositoryFactory(session, user_context))
         snapshot = await resolver.resolve(
@@ -128,7 +134,9 @@ async def authorize_mcp_tool_call(
         )
         policy = snapshot.to_json_dict()
 
-    decision = decide_tool_policy(policy, tool_name)
+    decision = decide_tool_policy(
+        policy, tool_name, aliases=(mcp_tool_target(str(instance_id), tool_name),)
+    )
     if not decision.allowed:
         raise HTTPException(
             status_code=403,
@@ -136,7 +144,9 @@ async def authorize_mcp_tool_call(
         )
 
 
-async def _authorize_mcp_tool_calls(body: bytes, user_context, session) -> None:
+async def _authorize_mcp_tool_calls(
+    body: bytes, user_context, session, *, instance_id: UUID
+) -> None:
     """Deny JSON-RPC tool calls the governance policy does not permit.
 
     The proxy has no task snapshot, so it resolves the workspace+user policy at
@@ -166,6 +176,7 @@ async def _authorize_mcp_tool_calls(body: bytes, user_context, session) -> None:
             tool_name,
             user_context,
             session,
+            instance_id=instance_id,
             policy=policy,
         )
 
@@ -355,7 +366,7 @@ async def proxy_instance(
 
     body = await request.body() if request.method in ("POST", "DELETE") else None
     if request.method == "POST" and body is not None:
-        await _authorize_mcp_tool_calls(body, user_context, db_session)
+        await _authorize_mcp_tool_calls(body, user_context, db_session, instance_id=instance.id)
     params = dict(request.query_params)
 
     client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=None, write=30, pool=10))

@@ -68,10 +68,10 @@ export function buildExecutionResources({
 
     const available =
       resolved?.status === "instance" ? resolved.availableTools : [];
-    const allowed = settings?.allowed_tools ?? [];
-    const restricted = allowed.length > 0;
+    const allowed = settings?.allowed_tools ?? null;
+    const restricted = allowed !== null;
     const serverApproval = Boolean(settings?.requires_user_confirmation);
-    const tools = restricted
+    const tools = allowed
       ? allowed.map((permission) => ({
           name: permission.tool_name,
           approval:
@@ -168,7 +168,7 @@ export function buildExecutionResources({
     type: "code" | "openapi";
     approval: boolean;
     disabledMethods: string[];
-    allowedTools: string[];
+    allowedTools: string[] | null;
   }>((tool) => {
     if (tool.type === "code") {
       return [
@@ -178,7 +178,7 @@ export function buildExecutionResources({
           type: tool.type,
           approval: Boolean(tool.settings?.requires_user_confirmation),
           disabledMethods: tool.settings?.disabled_methods ?? [],
-          allowedTools: [],
+          allowedTools: null,
         },
       ];
     }
@@ -190,7 +190,7 @@ export function buildExecutionResources({
           type: tool.type,
           approval: Boolean(tool.settings?.requires_user_confirmation),
           disabledMethods: [],
-          allowedTools: tool.settings?.allowed_tools ?? [],
+          allowedTools: tool.settings?.allowed_tools ?? null,
         },
       ];
     }

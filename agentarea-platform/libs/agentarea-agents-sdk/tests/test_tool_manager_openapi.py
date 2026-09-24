@@ -176,11 +176,13 @@ class TestToolManagerOpenAPIBranch:
         ]
 
         manager = ToolManager(openapi_connection_service=openapi_svc)
-        providers = await manager.discover_tool_providers(
-            agent_id=uuid4(),
-            tools_config=tools_config,
-            mcp_server_instance_service=mcp_svc,
-        )
+        providers = (
+            await manager.discover_tool_providers(
+                agent_id=uuid4(),
+                tools_config=tools_config,
+                mcp_server_instance_service=mcp_svc,
+            )
+        ).providers
 
         openapi_providers = [p for p in providers if p.provider_type == "openapi"]
         assert len(openapi_providers) == 1
@@ -197,11 +199,13 @@ class TestToolManagerOpenAPIBranch:
         ]
 
         manager = ToolManager(openapi_connection_service=openapi_svc)
-        providers = await manager.discover_tool_providers(
-            agent_id=uuid4(),
-            tools_config=tools_config,
-            mcp_server_instance_service=mcp_svc,
-        )
+        providers = (
+            await manager.discover_tool_providers(
+                agent_id=uuid4(),
+                tools_config=tools_config,
+                mcp_server_instance_service=mcp_svc,
+            )
+        ).providers
 
         openapi_provider = next(p for p in providers if p.provider_type == "openapi")
         catalog = openapi_provider.get_catalog_entry()

@@ -576,12 +576,22 @@ class TestOpenAPIToolFactory:
         assert len(tools) == 2
 
     @pytest.mark.asyncio
-    async def test_empty_allowed_tools_returns_all(self):
+    async def test_empty_allowed_tools_returns_none(self):
         conn = _make_connection(spec_content=_MINIMAL_SPEC)
         svc = AsyncMock()
         svc.get_connection = AsyncMock(return_value=conn)
 
         tools = await mod.OpenAPIToolFactory.create_tools_from_connection(conn.id, [], svc)
+
+        assert tools == []
+
+    @pytest.mark.asyncio
+    async def test_absent_allowed_tools_returns_all(self):
+        conn = _make_connection(spec_content=_MINIMAL_SPEC)
+        svc = AsyncMock()
+        svc.get_connection = AsyncMock(return_value=conn)
+
+        tools = await mod.OpenAPIToolFactory.create_tools_from_connection(conn.id, None, svc)
 
         assert len(tools) == 3
 

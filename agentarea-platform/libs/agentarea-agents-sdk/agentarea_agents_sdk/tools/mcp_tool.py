@@ -35,6 +35,7 @@ class MCPTool(BaseTool):
             mcp_server_instance_service: Service for MCP operations
         """
         self._name = name
+        self.raw_name = name
         self._description = description
         self._schema = schema
         self.server_instance_id = server_instance_id
@@ -43,6 +44,10 @@ class MCPTool(BaseTool):
     @property
     def name(self) -> str:
         return self._name
+
+    def expose_as(self, model_name: str) -> None:
+        """Offer the tool to the model under ``model_name``; the server still gets ``raw_name``."""
+        self._name = model_name
 
     @property
     def description(self) -> str:
@@ -74,7 +79,7 @@ class MCPTool(BaseTool):
             )
             execute_result = service_execute(
                 self.server_instance_id,
-                self.name,
+                self.raw_name,
                 kwargs,
             )
             result = await execute_result if isawaitable(execute_result) else execute_result

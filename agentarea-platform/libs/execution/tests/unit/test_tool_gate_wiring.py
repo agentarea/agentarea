@@ -48,3 +48,25 @@ async def test_branch_calls_gate_and_aborts_on_deny(method_name):
     # Denied -> branch returns without touching any downstream executor.
     assert result is None
     wf._gate_tool_call.assert_awaited_once_with(tool_call)
+
+
+def _offering(*names: str) -> AgentExecutionWorkflow:
+    wf = _workflow()
+    wf.state = SimpleNamespace(
+        available_tools=[{"type": "function", "function": {"name": n}} for n in names],
+        effective_policy={},
+        mcp_tool_routes={},
+    )
+    wf._deny_tool_call = AsyncMock()
+    return wf
+
+
+@pytest.mark.asyncio
+async def test_gate_refuses_a_tool_the_model_was_not_offered():
+    wf = _offering("mcp__github__search")
+    tool_call = _tool_call("mcp__github__delete_repo")
+
+    assert await wf._gate_tool_call(tool_call) is False
+    wf._deny_tool_call.assert_awaited_once_with(
+        tool_call, "mcp__github__delete_repo", "tool is not available to this agent"
+    )

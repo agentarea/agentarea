@@ -57,6 +57,8 @@ with workflow.unsafe.imports_passed_through():
         filter_disclosed_tools,
         resolve_effective_budget,
         sanitize_tool_event_value,
+        tool_definition_name,
+        tool_policy_aliases,
     )
     from .models import (
         AgentExecutionState,
@@ -948,6 +950,8 @@ class AgentExecutionWorkflow:
                 retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
 
+            self.state.mcp_tool_routes = dict(providers_result.mcp_tool_routes)
+
             # Reconstruct ToolProviders from serialized data
             providers = []
             for pd in providers_result.providers:
@@ -986,6 +990,8 @@ class AgentExecutionWorkflow:
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
             )
+
+            self.state.mcp_tool_routes = dict(tools_result.mcp_tool_routes)
 
             # Normalize tools to list[dict] for state storage, accepting multiple shapes
             available_tools: list[dict[str, Any]] = []
@@ -1291,7 +1297,9 @@ class AgentExecutionWorkflow:
 
         # Disclosure is a PDP decision: never offer the model a tool the gate
         # would reject (same policy, one decision, both ends).
-        disclosed = filter_disclosed_tools(self.state.effective_policy, available_tools)
+        disclosed = filter_disclosed_tools(
+            self.state.effective_policy, available_tools, self.state.mcp_tool_routes
+        )
         withheld = len(available_tools) - len(disclosed)
         if withheld:
             workflow.logger.info(f"Policy withheld {withheld} tool(s) from the model")
@@ -1381,6 +1389,7 @@ class AgentExecutionWorkflow:
         self.state.activated_tool_sources = state.activated_tool_sources
         self.state.searchable_tool_pool = state.searchable_tool_pool
         self.state.revealed_openapi_tools = state.revealed_openapi_tools
+        self.state.mcp_tool_routes = state.mcp_tool_routes
         # Re-instantiate disclosure policy stateless from pool presence so
         # post-replay tool dispatch can route load_tools and rebuild the
         # catalog block on subsequent iterations.
@@ -1555,6 +1564,7 @@ class AgentExecutionWorkflow:
             activated_tool_sources=self.state.activated_tool_sources,
             searchable_tool_pool=self.state.searchable_tool_pool,
             revealed_openapi_tools=self.state.revealed_openapi_tools,
+            mcp_tool_routes=self.state.mcp_tool_routes,
             service_budget_usd=self.state.service_budget_usd,
             service_cost_used=self.state.service_cost_used,
             wallet_id=self.state.wallet_id,
@@ -3233,7 +3243,11 @@ class AgentExecutionWorkflow:
             tool_call_id=tool_call.id,
             tool_name=tool_name,
             tool_args=tool_args,
-            approvers=approvers_for_tool(self.state.effective_policy, tool_name),
+            approvers=approvers_for_tool(
+                self.state.effective_policy,
+                tool_name,
+                tool_policy_aliases(self.state.mcp_tool_routes, tool_name),
+            ),
         )
         self._pending_escalations[escalation_id] = escalation
         self.state.status = ExecutionStatus.WAITING_FOR_APPROVAL
@@ -3338,7 +3352,18 @@ class AgentExecutionWorkflow:
         except (json.JSONDecodeError, KeyError):
             tool_args = {}
 
-        decision = decide_tool_action(self.state.effective_policy, tool_name)
+        # The model may only call what it was offered: a name it invented, recalled
+        # from earlier context, or read in a skill never reaches an executor.
+        offered = {name for t in self.state.available_tools if (name := tool_definition_name(t))}
+        if tool_name not in offered:
+            await self._deny_tool_call(tool_call, tool_name, "tool is not available to this agent")
+            return False
+
+        decision = decide_tool_action(
+            self.state.effective_policy,
+            tool_name,
+            tool_policy_aliases(self.state.mcp_tool_routes, tool_name),
+        )
         workflow.logger.info(f"Tool '{tool_name}' policy decision: {decision.value}")
 
         if decision is ToolAction.DENY:
@@ -3387,12 +3412,15 @@ class AgentExecutionWorkflow:
                     f"Missing workspace_id in workflow state for task {self.state.task_id}"
                 )
 
+            mcp_route = self.state.mcp_tool_routes.get(tool_name)
             mcp_request = MCPToolRequest(
                 tool_name=tool_name,
                 tool_args=tool_args,
-                server_instance_id=None,
+                server_instance_id=UUID(mcp_route.instance_id) if mcp_route else None,
+                mcp_route=mcp_route,
                 workspace_id=workspace_id,
                 user_id=self.state.user_context_data.get("user_id"),
+                user_context_data=self.state.user_context_data,
                 task_id=str(self.state.task_id),
                 execution_id=self.state.execution_id,
                 tool_call_id=tool_call.id,
@@ -3839,7 +3867,11 @@ class AgentExecutionWorkflow:
             )
             return
 
-        new_tools = self._tool_catalog.activate(source_name)
+        new_tools = filter_disclosed_tools(
+            self.state.effective_policy,
+            self._tool_catalog.activate(source_name),
+            self.state.mcp_tool_routes,
+        )
         if new_tools:
             self.state.available_tools.extend(new_tools)
             # Track activated sources for continue-as-new

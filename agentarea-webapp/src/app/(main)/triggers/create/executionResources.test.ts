@@ -96,6 +96,21 @@ describe("automation execution resources", () => {
     ]);
   });
 
+  it("treats an empty tool selection as no tools, not all tools", () => {
+    const result = buildExecutionResources({
+      ...base,
+      agent: {
+        ...agent,
+        tools: [
+          { type: "mcp", name: mcp.id, settings: { allowed_tools: [] } },
+          { type: "openapi", name: "CRM", settings: { allowed_tools: [] } },
+        ],
+      },
+    });
+    expect(result.mcps[0]).toMatchObject({ restricted: true, tools: [] });
+    expect(result.capabilities[0]).toMatchObject({ allowedTools: [] });
+  });
+
   it("shows an unrestricted task addition with concrete tools and removable task origin", () => {
     const result = buildExecutionResources({
       ...base,

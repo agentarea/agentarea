@@ -80,6 +80,7 @@ export default function AgentForm({
     register,
     control,
     setValue,
+    getValues,
     handleSubmit,
     watch,
     formState: { errors },
@@ -297,6 +298,7 @@ export default function AgentForm({
             <ToolConfig
               control={control}
               setValue={setValue}
+              getValues={getValues}
               errors={errors}
               toolFields={toolFields}
               removeTool={removeTool}
