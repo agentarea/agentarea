@@ -11,6 +11,7 @@ from uuid import UUID
 from agentarea_common.audit import audited
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
+from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.utils.slug import generate_slug
 
 from agentarea_agents.application.skill_parser import SkillParser
@@ -894,6 +895,11 @@ class SkillService:
     # Skill member management (skill-as-bundle / self-referential)
     # ------------------------------------------------------------------
 
+    async def _require_skill(self, skill_id: UUID | str) -> None:
+        """Resolve a bundle end in this workspace; a foreign id is not found."""
+        if await self._get_repository().get_by_id(skill_id) is None:
+            raise NotFoundError("Skill not found")
+
     async def add_member(
         self,
         parent_skill_id: UUID | str,
@@ -915,8 +921,8 @@ class SkillService:
             Created or updated SkillMember.
 
         Raises:
-            ValueError: If the parent or child skill is not found, or if adding
-                        the child would create a cycle.
+            NotFoundError: If the parent or child skill is not in this workspace.
+            ValueError: If adding the child would create a cycle.
         """
         from uuid import UUID as _UUID
 
@@ -927,6 +933,8 @@ class SkillService:
 
         if parent_id == child_id:
             raise ValueError("A skill cannot be a member of itself")
+        await self._require_skill(parent_id)
+        await self._require_skill(child_id)
 
         # Fetch existing members and simulate adding the new one for cycle detection
         existing = await repo.get_members(parent_id)
@@ -964,6 +972,7 @@ class SkillService:
         from uuid import UUID as _UUID
 
         repo = self._get_repository()
+        await self._require_skill(parent_skill_id)
         return await repo.remove_member(
             _UUID(str(parent_skill_id)),
             _UUID(str(child_skill_id)),
@@ -978,6 +987,7 @@ class SkillService:
         from uuid import UUID as _UUID
 
         repo = self._get_repository()
+        await self._require_skill(parent_skill_id)
         return await repo.get_members(_UUID(str(parent_skill_id)))
 
     async def flatten(self, parent_skill_id: UUID | str) -> list[UUID]:
@@ -989,6 +999,7 @@ class SkillService:
         from uuid import UUID as _UUID
 
         repo = self._get_repository()
+        await self._require_skill(parent_skill_id)
         members = await repo.get_members(_UUID(str(parent_skill_id)))
         return _topological_sort(members)
 

@@ -171,7 +171,9 @@ async def get_network_topology(
             query = (
                 select(Agent)
                 .where(Agent.workspace_id.in_(accessible_workspaces))
-                .options(selectinload(Agent.skills))
+                .options(
+                    selectinload(Agent.skills.and_(Skill.workspace_id.in_(accessible_workspaces)))
+                )
             )
             result = await session.execute(query)
             return list(result.scalars().all())

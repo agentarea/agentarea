@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from agentarea_agents.domain.models import Agent
-from agentarea_agents.domain.skill_models import agent_skills_table
+from agentarea_agents.domain.skill_models import Skill, agent_skills_table
 
 
 class AgentRepository(WorkspaceScopedRepository[Agent]):
@@ -57,7 +57,13 @@ class AgentRepository(WorkspaceScopedRepository[Agent]):
             select(self.model_class)
             .where(self.model_class.id == agent_id)
             .where(self._get_workspace_filter())
-            .options(selectinload(self.model_class.skills))
+            .options(
+                selectinload(
+                    self.model_class.skills.and_(
+                        Skill.workspace_id == self.user_context.workspace_id
+                    )
+                )
+            )
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
