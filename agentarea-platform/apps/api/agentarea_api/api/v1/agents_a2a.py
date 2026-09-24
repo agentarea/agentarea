@@ -25,6 +25,7 @@ from agentarea_api.api.deps.services import (
     get_secret_manager,
     get_task_service,
 )
+from agentarea_api.api.v1._task_authority import assert_may_act_on_task
 from agentarea_api.api.v1.a2a_auth import (
     A2AAuthContext,
     allow_public_access,
@@ -197,6 +198,21 @@ def set_user_context_from_a2a_auth(auth_context: A2AAuthContext) -> None:
         f"Set user context for A2A request: user_id={auth_context.user_id}, "
         + f"workspace_id={auth_context.workspace_id}"
     )
+
+
+async def _require_task_authority(task, auth_context: A2AAuthContext) -> None:
+    """Raise 403 unless the caller started ``task`` or administers the workspace.
+
+    JSON-RPC has no path parameter for ``requires_task_authority()`` to hook,
+    so A2A applies the same ``_task_authority`` check explicitly, on every
+    method that mutates an existing task (cancel, push notification config).
+    """
+    if not auth_context.user_id or not auth_context.workspace_id:
+        raise ValueError(
+            "A2A requests require authentication. Unauthenticated requests are not supported."
+        )
+    user_context = UserContext(user_id=auth_context.user_id, workspace_id=auth_context.workspace_id)
+    await assert_may_act_on_task(task, user_context)
 
 
 class A2AValidationError(Exception):
@@ -1266,6 +1282,8 @@ async def handle_task_cancel(
             )
             return create_error_response(request_id, -32001, f"Task not found: {task_id}")
 
+        await _require_task_authority(task, auth_context)
+
         # Check if task can be cancelled based on current workflow status
         if task.status in ["completed", "failed", "cancelled"]:
             duration_ms = (time.time() - start_time) * 1000
@@ -1327,6 +1345,9 @@ async def handle_task_cancel(
             )
             return create_error_response(request_id, -32603, "Task cancellation failed")
 
+    except HTTPException:
+        # Run-authority refusal: propagate as a real 403, not a JSON-RPC error.
+        raise
     except A2AValidationError as e:
         duration_ms = (time.time() - start_time) * 1000
         log_a2a_operation(
@@ -1517,6 +1538,7 @@ async def handle_push_config_set(
         return create_error_response(request_id, -32602, f"Invalid task ID: {task_id}")
     if not task:
         return create_error_response(request_id, -32001, f"Task not found: {task_id}")
+    await _require_task_authority(task, auth_context)
     try:
         stored = await register_push_config(task_service, secret_manager, task, push_config)
     except A2AValidationError as e:
@@ -1545,6 +1567,7 @@ async def handle_push_config_get(
         return create_error_response(request_id, -32602, f"Invalid task ID: {task_id}")
     if not task:
         return create_error_response(request_id, -32001, f"Task not found: {task_id}")
+    await _require_task_authority(task, auth_context)
 
     if config_id:
         cfg = get_push_config(task.task_parameters, config_id)
@@ -1576,6 +1599,7 @@ async def handle_push_config_list(
         return create_error_response(request_id, -32602, f"Invalid task ID: {task_id}")
     if not task:
         return create_error_response(request_id, -32001, f"Task not found: {task_id}")
+    await _require_task_authority(task, auth_context)
     result = [
         task_push_config_result(task_id, cfg) for cfg in list_push_configs(task.task_parameters)
     ]
@@ -1604,6 +1628,7 @@ async def handle_push_config_delete(
         return create_error_response(request_id, -32602, f"Invalid task ID: {task_id}")
     if not task:
         return create_error_response(request_id, -32001, f"Task not found: {task_id}")
+    await _require_task_authority(task, auth_context)
 
     new_params, removed = delete_push_config(task.task_parameters, config_id)
     if removed:
@@ -1987,6 +2012,10 @@ async def handle_agent_jsonrpc(
 
         return result
 
+    except HTTPException:
+        # Run-authority refusal from a handler: propagate as a real 403, not
+        # a 200 with a JSON-RPC error body.
+        raise
     except A2AValidationError as e:
         request_duration_ms = (time.time() - request_start_time) * 1000
         log_a2a_operation(
