@@ -104,11 +104,27 @@ secret_value_for() {
   esac
 }
 
+# Values .env.example and docker-compose.dev.yaml once shipped for the sandbox
+# and MCP gateway HMAC keys. Anyone can sign with them, and the services refuse
+# to start on them, so an env still carrying one is regenerated.
+PUBLISHED_SECRET_VALUES='dev-sandbox-activation-hmac-secret-change-in-prod
+dev-sandbox-cleanup-hmac-secret-change-in-prod-00
+dev-sandbox-file-auth-secret-change-in-prod-000000
+dev-sandbox-control-auth-secret-change-in-prod-0000
+dev-mcp-gateway-auth-secret-change-in-prod-00000000
+agentarea-dev-sandbox-activation-secret-change-me
+agentarea-dev-sandbox-cleanup-secret-change-me
+agentarea-dev-sandbox-file-secret-change-me
+agentarea-dev-sandbox-control-secret-change-me
+agentarea-dev-mcp-gateway-secret-change-me'
+
 # A key counts as set only when it has a non-empty value: compose declares these
 # as ${VAR:?}, which rejects an empty assignment exactly like a missing one, so
-# `KEY=` must not read as "already configured".
+# `KEY=` must not read as "already configured". A published value does not count.
 env_has_value() {
-  [ -f "$1" ] && grep -qE "^$2=." "$1"
+  [ -f "$1" ] && grep -qE "^$2=." "$1" || return 1
+  _value=$(grep -E "^$2=" "$1" | tail -n 1 | cut -d= -f2-)
+  ! printf '%s\n' "$PUBLISHED_SECRET_VALUES" | grep -qxF -- "$_value"
 }
 
 # Managed keys that $1 does not supply, one per line; empty means nothing to do.

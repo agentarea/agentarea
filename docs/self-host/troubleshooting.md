@@ -73,7 +73,7 @@ is the agent, not the deployment.
     **Compose aborts before creating any container.** A required variable is empty.
     `SANDBOX_ACTIVATION_AUTH_SECRET` and `SANDBOX_CLEANUP_AUTH_SECRET` are declared
     `${VAR:?message}`, so Compose refuses rather than starting an unauthenticated
-    sandbox path. Set both in `.env`, at least 32 bytes each.
+    sandbox path. Run `./scripts/gen-dev-secrets.sh` to generate them.
 
     **Port already allocated.** Find the holder and stop it, or change the published
     port.

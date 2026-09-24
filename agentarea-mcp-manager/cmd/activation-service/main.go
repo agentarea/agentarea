@@ -30,6 +30,7 @@ import (
 
 	"github.com/agentarea/mcp-manager/internal/activationauth"
 	"github.com/agentarea/mcp-manager/internal/execsupervisor"
+	"github.com/agentarea/mcp-manager/internal/publishedsecrets"
 	"github.com/agentarea/mcp-manager/internal/runtimeinfo"
 	"github.com/agentarea/mcp-manager/internal/sandboxruntime"
 	"github.com/agentarea/mcp-manager/internal/workspace"
@@ -123,6 +124,10 @@ type ErrorResponse struct {
 func main() {
 	logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	logger.Info("Activation service starting", "status", status)
+	if err := publishedsecrets.Reject(); err != nil {
+		logger.Error("Refusing to start", "error", err)
+		os.Exit(1)
+	}
 	policy, err := loadActivationPolicy()
 	if err != nil {
 		logger.Error("Activation service policy is invalid", "error", err)
