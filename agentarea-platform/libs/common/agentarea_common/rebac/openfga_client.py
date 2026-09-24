@@ -34,6 +34,7 @@ class OpenFGAClient:
         authorization_model_id: str | None = None,
         timeout_seconds: float = 10.0,
         client: httpx.AsyncClient | None = None,
+        api_token: str | None = None,
     ) -> None:
         if not store_id:
             raise ValueError("OpenFGA store_id is required when OpenFGA is enabled")
@@ -43,6 +44,10 @@ class OpenFGAClient:
         self._timeout = timeout_seconds
         self._client = client
         self._owns_client = client is None
+        self._api_token = api_token
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self._api_token}"} if self._api_token else {}
 
     async def _http(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -81,7 +86,7 @@ class OpenFGAClient:
         if query.page_token:
             body["continuation_token"] = query.page_token
         try:
-            resp = await client.post(url, json=body)
+            resp = await client.post(url, json=body, headers=self._headers())
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA read unreachable: {exc}") from exc
         if resp.status_code != 200:
@@ -137,7 +142,7 @@ class OpenFGAClient:
         if self._authorization_model_id:
             body["authorization_model_id"] = self._authorization_model_id
         try:
-            resp = await client.post(url, json=body)
+            resp = await client.post(url, json=body, headers=self._headers())
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA check unreachable: {exc}") from exc
         if resp.status_code != 200:
@@ -173,7 +178,7 @@ class OpenFGAClient:
         if self._authorization_model_id:
             body["authorization_model_id"] = self._authorization_model_id
         try:
-            resp = await client.post(url, json=body)
+            resp = await client.post(url, json=body, headers=self._headers())
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA list-objects unreachable: {exc}") from exc
         if resp.status_code != 200:
@@ -188,7 +193,7 @@ class OpenFGAClient:
         client = await self._http()
         url = f"{self._api_url}/stores/{self._store_id}/write"
         try:
-            resp = await client.post(url, json=body)
+            resp = await client.post(url, json=body, headers=self._headers())
         except httpx.HTTPError as exc:
             raise OpenFGAUnavailableError(f"OpenFGA write unreachable: {exc}") from exc
         ok_statuses = {200, 204}

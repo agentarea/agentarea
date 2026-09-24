@@ -18,3 +18,7 @@ class OpenFGASettings(BaseAppSettings):
     ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL: bool = False
     ACCESS_CONTROL_OPENFGA_STORE_NAME: str = "agentarea"
     ACCESS_CONTROL_OPENFGA_MODEL_PATH: str | None = None
+    # Bearer token sent with every request when the server runs with
+    # OPENFGA_AUTHN_METHOD=preshared. Empty means the server accepts
+    # unauthenticated requests (OPENFGA_AUTHN_METHOD=none, the OpenFGA default).
+    ACCESS_CONTROL_OPENFGA_API_TOKEN: str = ""
