@@ -41,6 +41,30 @@ _KNOWN_PROVIDERS: dict[str, dict[str, str]] = {
     },
 }
 
+# Hosts allowed to advertise a plain-http endpoint — the same carve-out
+# mcp_oauth_as.py uses for native-client redirect_uris.
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def _validate_endpoint_url(url: str, field: str) -> str:
+    """Reject an AS/protected-resource metadata endpoint the browser could act on.
+
+    A malicious or compromised MCP server controls every URL in its own AS
+    metadata. authorization_endpoint flows straight into build_authorize_url(),
+    which the frontend then navigates the browser to — a `javascript:` value
+    there is a stored XSS (#482). token_endpoint and registration_endpoint are
+    POSTed to by this service, so a scheme other than https is an SSRF-adjacent
+    risk even though the browser never sees them directly.
+    """
+    parsed = urlparse(url)
+    is_loopback = parsed.hostname in _LOOPBACK_HOSTS
+    if parsed.scheme != "https" and not is_loopback:
+        raise MCPOAuthDiscoveryError(
+            f"Authorization server {field} {url!r} must use https "
+            "(or http on a loopback host for local development)"
+        )
+    return url
+
 
 @dataclass
 class AuthServerMetadata:
@@ -205,8 +229,10 @@ class MCPOAuthClientService:
             logger.info("Using known provider config for %s", as_base)
             return AuthServerMetadata(
                 issuer=as_base,
-                authorization_endpoint=known["authorization_endpoint"],
-                token_endpoint=known["token_endpoint"],
+                authorization_endpoint=_validate_endpoint_url(
+                    known["authorization_endpoint"], "authorization_endpoint"
+                ),
+                token_endpoint=_validate_endpoint_url(known["token_endpoint"], "token_endpoint"),
                 registration_endpoint=known.get("registration_endpoint") or None,
             )
 
@@ -219,11 +245,20 @@ class MCPOAuthClientService:
                 if resp.status_code == 200:
                     data = resp.json()
                     advertised = data.get("scopes_supported") or []
+                    registration_endpoint = data.get("registration_endpoint")
                     return AuthServerMetadata(
                         issuer=data.get("issuer", as_base),
-                        authorization_endpoint=data["authorization_endpoint"],
-                        token_endpoint=data["token_endpoint"],
-                        registration_endpoint=data.get("registration_endpoint"),
+                        authorization_endpoint=_validate_endpoint_url(
+                            data["authorization_endpoint"], "authorization_endpoint"
+                        ),
+                        token_endpoint=_validate_endpoint_url(
+                            data["token_endpoint"], "token_endpoint"
+                        ),
+                        registration_endpoint=(
+                            _validate_endpoint_url(registration_endpoint, "registration_endpoint")
+                            if registration_endpoint
+                            else None
+                        ),
                         scopes_supported=list(advertised),
                         code_challenge_methods_supported=data.get(
                             "code_challenge_methods_supported", ["S256"]

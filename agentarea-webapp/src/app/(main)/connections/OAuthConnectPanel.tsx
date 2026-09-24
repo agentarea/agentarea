@@ -7,6 +7,7 @@ import { AlertTriangle, BadgeCheck, ExternalLink, Loader2 } from "lucide-react";
 import { CustomOAuthAppFields } from "@/components/CustomOAuthAppFields";
 import { Button } from "@/components/ui/button";
 import type { CustomOAuthAppCredentials } from "@/lib/oauth-app";
+import { isSafeRedirectUrl } from "@/lib/safe-redirect";
 import {
   listWorkspaceSecretsAction,
   mcpOAuthPreflightAction,
@@ -91,7 +92,11 @@ export function OAuthConnectPanel({
     setConnectError(null);
     try {
       const { data, error } = await oauthAuthorizeAction(request);
-      if (error || !data?.authorize_url) {
+      if (
+        error ||
+        !data?.authorize_url ||
+        !isSafeRedirectUrl(data.authorize_url)
+      ) {
         setConnectError(error || t("startFailed"));
         return;
       }

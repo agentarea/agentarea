@@ -37,6 +37,7 @@ import {
   Telescope,
 } from "lucide-react";
 import { getCategoryIcon } from "@/lib/category-icons";
+import { isSafeRedirectUrl } from "@/lib/safe-redirect";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { Streamdown } from "streamdown";
 import type {
@@ -1196,6 +1197,9 @@ function DetailView({
         ...custom,
         return_to: window.location.origin,
       });
+      if (!isSafeRedirectUrl(result.authorize_url)) {
+        throw new Error("Could not connect this account");
+      }
       window.location.assign(result.authorize_url);
     } catch (e) {
       setState({
