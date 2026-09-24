@@ -61,6 +61,7 @@ services:
       - ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=${ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL:-true}
       - ACCESS_CONTROL_OPENFGA_STORE_NAME=${ACCESS_CONTROL_OPENFGA_STORE_NAME:-agentarea}
       - ACCESS_CONTROL_OPENFGA_MODEL_PATH=${ACCESS_CONTROL_OPENFGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
+      - ACCESS_CONTROL_OPENFGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
     volumes:
       - ./config/auth/openfga:/app/config/auth/openfga:ro
     depends_on:
@@ -90,9 +91,11 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+    # Not on mcp-network: it still reaches agentarea-mcp-manager over default
+    # (manager is dual-homed), but the sandbox/MCP containers on mcp-network
+    # must not be able to dial the core API directly.
     networks:
       - default
-      - mcp-network
       - temporal-network
 
   app_migrations:
@@ -206,6 +209,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    # Also on mcp-network: sandbox executions PUT their outputs to signed
+    # object-store URLs directly (workspace writeback), so the isolated
+    # network still needs a path to the object store.
+    networks:
+      - default
+      - mcp-network
 
   db:
     image: postgres:18
@@ -244,9 +253,10 @@ services:
     restart: always
     volumes:
       - ./data/valkey:/data
+    # default only: valkey has no auth of its own, so the sandbox/MCP
+    # containers on mcp-network must not be able to reach it.
     networks:
       - default
-      - mcp-network
 
   agentarea-mcp-manager:
     image: agentarea/agentarea-mcp-manager:${VERSION:-latest}
@@ -347,9 +357,11 @@ services:
     tmpfs:
       - /tmp
       - /workspace
+    # mcp-network only: this runs untrusted agent code. It shares that
+    # network with the mcp-manager gateway (which activates it) and the
+    # object store, but not the default network's db/openfga/temporal/valkey.
     networks:
       - mcp-network
-      - default
     environment:
       ACTIVATION_PORT: "8080"
       HOME: /home/sandbox
@@ -461,6 +473,7 @@ services:
       - ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=${ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL:-true}
       - ACCESS_CONTROL_OPENFGA_STORE_NAME=${ACCESS_CONTROL_OPENFGA_STORE_NAME:-agentarea}
       - ACCESS_CONTROL_OPENFGA_MODEL_PATH=${ACCESS_CONTROL_OPENFGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
+      - ACCESS_CONTROL_OPENFGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
 
       # Development
       # - DEBUG=true
@@ -594,6 +607,10 @@ services:
       OPENFGA_DATASTORE_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${OPENFGA_DB:-openfga}?sslmode=disable
       OPENFGA_LOG_FORMAT: json
       OPENFGA_PLAYGROUND_ENABLED: "false"
+      # Everything on the default network can otherwise call the graph API
+      # unauthenticated; require the same preshared key the API/worker send.
+      OPENFGA_AUTHN_METHOD: preshared
+      OPENFGA_AUTHN_PRESHARED_KEYS: ${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
     healthcheck:
       test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=localhost:8081"]
       interval: 5s

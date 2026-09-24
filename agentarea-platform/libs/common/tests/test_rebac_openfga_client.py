@@ -200,3 +200,39 @@ async def test_unreachable_raises_unavailable():
         await client.write_tuple(
             RelationTuple(namespace="Skill", object="x", relation="use", subject_id="User:u1")
         )
+
+
+@pytest.mark.asyncio
+async def test_check_sends_bearer_token_when_configured():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["authorization"] = request.headers.get("authorization")
+        return httpx.Response(200, json={"allowed": True})
+
+    transport = httpx.MockTransport(handler)
+    http = httpx.AsyncClient(transport=transport)
+    client = OpenFGAClient(
+        api_url="http://openfga:8080",
+        store_id="store-1",
+        authorization_model_id="model-1",
+        client=http,
+        api_token="preshared-secret",  # noqa: S106
+    )
+    await client.check(namespace="Skill", object="x", relation="use", subject_id="User:u1")
+
+    assert seen["authorization"] == "Bearer preshared-secret"
+
+
+@pytest.mark.asyncio
+async def test_check_omits_authorization_header_without_token():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["authorization"] = request.headers.get("authorization")
+        return httpx.Response(200, json={"allowed": True})
+
+    client = _client(handler)
+    await client.check(namespace="Skill", object="x", relation="use", subject_id="User:u1")
+
+    assert seen["authorization"] is None
