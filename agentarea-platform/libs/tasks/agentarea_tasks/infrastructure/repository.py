@@ -389,7 +389,7 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
             event_type=event.event_type,
             timestamp=event.timestamp,
             data=event.data,
-            metadata=event.metadata,
+            event_metadata=event.metadata,
             workspace_id=event.workspace_id,
             created_by=event.created_by,
         )
