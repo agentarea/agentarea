@@ -70,7 +70,16 @@ generate_jwks() {
   mkdir -p "$(dirname "$jwks_private_path")"
   printf '{"keys":[{"kty":"EC","kid":"%s","use":"sig","alg":"ES256","crv":"P-256","x":"%s","y":"%s","d":"%s"}]}\n' \
     "$jwks_kid" "$x_b64" "$y_b64" "$d_b64" > "$jwks_private_path"
-  chmod 600 "$jwks_private_path"
+  # 644, not 600: this file is bind-mounted whole (the parent directory, not
+  # just the file) into the Kratos container, which reads it as its own
+  # non-root uid on every /sessions/whoami call. On Linux, bind mounts keep
+  # the host mode as-is, so 600 makes it unreadable to that uid and whoami
+  # 500s (#481); Docker Desktop's macOS file-sharing layer masked this by
+  # remapping ownership. There is no portable, sudo-free way to match the
+  # container's uid/gid from the host, so this key -- regenerated per
+  # install/dev-bootstrap and never committed -- is written world-readable
+  # instead, same as CI's prior workaround.
+  chmod 644 "$jwks_private_path"
 
   printf '{"keys":[{"kty":"EC","kid":"%s","use":"sig","alg":"ES256","crv":"P-256","x":"%s","y":"%s"}]}' \
     "$jwks_kid" "$x_b64" "$y_b64" | openssl base64 -A

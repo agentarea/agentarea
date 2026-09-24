@@ -50,5 +50,5 @@ for key in $pending; do
   printf '  %s\n' "$key"
 done
 if printf '%s\n' "$pending" | grep -q '^KRATOS_JWKS_B64$'; then
-  printf 'Wrote Kratos signing key to %s (mode 600, gitignored)\n' "$jwks_file"
+  printf 'Wrote Kratos signing key to %s (mode 644, gitignored)\n' "$jwks_file"
 fi

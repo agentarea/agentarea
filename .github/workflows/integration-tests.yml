@@ -51,6 +51,8 @@ jobs:
               - 'docker-compose.ci.yaml'
               - 'charts/agentarea/**'
               - 'scripts/install.sh'
+              - 'scripts/gen-dev-secrets.sh'
+              - 'scripts/lib/secrets.sh'
               - '.github/workflows/integration-tests.yml'
 
   # Import/collection gate — runs on EVERY PR (no label, no live stack). Pytest
@@ -323,12 +325,6 @@ jobs:
         run: |
           cp .env.example .env
           ./scripts/gen-dev-secrets.sh --force
-          # kratos reads the signing key over a bind mount as uid 10000, while
-          # the runner writes it as uid 1001. 0600 is right on a developer's
-          # machine and unreadable in the container, which surfaced only as a
-          # 500 from /sessions/whoami. This key is generated per run and dies
-          # with the job, so widening it here gives nothing away.
-          chmod 644 config/auth/kratos/jwks.json
           # The worker builds its secret manager at startup and refuses an
           # empty key; gen-dev-secrets leaves it alone on purpose (rotating it
           # would orphan every stored secret), so this throwaway stack gets one.
