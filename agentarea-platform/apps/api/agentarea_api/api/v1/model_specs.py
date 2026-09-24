@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from agentarea_api.api.deps.services import get_model_spec_repository
+from agentarea_api.api.deps.services import get_model_spec_repository, get_model_spec_service
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.auth.route_authz import requires_workspace_admin, unrestricted
 from agentarea_common.utils.types import UtcDatetime
+from agentarea_llm.application.model_spec_service import ModelSpecService
 from agentarea_llm.domain.models import ModelSpec
 from agentarea_llm.infrastructure.model_spec_repository import ModelSpecRepository
 from fastapi import APIRouter, Depends, HTTPException
@@ -165,14 +166,13 @@ async def get_model_spec(
 @router.post(
     "/",
     response_model=ModelSpecResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_workspace_admin()],
 )
 async def create_model_spec(
     data: ModelSpecCreate,
     user_context: UserContextDep,
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
+    model_spec_service: ModelSpecService = Depends(get_model_spec_service),
 ):
     """Create a new model specification."""
     existing = await model_spec_repo.get_by_provider_and_model(
@@ -185,7 +185,7 @@ async def create_model_spec(
         )
 
     try:
-        created_spec = await model_spec_repo.create(
+        created_spec = await model_spec_service.create(
             provider_spec_id=str(data.provider_spec_id),
             model_name=data.model_name,
             display_name=data.display_name,
@@ -199,7 +199,7 @@ async def create_model_spec(
         )
     except IntegrityError:
         # Concurrent insert raced past the pre-check and tripped the
-        # uq_model_specs_provider_model unique constraint.
+        # uq_model_specs_workspace_provider_model unique constraint.
         raise HTTPException(
             status_code=409,
             detail=f"Model specification '{data.model_name}' already exists for this provider",
@@ -211,15 +211,14 @@ async def create_model_spec(
 @router.patch(
     "/{model_spec_id}",
     response_model=ModelSpecResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_workspace_admin()],
 )
 async def update_model_spec(
     model_spec_id: UUID,
     data: ModelSpecUpdate,
     user_context: UserContextDep,
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
+    model_spec_service: ModelSpecService = Depends(get_model_spec_service),
 ):
     """Update a model specification."""
     model_spec = await model_spec_repo.get_with_relations(model_spec_id)
@@ -227,7 +226,7 @@ async def update_model_spec(
         raise HTTPException(status_code=404, detail="Model specification not found")
 
     updates = data.model_dump(exclude_none=True)
-    updated_spec = await model_spec_repo.update(model_spec_id, **updates)
+    updated_spec = await model_spec_service.update(model_spec_id, **updates)
     updated_spec = await model_spec_repo.get_with_relations(model_spec_id) or updated_spec
     if updated_spec is None:
         raise HTTPException(status_code=404, detail="Model specification not found")
@@ -236,17 +235,15 @@ async def update_model_spec(
 
 @router.delete(
     "/{model_spec_id}",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_workspace_admin()],
 )
 async def delete_model_spec(
     model_spec_id: UUID,
     user_context: UserContextDep,
-    model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
+    model_spec_service: ModelSpecService = Depends(get_model_spec_service),
 ):
     """Delete a model specification."""
-    success = await model_spec_repo.delete(model_spec_id)
+    success = await model_spec_service.delete(model_spec_id)
     if not success:
         raise HTTPException(status_code=404, detail="Model specification not found")
     return {"message": "Model specification deleted successfully"}
@@ -255,20 +252,19 @@ async def delete_model_spec(
 @router.post(
     "/upsert",
     response_model=ModelSpecResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires_workspace_admin()],
 )
 async def upsert_model_spec(
     data: ModelSpecCreate,
     user_context: UserContextDep,
     model_spec_repo: ModelSpecRepository = Depends(get_model_spec_repository),
+    model_spec_service: ModelSpecService = Depends(get_model_spec_service),
 ):
     """Create or update a model specification by provider and model name.
 
     This endpoint is useful for bulk operations and bootstrapping.
     """
-    upserted_spec = await model_spec_repo.upsert_by_provider_and_model_kwargs(
+    upserted_spec = await model_spec_service.upsert(
         provider_spec_id=str(data.provider_spec_id),
         model_name=data.model_name,
         display_name=data.display_name,

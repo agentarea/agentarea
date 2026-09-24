@@ -345,10 +345,31 @@ def _as_context(value):
     return ctx
 
 
+def test_the_platform_prices_its_own_spec_not_a_tenants():
+    """Specs are unique per workspace. A lookup that ignored the workspace could
+    return a tenant's spec for the same model and point the platform's instance at
+    it, letting that tenant's admin set the price every other workspace pays."""
+    conn = _RecordingConn()
+
+    handler._upsert_model_spec_and_instance(
+        conn,
+        "moonshot",
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        {"model_name": "kimi-k2.5", "input_cost_per_token": 6e-7},
+        handler.PLATFORM_WORKSPACE_ID,
+    )
+
+    lookup, params = next(
+        c for c in conn.calls if c[0].startswith("SELECT id FROM model_specs")
+    )
+    assert "workspace_id = :ws" in lookup
+    assert params["ws"] == handler.PLATFORM_WORKSPACE_ID
+
+
 def test_a_spec_another_workspace_owns_is_not_repriced():
-    """uq_model_specs_provider_model has no workspace_id, so the lookup can find a
-    tenant's own spec for the same model. Repricing it would silently change what
-    their usage of their own key costs them."""
+    """Repricing a tenant's spec would silently change what their usage of their
+    own key costs them."""
     conn = _RecordingConn()
 
     handler._upsert_model_spec_and_instance(
