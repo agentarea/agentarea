@@ -1,34 +1,12 @@
+{{- /*
+No workload runs on the host kernel. The data plane and the sandbox server
+already ask for the RuntimeClass; this makes asking the only way a pod is
+admitted at all, whatever a bug in either does.
+*/ -}}
 {{- if .Values.workloads.admission.requireRuntimeClass }}
-# No MCP server runs on the host kernel. The data plane already asks for the
-# RuntimeClass; this makes asking the only way a pod is admitted at all.
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
-  name: {{ include "dataplane.fullname" . }}-requires-runtimeclass
-  labels:
-    {{- include "dataplane.labels" . | nindent 4 }}
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    namespaceSelector:
-      matchLabels:
-        kubernetes.io/metadata.name: {{ .Values.workloads.namespace }}
-    resourceRules:
-      - apiGroups: [""]
-        apiVersions: [v1]
-        operations: [CREATE, UPDATE]
-        resources: [pods]
-  validations:
-    - expression: "has(object.spec.runtimeClassName) && object.spec.runtimeClassName == '{{ .Values.workloads.runtimeClassName }}'"
-      message: "pods in {{ .Values.workloads.namespace }} must run with runtimeClassName {{ .Values.workloads.runtimeClassName }}"
+{{ include "dataplane.requireRuntimeClass" (dict "root" . "name" (printf "%s-requires-runtimeclass" (include "dataplane.fullname" .)) "namespace" .Values.workloads.namespace "runtimeClass" .Values.workloads.runtimeClassName) }}
+{{- end }}
+{{- if and .Values.sandboxes.enabled .Values.sandboxes.admission.requireRuntimeClass }}
 ---
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicyBinding
-metadata:
-  name: {{ include "dataplane.fullname" . }}-requires-runtimeclass
-  labels:
-    {{- include "dataplane.labels" . | nindent 4 }}
-spec:
-  policyName: {{ include "dataplane.fullname" . }}-requires-runtimeclass
-  validationActions: [Deny]
+{{ include "dataplane.requireRuntimeClass" (dict "root" . "name" (printf "%s-sandboxes-require-runtimeclass" (include "dataplane.fullname" .)) "namespace" .Values.sandboxes.namespace "runtimeClass" .Values.sandboxes.runtimeClassName) }}
 {{- end }}

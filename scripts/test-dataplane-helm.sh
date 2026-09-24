@@ -56,4 +56,35 @@ assert_contains "10.0.0.0/8"
 # Off the host network the API listens on the pod, behind a Service.
 assert_contains "kind: Service$"
 
+# Agent sandboxes get the same confinement, and the server refuses to render
+# without a key or a sandboxing runtime.
+sandboxes=(--set dataPlane.id=dp --set dataPlane.auth.existingSecret=s --set sandboxes.enabled=true)
+assert_fails "sandboxes.server.auth: set existingSecret" "${sandboxes[@]}"
+assert_fails "sandboxes.server.auth.apiKey must be at least 32" "${sandboxes[@]}" --set sandboxes.server.auth.apiKey=short
+assert_fails "sandboxes.runtimeClassName is empty" "${sandboxes[@]}" --set sandboxes.server.auth.existingSecret=k \
+  --set sandboxes.runtimeClassName=
+assert_fails "sandboxes.server.port equals dataPlane.port" "${sandboxes[@]}" --set sandboxes.server.auth.existingSecret=k \
+  --set exposure.hostNetwork.enabled=true --set exposure.hostNetwork.bindAddress=10.0.0.1 --set sandboxes.server.port=8090
+assert_fails "opensandbox-controller.namespaceOverride" "${sandboxes[@]}" --set sandboxes.server.auth.existingSecret=k \
+  --set opensandbox-controller.enabled=true --namespace elsewhere
+
+helm template dp "$chart" "${sandboxes[@]}" --set sandboxes.server.auth.existingSecret=k \
+  --set opensandbox-controller.enabled=true --namespace agentarea-system >"$rendered"
+assert_contains "name: agentarea-sandboxes$"
+assert_contains "name: dp-agentarea-dataplane-sandboxes-require-runtimeclass"
+assert_contains "pods in agentarea-sandboxes must run with runtimeClassName gvisor"
+assert_contains "name: ingress-from-sandbox-server-only"
+assert_contains "port: 44772"
+assert_contains 'k8s_runtime_class = "gvisor"'
+assert_contains "automountServiceAccountToken: false"
+assert_contains "kind: CustomResourceDefinition"
+assert_contains "name: opensandbox-controller-manager"
+# The server must not share the data plane's selector: it would sit behind the
+# data plane's Service and inside the MCP servers' ingress policy.
+assert_contains "app.kubernetes.io/name: agentarea-sandbox-server"
+if [ "$(grep -c '^kind: NetworkPolicy' "$rendered")" != 4 ]; then
+  echo "expected ingress and egress policies for both workload namespaces" >&2
+  exit 1
+fi
+
 echo "data-plane chart guards hold"

@@ -1,19 +1,7 @@
-{{- if .Values.workloads.createNamespace }}
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ .Values.workloads.namespace }}
-  labels:
-    {{- include "dataplane.labels" . | nindent 4 }}
-    pod-security.kubernetes.io/enforce: {{ .Values.workloads.podSecurity.enforce }}
-    pod-security.kubernetes.io/warn: {{ .Values.workloads.podSecurity.warn }}
-{{- end }}
+{{- $w := .Values.workloads }}
+{{- include "dataplane.workloadNamespace" (dict "root" . "namespace" $w.namespace "create" $w.createNamespace "podSecurity" $w.podSecurity) }}
+{{- if .Values.sandboxes.enabled }}
+{{- $s := .Values.sandboxes }}
 ---
-# MCP servers are third-party code: the namespace's default account keeps no API
-# token in their filesystem. They have no business with the Kubernetes API.
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: default
-  namespace: {{ .Values.workloads.namespace }}
-automountServiceAccountToken: false
+{{ include "dataplane.workloadNamespace" (dict "root" . "namespace" $s.namespace "create" $s.createNamespace "podSecurity" $s.podSecurity) }}
+{{- end }}

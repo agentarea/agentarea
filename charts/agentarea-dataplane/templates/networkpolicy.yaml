@@ -1,62 +1,15 @@
 {{- if .Values.workloads.networkPolicy.enabled }}
-{{- $np := .Values.workloads.networkPolicy }}
-# Nothing reaches an MCP server except the data plane. Pod-to-pod stays closed,
-# which is what keeps one tenant's server from calling another's.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: ingress-from-dataplane-only
-  namespace: {{ .Values.workloads.namespace }}
-  labels:
-    {{- include "dataplane.labels" . | nindent 4 }}
-spec:
-  podSelector: {}
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        {{- if not .Values.exposure.hostNetwork.enabled }}
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: {{ .Release.Namespace }}
-          podSelector:
-            matchLabels:
-              {{- include "dataplane.selectorLabels" . | nindent 14 }}
-        {{- end }}
-        {{- range $np.ingressFromCIDRs }}
-        - ipBlock:
-            cidr: {{ . }}
-        {{- end }}
+{{- $fromPods := "" }}
+{{- if not .Values.exposure.hostNetwork.enabled }}
+{{- $fromPods = include "dataplane.selectorLabels" . }}
+{{- end }}
+{{ include "dataplane.workloadNetworkPolicies" (dict "root" . "namespace" .Values.workloads.namespace "np" .Values.workloads.networkPolicy "ingressName" "ingress-from-dataplane-only" "fromPods" $fromPods "ingressPorts" list) }}
+{{- end }}
+{{- if and .Values.sandboxes.enabled .Values.sandboxes.networkPolicy.enabled }}
+{{- $fromPods := "" }}
+{{- if not .Values.exposure.hostNetwork.enabled }}
+{{- $fromPods = include "dataplane.sandboxServerSelectorLabels" . }}
+{{- end }}
 ---
-# Out: cluster DNS, and the public internet minus denyCIDRs.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: egress-dns-and-public-only
-  namespace: {{ .Values.workloads.namespace }}
-  labels:
-    {{- include "dataplane.labels" . | nindent 4 }}
-spec:
-  podSelector: {}
-  policyTypes: [Egress]
-  egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: {{ $np.dns.namespace }}
-          podSelector:
-            matchLabels:
-              {{- toYaml $np.dns.podLabels | nindent 14 }}
-      ports:
-        - { protocol: UDP, port: 53 }
-        - { protocol: TCP, port: 53 }
-    {{- with $np.extraEgress }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            {{- with $np.denyCIDRs }}
-            except:
-              {{- toYaml . | nindent 14 }}
-            {{- end }}
+{{ include "dataplane.workloadNetworkPolicies" (dict "root" . "namespace" .Values.sandboxes.namespace "np" .Values.sandboxes.networkPolicy "ingressName" "ingress-from-sandbox-server-only" "fromPods" $fromPods "ingressPorts" .Values.sandboxes.networkPolicy.ingressPorts) }}
 {{- end }}

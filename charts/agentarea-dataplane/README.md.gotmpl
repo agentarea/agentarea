@@ -16,6 +16,14 @@ that confines those servers:
   and the public internet, not each other, the cluster or private networks;
 - a Role for the data plane scoped to that namespace.
 
+With `sandboxes.enabled` it also runs the control plane's **agent sandboxes**:
+an [OpenSandbox](https://github.com/opensandbox-group/OpenSandbox) server on its
+Kubernetes runtime, which the control plane creates sandboxes through
+(`SANDBOX_OPENSANDBOX_URL`), with the same confinement in a namespace of their
+own. Only the server may reach a sandbox, and only on execd's port. The
+BatchSandbox CRDs and controller come from the vendored `opensandbox-controller`
+subchart (`opensandbox-controller.enabled`), one per cluster.
+
 ## Prerequisites
 
 - Kubernetes 1.30+ (ValidatingAdmissionPolicy)
@@ -67,6 +75,36 @@ workloads:
   networkPolicy:
     ingressFromCIDRs: [10.0.0.10/32, <pod bridge gateway>/32]
 ```
+
+## Agent sandboxes
+
+```bash
+kubectl -n agentarea-system create secret generic opensandbox-api-key \
+  --from-literal=api-key="$OPENSANDBOX_API_KEY"   # the key the control plane sends
+
+helm upgrade agentarea-dataplane agentarea/agentarea-dataplane --reuse-values \
+  --namespace agentarea-system \
+  --set sandboxes.enabled=true \
+  --set sandboxes.server.auth.existingSecret=opensandbox-api-key \
+  --set opensandbox-controller.enabled=true \
+  --set opensandbox-controller.namespaceOverride=agentarea-system
+```
+
+On the host network, give the server a port of its own and let the node reach
+sandboxes, as for MCP servers:
+
+```yaml
+sandboxes:
+  server:
+    port: 8082
+  networkPolicy:
+    ingressFromCIDRs: [10.0.0.10/32, <pod bridge gateway>/32]
+```
+
+Then, in the `agentarea` chart, point `sandboxRuntime.opensandbox` at
+`http://<address>:<port>` with the same key. mcp-manager must name the storage
+limit `ephemeral-storage`: releases that still send `disk` have every sandbox pod
+rejected by the API server.
 
 ## Parameters
 

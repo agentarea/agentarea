@@ -28,6 +28,58 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{/*
+The sandbox server is named apart from the data plane: sharing the data plane's
+selector labels would put it behind the data plane's Service and inside the MCP
+servers' ingress policy.
+*/}}
+{{- define "dataplane.sandboxServerName" -}}
+{{- printf "%s-sandbox-server" (include "dataplane.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "dataplane.sandboxServerSelectorLabels" -}}
+app.kubernetes.io/name: agentarea-sandbox-server
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end -}}
+
+{{- define "dataplane.sandboxServerLabels" -}}
+{{ include "dataplane.sandboxServerSelectorLabels" . }}
+app.kubernetes.io/version: {{ .Values.sandboxes.server.image.tag | splitList "@" | first | quote }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
+{{- end -}}
+
+{{- define "dataplane.sandboxApiKeySecretName" -}}
+{{- .Values.sandboxes.server.auth.existingSecret | default (printf "%s-api-key" (include "dataplane.sandboxServerName" .)) -}}
+{{- end -}}
+
+{{- define "dataplane.sandboxApiKeySecretKey" -}}
+{{- if .Values.sandboxes.server.auth.existingSecret -}}{{ .Values.sandboxes.server.auth.existingSecretKey }}{{- else -}}api-key{{- end -}}
+{{- end -}}
+
+{{- define "dataplane.validateSandboxes" -}}
+{{- $s := .Values.sandboxes -}}
+{{- if and (not $s.server.auth.existingSecret) (not $s.server.auth.apiKey) -}}
+{{- fail "sandboxes.server.auth: set existingSecret (or apiKey, for development); the sandbox server would otherwise create pods for anyone who reaches it" -}}
+{{- end -}}
+{{- if and (not $s.server.auth.existingSecret) (lt (len $s.server.auth.apiKey) 32) -}}
+{{- fail "sandboxes.server.auth.apiKey must be at least 32 characters" -}}
+{{- end -}}
+{{- if not $s.runtimeClassName -}}
+{{- fail "sandboxes.runtimeClassName is empty: sandboxes run agent-written code and must run under a sandboxing RuntimeClass" -}}
+{{- end -}}
+{{- if not (has $s.secureRuntimeType (list "gvisor" "kata" "firecracker")) -}}
+{{- fail "sandboxes.secureRuntimeType must be gvisor, kata or firecracker" -}}
+{{- end -}}
+{{- if and .Values.exposure.hostNetwork.enabled (eq (int $s.server.port) (int .Values.dataPlane.port)) -}}
+{{- fail "sandboxes.server.port equals dataPlane.port: on the host network both bind the same address" -}}
+{{- end -}}
+{{- $controller := index .Values "opensandbox-controller" -}}
+{{- if and $controller.enabled (ne $controller.namespaceOverride .Release.Namespace) -}}
+{{- fail (printf "opensandbox-controller.namespaceOverride is %q but the release namespace is %q: the controller would land in a namespace nothing creates" $controller.namespaceOverride .Release.Namespace) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Refuse a configuration that would render something unsafe or unusable, naming
 the value to fix. Called from the Deployment so every render passes through it.
 */}}
@@ -47,4 +99,48 @@ the value to fix. Called from the Deployment so every render passes through it.
 {{- if and .Values.exposure.hostNetwork.enabled (not .Values.exposure.hostNetwork.bindAddress) -}}
 {{- fail "exposure.hostNetwork.bindAddress is empty: on the host network the API must bind one address, not every interface the node has" -}}
 {{- end -}}
+{{- end -}}
+
+{{/* OpenSandbox server configuration: the Kubernetes runtime, one namespace. */}}
+{{- define "dataplane.sandboxServerConfig" -}}
+{{- $s := .Values.sandboxes -}}
+[server]
+host = {{ ternary .Values.exposure.hostNetwork.bindAddress "0.0.0.0" .Values.exposure.hostNetwork.enabled | quote }}
+port = {{ $s.server.port | int }}
+max_sandbox_timeout_seconds = {{ $s.server.maxSandboxTimeoutSeconds | int }}
+timeout_keep_alive = 30
+timeout_graceful_shutdown = 15
+
+[log]
+level = {{ $s.server.logLevel | quote }}
+file_enabled = false
+
+[runtime]
+type = "kubernetes"
+execd_image = {{ $s.server.execdImage | quote }}
+
+[kubernetes]
+namespace = {{ $s.namespace | quote }}
+workload_provider = "batchsandbox"
+batchsandbox_template_file = "/etc/opensandbox/batchsandbox-template.yaml"
+image_pull_policy = "IfNotPresent"
+informer_enabled = true
+sandbox_create_timeout_seconds = {{ $s.server.createTimeoutSeconds | int }}
+
+[secure_runtime]
+type = {{ $s.secureRuntimeType | quote }}
+k8s_runtime_class = {{ $s.runtimeClassName | quote }}
+
+[storage]
+allowed_host_paths = []
+
+[store]
+type = "sqlite"
+path = "/var/lib/opensandbox/opensandbox.db"
+
+[ingress]
+mode = "direct"
+
+[renew_intent]
+enabled = false
 {{- end -}}
