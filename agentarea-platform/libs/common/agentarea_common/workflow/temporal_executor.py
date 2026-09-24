@@ -18,7 +18,6 @@ from temporalio.exceptions import TemporalError
 
 from agentarea_common.config import ObservabilitySettings
 from agentarea_common.observability import get_temporal_plugins, setup_otel
-from agentarea_common.utils.types import Artifact, Message, TextPart
 from agentarea_common.workflow.executor import (
     TaskExecutorInterface,
     WorkflowConfig,
@@ -39,10 +38,7 @@ def _duration_seconds(value: Any) -> float | None:
 
 
 def _extract_a2a_message_from_workflow_result(result: dict[str, Any]) -> dict[str, Any]:
-    """Extract A2A-compatible message from workflow result.
-
-    Converts workflow events into A2A Message format with proper parts structure.
-    """
+    """Extract the agent's response message and artifact from a workflow result."""
     if not result or not isinstance(result, dict):
         return {}
 
@@ -80,26 +76,22 @@ def _extract_a2a_message_from_workflow_result(result: dict[str, Any]) -> dict[st
     if not agent_response_text:
         return {}
 
-    # Create A2A-compatible response
-    a2a_message = Message(role="AGENT", parts=[TextPart(text=agent_response_text)])
-
-    # Create A2A-compatible artifact
-    a2a_artifact = Artifact(
-        artifactId="agent_response",
-        name="agent_response",
-        description="Agent response to user query",
-        parts=[TextPart(text=agent_response_text)],
-        lastChunk=True,
-        metadata={
-            "session_id": session_id,
-            "usage_metadata": usage_metadata,
-            "source": "workflow_execution",
-        },
-    )
-
+    response_parts = [{"text": agent_response_text}]
     return {
-        "message": a2a_message.model_dump(),
-        "artifacts": [a2a_artifact.model_dump()],
+        "message": {"role": "AGENT", "parts": response_parts},
+        "artifacts": [
+            {
+                "artifact_id": "agent_response",
+                "name": "agent_response",
+                "description": "Agent response to user query",
+                "parts": response_parts,
+                "metadata": {
+                    "session_id": session_id,
+                    "usage_metadata": usage_metadata,
+                    "source": "workflow_execution",
+                },
+            }
+        ],
         "session_id": session_id,
         "usage_metadata": usage_metadata,
     }

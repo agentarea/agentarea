@@ -10,7 +10,7 @@ related:
   - /concepts/execution/durable-execution
   - /concepts/governance/tool-authorization
   - /concepts/agents/skills
-last_updated: 2026-07-29
+last_updated: 2026-09-25
 ---
 
 When one agent hands work to another, the concept is delegation. A2A — the
@@ -97,15 +97,22 @@ The endpoint is a single JSON-RPC 2.0 route per agent:
 POST /v1/agents/{agent_id}/a2a/rpc
 ```
 
-Eleven methods are dispatched: `SendMessage`, `SendStreamingMessage`, `GetTask`,
-`CancelTask`, `SubscribeToTask`, `ListTasks`, the four
-`*TaskPushNotificationConfig` methods, and `GetExtendedAgentCard`.
+The protocol itself is not ours. The route authenticates the caller, then hands
+the request to the official `a2a-sdk` JSON-RPC dispatcher, which owns the wire
+types, method dispatch, error codes, SSE framing and the version check.
+AgentArea supplies only a request handler that maps each typed call onto the
+task service, the task event feed and push-config storage. Eleven methods are
+served: `SendMessage`, `SendStreamingMessage`, `GetTask`, `CancelTask`,
+`SubscribeToTask`, `ListTasks`, the four `*TaskPushNotificationConfig` methods,
+and `GetExtendedAgentCard`. Every task method answers only for tasks that belong
+to the agent in the URL; another agent's task is `TaskNotFoundError`.
 
 ### Sending is non-blocking, and that is deliberate
 
 `SendMessage` returns as soon as the task is submitted, with a `Task` object
-that is typically still in a non-terminal state. This follows the spec, which
-allows a message send to return a non-terminal task for long-running work.
+that is typically still in a non-terminal state, whatever the request's
+`configuration.returnImmediately` says. The spec's default is to block until
+the task is terminal or interrupted; AgentArea deliberately does not.
 Forcing the HTTP request to block until the agent finished would time out behind
 proxies and load balancers — the failure mode the design is avoiding.
 
@@ -124,17 +131,24 @@ One helper builds the A2A `Task` for every non-streaming response, so `GetTask`,
 The canonical final answer is `task.result["response"]`, produced by the
 workflow's `state.final_response`. On terminal success it is emitted twice: as
 an `Artifact` containing a text part, and mirrored into `status.message` with
-role `AGENT`. The duplication is intentional — a spec-minimal client that only
+role `ROLE_AGENT`. The duplication is intentional — a spec-minimal client that only
 reads `status.message` still gets the answer. On failure, `error_message` goes
 into `status.message`.
 
 Streaming maps the real workflow event stream onto the v1.0.0 `StreamResponse`
-union, one of `task`, `statusUpdate` or `artifactUpdate` per frame. Incremental
-LLM output becomes an `artifactUpdate` with `append: true`; a terminal event
-becomes a final `artifactUpdate` with `lastChunk: true` followed by a
-`statusUpdate` carrying the terminal state. Any other workflow event becomes a
-`WORKING` status update. The mapping function is shared with push delivery, so
-streaming and webhooks cannot drift apart.
+union, one of `task`, `statusUpdate` or `artifactUpdate` per frame. The first
+frame is always the `task`. Incremental LLM output becomes an `artifactUpdate`
+with `append: true`; a terminal event becomes a final `artifactUpdate` with
+`lastChunk: true` followed by a `statusUpdate` carrying the terminal state. Any
+other workflow event becomes a `TASK_STATE_WORKING` status update.
+`SubscribeToTask` on a task that is already terminal is refused with
+`UnsupportedOperationError`, as the spec requires; read it with `GetTask`.
+
+Task row statuses map onto A2A states as follows: `submitted`, `pending`,
+`preparing` and `scheduled` are `TASK_STATE_SUBMITTED`; `running` and `working`
+are `TASK_STATE_WORKING`; the three `waiting_for_*` statuses are
+`TASK_STATE_INPUT_REQUIRED`; `blocked` and `failed` are `TASK_STATE_FAILED`;
+`cancelled` is `TASK_STATE_CANCELED`.
 
 ### Push notifications ride the channel pipeline
 
@@ -146,7 +160,8 @@ Storage follows the channel precedent exactly: the non-secret part of the config
 lives in `task_parameters["a2a_push_configs"]`, and the client's token goes to
 the secret store under `a2a_push_token:<task_id>:<config_id>`, so it is never
 echoed back by `get` or `list`. Delivery POSTs the full v1.0.0 `statusUpdate`
-payload — the client gets the result without a follow-up `GetTask` — and echoes
+payload as a `StreamResponse` — the client gets the result without a
+follow-up `GetTask` — and echoes
 the token in an `X-A2A-Notification-Token` header so the client can authenticate
 the callback. The URL is validated against the shared SSRF guard both when the
 config is registered and again before each send.
@@ -156,28 +171,36 @@ are pushed, never incremental chunks.
 
 ### Protocol version
 
-AgentArea speaks A2A v1.0.0, adopted as a clean cutover from v0.3.0 with no
-compatibility aliases. The wire differences that matter:
+AgentArea speaks A2A v1.0 exactly as the official SDK encodes it — the SDK's
+protobuf types are the wire types, serialized with the proto JSON mapping, so
+any v1 client parses our responses without a shim. v0.3 compatibility is not
+enabled. The wire details that matter:
 
 - Methods are PascalCase RPC names, not slash-style (`SendMessage`, not
   `message/send`).
 - There are no `kind` discriminators on `Task`, `Message`, `Part` or stream
   events.
 - `Part` is flat: a part has `text`, or `data`, or `raw`/`url` with `mediaType`.
-- `Message.role` is the enum `USER` or `AGENT`.
-- `TaskState` is SCREAMING_SNAKE: `SUBMITTED`, `WORKING`, `COMPLETED`, `FAILED`,
-  `CANCELED`, `INPUT_REQUIRED`, `REJECTED`, `AUTH_REQUIRED`.
-- Streaming frames carry no `final` boolean; terminal is conveyed by the state.
+- `Message.role` is `ROLE_USER` or `ROLE_AGENT`, and `messageId` is required.
+- `TaskState` values carry the enum prefix: `TASK_STATE_SUBMITTED`,
+  `TASK_STATE_WORKING`, `TASK_STATE_COMPLETED`, `TASK_STATE_FAILED`,
+  `TASK_STATE_CANCELED`, `TASK_STATE_INPUT_REQUIRED`, `TASK_STATE_REJECTED`,
+  `TASK_STATE_AUTH_REQUIRED`.
+- `Artifact` has no `index`, `append` or `lastChunk`; `append` and `lastChunk`
+  live on the streaming `artifactUpdate` event. Streaming frames carry no
+  `final` boolean; terminal is conveyed by the state.
 - The agent card advertises transports through `supportedInterfaces[]`, with no
-  top-level `url` or `preferredTransport`.
+  top-level `url` or `preferredTransport`, and bearer auth as
+  `securitySchemes: {"bearer": {"httpAuthSecurityScheme": {"scheme": "bearer"}}}`
+  with `securityRequirements: [{"schemes": {"bearer": {}}}]`.
 
-The `A2A-Version` header is enforced: absent is treated as `1.0`, and anything
-not starting with `1.` returns `-32009 VersionNotSupportedError`. Bodies are
-accepted as `application/a2a+json` or JSON-RPC.
+The `A2A-Version` header is required. The spec reads a missing header as `0.3`,
+so a request without `A2A-Version: 1.0` is refused with `-32009
+VersionNotSupportedError`; the official clients always send it.
 
-Existing v0.3.0 callers break by design. There were no external ones, and the
-two wire formats are incompatible enough that a shim would have been pure
-overhead.
+Existing v0.3.0 callers break by design, and so do callers of the pre-SDK
+AgentArea dialect, which emitted bare `USER`/`COMPLETED` enums and a v0.3-shaped
+card that the official SDK could not parse.
 
 ### Discovery
 
@@ -188,11 +211,15 @@ Four unauthenticated endpoints describe an agent:
 | `GET /v1/agents/{agent_id}/.well-known/agent-card.json` | The A2A agent card |
 | `GET /v1/agents/{agent_id}/.well-known/a2a-info.json` | Protocol and endpoint metadata |
 | `GET /v1/agents/{agent_id}/.well-known/` | An index of the two above |
-| `GET /v1/agents/{agent_id}/a2a/well-known` | An older agent-card route |
+| `GET /v1/agents/{agent_id}/a2a/well-known` | The same agent card, on an older path |
 
 The card advertises `streaming`, `pushNotifications` and `extendedAgentCard` as
 true, and adds an A2UI extension entry when the agent has `a2ui_enabled`. The
 path layout anticipates proxying each agent to its own subdomain later.
+
+One builder produces the card for every surface: the well-known routes and
+`GetExtendedAgentCard` advertise the same interface URL, version and security
+scheme. The extended card differs only in listing more skills.
 
 ### Authentication
 
@@ -204,19 +231,21 @@ here unchanged, and the `/rpc` route requires the `agent:execute` permission.
 
 ### Delegating over A2A
 
-When the binding is `a2a`, `A2AAgentTool` sends `SendMessage`, then polls
-`GetTask` on the same endpoint every 2 seconds until terminal or until its
-budget runs out — 110 seconds, kept under the 120-second HTTP timeout. Each
-request stays short; waiting is a series of polls rather than one long-held
-connection.
+When the binding is `a2a`, `A2AAgentTool` uses the official SDK client: it
+sends `SendMessage` with `returnImmediately: true`, then polls `GetTask` on the
+same endpoint every 2 seconds until terminal or until its budget runs out — 110
+seconds, kept under the 120-second HTTP timeout. Each request stays short;
+waiting is a series of polls rather than one long-held connection. The
+configured `a2a_url` is the RPC endpoint itself; the tool does not fetch the
+remote card.
 
-It reads the result with the same flat-part logic used everywhere else: a part
-is text if it has `text`, data if it has `data`. It reads artifacts first, then
-falls back to `status.message`, and returns `"(No output from agent)"` when
-neither carries anything.
+It reads artifacts first, then falls back to `status.message`, and returns
+`"(No output from agent)"` when neither carries anything. A JSON-RPC error from
+the remote agent comes back as `success: false`; an HTTP failure raises.
 
-A `402 Payment Required` response is handed to an optional payment handler, and
-the request is retried once payment succeeds.
+A `402 Payment Required` response is handed to an optional payment handler
+below the SDK client, at the HTTP transport, and the paid response is returned
+to the client in its place.
 
 ## Why not make A2A the default for every agent-to-agent call
 
@@ -245,13 +274,6 @@ mapping in one case and the task row in the other.
 
 ## Limits
 
-- **Two agent cards disagree.** The `.well-known/agent-card.json` route always
-  advertises exactly one skill, sets a bearer `securitySchemes`, and points
-  `supportedInterfaces[0].url` at `/v1/agents/{id}/a2a/rpc`. The
-  `GetExtendedAgentCard` method advertises up to three skills, sets
-  `securitySchemes` to null, and points at `/api/v1/agents/{id}/a2a/rpc` — a
-  different path. A client following the extended card's URL is not following
-  the same path as one following the well-known card's.
 - **`a2a-info.json` advertises endpoints that do not exist.** Its `endpoints`
   block names `rpc` at `/v1/agents/{id}/rpc` and `stream` at
   `/v1/agents/{id}/stream`. The real RPC route is `/v1/agents/{id}/a2a/rpc`, and
@@ -265,8 +287,11 @@ mapping in one case and the task row in the other.
   directly by id with no authentication and no `UserContext`, so any agent's
   name, description and status are readable by anyone who can guess or obtain
   its UUID.
-- **`WORKING` is mapped but never written.** The state mapping covers it and
-  A2A can return it, but no code path writes `working` to a task row.
+- **`ListTasks` filters are not supported.** `contextId`, `status` and
+  `statusTimestampAfter` are refused with `UnsupportedOperationError`; paging
+  (`pageSize`, `pageToken`) works.
+- **Push authentication schemes are not supported.** A push config must carry a
+  `token`; one with `authentication` is refused.
 - **Delegation over A2A can return a non-terminal result.** If the poll budget
   elapses, the tool returns the latest task it saw and logs a warning rather
   than failing. The caller receives whatever text was available at that moment.

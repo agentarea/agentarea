@@ -7,7 +7,6 @@ import type {
   AgentResponse,
   AgentUpdate,
   AnalyzeRequest,
-  AgentCard as ApiAgentCard,
   TaskResponse as ApiTaskResponse,
   CatalogConnectionRequest,
   CreateInvitationBody,
@@ -2350,7 +2349,6 @@ export type ChatResponse = { task_id: string; status: string };
 export type ConversationResponse = unknown;
 export type Principal = PrincipalResponse;
 export type TaskResponse = ApiTaskResponse;
-export type AgentCard = ApiAgentCard;
 export type TaskWithAgent = ApiTaskResponse & {
   // null when the task's agent no longer resolves — the API does not
   // substitute a placeholder name.

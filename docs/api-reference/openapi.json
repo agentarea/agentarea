@@ -244,203 +244,6 @@
         "title": "AddSkillRequest",
         "type": "object"
       },
-      "AgentAuthentication": {
-        "properties": {
-          "credentials": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Credentials"
-          },
-          "schemes": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Schemes",
-            "type": "array"
-          }
-        },
-        "required": [
-          "schemes"
-        ],
-        "title": "AgentAuthentication",
-        "type": "object"
-      },
-      "AgentCapabilities": {
-        "properties": {
-          "extendedAgentCard": {
-            "default": false,
-            "title": "Extendedagentcard",
-            "type": "boolean"
-          },
-          "extensions": {
-            "anyOf": [
-              {
-                "items": {
-                  "additionalProperties": true,
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Extensions"
-          },
-          "pushNotifications": {
-            "default": false,
-            "title": "Pushnotifications",
-            "type": "boolean"
-          },
-          "streaming": {
-            "default": false,
-            "title": "Streaming",
-            "type": "boolean"
-          }
-        },
-        "title": "AgentCapabilities",
-        "type": "object"
-      },
-      "AgentCard": {
-        "properties": {
-          "authentication": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AgentAuthentication"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "capabilities": {
-            "$ref": "#/components/schemas/AgentCapabilities"
-          },
-          "defaultInputModes": {
-            "default": [
-              "text/plain",
-              "application/json"
-            ],
-            "items": {
-              "type": "string"
-            },
-            "title": "Defaultinputmodes",
-            "type": "array"
-          },
-          "defaultOutputModes": {
-            "default": [
-              "text/plain",
-              "application/json"
-            ],
-            "items": {
-              "type": "string"
-            },
-            "title": "Defaultoutputmodes",
-            "type": "array"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "documentationUrl": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Documentationurl"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "provider": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AgentProvider"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "security": {
-            "anyOf": [
-              {
-                "items": {
-                  "additionalProperties": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": "array"
-                  },
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Security"
-          },
-          "securitySchemes": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Securityschemes"
-          },
-          "skills": {
-            "items": {
-              "$ref": "#/components/schemas/AgentSkill"
-            },
-            "title": "Skills",
-            "type": "array"
-          },
-          "supportedInterfaces": {
-            "items": {
-              "$ref": "#/components/schemas/AgentInterface"
-            },
-            "title": "Supportedinterfaces",
-            "type": "array"
-          },
-          "version": {
-            "default": "1.0.0",
-            "title": "Version",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "supportedInterfaces",
-          "capabilities",
-          "skills"
-        ],
-        "title": "AgentCard",
-        "type": "object"
-      },
       "AgentCreate": {
         "additionalProperties": false,
         "description": "Payload for creating an agent.\n\n``model_id`` is the UUID of a model instance configured in the workspace \u2014\nthe runtime has no other interpretation of it. Omit it (or pass ``null``) to\ncreate an agent with no model bound yet; such an agent cannot be run until a\nmodel is assigned.",
@@ -584,41 +387,6 @@
         "title": "AgentCreate",
         "type": "object"
       },
-      "AgentInterface": {
-        "description": "A2A v1.0.0 AgentInterface \u2014 a (url, protocolBinding, protocolVersion) tuple.",
-        "properties": {
-          "protocolBinding": {
-            "default": "JSONRPC",
-            "title": "Protocolbinding",
-            "type": "string"
-          },
-          "protocolVersion": {
-            "default": "1.0",
-            "title": "Protocolversion",
-            "type": "string"
-          },
-          "tenant": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tenant"
-          },
-          "url": {
-            "title": "Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "url"
-        ],
-        "title": "AgentInterface",
-        "type": "object"
-      },
       "AgentOverviewResponse": {
         "properties": {
           "cost_mtd_usd": {
@@ -681,30 +449,6 @@
           "upcoming"
         ],
         "title": "AgentOverviewResponse",
-        "type": "object"
-      },
-      "AgentProvider": {
-        "properties": {
-          "organization": {
-            "title": "Organization",
-            "type": "string"
-          },
-          "url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Url"
-          }
-        },
-        "required": [
-          "organization"
-        ],
-        "title": "AgentProvider",
         "type": "object"
       },
       "AgentResponse": {
@@ -937,111 +681,6 @@
           "cost_mtd_usd"
         ],
         "title": "AgentRow",
-        "type": "object"
-      },
-      "AgentSkill": {
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "examples": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Examples"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "inputModes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Inputmodes"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "outputModes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Outputmodes"
-          },
-          "securityRequirements": {
-            "anyOf": [
-              {
-                "items": {
-                  "additionalProperties": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": "array"
-                  },
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Securityrequirements"
-          },
-          "tags": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tags"
-          }
-        },
-        "required": [
-          "id",
-          "name"
-        ],
-        "title": "AgentSkill",
         "type": "object"
       },
       "AgentToolConfig": {
@@ -14897,9 +14536,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentCard"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -14929,7 +14566,7 @@
     },
     "/v1/agents/{agent_id}/a2a/rpc": {
       "post": {
-        "description": "Handle A2A JSON-RPC requests with comprehensive error handling and validation.",
+        "description": "Serve one A2A JSON-RPC call (plain JSON, or SSE for the streaming methods).",
         "operationId": "handle_agent_jsonrpc_v1_agents__agent_id__a2a_rpc_post",
         "parameters": [
           {
@@ -14977,7 +14614,7 @@
     },
     "/v1/agents/{agent_id}/a2a/well-known": {
       "get": {
-        "description": "Get current agent discovery information with proper validation and error handling.",
+        "description": "The agent card, also served at ``.well-known/agent-card.json``.",
         "operationId": "get_agent_well_known_v1_agents__agent_id__a2a_well_known_get",
         "parameters": [
           {
@@ -14995,9 +14632,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentCard"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"

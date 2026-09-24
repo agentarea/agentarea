@@ -259,13 +259,13 @@ export declare const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonG
 /**
  * Handle Agent Jsonrpc
  *
- * Handle A2A JSON-RPC requests with comprehensive error handling and validation.
+ * Serve one A2A JSON-RPC call (plain JSON, or SSE for the streaming methods).
  */
 export declare const handleAgentJsonrpcV1AgentsAgentIdA2aRpcPost: <ThrowOnError extends boolean = false>(options: Options<HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostData, ThrowOnError>) => RequestResult<HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostResponses, HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostErrors, ThrowOnError>;
 /**
  * Get Agent Well Known
  *
- * Get current agent discovery information with proper validation and error handling.
+ * The agent card, also served at ``.well-known/agent-card.json``.
  */
 export declare const getAgentWellKnownV1AgentsAgentIdA2aWellKnownGet: <ThrowOnError extends boolean = false>(options: Options<GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetData, ThrowOnError>) => RequestResult<GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponses, GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetErrors, ThrowOnError>;
 /**

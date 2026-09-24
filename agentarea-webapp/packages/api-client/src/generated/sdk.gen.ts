@@ -549,7 +549,7 @@ export const getAgentWellKnownCardV1AgentsAgentIdWellKnownAgentCardJsonGet = <Th
 /**
  * Handle Agent Jsonrpc
  *
- * Handle A2A JSON-RPC requests with comprehensive error handling and validation.
+ * Serve one A2A JSON-RPC call (plain JSON, or SSE for the streaming methods).
  */
 export const handleAgentJsonrpcV1AgentsAgentIdA2aRpcPost = <ThrowOnError extends boolean = false>(options: Options<HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostData, ThrowOnError>): RequestResult<HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostResponses, HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostErrors, ThrowOnError> => (options.client ?? client).post<HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostResponses, HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostErrors, ThrowOnError>({
     security: [{
@@ -564,7 +564,7 @@ export const handleAgentJsonrpcV1AgentsAgentIdA2aRpcPost = <ThrowOnError extends
 /**
  * Get Agent Well Known
  *
- * Get current agent discovery information with proper validation and error handling.
+ * The agent card, also served at ``.well-known/agent-card.json``.
  */
 export const getAgentWellKnownV1AgentsAgentIdA2aWellKnownGet = <ThrowOnError extends boolean = false>(options: Options<GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetData, ThrowOnError>): RequestResult<GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponses, GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetErrors, ThrowOnError> => (options.client ?? client).get<GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponses, GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetErrors, ThrowOnError>({
     security: [{

@@ -16,6 +16,18 @@ from __future__ import annotations
 from typing import Any
 from uuid import uuid4
 
+from a2a.types import (
+    Message,
+    Part,
+    Role,
+    StreamResponse,
+    TaskPushNotificationConfig,
+    TaskState,
+    TaskStatus,
+    TaskStatusUpdateEvent,
+)
+from google.protobuf.json_format import MessageToJson
+
 from agentarea_common.events.contract import (
     TASK_CANCELLED,
     TASK_COMPLETED,
@@ -25,13 +37,13 @@ from agentarea_common.events.contract import (
 
 PUSH_CONFIGS_PARAM_KEY = "a2a_push_configs"
 
-# Maps canonical workflow terminal event types to A2A v1.0.0 task states (proto
-# encoding). Canonical names only: the emit side speaks the canonical contract,
-# and pre-contract names like "WorkflowCompleted" are deliberately not accepted.
+# Maps canonical workflow terminal event types to A2A task states. Canonical
+# names only: the emit side speaks the canonical contract, and pre-contract
+# names like "WorkflowCompleted" are deliberately not accepted.
 _TERMINAL_EVENT_STATES = {
-    TASK_COMPLETED: "COMPLETED",
-    TASK_FAILED: "FAILED",
-    TASK_CANCELLED: "CANCELED",
+    TASK_COMPLETED: TaskState.TASK_STATE_COMPLETED,
+    TASK_FAILED: TaskState.TASK_STATE_FAILED,
+    TASK_CANCELLED: TaskState.TASK_STATE_CANCELED,
 }
 
 
@@ -85,29 +97,25 @@ def delete_push_config(
     return params, len(remaining) != len(configs)
 
 
-def task_push_config_result(task_id: str, config: dict[str, Any]) -> dict[str, Any]:
-    """Build a flat A2A v1.0.0 ``TaskPushNotificationConfig`` result (token omitted)."""
-    return {
-        "taskId": str(task_id),
-        "id": config.get("id"),
-        "url": config.get("url"),
-    }
+def task_push_config_result(task_id: str, config: dict[str, Any]) -> TaskPushNotificationConfig:
+    """Build the A2A ``TaskPushNotificationConfig`` for a stored config (token omitted)."""
+    return TaskPushNotificationConfig(
+        task_id=str(task_id), id=str(config["id"]), url=str(config["url"])
+    )
 
 
 def build_push_notification_body(event: dict[str, Any]) -> str | None:
-    """Build the A2A v1.0.0 notification JSON body for a workflow event.
+    """Build the A2A notification JSON body for a workflow event.
 
-    Returns a serialized StreamResponse ``statusUpdate`` wrapper for terminal
-    events, or None for events that should not be pushed.
+    Returns a serialized ``StreamResponse`` carrying a ``statusUpdate`` for
+    terminal events, or None for events that should not be pushed.
 
     ``event`` is the delivery-side shape: ``{event_type, event_id, task_id, data}``
     with the workflow payload in ``data`` (unprefixed event types).
     """
-    import json
-
     event_type = canonical_type(event.get("event_type", ""))
     state = _TERMINAL_EVENT_STATES.get(event_type)
-    if not state:
+    if state is None:
         return None
 
     data = event.get("data") or {}
@@ -115,19 +123,16 @@ def build_push_notification_body(event: dict[str, Any]) -> str | None:
     context_id = str(data.get("context_id") or task_id)
     text = data.get("result") or data.get("final_response") or data.get("error") or ""
 
-    status: dict[str, Any] = {"state": state}
+    status = TaskStatus(state=state)
     if text:
-        status["message"] = {
-            "role": "AGENT",
-            "messageId": uuid4().hex,
-            "parts": [{"text": str(text)}],
-        }
-
-    body = {
-        "statusUpdate": {
-            "taskId": task_id,
-            "contextId": context_id,
-            "status": status,
-        }
-    }
-    return json.dumps(body)
+        status.message.CopyFrom(
+            Message(
+                role=Role.ROLE_AGENT,
+                message_id=uuid4().hex,
+                parts=[Part(text=str(text))],
+            )
+        )
+    body = StreamResponse(
+        status_update=TaskStatusUpdateEvent(task_id=task_id, context_id=context_id, status=status)
+    )
+    return MessageToJson(body, indent=None)
