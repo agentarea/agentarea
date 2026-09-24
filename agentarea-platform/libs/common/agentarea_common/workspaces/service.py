@@ -10,6 +10,8 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
 
+from ..auth.authorization import assert_workspace_admin_of
+from ..auth.context import UserContext
 from .memberships import (
     MembershipGraph,
     grant_workspace_membership,
@@ -91,33 +93,41 @@ class WorkspaceInvitationService:
     async def create_invitation(
         self,
         *,
+        actor: UserContext,
         workspace_id: str,
-        invited_by: str,
         email: str | None = None,
         expires_in_days: int = DEFAULT_EXPIRY_DAYS,
     ) -> tuple[WorkspaceInvitation, str]:
-        """Create an invitation. Returns (invitation, plaintext_token).
+        """Create an invitation from ``actor``. Returns (invitation, plaintext_token).
 
-        The plaintext token is returned exactly once and never persisted.
-        Caller is responsible for delivering it (link in UI, email,
-        Slack, etc.).
+        Only an admin of ``workspace_id`` may issue one: a join link grants
+        everything membership grants. The plaintext token is returned exactly
+        once and never persisted. Caller is responsible for delivering it (link
+        in UI, email, Slack, etc.).
         """
+        await assert_workspace_admin_of(actor, workspace_id)
         token = secrets.token_urlsafe(TOKEN_BYTES)
         invitation = WorkspaceInvitation(
             workspace_id=workspace_id,
             email=email,
             token_hash=_hash_token(token),
-            invited_by=invited_by,
+            invited_by=actor.user_id,
             status=INVITATION_STATUS_PENDING,
             expires_at=_utcnow() + timedelta(days=expires_in_days),
         )
         await self.invitation_repo.add(invitation)
         return invitation, token
 
-    async def list_pending(self, workspace_id: str) -> list[WorkspaceInvitation]:
+    async def list_pending(
+        self, *, actor: UserContext, workspace_id: str
+    ) -> list[WorkspaceInvitation]:
+        await assert_workspace_admin_of(actor, workspace_id)
         return await self.invitation_repo.list_pending(workspace_id)
 
-    async def revoke(self, *, workspace_id: str, invitation_id: UUID | str) -> WorkspaceInvitation:
+    async def revoke(
+        self, *, actor: UserContext, workspace_id: str, invitation_id: UUID | str
+    ) -> WorkspaceInvitation:
+        await assert_workspace_admin_of(actor, workspace_id)
         invitation = await self.invitation_repo.get_by_id(invitation_id)
         if invitation is None or invitation.workspace_id != workspace_id:
             raise InvitationNotFound(f"Invitation {invitation_id} not found")

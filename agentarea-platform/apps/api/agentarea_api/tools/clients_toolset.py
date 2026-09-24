@@ -14,7 +14,9 @@ import json
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_mcp.application.client_service import ClientService
 from agentarea_mcp.infrastructure.client_repository import ClientRepository
 from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
@@ -52,14 +54,20 @@ class ClientsToolset(Toolset):
     """Manage registered clients: list, get, create, update, delete, and wire their tools."""
 
     @tool_method(effect="read")
+    @enforced_in_handler("narrowed to the rows the graph says this caller may read")
     async def list(self, limit: int = 100, offset: int = 0) -> str:
         """List registered clients and their MCP endpoint URLs."""
-        async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
+        async with platform_read_context() as (_session, user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
-            clients = await service.list(limit=limit, offset=offset)
+            clients = await service.list(
+                limit=limit,
+                offset=offset,
+                ids=await readable_resource_ids(user_ctx.user_id),
+            )
             return json.dumps([_summary(c) for c in clients], default=str)
 
     @tool_method(effect="read")
+    @requires("read", "client", id_param="client_id")
     async def get(self, client_id: str) -> str:
         """Get a client with the skills and MCP instances attached to it."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -78,6 +86,7 @@ class ClientsToolset(Toolset):
             )
 
     @tool_method(effect="write")
+    @unrestricted("any member may register a client, as POST /v1/clients allows")
     async def create(
         self,
         name: str,
@@ -101,6 +110,7 @@ class ClientsToolset(Toolset):
             return json.dumps(_summary(client), default=str)
 
     @tool_method(effect="write")
+    @requires("edit", "client", id_param="client_id")
     async def update(
         self,
         client_id: str,
@@ -126,6 +136,7 @@ class ClientsToolset(Toolset):
             return json.dumps(_summary(client), default=str)
 
     @tool_method(effect="destructive")
+    @requires("delete", "client", id_param="client_id")
     async def delete(self, client_id: str) -> str:
         """Delete a client. Its MCP endpoint stops answering."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -134,6 +145,7 @@ class ClientsToolset(Toolset):
             return json.dumps({"deleted": deleted})
 
     @tool_method(effect="privileged")
+    @requires("edit", "client", id_param="client_id")
     async def add_skill(self, client_id: str, skill_id: str) -> str:
         """Attach a skill to a client, widening what the harness can call."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -142,6 +154,7 @@ class ClientsToolset(Toolset):
             return json.dumps({"added": True})
 
     @tool_method(effect="privileged")
+    @requires("edit", "client", id_param="client_id")
     async def remove_skill(self, client_id: str, skill_id: str) -> str:
         """Detach a skill from a client."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -150,6 +163,7 @@ class ClientsToolset(Toolset):
             return json.dumps({"removed": True})
 
     @tool_method(effect="privileged")
+    @requires("edit", "client", id_param="client_id")
     async def add_mcp_instance(
         self,
         client_id: str,
@@ -167,6 +181,7 @@ class ClientsToolset(Toolset):
             return json.dumps({"added": True})
 
     @tool_method(effect="privileged")
+    @requires("edit", "client", id_param="client_id")
     async def remove_mcp_instance(self, client_id: str, mcp_instance_id: str) -> str:
         """Detach an MCP instance from a client."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):

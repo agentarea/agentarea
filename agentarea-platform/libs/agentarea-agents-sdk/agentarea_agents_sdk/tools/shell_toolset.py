@@ -26,6 +26,7 @@ import httpx
 from .decorator_tool import Toolset, tool_method
 from .invocation_context import ToolInvocationContext
 from .sandbox_control_auth import SandboxControlSigner
+from .tool_authz import unrestricted
 from .tool_definition import toolset
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,7 @@ class ShellToolset(Toolset):
         self._http_client = http_client
 
     @tool_method(effect="destructive")
+    @unrestricted("runs in the run's own sandbox; the runtime policy engine governs each call")
     async def bash(
         self,
         command: str,

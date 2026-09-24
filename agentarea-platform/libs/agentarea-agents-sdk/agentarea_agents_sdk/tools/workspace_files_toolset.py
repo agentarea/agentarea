@@ -13,6 +13,7 @@ from urllib.parse import quote
 
 from .decorator_tool import Toolset, tool_method
 from .file_toolset import InMemoryStorage, StorageClient, WorkspaceRepositoryClient
+from .tool_authz import unrestricted
 from .tool_definition import toolset
 
 
@@ -67,6 +68,7 @@ class WorkspaceFilesToolset(Toolset):
         return path
 
     @tool_method(effect="read")
+    @unrestricted("workspace files are member-level, as /v1/files serves them")
     async def list(self, prefix: str = "", max_items: int = 200) -> str:
         """List files in the current workspace's storage."""
         try:
@@ -98,6 +100,7 @@ class WorkspaceFilesToolset(Toolset):
             return json.dumps({"error": str(exc)})
 
     @tool_method(effect="read")
+    @unrestricted("workspace files are member-level, as /v1/files serves them")
     async def get_url(self, path: str, expires_in: int = 3600) -> str:
         """Return an AgentArea API download path for a workspace file."""
         try:
@@ -129,6 +132,7 @@ class WorkspaceFilesToolset(Toolset):
             return json.dumps({"error": str(exc), "path": path})
 
     @tool_method(effect="destructive")
+    @unrestricted("workspace files are member-level, as DELETE /v1/files allows")
     async def delete(self, path: str) -> str:
         """Delete a workspace file."""
         try:

@@ -23,6 +23,7 @@ import httpx
 
 from .decorator_tool import Toolset, tool_method
 from .file_toolset import StorageClient, WorkspaceRepositoryClient
+from .tool_authz import unrestricted
 from .tool_definition import toolset
 
 _TEXT_CONTENT_TYPES: tuple[str, ...] = (
@@ -198,6 +199,7 @@ class WebToolset(Toolset):
         return relative_path
 
     @tool_method(effect="read")
+    @unrestricted("the public web; reads and writes no workspace state")
     async def search_web(
         self,
         query: str,
@@ -257,6 +259,7 @@ class WebToolset(Toolset):
         )
 
     @tool_method(effect="write")
+    @unrestricted("the public web; reads and writes no workspace state")
     async def fetch_webpage(
         self,
         url: str,

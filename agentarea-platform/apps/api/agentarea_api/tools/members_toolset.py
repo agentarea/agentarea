@@ -12,6 +12,11 @@ import json
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import (
+    enforced_in_handler,
+    requires_workspace_admin,
+    unrestricted,
+)
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.identity_directory import get_identity_directory, identity_for
 from agentarea_common.workspaces import (
@@ -83,6 +88,7 @@ class MembersToolset(Toolset):
     """Manage who is in the workspace: members, invitations, revocation."""
 
     @tool_method(effect="read")
+    @unrestricted("members of the caller's own workspace, which the MCP bearer fixes")
     async def list(self) -> str:
         """List members of the current workspace."""
         async with platform_read_context() as (session, user_ctx, _repo, _broker, _secret):
@@ -102,13 +108,14 @@ class MembersToolset(Toolset):
             )
 
     @tool_method(effect="privileged")
+    @requires_workspace_admin()
     async def invite(self, email: str | None = None, expires_in_days: int | None = None) -> str:
         """Create an invitation. The plaintext token is returned exactly once."""
         async with platform_context() as (session, user_ctx, _repo, _broker, _secret):
             service = _build_service(session)
             kwargs: dict = {
+                "actor": user_ctx,
                 "workspace_id": user_ctx.workspace_id,
-                "invited_by": user_ctx.user_id,
                 "email": email,
             }
             if expires_in_days is not None:
@@ -126,27 +133,34 @@ class MembersToolset(Toolset):
             )
 
     @tool_method(effect="read")
+    @requires_workspace_admin()
     async def list_invitations(self) -> str:
         """List pending invitations. Tokens are not returned."""
         async with platform_read_context() as (session, user_ctx, _repo, _broker, _secret):
             service = _build_service(session)
-            invitations = await service.list_pending(user_ctx.workspace_id)
+            invitations = await service.list_pending(
+                actor=user_ctx, workspace_id=user_ctx.workspace_id
+            )
             return json.dumps([_invitation(i) for i in invitations], default=str)
 
     @tool_method(effect="privileged")
+    @requires_workspace_admin()
     async def revoke_invitation(self, invitation_id: str) -> str:
         """Revoke a pending invitation."""
         async with platform_context() as (session, user_ctx, _repo, _broker, _secret):
             service = _build_service(session)
             try:
                 await service.revoke(
-                    workspace_id=user_ctx.workspace_id, invitation_id=UUID(invitation_id)
+                    actor=user_ctx,
+                    workspace_id=user_ctx.workspace_id,
+                    invitation_id=UUID(invitation_id),
                 )
             except InvitationNotFound:
                 return json.dumps({"error": "Invitation not found"})
             return json.dumps({"revoked": True})
 
     @tool_method(effect="privileged")
+    @enforced_in_handler("owner-only, enforced by WorkspaceMembershipService.remove")
     async def remove(self, user_id: str) -> str:
         """Remove a member from the workspace.
 

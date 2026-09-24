@@ -13,6 +13,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import requires_workspace_admin, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_governance.application import GovernancePolicyResolver, GovernancePolicyService
 from agentarea_governance.domain.policies import PolicyValidationError, effective_policy_from_json
@@ -63,6 +64,7 @@ class PoliciesToolset(Toolset):
     """Read and write governance rules, and preview the policy they resolve to."""
 
     @tool_method(effect="read")
+    @requires_workspace_admin()
     async def list(
         self,
         subject_type: str | None = None,
@@ -84,6 +86,7 @@ class PoliciesToolset(Toolset):
             return json.dumps([_rule_json(r) for r in rules], default=str)
 
     @tool_method(effect="read")
+    @requires_workspace_admin()
     async def get(self, rule_id: str) -> str:
         """Read one policy rule."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -94,6 +97,7 @@ class PoliciesToolset(Toolset):
             return json.dumps(_rule_json(rule), default=str)
 
     @tool_method(effect="privileged")
+    @requires_workspace_admin()
     async def create(
         self,
         subject_type: str,
@@ -139,6 +143,7 @@ class PoliciesToolset(Toolset):
             return json.dumps(_rule_json(created), default=str)
 
     @tool_method(effect="privileged")
+    @requires_workspace_admin()
     async def update(
         self,
         rule_id: str,
@@ -186,6 +191,7 @@ class PoliciesToolset(Toolset):
             return json.dumps(_rule_json(updated), default=str)
 
     @tool_method(effect="destructive")
+    @requires_workspace_admin()
     async def delete(self, rule_id: str) -> str:
         """Delete a policy rule."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -196,6 +202,9 @@ class PoliciesToolset(Toolset):
             return json.dumps({"deleted": True})
 
     @tool_method(effect="read")
+    @unrestricted(
+        "the ceiling a run would get, as POST /v1/governance/effective-policy/preview shows any member"
+    )
     async def preview_effective_policy(self, agent_id: str | None = None) -> str:
         """Resolve the policy ceiling that would apply, without persisting it."""
         async with platform_read_context() as (_session, user_ctx, repo_factory, _broker, _secret):
@@ -211,6 +220,9 @@ class PoliciesToolset(Toolset):
             return json.dumps(effective.model_dump(), default=str)
 
     @tool_method(effect="read")
+    @unrestricted(
+        "the snapshot a run ran under, as GET /v1/governance/task-policy-snapshots/{id} returns it"
+    )
     async def get_run_policy(self, run_id: str) -> str:
         """Read the policy snapshot a run was dispatched under."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):

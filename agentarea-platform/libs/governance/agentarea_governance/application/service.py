@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from agentarea_common.audit import audited
+from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_common.base.repository_factory import RepositoryFactory
 
 from ..domain.rules import PolicyEffect, PolicyRule, PolicySubjectType
@@ -10,7 +11,15 @@ from ..infrastructure.repository import PolicyRuleRepository
 
 
 class GovernancePolicyService:
-    """Coordinates policy rule persistence and audit boundaries."""
+    """Coordinates policy rule persistence and audit boundaries.
+
+    Every write asserts workspace admin on the context the service was built
+    with. The check lives here rather than on the router because the router is
+    one of several doors -- the platform toolset and the bundle installer reach
+    these same methods -- and a deny rule or spend cap any member can delete is
+    no rule at all. A caller seeding a workspace it just created says so by
+    passing a context that administers it.
+    """
 
     def __init__(self, repository_factory: RepositoryFactory):
         self.repository_factory = repository_factory
@@ -45,6 +54,7 @@ class GovernancePolicyService:
     )
     async def create_rule(self, *, rule: PolicyRule, subject_id: str) -> PolicyRule:
         """Create a new policy rule."""
+        await assert_workspace_admin(self.repository_factory.user_context)
         return await self._rule_repository.create(rule)
 
     @audited(
@@ -54,6 +64,7 @@ class GovernancePolicyService:
     )
     async def update_rule(self, *, rule_id: UUID | str, **fields) -> PolicyRule | None:
         """Partially update a policy rule."""
+        await assert_workspace_admin(self.repository_factory.user_context)
         return await self._rule_repository.update(rule_id, **fields)
 
     @audited(
@@ -63,6 +74,7 @@ class GovernancePolicyService:
     )
     async def set_rule_enabled(self, *, rule_id: UUID | str, enabled: bool) -> PolicyRule | None:
         """Enable or disable a policy rule."""
+        await assert_workspace_admin(self.repository_factory.user_context)
         return await self._rule_repository.set_enabled(rule_id, enabled)
 
     @audited(
@@ -72,4 +84,5 @@ class GovernancePolicyService:
     )
     async def delete_rule(self, *, rule_id: UUID | str) -> bool:
         """Delete a policy rule."""
+        await assert_workspace_admin(self.repository_factory.user_context)
         return await self._rule_repository.delete(rule_id)

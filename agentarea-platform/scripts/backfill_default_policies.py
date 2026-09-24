@@ -18,9 +18,12 @@ import argparse
 import asyncio
 import logging
 
+from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import db
+from agentarea_common.di.container import register_singleton
 from agentarea_common.workspaces import Workspace
 from agentarea_governance.application import (
     GovernancePolicyService,
@@ -39,6 +42,8 @@ async def main() -> None:
         help="single workspace to seed; default: every workspace",
     )
     args = parser.parse_args()
+    # Policy writes assert workspace admin; the script acts as each owner.
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
 
     async with db.session() as session:
         if args.workspace_id:
@@ -60,6 +65,7 @@ async def main() -> None:
             ctx = UserContext(
                 user_id=owner_user_id or "backfill-script",
                 workspace_id=ws_id,
+                admin_workspaces=[ws_id],
             )
             governance = GovernancePolicyService(RepositoryFactory(session, ctx))
             created = await provision_default_policies(governance, ws_id)

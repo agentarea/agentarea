@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from .decorator_tool import Toolset, tool_method
 from .file_toolset import InMemoryStorage, StorageClient
+from .tool_authz import unrestricted
 from .tool_definition import toolset
 
 
@@ -51,6 +52,7 @@ class ContextToolset(Toolset):
         self.workspace_id: str = workspace_id
 
     @tool_method(effect="read")
+    @unrestricted("read-only files under the prefix the worker injects for this run")
     async def list_org_files(self, prefix: str = "") -> str:
         """List files in the organization library (shared, read-only).
 
@@ -75,6 +77,7 @@ class ContextToolset(Toolset):
         return "\n".join(paths)
 
     @tool_method(effect="read")
+    @unrestricted("read-only files under the prefix the worker injects for this run")
     async def read_org_file(self, path: str) -> str:
         """Read a text file from the organization library (shared, read-only).
 

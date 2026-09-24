@@ -316,8 +316,8 @@ async def create_invitation(
     """
     _ensure_workspace_access(user, workspace_id)
     kwargs: dict = {
+        "actor": user,
         "workspace_id": workspace_id,
-        "invited_by": user.user_id,
         "email": body.email,
     }
     if body.expires_in_days is not None:
@@ -346,7 +346,7 @@ async def list_invitations(
 ):
     """List pending invitations for the workspace. Tokens are NOT returned."""
     _ensure_workspace_access(user, workspace_id)
-    invitations = await service.list_pending(workspace_id)
+    invitations = await service.list_pending(actor=user, workspace_id=workspace_id)
     inviters = await _resolve_identities([i.invited_by for i in invitations])
     return [_invitation_to_response(i, inviters.get(i.invited_by)) for i in invitations]
 
@@ -365,7 +365,7 @@ async def revoke_invitation(
     """Revoke a pending invitation. Idempotent — already-resolved invitations are no-ops."""
     _ensure_workspace_access(user, workspace_id)
     try:
-        await service.revoke(workspace_id=workspace_id, invitation_id=invitation_id)
+        await service.revoke(actor=user, workspace_id=workspace_id, invitation_id=invitation_id)
     except InvitationNotFound as exc:
         raise HTTPException(status_code=404, detail="Invitation not found") from exc
 

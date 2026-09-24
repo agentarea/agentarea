@@ -14,6 +14,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_triggers.schemas.dto import TriggerCreate
 
@@ -76,6 +77,7 @@ class TriggersToolset(Toolset):
     """Manage triggers: list, get, create cron/webhook, update, delete, enable/disable, history."""
 
     @tool_method(effect="read")
+    @unrestricted("triggers in the caller's workspace, as GET /v1/triggers lists them")
     async def list(
         self,
         agent_id: str = "",
@@ -93,6 +95,7 @@ class TriggersToolset(Toolset):
             return json.dumps([_trigger_summary(t) for t in triggers], default=str)
 
     @tool_method(effect="read")
+    @unrestricted("a trigger in the caller's workspace, as GET /v1/triggers/{id} returns it")
     async def get(self, trigger_id: str) -> str:
         """Get a trigger by ID."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, broker, secret):
@@ -103,6 +106,7 @@ class TriggersToolset(Toolset):
             return json.dumps(_trigger_summary(trigger), default=str)
 
     @tool_method(effect="write")
+    @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
     async def create_cron(
         self,
         name: str,
@@ -150,6 +154,7 @@ class TriggersToolset(Toolset):
             return json.dumps(_trigger_summary(trigger), default=str)
 
     @tool_method(effect="write")
+    @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
     async def create_webhook(
         self,
         name: str,
@@ -195,6 +200,7 @@ class TriggersToolset(Toolset):
             return json.dumps(_trigger_summary(trigger), default=str)
 
     @tool_method(effect="destructive")
+    @requires("delete", "trigger", id_param="trigger_id")
     async def delete(self, trigger_id: str) -> str:
         """Delete a trigger and its schedule."""
         async with platform_context() as (_session, _user_ctx, repo_factory, broker, secret):
@@ -203,6 +209,7 @@ class TriggersToolset(Toolset):
             return json.dumps({"deleted": deleted})
 
     @tool_method(effect="write")
+    @requires("edit", "trigger", id_param="trigger_id")
     async def enable(self, trigger_id: str) -> str:
         """Enable a trigger (resumes its schedule for cron triggers)."""
         async with platform_context() as (_session, _user_ctx, repo_factory, broker, secret):
@@ -211,6 +218,7 @@ class TriggersToolset(Toolset):
             return json.dumps({"enabled": ok})
 
     @tool_method(effect="write")
+    @requires("edit", "trigger", id_param="trigger_id")
     async def disable(self, trigger_id: str) -> str:
         """Disable a trigger (pauses its schedule for cron triggers)."""
         async with platform_context() as (_session, _user_ctx, repo_factory, broker, secret):
@@ -219,6 +227,7 @@ class TriggersToolset(Toolset):
             return json.dumps({"disabled": ok})
 
     @tool_method(effect="read")
+    @unrestricted("execution history, as GET /v1/triggers/{id}/executions serves it")
     async def get_history(self, trigger_id: str, limit: int = 50, offset: int = 0) -> str:
         """Get recent execution history for a trigger."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, broker, secret):

@@ -54,6 +54,8 @@ async def export_workspace_config(
             headers={"Content-Disposition": "attachment; filename=workspace_config.yaml"},
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Failed to export workspace configuration")
         raise HTTPException(status_code=500, detail="Internal server error") from e

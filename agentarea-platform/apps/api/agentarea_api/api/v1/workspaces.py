@@ -64,7 +64,11 @@ def get_workspace_service(session: SessionDep, user: UserContextDep) -> Workspac
         ``WorkspaceService`` commits both together, or rolls both back if this
         raises.
         """
-        ctx = UserContext(user_id=user.user_id, workspace_id=workspace.id)
+        # The creator administers what they are creating. Stated here because
+        # ownership is resolved from committed rows and this one is not yet.
+        ctx = UserContext(
+            user_id=user.user_id, workspace_id=workspace.id, admin_workspaces=[workspace.id]
+        )
         governance = GovernancePolicyService(RepositoryFactory(session, ctx))
         await provision_default_policies(governance, workspace.id)
 

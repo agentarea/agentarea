@@ -11,11 +11,36 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
 from agentarea_api.tools import clients_toolset
 from agentarea_api.tools.clients_toolset import ClientsToolset
+from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.permission import PermissionService
+from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.di.container import get_container
 from pydantic import ValidationError
 
 CLIENT_ID = uuid4()
+
+
+class _AllowAll(PermissionService):
+    async def check(self, user_id, permission, resource_type, resource_id) -> bool:
+        return True
+
+
+@pytest.fixture(autouse=True)
+def caller():
+    """The tools check the MCP caller first; this one administers the workspace."""
+    container = get_container()
+    saved = dict(container._singletons)
+    container.register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+    container.register_singleton(PermissionService, _AllowAll())
+    owner = UserContext(user_id="user-1", workspace_id="ws-1", admin_workspaces=["ws-1"])
+    with use_mcp_user_context(owner):
+        yield
+    container._singletons.clear()
+    container._singletons.update(saved)
 
 
 class FakeClientService:

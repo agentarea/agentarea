@@ -28,7 +28,9 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.auth.resource_visibility import readable_resource_ids
 
 from agentarea_agents.schemas.skills_dto import (
     SkillCreateFromArchive,
@@ -277,6 +279,7 @@ class SkillsToolset(Toolset):
     """
 
     @tool_method(effect="read")
+    @enforced_in_handler("rows the graph says this caller may read; see readable_resource_ids")
     async def list(self) -> str:
         """List all skills in the workspace."""
         async with platform_read_context() as (_session, user_ctx, repo_factory, _broker, _secret):
@@ -284,9 +287,13 @@ class SkillsToolset(Toolset):
 
             service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
             skills = await service.list()
-            return json.dumps([_skill_summary(s) for s in skills], default=str)
+            readable = await readable_resource_ids(user_ctx.user_id)
+            return json.dumps(
+                [_skill_summary(s) for s in skills if str(s.id) in readable], default=str
+            )
 
     @tool_method(effect="read")
+    @requires("read", "skill", id_param="skill_id")
     async def get(self, skill_id: str) -> str:
         """Get details of a skill, including its primary SKILL.md content."""
         async with platform_read_context() as (_session, user_ctx, repo_factory, _broker, _secret):
@@ -301,6 +308,7 @@ class SkillsToolset(Toolset):
             return json.dumps(payload, default=str)
 
     @tool_method(effect="write")
+    @unrestricted("any member may create a skill, as POST /v1/skills allows")
     async def create(
         self,
         files: dict[str, str],
@@ -354,6 +362,7 @@ class SkillsToolset(Toolset):
             return json.dumps(summary, default=str)
 
     @tool_method(effect="write")
+    @unrestricted("any member may create a skill, as POST /v1/skills/upload allows")
     async def create_from_archive(
         self,
         zip_base64: str,
@@ -391,6 +400,7 @@ class SkillsToolset(Toolset):
             return json.dumps(_skill_summary(skill), default=str)
 
     @tool_method(effect="write")
+    @unrestricted("any member may create a skill, as POST /v1/skills allows")
     async def import_from_github(
         self,
         github_url: str,
@@ -513,6 +523,7 @@ class SkillsToolset(Toolset):
         return json.dumps({"created": created, "count": len(created)}, default=str)
 
     @tool_method(effect="write")
+    @requires("edit", "skill", id_param="skill_id")
     async def edit_metadata(
         self,
         skill_id: str,
@@ -545,6 +556,7 @@ class SkillsToolset(Toolset):
             )
 
     @tool_method(effect="write")
+    @requires("edit", "skill", id_param="skill_id")
     async def edit_content(self, skill_id: str, files: dict[str, str]) -> str:
         """Edit a skill's file content. Mode-aware:
 
@@ -614,6 +626,7 @@ class SkillsToolset(Toolset):
             )
 
     @tool_method(effect="destructive")
+    @requires("delete", "skill", id_param="skill_id")
     async def delete(self, skill_id: str) -> str:
         """Delete a skill and its file storage."""
         async with platform_context() as (_session, user_ctx, repo_factory, _broker, _secret):
@@ -624,6 +637,7 @@ class SkillsToolset(Toolset):
             return json.dumps({"deleted": deleted})
 
     @tool_method(effect="read")
+    @unrestricted("package files, as GET /v1/skills/{id}/files serves them")
     async def list_files(self, skill_id: str, include_urls: bool = False) -> str:
         """List files inside a skill package. Set include_urls=True for bulk
         hydration with a presigned download URL per file (one round-trip).
@@ -642,6 +656,7 @@ class SkillsToolset(Toolset):
             )
 
     @tool_method(effect="read")
+    @unrestricted("package files, as GET /v1/skills/{id}/files/{path} serves them")
     async def get_file(
         self,
         skill_id: str,
