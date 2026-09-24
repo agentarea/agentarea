@@ -164,15 +164,13 @@ class AgentAreaWorker:
 
         discover_extensions()
 
-        # Resolve now, after discovery, so the pricing in force is logged at startup
-        # rather than on the first priced call — the one outcome that must never be a
-        # surprise is amounts silently staying in USD on a non-USD deployment.
+        # Resolve now, after discovery, and let a failure stop startup. An installed
+        # pricing extension that cannot be resolved leaves the currency unknown, and
+        # a process running anyway would record amounts in a different currency from
+        # its siblings; exiting lets the orchestrator restart it instead.
         from agentarea_common.extensions.customer_pricing import get_customer_pricing
 
-        try:
-            logger.info("Billing currency: %s", get_customer_pricing().currency())
-        except Exception:
-            logger.exception("customer_pricing could not report its currency at startup")
+        logger.info("Billing currency: %s", get_customer_pricing().currency())
 
         app_settings = get_app_settings()
         mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
