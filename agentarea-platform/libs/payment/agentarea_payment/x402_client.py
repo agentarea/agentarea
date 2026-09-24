@@ -203,25 +203,26 @@ class X402PaymentClient:
                 response = await http_client.request(**request_kwargs)
                 await response.aread()
 
-            if 200 <= response.status_code < 300:
-                # Extract tx hash from response headers if available
-                payment_response = response.headers.get("PAYMENT-RESPONSE", "")
-                tx_hash = None
-                if payment_response:
-                    try:
-                        pr_data = json.loads(base64.b64decode(payment_response))
-                        tx_hash = pr_data.get("txHash") or pr_data.get("transaction_hash")
-                    except Exception:
-                        logger.debug("Failed to parse x402 PAYMENT-RESPONSE header")
+            # A settlement receipt can come back on an error response too: the
+            # payment settled even though the paid request then failed.
+            payment_response = response.headers.get("PAYMENT-RESPONSE", "")
+            tx_hash = None
+            if payment_response:
                 try:
-                    settle_response = http_client_cls(client).get_payment_settle_response(
-                        lambda name: response.headers.get(name)
-                    )
-                    if settle_response is not None:
-                        tx_hash = tx_hash or getattr(settle_response, "tx_hash", None)
+                    pr_data = json.loads(base64.b64decode(payment_response))
+                    tx_hash = pr_data.get("txHash") or pr_data.get("transaction_hash")
                 except Exception:
-                    logger.debug("Failed to parse x402 settle response")
+                    logger.debug("Failed to parse x402 PAYMENT-RESPONSE header")
+            try:
+                settle_response = http_client_cls(client).get_payment_settle_response(
+                    lambda name: response.headers.get(name)
+                )
+                if settle_response is not None:
+                    tx_hash = tx_hash or getattr(settle_response, "tx_hash", None)
+            except Exception:
+                logger.debug("Failed to parse x402 settle response")
 
+            if 200 <= response.status_code < 300:
                 return PaymentResult(
                     success=True,
                     protocol="x402",
@@ -238,6 +239,7 @@ class X402PaymentClient:
                     protocol="x402",
                     amount_usd=amount,
                     recipient=recipient,
+                    tx_hash=tx_hash,
                     error=f"Payment retry failed with status {response.status_code}: {response.text[:200]}",
                     response_status=response.status_code,
                 )

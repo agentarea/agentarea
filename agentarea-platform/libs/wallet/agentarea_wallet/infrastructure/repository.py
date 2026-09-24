@@ -9,6 +9,7 @@ from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRep
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agentarea_wallet.domain.enums import SETTLED_PAYMENT_STATUSES
 from agentarea_wallet.domain.models import AgentWallet, PaymentRecord
 
 logger = logging.getLogger(__name__)
@@ -71,7 +72,7 @@ class WalletRepository(WorkspaceScopedRepository[AgentWallet]):
             spent_q = (
                 select(func.coalesce(func.sum(PaymentRecord.amount_usd), 0.0))
                 .where(PaymentRecord.agent_id == str(wallet.agent_id))
-                .where(PaymentRecord.status == "completed")
+                .where(PaymentRecord.status.in_(SETTLED_PAYMENT_STATUSES))
                 .where(PaymentRecord.created_at >= period_start)
                 .where(PaymentRecord.workspace_id == wallet.workspace_id)
             )
@@ -132,11 +133,11 @@ class PaymentRecordRepository(WorkspaceScopedRepository[PaymentRecord]):
         return list(result.scalars().all())
 
     async def get_settled_by_idempotency_key(self, idempotency_key: str) -> PaymentRecord | None:
-        """Return the completed payment recorded under this key, if any."""
+        """Return the settled payment recorded under this key, if any."""
         query = (
             select(PaymentRecord)
             .where(PaymentRecord.idempotency_key == idempotency_key)
-            .where(PaymentRecord.status == "completed")
+            .where(PaymentRecord.status.in_(SETTLED_PAYMENT_STATUSES))
             .where(self._get_workspace_filter())
         )
         result = await self.session.execute(query)
@@ -150,13 +151,13 @@ class PaymentRecordRepository(WorkspaceScopedRepository[PaymentRecord]):
             execution_id: The execution identifier.
 
         Returns:
-            Sum of amount_usd for completed payments in the execution.
+            Sum of amount_usd for settled payments in the execution.
         """
         query = (
             select(func.coalesce(func.sum(PaymentRecord.amount_usd), 0.0))
             .where(PaymentRecord.agent_id == agent_id)
             .where(PaymentRecord.execution_id == execution_id)
-            .where(PaymentRecord.status == "completed")
+            .where(PaymentRecord.status.in_(SETTLED_PAYMENT_STATUSES))
             .where(self._get_workspace_filter())
         )
         result = await self.session.execute(query)
@@ -170,12 +171,12 @@ class PaymentRecordRepository(WorkspaceScopedRepository[PaymentRecord]):
             budget_period: One of "daily" or "monthly". "execution" is not handled here.
 
         Returns:
-            Sum of amount_usd for completed payments in the current period.
+            Sum of amount_usd for settled payments in the current period.
         """
         query = (
             select(func.coalesce(func.sum(PaymentRecord.amount_usd), 0.0))
             .where(PaymentRecord.agent_id == agent_id)
-            .where(PaymentRecord.status == "completed")
+            .where(PaymentRecord.status.in_(SETTLED_PAYMENT_STATUSES))
             .where(self._get_workspace_filter())
         )
 
