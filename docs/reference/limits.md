@@ -8,7 +8,7 @@ related:
   - /reference/authorization-model
   - /reference/errors
   - /guides/governance/set-a-budget
-last_updated: 2026-07-29
+last_updated: 2026-09-24
 ---
 
 The numeric bounds on task execution, governance and the authorization graph.
@@ -43,14 +43,18 @@ A limit comes from one of three places, and that decides how you change it.
 
 | Limit | Default for a new workspace | Unit |
 |---|---|---|
-| `budget.monthly_spend_cap_usd` | `500.00` | USD per calendar month, UTC |
-| `budget.run_budget_usd` | `50.00` | USD per task |
+| `budget.monthly_spend_cap_usd` | `500.00` | billing currency per calendar month, UTC |
+| `budget.run_budget_usd` | `50.00` | billing currency per task |
 | `budget.service_budget_usd` | not seeded | USD per task |
 | `tokens.max_tokens` | `20000000` | tokens per task |
 | `tokens.max_tokens_per_call` | `100000` | maximum output tokens for one LLM call |
 | `execution.max_model_turns` | `100` | model turns per task |
 | `execution.max_tool_calls_per_turn` | `10` | tool calls per model turn |
 | `execution.max_tool_calls_total` | `1000` | tool calls per task |
+
+The `_usd` spend ceilings are in the deployment's billing currency, which is USD
+unless a `customer_pricing` extension says otherwise; `GET /v1/pricing/currency`
+returns it. See [budgets and quotas](/concepts/governance/budgets-and-quotas#currency).
 
 ### Execution limits
 

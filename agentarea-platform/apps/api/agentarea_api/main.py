@@ -50,6 +50,16 @@ async def initialize_services():
 
         discover_extensions()
 
+        # Resolve now, after discovery, so the pricing in force is logged at startup
+        # rather than on the first priced call — the one outcome that must never be a
+        # surprise is amounts silently staying in USD on a non-USD deployment.
+        from agentarea_common.extensions.customer_pricing import get_customer_pricing
+
+        try:
+            logger.info("Billing currency: %s", get_customer_pricing().currency())
+        except Exception:
+            logger.exception("customer_pricing could not report its currency at startup")
+
         app_settings = get_app_settings()
         mode = DeploymentMode(app_settings.DEPLOYMENT_MODE)
         register_singleton(FeatureService, FeatureService(mode=mode))

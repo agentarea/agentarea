@@ -42,7 +42,9 @@ from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationRequest,
     authorize_tool_invocation,
 )
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.events.contract import LLM_FAILED, canonical_type
+from agentarea_common.extensions.customer_pricing import price_llm_call
 from agentarea_common.money import ZERO, to_money
 from prometheus_client import Counter
 
@@ -1852,6 +1854,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
             model_name = None
             endpoint_url = None
             api_key = None
+            managed_by: str | None = None
             max_output_tokens = None
             input_cost_per_token = None
             output_cost_per_token = None
@@ -1864,12 +1867,13 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 max_output_tokens = cached.get("max_output_tokens")
                 input_cost_per_token = cached.get("input_cost_per_token")
                 output_cost_per_token = cached.get("output_cost_per_token")
+                managed_by = cached.get("managed_by")
                 api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
                     try:
                         api_key = await llm_execution_service.resolve_provider_api_key(
                             reference=api_key_secret_name,
-                            managed_by=cached.get("managed_by"),
+                            managed_by=managed_by,
                             user_context=user_context,
                             secret_manager_factory=dependencies.secret_manager_factory,
                         )
@@ -1906,11 +1910,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         model_instance.model_spec, "output_cost_per_token", None
                     )
 
+                    managed_by = getattr(model_instance.provider_config, "managed_by", None)
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                     if api_key_secret_name:
                         api_key = await llm_execution_service.resolve_provider_api_key(
                             reference=api_key_secret_name,
-                            managed_by=getattr(model_instance.provider_config, "managed_by", None),
+                            managed_by=managed_by,
                             user_context=user_context,
                             secret_manager_factory=dependencies.secret_manager_factory,
                         )
@@ -1997,6 +2002,16 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     "compaction usage accounting unavailable; budget cannot be enforced"
                 )
 
+            # Compaction spends against the same run budget as the loop's calls, so
+            # its cost has to be in the same currency they are.
+            cost = await price_llm_call(
+                model_instance_id=str(model_uuid),
+                platform_funded=managed_by == MANAGED_BY_PLATFORM,
+                prompt_tokens=final_usage.prompt_tokens,
+                completion_tokens=final_usage.completion_tokens,
+                provider_cost_usd=final_cost,
+            )
+
             original_tokens = sum(
                 len(msg.get("content", "") or "") // 4 for msg in request.messages_to_compact
             )
@@ -2006,7 +2021,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 summary=complete_content,
                 original_message_count=len(request.messages_to_compact),
                 estimated_tokens_saved=max(0, original_tokens - summary_tokens),
-                cost=final_cost,
+                cost=cost,
                 usage=LLMUsage(
                     prompt_tokens=final_usage.prompt_tokens,
                     completion_tokens=final_usage.completion_tokens,

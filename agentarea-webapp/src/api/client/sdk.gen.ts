@@ -356,6 +356,8 @@ import type {
   GetPolicyRuleV1PoliciesRuleIdGetData,
   GetPolicyRuleV1PoliciesRuleIdGetErrors,
   GetPolicyRuleV1PoliciesRuleIdGetResponses,
+  GetPricingCurrencyV1PricingCurrencyGetData,
+  GetPricingCurrencyV1PricingCurrencyGetResponses,
   GetProjectV1ProjectsProjectIdGetData,
   GetProjectV1ProjectsProjectIdGetErrors,
   GetProjectV1ProjectsProjectIdGetResponses,
@@ -6249,6 +6251,36 @@ export const updatePolicyRuleV1PoliciesRuleIdPatch = <
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * Get Pricing Currency
+ *
+ * Return the billing currency of this deployment.
+ */
+export const getPricingCurrencyV1PricingCurrencyGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<GetPricingCurrencyV1PricingCurrencyGetData, ThrowOnError>
+): RequestResult<
+  GetPricingCurrencyV1PricingCurrencyGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    GetPricingCurrencyV1PricingCurrencyGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/pricing/currency",
+    ...options,
   });
 
 /**

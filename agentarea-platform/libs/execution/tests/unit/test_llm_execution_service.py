@@ -482,6 +482,106 @@ async def test_error_publication_failure_does_not_replace_provider_error(
     provider.ainvoke_stream.assert_not_called()
 
 
+class _RecordingPricing:
+    """Stands in for a customer_pricing extension: RUB, 95 per provider dollar."""
+
+    def __init__(self, error: Exception | None = None):
+        self.calls = []
+        self._error = error
+
+    def currency(self):
+        return "RUB"
+
+    async def price_llm_call(self, **kwargs):
+        self.calls.append(kwargs)
+        if self._error is not None:
+            raise self._error
+        return kwargs["provider_cost_usd"] * 95
+
+
+@pytest.mark.parametrize("stream", [True, False], ids=["streamed", "completed"])
+@pytest.mark.parametrize(
+    ("managed_by", "platform_funded"),
+    [("platform", True), (None, False)],
+    ids=["platform-key", "customer-key"],
+)
+async def test_result_cost_is_what_the_customer_pays(
+    provider, make_service, user_context, stream, managed_by, platform_funded
+):
+    request = _request()
+    request.resolved_model["managed_by"] = managed_by
+    pricing = _RecordingPricing()
+
+    result = await make_service(stream=stream, customer_pricing=pricing).execute(
+        request, user_context=user_context
+    )
+
+    assert result.cost == to_money("1.90")
+    assert pricing.calls == [
+        {
+            "model_instance_id": MODEL_ID,
+            "platform_funded": platform_funded,
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "provider_cost_usd": to_money("0.02"),
+        }
+    ]
+
+
+async def test_uncached_model_prices_with_the_record_funding(
+    provider, make_service, model_scope, user_context
+):
+    model_scope.record.provider_config.managed_by = "platform"
+    pricing = _RecordingPricing()
+
+    await make_service(model_service_scope=model_scope.scope, customer_pricing=pricing).execute(
+        _request(resolved_model=None), user_context=user_context
+    )
+
+    assert pricing.calls[0]["platform_funded"] is True
+
+
+@pytest.fixture
+def registered_pricing(monkeypatch):
+    """A customer_pricing extension installed the way discovery installs one."""
+    from agentarea_common.extensions import customer_pricing
+    from agentarea_common.extensions.registry import ExtensionRegistry
+
+    pricing = _RecordingPricing()
+    monkeypatch.setattr(ExtensionRegistry, "_factories", {"customer_pricing": lambda: pricing})
+    customer_pricing.get_customer_pricing.cache_clear()
+    yield pricing
+    customer_pricing.get_customer_pricing.cache_clear()
+
+
+async def test_default_pricing_comes_from_the_extension_registry(
+    registered_pricing, provider, make_service, user_context
+):
+    result = await make_service().execute(_request(), user_context=user_context)
+
+    assert result.cost == to_money("1.90")
+    assert len(registered_pricing.calls) == 1
+
+
+async def test_pricing_failure_fails_the_call_without_recording_provider_cost(
+    provider, make_service, user_context
+):
+    from agentarea_execution.activities.event_publisher import _is_non_retryable_error
+
+    progress, errors = _Progress(), AsyncMock()
+    pricing = _RecordingPricing(error=ConnectionError("billing down"))
+
+    with pytest.raises(RuntimeError, match="customer pricing failed") as raised:
+        await make_service(customer_pricing=pricing).execute(
+            _request(), user_context=user_context, on_chunk=progress, on_error=errors
+        )
+
+    assert not any(event[2] for event in progress.events)
+    errors.assert_awaited_once_with(raised.value, "openai")
+    # Retrying would pay the provider again for a call that already succeeded.
+    assert _is_non_retryable_error(raised.value)
+
+
 @pytest.fixture
 def activity_boundary(monkeypatch):
     from agentarea_execution.activities import agent_execution_activities as activities
@@ -563,3 +663,34 @@ async def test_activity_context_failure_publishes_once_without_calling_provider(
     assert activity_boundary.errors.call_args.kwargs["provider_type"] is None
     provider.ainvoke_stream.assert_not_called()
     provider.complete.assert_not_awaited()
+
+
+async def test_compaction_cost_is_priced_like_the_loop_calls(
+    monkeypatch, registered_pricing, provider, activity_boundary
+):
+    """Compaction spends the same run budget, so it must be in the same currency."""
+    from agentarea_execution.activities import agent_execution_activities as activities
+    from agentarea_execution.models import CompactMessagesRequest
+
+    monkeypatch.setattr(activities, "LLMModel", provider.constructor)
+    functions = {
+        fn.__name__: fn for fn in activities.make_agent_activities(activity_boundary.dependencies)
+    }
+    request = _request()
+    request.resolved_model["managed_by"] = "platform"
+
+    result = await ActivityEnvironment().run(
+        functions["compact_messages_activity"],
+        CompactMessagesRequest(
+            messages_to_compact=[{"role": "user", "content": "old turn"}],
+            model_id=MODEL_ID,
+            workspace_id="test-workspace",
+            user_context_data=request.user_context_data,
+            resolved_model=request.resolved_model,
+            effective_policy=request.effective_policy,
+        ),
+    )
+
+    assert result.cost == to_money("1.90")
+    assert registered_pricing.calls[0]["platform_funded"] is True
+    assert registered_pricing.calls[0]["model_instance_id"] == MODEL_ID

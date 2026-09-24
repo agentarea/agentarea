@@ -1954,6 +1954,13 @@ export const zPreviewIssue = z.object({
 });
 
 /**
+ * PricingCurrencyResponse
+ */
+export const zPricingCurrencyResponse = z.object({
+  currency: z.string(),
+});
+
+/**
  * PrincipalType
  *
  * What kind of thing an id refers to.
@@ -4924,6 +4931,12 @@ export const zUpdatePolicyRuleV1PoliciesRuleIdPatchPath = z.object({
  */
 export const zUpdatePolicyRuleV1PoliciesRuleIdPatchResponse =
   zPolicyRuleResponse;
+
+/**
+ * Successful Response
+ */
+export const zGetPricingCurrencyV1PricingCurrencyGetResponse =
+  zPricingCurrencyResponse;
 
 export const zResolvePrincipalsV1PrincipalsGetQuery = z.object({
   ids: z.array(z.string()).optional(),

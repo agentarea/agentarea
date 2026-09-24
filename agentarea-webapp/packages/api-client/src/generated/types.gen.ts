@@ -4790,6 +4790,16 @@ export type PreviewIssue = {
 };
 
 /**
+ * PricingCurrencyResponse
+ */
+export type PricingCurrencyResponse = {
+    /**
+     * Currency
+     */
+    currency: string;
+};
+
+/**
  * PrincipalResponse
  */
 export type PrincipalResponse = {
@@ -12763,6 +12773,22 @@ export type UpdatePolicyRuleV1PoliciesRuleIdPatchResponses = {
 };
 
 export type UpdatePolicyRuleV1PoliciesRuleIdPatchResponse = UpdatePolicyRuleV1PoliciesRuleIdPatchResponses[keyof UpdatePolicyRuleV1PoliciesRuleIdPatchResponses];
+
+export type GetPricingCurrencyV1PricingCurrencyGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/pricing/currency';
+};
+
+export type GetPricingCurrencyV1PricingCurrencyGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PricingCurrencyResponse;
+};
+
+export type GetPricingCurrencyV1PricingCurrencyGetResponse = GetPricingCurrencyV1PricingCurrencyGetResponses[keyof GetPricingCurrencyV1PricingCurrencyGetResponses];
 
 export type ResolvePrincipalsV1PrincipalsGetData = {
     body?: never;

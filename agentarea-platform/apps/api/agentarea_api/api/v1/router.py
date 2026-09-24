@@ -35,6 +35,7 @@ from . import (
     network,
     openapi_connections,
     policies,
+    pricing,
     principals,
     projects,
     provider_configs,
@@ -160,6 +161,9 @@ protected_v1_router.include_router(clients.router)
 # Audit logs - PROTECTED
 protected_v1_router.include_router(audit.router)
 protected_v1_router.include_router(usage.router)
+
+# Billing currency of every money amount - PROTECTED
+protected_v1_router.include_router(pricing.router)
 
 # Dashboard + workspace settings - PROTECTED
 protected_v1_router.include_router(dashboard.router)

@@ -8269,6 +8269,19 @@
         "title": "PreviewIssue",
         "type": "object"
       },
+      "PricingCurrencyResponse": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency"
+        ],
+        "title": "PricingCurrencyResponse",
+        "type": "object"
+      },
       "PrincipalResponse": {
         "properties": {
           "display_name": {
@@ -22485,6 +22498,35 @@
           "v1",
           "protected",
           "policies"
+        ]
+      }
+    },
+    "/v1/pricing/currency": {
+      "get": {
+        "description": "Return the billing currency of this deployment.",
+        "operationId": "get_pricing_currency_v1_pricing_currency_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingCurrencyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Pricing Currency",
+        "tags": [
+          "v1",
+          "protected",
+          "pricing"
         ]
       }
     },

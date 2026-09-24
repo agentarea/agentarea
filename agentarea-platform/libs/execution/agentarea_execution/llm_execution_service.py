@@ -9,6 +9,7 @@ from uuid import UUID
 from agentarea_agents_sdk import LLMModel, LLMRequest, LLMResponse
 from agentarea_common.auth.context import UserContext
 from agentarea_common.constants import MANAGED_BY_PLATFORM
+from agentarea_common.extensions.customer_pricing import CustomerPricing, price_llm_call
 from agentarea_common.money import to_money
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
@@ -111,11 +112,15 @@ class LLMExecutionService:
         secret_manager_factory: SecretManagerFactory,
         local_host: str,
         stream: bool = True,
+        customer_pricing: CustomerPricing | None = None,
     ) -> None:
         self._model_service_scope = model_service_scope
         self._secret_manager_factory = secret_manager_factory
         self._local_host = local_host
         self._stream = stream
+        # None = the process-wide pricing, looked up per call: this service is built
+        # before the worker discovers extensions (see get_customer_pricing).
+        self._customer_pricing = customer_pricing
 
     async def execute(
         self,
@@ -139,6 +144,7 @@ class LLMExecutionService:
             model_name = None
             endpoint_url = None
             api_key = None
+            managed_by: str | None = None
             max_output_tokens = None
             input_cost_per_token = None
             output_cost_per_token = None
@@ -151,12 +157,13 @@ class LLMExecutionService:
                 max_output_tokens = cached.get("max_output_tokens")
                 input_cost_per_token = cached.get("input_cost_per_token")
                 output_cost_per_token = cached.get("output_cost_per_token")
+                managed_by = cached.get("managed_by")
                 api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
                     try:
                         api_key = await resolve_provider_api_key(
                             reference=api_key_secret_name,
-                            managed_by=cached.get("managed_by"),
+                            managed_by=managed_by,
                             user_context=user_context,
                             secret_manager_factory=self._secret_manager_factory,
                         )
@@ -190,11 +197,12 @@ class LLMExecutionService:
                     output_cost_per_token = getattr(
                         model_instance.model_spec, "output_cost_per_token", None
                     )
+                    managed_by = getattr(model_instance.provider_config, "managed_by", None)
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                     if api_key_secret_name:
                         api_key = await resolve_provider_api_key(
                             reference=api_key_secret_name,
-                            managed_by=getattr(model_instance.provider_config, "managed_by", None),
+                            managed_by=managed_by,
                             user_context=user_context,
                             secret_manager_factory=self._secret_manager_factory,
                         )
@@ -282,6 +290,23 @@ class LLMExecutionService:
                     "LLM usage accounting unavailable; token and cost policy cannot be enforced"
                 )
 
+            usage = LLMUsage(
+                prompt_tokens=getattr(final_usage, "prompt_tokens", 0),
+                completion_tokens=getattr(final_usage, "completion_tokens", 0),
+                total_tokens=getattr(final_usage, "total_tokens", 0),
+            )
+            # Provider cost (USD) becomes what the customer pays, in the billing
+            # currency. Events, task totals and budget enforcement all carry this
+            # amount from here on, unconverted.
+            cost = await price_llm_call(
+                model_instance_id=str(model_uuid),
+                platform_funded=managed_by == MANAGED_BY_PLATFORM,
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                provider_cost_usd=to_money(final_cost),
+                pricing=self._customer_pricing,
+            )
+
             if self._stream and on_chunk is not None:
                 await on_chunk("", chunk_index, True)
 
@@ -290,12 +315,8 @@ class LLMExecutionService:
                 content="".join(content_parts),
                 thinking="".join(thinking_parts),
                 tool_calls=complete_tool_calls,
-                cost=to_money(final_cost),
-                usage=LLMUsage(
-                    prompt_tokens=getattr(final_usage, "prompt_tokens", 0),
-                    completion_tokens=getattr(final_usage, "completion_tokens", 0),
-                    total_tokens=getattr(final_usage, "total_tokens", 0),
-                ),
+                cost=cost,
+                usage=usage,
             )
         except Exception as error:
             if on_error is not None:
