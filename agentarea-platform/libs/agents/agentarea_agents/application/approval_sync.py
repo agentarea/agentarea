@@ -26,7 +26,12 @@ from uuid import UUID
 
 from agentarea_agents_sdk.tools.mcp_tool_identity import mcp_tool_target
 from agentarea_common.auth.context import UserContext
-from agentarea_governance.domain.rules import PolicyEffect, PolicyRule, PolicySubjectType
+from agentarea_governance.domain.rules import (
+    MANAGED_BY_AGENT_TOOLS,
+    PolicyEffect,
+    PolicyRule,
+    PolicySubjectType,
+)
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -114,10 +119,13 @@ async def sync_agent_approval_rules(
     agent_id: UUID,
     targets: set[str],
 ) -> None:
-    """Reconcile an agent's APPROVAL rules to exactly ``targets``.
+    """Reconcile the agent's toggle-owned APPROVAL rules to exactly ``targets``.
 
     Idempotent: existing targets are left alone, missing ones created, and rows
-    whose target is no longer ticked are removed.
+    whose target is no longer ticked are removed. Only rules this sync wrote are
+    touched. Anyone who may edit the agent reaches this, admin or not, so a rule
+    an admin authored through the policy service is never altered or removed
+    here; a target it already requires needs no second rule.
     """
     repo = PolicyRuleRepository(session, user_context)
     existing = await repo.list_rules(
@@ -125,23 +133,27 @@ async def sync_agent_approval_rules(
         subject_id=str(agent_id),
         effect=PolicyEffect.APPROVAL,
     )
-    by_target = {rule.target: rule for rule in existing}
+    owned = {rule.target: rule for rule in existing if rule.managed_by == MANAGED_BY_AGENT_TOOLS}
+    authored = {rule.target for rule in existing if rule.managed_by is None and rule.enabled}
 
     for target in targets:
-        rule = by_target.get(target)
+        rule = owned.get(target)
         if rule is None:
+            if target in authored:
+                continue
             await repo.create(
                 PolicyRule(
                     subject_type=PolicySubjectType.AGENT,
                     subject_id=str(agent_id),
                     target=target,
                     effect=PolicyEffect.APPROVAL,
+                    managed_by=MANAGED_BY_AGENT_TOOLS,
                 )
             )
         elif not rule.enabled and rule.id is not None:
             await repo.set_enabled(rule.id, True)
 
-    for target, rule in by_target.items():
+    for target, rule in owned.items():
         if target not in targets and rule.id is not None:
             await repo.delete(rule.id)
 

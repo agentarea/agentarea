@@ -181,3 +181,41 @@ async def test_fork_catalog_agent_strips_and_syncs(session_factory):
         rules = await _rules(session, context, agent.id)
         assert {r.target for r in rules} == {"tool:shell"}
         assert agent.tools[0]["settings"].get("requires_user_confirmation") is None
+
+
+async def test_a_members_tool_edit_leaves_an_admins_approval_rule_alone(session_factory):
+    """The toggle owns the rules it wrote; a rule an admin wrote in Policies is not its."""
+    from agentarea_common.auth.authorization import AuthorizationService
+    from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+    from agentarea_common.di.container import register_singleton
+    from agentarea_governance.application.service import GovernancePolicyService
+    from agentarea_governance.domain.rules import PolicyRule
+
+    register_singleton(AuthorizationService, WorkspaceScopedAuthorizationService())
+    admin = UserContext(user_id="user-admin", workspace_id="ws-a", admin_workspaces=["ws-a"])
+    member = UserContext(user_id="user-member", workspace_id="ws-a", admin_workspaces=[])
+    async with session_factory() as session:
+        agent = await _service(session, member).create_agent(
+            AgentCreate(name="Shared", model_id=None, tools=[_code_tool("agentarea/shell", True)])
+        )
+        await GovernancePolicyService(RepositoryFactory(session, admin)).create_rule(
+            rule=PolicyRule(
+                subject_type=PolicySubjectType.AGENT,
+                subject_id=str(agent.id),
+                target="tool:files",
+                effect=PolicyEffect.APPROVAL,
+            ),
+            subject_id=str(agent.id),
+        )
+
+        await _service(session, member).update_agent(
+            agent.id,
+            AgentUpdate(
+                tools=[
+                    _code_tool("agentarea/shell", False),
+                    _code_tool("agentarea/files", False),
+                ]
+            ),
+        )
+
+        assert {r.target for r in await _rules(session, member, agent.id)} == {"tool:files"}

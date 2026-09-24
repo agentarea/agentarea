@@ -64,8 +64,16 @@ class PolicySubjectType(StrEnum):
     GROUP = "group"
 
 
+# ``PolicyRule.managed_by`` of a rule the agent editor's approval toggle wrote.
+MANAGED_BY_AGENT_TOOLS = "agent_tools"
+
+
 class PolicyRule(BaseModel):
-    """One unified governance rule for a single subject."""
+    """One unified governance rule for a single subject.
+
+    ``managed_by`` names the automation that owns the rule and may remove it;
+    ``None`` is a rule someone authored through the policy service.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -78,6 +86,7 @@ class PolicyRule(BaseModel):
     effect: PolicyEffect
     params: dict[str, Any] = Field(default_factory=dict)
     condition: str | None = None
+    managed_by: str | None = None
 
 
 # Selector kinds the compiler understands.
