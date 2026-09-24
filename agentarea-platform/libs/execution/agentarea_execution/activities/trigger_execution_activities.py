@@ -10,6 +10,7 @@ from uuid import UUID
 from agentarea_common.config import get_database
 from agentarea_triggers.logging_utils import (
     DependencyUnavailableError,
+    TriggerConditionError,
     TriggerExecutionError,
     TriggerLogger,
     generate_correlation_id,
@@ -149,41 +150,29 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         trigger_data=execution_data,
                     )
 
-                # Evaluate trigger conditions with error handling
-                conditions_met = True
-                if trigger.conditions:
-                    try:
-                        logger.debug(
-                            "Evaluating trigger conditions",
-                            trigger_id=trigger_id,
-                            conditions_count=len(trigger.conditions),
-                        )
-
-                        # Use LLM service for condition evaluation if available
-                        if trigger_service.llm_condition_evaluator:
-                            # TODO: Implement LLM-based condition evaluation
-                            # For now, assume conditions are met
-                            conditions_met = True
-                            logger.debug(
-                                "LLM condition evaluation not yet implemented, assuming conditions met",
-                                trigger_id=trigger_id,
-                            )
-                        else:
-                            # Simple rule-based condition evaluation
-                            conditions_met = await trigger_service.evaluate_trigger_conditions(
-                                trigger, execution_data
-                            )
-                            logger.debug(
-                                f"Rule-based condition evaluation result: {conditions_met}",
-                                trigger_id=trigger_id,
-                            )
-                    except Exception as condition_error:
-                        logger.warning(
-                            f"Error evaluating conditions, defaulting to conditions met: {condition_error}",
-                            trigger_id=trigger_id,
-                        )
-                        # Default to conditions met to avoid blocking execution
-                        conditions_met = True
+                # A condition that could not be evaluated is recorded as a failed
+                # run, never taken as met.
+                try:
+                    conditions_met = await trigger_service.evaluate_trigger_conditions(
+                        trigger, execution_data
+                    )
+                except TriggerConditionError as condition_error:
+                    execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                    execution_result = await trigger_service.record_execution(
+                        trigger_id=trigger_id,
+                        status=ExecutionStatus.FAILED,
+                        execution_time_ms=execution_time_ms,
+                        error_message=str(condition_error),
+                        trigger_data=execution_data,
+                    )
+                    return ExecuteTriggerResult(
+                        trigger_id=trigger_id,
+                        status=TriggerOutcome.FAILED,
+                        execution_id=execution_result.id,
+                        execution_time_ms=execution_time_ms,
+                        error=str(condition_error),
+                        trigger_data=execution_data,
+                    )
 
                 if not conditions_met:
                     logger.info(f"Trigger {trigger_id} conditions not met, skipping execution")
@@ -526,7 +515,9 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 )
 
         except Exception as e:
-            logger.error(f"Error evaluating conditions for trigger {trigger_id}: {e}")
+            logger.error(
+                f"Error evaluating conditions for trigger {trigger_id}: {e}", exc_info=True
+            )
             return EvaluateTriggerConditionsResult(conditions_met=False, trigger_id=trigger_id)
 
     @activity.defn(name="create_task_from_trigger_activity")

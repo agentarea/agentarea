@@ -200,6 +200,62 @@ class TestTriggerServiceLLMIntegration:
         assert result is True
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("conditions", "error"),
+        [
+            # The LLM fails and there is nothing a rule-based fallback can check.
+            (
+                {"type": "llm", "description": "only urgent tickets"},
+                "LLMConditionEvaluationError",
+            ),
+            # The LLM fails and the rule-based fallback fails too.
+            ({"field_matches": ["request.method"]}, "LLMConditionEvaluationError"),
+            # Anything else going wrong while evaluating.
+            ({"type": "llm", "description": "only urgent tickets"}, "RuntimeError"),
+        ],
+    )
+    async def test_a_condition_that_cannot_be_evaluated_does_not_fire(
+        self,
+        trigger_service,
+        mock_llm_condition_evaluator,
+        mock_trigger_repository,
+        mock_trigger_execution_repository,
+        mock_task_service,
+        conditions,
+        error,
+    ):
+        from agentarea_triggers.domain.enums import ExecutionStatus
+        from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluationError
+
+        trigger = WebhookTrigger(
+            id=uuid4(),
+            name="Urgent tickets",
+            agent_id=uuid4(),
+            webhook_id="webhook_urgent",
+            conditions=conditions,
+            task_parameters={"text": "Triage the ticket"},
+            created_by="test_user",
+        )
+        mock_trigger_repository.get_trigger.return_value = trigger
+        mock_llm_condition_evaluator.evaluate_condition.side_effect = (
+            LLMConditionEvaluationError("model unavailable")
+            if error == "LLMConditionEvaluationError"
+            else RuntimeError("boom")
+        )
+        mock_trigger_execution_repository.create.return_value = MagicMock(
+            id=uuid4(), trigger_id=trigger.id, status=ExecutionStatus.FAILED
+        )
+
+        await trigger_service.execute_trigger(
+            trigger.id, {"events": [{"text": "ticket #1 opened"}]}
+        )
+
+        mock_task_service.route_or_submit_task.assert_not_called()
+        recorded = mock_trigger_execution_repository.create.call_args.kwargs
+        assert recorded["status"] == ExecutionStatus.FAILED.value
+        assert "condition" in recorded["error_message"].lower()
+
+    @pytest.mark.asyncio
     async def test_build_task_parameters_with_llm_extraction(
         self, trigger_service, mock_llm_condition_evaluator
     ):
