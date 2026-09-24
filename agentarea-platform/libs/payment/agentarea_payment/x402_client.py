@@ -28,11 +28,13 @@ class X402PaymentClient:
         network: str = "eip155:8453",
         facilitator_url: str = "https://x402.org/facilitator",
         signer_type: str = "evm",
+        payment_identifier: str | None = None,
     ):
         self._private_key = private_key
         self._network = network
         self._facilitator_url = facilitator_url
         self._signer_type = signer_type
+        self._payment_identifier = payment_identifier
         self._client = None  # Lazy init
 
     def _get_client(self):
@@ -49,11 +51,26 @@ class X402PaymentClient:
             client = x402_client_cls()
             signer = self._create_signer()
             register_exact_evm_client(client, signer, networks=self._network or None)
+            if self._payment_identifier is not None:
+                client.on_before_payment_creation(self._attach_payment_identifier)
             self._client = client
             return client
         except ImportError:
             logger.warning("x402 SDK not installed. Install with: pip install x402[httpx,evm]")
             raise
+
+    def _attach_payment_identifier(self, context: Any) -> None:
+        """Send the idempotency key as x402's payment-identifier when the server declared it.
+
+        A server that implements the extension answers a repeated identifier from its
+        own record instead of settling again; one that does not ignores it.
+        """
+        extensions = getattr(context.payment_required, "extensions", None)
+        if not extensions:
+            return
+        import_module("x402.extensions.payment_identifier").append_payment_identifier_to_extensions(
+            extensions, id=self._payment_identifier
+        )
 
     def _create_signer(self):
         """Create a signer from the private key."""

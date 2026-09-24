@@ -13,6 +13,7 @@ This module provides Temporal activities for agent execution:
 # Standard library imports
 import asyncio
 import hashlib
+import itertools
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -376,6 +377,14 @@ _mcp_dispatch_failed_total = _make_counter(
     "Number of MCP dispatch failures",
     ["reason"],
 )
+
+
+def _payment_call_ref(request: MCPToolRequest) -> str:
+    """Identify the tool call a payment belongs to, identically on every retry of the activity."""
+    if request.task_id and request.tool_call_id:
+        return f"{request.task_id}:{request.tool_call_id}"
+    info = activity.info()
+    return f"{info.workflow_id}:{info.workflow_run_id}:{info.activity_id}"
 
 
 def _activity_output_id(prefix: str) -> str:
@@ -1058,6 +1067,39 @@ def make_agent_activities(dependencies: ActivityDependencies):
 
             payment_handler: Callable[..., Awaitable[dict[str, Any] | None]] | None = None
 
+            payment_sequence = itertools.count()
+
+            def next_payment_key() -> str:
+                from .payment_handler import payment_idempotency_key
+
+                return payment_idempotency_key(_payment_call_ref(request), next(payment_sequence))
+
+            async def find_settled_payment(
+                wallet_service: Any, idempotency_key: str
+            ) -> dict[str, Any] | None:
+                record = await wallet_service.find_settled_payment(idempotency_key)
+                if record is None:
+                    return None
+                logger.warning(
+                    "Payment %s already settled for tool call %s; not paying again",
+                    idempotency_key,
+                    request.tool_call_id,
+                )
+                return {
+                    "success": False,
+                    "already_settled": True,
+                    "protocol": record.protocol,
+                    "amount_usd": record.amount_usd,
+                    "recipient": record.recipient,
+                    "tx_hash": record.tx_hash,
+                    "protocol_metadata": record.protocol_metadata or {},
+                    "idempotency_key": idempotency_key,
+                    "error": (
+                        f"This request was already paid (tx {record.tx_hash}) by an earlier "
+                        "attempt of the same tool call; not paying again"
+                    ),
+                }
+
             async def get_payment_context() -> tuple[Any, Any, dict[str, Any], str, float] | None:
                 return None
 
@@ -1096,8 +1138,9 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     result: dict[str, Any] | None,
                     *,
                     tool_name: str,
+                    idempotency_key: str,
                 ) -> None:
-                    if not payment_context or not result:
+                    if not payment_context or not result or result.get("already_settled"):
                         return
                     if result.get("protocol") not in {"x402", "mpp"}:
                         return
@@ -1115,6 +1158,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         tx_hash=result.get("tx_hash"),
                         tool_name=tool_name,
                         tool_call_id=request.tool_call_id or "",
+                        idempotency_key=idempotency_key,
                         status="completed" if result.get("success") else "failed",
                         error_message=result.get("error"),
                         protocol_metadata=result.get("protocol_metadata"),
@@ -1125,7 +1169,11 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     payment_context = await get_payment_context()
                     if not payment_context:
                         return None
-                    _, _, wallet_config, _, budget_remaining = payment_context
+                    wallet_service, _, wallet_config, _, budget_remaining = payment_context
+                    idempotency_key = next_payment_key()
+                    settled = await find_settled_payment(wallet_service, idempotency_key)
+                    if settled is not None:
+                        return settled
 
                     from .payment_handler import handle_402_payment
 
@@ -1139,12 +1187,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
                         response_body=payment_kwargs.get("response_body") or "",
                         wallet_config=wallet_config,
                         budget_remaining=budget_remaining,
+                        idempotency_key=idempotency_key,
                     )
 
                     await record_payment_result(
                         payment_context,
                         result,
                         tool_name=str(payment_kwargs.get("tool_name") or request.tool_name),
+                        idempotency_key=idempotency_key,
                     )
                     return result
 
@@ -1263,7 +1313,12 @@ def make_agent_activities(dependencies: ActivityDependencies):
                     if payment_context:
                         from .mcp_payment_httpx import create_payment_httpx_client_factory
 
-                        _, _, wallet_config, _, budget_remaining = payment_context
+                        wallet_service, _, wallet_config, _, budget_remaining = payment_context
+
+                        async def find_settled_mcp_payment(
+                            idempotency_key: str, *, wallet_service=wallet_service
+                        ) -> dict[str, Any] | None:
+                            return await find_settled_payment(wallet_service, idempotency_key)
 
                         async def on_mcp_payment(
                             result: dict[str, Any],
@@ -1277,11 +1332,14 @@ def make_agent_activities(dependencies: ActivityDependencies):
                                 payment_context,
                                 result,
                                 tool_name=tool_name,
+                                idempotency_key=result["idempotency_key"],
                             )
 
                         payment_httpx_client_factory = create_payment_httpx_client_factory(
                             wallet_config=wallet_config,
                             budget_remaining=budget_remaining,
+                            next_idempotency_key=next_payment_key,
+                            find_settled_payment=find_settled_mcp_payment,
                             on_payment=on_mcp_payment,
                         )
 

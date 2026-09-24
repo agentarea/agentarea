@@ -275,6 +275,7 @@ class WalletService:
         tx_hash: str | None,
         tool_name: str,
         tool_call_id: str,
+        idempotency_key: str,
         status: str = "pending",
         error_message: str | None = None,
         protocol_metadata: dict | None = None,
@@ -291,6 +292,8 @@ class WalletService:
             tx_hash: Transaction hash (optional).
             tool_name: Name of the tool that triggered the payment.
             tool_call_id: Tool call identifier.
+            idempotency_key: Identifies the paid request across activity retries; at most one
+                completed record may carry it.
             status: Payment status ("pending", "completed", "failed").
             error_message: Error message if payment failed (optional).
             protocol_metadata: Additional protocol-specific metadata (optional).
@@ -308,6 +311,7 @@ class WalletService:
             tx_hash=tx_hash,
             tool_name=tool_name,
             tool_call_id=tool_call_id,
+            idempotency_key=idempotency_key,
             status=status,
             error_message=error_message,
             protocol_metadata=protocol_metadata,
@@ -320,6 +324,10 @@ class WalletService:
             amount_usd,
         )
         return record
+
+    async def find_settled_payment(self, idempotency_key: str) -> PaymentRecord | None:
+        """Return the completed payment already made under this idempotency key, if any."""
+        return await self._payments.get_settled_by_idempotency_key(idempotency_key)
 
     async def get_payment_history(
         self,

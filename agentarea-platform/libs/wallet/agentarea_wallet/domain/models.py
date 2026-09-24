@@ -1,7 +1,7 @@
 """ORM models for the wallet domain."""
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, Float, ForeignKey, String, UniqueConstraint
+from sqlalchemy import JSON, Float, ForeignKey, Index, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,6 +34,14 @@ class PaymentRecord(BaseModel, WorkspaceScopedMixin):
     """Record of a single payment made by an agent."""
 
     __tablename__ = "payment_records"
+    __table_args__ = (
+        Index(
+            "uq_payment_records_settled_idempotency_key",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("status = 'completed'"),
+        ),
+    )
 
     wallet_id = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("agent_wallets.id"), nullable=False, index=True
@@ -46,6 +54,8 @@ class PaymentRecord(BaseModel, WorkspaceScopedMixin):
     tx_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     tool_name: Mapped[str] = mapped_column(String, nullable=False)
     tool_call_id: Mapped[str] = mapped_column(String, nullable=False)
+    # One settled payment per paid request of a tool call, however often the activity retries.
+    idempotency_key: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(
         String, nullable=False, default="pending"
     )  # "completed", "failed", "pending"

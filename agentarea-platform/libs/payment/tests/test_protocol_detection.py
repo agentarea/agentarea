@@ -163,6 +163,51 @@ class TestX402PaymentClient:
         assert result.recipient == "0xrecipient"
         assert "exceeds remaining budget" in result.error
 
+    @pytest.mark.parametrize(
+        ("extensions", "expected_id"),
+        [({"payment-identifier": {"info": {"required": False}}}, "k" * 64), (None, None)],
+    )
+    def test_payment_identifier_carries_the_idempotency_key(
+        self, monkeypatch, extensions, expected_id
+    ):
+        from types import SimpleNamespace
+
+        from agentarea_payment import x402_client
+
+        class FakeX402Client:
+            def __init__(self):
+                self.hooks = []
+
+            def on_before_payment_creation(self, hook):
+                self.hooks.append(hook)
+
+        def append_payment_identifier_to_extensions(extensions, id):
+            extensions["payment-identifier"]["info"]["id"] = id
+            return extensions
+
+        modules = {
+            "x402": SimpleNamespace(x402Client=FakeX402Client),
+            "x402.mechanisms.evm.exact.register": SimpleNamespace(
+                register_exact_evm_client=lambda client, signer, networks: None
+            ),
+            "x402.extensions.payment_identifier": SimpleNamespace(
+                append_payment_identifier_to_extensions=append_payment_identifier_to_extensions
+            ),
+        }
+        monkeypatch.setattr(x402_client, "import_module", modules.__getitem__)
+        monkeypatch.setattr(x402_client.X402PaymentClient, "_create_signer", lambda self: None)
+
+        client = x402_client.X402PaymentClient(
+            private_key="0x" + "11" * 32, payment_identifier="k" * 64
+        )._get_client()
+        payment_required = SimpleNamespace(extensions=extensions)
+        for hook in client.hooks:
+            hook(SimpleNamespace(payment_required=payment_required))
+
+        assert len(client.hooks) == 1
+        info = (payment_required.extensions or {}).get("payment-identifier", {}).get("info", {})
+        assert info.get("id") == expected_id
+
 
 class TestMPPPaymentClient:
     @pytest.mark.asyncio
