@@ -65,6 +65,18 @@ func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
 	return manager
 }
 
+// NewManagerWithContainers builds a Manager pre-populated with the given
+// config and containers, bypassing container discovery, the health monitor
+// and the event publisher. It exists so other packages' tests can exercise
+// the real ListContainers/GetContainer/GetContainerStatus methods without a
+// live container runtime or Redis.
+func NewManagerWithContainers(cfg *config.Config, containers map[string]*models.Container) *Manager {
+	return &Manager{
+		config:     cfg,
+		containers: containers,
+	}
+}
+
 // SetSecretResolver sets the secret resolver for resolving env vars from encrypted_secrets table
 func (m *Manager) SetSecretResolver(resolver SecretResolverInterface) {
 	m.secretResolver = resolver

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -114,7 +115,11 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 
 	// Container endpoints — only the Docker backend supplies a container manager.
 	// Inspection only, for the same reason as /instances above: container
-	// creation and teardown are the gateway's, on every backend.
+	// creation and teardown are the gateway's, on every backend. Unlike
+	// /instances, listContainers and getContainer serialize the container's
+	// resolved environment unredacted, so they also require
+	// CONTAINER_INSPECTION_AUTH_SECRET, the same bearer-token gate
+	// /sandbox/sessions uses for SANDBOX_INSPECTION_AUTH_SECRET.
 	if h.containerManager != nil {
 		router.GET("/containers", h.listContainers)
 		router.GET("/containers/:service", h.getContainer)
@@ -423,13 +428,33 @@ func (h *Handler) healthCheckInstances(c *gin.Context) {
 	}
 }
 
+// containerInspectionAuthSecretEnv gates the container inspection routes.
+// They carry no other authentication, and Container.Environment holds the
+// same class of resolved secrets as instance inspection — but unlike
+// /instances, these routes were not even redacted, so an unauthenticated
+// caller got them outright.
+const containerInspectionAuthSecretEnv = "CONTAINER_INSPECTION_AUTH_SECRET" // pragma: allowlist secret
+
 // listContainers returns a list of all managed containers
 func (h *Handler) listContainers(c *gin.Context) {
+	if !sandboxCleanupAuthorized(c.GetHeader("Authorization"), os.Getenv(containerInspectionAuthSecretEnv)) {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "unauthorized",
+			"message": "valid internal bearer token is required",
+		})
+		return
+	}
+
 	containers := h.containerManager.ListContainers()
 
+	public := make([]models.Container, 0, len(containers))
+	for i := range containers {
+		public = append(public, *withoutContainerEnvironment(&containers[i]))
+	}
+
 	response := models.ListContainersResponse{
-		Containers: containers,
-		Total:      len(containers),
+		Containers: public,
+		Total:      len(public),
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -437,6 +462,14 @@ func (h *Handler) listContainers(c *gin.Context) {
 
 // getContainer returns details of a specific container
 func (h *Handler) getContainer(c *gin.Context) {
+	if !sandboxCleanupAuthorized(c.GetHeader("Authorization"), os.Getenv(containerInspectionAuthSecretEnv)) {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "unauthorized",
+			"message": "valid internal bearer token is required",
+		})
+		return
+	}
+
 	serviceName := c.Param("service")
 
 	container, err := h.containerManager.GetContainer(serviceName)
@@ -449,7 +482,25 @@ func (h *Handler) getContainer(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, container)
+	c.JSON(http.StatusOK, withoutContainerEnvironment(container))
+}
+
+// withoutContainerEnvironment copies a container with its resolved
+// environment stripped, for the same reason withoutEnvironment strips it
+// from an instance status: this is exactly where the secret resolver's
+// output lands, and returning it hands the container's credentials to
+// whatever reaches this response.
+//
+// It copies rather than blanking in place: GetContainer returns the pointer
+// the manager holds in its own map, and clearing that would take the
+// environment away from the workload itself.
+func withoutContainerEnvironment(c *models.Container) *models.Container {
+	if c == nil {
+		return nil
+	}
+	redacted := *c
+	redacted.Environment = nil
+	return &redacted
 }
 
 // validateContainer validates a container configuration without creating it
@@ -549,7 +600,7 @@ func (h *Handler) checkContainerHealth(c *gin.Context) {
 		"healthy":   isHealthy,
 		"health":    healthStatus,
 		"timestamp": time.Now(),
-		"container": container,
+		"container": withoutContainerEnvironment(container),
 	}
 
 	if isHealthy {
