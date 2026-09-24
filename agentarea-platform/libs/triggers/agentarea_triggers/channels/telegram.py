@@ -115,7 +115,14 @@ class TelegramAdapter:
             return f"\u2753 *Needs your input:*\n{_escape_md(str(question))}"
 
         if event_type == "approval.response":
-            return "\u2705 Approval received, continuing..."
+            approved = data.get("approved")
+            comment = data.get("comment")
+            if approved is True:
+                return f"\u2705 {_escape_md('Approved, continuing...')}"
+            if approved is False:
+                reason = f" \u2014 {_escape_md(str(comment))}" if comment else ""
+                return f"\u26d4 *Denied*{reason}"
+            return f"\u2139\ufe0f {_escape_md('Approval resolved.')}"
 
         if presentation == "concise":
             # Status events in concise mode

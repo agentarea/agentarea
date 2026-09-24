@@ -130,7 +130,14 @@ def make_formatter(flavor: MarkdownFlavor) -> Callable[[dict[str, Any], str], st
             q = esc(str(d.get("question", "Approval needed")))
             return f"{e['question']} {b0}Needs your input:{b1}\n{flavor.quote}{q}"
         if et == APPROVAL_RESPONSE:
-            return f"{e['check']} {esc('Approval received, continuing...')}"
+            approved = d.get("approved")
+            if approved is True:
+                return f"{e['check']} {esc('Approved, continuing...')}"
+            if approved is False:
+                comment = d.get("comment")
+                reason = f" \u2014 {esc(str(comment))}" if comment else ""
+                return f"{e['stop']} {b0}Denied{b1}{reason}"
+            return f"{e['info']} {esc('Approval resolved.')}"
 
         if presentation == "concise":
             if et == TASK_STARTED or raw_et == "WorkflowCommandReceived":

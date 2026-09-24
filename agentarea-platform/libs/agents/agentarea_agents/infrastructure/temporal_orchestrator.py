@@ -5,7 +5,15 @@ from inspect import isawaitable
 from typing import Any
 from uuid import UUID
 
-from ..application.execution_service import WorkflowOrchestratorInterface
+from agentarea_common.auth.tool_authorization import caller_can_approve
+from temporalio.service import RPCError, RPCStatusCode
+
+from ..application.execution_service import (
+    EscalationNotPendingError,
+    NotAnApproverError,
+    WorkflowNotFoundError,
+    WorkflowOrchestratorInterface,
+)
 from ..domain.interfaces import ExecutionRequest
 
 logger = logging.getLogger(__name__)
@@ -326,6 +334,21 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
             logger.error(f"Failed to get workflow effective policy: {e}")
             return None
 
+    async def get_workflow_pending_escalations(self, execution_id: str) -> list[dict[str, Any]]:
+        """The workflow's unresolved escalations, with the arguments awaiting a decision.
+
+        Raises:
+            WorkflowNotFoundError: No workflow exists for ``execution_id``.
+        """
+        client = await self._get_client()
+        handle = client.get_workflow_handle(execution_id)
+        try:
+            return await handle.query("get_pending_escalations")
+        except RPCError as e:
+            if e.status == RPCStatusCode.NOT_FOUND:
+                raise WorkflowNotFoundError(execution_id) from e
+            raise
+
     async def cancel_workflow(self, execution_id: str) -> bool:
         """Cancel Temporal workflow."""
         client = await self._get_client()
@@ -390,19 +413,45 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
         comment: str = "",
         resolved_by: str = "",
     ) -> bool:
-        """Resolve a tool escalation in a Temporal workflow using signals."""
-        client = await self._get_client()
+        """Resolve a tool escalation in a Temporal workflow using signals.
 
+        The workflow's signal drops ids it is not waiting on and callers who are
+        not approvers, so both are checked against the workflow's own pending
+        escalations before signalling.
+
+        Raises:
+            EscalationNotPendingError: The workflow does not exist or is not
+                waiting on ``escalation_id``.
+            NotAnApproverError: ``resolved_by`` is not among the escalation's
+                approvers.
+        """
         try:
-            handle = client.get_workflow_handle(execution_id)
+            pending = await self.get_workflow_pending_escalations(execution_id)
+        except WorkflowNotFoundError as e:
+            raise EscalationNotPendingError(execution_id, escalation_id) from e
+        except Exception:
+            logger.error(
+                "Failed to read pending escalations of workflow %s", execution_id, exc_info=True
+            )
+            return False
+
+        escalation = next((e for e in pending if e["escalation_id"] == escalation_id), None)
+        if escalation is None:
+            raise EscalationNotPendingError(execution_id, escalation_id)
+        if not caller_can_approve(escalation["approvers"], resolved_by):
+            raise NotAnApproverError(execution_id, escalation_id, resolved_by)
+
+        client = await self._get_client()
+        handle = client.get_workflow_handle(execution_id)
+        try:
             await handle.signal(
                 "resolve_escalation", args=[escalation_id, approved, comment, resolved_by]
             )
             logger.info(f"Resolved escalation {escalation_id} in workflow: {execution_id}")
             return True
 
-        except Exception as e:
-            logger.error(f"Failed to resolve escalation in workflow: {e}")
+        except Exception:
+            logger.error("Failed to resolve escalation in workflow %s", execution_id, exc_info=True)
             return False
 
     async def send_workflow_command(

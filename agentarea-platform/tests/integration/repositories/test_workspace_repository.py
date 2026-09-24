@@ -24,12 +24,13 @@ from agentarea_common.workspaces.repository import (
     WorkspaceRepository,
 )
 from agentarea_common.workspaces.service import WorkspaceService
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 
 @pytest_asyncio.fixture
-async def db_session():
+async def session_factory():
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         poolclass=StaticPool,
@@ -43,10 +44,14 @@ async def db_session():
         ):
             await conn.run_sync(table.create)
 
-    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    yield async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def db_session(session_factory):
     async with session_factory() as session:
         yield session
-    await engine.dispose()
 
 
 @pytest.fixture
@@ -144,3 +149,63 @@ async def test_list_for_user_returns_personal_and_granted_workspaces(workspace_s
 
     assert "user-2" in ids  # personal, auto-provisioned by list_for_user
     assert shared.id in ids  # shared, via membership
+
+
+async def _committed_workspace_ids(session_factory) -> set[str]:
+    async with session_factory() as fresh:
+        return set((await fresh.execute(select(Workspace.id))).scalars().all())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "create",
+    [
+        pytest.param(lambda s: s.create_shared(owner_user_id="user-1", name="Acme"), id="shared"),
+        pytest.param(lambda s: s.ensure_personal("user-1"), id="personal"),
+    ],
+)
+async def test_a_failed_creation_hook_leaves_no_workspace_row(db_session, session_factory, create):
+    """The row and what ``on_created`` provisions for it land together or not at all.
+
+    ``on_created`` is where the composition layer seeds the governance baseline.
+    If the row were committed before it ran, a provisioning failure would leave
+    a workspace that exists with no runtime baseline and nothing to retry it.
+    """
+
+    async def refuse(_workspace: Workspace) -> None:
+        raise RuntimeError("baseline unavailable")
+
+    service = WorkspaceService(WorkspaceRepository(db_session), on_created=refuse)
+
+    with pytest.raises(RuntimeError, match="baseline unavailable"):
+        await create(service)
+
+    assert await _committed_workspace_ids(session_factory) == set()
+
+
+@pytest.mark.asyncio
+async def test_creation_hook_writes_commit_with_the_row(db_session, session_factory):
+    """The hook writes through the caller's session and the service commits both."""
+
+    async def provision(workspace: Workspace) -> None:
+        db_session.add(
+            WorkspaceMembership(workspace_id=workspace.id, user_id="user-1", invitation_id=None)
+        )
+
+    service = WorkspaceService(WorkspaceRepository(db_session), on_created=provision)
+    ws = await service.create_shared(owner_user_id="user-1", name="Acme")
+
+    assert await _committed_workspace_ids(session_factory) == {ws.id}
+    async with session_factory() as fresh:
+        members = (
+            (
+                await fresh.execute(
+                    select(WorkspaceMembership.user_id).where(
+                        WorkspaceMembership.workspace_id == ws.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert members == ["user-1"]

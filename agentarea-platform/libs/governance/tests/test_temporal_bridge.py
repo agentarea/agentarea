@@ -2,9 +2,11 @@
 
 from dataclasses import dataclass, field
 from typing import Any
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
+from agentarea_execution import create_activities_for_worker
 from agentarea_governance.bridges.temporal_bridge import (
     _ACTIVITY_PHASE_MAP,
     GovernanceActivityInterceptor,
@@ -18,11 +20,16 @@ from agentarea_governance.domain.enums import (
     InterceptorCategory,
     Phase,
 )
-from agentarea_governance.domain.exceptions import EscalationRequired, GovernanceDenied
 from agentarea_governance.domain.models import InterceptorContext, InterceptorResult
 from agentarea_governance.interceptors.gates.cost_budget_guard import CostBudgetGuard
+from agentarea_governance.interceptors.gates.semantic_guard import SemanticGuard
 from agentarea_governance.pipeline import InterceptorPipeline
 from agentarea_governance.registry import InterceptorRegistry
+from temporalio import activity
+from temporalio.exceptions import ApplicationError
+
+DENIED = "GovernanceDeniedError"
+ESCALATED = "EscalationRequiredError"
 
 
 class _MockInterceptor:
@@ -108,6 +115,7 @@ class _FakeMCPToolRequest:
     cost_used: float | None = None
     tokens_used: int | None = None
     service_cost_used: float | None = None
+    escalation_approved: bool = False
 
     def model_dump(self) -> dict[str, Any]:
         return {"tool_name": self.tool_name, "tool_args": self.tool_args}
@@ -269,14 +277,16 @@ class TestExecutionStateFromPolicy:
             cost_used=10.0,
         )
         input = _FakeActivityInput(fn=_make_fn("call_llm_activity"), args=[request])
-        with pytest.raises(GovernanceDenied):
+        with pytest.raises(ApplicationError) as exc_info:
             await bridge.execute_activity(input)
+        assert exc_info.value.type == DENIED
         assert not next_interceptor.called
 
     @pytest.mark.asyncio
     async def test_tool_phase_denial_propagates_as_governance_denied(self):
         # The bridge maps ``execute_mcp_tool_activity`` to PRE_TOOL_CALL and turns
-        # a gate DENY on that phase into GovernanceDenied without calling through.
+        # a gate DENY on that phase into a GovernanceDeniedError failure without
+        # calling through.
         registry = InterceptorRegistry()
         registry.register(
             _MockInterceptor(action=InterceptorAction.DENY, reason="tool denied"),
@@ -288,8 +298,65 @@ class TestExecutionStateFromPolicy:
         bridge = GovernanceActivityInterceptor(next_interceptor, pipeline)
         request = _FakeMCPToolRequest(tool_name="shell_exec", tool_args={})
         input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
-        with pytest.raises(GovernanceDenied):
+        with pytest.raises(ApplicationError) as exc_info:
             await bridge.execute_activity(input)
+        assert exc_info.value.type == DENIED
+        assert not next_interceptor.called
+
+
+class TestSemanticGuardEscalationAtTheBridge:
+    """The gate escalates; only a recorded human approval of the call satisfies it."""
+
+    @staticmethod
+    def _bridge(next_interceptor: "_FakeNextInterceptor") -> GovernanceActivityInterceptor:
+        registry = InterceptorRegistry()
+        registry.register(SemanticGuard(), Phase.PRE_TOOL_CALL, priority=400)
+        return GovernanceActivityInterceptor(next_interceptor, InterceptorPipeline(registry))
+
+    @pytest.mark.asyncio
+    async def test_unapproved_destructive_call_escalates(self):
+        next_interceptor = _FakeNextInterceptor()
+        request = _FakeMCPToolRequest(tool_name="sql", tool_args={"query": "DELETE FROM orders"})
+        input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
+        with pytest.raises(ApplicationError) as exc_info:
+            await self._bridge(next_interceptor).execute_activity(input)
+        error = exc_info.value
+        assert error.type == ESCALATED
+        assert error.non_retryable is True
+        assert error.message == "semantic_guard: potentially destructive pattern: DELETE FROM"
+        assert list(error.details) == [
+            {
+                "interceptor_name": "semantic_guard",
+                "reason": "potentially destructive pattern: DELETE FROM",
+                "metadata": {"patterns": ["DELETE FROM"]},
+                "phase": "pre_tool_call",
+            }
+        ]
+        assert not next_interceptor.called
+
+    @pytest.mark.asyncio
+    async def test_approved_call_runs(self):
+        next_interceptor = _FakeNextInterceptor("deleted")
+        request = _FakeMCPToolRequest(
+            tool_name="sql",
+            tool_args={"query": "DELETE FROM orders"},
+            escalation_approved=True,
+        )
+        input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
+        assert await self._bridge(next_interceptor).execute_activity(input) == "deleted"
+
+    @pytest.mark.asyncio
+    async def test_approval_does_not_lift_a_deny(self):
+        next_interceptor = _FakeNextInterceptor()
+        request = _FakeMCPToolRequest(
+            tool_name="sql",
+            tool_args={"query": "DROP TABLE orders"},
+            escalation_approved=True,
+        )
+        input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
+        with pytest.raises(ApplicationError) as exc_info:
+            await self._bridge(next_interceptor).execute_activity(input)
+        assert exc_info.value.type == DENIED
         assert not next_interceptor.called
 
 
@@ -337,10 +404,39 @@ class TestGovernanceActivityInterceptor:
         )
         fn = _make_fn("call_llm_activity")
         input = _FakeActivityInput(fn=fn, args=[request])
-        with pytest.raises(GovernanceDenied) as exc_info:
+        with pytest.raises(ApplicationError) as exc_info:
             await bridge.execute_activity(input)
-        assert "blocked" in str(exc_info.value)
+        error = exc_info.value
+        assert error.type == DENIED
+        assert error.non_retryable is True
+        assert error.message == "denier: blocked"
+        assert list(error.details) == [
+            {
+                "interceptor_name": "denier",
+                "reason": "blocked",
+                "metadata": {},
+                "phase": "pre_llm_call",
+            }
+        ]
         assert not next_interceptor.called
+
+    @pytest.mark.asyncio
+    async def test_post_phase_deny_says_the_call_already_ran(self):
+        registry = InterceptorRegistry()
+        gate = _MockInterceptor(
+            "output_guard", InterceptorCategory.FILTER, InterceptorAction.DENY, "leaks a key"
+        )
+        registry.register(gate, Phase.POST_TOOL_CALL, priority=100)
+        next_interceptor = _FakeNextInterceptor("AKIA...")
+        bridge = GovernanceActivityInterceptor(next_interceptor, InterceptorPipeline(registry))
+        request = _FakeMCPToolRequest(tool_name="read_env", tool_args={})
+        input = _FakeActivityInput(fn=_make_fn("execute_mcp_tool_activity"), args=[request])
+        with pytest.raises(ApplicationError) as exc_info:
+            await bridge.execute_activity(input)
+        assert next_interceptor.called
+        assert exc_info.value.type == DENIED
+        (details,) = exc_info.value.details
+        assert details["phase"] == "post_tool_call"
 
     @pytest.mark.asyncio
     async def test_gate_escalate_raises(self):
@@ -355,8 +451,10 @@ class TestGovernanceActivityInterceptor:
         request = _FakeMCPToolRequest(tool_name="delete_all", tool_args={})
         fn = _make_fn("execute_mcp_tool_activity")
         input = _FakeActivityInput(fn=fn, args=[request])
-        with pytest.raises(EscalationRequired):
+        with pytest.raises(ApplicationError) as exc_info:
             await bridge.execute_activity(input)
+        assert exc_info.value.type == ESCALATED
+        assert exc_info.value.message == "escalator: needs human"
 
     @pytest.mark.asyncio
     async def test_post_phase_filter_modifies_output(self):
@@ -392,19 +490,31 @@ class TestGovernanceWorkerInterceptor:
         assert isinstance(activity_interceptor, GovernanceActivityInterceptor)
 
 
-class TestStartupValidation:
-    def test_all_activities_present(self, caplog):
-        activities = [
-            "call_llm_activity",
-            "execute_mcp_tool_activity",
-            "discover_available_tools_activity",
-        ]
-        with caplog.at_level("WARNING"):
-            validate_activity_mapping(activities)
-        assert "not registered" not in caplog.text
+@activity.defn
+async def call_llm_activity() -> None: ...
 
-    def test_missing_activity_warns(self, caplog):
-        activities = ["call_llm_activity"]
+
+@activity.defn
+async def discover_available_tools_activity() -> None: ...
+
+
+@activity.defn(name="execute_mcp_tool_activity")
+async def run_tool() -> None: ...
+
+
+class TestStartupValidation:
+    def test_registered_names_satisfy_the_mapping(self, caplog):
         with caplog.at_level("WARNING"):
-            validate_activity_mapping(activities)
-        assert "execute_mcp_tool_activity" in caplog.text
+            validate_activity_mapping(
+                [call_llm_activity, run_tool, discover_available_tools_activity]
+            )
+        assert not caplog.records
+
+    def test_the_worker_activities_satisfy_the_mapping(self, caplog):
+        with caplog.at_level("WARNING"):
+            validate_activity_mapping(create_activities_for_worker(Mock()))
+        assert not caplog.records
+
+    def test_a_missing_governed_activity_fails_startup(self):
+        with pytest.raises(RuntimeError, match="execute_mcp_tool_activity"):
+            validate_activity_mapping([call_llm_activity, discover_available_tools_activity])

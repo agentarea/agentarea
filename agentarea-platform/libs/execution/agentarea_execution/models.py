@@ -526,6 +526,9 @@ class MCPToolRequest(BaseModel):
     tokens_used: int | None = None
     service_cost_used: float | None = None
     user_context_data: dict[str, Any] | None = None
+    # Set only by the workflow, after a human approved this exact call following
+    # a governance escalation; the escalating gate decides whether it suffices.
+    escalation_approved: bool = False
 
 
 class MCPToolResult(BaseModel):

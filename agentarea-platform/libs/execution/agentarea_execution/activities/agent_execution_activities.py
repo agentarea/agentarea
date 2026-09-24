@@ -2248,12 +2248,10 @@ def make_agent_activities(dependencies: ActivityDependencies):
                 )
                 repository_factory = RepositoryFactory(session, user_context)
                 task_repository = repository_factory.create_repository(TaskRepository)
-                if dependencies.workflow_executor is not None:
-                    task_manager = TemporalTaskManager.__new__(TemporalTaskManager)
-                    task_manager.task_repository = task_repository
-                    task_manager.temporal_executor = dependencies.workflow_executor
-                else:
-                    task_manager = TemporalTaskManager(task_repository=task_repository)
+                task_manager = TemporalTaskManager(
+                    task_repository=task_repository,
+                    temporal_executor=dependencies.workflow_executor,
+                )
 
                 task_service = TaskService(
                     repository_factory=repository_factory,

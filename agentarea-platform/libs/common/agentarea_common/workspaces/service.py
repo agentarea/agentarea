@@ -317,7 +317,10 @@ class WorkspaceService:
         # Fired exactly once when a workspace row is genuinely inserted (not on
         # idempotent re-reads). The composition layer wires cross-domain
         # provisioning here (e.g. baseline governance policies) without this
-        # base library depending on those domains.
+        # base library depending on those domains. It runs after the insert is
+        # flushed and before it is committed, and writes through the same
+        # session, so the row and what it provisions commit together: if it
+        # raises, the workspace was never created.
         self._on_created = on_created
         # Fired with the fully-built row *before* it is inserted, for admission
         # work that lives outside Postgres and therefore cannot join its
@@ -410,20 +413,33 @@ class WorkspaceService:
         that steals the slug (or, for personal workspaces, the id) raises
         ``IntegrityError`` — we roll back and retry, returning the winner's
         row via ``on_conflict_get`` when the conflict was on identity.
+
+        The insert and ``on_created`` share one transaction, committed only
+        once both succeeded; any other failure rolls both back and re-raises.
         """
+        session = self.workspace_repo.session
         for _ in range(5):
             workspace = build(await self._next_free_slug(slug_base))
+            if self._before_insert is not None:
+                await self._before_insert(workspace)
             try:
-                if self._before_insert is not None:
-                    await self._before_insert(workspace)
                 created = await self.workspace_repo.add(workspace)
-                if self._on_created is not None:
-                    await self._on_created(created)
-                return created
             except IntegrityError:
-                await self.workspace_repo.session.rollback()
+                await session.rollback()
                 if on_conflict_get is not None:
                     existing = await on_conflict_get()
                     if existing is not None:
                         return existing
+                continue
+            try:
+                if self._on_created is not None:
+                    await self._on_created(created)
+                await session.commit()
+                return created
+            except Exception:
+                logger.error(
+                    "workspace %s not created: admission failed", workspace.id, exc_info=True
+                )
+                await session.rollback()
+                raise
         raise RuntimeError(f"could not allocate a unique slug from base {slug_base!r}")

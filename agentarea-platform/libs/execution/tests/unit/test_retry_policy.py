@@ -97,3 +97,10 @@ def test_accounting_contract_errors_fail_fast_after_paid_call():
         )
         is True
     )
+
+
+def test_governance_decisions_are_not_retried():
+    """A gate verdict is deterministic for the same call; retrying the activity
+    only repeats it and delays the escalation or denial reaching the workflow."""
+    assert "GovernanceDeniedError" in NON_RETRYABLE_ERROR_TYPES
+    assert "EscalationRequiredError" in NON_RETRYABLE_ERROR_TYPES

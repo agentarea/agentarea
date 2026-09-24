@@ -4563,6 +4563,30 @@ export type PaymentRecordResponse = {
 };
 
 /**
+ * PendingEscalationResponse
+ */
+export type PendingEscalationResponse = {
+  /**
+   * Escalation Id
+   */
+  escalation_id: string;
+  /**
+   * Tool Args
+   */
+  tool_args: {
+    [key: string]: unknown;
+  };
+  /**
+   * Tool Call Id
+   */
+  tool_call_id: string;
+  /**
+   * Tool Name
+   */
+  tool_name: string;
+};
+
+/**
  * PolicyDocument
  *
  * Source policy document stored per scope.
@@ -9255,6 +9279,47 @@ export type SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostResponses = {
    */
   200: unknown;
 };
+
+export type ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetData =
+  {
+    body?: never;
+    path: {
+      /**
+       * Agent Id
+       */
+      agent_id: string;
+      /**
+       * Task Id
+       */
+      task_id: string;
+    };
+    query?: never;
+    url: "/v1/agents/{agent_id}/tasks/{task_id}/escalations";
+  };
+
+export type ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetError =
+  ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetErrors[keyof ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetErrors];
+
+export type ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponses =
+  {
+    /**
+     * Response List Pending Escalations V1 Agents  Agent Id  Tasks  Task Id  Escalations Get
+     *
+     * Successful Response
+     */
+    200: Array<PendingEscalationResponse>;
+  };
+
+export type ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponse =
+  ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponses[keyof ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponses];
 
 export type GetTaskEventsV1AgentsAgentIdTasksTaskIdEventsGetData = {
   body?: never;

@@ -519,6 +519,9 @@ import type {
   ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetData,
   ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetErrors,
   ListOauthLinksV1McpServerInstancesInstanceIdOauthLinksGetResponses,
+  ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetData,
+  ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetErrors,
+  ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponses,
   ListPolicyRulesV1PoliciesGetData,
   ListPolicyRulesV1PoliciesGetErrors,
   ListPolicyRulesV1PoliciesGetResponses,
@@ -2277,6 +2280,42 @@ export const sendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPost = <
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * List Pending Escalations
+ *
+ * The escalations awaiting this caller's decision, with the exact arguments.
+ *
+ * The event log redacts tool arguments, since a command can carry an inline
+ * secret; the caller reads them here only where they may resolve the escalation.
+ */
+export const listPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponses,
+  ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetResponses,
+    ListPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/agents/{agent_id}/tasks/{task_id}/escalations",
+    ...options,
   });
 
 /**

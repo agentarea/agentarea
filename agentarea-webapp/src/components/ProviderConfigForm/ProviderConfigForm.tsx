@@ -22,6 +22,7 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { apiErrorMessage } from "@/lib/api-errors";
 import {
   bulkCreateModelInstancesAction as bulkCreateModelInstances,
   createProviderConfigAction as createProviderConfig,
@@ -283,7 +284,7 @@ export default function ProviderConfigForm({
         const updateData: ProviderConfigUpdate = {
           name: data.name,
           endpoint_url: data.endpoint_url === "" ? null : data.endpoint_url,
-          is_active: data.is_public, // Note: backend uses is_active, frontend uses is_public
+          is_public: data.is_public,
         };
 
         // Only include api_key if it's provided (not empty)
@@ -324,15 +325,13 @@ export default function ProviderConfigForm({
       }
 
       if (providerError || !providerConfig) {
-        const errorMessage =
-          (providerError as { detail?: { msg?: string }[]; message?: string })
-            ?.detail?.[0]?.msg ||
-          (providerError as { message?: string })?.message ||
-          t("error.unknownError");
         throw new Error(
-          `${t("error.failedTo")} ${
-            isEdit ? tCommon("update") : tCommon("create")
-          } ${t("providerConfiguration")}: ${errorMessage}`
+          apiErrorMessage(
+            { error: providerError },
+            `${t("error.failedTo")} ${
+              isEdit ? tCommon("update") : tCommon("create")
+            } ${t("providerConfiguration")}`
+          )
         );
       }
 
@@ -358,12 +357,9 @@ export default function ProviderConfigForm({
           })),
         });
         if (error || !data) {
-          const detail =
-            (error as { detail?: { msg?: string }[]; message?: string })
-              ?.detail?.[0]?.msg ||
-            (error as { message?: string })?.message ||
-            "Unknown error";
-          throw new Error(`Failed to create model instances: ${detail}`);
+          throw new Error(
+            apiErrorMessage({ error }, "Failed to create model instances")
+          );
         }
         const result = data as {
           succeeded_count: number;
@@ -416,9 +412,10 @@ export default function ProviderConfigForm({
 
             if (error) {
               throw new Error(
-                `Failed to delete model instance "${instance.name}": ${
-                  (error as { message?: string })?.message || "Unknown error"
-                }`
+                apiErrorMessage(
+                  { error },
+                  `Failed to delete model instance "${instance.name}"`
+                )
               );
             }
           });

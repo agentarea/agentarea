@@ -7817,6 +7817,35 @@
         "title": "PaymentRecordResponse",
         "type": "object"
       },
+      "PendingEscalationResponse": {
+        "properties": {
+          "escalation_id": {
+            "title": "Escalation Id",
+            "type": "string"
+          },
+          "tool_args": {
+            "additionalProperties": true,
+            "title": "Tool Args",
+            "type": "object"
+          },
+          "tool_call_id": {
+            "title": "Tool Call Id",
+            "type": "string"
+          },
+          "tool_name": {
+            "title": "Tool Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "escalation_id",
+          "tool_name",
+          "tool_call_id",
+          "tool_args"
+        ],
+        "title": "PendingEscalationResponse",
+        "type": "object"
+      },
       "PolicyDocument": {
         "additionalProperties": false,
         "description": "Source policy document stored per scope.",
@@ -15752,6 +15781,71 @@
           }
         ],
         "summary": "Send Task Command",
+        "tags": [
+          "v1",
+          "protected",
+          "agent-tasks"
+        ]
+      }
+    },
+    "/v1/agents/{agent_id}/tasks/{task_id}/escalations": {
+      "get": {
+        "description": "The escalations awaiting this caller's decision, with the exact arguments.\n\nThe event log redacts tool arguments, since a command can carry an inline\nsecret; the caller reads them here only where they may resolve the escalation.",
+        "operationId": "list_pending_escalations_v1_agents__agent_id__tasks__task_id__escalations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PendingEscalationResponse"
+                  },
+                  "title": "Response List Pending Escalations V1 Agents  Agent Id  Tasks  Task Id  Escalations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Pending Escalations",
         "tags": [
           "v1",
           "protected",

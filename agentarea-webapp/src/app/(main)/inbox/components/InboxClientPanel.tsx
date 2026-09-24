@@ -22,6 +22,7 @@ import {
   isPending,
   type InboxTask,
 } from "@/app/(main)/inbox/components/inboxShared";
+import { EscalationArguments } from "./EscalationArguments";
 import { InboxResultMessage } from "./InboxResultMessage";
 import { extractInboxResult } from "./inboxResult";
 
@@ -155,13 +156,22 @@ export function InboxClientPanel({
               className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400"
               aria-hidden
             />
-            <p>
-              Approving will let the agent run{" "}
-              <b className="font-semibold text-foreground">
-                {task.escalation_tool_name || "the requested action"}
-              </b>
-              .
-            </p>
+            <div className="min-w-0 flex-1">
+              <p>
+                Approving will let the agent run{" "}
+                <b className="font-semibold text-foreground">
+                  {task.escalation_tool_name || "the requested action"}
+                </b>
+                .
+              </p>
+              {task.escalation_id && (
+                <EscalationArguments
+                  agentId={task.agent_id}
+                  taskId={String(task.id)}
+                  escalationId={task.escalation_id}
+                />
+              )}
+            </div>
           </div>
         </div>
       )}

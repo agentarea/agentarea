@@ -59,18 +59,14 @@ def get_workspace_service(session: SessionDep, user: UserContextDep) -> Workspac
 
         Governance provisioning is part of workspace admission and therefore
         fails closed. A workspace without a runtime baseline must not appear
-        ready and later execute under weaker implicit settings.
+        ready and later execute under weaker implicit settings. The rows are
+        written through the session that holds the uncommitted workspace row;
+        ``WorkspaceService`` commits both together, or rolls both back if this
+        raises.
         """
-        try:
-            ctx = UserContext(user_id=user.user_id, workspace_id=workspace.id)
-            governance = GovernancePolicyService(RepositoryFactory(session, ctx))
-            created = await provision_default_policies(governance, workspace.id)
-            if created:
-                await session.commit()
-        except Exception:
-            logger.exception("failed to seed default policies for workspace %s", workspace.id)
-            await session.rollback()
-            raise
+        ctx = UserContext(user_id=user.user_id, workspace_id=workspace.id)
+        governance = GovernancePolicyService(RepositoryFactory(session, ctx))
+        await provision_default_policies(governance, workspace.id)
 
     async def seed_authorization_graph(workspace: Workspace) -> None:
         """Write the workspace's graph tuples before its row exists.

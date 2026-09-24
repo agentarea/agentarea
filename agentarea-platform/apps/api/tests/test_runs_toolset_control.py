@@ -2,8 +2,9 @@
 
 Every control tool must resolve the run through the workspace-scoped
 ``TaskService`` before it signals Temporal: ``run_id`` arrives from the caller,
-so the repository's workspace filter is the only thing standing between a
-tenant and someone else's workflow.
+so the repository's workspace filter keeps a tenant out of someone else's
+workflow. Run authority inside the workspace is covered in
+``test_runs_toolset_task_authority.py``.
 """
 
 import json
@@ -12,6 +13,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from agentarea_agents.application.execution_service import EscalationNotPendingError
 from agentarea_api.tools import runs_toolset
 from agentarea_api.tools.runs_toolset import RunsToolset
 
@@ -57,7 +59,7 @@ class FakeTaskService:
 @pytest.fixture
 def harness(monkeypatch):
     workflow = FakeWorkflowService()
-    task_service = FakeTaskService(SimpleNamespace(id=RUN_ID, status="running"))
+    task_service = FakeTaskService(SimpleNamespace(id=RUN_ID, user_id="user-1", status="running"))
 
     @asynccontextmanager
     async def fake_context():
@@ -149,6 +151,21 @@ async def test_resolve_escalation_records_who_resolved_it(harness):
     assert harness.workflow.calls == [
         ("escalation", f"task-{RUN_ID}", "esc-1", False, "not now", "user-1")
     ]
+
+
+async def test_resolve_escalation_that_is_not_pending_reports_an_error(harness, monkeypatch):
+    async def not_pending(execution_id, escalation_id, *_args, **_kwargs):
+        raise EscalationNotPendingError(execution_id, escalation_id)
+
+    monkeypatch.setattr(harness.workflow, "resolve_escalation", not_pending)
+
+    result = json.loads(
+        await RunsToolset().resolve_escalation(
+            run_id=str(RUN_ID), escalation_id="None", approved=True
+        )
+    )
+
+    assert result == {"error": "Escalation not found or no longer pending"}
 
 
 async def test_continue_run_parses_budget_through_the_rest_dto(harness):

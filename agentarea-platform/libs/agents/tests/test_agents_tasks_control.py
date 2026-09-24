@@ -8,9 +8,12 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents.application.agent_service import AgentService
+from agentarea_agents.application.execution_service import EscalationNotPendingError
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
 from agentarea_api.api.v1.agents_tasks import (
+    EscalationResolution,
     pause_agent_task,
+    resolve_task_escalation,
     resume_agent_task,
 )
 from fastapi import HTTPException
@@ -433,6 +436,35 @@ class TestAgentTaskControl:
 
         assert exc_info.value.status_code == 500
         assert exc_info.value.detail == "Internal server error"
+
+    @pytest.mark.asyncio
+    async def test_resolve_escalation_that_is_not_pending_is_404(
+        self,
+        mock_agent_service,
+        mock_task_service,
+        mock_workflow_service,
+        test_agent_id,
+        test_task_id,
+        mock_agent,
+        test_user_context,
+    ):
+        mock_agent_service.get.return_value = mock_agent
+        mock_workflow_service.resolve_escalation.side_effect = EscalationNotPendingError(
+            f"task-{test_task_id}", "None"
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await resolve_task_escalation(
+                agent_id=test_agent_id,
+                task_id=test_task_id,
+                data=EscalationResolution(escalation_id="None", approved=True),
+                user_context=test_user_context,
+                agent_service=mock_agent_service,
+                task_service=mock_task_service,
+                workflow_task_service=mock_workflow_service,
+            )
+
+        assert exc_info.value.status_code == 404
 
 
 class TestTemporalWorkflowServiceControl:

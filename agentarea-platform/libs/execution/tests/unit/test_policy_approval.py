@@ -2,9 +2,9 @@
 for whether a tool call needs a human, replacing the old per-tool config.
 """
 
+from agentarea_common.auth.tool_authorization import caller_can_approve
 from agentarea_execution.workflows.helpers import (
     approvers_for_tool,
-    caller_can_approve,
     policy_approvers,
     policy_requires_approval,
 )

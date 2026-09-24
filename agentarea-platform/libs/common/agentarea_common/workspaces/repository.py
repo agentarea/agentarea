@@ -115,8 +115,9 @@ class WorkspaceRepository:
         self.session = session
 
     async def add(self, workspace: Workspace) -> Workspace:
+        """Stage the row in the caller's transaction; ``WorkspaceService`` commits it."""
         self.session.add(workspace)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(workspace)
         return workspace
 

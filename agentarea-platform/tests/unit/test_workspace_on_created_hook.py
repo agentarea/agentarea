@@ -6,6 +6,8 @@ The hook must NOT fire on idempotent re-reads (``ensure_personal`` of an
 already-provisioned workspace), or defaults would be re-seeded repeatedly.
 """
 
+from unittest.mock import AsyncMock
+
 import pytest
 from agentarea_common.workspaces import Workspace
 from agentarea_common.workspaces.service import WorkspaceService
@@ -15,6 +17,7 @@ class _FakeWorkspaceRepo:
     def __init__(self, existing: Workspace | None = None):
         self._existing = existing
         self.added: list[Workspace] = []
+        self.session = AsyncMock()
 
     async def get(self, workspace_id: str) -> Workspace | None:
         return self._existing

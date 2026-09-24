@@ -108,8 +108,16 @@ true or the tool is in `escalation_rules`. The workflow's tool gate then:
    `waiting_for_approval`, so the inbox can find it by querying the database.
 3. Emits an `approval.request` event with the escalation id, tool name, sanitized
    arguments and the approver list, and publishes it immediately to the event
-   stream.
+   stream. Sanitizing drops fields such as `command`, which can carry inline
+   secrets, so the event alone does not show the approver what they approve.
 4. Waits on that specific escalation.
+
+The exact arguments are read from the workflow instead:
+`GET /v1/agents/{agent_id}/tasks/{task_id}/escalations` lists the pending
+escalations with their `tool_args`. It answers only a caller who may act on the
+run, and drops any escalation whose approver list does not include them, so the
+arguments reach the same people who may resolve the escalation. The inbox shows
+the command from this endpoint.
 
 Tools awaiting approval stay *disclosed* to the model. Disclosure drops denials,
 not escalations — the point of an approval is that the answer might be yes.
@@ -123,18 +131,19 @@ is the authorization point:
 - If the escalation id is not pending, the signal is ignored.
 - If the caller is not permitted to approve, the signal is logged as unauthorized
   and ignored, so the API or activity boundary cannot bypass the policy.
-- Otherwise the escalation is marked resolved and an `approval.response` event is
-  emitted with the approver's id. Approve and deny share that one wire type; the
+- Otherwise the escalation is marked resolved. When the waiting tool call
+  resumes it emits exactly one `approval.response` event carrying `approved`,
+  `approved_by` and the `comment`. Approve and deny share that one wire type; the
   decision is in the payload.
 
-The HTTP response does not tell you which of those three happened. The
-resolve-escalation endpoint returns `200` with `{"status": "resolved"}` as soon as
-the signal is delivered, and signal delivery is all its success value reports —
-Temporal signals return no outcome. An unauthorized caller, or one naming an
-escalation that is not pending, receives the same `200 resolved` as a real
-approver while the workflow drops the signal and the task stays in
-`waiting_for_approval`. Confirm an approval by observing the task leaving that
-state or by the `approval.response` event, never by the status code.
+Temporal signals return no outcome, so the API checks both conditions against
+the workflow's pending escalations before it signals. The resolve-escalation
+endpoint returns `404` when the escalation is not pending (or the run has no
+workflow), `403` when the caller is not one of its approvers, and `200` with
+`{"status": "resolved"}` once the signal is delivered. The MCP
+`runs.resolve_escalation` tool returns the same outcomes as an `error` field.
+The workflow still applies the approver check itself, so a signal sent around
+the API is ignored. Confirm the outcome by the `approval.response` event.
 
 On approval the tool call proceeds and the normal `tool.call` event
 follows. On denial a tool message saying the call was denied by a human operator,
@@ -157,9 +166,11 @@ matches a glob. **It is not registered in the pipeline**, and that is intentiona
 
 The interceptor pipeline runs at the Temporal *activity* boundary. An activity
 cannot pause and resume — an `ESCALATE` there is converted into an
-`EscalationRequired` exception, which fails the activity. The user experience of
-that is a failed tool call, not a pending approval, and the conversation state
-that would let a human judge the request is not available at that layer.
+`EscalationRequired` exception, which fails the activity. Only the tool path's
+workflow code turns that failure into a pending approval (see the `SemanticGuard`
+limit below); on the LLM and discovery paths it stays a failure, and the
+conversation state that would let a human judge the request is not available at
+that layer.
 
 The workflow is the only place that holds durable state, can wait indefinitely,
 can receive a signal, and can put a denial message back into the conversation. So
@@ -182,9 +193,12 @@ agent workflow has no approval flow, only a denial. See the limits below.
   called through `POST /v1/mcp/{instance_id}/mcp` returns HTTP 403 with no
   escalation created and nothing for a human to answer. An external MCP client
   cannot obtain approval.
-- **`SemanticGuard` escalation is not an approval either.** Its medium-severity
-  patterns return `ESCALATE` at the activity boundary, which fails the activity.
-  No escalation record is created and no human is asked.
+- **`SemanticGuard` escalation reuses this flow, but only after the activity
+  starts.** The guard's `ESCALATE` fails the tool activity without retry; the
+  workflow turns that into a pending escalation, and on approval re-issues the
+  call with the approval recorded so the guard lets it through. Approvers are
+  resolved the same way as for `ApprovalPolicy`. Its deny patterns are never
+  escalated.
 - **There is no timeout.** The workflow waits on the escalation with no deadline.
   A task blocked on an approval nobody answers stays in `waiting_for_approval`
   until it is cancelled. There is no auto-deny, no expiry, and no escalation to a
@@ -193,12 +207,6 @@ agent workflow has no approval flow, only a denial. See the limits below.
   `approvers` parameter produces an empty list, and an empty list permits any
   caller to resolve. If you want the approval to mean something, name the
   approvers.
-- **A rejected approval is indistinguishable from an accepted one over HTTP.**
-  The endpoint returns `200 {"status": "resolved"}` on signal delivery, and the
-  workflow drops an unauthorized signal with a log line and no reply. A caller
-  cannot learn from the response whether the approval was refused, whether the
-  escalation id was wrong, or whether it worked. The rejection is recorded only
-  in the worker's logs.
 - **Group and userset approvers do not grant approval.** `group:<id>` and
   `<type>:<id>#<relation>` references are accepted, validated and stored, but the
   resolution check only matches direct `user:<id>` subjects. An approver list
