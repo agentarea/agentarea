@@ -21,7 +21,8 @@ metadata:
 # What the server does to a sandbox: a BatchSandbox, which the controller turns
 # into a pod, and reads of that pod for its state and address. Nothing that
 # could publish a sandbox (Services) or run something beside it (pods), and no
-# secrets: AgentArea's sandbox images need no per-sandbox pull credentials.
+# Secret access, since AgentArea's sandbox images need no per-sandbox pull
+# credentials.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:

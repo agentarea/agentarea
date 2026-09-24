@@ -10,6 +10,16 @@ chart="$repository_root/charts/agentarea-dataplane"
 rendered="$(mktemp)"
 trap 'rm -f "$rendered"' EXIT
 
+# The chart needs ValidatingAdmissionPolicy (1.30+); without a cluster, helm
+# would render against its own default version and refuse.
+helm() {
+  if [ "$1" = template ]; then
+    command helm "$@" --kube-version 1.31.0
+  else
+    command helm "$@"
+  fi
+}
+
 assert_fails() {
   local expected="$1"
   shift

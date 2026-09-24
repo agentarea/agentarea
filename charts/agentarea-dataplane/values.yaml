@@ -23,7 +23,7 @@ dataPlane:
     # -- Secret holding the shared token: the value the control plane sends.
     existingSecret: ""
     # -- Key in existingSecret.
-    existingSecretKey: token
+    existingSecretKey: token  # pragma: allowlist secret
     # -- Creates the Secret from this value when existingSecret is empty. For
     # development only: a value here lives in your values file and release history.
     token: ""
@@ -139,7 +139,7 @@ sandboxes:
       # -- Secret holding the API key the control plane sends as OPEN-SANDBOX-API-KEY.
       existingSecret: ""
       # -- Key in existingSecret.
-      existingSecretKey: api-key
+      existingSecretKey: api-key  # pragma: allowlist secret
       # -- Creates the Secret from this value when existingSecret is empty. For
       # development only.
       apiKey: ""
