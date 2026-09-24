@@ -273,7 +273,7 @@ class TestTriggerE2EScenarios:
         # github has a registered signature scheme, so a real webhook_secret and
         # a matching X-Hub-Signature-256 (over the exact raw body) are required
         # to get past the now fail-closed verification step.
-        secret = "github-webhook-secret"  # noqa: S105
+        secret = "github-webhook-secret"  # noqa: S105  # pragma: allowlist secret
         # Step 1: Create webhook trigger
         trigger_data = TriggerCreate(
             name="GitHub Push Webhook",
@@ -723,7 +723,7 @@ class TestTriggerE2EScenarios:
         # github has a registered signature scheme, so both requests below need
         # a real webhook_secret and a matching signature to get past the
         # (now fail-closed) verification step before reaching header validation.
-        secret = "github-webhook-secret"  # noqa: S105
+        secret = "github-webhook-secret"  # noqa: S105  # pragma: allowlist secret
         # Test GitHub webhook
         github_trigger_data = TriggerCreate(
             name="GitHub Webhook",

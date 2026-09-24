@@ -310,7 +310,7 @@ class TestWebhookHTTPIntegration:
         # A GitHub trigger has a registered signature scheme, so an unresolvable
         # secret now fails closed; a real webhook_secret + matching signature is
         # required for the request to reach the parser under test.
-        secret = "github-webhook-secret"  # noqa: S105
+        secret = "github-webhook-secret"  # noqa: S105  # pragma: allowlist secret
         # Create GitHub webhook trigger
         trigger_data = TriggerCreate(
             name="GitHub Push Webhook",
@@ -395,7 +395,7 @@ class TestWebhookHTTPIntegration:
         """Test GitHub webhook with validation failure."""
         # A valid signature is required to reach the (separate) header
         # validation this test targets — github fails closed without one.
-        secret = "github-webhook-secret"  # noqa: S105
+        secret = "github-webhook-secret"  # noqa: S105  # pragma: allowlist secret
         # Create GitHub webhook trigger with validation
         trigger_data = TriggerCreate(
             name="GitHub Webhook with Validation",
@@ -442,7 +442,7 @@ class TestWebhookHTTPIntegration:
         # Slack has a registered signature scheme, so a real signing_secret
         # plus a matching X-Slack-Signature are required to get past the
         # (now fail-closed) verification step.
-        secret = "slack-signing-secret"  # noqa: S105
+        secret = "slack-signing-secret"  # noqa: S105  # pragma: allowlist secret
         # Create Slack webhook trigger
         trigger_data = TriggerCreate(
             name="Slack Slash Command",

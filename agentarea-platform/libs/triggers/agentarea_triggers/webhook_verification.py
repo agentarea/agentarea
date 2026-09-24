@@ -394,14 +394,25 @@ async def resolve_signing_secret(
     try:
         raw = await secret_reader.get_secret(secret_name)
     except Exception:
-        logger.exception("Failed to read channel credentials for secret '%s'", secret_name)
+        # Log only non-sensitive lookup facts: never the secret name (it
+        # embeds the trigger id, but is also the exact string handed to the
+        # secret backend) or anything derived from the credential itself.
+        logger.exception(
+            "Failed to read channel credentials for webhook_type=%s trigger_id=%s",
+            webhook_type,
+            trigger_id,
+        )
         return None
     if not raw:
         return None
     try:
         credentials = json.loads(raw)
     except (TypeError, ValueError):
-        logger.warning("Stored channel credentials for '%s' are not valid JSON", secret_name)
+        logger.warning(
+            "Stored channel credentials for webhook_type=%s trigger_id=%s are not valid JSON",
+            webhook_type,
+            trigger_id,
+        )
         return None
     if not isinstance(credentials, dict):
         return None

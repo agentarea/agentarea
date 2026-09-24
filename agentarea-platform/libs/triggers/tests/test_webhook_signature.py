@@ -294,7 +294,7 @@ async def test_email_signing_secret_resolves():
 
 @pytest.mark.asyncio
 async def test_secret_store_bad_signature_rejected():
-    secret = "store-secret"  # noqa: S105
+    secret = "store-secret"  # noqa: S105  # pragma: allowlist secret
     trigger_id = uuid4()
     reader = _FakeSecretReader(
         {
@@ -314,7 +314,7 @@ async def test_secret_store_bad_signature_rejected():
 
 @pytest.mark.asyncio
 async def test_secret_store_good_signature_accepted():
-    secret = "store-secret"  # noqa: S105
+    secret = "store-secret"  # noqa: S105  # pragma: allowlist secret
     trigger_id = uuid4()
     reader = _FakeSecretReader(
         {
@@ -352,7 +352,7 @@ async def test_signed_type_with_no_resolvable_secret_in_store_is_rejected():
 
 @pytest.mark.asyncio
 async def test_resolve_signing_secret_reads_secret_store():
-    secret = "abc123"  # noqa: S105
+    secret = "abc123"  # noqa: S105  # pragma: allowlist secret
     trigger_id = uuid4()
     reader = _FakeSecretReader(
         {
@@ -374,7 +374,7 @@ async def test_resolve_signing_secret_ignores_other_triggers_credentials():
     reader = _FakeSecretReader(
         {
             channel_credential_secret_name("slack", other_trigger_id): json.dumps(
-                {"signing_secret": "not-this-one"}
+                {"signing_secret": "not-this-one"}  # pragma: allowlist secret
             )
         }
     )

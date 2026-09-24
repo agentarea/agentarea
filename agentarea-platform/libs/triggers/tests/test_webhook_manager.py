@@ -486,7 +486,7 @@ class TestDefaultWebhookManager:
         self, mock_execution_callback
     ):
         """A signing secret stored the way the UI stores it rejects a bad signature."""
-        secret = "store-secret"  # noqa: S105
+        secret = "store-secret"  # noqa: S105  # pragma: allowlist secret
         trigger = WebhookTrigger(
             id=uuid4(),
             name="GitHub Webhook",
@@ -530,7 +530,7 @@ class TestDefaultWebhookManager:
         self, mock_execution_callback
     ):
         """A signing secret stored the way the UI stores it accepts a valid signature."""
-        secret = "store-secret"  # noqa: S105
+        secret = "store-secret"  # noqa: S105  # pragma: allowlist secret
         raw = b'{"test": "data"}'
         sig = "sha256=" + hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
 
