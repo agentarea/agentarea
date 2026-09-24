@@ -114,7 +114,7 @@ async def test_non_http_schemes_are_refused():
     ("entry", "host", "address"),
     [
         ("localhost", "localhost", "127.0.0.1"),
-        ("*.svc.cluster.local", "ollama.ai.svc.cluster.local", "10.43.0.12"),
+        ("ollama.ai.svc.cluster.local", "ollama.ai.svc.cluster.local", "10.43.0.12"),
         ("192.168.1.0/24", "nas.lan", "192.168.1.50"),
     ],
 )

@@ -147,10 +147,15 @@ def validate_outbound_url(
 class OutboundPolicy:
     """Which non-public destinations a member-supplied URL may still reach.
 
-    ``private_allowlist`` holds host globs (``localhost``, ``*.svc.cluster.local``)
-    and CIDRs (``192.168.1.0/24``) for deployments that legitimately target a
-    private endpoint, such as a local Ollama. ``allow_private`` is the existing
-    blanket opt-out (``ALLOW_PRIVATE_URLS``). Both default to closed.
+    ``private_allowlist`` holds host globs (``localhost``,
+    ``ollama.ai.svc.cluster.local``) and CIDRs (``192.168.1.50/32``) for
+    deployments that legitimately target a private endpoint, such as a local
+    Ollama. ``allow_private`` is the existing blanket opt-out
+    (``ALLOW_PRIVATE_URLS``). Both default to closed.
+
+    Name each endpoint: a wildcard such as ``*.svc.cluster.local`` or a cluster
+    CIDR lets every member reach every in-cluster service, the platform's own
+    included.
     """
 
     allow_private: bool = False
