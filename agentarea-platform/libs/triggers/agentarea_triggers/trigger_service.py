@@ -42,6 +42,7 @@ from .logging_utils import (
 from .schemas.dto import TriggerCreate as TriggerCreatePayload
 from .schemas.dto import TriggerUpdate as TriggerUpdatePayload
 from .temporal_schedule_manager import TemporalScheduleManager
+from .webhook_verification import keep_stored_secret_fields
 
 logger = TriggerLogger(__name__)
 
@@ -287,6 +288,17 @@ class TriggerService:
 
         # Validate update data
         await self._validate_trigger_update(existing_trigger, trigger_update)
+
+        # Credentials are never read back, so an edit that omits one or returns
+        # the mask it was shown must not wipe the stored value.
+        for field in ("validation_rules", "webhook_config"):
+            sent = getattr(trigger_update, field)
+            if sent is not None:
+                setattr(
+                    trigger_update,
+                    field,
+                    keep_stored_secret_fields(sent, getattr(existing_trigger, field, None)),
+                )
 
         # Update the trigger
         updated_trigger = await self.trigger_repository.update_by_id(trigger_id, trigger_update)

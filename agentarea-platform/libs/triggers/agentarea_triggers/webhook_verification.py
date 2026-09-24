@@ -337,6 +337,42 @@ SIGNING_SECRET_KEYS: dict[str, str] = {
 }
 
 
+#: Keys of a trigger's ``validation_rules`` / ``webhook_config`` whose values are
+#: credentials: every signing key above, plus the channel credentials a member
+#: may have put inline (``credential_fields`` in the trigger catalog). They are
+#: write-only: responses carry ``REDACTED_SECRET`` in their place, and an update
+#: that omits them or sends that placeholder back keeps the stored value.
+SECRET_CONFIG_FIELDS: frozenset[str] = frozenset(
+    {*SIGNING_SECRET_KEYS.values(), "bot_token", "password"}
+)
+REDACTED_SECRET = "********"  # noqa: S105
+
+
+def redact_secret_fields(config: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Copy of ``config`` with every configured credential value masked."""
+    if not config:
+        return config
+    return {
+        key: REDACTED_SECRET if key in SECRET_CONFIG_FIELDS and value else value
+        for key, value in config.items()
+    }
+
+
+def keep_stored_secret_fields(
+    sent: dict[str, Any], stored: dict[str, Any] | None
+) -> dict[str, Any]:
+    """``sent`` with each credential it omits, or echoes masked, taken from ``stored``.
+
+    A credential sent as a real value replaces the stored one; sent as null or
+    empty it is cleared.
+    """
+    merged = dict(sent)
+    for key in SECRET_CONFIG_FIELDS & (stored or {}).keys():
+        if key not in merged or merged[key] == REDACTED_SECRET:
+            merged[key] = (stored or {})[key]
+    return merged
+
+
 def get_verifier(webhook_type: str) -> SignatureVerifier | None:
     """Get the appropriate signature verifier for a webhook type.
 
