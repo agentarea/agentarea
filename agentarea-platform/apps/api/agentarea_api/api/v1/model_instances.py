@@ -1,4 +1,5 @@
 import logging
+from typing import Literal
 from uuid import UUID
 
 from agentarea_agents_sdk.models import LLMModel, LLMRequest
@@ -50,7 +51,11 @@ class ModelInstanceTestResponse(BaseModel):
     error_type: str | None = None
     provider_type: str | None = None
     model_name: str | None = None
+    # The provider's charge for the test call, unconverted — unlike task costs,
+    # which are in the billing currency. Named so a client does not format this
+    # with the billing currency and show a USD figure as, say, roubles.
     cost: float | None = None
+    currency: Literal["USD"] = "USD"
     tokens_used: int | None = None
 
 

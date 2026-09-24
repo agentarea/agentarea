@@ -3684,6 +3684,10 @@ export type ModelInstanceTestResponse = {
      */
     cost?: number | null;
     /**
+     * Currency
+     */
+    currency?: 'USD';
+    /**
      * Error Type
      */
     error_type?: string | null;

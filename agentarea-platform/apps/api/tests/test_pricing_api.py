@@ -54,3 +54,12 @@ def test_route_is_served_behind_authentication():
 
     assert route.methods == {"GET"}
     assert get_user_context in calls
+
+
+def test_model_test_cost_is_labelled_usd():
+    """The model test returns the provider's raw charge, not a billing-currency amount."""
+    from agentarea_api.api.v1.model_instances import ModelInstanceTestResponse
+
+    response = ModelInstanceTestResponse(success=True, message="ok", cost=0.0001)
+
+    assert response.model_dump()["currency"] == "USD"

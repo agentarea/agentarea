@@ -1450,6 +1450,7 @@ export const zModelInstanceTestRequest = z.object({
  */
 export const zModelInstanceTestResponse = z.object({
   cost: z.number().nullish(),
+  currency: z.literal("USD").optional().default("USD"),
   error_type: z.string().nullish(),
   message: z.string(),
   model_name: z.string().nullish(),

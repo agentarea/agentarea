@@ -6570,6 +6570,12 @@
             ],
             "title": "Cost"
           },
+          "currency": {
+            "const": "USD",
+            "default": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
           "error_type": {
             "anyOf": [
               {
