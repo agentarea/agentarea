@@ -9,6 +9,7 @@ import json
 
 from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.config import get_database, get_settings
 
@@ -39,6 +40,7 @@ class WorkspacesToolset(Toolset):
     workspace_scoped = False
 
     @tool_method(effect="read")
+    @unrestricted("returns only the workspaces the caller already reaches, as GET /v1/workspaces")
     async def list(self, query: str | None = None) -> str:
         """List the workspaces you can reach, optionally filtered by a name or slug substring.
 
@@ -57,6 +59,7 @@ class WorkspacesToolset(Toolset):
         return json.dumps([_describe(w) for w in workspaces])
 
     @tool_method(effect="write")
+    @unrestricted("anyone may create a workspace; they become its owner, as POST /v1/workspaces")
     async def create(self, name: str) -> str:
         """Create a shared workspace owned by you and return it."""
         name = name.strip()

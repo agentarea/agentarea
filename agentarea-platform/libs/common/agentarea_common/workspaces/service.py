@@ -433,8 +433,6 @@ class WorkspaceService:
             if self._before_insert is not None:
                 await self._before_insert(workspace)
             try:
-                if self._before_insert is not None:
-                    await self._before_insert(workspace)
                 created = await self.workspace_repo.add(workspace)
             except IntegrityError:
                 await session.rollback()
