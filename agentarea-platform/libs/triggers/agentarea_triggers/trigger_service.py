@@ -54,6 +54,22 @@ NO_TASK_TEXT = (
     "Trigger has no task text: nothing arrived with the event and none is set on the trigger"
 )
 
+# Where to send a reply within the trigger's own channel. Anything that picks
+# the channel, the credentials or a delivery target is set from the trigger.
+_ORIGIN_ROUTING_FIELDS = frozenset(
+    {
+        "chat_id",
+        "message_id",
+        "channel_id",
+        "thread_ts",
+        "reply_to",
+        "subject",
+        "references",
+        "user_display_name",
+        "presentation",
+    }
+)
+
 
 def resolve_task_query(trigger: Trigger, trigger_data: dict[str, Any]) -> str | None:
     """What the agent is being asked to do, or None when nothing says.
@@ -1137,12 +1153,7 @@ class TriggerService:
                         fired_by=fired_by,
                     )
 
-                channel_origin = trigger_data.get("channel_origin")
-
-                # Build task parameters
                 task_params = await self._build_task_parameters(trigger, trigger_data, fired_by)
-                if channel_origin:
-                    task_params["channel_origin"] = channel_origin
 
                 # Route to active workflow or create new task
                 from agentarea_tasks.domain.models import AgentTask
@@ -1370,14 +1381,23 @@ class TriggerService:
         Returns:
             Channel origin dict or None if no outbound routing needed.
         """
-        # If extractor already provided channel_origin, use it
-        if trigger_data.get("channel_origin"):
-            origin = trigger_data["channel_origin"]
-            # Ensure trigger_id is set for credential lookup
-            origin.setdefault("trigger_id", str(trigger.id))
-            return origin
-
         trigger_id = str(trigger.id)
+
+        # A supplied origin is event data: only its routing fields are kept.
+        # The channel and the credentials replies are sent with come from the
+        # trigger, so an origin naming another trigger cannot borrow its bot.
+        supplied = trigger_data.get("channel_origin")
+        if supplied and isinstance(supplied, dict):
+            channel = self._reply_channel(trigger)
+            if channel is None:
+                return None
+            channel_type, credential_type = channel
+            return {
+                **{k: v for k, v in supplied.items() if k in _ORIGIN_ROUTING_FIELDS},
+                "type": channel_type,
+                "credential_type": credential_type,
+                "trigger_id": trigger_id,
+            }
 
         # Build channel_origin from webhook trigger data
         if isinstance(trigger, WebhookTrigger):
@@ -1427,6 +1447,21 @@ class TriggerService:
             return None
 
         # Cron triggers without extractors don't have channel_origin
+        return None
+
+    @staticmethod
+    def _reply_channel(trigger: Trigger) -> tuple[str, str] | None:
+        """(channel type, credential type) this trigger's replies go out on, if any."""
+        if isinstance(trigger, WebhookTrigger):
+            webhook_type = str(trigger.webhook_type)
+            if webhook_type == "generic":
+                return None
+            return webhook_type, webhook_type
+        extractor = getattr(trigger, "data_extractor", None)
+        if extractor:
+            from .extractors import reply_channel
+
+            return reply_channel(extractor)
         return None
 
     async def evaluate_trigger_conditions(

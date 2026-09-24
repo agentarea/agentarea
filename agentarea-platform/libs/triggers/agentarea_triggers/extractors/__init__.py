@@ -61,6 +61,18 @@ def resolves_own_credentials(name: str) -> bool:
     return bool(getattr(extractor, "resolves_own_credentials", False))
 
 
+def reply_channel(name: str) -> tuple[str, str]:
+    """(channel type, credential type) that replies to this extractor's events use.
+
+    The credential type matches the name the trigger API stores the channel
+    credentials under. An extractor whose replies go out on a different channel
+    than the one it polls declares ``reply_channel_type``.
+    """
+    credential_type = name.removesuffix("_polling")
+    extractor = _EXTRACTORS.get(name)
+    return getattr(extractor, "reply_channel_type", None) or credential_type, credential_type
+
+
 def list_extractors() -> list[str]:
     """List all registered extractor names."""
     return list(_EXTRACTORS.keys())
