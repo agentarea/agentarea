@@ -247,10 +247,12 @@ def create_app() -> FastAPI:
     from agentarea_agents_sdk.mcp_server.auth import MCPAuthMiddleware
     from agentarea_agents_sdk.tools.base_tool import BaseTool
     from agentarea_agents_sdk.tools.decorator_tool import Toolset
+    from mcp.server.transport_security import TransportSecuritySettings
 
     from agentarea_api.tools import get_platform_tools, get_spanning_mcp_tools
 
     _mcp_description = "AgentArea platform — agents, runs, MCP servers, providers, models, secrets"
+    _transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
     # Bare /mcp spans every workspace the caller can reach: workspace-scoped
     # tools take a required `workspace` argument, found via workspaces_list.
     _mcp_server = create_mcp_server(
@@ -259,7 +261,13 @@ def create_app() -> FastAPI:
         description=_mcp_description,
         workspace_argument=True,
     )
-    _mcp_app = MCPAuthMiddleware(_mcp_server.streamable_http_app())
+    _mcp_app = MCPAuthMiddleware(
+        _mcp_server.streamable_http_app(
+            streamable_http_path="/",
+            stateless_http=True,
+            transport_security=_transport_security,
+        )
+    )
 
     # /mcp/w/{workspace} pins one workspace by URL, so its tools carry no
     # `workspace` argument.
@@ -270,7 +278,14 @@ def create_app() -> FastAPI:
         workspace_argument=False,
     )
     _pinned_mcp_app = PinnedWorkspaceMiddleware(
-        MCPAuthMiddleware(_pinned_mcp_server.streamable_http_app()), prefix="/mcp/w"
+        MCPAuthMiddleware(
+            _pinned_mcp_server.streamable_http_app(
+                streamable_http_path="/",
+                stateless_http=True,
+                transport_security=_transport_security,
+            )
+        ),
+        prefix="/mcp/w",
     )
 
     from agentarea_api.api.v1.client_mcp import (
@@ -278,7 +293,13 @@ def create_app() -> FastAPI:
         client_mcp_server,
     )
 
-    _client_mcp_inner = MCPAuthMiddleware(client_mcp_server.streamable_http_app())
+    _client_mcp_inner = MCPAuthMiddleware(
+        client_mcp_server.streamable_http_app(
+            streamable_http_path="/",
+            stateless_http=True,
+            transport_security=_transport_security,
+        )
+    )
     _client_mcp_app = ClientMCPScopeMiddleware(_client_mcp_inner, prefix="/mcp/clients")
     _legacy_client_mcp_app = ClientMCPScopeMiddleware(_client_mcp_inner, prefix="/client-mcp")
 

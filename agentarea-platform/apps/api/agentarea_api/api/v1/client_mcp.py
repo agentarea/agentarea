@@ -18,9 +18,15 @@ from contextvars import ContextVar
 from agentarea_agents_sdk.mcp_server.auth import PROTECTED_RESOURCE_SCOPE_KEY
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 from agentarea_mcp.application.tool_list_cache import RedisToolListCache
-from mcp.server.fastmcp import FastMCP
-from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import TextContent, Tool
+from mcp.server import Server
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ListToolsResult,
+    PaginatedRequestParams,
+    TextContent,
+    Tool,
+)
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
@@ -47,20 +53,6 @@ async def _authorize_client_access(user_ctx, client_id: str) -> None:
     allowed = await resolve(PermissionService).check(user_ctx.user_id, "use", "client", client_id)
     if not allowed:
         raise ClientAccessDeniedError(client_id)
-
-
-client_mcp_server = FastMCP(
-    name="AgentArea Client",
-    instructions="Scoped tool bundle for a registered client (agent-proxy).",
-    streamable_http_path="/",
-    stateless_http=True,
-    # Same opt-out as the platform ``/mcp`` mount (see ``create_mcp_server``):
-    # FastMCP enables DNS-rebinding protection by default with an empty
-    # ``allowed_hosts``, so every Host header is answered with 421. We run behind
-    # an ingress that owns Host validation, and without this an authenticated
-    # harness gets 421 on every call after finishing its OAuth flow.
-    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
-)
 
 
 _tool_list_cache: RedisToolListCache | None = None
@@ -180,7 +172,7 @@ def _activate_skill_tool(skill_registry: dict) -> Tool:
     return Tool(
         name="activate_skill",
         description="Load full instructions for an available skill by name.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "skill_name": {
@@ -194,28 +186,30 @@ def _activate_skill_tool(skill_registry: dict) -> Tool:
     )
 
 
-@client_mcp_server._mcp_server.list_tools()
-async def _list_tools() -> list[Tool]:
+async def _list_tools(_ctx: object, _params: PaginatedRequestParams | None) -> ListToolsResult:
     client_id = _client_id_var.get()
     if not client_id:
-        return []
+        return ListToolsResult(tools=[])
     try:
         proxy, skill_registry = await _resolve_client_scope(client_id)
     except ClientAccessDeniedError:
         raise ValueError("Not authorized for this client") from None
     if proxy is None:
-        return []
+        return ListToolsResult(tools=[])
     tools = [
-        Tool(name=t["name"], description=t["description"], inputSchema=t["inputSchema"])
+        Tool(
+            name=t["name"],
+            description=t["description"],
+            input_schema=t.get("input_schema") or t["inputSchema"],
+        )
         for t in await proxy.list_namespaced_tools()
     ]
     if skill_registry:
         tools.append(_activate_skill_tool(skill_registry))
-    return tools
+    return ListToolsResult(tools=tools)
 
 
-@client_mcp_server._mcp_server.call_tool()
-async def _call_tool(name: str, arguments: dict) -> list[TextContent]:
+async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolResult:
     client_id = _client_id_var.get()
     if not client_id:
         raise ValueError("No client scope on request")
@@ -226,15 +220,26 @@ async def _call_tool(name: str, arguments: dict) -> list[TextContent]:
     if proxy is None:
         raise ValueError("Client not found")
 
-    if name == "activate_skill":
+    arguments = params.arguments or {}
+    if params.name == "activate_skill":
         from agentarea_agents_sdk.skills.skill_toolset import SkillActivationTool
 
-        skill_name = (arguments or {}).get("skill_name", "")
+        skill_name = arguments.get("skill_name", "")
         result = SkillActivationTool(skill_registry).activate_skill(skill_name)
     else:
-        result = await proxy.call_namespaced_tool(name, arguments or {})
+        result = await proxy.call_namespaced_tool(params.name, arguments)
     text = result if isinstance(result, str) else str(result)
-    return [TextContent(type="text", text=text)]
+    return CallToolResult(content=[TextContent(type="text", text=text)])
+
+
+# The tool set is resolved per request from the client scope, so this is the
+# low-level Server with its list/call handlers, not a decorator-built MCPServer.
+client_mcp_server = Server(
+    "AgentArea Client",
+    instructions="Scoped tool bundle for a registered client (agent-proxy).",
+    on_list_tools=_list_tools,
+    on_call_tool=_call_tool,
+)
 
 
 class ClientMCPScopeMiddleware:

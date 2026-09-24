@@ -13,6 +13,8 @@ dependencies = [
     "agentarea-agents-sdk",
     "pydantic>=2.4.2",
     "httpx>=0.25.0",
+    "httpx2>=2.5.0",
+    "mcp>=2.2.0,<3",
 ]
 
 [tool.uv.sources]

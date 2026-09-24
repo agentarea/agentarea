@@ -3,6 +3,7 @@ package mcpgateway
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -148,6 +149,42 @@ func TestGatewayAuthenticatesStartsAndObservesWholeRequest(t *testing.T) {
 	}
 	if runtime.ensured != 1 || repository.starting != 1 || repository.started != 1 || repository.finished != 1 {
 		t.Fatalf("lifecycle calls: ensured=%d starting=%d started=%d finished=%d", runtime.ensured, repository.starting, repository.started, repository.finished)
+	}
+}
+
+func TestGatewayUsageIncludesMCPRoutingHeaders(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer upstream.Close()
+
+	instanceID := "8ca9f331-9cc9-4a51-9933-27d7bb73860b"
+	instance := &models.MCPServerInstance{
+		InstanceID:  instanceID,
+		WorkspaceID: "ws-usage",
+	}
+	gateway := testGateway(t, &gatewayRepositoryStub{instance: instance}, &runtimeStub{endpoint: upstream.URL})
+	recorder := &usageRecorderStub{}
+	gateway.SetUsageRecorder(recorder)
+	request := httptest.NewRequest(http.MethodPost, "/mcp/"+instanceID+"/mcp", strings.NewReader("{}"))
+	request.Header.Set("X-AgentArea-Manager-Authorization", "Bearer "+testGatewaySecret)
+	request.Header.Set("Mcp-Method", "tools/call")
+	request.Header.Set("Mcp-Name", "get_weather")
+
+	gateway.ServeHTTP(httptest.NewRecorder(), request)
+
+	events := recorder.snapshot()
+	if len(events) != 2 {
+		t.Fatalf("usage events = %d, want started and completed", len(events))
+	}
+	for _, event := range events {
+		var data map[string]any
+		if err := json.Unmarshal(event.Data, &data); err != nil {
+			t.Fatal(err)
+		}
+		if data["mcp_method"] != "tools/call" || data["mcp_name"] != "get_weather" {
+			t.Fatalf("%s payload = %+v", event.Kind, data)
+		}
 	}
 }
 

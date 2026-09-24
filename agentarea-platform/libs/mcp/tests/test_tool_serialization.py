@@ -10,7 +10,7 @@ def _tool(**kwargs):
     """A duck-typed stand-in for mcp.types.Tool (only the attrs we read)."""
     kwargs.setdefault("name", "do_thing")
     kwargs.setdefault("description", "does a thing")
-    kwargs.setdefault("inputSchema", {"type": "object"})
+    kwargs.setdefault("input_schema", {"type": "object"})
     kwargs.setdefault("title", None)
     kwargs.setdefault("annotations", None)
     return SimpleNamespace(**kwargs)
@@ -24,7 +24,7 @@ class TestSerializeMcpTool:
         assert out["inputSchema"] == {"type": "object"}
 
     def test_missing_description_and_schema_default_to_empty(self):
-        out = serialize_mcp_tool(_tool(description=None, inputSchema=None))
+        out = serialize_mcp_tool(_tool(description=None, input_schema=None))
         assert out["description"] == ""
         assert out["inputSchema"] == {}
 

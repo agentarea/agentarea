@@ -28,7 +28,7 @@ def serialize_mcp_tool(tool: Any) -> dict[str, Any]:
     out: dict[str, Any] = {
         "name": tool.name,
         "description": getattr(tool, "description", None) or "",
-        "inputSchema": getattr(tool, "inputSchema", None) or {},
+        "inputSchema": getattr(tool, "input_schema", None) or {},
     }
 
     title = getattr(tool, "title", None)
@@ -47,8 +47,6 @@ def serialize_mcp_tool(tool: Any) -> dict[str, Any]:
             out["annotations"] = ann
 
     metadata = getattr(tool, "meta", None)
-    if metadata is None:
-        metadata = getattr(tool, "_meta", None)
     if isinstance(metadata, Mapping):
         ui = metadata.get("ui")
         normalized_ui = dict(ui) if isinstance(ui, Mapping) else {}

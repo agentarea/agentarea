@@ -275,42 +275,51 @@ class TestUnauthenticatedChallenge:
 
 
 @pytest.mark.asyncio
-async def test_a_restored_session_asks_the_admin_question_again():
-    """Admin authority is resolved per request, not frozen for the session's lifetime.
+async def test_each_protected_request_requires_its_own_bearer_token():
+    responses: list[dict] = []
 
-    The first admin check fills ``admin_workspaces`` on the context, and the
-    middleware caches that context per ``mcp-session-id``. Handing the cached
-    object back as-is would keep a demoted owner an admin until the session
-    ended.
-    """
-    seen: list[UserContext] = []
-
-    async def downstream(scope, receive, send):
-        seen.append(_mcp_user_context_var.get(None))
+    async def inner(scope, receive, send):
         await send({"type": "http.response.start", "status": 200, "headers": []})
-        await send({"type": "http.response.body", "body": b""})
+        await send({"type": "http.response.body", "body": b"ok"})
 
-    async def receive():
-        return {
-            "type": "http.request",
-            "body": b'{"jsonrpc":"2.0","id":1,"method":"tools/call"}',
-            "more_body": False,
-        }
+    middleware = MCPAuthMiddleware(inner)
 
-    async def send(_message):
-        return None
+    async def authenticate(_token, _request, _pinned_workspace=None):
+        _mcp_user_context_var.set(UserContext(user_id="alice", workspace_id="alice"))
+        return False
 
-    middleware = MCPAuthMiddleware(downstream)
-    cached = UserContext(user_id="user-1", workspace_id="ws-1", admin_workspaces=["ws-1"])
-    middleware._session_contexts["session-1"] = cached
+    async def request(headers: list[tuple[bytes, bytes]]):
+        responses.clear()
 
-    await middleware(
-        {"type": "http", "path": "/", "headers": [(b"mcp-session-id", b"session-1")]},
-        receive,
-        send,
+        async def receive():
+            return {
+                "type": "http.request",
+                "body": b'{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
+                "more_body": False,
+            }
+
+        async def send(message):
+            responses.append(message)
+
+        await middleware(
+            {"type": "http", "path": "/", "headers": headers},
+            receive,
+            send,
+        )
+        return list(responses)
+
+    with patch.object(
+        middleware, "_try_authenticate", side_effect=authenticate
+    ) as authenticate_mock:
+        first = await request([(b"authorization", b"Bearer first-token")])
+        second = await request([])
+
+    assert (
+        next(message for message in first if message["type"] == "http.response.start")["status"]
+        == 200
     )
-
-    assert seen[0].user_id == "user-1"
-    assert seen[0].workspace_id == "ws-1"
-    assert seen[0].admin_workspaces is None
-    assert cached.admin_workspaces == ["ws-1"], "the cached principal is not mutated"
+    assert (
+        next(message for message in second if message["type"] == "http.response.start")["status"]
+        == 401
+    )
+    authenticate_mock.assert_awaited_once()

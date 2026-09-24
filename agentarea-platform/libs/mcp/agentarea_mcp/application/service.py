@@ -4,7 +4,7 @@ import asyncio
 import inspect
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +17,11 @@ from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
 
 from agentarea_mcp.application.auth_service import MCPAuthService, OAuthReauthRequiredError
+from agentarea_mcp.application.mcp_client import (
+    connected_mcp_client,
+    mcp_verdict_key,
+    shared_era_verdict_store,
+)
 from agentarea_mcp.domain.events import (
     MCPServerCreated,
     MCPServerDeleted,
@@ -43,11 +48,7 @@ from agentarea_mcp.schemas.dto import (
     MCPServerUpdate,
 )
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
-from agentarea_mcp.verification import (
-    declared_remote_transport,
-    mcp_transport_candidates,
-    verify,
-)
+from agentarea_mcp.verification import declared_remote_transport, verify
 
 from .mcp_env_service import MCPEnvironmentService
 from .oauth_client_service import MCPOAuthClientService
@@ -309,6 +310,8 @@ class MCPServerInstanceService:
         repository_factory: Any,
         event_broker: EventBroker,
         secret_manager: BaseSecretManager,
+        *,
+        era_verdict_store=None,
     ):
         self.repository = repository_factory.create_repository(MCPServerInstanceRepository)
         self.mcp_server_repository = repository_factory.create_repository(MCPServerRepository)
@@ -318,6 +321,9 @@ class MCPServerInstanceService:
         self.secret_manager = secret_manager
         self.env_service = MCPEnvironmentService(secret_manager)
         self.db = get_database()
+        self.era_verdict_store = (
+            era_verdict_store if era_verdict_store is not None else shared_era_verdict_store()
+        )
 
     def _get_secret_env_names(self, env_schema: list[dict[str, Any]]) -> set[str]:
         return {e["name"] for e in env_schema if isinstance(e, dict) and e.get("isSecret")}
@@ -1009,6 +1015,7 @@ class MCPServerInstanceService:
 
         try:
             mcp_url, headers, transport = await self._resolve_mcp_url_and_headers(instance)
+            verdict_key = mcp_verdict_key(server_instance_id, transport_spec)
         except Exception as e:
             return _fail(
                 f"MCP '{instance.name}' is not available (cannot resolve URL: {e}). "
@@ -1031,6 +1038,8 @@ class MCPServerInstanceService:
                 tool_args,
                 httpx_client_factory=httpx_client_factory,
                 transport=transport,
+                verdict_key=verdict_key,
+                verdict_store=self.era_verdict_store,
             )
         except Exception as e:
             logger.error(
@@ -1052,7 +1061,7 @@ class MCPServerInstanceService:
             if block_type == "text":
                 parts.append(getattr(block, "text", "") or "")
             elif block_type == "image":
-                mime = getattr(block, "mimeType", "unknown")
+                mime = getattr(block, "mime_type", "unknown")
                 parts.append(f"<image mime={mime}>")
             elif block_type == "resource":
                 resource = getattr(block, "resource", None)
@@ -1061,8 +1070,12 @@ class MCPServerInstanceService:
             else:
                 parts.append(str(block))
 
+        structured_content = getattr(call_result, "structured_content", None)
+        if not parts and structured_content is not None:
+            parts.append(str(structured_content))
+
         result_str = "\n".join(parts)
-        is_error = bool(getattr(call_result, "isError", False))
+        is_error = bool(getattr(call_result, "is_error", False))
 
         if is_error:
             error_msg = result_str or "MCP tool returned error"
@@ -1131,53 +1144,22 @@ class MCPServerInstanceService:
         *,
         httpx_client_factory: Callable[..., Any] | None = None,
         transport: str | None = None,
-        timeout_seconds: int = 30,
+        timeout_seconds: float = 30.0,
+        verdict_key: str | None = None,
+        verdict_store=None,
     ) -> Any:
-        """Open an initialized MCP session and retry the operation per transport."""
-        from mcp import ClientSession
-        from mcp.shared._httpx_utils import create_mcp_http_client
-
-        streamable_urls, sse_url = mcp_transport_candidates(mcp_url, transport)
-        client_factory = httpx_client_factory or create_mcp_http_client
-        last_err: BaseException | None = None
-
-        for streamable_url in streamable_urls:
-            try:
-                from mcp.client.streamable_http import streamablehttp_client
-
-                async with streamablehttp_client(
-                    streamable_url,
-                    timeout=timedelta(seconds=timeout_seconds),
-                    headers=headers or None,
-                    httpx_client_factory=client_factory,
-                ) as (read_stream, write_stream, _):
-                    async with ClientSession(read_stream, write_stream) as session:
-                        await session.initialize()
-                        result = operation(session)
-                        return await result if inspect.isawaitable(result) else result
-            except Exception as exc:
-                last_err = exc
-                logger.info(
-                    "Streamable HTTP MCP operation failed for %s (%s), trying next transport",
-                    streamable_url,
-                    exc,
-                )
-
-        if sse_url is None:
-            raise last_err or RuntimeError(f"No usable MCP transport for {mcp_url}")
-
-        from mcp.client.sse import sse_client
-
-        async with sse_client(
-            sse_url,
-            timeout=timeout_seconds,
-            headers=headers or None,
-            httpx_client_factory=client_factory,
-        ) as (read_stream, write_stream):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                result = operation(session)
-                return await result if inspect.isawaitable(result) else result
+        """Open a connected v2 MCP client and run one operation."""
+        async with connected_mcp_client(
+            mcp_url,
+            headers or None,
+            float(timeout_seconds),
+            transport=transport,
+            verdict_key=verdict_key,
+            verdict_store=verdict_store,
+            httpx_client_factory=httpx_client_factory,
+        ) as client:
+            result = operation(client)
+            return await result if inspect.isawaitable(result) else result
 
     async def _call_tool_via_mcp(
         self,
@@ -1187,24 +1169,35 @@ class MCPServerInstanceService:
         tool_args: dict[str, Any],
         httpx_client_factory: Callable[..., Any] | None = None,
         transport: str | None = None,
+        *,
+        verdict_key: str | None = None,
+        verdict_store=None,
     ):
         return await self._with_mcp_session(
             mcp_url,
             headers,
-            lambda session: session.call_tool(tool_name, tool_args),
+            lambda client: client.call_tool(tool_name, tool_args),
             httpx_client_factory=httpx_client_factory,
             transport=transport,
+            verdict_key=verdict_key,
+            verdict_store=verdict_store,
         )
 
     async def _list_tools_via_mcp(
-        self, mcp_url: str, headers: dict[str, str], transport: str | None = None
+        self,
+        mcp_url: str,
+        headers: dict[str, str],
+        transport: str | None = None,
+        *,
+        httpx_client_factory: Callable[..., Any] | None = None,
     ):
         return await self._with_mcp_session(
             mcp_url,
             headers,
-            lambda session: session.list_tools(),
+            lambda client: client.list_tools(),
             transport=transport,
-            timeout_seconds=10,
+            timeout_seconds=10.0,
+            httpx_client_factory=httpx_client_factory,
         )
 
     async def validate_connection(

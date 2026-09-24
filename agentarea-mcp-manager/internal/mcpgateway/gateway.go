@@ -159,6 +159,17 @@ func (g *Gateway) isRemoteUpstream(target *url.URL, parseErr error) bool {
 	return strings.HasPrefix(target.Path, prefix)
 }
 
+// addMCPRoutingUsageFields copies the 2026-07-28 routing headers onto a usage
+// payload. 2025-era requests carry neither and get neither key.
+func addMCPRoutingUsageFields(data map[string]any, request *http.Request) {
+	if values := request.Header.Values("Mcp-Method"); len(values) > 0 {
+		data["mcp_method"] = values[0]
+	}
+	if values := request.Header.Values("Mcp-Name"); len(values) > 0 {
+		data["mcp_name"] = values[0]
+	}
+}
+
 func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	instanceID, err := instanceIDFromPath(request.URL.Path)
 	if err != nil {
@@ -180,10 +191,12 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		return
 	}
 	if g.usage != nil {
-		data, _ := json.Marshal(map[string]any{
+		dataFields := map[string]any{
 			"request_id": requestID, "http_method": request.Method,
 			"started_at": startedAt.UTC(), "transport": "streamable_http",
-		})
+		}
+		addMCPRoutingUsageFields(dataFields, request)
+		data, _ := json.Marshal(dataFields)
 		if err := g.recordRequestUsage(request.Context(), instance, requestID+":started", "mcp.request.started", startedAt, data); err != nil {
 			http.Error(response, "MCP request accounting unavailable", http.StatusServiceUnavailable)
 			return
@@ -205,13 +218,15 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 			} else if observed.status >= 400 {
 				outcome = "http_error"
 			}
-			data, _ := json.Marshal(map[string]any{
+			dataFields := map[string]any{
 				"request_id": requestID, "http_method": request.Method,
 				"started_at": startedAt.UTC(), "ended_at": endedAt.UTC(),
 				"duration_ns": endedAt.Sub(startedAt).Nanoseconds(),
 				"http_status": observed.status, "outcome": outcome,
 				"transport": "streamable_http",
-			})
+			}
+			addMCPRoutingUsageFields(dataFields, request)
+			data, _ := json.Marshal(dataFields)
 			_ = g.recordRequestUsage(context.WithoutCancel(request.Context()), instance, requestID+":completed", "mcp.request.completed", endedAt, data)
 		}()
 	}

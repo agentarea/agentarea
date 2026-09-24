@@ -1,18 +1,16 @@
-"""MCP auth middleware — extracts UserContext from request headers via ContextVar.
+"""MCP auth middleware — authenticates every protected request independently.
 
-The middleware allows the MCP protocol handshake (initialize, notifications/*,
-ping) without authentication.  All other methods — including ``tools/list``,
-``tools/call``, ``resources/*``, ``prompts/*`` — require a valid Bearer token
-or an established (previously authenticated) session.
+The middleware allows the legacy MCP handshake (``initialize``, notifications/*
+and ``ping``) without authentication.  All other methods — including
+``server/discover`` on the 2026-07-28 wire, ``tools/list``, ``tools/call``,
+``resources/*`` and ``prompts/*`` — require a valid Bearer token on that
+request.
 
-Unauthenticated requests to protected methods receive HTTP 401 with an
+Unauthenticated requests to protected methods receive HTTP 401 with a
 ``WWW-Authenticate: Bearer resource_metadata="…"`` header (RFC 9728) so that
-MCP clients (Cursor, Claude Desktop) can discover the OAuth flow automatically.
-
-Session-aware: when a Bearer token is validated on the first request (Initialize),
-the resulting UserContext is cached by ``mcp-session-id``.  Subsequent requests
-in the same session (which carry only the session ID, no Bearer) restore the
-cached context automatically.
+MCP clients can discover the OAuth flow automatically.  Modern MCP
+authorization requires the access token in every HTTP request; no request
+context is retained between requests.
 """
 
 import dataclasses
@@ -22,7 +20,6 @@ import re
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
-from dataclasses import replace
 from typing import Any
 
 from starlette.requests import Request
@@ -157,22 +154,15 @@ async def _read_body(receive: Receive) -> bytes:
 class MCPAuthMiddleware:
     """Pure-ASGI middleware that authenticates MCP requests.
 
-    Allows handshake methods (initialize, notifications/*, ping) without auth.
-    All other methods require a valid Bearer token or an established session.
-    Unauthenticated requests to protected methods receive HTTP 401 with
-    RFC 9728 WWW-Authenticate header for OAuth discovery.
-
-    Session-aware: on the first authenticated request (Initialize with Bearer
-    token), the middleware validates the token, caches the resulting
-    UserContext keyed by ``mcp-session-id``, and restores it on subsequent
-    requests that carry only the session ID.
+    Allows only legacy handshake methods (``initialize``, ``ping`` and
+    ``notifications/*``) without auth.  Modern ``server/discover`` requests
+    are protected because MCP authorization requires an access token on every
+    HTTP request.  Every other method requires a valid Bearer token on the
+    same request.
     """
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
-        # (resource, session_id) → UserContext cache (lives for the process
-        # lifetime). Keyed by resource too: one instance serves every pinned URL.
-        self._session_contexts: dict[tuple[str | None, str], Any] = {}
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -187,13 +177,9 @@ class MCPAuthMiddleware:
         # Build a Request for header access (body will be replayed separately
         # for the downstream handler — Request itself is only used for headers).
         request = Request(scope, _make_replay_receive(body))
-        session_id = request.headers.get("mcp-session-id")
         auth_header = request.headers.get("authorization", "")
 
         token = _mcp_user_context_var.set(None)
-        captured_session_id: str | None = None
-
-        resource = scope.get(PROTECTED_RESOURCE_SCOPE_KEY)
         pinned_workspace = scope.get(WORKSPACE_SCOPE_KEY)
         workspace_denied = False
 
@@ -204,13 +190,6 @@ class MCPAuthMiddleware:
                 workspace_denied = await self._try_authenticate(
                     bearer_token, request, pinned_workspace
                 )
-            elif session_id and (resource, session_id) in self._session_contexts:
-                # Admin authority is filled in lazily on the context by the first
-                # check that asks; a restored session must ask again, or a demoted
-                # owner stays an admin until the session ends.
-                _mcp_user_context_var.set(
-                    replace(self._session_contexts[(resource, session_id)], admin_workspaces=None)
-                )
 
             # ---------- gate: reject protected methods without auth ----------
             ctx = _mcp_user_context_var.get(None)
@@ -220,31 +199,13 @@ class MCPAuthMiddleware:
                 await _send_workspace_denied(send, request_id, pinned_workspace)
                 return
             if ctx is None and not _is_handshake_method(method):
-                logger.info(
-                    "MCP auth: rejecting unauthenticated request method=%s session=%s",
-                    method,
-                    session_id,
-                )
+                logger.info("MCP auth: rejecting unauthenticated request method=%s", method)
                 await _send_401(send, request_id, scope.get(PROTECTED_RESOURCE_SCOPE_KEY))
                 return
 
             # ---------- forward to downstream handler ----------
-            replay = _make_replay_receive(body)
-
-            async def send_wrapper(message):
-                nonlocal captured_session_id
-                if message["type"] == "http.response.start":
-                    for key, value in message.get("headers", []):
-                        if key == b"mcp-session-id":
-                            captured_session_id = value.decode()
-                            break
-                await send(message)
-
-            await self.app(scope, replay, send_wrapper)
+            await self.app(scope, _make_replay_receive(body), send)
         finally:
-            ctx = _mcp_user_context_var.get(None)
-            if ctx is not None and captured_session_id:
-                self._session_contexts[(resource, captured_session_id)] = ctx
             _mcp_user_context_var.reset(token)
 
     async def _try_authenticate(

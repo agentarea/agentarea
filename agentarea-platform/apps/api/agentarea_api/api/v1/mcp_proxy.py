@@ -46,7 +46,8 @@ from agentarea_mcp.infrastructure.repository import (
 )
 from agentarea_openapi.application.url_validator import build_pinned_target, validate_url
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from mcp.shared.inbound import NAME_BEARING_METHODS, decode_header_value
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,78 @@ def _filter_outbound_headers(headers) -> dict[str, str]:
             continue
         out[k] = v
     return out
+
+
+class _MCPHeaderMismatchError(Exception):
+    """A request envelope header disagrees with the JSON-RPC body."""
+
+    def __init__(self, request_id: Any, message: str) -> None:
+        self.body = {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {"code": -32020, "message": message},
+        }
+        super().__init__(message)
+
+
+def _mcp_header_value(headers, name: str) -> str | None:
+    for header_name, value in headers.items():
+        if header_name.lower() == name.lower():
+            return value
+    return None
+
+
+def _validate_mcp_header_consistency(payload: Any, headers) -> None:
+    """Reject routing headers that disagree with a single JSON-RPC body."""
+    if headers is None:
+        return
+
+    method_header = _mcp_header_value(headers, "Mcp-Method")
+    name_header = _mcp_header_value(headers, "Mcp-Name")
+    if method_header is None and name_header is None:
+        # A 2025-era request: no routing headers to hold to the body.
+        return
+
+    if isinstance(payload, list):
+        raise _MCPHeaderMismatchError(
+            None,
+            "Header mismatch: Mcp-Method and Mcp-Name headers cannot be "
+            "validated against a JSON-RPC batch body",
+        )
+
+    if not isinstance(payload, dict):
+        raise _MCPHeaderMismatchError(
+            None,
+            "Header mismatch: routing headers require a JSON-RPC request object",
+        )
+
+    request_id = payload.get("id")
+    body_method = payload.get("method")
+    if method_header is not None and method_header != body_method:
+        raise _MCPHeaderMismatchError(
+            request_id,
+            f"Header mismatch: Mcp-Method header value {method_header!r} "
+            f"does not match body value {body_method!r}",
+        )
+
+    if name_header is None:
+        return
+    name_key = NAME_BEARING_METHODS.get(body_method) if isinstance(body_method, str) else None
+    if name_key is None:
+        raise _MCPHeaderMismatchError(
+            request_id,
+            f"Header mismatch: Mcp-Name header is not defined for request method {body_method!r}",
+        )
+    raw_params = payload.get("params")
+    params = raw_params if isinstance(raw_params, dict) else {}
+    body_name = params.get(name_key)
+    decoded_name = decode_header_value(name_header)
+    if decoded_name is None or decoded_name != body_name:
+        raise _MCPHeaderMismatchError(
+            request_id,
+            f"Header mismatch: Mcp-Name header value {name_header!r} "
+            f"does not match body value {body_name!r}",
+        )
 
 
 def _iter_jsonrpc_tool_calls(payload: Any) -> list[tuple[str, dict[str, Any]]]:
@@ -145,7 +218,12 @@ async def authorize_mcp_tool_call(
 
 
 async def _authorize_mcp_tool_calls(
-    body: bytes, user_context, session, *, instance_id: UUID
+    body: bytes,
+    user_context,
+    session,
+    *,
+    instance_id: UUID,
+    headers=None,
 ) -> None:
     """Deny JSON-RPC tool calls the governance policy does not permit.
 
@@ -160,6 +238,7 @@ async def _authorize_mcp_tool_calls(
         payload = json.loads(body)
     except json.JSONDecodeError:
         return
+    _validate_mcp_header_consistency(payload, headers)
     tool_calls = _iter_jsonrpc_tool_calls(payload)
     if not tool_calls:
         return
@@ -366,7 +445,16 @@ async def proxy_instance(
 
     body = await request.body() if request.method in ("POST", "DELETE") else None
     if request.method == "POST" and body is not None:
-        await _authorize_mcp_tool_calls(body, user_context, db_session, instance_id=instance.id)
+        try:
+            await _authorize_mcp_tool_calls(
+                body,
+                user_context,
+                db_session,
+                instance_id=instance.id,
+                headers=request.headers,
+            )
+        except _MCPHeaderMismatchError as exc:
+            return JSONResponse(status_code=400, content=exc.body)
     params = dict(request.query_params)
 
     client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=None, write=30, pool=10))

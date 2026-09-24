@@ -65,6 +65,8 @@ async def _tools(server) -> dict:
 
 
 def _text(result) -> str:
+    if hasattr(result, "content"):
+        return result.content[0].text
     content = result[0] if isinstance(result, tuple) else result
     return content[0].text
 
@@ -74,7 +76,7 @@ class TestSchema:
     async def test_spanning_mount_requires_workspace(self):
         server = create_mcp_server(toolsets=[WhereToolset()], workspace_argument=True)
 
-        schema = (await _tools(server))["where_where"].inputSchema
+        schema = (await _tools(server))["where_where"].input_schema
 
         assert "workspace" in schema["properties"]
         assert "workspace" in schema["required"]
@@ -84,7 +86,7 @@ class TestSchema:
     async def test_pinned_mount_has_no_workspace_argument(self):
         server = create_mcp_server(toolsets=[WhereToolset()], workspace_argument=False)
 
-        schema = (await _tools(server))["where_where"].inputSchema
+        schema = (await _tools(server))["where_where"].input_schema
 
         assert "workspace" not in schema["properties"]
 
@@ -92,7 +94,7 @@ class TestSchema:
     async def test_unscoped_toolset_opts_out(self):
         server = create_mcp_server(toolsets=[UnscopedToolset()], workspace_argument=True)
 
-        schema = (await _tools(server))["unscoped_whoami"].inputSchema
+        schema = (await _tools(server))["unscoped_whoami"].input_schema
 
         assert "workspace" not in schema.get("properties", {})
 
@@ -112,8 +114,9 @@ class TestBinding:
         server = create_mcp_server(toolsets=[WhereToolset()], workspace_argument=True)
 
         with use_mcp_user_context(_alice()), _slugs({"globex": "ws-globex"}):
-            with pytest.raises(Exception, match="No accessible workspace 'globex'"):
+            with pytest.raises(Exception) as exc:  # noqa: B017 - SDK wraps tool errors
                 await server.call_tool("where_where", {"workspace": "globex"})
+        assert isinstance(exc.value.__cause__, WorkspaceAccessDeniedError)
 
     @pytest.mark.asyncio
     async def test_missing_workspace_is_refused_not_defaulted(self):

@@ -1,8 +1,8 @@
 """MCPToolAdapter — converts BaseTool/Toolset instances into MCP tool registrations.
 
-Adapter pattern (GoF): bridges the internal tool interface to the MCP SDK's
-FastMCP server. Each @tool_method becomes a separate MCP tool with
-resource-first naming: ``{toolset.name}_{method_name}``.
+Adapter pattern (GoF): bridges the internal tool interface to the MCPServer.
+Each @tool_method becomes a separate MCP tool with resource-first naming:
+``{toolset.name}_{method_name}``.
 """
 
 import inspect
@@ -11,7 +11,7 @@ import logging
 from collections.abc import Callable
 from typing import Annotated, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from pydantic import Field
 
 from ..tools.base_tool import BaseTool
@@ -38,7 +38,7 @@ class MCPToolAdapter:
     ``workspace_scoped = False`` (it acts on no single workspace).
     """
 
-    def __init__(self, server: FastMCP, *, workspace_argument: bool):
+    def __init__(self, server: MCPServer, *, workspace_argument: bool):
         self._server = server
         self._workspace_argument = workspace_argument
 

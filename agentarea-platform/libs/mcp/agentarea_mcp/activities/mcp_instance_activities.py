@@ -13,7 +13,6 @@ Remaining activities:
 """
 
 import logging
-from datetime import timedelta
 from typing import Any
 
 from agentarea_execution.interfaces import ActivityDependencies
@@ -57,8 +56,6 @@ async def discover_mcp_tools(
     """
     from agentarea_common.config import get_settings
 
-    from agentarea_mcp.verification import mcp_transport_candidates
-
     settings = get_settings()
     custom_headers: dict[str, str] = dict(headers) if headers else {}
 
@@ -85,49 +82,32 @@ async def discover_mcp_tools(
 
     logger.info("Tool discovery connecting to %s", base_url)
 
-    from mcp import ClientSession
+    from agentarea_mcp.application.mcp_client import (
+        connected_mcp_client,
+        mcp_verdict_key,
+        shared_era_verdict_store,
+    )
 
-    streamable_urls, sse_url = mcp_transport_candidates(base_url, transport)
+    verdict_store = None
+    verdict_key = None
+    if instance_id:
+        verdict_store = shared_era_verdict_store()
+        verdict_key = mcp_verdict_key(
+            instance_id,
+            {"endpoint_url": base_url, "headers": custom_headers, "transport": transport},
+        )
 
-    result = None
-    last_err: BaseException | None = None
-    for streamable_url in streamable_urls:
-        try:
-            from mcp.client.streamable_http import streamablehttp_client
+    async with connected_mcp_client(
+        base_url,
+        custom_headers or None,
+        float(timeout),
+        transport=transport,
+        verdict_key=verdict_key,
+        verdict_store=verdict_store,
+    ) as client:
+        result = await client.list_tools()
 
-            async with streamablehttp_client(
-                streamable_url,
-                timeout=timedelta(seconds=timeout),
-                headers=custom_headers or None,
-            ) as (read_stream, write_stream, _):
-                async with ClientSession(read_stream, write_stream) as sess:
-                    await sess.initialize()
-                    result = await sess.list_tools()
-            break
-        except Exception as transport_err:
-            last_err = transport_err
-            logger.info(
-                "Streamable HTTP failed for %s (%s), trying next transport",
-                streamable_url,
-                transport_err,
-            )
-
-    if result is None and sse_url is not None:
-        from mcp.client.sse import sse_client
-
-        async with sse_client(
-            sse_url,
-            timeout=timeout,
-            headers=custom_headers or None,
-        ) as (read_stream, write_stream):
-            async with ClientSession(read_stream, write_stream) as sess:
-                await sess.initialize()
-                result = await sess.list_tools()
-
-    if result is None:
-        raise last_err or RuntimeError(f"No usable MCP transport for {base_url}")
-
-    tools = [serialize_mcp_tool(t) for t in result.tools]
+    tools = [serialize_mcp_tool(tool) for tool in result.tools]
 
     if instance_id:
         logger.info("Discovered %d tools for instance %s", len(tools), instance_id)
