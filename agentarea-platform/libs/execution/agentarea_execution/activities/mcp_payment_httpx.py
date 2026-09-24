@@ -34,6 +34,7 @@ def create_payment_httpx_client_factory(
         headers: dict[str, str] | None = None,
         timeout: httpx.Timeout | None = None,
         auth: httpx.Auth | None = None,
+        inner: httpx.AsyncBaseTransport | None = None,
     ) -> httpx.AsyncClient:
         kwargs: dict[str, Any] = {
             "follow_redirects": True,
@@ -43,6 +44,7 @@ def create_payment_httpx_client_factory(
                 next_idempotency_key=next_idempotency_key,
                 find_settled_payment=find_settled_payment,
                 on_payment=on_payment,
+                inner=inner,
             ),
         }
         if timeout is not None:

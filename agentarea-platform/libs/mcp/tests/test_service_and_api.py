@@ -927,7 +927,12 @@ class TestServiceExecuteTool:
                 mod._enqueue_last_dispatch = orig
 
         assert result["success"] is True
-        assert captured["factory"] is factory
+        # A URL-type endpoint is member-chosen: the payment client is kept but
+        # its requests go through the pinned transport.
+        from agentarea_common.utils.url_safety import SafeOutboundTransport
+
+        captured["factory"](headers=None, timeout=None)
+        assert isinstance(factory.call_args.kwargs["inner"], SafeOutboundTransport)
 
 
 # ---------------------------------------------------------------------------

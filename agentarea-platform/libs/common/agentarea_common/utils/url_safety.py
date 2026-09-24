@@ -30,9 +30,12 @@ import httpx
 
 __all__ = [
     "OutboundPolicy",
+    "PinnedSender",
+    "Resolver",
     "SafeOutboundTransport",
     "UnsafeDestinationError",
     "UnsafeUrlError",
+    "resolve_host",
     "safe_async_client",
     "validate_outbound_url",
 ]
@@ -191,40 +194,46 @@ class OutboundPolicy:
 Resolver = Callable[[str, int], Awaitable[list[str]]]
 
 
-async def _resolve(host: str, port: int) -> list[str]:
+async def resolve_host(host: str, port: int) -> list[str]:
     infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
     return [str(info[4][0]).split("%")[0] for info in infos]
 
 
-class SafeOutboundTransport(httpx.AsyncBaseTransport):
-    """Sends each request only to an address it resolved and vetted itself.
+class PinnedSender:
+    """Resolve, vet and pin one request, for any client speaking the httpx API.
 
-    The request goes to that IP, with the original name kept in the Host header
-    and as the TLS server name, so a name cannot resolve to one address when
-    vetted and another when connected. The client hands every redirect hop back
-    through here, so each hop is vetted the same way.
+    ``lib`` is the module whose ``Request`` and ``AsyncHTTPTransport`` the caller
+    uses: ``httpx`` here, ``httpx2`` for the MCP SDK's client. ``error`` is raised
+    for a refused destination and should be that library's ``RequestError`` so
+    its callers treat it as an unreachable host.
+
+    The request goes to the vetted IP, with the original name kept in the Host
+    header and as the TLS server name, so a name cannot resolve to one address
+    when vetted and another when connected.
     """
 
     def __init__(
         self,
+        lib: Any,
         policy: OutboundPolicy,
         *,
-        resolve: Resolver = _resolve,
-        inner: httpx.AsyncBaseTransport | None = None,
+        error: Callable[..., Exception],
+        resolve: Resolver = resolve_host,
+        inner: Any = None,
     ) -> None:
+        self._lib = lib
         self._policy = policy
+        self._error = error
         self._resolve = resolve
-        self._inner = inner or httpx.AsyncHTTPTransport(trust_env=False)
+        self._inner = inner or lib.AsyncHTTPTransport(trust_env=False)
 
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+    async def send(self, request: Any) -> Any:
         url = request.url
         if url.scheme not in _ALLOWED_SCHEMES:
-            raise UnsafeDestinationError(
-                f"URL scheme {url.scheme!r} is not allowed", request=request
-            )
+            raise self._error(f"URL scheme {url.scheme!r} is not allowed", request=request)
         host = url.host
         if not host:
-            raise UnsafeDestinationError("URL has no host", request=request)
+            raise self._error("URL has no host", request=request)
 
         try:
             addresses = [ipaddress.ip_address(host)]
@@ -233,15 +242,13 @@ class SafeOutboundTransport(httpx.AsyncBaseTransport):
             try:
                 resolved = await self._resolve(host, port)
             except OSError as exc:
-                raise UnsafeDestinationError(
-                    f"Could not resolve host {host!r}", request=request
-                ) from exc
+                raise self._error(f"Could not resolve host {host!r}", request=request) from exc
             addresses = [ipaddress.ip_address(addr) for addr in resolved]
         if not addresses:
-            raise UnsafeDestinationError(f"Host {host!r} has no address", request=request)
+            raise self._error(f"Host {host!r} has no address", request=request)
         for ip in addresses:
             if not self._policy.permits(host, ip):
-                raise UnsafeDestinationError(
+                raise self._error(
                     f"URL host {host!r} resolves to non-public address {ip}; refusing request",
                     request=request,
                 )
@@ -249,7 +256,7 @@ class SafeOutboundTransport(httpx.AsyncBaseTransport):
         extensions: dict[str, Any] = dict(request.extensions)
         if url.scheme == "https" and str(addresses[0]) != host:
             extensions.setdefault("sni_hostname", host)
-        pinned = httpx.Request(
+        pinned = self._lib.Request(
             request.method,
             url.copy_with(host=str(addresses[0])),
             headers=request.headers,
@@ -260,6 +267,31 @@ class SafeOutboundTransport(httpx.AsyncBaseTransport):
 
     async def aclose(self) -> None:
         await self._inner.aclose()
+
+
+class SafeOutboundTransport(httpx.AsyncBaseTransport):
+    """Sends each request only to an address it resolved and vetted itself.
+
+    The client hands every redirect hop back through here, so each hop is
+    vetted the same way.
+    """
+
+    def __init__(
+        self,
+        policy: OutboundPolicy,
+        *,
+        resolve: Resolver = resolve_host,
+        inner: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self._sender = PinnedSender(
+            httpx, policy, error=UnsafeDestinationError, resolve=resolve, inner=inner
+        )
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        return await self._sender.send(request)
+
+    async def aclose(self) -> None:
+        await self._sender.aclose()
 
 
 def safe_async_client(*, policy: OutboundPolicy | None = None, **kwargs: Any) -> httpx.AsyncClient:

@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 
 import httpx
 from agentarea_common.config import get_database, get_settings
+from mcp import MCPError
 from sqlalchemy import select
 
 from agentarea_mcp.domain.models import MCPServer
@@ -29,6 +30,7 @@ from agentarea_mcp.tool_serialization import serialize_mcp_tool
 logger = logging.getLogger(__name__)
 
 _LIST_TOOLS_ATTEMPT_TIMEOUT = 5  # seconds per attempt
+_URL_CONNECT_FAILED = "Could not connect to the MCP server"
 _LIST_TOOLS_RETRY_DELAY = 5  # steady poll interval while the container provisions
 # Absolute safety cap. Verification is liveness-driven: while a docker/command
 # container is alive and still provisioning (pulling its image, or running a
@@ -206,6 +208,7 @@ async def _list_tools(
     *,
     verdict_key: str | None = None,
     verdict_store=None,
+    httpx_client_factory=None,
 ) -> list[dict]:
     """Connect to an MCP server and list tools through the shared v2 client."""
     from agentarea_mcp.application.mcp_client import connected_mcp_client
@@ -218,6 +221,7 @@ async def _list_tools(
         transport=transport,
         verdict_key=verdict_key,
         verdict_store=verdict_store,
+        httpx_client_factory=httpx_client_factory,
     ) as client:
         result = await client.list_tools()
     return [serialize_mcp_tool(tool) for tool in result.tools]
@@ -372,14 +376,20 @@ async def verify(
             remote_transport = declared_remote_transport(runtime_instance.json_spec)
         verdict_store = None
         verdict_key = None
+        client_factory = None
         if _list_tools_fn is None:
             from agentarea_mcp.application.mcp_client import (
                 mcp_verdict_key,
+                pinned_client_factory,
                 shared_era_verdict_store,
             )
 
             verdict_key = mcp_verdict_key(instance_id, runtime_instance.json_spec)
             verdict_store = shared_era_verdict_store()
+            # A URL-type endpoint is the member's choice of address; the
+            # gateway URL of a container-backed one is the platform's.
+            if instance_type == "url":
+                client_factory = pinned_client_factory()
         deadline = asyncio.get_event_loop().time() + _SAFETY_DEADLINE
         last_error: BaseException | None = None
 
@@ -393,6 +403,7 @@ async def verify(
                             remote_transport,
                             verdict_key=verdict_key,
                             verdict_store=verdict_store,
+                            httpx_client_factory=client_factory,
                         )
                     else:
                         tools = await _list_tools_fn(endpoint_url, headers or None)
@@ -437,6 +448,15 @@ async def verify(
 
                 # MCP protocol-level error — fail fast, no retry.
                 message = f"{type(leaf).__name__}: {leaf}" if str(leaf) else type(leaf).__name__
+                if instance_type == "url" and not isinstance(leaf, MCPError):
+                    # Refusals and connection failures of a member-chosen
+                    # address would otherwise say which internal ports answer.
+                    logger.warning(
+                        "verify: could not connect to url endpoint: %s",
+                        message,
+                        extra={"instance_id": instance_id},
+                    )
+                    message = _URL_CONNECT_FAILED
                 payload = _make_payload(
                     "failed",
                     VerificationError(
@@ -463,6 +483,13 @@ async def verify(
         # returns a concrete startup failure when it cannot satisfy demand.
         error_code = "list_tools_timeout"
         error_msg = f"MCP did not become ready within {_SAFETY_DEADLINE}s: {last_error}"
+        if instance_type == "url":
+            logger.warning(
+                "verify: url endpoint never answered: %s",
+                error_msg,
+                extra={"instance_id": instance_id},
+            )
+            error_msg = _URL_CONNECT_FAILED
 
         payload = _make_payload(
             "failed",
