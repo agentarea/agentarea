@@ -93,4 +93,50 @@ describe("useCurrency", () => {
     expect(result.current.isLoading).toBe(false);
     expect(getPricingCurrencyAction).toHaveBeenCalledTimes(2);
   });
+
+  it("ignores a stale in-flight fetch that resolves after a reset, even if it resolves last", async () => {
+    let resolveStale: (value: { data: { currency: string } }) => void;
+    let resolveFresh: (value: { data: { currency: string } }) => void;
+
+    getPricingCurrencyAction
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveStale = resolve;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFresh = resolve;
+          })
+      );
+
+    const { result } = renderHook(() => useCurrency());
+    expect(result.current.isLoading).toBe(true);
+
+    // Workspace switch happens while the first (pre-switch) fetch is still
+    // in flight — the broadcast kicks off a second, post-switch fetch.
+    act(() => {
+      resetCurrencyCache();
+    });
+    expect(getPricingCurrencyAction).toHaveBeenCalledTimes(2);
+
+    // Resolve the fresh (post-switch) fetch first, then the stale
+    // (pre-switch) one arrives last — the slower, older request must not
+    // win the race and overwrite the fresher currency.
+    await act(async () => {
+      resolveFresh({ data: { currency: "RUB" } });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current.currency).toBe("RUB"));
+
+    await act(async () => {
+      resolveStale({ data: { currency: "USD" } });
+      await Promise.resolve();
+    });
+
+    expect(result.current.currency).toBe("RUB");
+    expect(result.current.isLoading).toBe(false);
+  });
 });

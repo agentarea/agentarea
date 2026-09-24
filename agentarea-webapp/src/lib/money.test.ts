@@ -57,11 +57,15 @@ describe("formatMoney", () => {
   });
 
   it("preserves the sign on a tiny negative amount instead of flipping it positive", () => {
-    const positiveFloor = formatMoney(0.00001, "USD", "en-US");
-    const negativeFloor = formatMoney(-0.00001, "USD", "en-US");
-    expect(negativeFloor).toBe(`< ${intl(-0.0001, "USD", "en-US", 4)}`);
-    // The magnitude reads the same either way; only the sign differs.
-    expect(negativeFloor.replace("-", "")).toBe(positiveFloor);
+    expect(formatMoney(0.00001, "USD", "en-US")).toBe(
+      `< ${intl(0.0001, "USD", "en-US", 4)}`
+    );
+    // "< -$0.0001" would misread as smaller (more negative) than the floor;
+    // the value's magnitude is under the floor, so the signed amount is
+    // *greater* than -$0.0001 — "> -$0.0001" reads correctly either way.
+    expect(formatMoney(-0.00001, "USD", "en-US")).toBe(
+      `> ${intl(-0.0001, "USD", "en-US", 4)}`
+    );
   });
 
   describe("compact option", () => {
