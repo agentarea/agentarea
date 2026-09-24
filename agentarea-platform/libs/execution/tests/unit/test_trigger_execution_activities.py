@@ -377,6 +377,50 @@ class TestTriggerExecutionActivities:
             assert result.trigger_id == sample_trigger.id
 
     @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
+    async def test_a_scheduled_trigger_whose_conditions_cannot_be_evaluated_does_not_fire(
+        self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
+    ):
+        from agentarea_triggers.trigger_service import TriggerService
+
+        mock_database_session.get.return_value = MagicMock(
+            created_by="test_user", workspace_id="ws-1"
+        )
+        mock_database = MagicMock()
+        mock_database.async_session_factory.return_value = mock_database_session
+        mock_get_database.return_value = mock_database
+
+        # field_matches must be a mapping; the evaluator cannot check this one.
+        sample_trigger.conditions = {"field_matches": ["request.method"]}
+        recorded = TriggerExecution(
+            trigger_id=sample_trigger.id,
+            status=ExecutionStatus.FAILED,
+            execution_time_ms=1,
+        )
+
+        with (
+            patch.object(TriggerService, "get_trigger", AsyncMock(return_value=sample_trigger)),
+            patch.object(
+                TriggerService, "record_execution", AsyncMock(return_value=recorded)
+            ) as record_execution,
+            patch("agentarea_tasks.task_service.TaskService") as task_service_class,
+        ):
+            task_service_class.return_value = AsyncMock()
+            result = await trigger_activities[0](
+                ExecuteTriggerRequest(
+                    trigger_id=sample_trigger.id,
+                    execution_data={"execution_time": datetime.utcnow().isoformat()},
+                )
+            )
+
+        assert result.status is TriggerOutcome.FAILED
+        assert result.task_id is None
+        assert result.error is not None and "condition" in result.error.lower()
+        task_service_class.return_value.route_or_submit_task.assert_not_called()
+        kwargs = record_execution.call_args.kwargs
+        assert kwargs["status"] == ExecutionStatus.FAILED
+        assert "condition" in kwargs["error_message"].lower()
+
+    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
     async def test_record_trigger_execution_activity(
         self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
     ):

@@ -31,6 +31,7 @@ from .infrastructure.repository import TriggerExecutionRepository, TriggerReposi
 from .llm_condition_evaluator import LLMConditionEvaluationError, LLMConditionEvaluator
 from .logging_utils import (
     DependencyUnavailableError,
+    TriggerConditionError,
     TriggerExecutionError,
     TriggerLogger,
     TriggerNotFoundError,
@@ -1475,6 +1476,10 @@ class TriggerService:
 
         Returns:
             True if conditions are met, False otherwise
+
+        Raises:
+            TriggerConditionError: The conditions could not be evaluated. A
+                condition nobody could check is not a condition that passed.
         """
         if not trigger.conditions:
             return True
@@ -1501,19 +1506,35 @@ class TriggerService:
             return await self._evaluate_simple_conditions(trigger.conditions, event_data)
 
         except LLMConditionEvaluationError as e:
-            logger.error(f"LLM condition evaluation failed for trigger {trigger.id}: {e}")
-            # Fallback to simple evaluation on LLM failure
+            logger.error(
+                f"LLM condition evaluation failed for trigger {trigger.id}: {e}", exc_info=True
+            )
+            # The rule-based evaluator only checks field_matches; for anything
+            # else it would report a pass without having looked.
+            if "field_matches" not in trigger.conditions:
+                raise TriggerConditionError(
+                    f"Trigger conditions could not be evaluated: {e}", trigger_id=str(trigger.id)
+                ) from e
             try:
                 return await self._evaluate_simple_conditions(trigger.conditions, event_data)
             except Exception as fallback_error:
-                logger.error(f"Fallback condition evaluation also failed: {fallback_error}")
-                # Default to True to avoid blocking execution on condition evaluation errors
-                return True
+                logger.error(
+                    f"Fallback condition evaluation also failed for trigger {trigger.id}: "
+                    f"{fallback_error}",
+                    exc_info=True,
+                )
+                raise TriggerConditionError(
+                    f"Trigger conditions could not be evaluated: {fallback_error}",
+                    trigger_id=str(trigger.id),
+                ) from fallback_error
 
         except Exception as e:
-            logger.error(f"Error evaluating conditions for trigger {trigger.id}: {e}")
-            # Default to True to avoid blocking execution on condition evaluation errors
-            return True
+            logger.error(
+                f"Error evaluating conditions for trigger {trigger.id}: {e}", exc_info=True
+            )
+            raise TriggerConditionError(
+                f"Trigger conditions could not be evaluated: {e}", trigger_id=str(trigger.id)
+            ) from e
 
     def _get_nested_value(self, data: dict[str, Any], field_path: str) -> Any:
         """Get nested value from dictionary using dot notation.
@@ -1548,20 +1569,14 @@ class TriggerService:
         Returns:
             True if conditions are met, False otherwise
         """
-        try:
-            # Check for simple field matching conditions
-            if "field_matches" in conditions:
-                field_matches = conditions["field_matches"]
-                for field_path, expected_value in field_matches.items():
-                    actual_value = self._get_nested_value(event_data, field_path)
-                    if actual_value != expected_value:
-                        return False
+        if "field_matches" in conditions:
+            field_matches = conditions["field_matches"]
+            for field_path, expected_value in field_matches.items():
+                actual_value = self._get_nested_value(event_data, field_path)
+                if actual_value != expected_value:
+                    return False
 
-            return True
-
-        except Exception as e:
-            logger.error(f"Error in simple condition evaluation: {e}")
-            return True  # Default to True on evaluation errors
+        return True
 
     async def extract_task_parameters_with_llm(
         self, instruction: str, event_data: dict[str, Any], trigger_context: dict[str, Any]

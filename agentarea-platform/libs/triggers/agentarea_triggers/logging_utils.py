@@ -62,10 +62,10 @@ class TriggerLogger:
         formatted_message = self._format_message(message, **kwargs)
         self.logger.warning(formatted_message)
 
-    def error(self, message: str, **kwargs):
+    def error(self, message: str, exc_info: bool = False, **kwargs):
         """Log error message with correlation context."""
         formatted_message = self._format_message(message, **kwargs)
-        self.logger.error(formatted_message)
+        self.logger.error(formatted_message, exc_info=exc_info)
 
     def debug(self, message: str, **kwargs):
         """Log debug message with correlation context."""
@@ -120,6 +120,12 @@ class TriggerNotFoundError(TriggerError):
 
 class TriggerExecutionError(TriggerError):
     """Raised when trigger execution fails."""
+
+    pass
+
+
+class TriggerConditionError(TriggerError):
+    """Raised when a trigger's conditions could not be evaluated; the trigger must not fire."""
 
     pass
 
