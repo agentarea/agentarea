@@ -10,7 +10,7 @@ export default function InboxLoading() {
       subheader={
         <div className="flex items-center gap-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-6 w-20 rounded-md" />
+            <Skeleton key={i} className="h-7 w-24 rounded-md" />
           ))}
         </div>
       }

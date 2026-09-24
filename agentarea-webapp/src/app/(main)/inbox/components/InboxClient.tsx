@@ -193,6 +193,11 @@ export function InboxClient({ items, error }: InboxClientProps) {
   return (
     <ContentBlock
       header={{ breadcrumb: [{ label: "Inbox" }], controls: approveAll }}
+      subheader={
+        error ? undefined : (
+          <InboxToolbar counts={counts} filter={filter} onChange={changeFilter} />
+        )
+      }
       className="flex min-h-0 flex-1 flex-col overflow-hidden p-0"
     >
       {error ? (
@@ -225,10 +230,7 @@ export function InboxClient({ items, error }: InboxClientProps) {
             </SheetContent>
           </Sheet>
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:w-[34%] lg:min-w-[320px] lg:max-w-[440px] lg:flex-none lg:border-r lg:border-border">
-            <div className="flex h-[46px] shrink-0 items-center border-b border-border bg-background px-3 sm:px-4">
-              <InboxToolbar counts={counts} filter={filter} onChange={changeFilter} />
-            </div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:w-[40%] lg:min-w-[360px] lg:max-w-[520px] lg:flex-none lg:border-r lg:border-border">
             {anyChecked && (
               <InboxSelectionBar
                 checkedCount={checked.size}
