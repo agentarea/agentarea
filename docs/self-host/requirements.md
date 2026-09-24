@@ -23,8 +23,8 @@ AgentArea ships two supported deployment targets:
 | Kubernetes | the `agentarea` Helm chart | `charts/agentarea/values.yaml` |
 
 `docker-compose.dev.yaml` is a third file used for development. It starts the
-same platform plus Traefik, Temporal UI, Keto, OpenFGA, Hydra, and Mailpit, and
-it bind-mounts source into the containers. It is not a deployment target.
+same platform plus Traefik, Keto, OpenFGA, Hydra, and Mailpit, and it
+bind-mounts source into the containers. It is not a deployment target.
 
 ## Parameters
 
@@ -75,7 +75,6 @@ the corresponding `global.*` key at a managed service instead.
 | Valkey (Redis-compatible) | `valkey` subchart 0.9.3 from `https://valkey.io/valkey-helm/` | `redis.enabled` | `true` |
 | RustFS (S3-compatible object store) | `rustfs/rustfs:latest` | `rustfs.enabled` | `true` |
 | Temporal | `temporalio/auto-setup:1.29.1` | `temporal.enabled` | `true` |
-| Temporal UI | `temporalio/ui:2.39.0` | `temporalUi.enabled` | `true` |
 | Ory Kratos | `oryd/kratos:v1.3.1` | `kratos.enabled` | `true` |
 | OpenFGA | `openfga/openfga:v1.18.0` | `openfga.enabled` | `true` |
 | Ory Keto | `oryd/keto:v0.12.0` | `keto.enabled` | `false` |
@@ -110,7 +109,6 @@ One PostgreSQL instance, several logical databases. Compose creates them in
 | MCP Manager | 7999 (host) to 80 (container) | 80 |
 | Event service | not published | 8002 |
 | Temporal | 7233 | 7233 |
-| Temporal UI | 8080 (dev only) | 8080 |
 | PostgreSQL | 5432 | 5432 |
 | Valkey | 6379 | 6379 |
 | RustFS | 9000 | 9000 |

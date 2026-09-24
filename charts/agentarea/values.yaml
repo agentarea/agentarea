@@ -1019,19 +1019,6 @@ temporal:
   resources: {}
   extraEnv: []
 
-# Temporal UI
-temporalUi:
-  enabled: true
-  replicaCount: 1
-  image:
-    repository: temporalio/ui
-    tag: "2.39.0"
-  service:
-    type: ClusterIP
-    port: 8080
-  resources: {}
-  extraEnv: []
-
 # Built-in PostgreSQL (simple StatefulSet, not for production)
 # For production, disable and point global.database.host to your managed DB (RDS, Cloud SQL, etc.)
 postgresql:

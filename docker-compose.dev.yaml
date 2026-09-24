@@ -513,20 +513,6 @@ services:
     stdin_open: true
     tty: true
 
-  temporal-ui:
-    container_name: agentarea-temporal-ui
-    depends_on:
-      temporal:
-        condition: service_healthy
-    environment:
-      - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
-    image: temporalio/ui:2.39.0
-    networks:
-      - temporal-network
-    ports:
-      - 8082:8080
-
   # AgentArea Worker Service
   agentarea-worker:
     image: agentarea/agentarea-worker:dev

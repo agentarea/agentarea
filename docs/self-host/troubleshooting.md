@@ -175,15 +175,18 @@ is the agent, not the deployment.
     Under Compose, `temporal` has a 120-second health-check start period and the
     worker waits for it. First start is slow; that is not a fault.
 
-    Open the Temporal UI to see whether the workflow was started at all, and where it
+    Ask Temporal directly whether the workflow was started at all, and where it
     stopped:
 
     ```bash
-    kubectl port-forward -n agentarea svc/agentarea-temporal-ui 8080:8080
+    kubectl port-forward -n agentarea svc/agentarea-temporal 7233:7233
+    temporal workflow list --address localhost:7233 --namespace default
     ```
 
     If the workflow does not appear, the API never submitted it. If it appears and
-    fails, the history shows which activity and why.
+    fails, `temporal workflow describe --workflow-id "$WORKFLOW_ID"` shows which
+    activity and why. See [observability](/self-host/observability) for running the
+    graphical history alongside this.
   </Step>
 
   <Step title="Tool calls or MCP servers fail">
