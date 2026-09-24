@@ -11,12 +11,12 @@ a member's tool surface.
 import json
 from uuid import UUID
 
-from agentarea_agents.tools.platform_authz import (
+from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import (
     enforced_in_handler,
     requires_workspace_admin,
     unrestricted,
 )
-from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.identity_directory import get_identity_directory, identity_for
 from agentarea_common.workspaces import (

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from .decorator_tool import Toolset, tool_method
+from .tool_authz import unrestricted
 from .tool_definition import toolset
 
 # Extensions whose files are binary: writing them as UTF-8 text corrupts the
@@ -187,6 +188,9 @@ class InMemoryStorage:
         self._data.pop((workspace_id, path.lstrip("/")), None)
 
 
+RUN_OWN_FILES = "files under the storage prefix the worker injects for this run"
+
+
 @toolset(
     namespace="agentarea/files",
     display_name="File Operations",
@@ -246,6 +250,7 @@ class FileToolset(Toolset):
         return name
 
     @tool_method(effect="write")
+    @unrestricted(RUN_OWN_FILES)
     async def save_file(self, contents: str, file_name: str, overwrite: bool = True) -> str:
         """Save ``contents`` as a text file in the live task workspace.
 
@@ -292,6 +297,7 @@ class FileToolset(Toolset):
             return f"Error saving to file: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(RUN_OWN_FILES)
     async def read_file(self, file_name: str) -> str:
         """Read a text file from the live task workspace.
 
@@ -314,6 +320,7 @@ class FileToolset(Toolset):
             return f"Error reading file: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(RUN_OWN_FILES)
     async def list_files(self, pattern: str = "*") -> str:
         """List files under the task scope, optionally filtered by glob pattern.
 
@@ -344,6 +351,7 @@ class FileToolset(Toolset):
             return f"Error listing files: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(RUN_OWN_FILES)
     async def search_files(self, pattern: str) -> str:
         """Search the task scope for files whose name matches a glob pattern.
 

@@ -12,8 +12,8 @@ import json
 from typing import Any
 from uuid import UUID
 
-from agentarea_agents.tools.platform_authz import requires_workspace_admin, unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import requires_workspace_admin, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_governance.application import GovernancePolicyResolver, GovernancePolicyService
 from agentarea_governance.domain.policies import PolicyValidationError, effective_policy_from_json

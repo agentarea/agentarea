@@ -13,8 +13,8 @@ the source of truth is ``ClientCreate``/``ClientUpdate`` in
 import json
 from uuid import UUID
 
-from agentarea_agents.tools.platform_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_mcp.application.client_service import ClientService

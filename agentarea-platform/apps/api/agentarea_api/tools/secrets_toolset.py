@@ -2,8 +2,8 @@
 
 import json
 
-from agentarea_agents.tools.platform_authz import enforced_in_handler, unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_secrets.catalog_service import (

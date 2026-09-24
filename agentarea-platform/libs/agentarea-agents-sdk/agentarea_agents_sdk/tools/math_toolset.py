@@ -5,7 +5,10 @@ import math
 from collections.abc import Callable
 
 from .decorator_tool import Toolset, tool_method
+from .tool_authz import unrestricted
 from .tool_definition import toolset
+
+PURE_ARITHMETIC = "pure arithmetic; reads and writes no workspace state"
 
 
 @toolset(
@@ -79,6 +82,7 @@ class MathToolset(Toolset):
         return methods
 
     @tool_method(effect="read")
+    @unrestricted(PURE_ARITHMETIC)
     async def add(self, a: float, b: float) -> str:
         """Add two numbers together.
 
@@ -99,6 +103,7 @@ class MathToolset(Toolset):
             return f"Error in addition: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(PURE_ARITHMETIC)
     async def subtract(self, a: float, b: float) -> str:
         """Subtract one number from another.
 
@@ -119,6 +124,7 @@ class MathToolset(Toolset):
             return f"Error in subtraction: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(PURE_ARITHMETIC)
     async def multiply(self, a: float, b: float) -> str:
         """Multiply two numbers.
 
@@ -139,6 +145,7 @@ class MathToolset(Toolset):
             return f"Error in multiplication: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(PURE_ARITHMETIC)
     async def divide(self, a: float, b: float) -> str:
         """Divide one number by another.
 
@@ -161,6 +168,7 @@ class MathToolset(Toolset):
             return f"Error in division: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(PURE_ARITHMETIC)
     async def power(self, base: float, exponent: float) -> str:
         """Raise a number to a power.
 
@@ -181,6 +189,7 @@ class MathToolset(Toolset):
             return f"Error in power calculation: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(PURE_ARITHMETIC)
     async def sqrt(self, number: float) -> str:
         """Calculate the square root of a number.
 
@@ -202,6 +211,7 @@ class MathToolset(Toolset):
             return f"Error in square root calculation: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(PURE_ARITHMETIC)
     async def sin(self, angle: float, degrees: bool = False) -> str:
         """Calculate the sine of an angle.
 
@@ -225,6 +235,7 @@ class MathToolset(Toolset):
             return f"Error in sine calculation: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(PURE_ARITHMETIC)
     async def cos(self, angle: float, degrees: bool = False) -> str:
         """Calculate the cosine of an angle.
 
@@ -248,6 +259,7 @@ class MathToolset(Toolset):
             return f"Error in cosine calculation: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(PURE_ARITHMETIC)
     async def tan(self, angle: float, degrees: bool = False) -> str:
         """Calculate the tangent of an angle.
 
@@ -271,6 +283,7 @@ class MathToolset(Toolset):
             return f"Error in tangent calculation: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(PURE_ARITHMETIC)
     async def log(self, number: float, base: float = math.e) -> str:
         """Calculate the logarithm of a number.
 
@@ -300,6 +313,7 @@ class MathToolset(Toolset):
             return f"Error in logarithm calculation: {e}"
 
     @tool_method(effect="read")
+    @unrestricted(PURE_ARITHMETIC)
     async def abs(self, number: float) -> str:
         """Calculate the absolute value of a number.
 

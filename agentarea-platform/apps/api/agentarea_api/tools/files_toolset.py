@@ -3,8 +3,8 @@
 import json
 from urllib.parse import quote
 
-from agentarea_agents.tools.platform_authz import unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.config.app import get_app_settings
 

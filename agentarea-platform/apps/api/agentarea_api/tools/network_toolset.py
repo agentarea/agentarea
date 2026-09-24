@@ -1,7 +1,7 @@
 """NetworkToolset — workspace topology overview."""
 
-from agentarea_agents.tools.platform_authz import unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 
 from .base import platform_read_context

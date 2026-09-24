@@ -259,3 +259,45 @@ class TestUnauthenticatedChallenge:
             'Bearer resource_metadata="https://api.example.com/.well-known/'
             'oauth-protected-resource"'
         )
+
+
+@pytest.mark.asyncio
+async def test_a_restored_session_asks_the_admin_question_again():
+    """Admin authority is resolved per request, not frozen for the session's lifetime.
+
+    The first admin check fills ``admin_workspaces`` on the context, and the
+    middleware caches that context per ``mcp-session-id``. Handing the cached
+    object back as-is would keep a demoted owner an admin until the session
+    ended.
+    """
+    seen: list[UserContext] = []
+
+    async def downstream(scope, receive, send):
+        seen.append(_mcp_user_context_var.get(None))
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    async def receive():
+        return {
+            "type": "http.request",
+            "body": b'{"jsonrpc":"2.0","id":1,"method":"tools/call"}',
+            "more_body": False,
+        }
+
+    async def send(_message):
+        return None
+
+    middleware = MCPAuthMiddleware(downstream)
+    cached = UserContext(user_id="user-1", workspace_id="ws-1", admin_workspaces=["ws-1"])
+    middleware._session_contexts["session-1"] = cached
+
+    await middleware(
+        {"type": "http", "path": "/", "headers": [(b"mcp-session-id", b"session-1")]},
+        receive,
+        send,
+    )
+
+    assert seen[0].user_id == "user-1"
+    assert seen[0].workspace_id == "ws-1"
+    assert seen[0].admin_workspaces is None
+    assert cached.admin_workspaces == ["ws-1"], "the cached principal is not mutated"

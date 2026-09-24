@@ -1,20 +1,25 @@
-"""Every platform tool states its authorization, the way every route does.
+"""Every tool states its authorization, the way every route does.
 
-The platform toolsets served at ``/mcp`` -- and bound into agent runs by the
-worker's code-tool activity -- call the same services as the REST routers. On
-2026-09-24 only two of eighteen toolsets checked anything: a member who could
-not delete a deny rule, invite a stranger, rotate a provider key or read the
-audit log through the API could do all of it by asking an agent to.
-``test_authz_ratchet.py`` could not notice, because ``/mcp`` is a Starlette
+The platform toolsets served at ``/mcp`` call the same services as the REST
+routers, and the worker binds toolsets from the code-tool registry into agent
+runs. On 2026-09-24 only two of eighteen platform toolsets checked anything: a
+member who could not delete a deny rule, invite a stranger, rotate a provider
+key or read the audit log through the API could do all of it by asking an agent
+to. ``test_authz_ratchet.py`` could not notice, because ``/mcp`` is a Starlette
 mount and it enumerates ``APIRoute``s only.
 
-So a tool declares, from ``agentarea_agents.tools.platform_authz``, one of
-``requires``, ``requires_workspace_admin``, ``enforced_in_handler`` or
-``unrestricted``, and this test fails on a tool that declares none.
+Two surfaces are enumerated here, because they are not the same set: the
+``/mcp`` toolsets (``get_platform_tools``) and every ``@toolset`` registered for
+the worker. ``agentarea/triggers`` is the case that made the difference -- the
+API's toolset is unregistered and the worker resolves the namespace to
+``TriggersAgentToolset``, a second implementation with its own methods.
 
-The two enforcing markers are exercised for every tool that carries one: a
-caller without the authority is refused before the body runs, and a caller
-with it gets through.
+A tool declares, from ``agentarea_agents_sdk.tools.tool_authz``, one of
+``requires``, ``requires_workspace_admin``, ``enforced_in_handler`` or
+``unrestricted``, and this test fails on a tool that declares none. The two
+enforcing markers are exercised for every tool that carries one: a caller
+without the authority is refused before the body runs, and a caller with it
+gets through.
 """
 
 from __future__ import annotations
@@ -26,8 +31,10 @@ from contextlib import asynccontextmanager
 from uuid import uuid4
 
 import pytest
-from agentarea_agents.tools.platform_authz import tool_authz
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.code_tools_loader import _ensure_all_toolsets_imported
+from agentarea_agents_sdk.tools.tool_authz import tool_authz
+from agentarea_agents_sdk.tools.tool_definition import get_toolset_registry
 from agentarea_api.tools import get_platform_tools
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
@@ -40,31 +47,46 @@ MEMBER = UserContext(user_id="user-member", workspace_id=WORKSPACE, admin_worksp
 OWNER = UserContext(user_id="user-owner", workspace_id=WORKSPACE, admin_workspaces=[WORKSPACE])
 REFUSALS = {"Permission denied", "Only a workspace admin may perform this action"}
 
+
+def _toolset_classes() -> list[type]:
+    _ensure_all_toolsets_imported()
+    classes = {type(toolset) for toolset in get_platform_tools()}
+    classes |= set(get_toolset_registry().values())
+    return sorted(classes, key=lambda cls: f"{cls.__module__}.{cls.__name__}")
+
+
 TOOLS = [
-    (toolset, name, method)
-    for toolset in get_platform_tools()
-    for name, method in toolset._tool_methods.items()
+    (cls, name, func)
+    for cls in _toolset_classes()
+    for name, func in inspect.getmembers(cls, predicate=inspect.isfunction)
+    if getattr(func, "_is_tool_method", False)
 ]
 GATED = [
-    (toolset, name, method)
-    for toolset, name, method in TOOLS
-    if (tool_authz(method) or {}).get("action") not in (None, "in-handler")
+    item for item in TOOLS if (tool_authz(item[2]) or {}).get("action") not in (None, "in-handler")
 ]
 
 
 def _tool_id(item) -> str:
-    toolset, name, _method = item
-    return f"{toolset.name}_{name}"
+    cls, name, _func = item
+    return f"{cls.__module__}.{cls.__name__}.{name}"
 
 
-def test_every_platform_tool_declares_its_authorization() -> None:
+def test_both_surfaces_are_enumerated() -> None:
+    """Guard against either source silently contributing nothing."""
+    modules = {cls.__module__ for cls, _name, _func in TOOLS}
+    assert "agentarea_triggers.agent_tool" in modules
+    assert "agentarea_api.tools.triggers_toolset" in modules
+    assert "agentarea_agents_sdk.tools.shell_toolset" in modules
+
+
+def test_every_tool_declares_its_authorization() -> None:
     undeclared = sorted(_tool_id(item) for item in TOOLS if tool_authz(item[2]) is None)
     assert not undeclared, (
-        "these platform tools declare no authorization:\n  "
+        "these tools declare no authorization:\n  "
         + "\n  ".join(undeclared)
         + "\n\nDecorate the tool with requires(...), requires_workspace_admin(), "
         "enforced_in_handler(reason) or unrestricted(reason) from "
-        "agentarea_agents.tools.platform_authz, matching the REST route it mirrors."
+        "agentarea_agents_sdk.tools.tool_authz, matching the REST route it mirrors."
     )
 
 
@@ -102,21 +124,27 @@ def _authorization():
 
 
 @pytest.fixture
-def body_guard(monkeypatch):
-    """Make entering any tool body observable: every toolset opens a platform context."""
+def bound(monkeypatch):
+    """A tool method whose body is observable: every toolset opens a context first."""
 
     @asynccontextmanager
     async def _entered():
         raise _BodyReachedError
         yield
 
-    def install(method) -> None:
-        module = sys.modules[inspect.unwrap(method).__module__]
-        for name in ("platform_context", "platform_read_context"):
-            if hasattr(module, name):
-                monkeypatch.setattr(module, name, _entered)
+    async def _open(*_args, **_kwargs):
+        raise _BodyReachedError
 
-    return install
+    def bind(cls, name):
+        module = sys.modules[cls.__module__]
+        for attr in ("platform_context", "platform_read_context"):
+            if hasattr(module, attr):
+                monkeypatch.setattr(module, attr, _entered)
+        if hasattr(cls, "_open"):
+            monkeypatch.setattr(cls, "_open", _open)
+        return getattr(cls(), name)
+
+    return bind
 
 
 def _arguments(method) -> dict:
@@ -134,9 +162,9 @@ def _arguments(method) -> dict:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("item", GATED, ids=_tool_id)
-async def test_a_member_without_the_authority_is_refused(item, body_guard) -> None:
-    _toolset, _name, method = item
-    body_guard(method)
+async def test_a_member_without_the_authority_is_refused(item, bound) -> None:
+    cls, name, _func = item
+    method = bound(cls, name)
 
     with use_mcp_user_context(MEMBER):
         result = json.loads(await method(**_arguments(method)))
@@ -146,9 +174,9 @@ async def test_a_member_without_the_authority_is_refused(item, body_guard) -> No
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("item", GATED, ids=_tool_id)
-async def test_a_caller_with_the_authority_gets_through(item, body_guard) -> None:
-    _toolset, _name, method = item
-    body_guard(method)
+async def test_a_caller_with_the_authority_gets_through(item, bound) -> None:
+    cls, name, _func = item
+    method = bound(cls, name)
 
     with use_mcp_user_context(OWNER):
         try:

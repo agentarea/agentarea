@@ -24,8 +24,8 @@ from agentarea_agents.application.execution_service import (
     NotAnApproverError,
     WorkflowNotFoundError,
 )
-from agentarea_agents.tools.platform_authz import enforced_in_handler, unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.context import UserContext
 from agentarea_common.money import serialize_money

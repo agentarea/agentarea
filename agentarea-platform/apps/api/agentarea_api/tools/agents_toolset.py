@@ -11,8 +11,8 @@ from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.schemas.dto import AgentCreate, AgentTypeLiteral, AgentUpdate
-from agentarea_agents.tools.platform_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.resource_visibility import readable_resource_ids

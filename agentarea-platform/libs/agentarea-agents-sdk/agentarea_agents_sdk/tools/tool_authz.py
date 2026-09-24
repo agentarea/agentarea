@@ -1,11 +1,12 @@
-"""Authorization declarations for platform tools.
+"""Authorization declarations for toolsets.
 
 A platform toolset calls the same services as the REST router beside it, so a
 tool must answer the same authorization question as the route it mirrors. Until
 2026-09-24 only the routes did: ``/mcp`` is a Starlette mount the route ratchet
-cannot see, and every check that lived on a router was simply absent there.
+cannot see, the worker binds the same toolsets into agent runs, and every check
+that lived on a router was simply absent on both.
 
-Every ``@tool_method`` on a platform toolset now carries one of these, the tool
+Every ``@tool_method`` of every ``@toolset`` now carries one of these, the tool
 counterpart of ``agentarea_common.auth.route_authz``:
 
 - ``requires(action, resource_type, id_param=...)`` -- the PDP decides before
@@ -17,7 +18,12 @@ counterpart of ``agentarea_common.auth.route_authz``:
 ``apps/api/tests/test_tool_authz_ratchet.py`` fails on a tool that declares
 none. The two enforcing markers wrap the method, so the declaration and the
 check cannot drift apart; a refusal is returned as the tool's JSON error, the
-shape every tool body already uses.
+shape every tool body already uses. They answer for the principal bound by
+``use_mcp_user_context`` -- the MCP bearer, or the run's user in the worker.
+
+The platform imports stay inside the checks, as in ``mcp_server.auth``: the
+declarations are needed wherever a toolset is defined, the checks only where
+one runs against the platform.
 """
 
 from __future__ import annotations
@@ -28,14 +34,9 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from agentarea_common.auth.authorization import assert_workspace_admin
-from agentarea_common.auth.context import UserContext
-from agentarea_common.auth.permission import require_permission
-from fastapi import HTTPException
-
 TOOL_AUTHZ_ATTR = "__tool_authz__"
 
-_Check = Callable[[dict[str, Any], UserContext], Awaitable[None]]
+_Check = Callable[[dict[str, Any], Any], Awaitable[None]]
 
 
 def _declare(func: Any, marker: dict[str, Any]) -> Any:
@@ -49,7 +50,9 @@ def _enforcing(marker: dict[str, Any], check: _Check) -> Callable[[Any], Any]:
 
         @functools.wraps(func)
         async def guarded(*args: Any, **kwargs: Any) -> Any:
-            from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
+            from fastapi import HTTPException
+
+            from ..mcp_server.auth import get_mcp_user_context
 
             arguments = signature.bind(*args, **kwargs).arguments
             try:
@@ -72,7 +75,9 @@ def requires(
     workspace-wide action, which resolves against the caller's workspace.
     """
 
-    async def check(arguments: dict[str, Any], user_context: UserContext) -> None:
+    async def check(arguments: dict[str, Any], user_context: Any) -> None:
+        from agentarea_common.auth.permission import require_permission
+
         resource_id = str(arguments[id_param]) if id_param else str(user_context.workspace_id)
         await require_permission(action, resource_type, resource_id, user_context.user_id)
 
@@ -82,7 +87,9 @@ def requires(
 def requires_workspace_admin() -> Callable[[Any], Any]:
     """Demand authority over the caller's workspace, not just membership in it."""
 
-    async def check(_arguments: dict[str, Any], user_context: UserContext) -> None:
+    async def check(_arguments: dict[str, Any], user_context: Any) -> None:
+        from agentarea_common.auth.authorization import assert_workspace_admin
+
         await assert_workspace_admin(user_context)
 
     return _enforcing({"action": "administer", "resource_type": "workspace"}, check)

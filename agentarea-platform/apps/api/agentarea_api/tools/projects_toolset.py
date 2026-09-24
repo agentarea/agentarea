@@ -10,8 +10,8 @@ between toolset kwargs and DTO fields.
 import json
 from uuid import UUID
 
-from agentarea_agents.tools.platform_authz import unrestricted
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository

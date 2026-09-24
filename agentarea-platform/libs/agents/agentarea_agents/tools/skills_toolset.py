@@ -28,6 +28,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
+from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 
@@ -39,7 +40,6 @@ from agentarea_agents.schemas.skills_dto import (
     SkillImportFromGithub,
 )
 
-from .platform_authz import enforced_in_handler, requires, unrestricted
 from .platform_base import platform_context, platform_read_context
 
 MAX_FILES = 200

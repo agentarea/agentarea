@@ -20,6 +20,7 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import replace
 from typing import Any
 
 from starlette.requests import Request
@@ -149,7 +150,12 @@ class MCPAuthMiddleware:
                 bearer_token = auth_header[len("bearer ") :]
                 await self._try_authenticate(bearer_token, request)
             elif session_id and session_id in self._session_contexts:
-                _mcp_user_context_var.set(self._session_contexts[session_id])
+                # Admin authority is filled in lazily on the context by the first
+                # check that asks; a restored session must ask again, or a demoted
+                # owner stays an admin until the session ends.
+                _mcp_user_context_var.set(
+                    replace(self._session_contexts[session_id], admin_workspaces=None)
+                )
 
             # ---------- gate: reject protected methods without auth ----------
             ctx = _mcp_user_context_var.get(None)
