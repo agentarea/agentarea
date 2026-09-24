@@ -7,6 +7,7 @@ from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.service import BaseCrudService
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.utils.slug import generate_slug
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 
@@ -22,6 +23,7 @@ from agentarea_agents.infrastructure.catalog_agent_repository import (
     CatalogAgentRepository,
 )
 from agentarea_agents.infrastructure.repository import AgentRepository
+from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_agents.schemas.dto import AgentCreate, AgentUpdate
 
 logger = logging.getLogger(__name__)
@@ -95,6 +97,13 @@ class AgentService(BaseCrudService[Agent]):
     def _get_agent_repository(self) -> AgentRepository:
         """Get the agent repository with proper type."""
         return self.repository_factory.create_repository(AgentRepository)
+
+    async def _require_skills(self, skill_ids: list[UUID] | None) -> None:
+        """Refuse to attach a skill that is not in the caller's workspace."""
+        repo = self.repository_factory.create_repository(SkillRepository)
+        for skill_id in skill_ids or []:
+            if await repo.get_by_id(skill_id) is None:
+                raise NotFoundError(f"Skill {skill_id} not found")
 
     async def _validate_model_id(self, model_id: str | None) -> str | None:
         """Resolve ``model_id`` to a model instance, or reject it.
@@ -234,6 +243,7 @@ class AgentService(BaseCrudService[Agent]):
 
         slug = await self._resolve_unique_slug(payload.name)
         model_id = await self._validate_model_id(payload.model_id)
+        await self._require_skills(payload.skill_ids)
 
         agent = Agent(
             name=payload.name,
@@ -332,6 +342,7 @@ class AgentService(BaseCrudService[Agent]):
 
     @audited("agent.update", resource_type="agent", resource_id_param="id")
     async def update_agent(self, id: UUID, payload: AgentUpdate) -> Agent | None:
+        await self._require_skills(payload.skill_ids)
         agent = await self.get(id)
         if not agent:
             # The id may reference a catalog (not-yet-materialized) agent.

@@ -13,6 +13,7 @@ from agentarea_agents.domain.collection_models import (
     SkillCollection,
     collection_skills_table,
 )
+from agentarea_agents.domain.skill_models import Skill
 
 
 class SkillCollectionRepository(WorkspaceScopedRepository[SkillCollection]):
@@ -38,7 +39,13 @@ class SkillCollectionRepository(WorkspaceScopedRepository[SkillCollection]):
                 self.model_class.id == collection_id,
                 self._get_workspace_filter(),
             )
-            .options(selectinload(self.model_class.skills))
+            .options(
+                selectinload(
+                    self.model_class.skills.and_(
+                        Skill.workspace_id == self.user_context.workspace_id
+                    )
+                )
+            )
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()

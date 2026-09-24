@@ -233,7 +233,11 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         """Get all child skills for a parent skill, ordered by 'order' field."""
         query = (
             select(skill_members_table)
-            .where(skill_members_table.c.parent_skill_id == parent_skill_id)
+            .join(Skill, Skill.id == skill_members_table.c.child_skill_id)
+            .where(
+                skill_members_table.c.parent_skill_id == parent_skill_id,
+                self._get_workspace_filter(),
+            )
             .order_by(skill_members_table.c.order)
         )
         result = await self.session.execute(query)
