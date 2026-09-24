@@ -10,6 +10,7 @@ from agentarea_common.artifacts import (
     ArtifactActor,
     ArtifactService,
     DbArtifactEventRecorder,
+    secure_download_headers,
 )
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
@@ -418,7 +419,7 @@ async def stream_project_file(
         raise HTTPException(status_code=404, detail="File not found") from None
 
     filename = PurePosixPath(file_path).name or "file.bin"
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    headers = secure_download_headers(content_type=content_type, filename=filename)
     return StreamingResponse(iter([data]), media_type=content_type, headers=headers)
 
 

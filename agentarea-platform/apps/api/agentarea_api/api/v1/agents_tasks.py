@@ -1,12 +1,10 @@
 import logging
 import mimetypes
 import re
-import unicodedata
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from typing import Any
-from urllib.parse import quote
 from uuid import UUID, uuid4
 
 import httpx
@@ -29,6 +27,7 @@ from agentarea_api.api.deps.services import (
     get_task_service,
     get_temporal_workflow_service,
 )
+from agentarea_common.artifacts import secure_download_headers
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.auth.tool_authorization import caller_can_approve
@@ -107,14 +106,6 @@ class TaskCreate(BaseModel):
     task_policy: PolicyDocument | None = None
     # staging refs from POST /v1/files (purpose=attachment) or POST /v1/files/upload-url
     attachments: list[str] | None = None
-
-
-def _attachment_content_disposition(filename: str) -> str:
-    """Return an ASCII fallback plus an RFC 5987 UTF-8 filename."""
-    fallback = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode()
-    fallback = re.sub(r"[^A-Za-z0-9._-]+", "_", fallback).strip("._-") or "artifact.bin"
-    encoded = quote(filename, safe="")
-    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
 
 
 def _dedupe_attachment_name(name: str, used: set[str]) -> str:
@@ -1305,16 +1296,18 @@ async def _stream_manager_download(
             await response.aclose()
             await client.aclose()
 
-    headers = {
-        "Content-Disposition": response.headers.get(
-            "content-disposition", _attachment_content_disposition(filename)
-        )
-    }
+    content_type = response.headers.get("content-type", default_content_type)
+    headers = secure_download_headers(
+        content_type=content_type,
+        filename=filename,
+        disposition=response.headers.get("content-disposition"),
+        fallback="artifact.bin",
+    )
     if content_length := response.headers.get("content-length"):
         headers["Content-Length"] = content_length
     return StreamingResponse(
         stream_content(),
-        media_type=response.headers.get("content-type", default_content_type),
+        media_type=content_type,
         headers=headers,
     )
 

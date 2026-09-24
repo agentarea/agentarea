@@ -15,7 +15,6 @@ import base64
 import hashlib
 import logging
 import re
-import unicodedata
 from pathlib import PurePosixPath
 from typing import Annotated
 from urllib.parse import quote
@@ -32,6 +31,7 @@ from agentarea_common.artifacts import (
     WorkspaceRepository,
     WorkspaceValidationError,
     normalize_workspace_path,
+    secure_download_headers,
 )
 from agentarea_common.artifacts.workspace import DEFAULT_MAX_FILE_BYTES
 from agentarea_common.auth.dependencies import UserContextDep
@@ -52,13 +52,6 @@ logger = logging.getLogger(__name__)
 # enforces. The presigned path re-checks size/quota at attach time.
 MAX_ATTACHMENT_BYTES = DEFAULT_MAX_FILE_BYTES
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
-
-
-def _attachment_content_disposition(filename: str) -> str:
-    fallback = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode()
-    fallback = re.sub(r"[^A-Za-z0-9._-]+", "_", fallback).strip("._-") or "file.bin"
-    encoded = quote(filename, safe="")
-    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}"
 
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -584,7 +577,7 @@ async def stream_workspace_file(
 
     filename = PurePosixPath(file_path).name or "file.bin"
     headers = {
-        "Content-Disposition": _attachment_content_disposition(filename),
+        **secure_download_headers(content_type=content_type, filename=filename),
         "Content-Length": str(size),
     }
     return StreamingResponse(body, media_type=content_type, headers=headers)

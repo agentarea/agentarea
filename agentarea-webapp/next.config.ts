@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 import packageJson from "./package.json";
 import path from "path";
+import { buildContentSecurityPolicy } from "./src/lib/csp";
 import "./src/env";
 
 const nextConfig: NextConfig = {
@@ -23,6 +24,21 @@ const nextConfig: NextConfig = {
       {
         source: "/api/static/:path*",
         destination: `${backendUrl}/static/:path*`,
+      },
+    ];
+  },
+  async headers() {
+    const csp = buildContentSecurityPolicy({
+      apiOrigin: process.env.API_BROWSER_URL || process.env.API_URL,
+      oryOrigin: process.env.ORY_BROWSER_URL || process.env.ORY_SDK_URL,
+    });
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "Content-Security-Policy", value: csp },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+        ],
       },
     ];
   },
