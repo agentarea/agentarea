@@ -52,7 +52,10 @@ from agentarea_triggers.trigger_service import (
     TriggerService,
     TriggerValidationError,
 )
-from agentarea_triggers.webhook_verification import channel_credential_secret_name
+from agentarea_triggers.webhook_verification import (
+    channel_credential_secret_name,
+    redact_secret_fields,
+)
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import Numeric, and_, func, select
@@ -148,8 +151,8 @@ class TriggerResponse(BaseModel):
                     "webhook_type": trigger.webhook_type.value
                     if hasattr(trigger.webhook_type, "value")
                     else str(trigger.webhook_type),
-                    "validation_rules": trigger.validation_rules,
-                    "webhook_config": trigger.webhook_config,
+                    "validation_rules": redact_secret_fields(trigger.validation_rules),
+                    "webhook_config": redact_secret_fields(trigger.webhook_config),
                     "event_types": getattr(trigger, "event_types", []) or [],
                 }
             )

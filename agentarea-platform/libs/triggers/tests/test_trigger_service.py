@@ -19,6 +19,7 @@ from agentarea_triggers.trigger_service import (
     TriggerService,
     TriggerValidationError,
 )
+from agentarea_triggers.webhook_verification import REDACTED_SECRET
 
 from .conftest import make_trigger_repository_factory
 
@@ -401,6 +402,75 @@ class TestTriggerService:
         mock_trigger_repository.update_by_id.assert_called_once_with(
             sample_cron_trigger.id, trigger_update
         )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "sent_secret",
+        [
+            pytest.param({}, id="omitted"),
+            pytest.param({"signing_secret": REDACTED_SECRET}, id="masked-as-read"),
+        ],
+    )
+    async def test_an_update_that_does_not_send_the_signing_secret_keeps_it(
+        self, trigger_service, mock_trigger_repository, sample_webhook_trigger, sent_secret
+    ):
+        """Responses mask the secret, so an edit that round-trips them must not wipe it."""
+        sample_webhook_trigger.validation_rules = {
+            "signing_secret": "whsec_stored",  # pragma: allowlist secret
+            "required_headers": ["x-old"],
+        }
+        sample_webhook_trigger.webhook_config = {"bot_token": "stored-token"}
+        mock_trigger_repository.get_trigger.return_value = sample_webhook_trigger
+        mock_trigger_repository.update_by_id.return_value = sample_webhook_trigger
+
+        await trigger_service.update_trigger(
+            sample_webhook_trigger.id,
+            TriggerUpdate(
+                validation_rules={"required_headers": ["x-new"], **sent_secret},
+                webhook_config={"field_map": {"text": "body"}},
+            ),
+        )
+
+        persisted = mock_trigger_repository.update_by_id.call_args.args[1].dict(
+            exclude_unset=True
+        )
+        assert persisted["validation_rules"] == {
+            "signing_secret": "whsec_stored",  # pragma: allowlist secret
+            "required_headers": ["x-new"],
+        }
+        assert persisted["webhook_config"] == {
+            "bot_token": "stored-token",
+            "field_map": {"text": "body"},
+        }
+
+    @pytest.mark.asyncio
+    async def test_an_update_can_replace_or_clear_the_signing_secret(
+        self, trigger_service, mock_trigger_repository, sample_webhook_trigger
+    ):
+        sample_webhook_trigger.validation_rules = {
+            "signing_secret": "whsec_stored",  # pragma: allowlist secret
+            "webhook_secret": "gh_stored",  # pragma: allowlist secret
+        }
+        mock_trigger_repository.get_trigger.return_value = sample_webhook_trigger
+        mock_trigger_repository.update_by_id.return_value = sample_webhook_trigger
+
+        await trigger_service.update_trigger(
+            sample_webhook_trigger.id,
+            TriggerUpdate(
+                validation_rules={
+                    "signing_secret": "whsec_rotated",  # pragma: allowlist secret
+                    "webhook_secret": None,
+                }
+            ),
+        )
+
+        persisted = mock_trigger_repository.update_by_id.call_args.args[1].dict(
+            exclude_unset=True
+        )
+        assert persisted["validation_rules"] == {
+            "signing_secret": "whsec_rotated",  # pragma: allowlist secret
+            "webhook_secret": None,
+        }
 
     @pytest.mark.asyncio
     async def test_update_trigger_not_found(self, trigger_service, mock_trigger_repository):
