@@ -64,6 +64,12 @@ async def initialize_services():
             from agentarea_common.rebac.openfga_bootstrap import bootstrap_openfga
             from agentarea_common.rebac.openfga_client import OpenFGAClient
 
+            if not settings.openfga.ACCESS_CONTROL_OPENFGA_API_TOKEN:
+                logger.warning(
+                    "ACCESS_CONTROL_OPENFGA_API_TOKEN is not set: OpenFGA calls are "
+                    "unauthenticated. Set ACCESS_CONTROL_OPENFGA_API_TOKEN and the "
+                    "server's OPENFGA_AUTHN_PRESHARED_KEYS to require a bearer token."
+                )
             await bootstrap_openfga(settings.openfga)
             openfga_client = OpenFGAClient(
                 api_url=settings.openfga.ACCESS_CONTROL_OPENFGA_API_URL,

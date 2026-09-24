@@ -71,7 +71,7 @@ services:
       - ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=${ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL:-true}
       - ACCESS_CONTROL_OPENFGA_STORE_NAME=${ACCESS_CONTROL_OPENFGA_STORE_NAME:-agentarea}
       - ACCESS_CONTROL_OPENFGA_MODEL_PATH=${ACCESS_CONTROL_OPENFGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
-      - ACCESS_CONTROL_OPENFGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:-agentarea-dev-openfga-preshared-key-change-me}
+      - ACCESS_CONTROL_OPENFGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
       # Server settings
       - PORT=${PORT:-8000}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -588,7 +588,7 @@ services:
       - ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL=${ACCESS_CONTROL_OPENFGA_AUTO_APPLY_MODEL:-true}
       - ACCESS_CONTROL_OPENFGA_STORE_NAME=${ACCESS_CONTROL_OPENFGA_STORE_NAME:-agentarea}
       - ACCESS_CONTROL_OPENFGA_MODEL_PATH=${ACCESS_CONTROL_OPENFGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
-      - ACCESS_CONTROL_OPENFGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:-agentarea-dev-openfga-preshared-key-change-me}
+      - ACCESS_CONTROL_OPENFGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
 
       # Development
       # - DEBUG=true
@@ -767,7 +767,7 @@ services:
       # Everything on the default network can otherwise call the graph API
       # unauthenticated; require the same preshared key the API/worker send.
       OPENFGA_AUTHN_METHOD: preshared
-      OPENFGA_AUTHN_PRESHARED_KEYS: ${OPENFGA_AUTHN_PRESHARED_KEY:-agentarea-dev-openfga-preshared-key-change-me}
+      OPENFGA_AUTHN_PRESHARED_KEYS: ${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
     networks:
       - auth-network
       - default
