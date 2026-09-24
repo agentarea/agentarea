@@ -113,6 +113,7 @@ class EventTypes:
     MODEL_UNAVAILABLE: Final[str] = "ModelUnavailable"
     RUNTIME_DISCOVERED: Final[str] = "RuntimeDiscovered"
     WORKFLOW_COMMAND_RECEIVED: Final[str] = "WorkflowCommandReceived"
+    WORKFLOW_COMMAND_REJECTED: Final[str] = "WorkflowCommandRejected"
 
 
 # Activity names

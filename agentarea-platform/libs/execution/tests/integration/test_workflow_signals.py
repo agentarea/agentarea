@@ -627,6 +627,64 @@ async def test_unknown_workflow_command_is_ignored_no_event():
                 assert "WorkflowCommandReceived" not in published_types, published_types
 
 
+@pytest.mark.parametrize(
+    ("command", "payload"),
+    [
+        ("change_model", {"model_id": "11111111-1111-1111-1111-111111111111"}),
+        ("update_budget", {"budget_usd": "-1"}),
+        ("remove_message", {}),
+        ("queue_message", {"message": 42}),
+    ],
+)
+@pytest.mark.asyncio
+async def test_malformed_workflow_command_is_rejected_and_the_run_finishes(command, payload):
+    import asyncio
+
+    env = await WorkflowEnvironment.start_time_skipping(
+        data_converter=pydantic_data_converter,
+    )
+    async with env:
+        task_queue = f"test-{uuid.uuid4()}"
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            async with Worker(
+                env.client,
+                task_queue=task_queue,
+                workflows=[AgentExecutionWorkflow],
+                activities=_ALL_ACTIVITIES,
+                activity_executor=executor,
+                workflow_runner=create_workflow_runner(),
+            ):
+                handle = await env.client.start_workflow(
+                    AgentExecutionWorkflow.run,
+                    _make_request(),
+                    id=f"test-{uuid.uuid4()}",
+                    task_queue=task_queue,
+                    execution_timeout=timedelta(hours=1),
+                )
+
+                await _wait_until_initialized(handle)
+                await handle.signal(
+                    AgentExecutionWorkflow.workflow_command, args=[command, payload]
+                )
+
+                _llm_release.set()
+                result = await asyncio.wait_for(handle.result(), timeout=30)
+
+                assert result.success is True
+                rejected = [
+                    e for e in _published if e.get("event_type") == "WorkflowCommandRejected"
+                ]
+                assert [e["data"]["command"] for e in rejected] == [command]
+                assert rejected[0]["data"]["reason"]
+                published_types = {e.get("event_type") for e in _published}
+                assert "WorkflowCommandReceived" not in published_types, published_types
+                await Replayer(
+                    workflows=[AgentExecutionWorkflow],
+                    data_converter=pydantic_data_converter,
+                    workflow_runner=create_workflow_runner(),
+                ).replay_workflow(await handle.fetch_history())
+
+
 @pytest.mark.asyncio
 async def test_required_input_timeout_is_blocked_without_a_second_llm_call_and_replays():
     env = await WorkflowEnvironment.start_time_skipping(
