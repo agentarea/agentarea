@@ -9,7 +9,11 @@ from uuid import UUID
 from agentarea_agents_sdk import LLMModel, LLMRequest, LLMResponse
 from agentarea_common.auth.context import UserContext
 from agentarea_common.constants import MANAGED_BY_PLATFORM
-from agentarea_common.extensions.customer_pricing import CustomerPricing, price_llm_call
+from agentarea_common.extensions.customer_pricing import (
+    CustomerPricing,
+    get_customer_pricing,
+    price_llm_call,
+)
 from agentarea_common.money import to_money
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
@@ -298,12 +302,13 @@ class LLMExecutionService:
             # Provider cost (USD) becomes what the customer pays, in the billing
             # currency. Events, task totals and budget enforcement all carry this
             # amount from here on, unconverted.
+            provider_cost_usd = to_money(final_cost)
             cost = await price_llm_call(
                 model_instance_id=str(model_uuid),
                 platform_funded=managed_by == MANAGED_BY_PLATFORM,
                 prompt_tokens=usage.prompt_tokens,
                 completion_tokens=usage.completion_tokens,
-                provider_cost_usd=to_money(final_cost),
+                provider_cost_usd=provider_cost_usd,
                 pricing=self._customer_pricing,
             )
 
@@ -316,6 +321,9 @@ class LLMExecutionService:
                 thinking="".join(thinking_parts),
                 tool_calls=complete_tool_calls,
                 cost=cost,
+                provider_cost_usd=provider_cost_usd,
+                # Resolved by price_llm_call just above, so this cannot fail to resolve.
+                currency=(self._customer_pricing or get_customer_pricing()).currency(),
                 usage=usage,
             )
         except Exception as error:

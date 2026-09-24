@@ -67,3 +67,23 @@ def test_every_inference_call_updates_shared_cost_and_token_counters(monkeypatch
 
     assert workflow.budget_tracker.cost == Decimal("0.25")
     assert workflow.state.tokens_used == 125
+
+
+def test_budget_messages_name_the_currency_learned_from_priced_calls(monkeypatch):
+    from temporalio.exceptions import ApplicationError
+
+    monkeypatch.setattr(temporal_workflow, "logger", logging.getLogger("test-budget"))
+    workflow = AgentExecutionWorkflow()
+    workflow.budget_tracker = BudgetTracker(Decimal("10"))
+    workflow.state.effective_policy = {"tokens": {"max_tokens": 1000}}
+
+    assert workflow.budget_tracker.describe(Decimal("1.5"), 2) == "1.50"
+    workflow.budget_tracker.currency = "RUB"
+
+    with pytest.raises(ApplicationError) as raised:
+        workflow._record_inference_usage(
+            cost=Decimal("12"), total_tokens=10, source="LLM call"
+        )
+
+    assert "$" not in str(raised.value)
+    assert "12 RUB/10 RUB" in str(raised.value)

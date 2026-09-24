@@ -475,6 +475,7 @@ def create_app() -> FastAPI:
             extra={
                 "current_mtd_usd": exc.current_mtd_usd,
                 "cap_usd": exc.cap_usd,
+                "currency": exc.currency,
                 "workspace_id": exc.workspace_id,
             },
         )

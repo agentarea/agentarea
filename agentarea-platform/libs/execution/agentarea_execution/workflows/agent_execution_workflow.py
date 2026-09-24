@@ -308,7 +308,8 @@ class AgentExecutionWorkflow:
         if self._budget.cost > self._budget.budget_limit:
             raise ApplicationError(
                 f"{source} exceeded the resolved run budget: "
-                f"${self._budget.cost}/${self._budget.budget_limit}",
+                f"{self._budget.describe(self._budget.cost)}/"
+                f"{self._budget.describe(self._budget.budget_limit)}",
                 type="BudgetExceeded",
                 non_retryable=True,
             )
@@ -1564,7 +1565,7 @@ class AgentExecutionWorkflow:
         workflow.logger.info(
             f"Restored from run {state.continued_from_run_id}, "
             f"iteration {state.current_iteration}, "
-            f"cost ${state.total_cost:.4f}, "
+            f"cost {state.total_cost:.4f}, "
             f"{len(self.state.messages)} messages, "
             f"{len(self._agent_tool_registry)} agent tools"
         )
@@ -1723,7 +1724,8 @@ class AgentExecutionWorkflow:
                 if error.type != "BudgetExceeded":
                     raise
                 reason = (
-                    f"Budget exceeded (${self._budget.cost:.2f}/${self._budget.budget_limit:.2f})"
+                    f"Budget exceeded ({self._budget.describe(self._budget.cost, 2)}/"
+                    f"{self._budget.describe(self._budget.budget_limit, 2)})"
                 )
                 if await self._await_continuation("budget_exceeded", reason):
                     continue
@@ -1957,7 +1959,8 @@ class AgentExecutionWorkflow:
             return (
                 False,
                 "budget_exceeded",
-                f"Budget exceeded (${self.budget_tracker.cost:.2f}/${self.budget_tracker.budget_limit:.2f})",
+                f"Budget exceeded ({self.budget_tracker.describe(self.budget_tracker.cost, 2)}/"
+                f"{self.budget_tracker.describe(self.budget_tracker.budget_limit, 2)})",
             )
 
         # Check for cancellation (this could be extended for other cancellation conditions)
@@ -2275,6 +2278,8 @@ class AgentExecutionWorkflow:
             if isinstance(response, dict):
                 raw_usage = response.get("usage")
                 cost_value = response.get("cost", 0.0)
+                provider_cost_value = response.get("provider_cost_usd")
+                currency_value = response.get("currency")
                 role_value = response.get("role", "assistant")
                 content_value = response.get("content", "")
                 thinking_value = response.get("thinking", "")
@@ -2282,6 +2287,8 @@ class AgentExecutionWorkflow:
             else:
                 raw_usage = getattr(response, "usage", None)
                 cost_value = getattr(response, "cost", 0.0)
+                provider_cost_value = getattr(response, "provider_cost_usd", None)
+                currency_value = getattr(response, "currency", None)
                 role_value = getattr(response, "role", "assistant")
                 content_value = getattr(response, "content", "")
                 thinking_value = getattr(response, "thinking", "")
@@ -2308,6 +2315,8 @@ class AgentExecutionWorkflow:
                 "usage": usage_payload,
             }
             total_tokens = usage_payload.get("total_tokens", 0) if usage_payload else 0
+            if currency_value:
+                self._budget.currency = currency_value
             self._record_inference_usage(
                 cost=usage_info["cost"],
                 total_tokens=total_tokens,
@@ -2348,7 +2357,16 @@ class AgentExecutionWorkflow:
                     # customer — from a run on the customer's own, which costs us
                     # nothing and must not be charged for twice.
                     "managed_by": (self.state.resolved_model or {}).get("managed_by"),
+                    # Billing currency — what the customer pays.
                     "cost": usage_info["cost"],
+                    # USD the provider charged, before conversion; what usage
+                    # projection records as provider cost. None when the activity
+                    # predates the field.
+                    "provider_cost_usd": (
+                        serialize_money(provider_cost_value)
+                        if provider_cost_value is not None
+                        else None
+                    ),
                     "total_cost": serialize_money(self._budget.cost),
                     "usage": usage_info,
                     "content": display_content,
@@ -4349,7 +4367,8 @@ class AgentExecutionWorkflow:
 
             workflow.logger.info(
                 f"Agent delegation to '{agent_name}' completed "
-                f"(success={child_result.success}, cost=${child_result.total_cost:.4f})"
+                f"(success={child_result.success}, "
+                f"cost={self._budget.describe(child_result.total_cost, 4)})"
             )
 
         except Exception as e:

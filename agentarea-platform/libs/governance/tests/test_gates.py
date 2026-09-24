@@ -24,6 +24,36 @@ def _ctx(
     )
 
 
+@pytest.fixture
+def rub_pricing(monkeypatch):
+    """A customer_pricing extension billing in RUB, installed as discovery would."""
+    from agentarea_common.extensions import customer_pricing
+    from agentarea_common.extensions.registry import ExtensionRegistry
+
+    class _Rub:
+        def currency(self):
+            return "RUB"
+
+        async def price_llm_call(self, **kwargs):
+            return kwargs["provider_cost_usd"] * 95
+
+    monkeypatch.setattr(ExtensionRegistry, "_factories", {"customer_pricing": _Rub})
+    customer_pricing.get_customer_pricing.cache_clear()
+    yield
+    customer_pricing.get_customer_pricing.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_cost_guard_names_the_billing_currency_not_dollars(rub_pricing):
+    guard = CostBudgetGuard()
+
+    denied = await guard.execute(_ctx(execution_state={"budget_usd": 10.0, "cost_used": 12.0}))
+    warned = await guard.execute(_ctx(execution_state={"budget_usd": 10.0, "cost_used": 8.5}))
+
+    assert denied.reason == "budget exhausted (12.00/10.00 RUB)"
+    assert warned.reason == "budget at 85% (8.50/10.00 RUB)"
+
+
 class TestCostBudgetGuard:
     @pytest.mark.asyncio
     async def test_no_budget_allows(self):

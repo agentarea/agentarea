@@ -186,6 +186,8 @@ async def test_trailing_metadata_and_cumulative_tools_produce_one_final_result(
         "thinking": "why",
         "tool_calls": [_tool('{"x":1}')],
         "cost": "0.02",
+        "provider_cost_usd": "0.02",
+        "currency": "USD",
         "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
     }
     assert result.cost == to_money("0.02")
@@ -426,6 +428,9 @@ async def test_cancellation_closes_iterator_and_next_call_has_no_partial_state(
             "thinking": "",
             "tool_calls": None,
             "cost": "0.02",
+            "provider_cost_usd": "0.02",
+            "currency": "USD",
+        "currency": "USD",
             "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
         }
         assert result.cost == to_money("0.02")
@@ -517,6 +522,8 @@ async def test_result_cost_is_what_the_customer_pays(
     )
 
     assert result.cost == to_money("1.90")
+    assert result.provider_cost_usd == to_money("0.02")
+    assert result.currency == "RUB"
     assert pricing.calls == [
         {
             "model_instance_id": MODEL_ID,

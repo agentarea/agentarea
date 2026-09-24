@@ -15,6 +15,7 @@ from uuid import UUID, uuid4
 from agentarea_common.artifacts.workspace import WorkspaceValidationError, normalize_workspace_path
 from agentarea_common.audit import audited
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import Money, serialize_money, to_money
 from agentarea_common.ports.policy_resolver import PolicyResolverPort
 from agentarea_governance.domain.policies import (
@@ -213,6 +214,7 @@ class TaskService(BaseTaskService):
                 workspace_id=workspace_id,
                 current_mtd_usd=float(mtd),
                 cap_usd=float(cap),
+                currency=get_customer_pricing().currency(),
             )
 
     async def _validate_agent_exists(self, agent_id: UUID):

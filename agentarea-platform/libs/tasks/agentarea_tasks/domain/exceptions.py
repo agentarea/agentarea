@@ -39,15 +39,24 @@ class BudgetCapExceededError(Exception):
 
     Maps to HTTP 402 Payment Required at the API boundary. The numeric
     fields are surfaced in the response body so the UI can render an
-    actionable message ("you've spent $X of $Y, raise the cap or wait
-    until next month").
+    actionable message ("you've spent X of Y, raise the cap or wait
+    until next month"). The ``_usd`` amounts are in ``currency``, the billing
+    currency; the names are kept for API compatibility.
     """
 
-    def __init__(self, *, workspace_id: str, current_mtd_usd: float, cap_usd: float):
+    def __init__(
+        self,
+        *,
+        workspace_id: str,
+        current_mtd_usd: float,
+        cap_usd: float,
+        currency: str = "USD",
+    ):
         self.workspace_id = workspace_id
         self.current_mtd_usd = current_mtd_usd
         self.cap_usd = cap_usd
+        self.currency = currency
         super().__init__(
-            f"Workspace {workspace_id} MTD spend ${current_mtd_usd:.2f} "
-            f"has reached cap ${cap_usd:.2f}"
+            f"Workspace {workspace_id} MTD spend {current_mtd_usd:.2f} {currency} "
+            f"has reached cap {cap_usd:.2f} {currency}"
         )
