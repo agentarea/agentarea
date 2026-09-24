@@ -31,3 +31,4 @@ class PolicyRuleORM(BaseModel, WorkspaceScopedMixin):
     condition: Mapped[str | None] = mapped_column(Text, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    managed_by: Mapped[str | None] = mapped_column(String(50), nullable=True)

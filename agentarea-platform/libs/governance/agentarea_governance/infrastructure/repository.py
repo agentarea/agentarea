@@ -31,6 +31,7 @@ def _to_rule(row: PolicyRuleORM) -> PolicyRule:
         effect=PolicyEffect(row.effect),
         params=row.params or {},
         condition=row.condition,
+        managed_by=row.managed_by,
     )
 
 
@@ -105,6 +106,7 @@ class PolicyRuleRepository:
             condition=rule.condition,
             enabled=rule.enabled,
             priority=rule.priority,
+            managed_by=rule.managed_by,
         )
         self.session.add(row)
         await self.session.flush()
