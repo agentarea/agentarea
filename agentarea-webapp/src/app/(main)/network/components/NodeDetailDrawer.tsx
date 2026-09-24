@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale } from "next-intl";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -18,7 +19,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useCurrency } from "@/hooks/useCurrency";
 import { formatApiError } from "@/lib/api-errors";
+import { formatMoney } from "@/lib/money";
 import { listAgentTasksAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 import type { NetworkNodeData, TopologyResponse } from "../types";
@@ -76,12 +79,6 @@ const RUNNING_STATUSES = new Set([
 ]);
 const TERMINAL_OK = new Set(["completed", "succeeded", "done"]);
 const TERMINAL_BAD = new Set(["failed", "cancelled", "error"]);
-
-function fmtCost(c: number | null | undefined) {
-  if (!c || c <= 0) return "—";
-  if (c < 0.01) return `<$0.01`;
-  return `$${c.toFixed(c < 1 ? 3 : 2)}`;
-}
 
 function fmtRelative(iso?: string) {
   if (!iso) return "—";
@@ -171,6 +168,10 @@ function StatTile({
 function AgentSections({ agentId }: { agentId: string }) {
   const [tasks, setTasks] = useState<AgentTask[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const locale = useLocale();
+  const { currency } = useCurrency();
+  const fmtCost = (c: number | null | undefined) =>
+    !c || c <= 0 ? "—" : formatMoney(c, currency, locale);
 
   useEffect(() => {
     let cancelled = false;
@@ -201,14 +202,17 @@ function AgentSections({ agentId }: { agentId: string }) {
     let failed = 0;
     for (const t of tasks) {
       const s = (t.status || "").toLowerCase();
-      if (s === "awaiting_approval" || s === "awaiting_input") approvals.push(t);
+      if (s === "awaiting_approval" || s === "awaiting_input")
+        approvals.push(t);
       if (RUNNING_STATUSES.has(s)) running.push(t);
       else recent.push(t);
       if (TERMINAL_OK.has(s)) succeeded++;
       else if (TERMINAL_BAD.has(s)) failed++;
       totalCost += t.total_cost ?? 0;
     }
-    recent.sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+    recent.sort((a, b) =>
+      (b.created_at ?? "").localeCompare(a.created_at ?? "")
+    );
     return {
       running,
       recent: recent.slice(0, 8),
@@ -304,7 +308,9 @@ function AgentSections({ agentId }: { agentId: string }) {
 
       <Section title="Recent" count={grouped.recent.length}>
         {grouped.recent.length === 0 ? (
-          <p className="px-2.5 text-xs text-muted-foreground">No history yet.</p>
+          <p className="px-2.5 text-xs text-muted-foreground">
+            No history yet.
+          </p>
         ) : (
           <ul className="space-y-1.5">
             {grouped.recent.map((t) => {

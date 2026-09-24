@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -12,19 +13,20 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { AgentAvatar } from "@/components/AgentAvatar";
-import { TaskConversation } from "@/components/Chat/TaskConversation";
-import { TaskStatus } from "@/components/TaskStatus";
-import { Button } from "@/components/ui/button";
 import {
   fmtCost,
   formatRelative,
   isPending,
   type InboxTask,
 } from "@/app/(main)/inbox/components/inboxShared";
+import { AgentAvatar } from "@/components/AgentAvatar";
+import { TaskConversation } from "@/components/Chat/TaskConversation";
+import { TaskStatus } from "@/components/TaskStatus";
+import { Button } from "@/components/ui/button";
+import { useCurrency } from "@/hooks/useCurrency";
 import { EscalationArguments } from "./EscalationArguments";
-import { InboxResultMessage } from "./InboxResultMessage";
 import { extractInboxResult } from "./inboxResult";
+import { InboxResultMessage } from "./InboxResultMessage";
 
 interface InboxClientPanelProps {
   task: InboxTask | null;
@@ -38,6 +40,8 @@ export function InboxClientPanel({
   onClose,
 }: InboxClientPanelProps) {
   const router = useRouter();
+  const locale = useLocale();
+  const { currency } = useCurrency();
 
   if (!task) {
     return (
@@ -139,11 +143,13 @@ export function InboxClientPanel({
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-muted-foreground">
             <Clock size={13} aria-hidden />
-            <span>{formatRelative(task.created_at) || "Requested recently"}</span>
+            <span>
+              {formatRelative(task.created_at) || "Requested recently"}
+            </span>
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 font-mono text-muted-foreground">
             <Wallet size={13} aria-hidden />
-            <span>{fmtCost(task.total_cost)}</span>
+            <span>{fmtCost(task.total_cost, currency, locale)}</span>
           </span>
         </div>
       </header>

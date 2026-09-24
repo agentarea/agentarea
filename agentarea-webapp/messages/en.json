@@ -1843,7 +1843,7 @@
     "budget": {
       "title": "Monthly Spend Cap",
       "description": "Set a soft monthly cap for total task spend. New tasks are refused (HTTP 402) when month-to-date spend reaches this value. Running tasks are not killed.",
-      "label": "Monthly cap (USD)",
+      "label": "Monthly cap ({currency})",
       "placeholder": "e.g. 100.00",
       "save": "Save cap",
       "saving": "Saving...",
@@ -2143,7 +2143,7 @@
     "capNoCap": "No cap is set. Workspace spend can continue without a monthly stop.",
     "capUsed": "{amount} used",
     "capOfTotal": "{pct}% of {cap}",
-    "capField": "Monthly cap (USD)",
+    "capField": "Monthly cap ({currency})",
     "capPlaceholder": "No cap",
     "save": "Save",
     "capNote": "Changes apply immediately across the workspace.",

@@ -1,9 +1,10 @@
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Clock, Gauge, Hash, Wallet } from "lucide-react";
 import type { ExecutionMetricsResponse } from "@/api/client/types.gen";
 import { Stat, StatStrip } from "@/components/Overview/OverviewCard";
 import { getTriggerMetrics } from "@/lib/api";
-import { formatTriggerCost as fmtUsd } from "../../components/triggerDisplay";
+import { getPricingCurrency } from "@/lib/api-dashboard";
+import { formatTriggerCost } from "../../components/triggerDisplay";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -17,6 +18,9 @@ const seconds = (ms: number) => `${(ms / 1000).toFixed(2)}`;
 export default async function TriggerMetricsPage({ params }: Props) {
   const { id } = await params;
   const t = await getTranslations("TriggersPage.detail");
+  const locale = await getLocale();
+  const { currency } = await getPricingCurrency();
+  const fmtUsd = (value: number) => formatTriggerCost(value, currency, locale);
 
   const { data, error } = await getTriggerMetrics(id, { hours: WINDOW_HOURS });
 
@@ -61,7 +65,9 @@ export default async function TriggerMetricsPage({ params }: Props) {
           sub={
             failed > 0
               ? t("failedRuns", { count: failed })
-              : t("periodHours", { hours: metrics.period_hours ?? WINDOW_HOURS })
+              : t("periodHours", {
+                  hours: metrics.period_hours ?? WINDOW_HOURS,
+                })
           }
           subTone={failed > 0 ? "down" : "muted"}
         />

@@ -1,3 +1,4 @@
+import { getLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { policyToRule } from "@/app/(main)/policies/components/policy-rules";
 import { resolveAgentIdentity } from "@/lib/agent-identity";
@@ -11,14 +12,18 @@ import {
   listPolicies,
   type TaskResponse,
 } from "@/lib/api";
-import { getAgentOverview, getWorkspaceSettings } from "@/lib/api-dashboard";
+import {
+  getAgentOverview,
+  getPricingCurrency,
+  getWorkspaceSettings,
+} from "@/lib/api-dashboard";
 import { McpInstance, McpServer } from "@/lib/mcp/resolveMcpRef";
 import { getAgentStatusPresentation } from "@/lib/status";
 import type { Agent } from "@/types/agent";
 import type { Policy, PolicyEffect } from "@/types/policies";
 import {
-  type OpenApiConnectionRef,
   resolveAgentToolIcons,
+  type OpenApiConnectionRef,
 } from "@/utils/agentToolIcons";
 import { isRunningTask } from "../../shared/taskStatus";
 import {
@@ -65,6 +70,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     openApiConnectionsRes,
     policiesRes,
     modelInstanceRes,
+    pricingCurrency,
   ] = await Promise.all([
     getAgentOverview(realId).catch(() => null),
     listAgentTasks(realId).catch(() => ({ data: null, error: "load failed" })),
@@ -78,6 +84,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     agent.model_id
       ? getModelInstance(agent.model_id).catch(() => ({ data: undefined }))
       : Promise.resolve({ data: undefined }),
+    getPricingCurrency(),
   ]);
   const tasks = (tasksRes?.data as TaskResponse[]) || [];
 
@@ -112,9 +119,10 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
   });
 
   // Agent-scoped governance rules, summarised by effect.
+  const locale = await getLocale();
   const policyRules = ((policiesRes?.data as Policy[]) ?? [])
     .filter((p) => p.enabled !== false)
-    .map(policyToRule);
+    .map((p) => policyToRule(p, pricingCurrency.currency, locale));
   const effectCounts = policyRules.reduce<
     Partial<Record<PolicyEffect, number>>
   >((acc, rule) => {
@@ -193,6 +201,7 @@ export async function AgentOverview({ agentId }: { agentId: string }) {
     connections: toolIcons.map((tool) => tool.label),
     policyCount: policyRules.length,
     effectCounts,
+    currency: pricingCurrency.currency,
   };
 
   return <AgentOverviewView model={model} />;

@@ -52,6 +52,10 @@ vi.mock("@/hooks/useTaskActions", () => ({
   }),
 }));
 
+vi.mock("@/hooks/useCurrency", () => ({
+  useCurrency: () => ({ currency: "USD", isLoading: false }),
+}));
+
 vi.mock("@/components/Chat/hooks/useScrollManagement", () => ({
   useScrollManagement: () => ({
     messagesContainerRef: { current: null },

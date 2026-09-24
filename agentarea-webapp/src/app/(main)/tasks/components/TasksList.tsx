@@ -1,16 +1,18 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import type { TriggerCatalogEntry } from "@/app/(main)/triggers/components/triggerDisplay";
 import { AgentLink } from "@/components/AgentIdentity";
 import Table from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { TaskItem } from "@/components/TaskItem";
 import { TaskSourceBadge } from "@/components/TaskSourceBadge";
-import type { TriggerCatalogEntry } from "@/app/(main)/triggers/components/triggerDisplay";
 import { TaskStatus } from "@/components/TaskStatus";
+import { useCurrency } from "@/hooks/useCurrency";
 import { TaskWithAgent } from "@/lib/api";
 import { CARD_GRID_WIDE } from "@/lib/collectionGrids";
+import { formatMoney } from "@/lib/money";
 
 interface TasksListProps {
   initialTasks: TaskWithAgent[];
@@ -31,10 +33,6 @@ interface TasksListProps {
   showAgent?: boolean;
 }
 
-function formatUsdCost(value: number) {
-  return `$${value.toFixed(4)}`;
-}
-
 export default function TasksList({
   initialTasks,
   viewMode = "table",
@@ -44,6 +42,8 @@ export default function TasksList({
 }: TasksListProps) {
   const t = useTranslations("TasksPage");
   const router = useRouter();
+  const locale = useLocale();
+  const { currency } = useCurrency();
 
   // Define table columns for tasks
   const taskColumns = [
@@ -123,7 +123,7 @@ export default function TasksList({
         return (
           <div className="font-mono text-xs tabular-nums text-muted-foreground">
             {num != null && !isNaN(num) ? (
-              <span>{formatUsdCost(num)}</span>
+              <span>{formatMoney(num, currency, locale)}</span>
             ) : (
               <span>—</span>
             )}

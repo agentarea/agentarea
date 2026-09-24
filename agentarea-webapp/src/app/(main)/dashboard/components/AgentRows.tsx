@@ -1,23 +1,17 @@
 import { Fragment, type ReactElement } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
 import { ArrowUpRight, Bot } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { BoardSectionHeader } from "@/components/board";
 import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
-import { BoardSectionHeader } from "@/components/board";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
-import { cn } from "@/lib/utils";
+import { useCurrency } from "@/hooks/useCurrency";
 import type { DashboardAgentRow } from "@/lib/api-dashboard";
+import { formatMoney } from "@/lib/money";
+import { cn } from "@/lib/utils";
 import { formatRelTime } from "./relTime";
-
-const fmt = (v: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-    maximumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-  }).format(v);
 
 function inferStatus(
   row: DashboardAgentRow
@@ -31,11 +25,16 @@ function inferStatus(
 }
 
 function Dot() {
-  return <span className="h-[2.5px] w-[2.5px] shrink-0 rounded-full bg-muted-foreground/60" />;
+  return (
+    <span className="h-[2.5px] w-[2.5px] shrink-0 rounded-full bg-muted-foreground/60" />
+  );
 }
 
 export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
   const t = useTranslations("DashboardPage");
+  const locale = useLocale();
+  const { currency } = useCurrency();
+  const fmt = (v: number) => formatMoney(v, currency, locale);
 
   const stats = (a: DashboardAgentRow, className?: string) => {
     const parts = [
@@ -43,7 +42,10 @@ export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
         <span key="done">{t("statDone", { count: a.tasks_done_today })}</span>
       ),
       a.tasks_failed_today > 0 && (
-        <span key="failed" className="font-semibold text-red-500 dark:text-red-400">
+        <span
+          key="failed"
+          className="font-semibold text-red-500 dark:text-red-400"
+        >
           {t("statFailed", { count: a.tasks_failed_today })}
         </span>
       ),
@@ -78,7 +80,12 @@ export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
           title={t("agents")}
           pill={t("agentsActive", { count: agents.length })}
           meta={
-            <Button asChild variant="ghost" size="xs" className="text-muted-foreground">
+            <Button
+              asChild
+              variant="ghost"
+              size="xs"
+              className="text-muted-foreground"
+            >
               <Link href="/agents">
                 {t("viewAllAgents")}
                 <ArrowUpRight />
@@ -104,7 +111,11 @@ export function AgentRows({ agents }: { agents: DashboardAgentRow[] }) {
       ) : (
         <div className="min-h-0 flex-1 lg:overflow-y-auto">
           {agents.map((a) => (
-            <Link key={a.agent_id} href={`/agents/${a.agent_id}`} className="block">
+            <Link
+              key={a.agent_id}
+              href={`/agents/${a.agent_id}`}
+              className="block"
+            >
               <InteractiveListRow
                 showIndicator={false}
                 className="px-6 py-2.5"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale } from "next-intl";
 import {
   AlertTriangle,
   Bot,
@@ -10,6 +11,8 @@ import {
   Plug,
   type LucideIcon,
 } from "lucide-react";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatMoney } from "@/lib/money";
 import { getAllTasksAction } from "@/lib/server-actions";
 import { cn } from "@/lib/utils";
 import type { TopologyResponse } from "../types";
@@ -42,13 +45,6 @@ const PROBLEM_STATUSES = new Set([
 
 function fmtNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(value);
-}
-
-function fmtCost(value: number | null) {
-  if (value === null) return "-";
-  if (value <= 0) return "$0";
-  if (value < 0.01) return "<$0.01";
-  return `$${value.toFixed(value < 1 ? 3 : 2)}`;
 }
 
 function toNumber(value: unknown) {
@@ -104,6 +100,8 @@ export default function NetworkMetricsPanel({
 }) {
   const [tasks, setTasks] = useState<TaskSummary[] | null>(null);
   const [tasksUnavailable, setTasksUnavailable] = useState(false);
+  const locale = useLocale();
+  const { currency } = useCurrency();
 
   useEffect(() => {
     let cancelled = false;
@@ -208,7 +206,11 @@ export default function NetworkMetricsPanel({
         />
         <MetricTile
           label="Spent"
-          value={fmtCost(metrics.totalCost)}
+          value={
+            metrics.totalCost === null
+              ? "-"
+              : formatMoney(metrics.totalCost, currency, locale)
+          }
           hint={
             tasks === null && !tasksUnavailable
               ? "Loading usage..."

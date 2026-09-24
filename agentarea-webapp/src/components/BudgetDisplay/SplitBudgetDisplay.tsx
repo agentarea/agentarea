@@ -1,12 +1,18 @@
 "use client";
 
+import { useLocale } from "next-intl";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatMoney } from "@/lib/money";
+
 interface BudgetBarProps {
   label: string;
   used: number;
   total: number;
+  currency: string;
+  locale: string;
 }
 
-function BudgetBar({ label, used, total }: BudgetBarProps) {
+function BudgetBar({ label, used, total, currency, locale }: BudgetBarProps) {
   const percentage = total > 0 ? Math.min(100, (used / total) * 100) : 0;
   const remaining = Math.max(0, total - used);
 
@@ -19,7 +25,8 @@ function BudgetBar({ label, used, total }: BudgetBarProps) {
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground">{label}</span>
         <span className="font-mono">
-          ${used.toFixed(2)} / ${total.toFixed(2)}
+          {formatMoney(used, currency, locale)} /{" "}
+          {formatMoney(total, currency, locale)}
         </span>
       </div>
       <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
@@ -30,7 +37,7 @@ function BudgetBar({ label, used, total }: BudgetBarProps) {
       </div>
       <div className="flex justify-between text-[10px] text-muted-foreground">
         <span>{percentage.toFixed(0)}% used</span>
-        <span>${remaining.toFixed(2)} remaining</span>
+        <span>{formatMoney(remaining, currency, locale)} remaining</span>
       </div>
     </div>
   );
@@ -49,13 +56,28 @@ export function SplitBudgetDisplay({
   serviceBudget,
   serviceCost = 0,
 }: SplitBudgetDisplayProps) {
+  const locale = useLocale();
+  const { currency } = useCurrency();
+
   return (
     <div className="space-y-3">
       {inferenceBudget != null && inferenceBudget > 0 && (
-        <BudgetBar label="Inference Budget" used={inferenceCost} total={inferenceBudget} />
+        <BudgetBar
+          label="Inference Budget"
+          used={inferenceCost}
+          total={inferenceBudget}
+          currency={currency}
+          locale={locale}
+        />
       )}
       {serviceBudget != null && serviceBudget > 0 && (
-        <BudgetBar label="Service Budget" used={serviceCost} total={serviceBudget} />
+        <BudgetBar
+          label="Service Budget"
+          used={serviceCost}
+          total={serviceBudget}
+          currency={currency}
+          locale={locale}
+        />
       )}
     </div>
   );

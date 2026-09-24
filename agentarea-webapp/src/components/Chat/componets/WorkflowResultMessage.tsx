@@ -1,7 +1,10 @@
 import React from "react";
+import { useLocale } from "next-intl";
+import { SplitBudgetDisplay } from "@/components/BudgetDisplay";
+import { useCurrency } from "@/hooks/useCurrency";
+import { formatMoney } from "@/lib/money";
 import BaseMessage from "./BaseMessage";
 import MessageWrapper from "./MessageWrapper";
-import { SplitBudgetDisplay } from "@/components/BudgetDisplay";
 
 interface WorkflowResultData {
   result?: string;
@@ -18,8 +21,11 @@ const WorkflowResultMessage: React.FC<{
   data: WorkflowResultData;
   agent_name?: string;
 }> = ({ data, agent_name: _agent_name }) => {
+  const locale = useLocale();
+  const { currency } = useCurrency();
   const content = data.result || data.final_response || "";
-  const hasServiceBudget = data.service_budget_usd != null && data.service_budget_usd > 0;
+  const hasServiceBudget =
+    data.service_budget_usd != null && data.service_budget_usd > 0;
 
   return (
     <MessageWrapper>
@@ -43,7 +49,10 @@ const WorkflowResultMessage: React.FC<{
               <span>Iterations: {data.iterations_completed}</span>
             )}
             {data.total_cost && (
-              <span>Total Cost: ${Number(data.total_cost).toFixed(4)}</span>
+              <span>
+                Total Cost:{" "}
+                {formatMoney(Number(data.total_cost), currency, locale)}
+              </span>
             )}
           </div>
         )}

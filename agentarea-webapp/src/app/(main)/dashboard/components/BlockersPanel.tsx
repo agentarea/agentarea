@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
 import { Clock, Shield, TriangleAlert, Wallet } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import EmptyState from "@/components/EmptyState";
 import { BoardSectionHeader } from "@/components/board";
+import EmptyState from "@/components/EmptyState";
 import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
+import { useCurrency } from "@/hooks/useCurrency";
 import type { DashboardData } from "@/lib/api-dashboard";
+import { formatMoney } from "@/lib/money";
 import { formatRelTime } from "./relTime";
 
 type BlockerRow = {
@@ -32,6 +34,8 @@ export function BlockersPanel({
   blockers: DashboardData["blockers"];
 }) {
   const t = useTranslations("DashboardPage");
+  const locale = useLocale();
+  const { currency } = useCurrency();
   const ago = (iso: string | null) =>
     t("timeAgo", { time: formatRelTime(iso, t) });
 
@@ -56,7 +60,7 @@ export function BlockersPanel({
       rows: blockers.wallet_exhausted.map((b) => ({
         key: b.agent_id,
         question: t("budgetExhausted", {
-          amount: `$${b.budget_usd.toFixed(2)}`,
+          amount: formatMoney(b.budget_usd, currency, locale),
           period: b.period,
         }),
         agentId: b.agent_id,
@@ -130,7 +134,9 @@ export function BlockersPanel({
                           agent={{ id: r.agentId, name: r.agentName }}
                           size="xs"
                         />
-                        <span className="truncate font-medium">{r.agentName}</span>
+                        <span className="truncate font-medium">
+                          {r.agentName}
+                        </span>
                         <span className="h-[2.5px] w-[2.5px] shrink-0 rounded-full bg-muted-foreground/60" />
                         <span className="shrink-0 font-mono">{r.ago}</span>
                       </span>

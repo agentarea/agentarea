@@ -26,6 +26,7 @@ import { buildActivitySummary } from "@/components/TaskInfoPanel/buildActivitySu
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { useCurrency } from "@/hooks/useCurrency";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import type { TaskWithAgent } from "@/lib/api";
 import type { Part } from "@/lib/events/contract";
@@ -68,6 +69,7 @@ export function TaskConversation({
   onA2UIAction,
 }: TaskConversationProps) {
   const router = useRouter();
+  const { currency } = useCurrency();
   const [chatInput, setChatInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [continuationIterations, setContinuationIterations] = useState("10");
@@ -374,7 +376,7 @@ export function TaskConversation({
                   />
                 </label>
                 <label className="space-y-1 text-xs font-medium">
-                  Budget top-up (USD, optional)
+                  Budget top-up ({currency}, optional)
                   <input
                     className="block h-9 w-44 rounded-md border bg-background px-3 text-sm"
                     min="0.01"

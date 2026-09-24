@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import Link from "next/link";
 import {
   Boxes,
@@ -33,6 +33,7 @@ import { getAgentIconComponent } from "@/lib/agent-identity";
 import type { TaskResponse } from "@/lib/api";
 import type { AvatarHue } from "@/lib/avatar-hue";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import {
   getTaskStatusPresentation,
   type StatusPresentation,
@@ -88,15 +89,9 @@ export type AgentOverviewModel = {
   connections: string[];
   policyCount: number;
   effectCounts: Partial<Record<PolicyEffect, number>>;
+  /** Billing currency for every money value above (C2). Defaults to USD. */
+  currency?: string;
 };
-
-const fmtUsd = (v: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-    maximumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-  }).format(v);
 
 type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
@@ -153,6 +148,9 @@ export async function AgentOverviewView({
   model: AgentOverviewModel;
 }) {
   const t = await getTranslations("AgentOverviewPage");
+  const locale = await getLocale();
+  const currency = model.currency ?? DEFAULT_CURRENCY;
+  const fmtUsd = (v: number) => formatMoney(v, currency, locale);
   const { agentRef, stats } = model;
 
   const totalRuns = stats.completed7d + stats.failed7d;
@@ -343,7 +341,14 @@ export async function AgentOverviewView({
                 <EmptyRow text={t("nothingRunning")} />
               ) : (
                 model.runningTasks.map((task) => (
-                  <TaskRow key={task.id} task={task} t={t} hideRunningStatus />
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    t={t}
+                    currency={currency}
+                    locale={locale}
+                    hideRunningStatus
+                  />
                 ))
               )}
             </CollapsibleGroup>
@@ -364,7 +369,13 @@ export async function AgentOverviewView({
                 />
               ) : (
                 model.recentTasks.map((task) => (
-                  <TaskRow key={task.id} task={task} t={t} />
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    t={t}
+                    currency={currency}
+                    locale={locale}
+                  />
                 ))
               )}
             </CollapsibleGroup>
@@ -580,7 +591,13 @@ function UpcomingRow({
           size={20}
           rounded={5}
           color="hsl(var(--muted-foreground))"
-          icon={isTrigger ? <Clock strokeWidth={1.8} /> : <ListChecks strokeWidth={1.8} />}
+          icon={
+            isTrigger ? (
+              <Clock strokeWidth={1.8} />
+            ) : (
+              <ListChecks strokeWidth={1.8} />
+            )
+          }
           aria-hidden
         />
       }
@@ -608,10 +625,14 @@ function UpcomingRow({
 function TaskRow({
   task,
   t,
+  currency,
+  locale,
   hideRunningStatus = false,
 }: {
   task: TaskResponse;
   t: Translator;
+  currency: string;
+  locale: string;
   hideRunningStatus?: boolean;
 }) {
   const status = String(task.status ?? "unknown");
@@ -653,7 +674,7 @@ function TaskRow({
           <span className="flex items-center gap-3 text-[11.5px] text-muted-foreground">
             <span className="whitespace-nowrap">{timeText}</span>
             <span className="w-[46px] text-right tabular-nums">
-              {cost > 0 ? fmtUsd(cost) : "—"}
+              {cost > 0 ? formatMoney(cost, currency, locale) : "—"}
             </span>
           </span>
         }

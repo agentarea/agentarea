@@ -3,6 +3,7 @@ import { Clock, Zap } from "lucide-react";
 import type { TriggerResponse } from "@/api/client/types.gen";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 export interface TriggerCatalogEntry {
@@ -307,18 +308,16 @@ export function getTriggerHealth(trigger: TriggerLike): TriggerHealth {
 }
 
 /**
- * Cost of one run, or of a trigger's history. Sub-dollar amounts keep four
- * decimals: a run that costs $0.0071 must not read as "$0.01", which is what
- * the two-decimal money format everywhere else would make of it.
+ * Cost of one run, or of a trigger's history, in the workspace's billing
+ * currency (see `useCurrency()` / C2). Defaults to USD/en for callers that
+ * have not threaded a currency through yet.
  */
-export function formatTriggerCost(value: number): string {
-  const fractionDigits = Math.abs(value) > 0 && Math.abs(value) < 1 ? 4 : 2;
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(value);
+export function formatTriggerCost(
+  value: number,
+  currency: string = DEFAULT_CURRENCY,
+  locale: string = "en"
+): string {
+  return formatMoney(value, currency, locale);
 }
 
 /** Compact relative time like "in 14h" / "3m ago" (matches the design). */

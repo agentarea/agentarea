@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useLocale } from "next-intl";
 import { InfoPanelBody, InfoPanelShell } from "@/components/InfoPanel";
+import { useCurrency } from "@/hooks/useCurrency";
 import type { EffectivePolicy } from "@/types/policies";
 import ActivitySummary, {
   TaskActivitySummary,
@@ -53,6 +54,7 @@ export default function TaskInfoPanel({
 }: TaskInfoPanelProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "model">("overview");
   const locale = useLocale();
+  const { currency } = useCurrency();
 
   const formattedStart = startTime
     ? new Date(startTime).toLocaleString(locale)
@@ -103,12 +105,18 @@ export default function TaskInfoPanel({
               <BudgetInfo
                 totalCost={totalCost ?? 0}
                 budgetLimit={budgetLimit ?? null}
+                currency={currency}
+                locale={locale}
               />
             )}
 
-            <PolicyInfo policy={policy} />
+            <PolicyInfo policy={policy} currency={currency} locale={locale} />
 
-            <ActivitySummary summary={activitySummary} />
+            <ActivitySummary
+              summary={activitySummary}
+              currency={currency}
+              locale={locale}
+            />
             <Participants
               agentId={task.agent_id}
               agentName={task.agent_name}

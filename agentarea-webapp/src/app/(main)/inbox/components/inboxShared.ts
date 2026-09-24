@@ -1,5 +1,6 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import type { TaskWithAgent } from "@/lib/api";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 
 export const FILTER_KEYS = ["all", "pending", "completed", "failed"] as const;
 export type FilterValue = (typeof FILTER_KEYS)[number];
@@ -36,6 +37,10 @@ export function formatRelative(dateStr?: string | null): string {
   }
 }
 
-export function fmtCost(cost?: number | null): string {
-  return cost == null ? "—" : `$${Number(cost).toFixed(4)}`;
+export function fmtCost(
+  cost?: number | null,
+  currency: string = DEFAULT_CURRENCY,
+  locale: string = "en"
+): string {
+  return cost == null ? "—" : formatMoney(Number(cost), currency, locale);
 }

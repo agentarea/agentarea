@@ -1,4 +1,4 @@
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import Link from "next/link";
 import {
   Boxes,
@@ -27,6 +27,7 @@ import {
 import { CopyableText } from "@/components/ui/copyable-text";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { getPricingCurrency } from "@/lib/api-dashboard";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import {
   getTriggerExecutionStatusPresentation,
@@ -36,7 +37,7 @@ import { cn } from "@/lib/utils";
 import type { TaskParameterRef } from "../../components/taskParameters";
 import {
   formatCompactDistance,
-  formatTriggerCost as fmtUsd,
+  formatTriggerCost,
 } from "../../components/triggerDisplay";
 
 /**
@@ -119,6 +120,9 @@ export async function TriggerOverviewView({
   model: TriggerOverviewModel;
 }) {
   const t = await getTranslations("TriggersPage.detail");
+  const locale = await getLocale();
+  const { currency } = await getPricingCurrency();
+  const fmtUsd = (value: number) => formatTriggerCost(value, currency, locale);
   const { triggerId, metrics, failure } = model;
 
   const editHref = `/triggers/${triggerId}/edit`;
@@ -319,6 +323,8 @@ export async function TriggerOverviewView({
                     key={execution.id}
                     execution={execution}
                     t={t}
+                    currency={currency}
+                    locale={locale}
                   />
                 ))
               )}
@@ -454,9 +460,13 @@ export async function TriggerOverviewView({
 function ExecutionRow({
   execution,
   t,
+  currency,
+  locale,
 }: {
   execution: TriggerExecutionResponse;
   t: Translator;
+  currency: string;
+  locale: string;
 }) {
   const presentation = getTriggerExecutionStatusPresentation(execution.status);
   const when = formatCompactDistance(execution.executed_at);
@@ -470,8 +480,7 @@ function ExecutionRow({
   // The error is the whole story when there is one; otherwise the second line
   // carries how the run started and how long it took.
   const sub =
-    execution.error_message ||
-    [source, duration].filter(Boolean).join(" · ");
+    execution.error_message || [source, duration].filter(Boolean).join(" · ");
   const cost = execution.cost_usd;
 
   const row = (
@@ -488,7 +497,7 @@ function ExecutionRow({
               cost != null && cost > 0 && "font-medium text-foreground/80"
             )}
           >
-            {cost != null ? fmtUsd(cost) : "—"}
+            {cost != null ? formatTriggerCost(cost, currency, locale) : "—"}
           </span>
           <StatusIndicator
             size="sm"

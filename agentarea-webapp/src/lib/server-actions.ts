@@ -36,7 +36,6 @@ import {
   checkMCPServerInstanceConfiguration,
   continueAgentTask,
   createAgentWallet,
-  createWorkspaceDirectory,
   createClient,
   createMCPAuthConfig,
   createMCPServer,
@@ -46,6 +45,7 @@ import {
   createProject,
   createProviderConfig,
   createSkill,
+  createWorkspaceDirectory,
   deleteAgentWallet,
   deleteClient,
   deleteModelInstance,
@@ -130,6 +130,7 @@ import {
   workspaceFileHistory,
 } from "@/lib/api";
 import {
+  getPricingCurrency,
   getWorkspaceSettings,
   updateWorkspaceSettings,
 } from "@/lib/api-dashboard";
@@ -613,7 +614,9 @@ export async function probeInstanceAuthAction(instanceId: string) {
 export async function listWorkspaceSecretsAction(): Promise<SecretResponse[]> {
   const { data, error } = await listSecrets();
   if (error || !data) {
-    throw new Error(apiErrorMessage({ error }, "Failed to load workspace secrets"));
+    throw new Error(
+      apiErrorMessage({ error }, "Failed to load workspace secrets")
+    );
   }
   return zListSecretsV1SecretsGetResponse.parse(data);
 }
@@ -635,17 +638,15 @@ export async function mcpOAuthPreflightAction(instanceId: string) {
   return { data: await res.json(), error: null };
 }
 
-export async function oauthAuthorizeAction(
-  body: {
-    instance_id: string;
-    credential_mode?: "auto" | "custom";
-    client_id?: string;
-    client_secret?: string;
-    client_id_secret_id?: string;
-    client_secret_secret_id?: string;
-    return_to?: string;
-  }
-) {
+export async function oauthAuthorizeAction(body: {
+  instance_id: string;
+  credential_mode?: "auto" | "custom";
+  client_id?: string;
+  client_secret?: string;
+  client_id_secret_id?: string;
+  client_secret_secret_id?: string;
+  return_to?: string;
+}) {
   // Validate UUID to prevent SSRF/path injection in downstream fetch URL
   if (!isUUID(body.instance_id)) {
     return { data: null, error: "Invalid instance ID" };
@@ -675,7 +676,10 @@ export async function oauthAuthorizeAction(
 async function readApiError(res: Response) {
   const text = await res.text();
   try {
-    return apiErrorMessage({ error: JSON.parse(text), status: res.status }, "Request failed");
+    return apiErrorMessage(
+      { error: JSON.parse(text), status: res.status },
+      "Request failed"
+    );
   } catch {
     return text || `Request failed (${res.status})`;
   }
@@ -891,7 +895,9 @@ export async function listWorkspaceFilesAction() {
   return await listWorkspaceFiles();
 }
 
-export async function createWorkspaceDirectoryAction(body: CreateWorkspaceDirectoryRequest) {
+export async function createWorkspaceDirectoryAction(
+  body: CreateWorkspaceDirectoryRequest
+) {
   const parsed = zCreateWorkspaceDirectoryRequest.safeParse(body);
   if (!parsed.success) return { data: null, error: parsed.error.flatten() };
   return await createWorkspaceDirectory(parsed.data);
@@ -937,7 +943,10 @@ export async function deleteWorkspaceFileAction(filePath: string) {
   return { data: await response.json(), error: null };
 }
 
-export async function moveWorkspaceFileAction(source: string, destination: string) {
+export async function moveWorkspaceFileAction(
+  source: string,
+  destination: string
+) {
   const response = await workspaceFetch(`${env.API_URL}/v1/files/move`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1045,4 +1054,11 @@ export async function updateWorkspaceSettingsAction(
           : "Failed to update workspace settings",
     };
   }
+}
+
+// getPricingCurrency() already defaults to USD on any failure, so this never
+// surfaces an error — callers (useCurrency()) only need the currency.
+export async function getPricingCurrencyAction() {
+  const data = await getPricingCurrency();
+  return { data, error: null };
 }

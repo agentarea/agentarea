@@ -1,13 +1,14 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { formatDistanceToNow } from "date-fns";
-import { useTranslations } from "next-intl";
 import type { TriggerExecutionResponse } from "@/api/client/types.gen";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { useCurrency } from "@/hooks/useCurrency";
 import { getTriggerExecutionStatusPresentation } from "@/lib/status";
-import { formatTriggerCost as fmtUsd } from "../../components/triggerDisplay";
+import { formatTriggerCost } from "../../components/triggerDisplay";
 
 interface ExecutionsTableProps {
   executions: TriggerExecutionResponse[];
@@ -24,6 +25,9 @@ export default function ExecutionsTable({
   principalNames = {},
 }: ExecutionsTableProps) {
   const t = useTranslations("TriggersPage.detail");
+  const locale = useLocale();
+  const { currency } = useCurrency();
+  const fmtUsd = (value: number) => formatTriggerCost(value, currency, locale);
   const columns = [
     {
       accessor: "id",
@@ -36,7 +40,9 @@ export default function ExecutionsTable({
       accessor: "status",
       header: "Status",
       render: (value: string) => {
-        const status = getTriggerExecutionStatusPresentation(value || "unknown");
+        const status = getTriggerExecutionStatusPresentation(
+          value || "unknown"
+        );
 
         return (
           <StatusIndicator
@@ -63,7 +69,9 @@ export default function ExecutionsTable({
               : t("executionManual")}
           </Badge>
         ) : (
-          <span className="text-muted-foreground">{t("executionAutomatic")}</span>
+          <span className="text-muted-foreground">
+            {t("executionAutomatic")}
+          </span>
         ),
     },
     {

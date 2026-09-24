@@ -8,14 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-
-const fmtUsd = (v: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-    maximumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
-  }).format(v);
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 
 const fmtDateShort = (iso: string) => {
   const d = new Date(iso + "T00:00:00Z");
@@ -31,20 +24,29 @@ type Point = { date: string; usd: number };
 export function SpendAreaChart({
   data,
   height = 110,
+  locale = "en",
+  currency = DEFAULT_CURRENCY,
 }: {
   data: Point[];
   height?: number;
+  locale?: string;
+  currency?: string;
 }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart
-        data={data}
-        margin={{ top: 6, right: 6, bottom: 0, left: 0 }}
-      >
+      <AreaChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: 0 }}>
         <defs>
           <linearGradient id="spendGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="hsl(var(--accent))" stopOpacity={0.18} />
-            <stop offset="100%" stopColor="hsl(var(--accent))" stopOpacity={0} />
+            <stop
+              offset="0%"
+              stopColor="hsl(var(--accent))"
+              stopOpacity={0.18}
+            />
+            <stop
+              offset="100%"
+              stopColor="hsl(var(--accent))"
+              stopOpacity={0}
+            />
           </linearGradient>
         </defs>
         <XAxis
@@ -70,8 +72,12 @@ export function SpendAreaChart({
           labelStyle={{ color: "hsl(var(--muted-foreground))", fontSize: 11 }}
           itemStyle={{ color: "hsl(var(--foreground))" }}
           labelFormatter={(label) => fmtDateShort(String(label))}
-          formatter={(v) => [fmtUsd(Number(v)), "Spend"]}
-          cursor={{ stroke: "currentColor", strokeOpacity: 0.12, strokeDasharray: "3 3" }}
+          formatter={(v) => [formatMoney(Number(v), currency, locale), "Spend"]}
+          cursor={{
+            stroke: "currentColor",
+            strokeOpacity: 0.12,
+            strokeDasharray: "3 3",
+          }}
         />
         <Area
           type="monotone"

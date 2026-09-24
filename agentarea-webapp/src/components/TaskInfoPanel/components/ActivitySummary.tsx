@@ -1,8 +1,9 @@
-import Image from "next/image";
 import { useTranslations } from "next-intl";
+import Image from "next/image";
 import { Clock, Sparkles, SquareTerminal } from "lucide-react";
 import { describeToolCall } from "@/components/Chat/utils/describeToolCall";
 import { scrollToToolCall } from "@/components/Chat/utils/scrollToToolCall";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import Section from "./Section";
 
 export interface ToolUsage {
@@ -48,6 +49,8 @@ export interface TaskActivitySummary {
 
 interface ActivitySummaryProps {
   summary?: TaskActivitySummary;
+  currency?: string;
+  locale?: string;
 }
 
 function formatDuration(sec: number): string {
@@ -80,7 +83,11 @@ function ServiceIcon({ service }: { service: ServiceGroup }) {
   return <SquareTerminal className="h-4 w-4 shrink-0 text-muted-foreground" />;
 }
 
-export default function ActivitySummary({ summary }: ActivitySummaryProps) {
+export default function ActivitySummary({
+  summary,
+  currency = DEFAULT_CURRENCY,
+  locale = "en",
+}: ActivitySummaryProps) {
   const t = useTranslations("TaskInfoPanel");
 
   if (!summary) {
@@ -105,10 +112,7 @@ export default function ActivitySummary({ summary }: ActivitySummaryProps) {
           </div>
           <div className="space-y-1.5">
             {summary.services.map((service) => (
-              <div
-                key={service.key}
-                className="px-0.5 py-1"
-              >
+              <div key={service.key} className="px-0.5 py-1">
                 <button
                   type="button"
                   onClick={() => scrollToToolCall(service.firstCallId)}
@@ -116,7 +120,9 @@ export default function ActivitySummary({ summary }: ActivitySummaryProps) {
                   title={t("jumpToUsage")}
                 >
                   <ServiceIcon service={service} />
-                  <span className="flex-1 truncate font-medium text-foreground">{service.name}</span>
+                  <span className="flex-1 truncate font-medium text-foreground">
+                    {service.name}
+                  </span>
                   {service.isMcp ? (
                     <span className="rounded bg-primary/10 px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-primary">
                       MCP
@@ -129,7 +135,9 @@ export default function ActivitySummary({ summary }: ActivitySummaryProps) {
                       </span>
                     )
                   )}
-                  <span className="text-[10px] text-muted-foreground">{service.count}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {service.count}
+                  </span>
                 </button>
                 {service.isMcp && (
                   <ul className="mt-1 space-y-1 pl-5">
@@ -145,10 +153,14 @@ export default function ActivitySummary({ summary }: ActivitySummaryProps) {
                             {describeToolCall(tool.name).text}
                           </span>
                           {tool.count > 1 && (
-                            <span className="text-[10px] text-muted-foreground">×{tool.count}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              ×{tool.count}
+                            </span>
                           )}
                           {tool.failed > 0 && (
-                            <span className="text-[10px] text-destructive">{tool.failed} failed</span>
+                            <span className="text-[10px] text-destructive">
+                              {tool.failed} failed
+                            </span>
                           )}
                         </button>
                         {tool.uses.map((u, i) => (
@@ -196,7 +208,8 @@ export default function ActivitySummary({ summary }: ActivitySummaryProps) {
         <div className="flex items-center justify-between border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
           <span>{t("usage")}</span>
           <span className="tabular-nums">
-            {summary.totalTokens.toLocaleString()} {t("tokensShort")} · ${summary.totalCost.toFixed(4)}
+            {summary.totalTokens.toLocaleString()} {t("tokensShort")} ·{" "}
+            {formatMoney(summary.totalCost, currency, locale)}
           </span>
         </div>
       )}
