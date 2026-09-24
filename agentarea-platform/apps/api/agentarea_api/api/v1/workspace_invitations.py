@@ -440,21 +440,22 @@ async def accept_invitation(
     signed in under that address. Idempotent for the same acceptor.
     """
     try:
-        invitation = await service.accept(
+        invitation, accepted_now = await service.accept(
             token=body.token, user_id=user.user_id, user_email=user.email
         )
     except INVITATION_ERRORS as exc:
         _raise_invitation_error(exc)
 
-    try:
-        await memberships.record(
-            workspace_id=invitation.workspace_id,
-            user_id=user.user_id,
-            invitation_id=invitation.id,
-        )
-    except GRAPH_ERRORS as exc:
-        logger.exception("Failed to grant workspace membership")
-        _raise_membership_graph_unavailable(exc)
+    if accepted_now:
+        try:
+            await memberships.record(
+                workspace_id=invitation.workspace_id,
+                user_id=user.user_id,
+                invitation_id=invitation.id,
+            )
+        except GRAPH_ERRORS as exc:
+            logger.exception("Failed to grant workspace membership")
+            _raise_membership_graph_unavailable(exc)
 
     return AcceptInvitationResponse(
         workspace_id=invitation.workspace_id,

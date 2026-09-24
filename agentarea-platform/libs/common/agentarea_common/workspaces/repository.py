@@ -14,11 +14,12 @@ use it only for explicit policy checks inside the calling service.
 
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import column, delete, or_, select, table, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import (
     INVITATION_STATUS_PENDING,
+    INVITATION_STATUS_REVOKED,
     Workspace,
     WorkspaceInvitation,
     WorkspaceMembership,
@@ -94,13 +95,35 @@ class WorkspaceMembershipRepository:
         )
         return list(result.scalars().all())
 
-    async def delete(self, workspace_id: str, user_id: str) -> bool:
-        membership = await self.get(workspace_id, user_id)
-        if membership is None:
-            return False
-        await self.session.delete(membership)
+    async def end(self, workspace_id: str, user_id: str) -> None:
+        """Drop the row and every credential that could bring the user back.
+
+        The invitation they joined through is revoked so replaying it is refused,
+        and their API keys for the workspace are deactivated. ``api_keys`` is
+        owned by the MCP domain, which depends on this library, so it is named
+        as a bare table rather than imported.
+        """
+        await self.session.execute(
+            delete(WorkspaceMembership)
+            .where(WorkspaceMembership.workspace_id == workspace_id)
+            .where(WorkspaceMembership.user_id == user_id)
+        )
+        await self.session.execute(
+            update(WorkspaceInvitation)
+            .where(WorkspaceInvitation.workspace_id == workspace_id)
+            .where(WorkspaceInvitation.accepted_by_user_id == user_id)
+            .values(status=INVITATION_STATUS_REVOKED)
+        )
+        api_keys = table(
+            "api_keys", column("workspace_id"), column("created_by"), column("is_active")
+        )
+        await self.session.execute(
+            update(api_keys)
+            .where(api_keys.c.workspace_id == workspace_id)
+            .where(api_keys.c.created_by == user_id)
+            .values(is_active=False)
+        )
         await self.session.commit()
-        return True
 
 
 class WorkspaceRepository:

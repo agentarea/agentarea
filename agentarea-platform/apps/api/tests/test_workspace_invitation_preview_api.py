@@ -223,9 +223,7 @@ async def test_accept_is_refused_to_an_account_it_is_not_addressed_to(
 
 
 @pytest.mark.asyncio
-async def test_accept_by_the_addressee_grants_membership(
-    service, make_client, memberships
-) -> None:
+async def test_accept_by_the_addressee_grants_membership(service, make_client, memberships) -> None:
     token = await _invite(service, email="misha@agentarea.ai")
 
     response = await make_client("misha@agentarea.ai").post(
@@ -235,3 +233,20 @@ async def test_accept_by_the_addressee_grants_membership(
     assert response.status_code == 200, response.text
     assert response.json()["workspace_id"] == WORKSPACE_ID
     memberships.record.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_accepting_an_accepted_invitation_again_grants_nothing(
+    service, make_client, memberships
+) -> None:
+    """A removed member replaying their old link must not be re-recorded."""
+    token = await _invite(service)
+    client = make_client("misha@agentarea.ai")
+    await client.post("/v1/invitations/accept", json={"token": token})
+    memberships.record.reset_mock()
+
+    response = await client.post("/v1/invitations/accept", json={"token": token})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["workspace_id"] == WORKSPACE_ID
+    memberships.record.assert_not_awaited()
