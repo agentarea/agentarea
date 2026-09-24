@@ -1,0 +1,7 @@
+{{- $w := .Values.workloads }}
+{{- include "dataplane.workloadNamespace" (dict "root" . "namespace" $w.namespace "create" $w.createNamespace "podSecurity" $w.podSecurity) }}
+{{- if .Values.sandboxes.enabled }}
+{{- $s := .Values.sandboxes }}
+---
+{{ include "dataplane.workloadNamespace" (dict "root" . "namespace" $s.namespace "create" $s.createNamespace "podSecurity" $s.podSecurity "keep" true) }}
+{{- end }}

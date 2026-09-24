@@ -1,0 +1,20 @@
+MCP data plane "{{ .Values.dataPlane.id }}" is installed.
+
+It creates MCP servers in namespace {{ .Values.workloads.namespace }}, under RuntimeClass {{ .Values.workloads.runtimeClassName }}.
+{{- if .Values.exposure.hostNetwork.enabled }}
+The control plane reaches it at http://{{ .Values.exposure.hostNetwork.bindAddress }}:{{ .Values.dataPlane.port }}
+{{- else }}
+The control plane reaches it through Service {{ include "dataplane.fullname" . }} ({{ .Values.exposure.service.type }}), port {{ .Values.dataPlane.port }}.
+{{- end }}
+
+Point the control plane at it, in the agentarea chart:
+
+  mcpManager:
+    dataPlane:
+      url: http://<address above>
+      tokenSecret: <secret holding the same token>
+
+Check it answers, and refuses without the token:
+
+  curl -s -o /dev/null -w '%{http_code}\n' <url>/healthz                   # 200
+  curl -s -o /dev/null -w '%{http_code}\n' <url>/dataplane/v1/instances    # 401

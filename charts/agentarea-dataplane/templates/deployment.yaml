@@ -1,0 +1,111 @@
+{{- include "dataplane.validate" . }}
+{{- $host := .Values.exposure.hostNetwork }}
+{{- $w := .Values.workloads }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dataplane.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dataplane.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  {{- if $host.enabled }}
+  # One process owns the host port; a surge replica could not bind it.
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "dataplane.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dataplane.selectorLabels" . | nindent 8 }}
+      {{- if .Values.dataPlane.auth.token }}
+      annotations:
+        # Roll the pod when a chart-managed token changes.
+        checksum/token: {{ .Values.dataPlane.auth.token | sha256sum | trunc 16 | quote }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "dataplane.fullname" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $host.enabled }}
+      hostNetwork: true
+      # Still resolves the Service names of the instances it proxies to.
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
+      containers:
+        - name: dataplane
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if not $host.enabled }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.dataPlane.port }}
+          {{- end }}
+          env:
+            - { name: MCP_MANAGER_MODE, value: dataplane }
+            - { name: MCP_DATAPLANE_ID, value: {{ .Values.dataPlane.id | quote }} }
+            - name: MCP_DATAPLANE_LISTEN_ADDR
+              value: "{{ if $host.enabled }}{{ $host.bindAddress }}{{ end }}:{{ .Values.dataPlane.port }}"
+            - name: MCP_DATAPLANE_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dataplane.tokenSecretName" . }}
+                  key: {{ include "dataplane.tokenSecretKey" . }}
+            # Declared, not detected.
+            - { name: BACKEND_TYPE, value: kubernetes }
+            - { name: KUBERNETES_ENABLED, value: "true" }
+            - { name: KUBERNETES_NAMESPACE, value: {{ $w.namespace | quote }} }
+            - { name: KUBERNETES_RUNTIME_CLASS, value: {{ $w.runtimeClassName | quote }} }
+            - { name: KUBERNETES_READ_ONLY_ROOT_FS, value: {{ $w.readOnlyRootFilesystem | toString | quote }} }
+            - { name: KUBERNETES_DEFAULT_CPU_REQUEST, value: {{ $w.resources.requests.cpu | quote }} }
+            - { name: KUBERNETES_DEFAULT_MEMORY_REQUEST, value: {{ $w.resources.requests.memory | quote }} }
+            - { name: KUBERNETES_DEFAULT_CPU_LIMIT, value: {{ $w.resources.limits.cpu | quote }} }
+            - { name: KUBERNETES_DEFAULT_MEMORY_LIMIT, value: {{ $w.resources.limits.memory | quote }} }
+            - { name: DEFAULT_ISOLATION_TIER, value: {{ $w.isolationTier | quote }} }
+            - { name: MAX_CONTAINERS, value: {{ $w.maxInstances | toString | quote }} }
+            # A data plane has no Core API to sync against -- it is told what to run.
+            - { name: SKIP_INSTANCE_SYNC, value: "true" }
+            - { name: LOG_LEVEL, value: {{ .Values.dataPlane.logLevel | quote }} }
+            - { name: SANDBOX_TASK_LEASE_TTL, value: {{ .Values.sandboxPolicy.taskLeaseTTL | quote }} }
+            - { name: SANDBOX_TASK_IDLE_TTL, value: {{ .Values.sandboxPolicy.taskIdleTTL | quote }} }
+            - { name: SANDBOX_PROVIDER_PROVISIONING_TIMEOUT, value: {{ .Values.sandboxPolicy.providerProvisioningTimeout | quote }} }
+            - { name: SANDBOX_PROVIDER_SESSION_TTL, value: {{ .Values.sandboxPolicy.providerSessionTTL | quote }} }
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- $probe := dict "path" "/healthz" "port" (.Values.dataPlane.port | int) }}
+          {{- if $host.enabled }}{{- $_ := set $probe "host" $host.bindAddress }}{{- end }}
+          readinessProbe:
+            httpGet:
+              {{- toYaml $probe | nindent 14 }}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              {{- toYaml $probe | nindent 14 }}
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

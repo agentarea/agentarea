@@ -1,0 +1,250 @@
+# Install this chart on the cluster MCP servers should run on: not on the
+# control plane's. The control plane reaches it with mcpManager.dataPlane.url
+# and the same token, in the agentarea chart.
+
+image:
+  # -- mcp-manager image. The data plane is the same binary in data-plane mode.
+  repository: agentarea/agentarea-mcp-manager
+  # -- Defaults to the chart's appVersion. Keep equal to the control plane's tag.
+  tag: ""
+  # -- Pull policy for the data plane image.
+  pullPolicy: IfNotPresent
+
+# -- Pull secrets for the data plane's own image. MCP server images are pulled by
+# the nodes of this cluster; give them registry credentials there.
+imagePullSecrets: []
+
+dataPlane:
+  # -- (required) Stamped on every instance this data plane creates. A data plane
+  # refuses instances without its own id, so two data planes never claim each
+  # other's workloads.
+  id: ""
+  auth:
+    # -- Secret holding the shared token: the value the control plane sends.
+    existingSecret: ""
+    # -- Key in existingSecret.
+    existingSecretKey: token  # pragma: allowlist secret
+    # -- Creates the Secret from this value when existingSecret is empty. For
+    # development only: a value here lives in your values file and release history.
+    token: ""
+  # -- Port the data-plane API listens on.
+  port: 8090
+  # -- Data plane log level.
+  logLevel: INFO
+
+# How the control plane reaches the data plane, and the sandbox server when it is
+# enabled: both are exposed the same way. Each API authenticates every call, but
+# its network should be closed first: restrict it to the control plane.
+exposure:
+  hostNetwork:
+    # -- Serve on the node's own address instead of a Service. For a single-node
+    # cluster whose host firewall already guards ports: a NodePort would be DNATed
+    # past INPUT, where that firewall lives.
+    enabled: false
+    # -- (required with hostNetwork) Node address to bind, e.g. its VPC address.
+    # Binding 0.0.0.0 would publish the API on every interface the node has.
+    bindAddress: ""
+  service:
+    # -- Rendered when hostNetwork is off.
+    type: ClusterIP
+    # -- Annotations for the Service, e.g. a cloud load balancer's internal-only switch.
+    annotations: {}
+    # -- For LoadBalancer: who may reach the API. Name the control plane.
+    loadBalancerSourceRanges: []
+
+# Where MCP servers run, and what confines them. All of it is enforced by the
+# cluster, not by the data plane's code.
+workloads:
+  # -- Namespace the MCP servers are created in. The data plane gets write access
+  # there and nowhere else.
+  namespace: agentarea-mcp
+  # -- Create the namespace. Turn off to manage it yourself; keep its labels.
+  createNamespace: true
+  # -- (required) RuntimeClass every MCP server runs with. It must exist on the
+  # cluster and point at a sandboxing runtime (runsc for gVisor).
+  runtimeClassName: gvisor
+  # -- Default isolation tier for instances whose spec names none.
+  isolationTier: untrusted
+  # -- Read-only root for MCP servers. Off by default, as on the Docker data plane:
+  # real servers write under their image (Telethon keeps its session in /app).
+  # The sandboxing runtime keeps such writes inside the sandbox.
+  readOnlyRootFilesystem: false
+  # -- Per-instance defaults. A spec may ask for less, never more than limits.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  # -- How many instances may exist at once.
+  maxInstances: 8
+  podSecurity:
+    # -- Pod Security level enforced on the namespace. baseline rejects host
+    # namespaces, hostPath, privileged and added capabilities.
+    enforce: baseline
+    # -- Pod Security level that only warns.
+    warn: restricted
+  admission:
+    # -- Refuse any pod in the namespace that does not use runtimeClassName,
+    # through a ValidatingAdmissionPolicy, so no MCP server can reach the host kernel even
+    # through a data-plane bug. Needs Kubernetes 1.30+.
+    requireRuntimeClass: true
+  networkPolicy:
+    # -- Close MCP servers to each other and to private networks. Needs a CNI
+    # that enforces NetworkPolicy (k3s does, through kube-router).
+    enabled: true
+    # -- Extra sources allowed to reach MCP servers. The data plane itself is
+    # allowed automatically when it runs as a pod; with hostNetwork its traffic
+    # comes from the node, so list the node address and the pod bridge gateway.
+    ingressFromCIDRs: []
+    # -- Destinations MCP servers may not open connections to. Covers the cloud
+    # metadata service, private ranges (including this cluster's pod and service
+    # ranges and the network the control plane sits on) and carrier-grade NAT.
+    denyCIDRs:
+      - 169.254.0.0/16
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+      - 100.64.0.0/10
+    # -- Labels of the cluster DNS pods MCP servers may query.
+    dns:
+      namespace: kube-system
+      podLabels:
+        k8s-app: kube-dns
+    # -- Additional egress rules, as NetworkPolicy egress entries. For a host that
+    # REDIRECTs some traffic to a local proxy, allow the redirect target here.
+    extraEgress: []
+
+# Agent sandboxes: an OpenSandbox server the control plane creates them through
+# (SANDBOX_OPENSANDBOX_URL), running them here as BatchSandbox pods. Needs the
+# BatchSandbox controller: enable opensandbox-controller below, or install it
+# yourself.
+sandboxes:
+  # -- Run the sandbox server and confine the sandboxes it creates.
+  enabled: false
+  server:
+    image:
+      # -- OpenSandbox server image. The mcp-manager adapter is tested against v0.2.2.
+      repository: opensandbox/server
+      # -- Tag, optionally with a digest.
+      tag: "v0.2.2@sha256:8f8762af7565ed9c6f9dbcf009dd56727aa1fef8ce58a17f2b007b88cfe542bb"
+      # -- Pull policy for the server image.
+      pullPolicy: IfNotPresent
+    # -- Port the sandbox API listens on.
+    port: 8081
+    # -- Server log level.
+    logLevel: INFO
+    auth:
+      # -- Secret holding the API key the control plane sends as OPEN-SANDBOX-API-KEY.
+      existingSecret: ""
+      # -- Key in existingSecret.
+      existingSecretKey: api-key  # pragma: allowlist secret
+      # -- Creates the Secret from this value when existingSecret is empty. For
+      # development only.
+      apiKey: ""
+    # -- Image the server copies execd from into every sandbox. The runtime
+    # identity the control plane pins (SANDBOX_OPENSANDBOX_RUNTIME_IDENTITY)
+    # names this digest.
+    execdImage: "opensandbox/execd:v1.0.21@sha256:1dc98c7de10b9a73450ac75aa0f200ad7972f2c40f5225f6a8998e166b45d6dd"
+    # -- Longest lifetime a sandbox may be created with.
+    maxSandboxTimeoutSeconds: 21600
+    # -- How long a create waits for the pod to run, image pull included. The
+    # control plane's SANDBOX_PROVIDER_PROVISIONING_TIMEOUT should be longer.
+    createTimeoutSeconds: 120
+    # -- Resources of the server itself.
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+  # -- Namespace sandboxes are created in. The server gets write access there
+  # and nowhere else.
+  namespace: agentarea-sandboxes
+  # -- Create the namespace. Turn off to manage it yourself; keep its labels.
+  createNamespace: true
+  # -- (required) RuntimeClass every sandbox runs with.
+  runtimeClassName: gvisor
+  # -- What the RuntimeClass is, for the server's own check: gvisor, kata or firecracker.
+  secureRuntimeType: gvisor
+  # -- Merged into the pod spec of every sandbox, over the chart's defaults
+  # (no service links, no service account token, RuntimeDefault seccomp).
+  podTemplate: {}
+  podSecurity:
+    # -- Pod Security level enforced on the namespace.
+    enforce: baseline
+    # -- Pod Security level that only warns.
+    warn: restricted
+  admission:
+    # -- Refuse any pod in the namespace without runtimeClassName, as for MCP servers.
+    requireRuntimeClass: true
+  networkPolicy:
+    # -- Close sandboxes to each other and to private networks.
+    enabled: true
+    # -- Extra sources allowed to reach sandboxes. The server is allowed
+    # automatically when it runs as a pod; with hostNetwork list the node address
+    # and the pod bridge gateway.
+    ingressFromCIDRs: []
+    # -- Ports the server reaches sandboxes on: execd.
+    ingressPorts: [44772]
+    # -- Destinations sandboxes may not open connections to.
+    denyCIDRs:
+      - 169.254.0.0/16
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+      - 100.64.0.0/10
+    # -- Labels of the cluster DNS pods sandboxes may query.
+    dns:
+      namespace: kube-system
+      podLabels:
+        k8s-app: kube-dns
+    # -- Additional egress rules, as NetworkPolicy egress entries.
+    extraEgress: []
+
+# The BatchSandbox CRDs and controller (vendored OpenSandbox chart). Values here
+# are passed to it unchanged; see charts/opensandbox-controller/values.yaml.
+opensandbox-controller:
+  # -- Install the controller and its CRDs. One per cluster.
+  enabled: false
+  # -- Namespace of the controller. The subchart does not follow the release
+  # namespace; keep this equal to it.
+  namespaceOverride: agentarea-system
+  controller:
+    image:
+      # -- Controller image, from Docker Hub rather than the upstream default registry.
+      repository: opensandbox/controller
+      # -- Tag, optionally with a digest.
+      tag: "v0.2.0@sha256:a9a5f73c1785ebd955336ffa313973a35c1a1b662cb7afc4ea82d92021b3532a"
+    snapshot:
+      # -- Only used for snapshots, which AgentArea does not take.
+      imageCommitterImage: opensandbox/image-committer:v0.1.1
+
+# -- Required by the Kubernetes backend at start although a data plane runs no
+# agent sandboxes: the task lease is read unconditionally.
+sandboxPolicy:
+  taskLeaseTTL: 10m
+  taskIdleTTL: 15m
+  providerProvisioningTimeout: 5m
+  providerSessionTTL: 24h
+
+# -- Extra environment for the data plane container.
+extraEnv: []
+
+# -- Resources of the data plane itself.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+# -- Scheduling for the data plane pod. MCP servers are placed by their RuntimeClass.
+nodeSelector: {}
+# -- Tolerations for the data plane pod.
+tolerations: []
+# -- Affinity for the data plane pod.
+affinity: {}

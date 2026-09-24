@@ -1,0 +1,25 @@
+{{- if not .Values.exposure.hostNetwork.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dataplane.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dataplane.labels" . | nindent 4 }}
+  {{- with .Values.exposure.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.exposure.service.type }}
+  {{- with .Values.exposure.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    {{- include "dataplane.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.dataPlane.port }}
+      targetPort: http
+{{- end }}

@@ -1,0 +1,37 @@
+annotations:
+  artifacthub.io/category: integration-delivery
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://github.com/opensandbox-group/OpenSandbox/blob/main/kubernetes/README.md
+    - name: Support
+      url: https://github.com/opensandbox-group/OpenSandbox/issues
+  artifacthub.io/operator: "true"
+  artifacthub.io/operatorCapabilities: Full Lifecycle
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/recommendations: |
+    - url: https://github.com/kubernetes-sigs/kind
+  artifacthub.io/signKey: |
+    fingerprint: [your-gpg-fingerprint]
+apiVersion: v2
+appVersion: 0.2.0
+description: A Kubernetes operator for managing sandbox environments with resource
+  pooling and batch delivery
+home: https://github.com/opensandbox-group/OpenSandbox
+icon: https://raw.githubusercontent.com/opensandbox-group/OpenSandbox/main/kubernetes/images/logo.png
+keywords:
+- sandbox
+- kubernetes
+- operator
+- resource-pool
+- batch-sandbox
+- task-orchestration
+kubeVersion: '>=1.21.1-0'
+maintainers:
+- email: opensandbox@example.com
+  name: OpenSandbox Team
+name: opensandbox-controller
+sources:
+- https://github.com/opensandbox-group/OpenSandbox/tree/main/kubernetes
+type: application
+version: 0.2.1
