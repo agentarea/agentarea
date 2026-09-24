@@ -2,7 +2,8 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import select
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -86,6 +87,19 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
             .where(ModelSpec.id == id)
         )
         return result.unique().scalar_one_or_none()
+
+    async def get_usable(self, id: UUID) -> ModelSpec | None:
+        """A spec a model instance in this workspace may point at: its own or the platform's."""
+        result = await self.session.execute(
+            select(ModelSpec).where(
+                ModelSpec.id == id,
+                or_(
+                    self._get_workspace_filter(),
+                    ModelSpec.workspace_id == PLATFORM_WORKSPACE_ID,
+                ),
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def get_by_provider_and_model(
         self, provider_spec_id: UUID, model_name: str
