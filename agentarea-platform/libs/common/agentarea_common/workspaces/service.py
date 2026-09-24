@@ -144,22 +144,24 @@ class WorkspaceInvitationService:
 
     async def accept(
         self, *, token: str, user_id: str, user_email: str | None
-    ) -> WorkspaceInvitation:
-        """Accept an invitation as ``user_id``.
+    ) -> tuple[WorkspaceInvitation, bool]:
+        """Accept an invitation as ``user_id``. Returns (invitation, accepted_now).
 
-        Idempotent for the same acceptor. The caller owns granting workspace
-        membership in the configured authorization graph.
+        Idempotent for the same acceptor, but only the call that accepts it
+        reports ``accepted_now``: the caller grants workspace membership in the
+        configured authorization graph on that call alone, so replaying an old
+        link never grants anything again.
         """
         invitation = await self._redeemable(token=token, user_id=user_id, user_email=user_email)
         if invitation.status == INVITATION_STATUS_ACCEPTED:
-            return invitation
+            return invitation, False
 
         invitation.status = INVITATION_STATUS_ACCEPTED
         invitation.accepted_at = _utcnow()
         invitation.accepted_by_user_id = user_id
         await self.invitation_repo.update(invitation)
 
-        return invitation
+        return invitation, True
 
     async def _redeemable(
         self, *, token: str, user_id: str, user_email: str | None
@@ -288,7 +290,7 @@ class WorkspaceMembershipService:
         await revoke_workspace_membership(
             self.graph, workspace_id=workspace_id, user_id=target_user_id
         )
-        await self.membership_repo.delete(workspace_id, target_user_id)
+        await self.membership_repo.end(workspace_id, target_user_id)
 
     async def owner_user_id(self, workspace_id: str) -> str:
         """Who owns the workspace.

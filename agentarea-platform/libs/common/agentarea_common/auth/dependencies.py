@@ -16,6 +16,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .authorization import AuthorizationService
 from .context import UserContext
@@ -196,6 +197,34 @@ security_required = HTTPBearer(auto_error=False)
 security_optional = HTTPBearer(auto_error=False)
 
 
+async def _is_member_of(session: AsyncSession, user_id: str, workspace_id: str) -> bool:
+    """Whether ``user_id`` still belongs to ``workspace_id``, the key's workspace.
+
+    A key carries no authority of its own: it is only as good as its owner's
+    current membership. A graph failure denies.
+    """
+    from agentarea_common.workspaces import memberships
+    from agentarea_common.workspaces.repository import WorkspaceRepository
+
+    if workspace_id == user_id:
+        return True
+    workspace = await WorkspaceRepository(session).get(workspace_id)
+    if workspace is not None and workspace.owner_user_id == user_id:
+        return True
+    graph = memberships.get_workspace_membership_graph()
+    if graph is None:
+        return False
+    try:
+        return await memberships.check_workspace_membership(
+            graph, workspace_id=workspace_id, user_id=user_id
+        )
+    except Exception:
+        logger.exception(
+            "Could not check membership of user %s in workspace %s", user_id, workspace_id
+        )
+        return False
+
+
 async def _validate_api_key(token: str, request: Request) -> UserContext | None:
     """Validate an API key and return UserContext, or None if invalid."""
     from agentarea_mcp.domain.auth_models import APIKey
@@ -213,6 +242,14 @@ async def _validate_api_key(token: str, request: Request) -> UserContext | None:
         if record is None or not record.is_active:
             return None
         if record.expires_at and datetime.utcnow() >= record.expires_at:
+            return None
+        if not await _is_member_of(session, str(record.created_by), str(record.workspace_id)):
+            logger.warning(
+                "API key %s refused: its owner %s is not a member of workspace %s",
+                record.id,
+                record.created_by,
+                record.workspace_id,
+            )
             return None
 
         # Increment access count (best-effort)
