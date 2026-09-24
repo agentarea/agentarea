@@ -11,12 +11,14 @@ import pytest
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
+    caller_can_approve,
     decide_tool_policy,
 )
 from agentarea_common.base.models import BaseModel
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_governance.domain.policies import (
+    ApprovalPolicy,
     BudgetPolicy,
     PolicyDocument,
     PolicyValidationError,
@@ -300,3 +302,96 @@ async def test_resolve_empty_when_no_rules(session_factory):
         effective = await resolver.resolve(workspace_id=context.workspace_id)
         assert effective.budget is None
         assert effective.source_policy_ids == []
+
+
+async def _workspace_approval(repo, context, target, **params):
+    await repo.create(
+        _rule(
+            PolicySubjectType.WORKSPACE,
+            context.workspace_id,
+            target,
+            PolicyEffect.APPROVAL,
+            **params,
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "task_approval",
+    [
+        ApprovalPolicy(approvers_by_tool={"send_email": ["user:user-a"]}),
+        ApprovalPolicy(approvers=["user:user-a"]),
+        # A key the workspace never named can still win the runtime lookup for
+        # the same tool (a model-facing alias sorts ahead of the canonical name).
+        ApprovalPolicy(approvers_by_tool={"mail__send_email": ["user:user-a"]}),
+        ApprovalPolicy(approvers_by_tool={"send_email": ["user:alice", "user:user-a"]}),
+    ],
+)
+async def test_task_policy_cannot_make_its_creator_an_approver(session_factory, task_approval):
+    async with session_factory() as session:
+        context = _context()
+        repo = PolicyRuleRepository(session, context)
+        await _workspace_approval(repo, context, "tool:send_email", approvers=["user:alice"])
+
+        resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
+        with pytest.raises(PolicyValidationError, match="user:user-a"):
+            await resolver.resolve(
+                workspace_id=context.workspace_id,
+                task_policy=PolicyDocument(approval=task_approval),
+            )
+
+
+async def test_task_policy_cannot_add_to_workspace_global_approvers(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        repo = PolicyRuleRepository(session, context)
+        await _workspace_approval(repo, context, "*", approvers=["user:alice"])
+
+        resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
+        with pytest.raises(PolicyValidationError, match="user:user-a"):
+            await resolver.resolve(
+                workspace_id=context.workspace_id,
+                task_policy=PolicyDocument(
+                    approval=ApprovalPolicy(approvers_by_tool={"send_email": ["user:user-a"]})
+                ),
+            )
+
+
+async def test_workspace_designated_approver_still_approves(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        repo = PolicyRuleRepository(session, context)
+        await _workspace_approval(repo, context, "tool:send_email", approvers=["user:alice"])
+
+        resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
+        effective = await resolver.resolve(
+            workspace_id=context.workspace_id,
+            task_policy=PolicyDocument(
+                approval=ApprovalPolicy(approvers_by_tool={"send_email": ["user:alice"]})
+            ),
+        )
+
+        approvers = effective.approval.approvers_by_tool["send_email"]
+        assert caller_can_approve(approvers, "alice")
+        assert not caller_can_approve(approvers, context.user_id)
+
+
+async def test_task_policy_may_narrow_an_any_member_gate(session_factory):
+    # No workspace approvers means any member may approve; a task naming one
+    # member only narrows that set.
+    async with session_factory() as session:
+        context = _context()
+        repo = PolicyRuleRepository(session, context)
+        await _workspace_approval(repo, context, "tool:send_email")
+
+        resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
+        effective = await resolver.resolve(
+            workspace_id=context.workspace_id,
+            task_policy=PolicyDocument(
+                approval=ApprovalPolicy(approvers_by_tool={"send_email": ["user:carol"]})
+            ),
+        )
+
+        approvers = effective.approval.approvers_by_tool["send_email"]
+        assert caller_can_approve(approvers, "carol")
+        assert not caller_can_approve(approvers, context.user_id)

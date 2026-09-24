@@ -535,6 +535,35 @@ def _merge_approvers_by_tool(
     return merged
 
 
+def validate_caller_approvers(ceiling: PolicyDocument, caller: PolicyDocument) -> None:
+    """Reject a caller-supplied layer that names an approver the ceiling does not admit.
+
+    A per-tool key cannot be checked against only the ceiling set it overrides:
+    a tool is looked up under several names at runtime, and a key the ceiling
+    never named can win that lookup. So each caller-named approver must be in
+    every non-empty ceiling set. An empty ceiling (any member) may be narrowed.
+    """
+    if caller.approval is None or ceiling.approval is None:
+        return
+    ceiling_sets = [
+        set(refs)
+        for refs in (ceiling.approval.approvers, *ceiling.approval.approvers_by_tool.values())
+        if refs
+    ]
+    if not ceiling_sets:
+        return
+    admitted = set.intersection(*ceiling_sets)
+    named = [
+        *caller.approval.approvers,
+        *(ref for refs in caller.approval.approvers_by_tool.values() for ref in refs),
+    ]
+    added = sorted({ref for ref in named if ref not in admitted})
+    if added:
+        raise PolicyValidationError(
+            "task policy cannot add approvers beyond the workspace policy: " + ", ".join(added)
+        )
+
+
 def _pattern_is_within(child: str, parent: str) -> bool:
     if child == parent:
         return True

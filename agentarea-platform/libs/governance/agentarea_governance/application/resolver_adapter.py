@@ -17,6 +17,7 @@ from ..domain.policies import (
     EffectivePolicy,
     PolicyDocument,
     PolicyResolver,
+    validate_caller_approvers,
 )
 from ..domain.rules import PolicyRule, PolicySubjectType, rules_to_document
 from ..infrastructure.repository import PolicyRuleRepository
@@ -83,6 +84,7 @@ class GovernancePolicyResolver:
                 source_ids.extend(_rule_ids(user_rules))
 
         if task_policy is not None:
+            validate_caller_approvers(PolicyResolver().resolve(layers), task_policy)
             layers.append(task_policy)
 
         return PolicyResolver().resolve(layers, source_policy_ids=source_ids)
