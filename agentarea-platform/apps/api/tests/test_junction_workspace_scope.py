@@ -17,6 +17,7 @@ from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.domain.skill_models import Skill, agent_skills_table, skill_members_table
 from agentarea_agents.schemas.dto import AgentCreate, AgentUpdate
+from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
 from agentarea_api.api.v1 import clients as clients_router
 from agentarea_api.api.v1 import projects as projects_router
 from agentarea_api.tools import clients_toolset, projects_toolset
@@ -26,10 +27,12 @@ from agentarea_common.audit.models import AuditEventORM
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.di.container import get_container
 from agentarea_common.exceptions.errors import NotFoundError
-from agentarea_common.testing import install_graph_ownership_stub
+from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_mcp.application.client_service import ClientService
+from agentarea_mcp.domain.auth_models import MCPAuthConfig
 from agentarea_mcp.domain.client_models import Client, client_mcp_instances, client_skills
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.infrastructure.client_repository import ClientRepository
@@ -41,7 +44,7 @@ from agentarea_projects.domain.models import (
     project_skills,
 )
 from agentarea_projects.infrastructure.repository import ProjectRepository
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 OURS = UserContext(user_id="user-a", workspace_id="ws-a")
@@ -50,6 +53,7 @@ THEIRS = UserContext(user_id="user-b", workspace_id="ws-b")
 _TABLES = [
     Agent.__table__,
     Skill.__table__,
+    MCPAuthConfig.__table__,
     MCPServerInstance.__table__,
     Project.__table__,
     Client.__table__,
@@ -73,6 +77,11 @@ def _graph(monkeypatch):
 @pytest.fixture
 async def session():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    event.listen(
+        engine.sync_engine,
+        "connect",
+        lambda dbapi_connection, _record: dbapi_connection.execute("PRAGMA foreign_keys=ON"),
+    )
     async with engine.begin() as conn:
         await conn.run_sync(
             lambda sync_conn: BaseModel.metadata.create_all(sync_conn, tables=_TABLES)
@@ -228,7 +237,13 @@ def toolset_session(monkeypatch, session):
     for module in (projects_toolset, clients_toolset):
         monkeypatch.setattr(module, "platform_context", context)
         monkeypatch.setattr(module, "platform_read_context", context)
-    return session
+    container = get_container()
+    saved = dict(container._singletons)
+    allow_all_permissions()
+    with use_mcp_user_context(OURS):
+        yield session
+    container._singletons.clear()
+    container._singletons.update(saved)
 
 
 async def test_projects_toolset_refuses_a_foreign_agent(toolset_session):
