@@ -509,6 +509,12 @@ class LLMCallResult(BaseModel):
     # ISO 4217 code of `cost`, so the workflow can name the currency in budget
     # messages without asking the pricing extension. None on older results.
     currency: str | None = None
+    # Whose credentials this call ran on, as resolved by the activity that made it
+    # and priced it. The workflow's cached resolved_model can be missing (model
+    # resolution failed and the activity fell back to the database), so the event
+    # must report this value, not the cache's. Absent on results recorded before
+    # the field existed; see AgentExecutionWorkflow._call_managed_by.
+    managed_by: str | None = None
     usage: LLMUsage | None = None
 
 

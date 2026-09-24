@@ -324,6 +324,7 @@ class LLMExecutionService:
                 provider_cost_usd=provider_cost_usd,
                 # Resolved by price_llm_call just above, so this cannot fail to resolve.
                 currency=(self._customer_pricing or get_customer_pricing()).currency(),
+                managed_by=managed_by,
                 usage=usage,
             )
         except Exception as error:

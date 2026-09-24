@@ -290,6 +290,23 @@ class AgentExecutionWorkflow:
             return ZERO
         return max(self.budget_tracker.cost - self._delegated_cost, ZERO)
 
+    def _call_managed_by(self, response: LLMCallResult | dict[str, Any]) -> str | None:
+        """Whose credentials the call ran on, as the activity that priced it saw it.
+
+        The activity reports it on the result because the workflow's own cache can
+        be empty: when model resolution fails, resolved_model is None and the
+        activity resolves from the database. Reading the cache then reports None —
+        a tenant key — for a platform-funded call, and usage metering skips it.
+        Results recorded before the field existed do not carry it at all (as
+        opposed to carrying None), and only those fall back to the cache.
+        """
+        if isinstance(response, dict):
+            if "managed_by" in response:
+                return response["managed_by"]
+        elif "managed_by" in response.model_fields_set:
+            return response.managed_by
+        return (self.state.resolved_model or {}).get("managed_by")
+
     def _record_inference_usage(
         self,
         *,
@@ -2356,7 +2373,7 @@ class AgentExecutionWorkflow:
                     # account, and the only kind that must be recovered from the
                     # customer — from a run on the customer's own, which costs us
                     # nothing and must not be charged for twice.
-                    "managed_by": (self.state.resolved_model or {}).get("managed_by"),
+                    "managed_by": self._call_managed_by(response),
                     # Billing currency — what the customer pays.
                     "cost": usage_info["cost"],
                     # USD the provider charged, before conversion; what usage

@@ -74,5 +74,57 @@ async def test_result_from_before_the_field_existed_reports_none(monkeypatch, fl
 
     await flow._call_llm()
 
-    assert _completed(flow)["provider_cost_usd"] is None
+    data = _completed(flow)
+    assert data["provider_cost_usd"] is None
+    # Recorded before results carried managed_by: the cache is all there is.
+    assert data["managed_by"] == "platform"
     assert flow.budget_tracker.currency is None
+
+
+def _through_temporal(result: LLMCallResult) -> LLMCallResult:
+    """Serialize and deserialize the way the activity result reaches the workflow."""
+    from temporalio.contrib.pydantic import pydantic_data_converter
+
+    converter = pydantic_data_converter.payload_converter
+    return converter.from_payload(converter.to_payload(result), LLMCallResult)
+
+
+async def test_managed_by_comes_from_the_call_when_model_resolution_failed(monkeypatch, flow):
+    """resolve_model failed, so the cache is empty; the activity resolved from the DB."""
+    flow.state.resolved_model = None
+    result = _through_temporal(
+        LLMCallResult(
+            content="hi",
+            cost=Decimal("1.90"),
+            provider_cost_usd=Decimal("0.02"),
+            currency="RUB",
+            managed_by="platform",
+            usage=LLMUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+        )
+    )
+    monkeypatch.setattr(
+        workflow_module.workflow, "execute_activity", AsyncMock(return_value=result)
+    )
+
+    await flow._call_llm()
+
+    assert _completed(flow)["managed_by"] == "platform"
+
+
+async def test_a_tenant_key_reported_by_the_call_is_not_overridden_by_the_cache(monkeypatch, flow):
+    """None from the call means the tenant's key, not "unknown, ask the cache"."""
+    result = _through_temporal(
+        LLMCallResult(
+            content="hi",
+            cost=Decimal("0.02"),
+            managed_by=None,
+            usage=LLMUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+        )
+    )
+    monkeypatch.setattr(
+        workflow_module.workflow, "execute_activity", AsyncMock(return_value=result)
+    )
+
+    await flow._call_llm()
+
+    assert _completed(flow)["managed_by"] is None

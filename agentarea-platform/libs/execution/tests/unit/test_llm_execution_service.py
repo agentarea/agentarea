@@ -188,6 +188,7 @@ async def test_trailing_metadata_and_cumulative_tools_produce_one_final_result(
         "cost": "0.02",
         "provider_cost_usd": "0.02",
         "currency": "USD",
+        "managed_by": None,
         "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
     }
     assert result.cost == to_money("0.02")
@@ -320,7 +321,9 @@ async def test_cached_secret_failure_falls_back_to_fresh_model_resolution(
 
     assert result.content == "hello"
     assert model_scope.contexts == [user_context]
-    assert provider.constructor.call_args.kwargs["api_key"] == "fresh-key"  # pragma: allowlist secret
+    assert (
+        provider.constructor.call_args.kwargs["api_key"] == "fresh-key"
+    )  # pragma: allowlist secret
     assert provider.constructor.call_args.kwargs["model_name"] == "database-model"
     assert "fresh-key" not in result.model_dump_json()
     assert secret_store.session.close.await_count == 2
@@ -430,7 +433,7 @@ async def test_cancellation_closes_iterator_and_next_call_has_no_partial_state(
             "cost": "0.02",
             "provider_cost_usd": "0.02",
             "currency": "USD",
-        "currency": "USD",
+            "managed_by": None,
             "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
         }
         assert result.cost == to_money("0.02")
@@ -541,11 +544,13 @@ async def test_uncached_model_prices_with_the_record_funding(
     model_scope.record.provider_config.managed_by = "platform"
     pricing = _RecordingPricing()
 
-    await make_service(model_service_scope=model_scope.scope, customer_pricing=pricing).execute(
-        _request(resolved_model=None), user_context=user_context
-    )
+    result = await make_service(
+        model_service_scope=model_scope.scope, customer_pricing=pricing
+    ).execute(_request(resolved_model=None), user_context=user_context)
 
     assert pricing.calls[0]["platform_funded"] is True
+    # Reported on the result so the event does not have to trust the empty cache.
+    assert result.managed_by == "platform"
 
 
 @pytest.fixture
